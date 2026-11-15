@@ -1609,7 +1609,9 @@ The pack folder is the one `display.texture_folder` (the viewer's `--textures`) 
 zone loads (`Zone::draw_objects`).
 
 - **Frame:** glTF's own, Y up; its units are EQ units, and glTF (x, y, z) is the zone's (x, -z, y). Front faces are
-  counter-clockwise; each node's transform is applied.
+  counter-clockwise; each node's transform is applied, made top-down as the node tree is walked, and primitives
+  that share their accessors under one transform share their vertices (found in a hash map), so a file of many
+  nodes or primitives loads in time linear in them.
 - **Materials:** a material's base colour texture names its texture by its image's URI: the file name is looked up as
   a replacement texture is (the zone's subfolder first, so a model's textures can sit beside it), any extension, with
   its `.n` and `.r` maps. `MASK` is drawn as a cut-out, `BLEND` at 50 %, `doubleSided` without culling. Images inside
