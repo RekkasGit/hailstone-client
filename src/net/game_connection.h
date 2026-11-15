@@ -1772,11 +1772,13 @@ public:
     // Item links: asks the server for the linked item (OP_ItemLinkClick); its
     // OP_ItemLinkResponse arrives through take_item_display().
     void request_item(const game::ItemLink& link);
+    // Read-only Final Result inspection: native OP_EvolveItem action 4, answered as an ordinary item display.
+    bool request_evolving_final_result(const Item& item, bool shift = false);
     // Send_OP_ItemLinkResponse(id, name, flags) (net/item_packets.h ItemLinkRequest): `shift` adds flag 2.
     void request_item_link(std::uint32_t item_id, const std::string& name, std::uint32_t flags, bool shift);
     std::optional<Item> take_item_display();
-    // An item the server sent again as OP_ItemPacket type 0x67 (CEverQuest_HandleItemPacket @004c2570 → 0x6ae710
-    // @006ae710): every open item display showing the same serial (+0xf8) is set to it in place.
+    // An item the server sent again as OP_ItemPacket type 0x67, or whose evolving progress it updated: every open
+    // item display showing the same two-part instance id is set to it in place.
     std::optional<Item> take_item_refresh();
 
     // ---- augments (game/augments.h; net/game_connection_augments.cpp) ----

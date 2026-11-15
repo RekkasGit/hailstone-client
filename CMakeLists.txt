@@ -1304,6 +1304,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/ui_packs_test.cpp
     tests/item_compare_test.cpp
     tests/item_display_test.cpp
+    tests/evolving_item_test.cpp
     tests/game_vectors_test.cpp
     tests/key_commands_test.cpp
     tests/mouse_buttons_test.cpp
