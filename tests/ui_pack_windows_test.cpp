@@ -2171,6 +2171,80 @@ TEST_CASE("UI packs (modern): the extended target window shows empty slots and s
     ImGui::DestroyContext(ctx);
 }
 
+// The modern extended target window with the most slots (20): six rows tall by default, the rest scrolling; Auto
+// expand (hud.expand.ExtendedTargetWnd, the slot menu's row and the frame's) grows it down to the last filled slot.
+TEST_CASE("UI packs (modern): the extended target window starts six rows tall and Auto expand grows it to its targets") {
+    fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
+    hailstone::test::ScratchDir dir_scratch("ui_pack_xtarget_expand_test");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(src, dir / "modern", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        Session s(dir, "modern");
+        // Twenty slots: slot 0 and slot 15 hold a spawn.
+        ByteWriter b;
+        b.le<std::uint32_t>(20);
+        b.le<std::uint32_t>(2);
+        for (auto [slot, id, name] : {std::tuple{0u, 101u, std::string("a gnoll")}, std::tuple{15u, 102u, std::string("a pup")}}) {
+            b.le<std::uint32_t>(slot);
+            b.le<std::uint8_t>(1);
+            b.le<std::uint32_t>(id);
+            b.fixed_string(name, name.size() + 1);
+            game::Spawn& m = s.conn.world_for_test().spawns[id];
+            m.id = id;
+            m.name = name;
+            m.is_npc = true;
+            m.hp_percent = 80;
+        }
+        s.conn.receive_zone_packet_for_test(net::AppPacket(net::to_wire(net::Op::XTargetResponse), b.take()));
+        lua_State* L = s.lua.state();
+        REQUIRE(luaL_dostring(L, "eq.ShowWindow('ExtendedTargetWnd', true)") == LUA_OK);
+        s.frames(3);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        auto rows = []() -> ImGuiWindow* {
+            for (ImGuiWindow* win : GImGui->Windows)
+                if (std::string_view(win->Name).find("/##xtrows") != std::string_view::npos) return win;
+            return nullptr;
+        };
+        ImGuiWindow* area = rows();
+        REQUIRE(area != nullptr);
+        // Every slot is a row (30 + 3 pixels at scale 1); the frame shows about six of them and scrolls the rest.
+        CHECK(area->ContentSize.y >= 20 * 33 - 4);
+        CHECK(area->Size.y >= 6 * 33 - 4);
+        CHECK(area->Size.y < 7 * 33);
+        CHECK(area->ScrollMax.y > 0.0f);
+        // Auto expand: tall enough for the rows down to slot 15 (16 rows); the four after it still scroll.
+        REQUIRE(luaL_dostring(L, "ui.SetSetting('hud.expand.ExtendedTargetWnd', '1')") == LUA_OK);
+        s.frames(3);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        area = rows();
+        REQUIRE(area != nullptr);
+        CHECK(area->Size.y >= 16 * 33 - 4);
+        CHECK(area->Size.y < 17 * 33);
+        CHECK(area->ScrollMax.y > 0.0f);
+        // A size of the player's own taller than the targets need is kept.
+        REQUIRE(luaL_dostring(L, "ui.SetSetting('hud.size.ExtendedTargetWnd', '210,800')") == LUA_OK);
+        s.frames(3);
+        area = rows();
+        REQUIRE(area != nullptr);
+        CHECK(area->Size.y > 17 * 33);
+        // Off again: the player's size, here a short one, and the rows scroll.
+        REQUIRE(luaL_dostring(L, "ui.SetSetting('hud.size.ExtendedTargetWnd', '210,120') "
+                                 "ui.SetSetting('hud.expand.ExtendedTargetWnd', '0')") == LUA_OK);
+        s.frames(3);
+        area = rows();
+        REQUIRE(area != nullptr);
+        CHECK(area->Size.y < 3 * 33);
+        CHECK(area->ScrollMax.y > 0.0f);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 // The modern AA window as a library (ui/modern/lib/aa.lua): a window of the same name that calls it with a row part,
 // a details part and a banner gets each called, the row's with the ability's name, ranks and cost, and draws cleanly.
 // Its one list (AAWindow's ModernList) holds every tab's abilities, with the tab, era and activated columns.
