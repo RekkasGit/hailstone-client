@@ -430,7 +430,7 @@ The global `mq` (also `require('mq')`) in every script, Lua social and Lua plugi
 | `mq.getFilteredSpawns(fn)` | `read` | those for which `fn(spawn)` is true |
 | `mq.imgui.init(name, fn)` | `ui` | `fn` is called every frame to draw with `ImGui` |
 | `mq.imgui.destroy(name)`, `mq.imgui.exists(name)` | | |
-| `mq.pickle(path, table)` | | writes the table as Lua to `path` under `mq.configDir`. Read it back with `dofile` / `loadfile`, as data: no functions |
+| `mq.pickle(path, table)` | | writes the table as Lua to `path` under `mq.configDir`. Read it back with `dofile` / `loadfile`, as data: no functions (a file whose values are or hold one is refused). A file is at most 8 MiB, and `mq.configDir` at most 1000 files or 64 MiB |
 | `mq.web.*` | `web` | the script's own browser tabs (below) |
 | `mq.luaDir` | | the script folder the script was found in |
 | `mq.configDir` | | the folder `mq.pickle` writes to: `scripts/config/`, or `scripts/config/<script>/` for a script without every capability |
