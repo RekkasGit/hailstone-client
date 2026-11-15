@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Story window: the links in a story's page open the page they point to, such as a server's epic quest, spell and progression guides. Before, clicking them did nothing
 - Texture packs with generated trees: the needles of pines and other evergreens no longer flicker as the trees sway in the wind, and shimmer much less as you walk or fly through a forest. Rebuild a pack's trees in the Texture Studio to get them
 - Characters' see-through parts, such as a glass or ice shield, a translucent weapon or a glow, are no longer hidden by the grass behind them
 - Options > **Upscale Quality** (and the gamepad pack's Display page): the usual presets, Native AA, Quality, Balanced, Performance and Ultra Performance, which draw the 3D world at 100, 67, 59, 50 and 33 % of the screen and upscale it. Native AA with Temporal or AMD FSR 3.1 is anti-aliasing alone at full resolution. Render Scale now goes down to 33 %, and any other value shows as Custom

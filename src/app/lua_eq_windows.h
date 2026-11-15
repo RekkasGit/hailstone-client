@@ -413,6 +413,9 @@ void help_window_set_file(StockWindow& help, EqHost& host, const std::string& fi
 // CStmlWnd::LoadPage of a game file (help\\..., help\\tips\\...): the page's body with its new lines as spaces, and
 // its <TITLE> in `title` (empty when it has none).
 std::string load_stml_page(const GameDir* game, const std::string& path, std::string* title);
+// An href link's page in the game folder, as CStmlWnd follows it from `page` (the page shown): file:///x is x from the
+// game folder, a bare name is beside the page; none for a web link (not followed).
+std::optional<std::string> stml_href_path(const std::string& page, std::string_view href);
 
 // CChatWindowManager::GetRGBAFromIndex as 0xRRGGBB (app/lua_eq_chat.cpp), and text made safe inside STML.
 std::uint32_t chat_index_rgb(int index);
