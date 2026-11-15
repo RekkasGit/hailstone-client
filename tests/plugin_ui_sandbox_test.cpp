@@ -271,6 +271,10 @@ TEST_CASE("Plugin UI: the consent question's windows are the pack's alone") {
                              "  ui.Foreground(true) ui.DrawRectFilled(0, 0, 50, 50, 1, 0, 0, 1) ui.Foreground(false)\n"
                              "  local x = ui.FindWindowRect('Consent##q') RECT = x and math.floor(x) or false\n"
                              "  eq.WindowShown('PluginConsent')\n"
+                             "  INTO = ui.Begin('Consent##q') ui.Button('inject')\n"
+                             "  if ui.BeginChild('c', 10, 10) then ui.Text('inject') end ui.EndChild()\n"
+                             "  ui.End()\n"
+                             "  PROMPT = ui.Begin(\"Allow this server's plugin?##hailstone_plugin_consent\") ui.End()\n"
                              "end)\n");
     int foreground = 0;
     auto frame = [&] {
@@ -292,6 +296,14 @@ TEST_CASE("Plugin UI: the consent question's windows are the pack's alone") {
     REQUIRE(GImGui->Windows.Size > 0);
     CHECK(std::string(GImGui->Windows.back()->Name) == "Consent##q"); // and it is on top
     CHECK(s.api->replaces("PluginConsent"));                         // (the pack's window stands in)
+    // The plugin cannot begin the question's window to add to it, or a child of it, or end it.
+    const ImGuiWindow* consent = ImGui::FindWindowByName("Consent##q");
+    REQUIRE(consent);
+    CHECK(consent->BeginCount == 1); // the pack's Begin alone
+    CHECK(s.run("plugin:X", "return tostring(INTO)") == "false");
+    CHECK(s.run("plugin:X", "return tostring(PROMPT)") == "false");
+    // The client's own prompt neither, before it was ever drawn: the plugin did not create it.
+    CHECK_FALSE(ImGui::FindWindowByName(ui::lua::kConsentWindowName));
 
     // Without the pack's window: the plugin cannot put the client's prompt away.
     s.run("", "NO_PACK_CONSENT = true");

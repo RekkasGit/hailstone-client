@@ -1448,6 +1448,7 @@ void LuaUi::frame() {
         if (!w.enabled || w.failed || (i < covered.size() && covered[i])) continue;
         ImGuiErrorRecoveryState state;
         ImGui::ErrorRecoveryStoreState(&state);
+        const std::size_t begun = windows_begun();
         lua_rawgeti(L, LUA_REGISTRYINDEX, w.draw_ref);
         g_drawing = w.name;
         m.drawing_tag = w.tag;
@@ -1464,8 +1465,11 @@ void LuaUi::frame() {
         m.running_tag.clear();
         m.drawing_tag.clear();
         g_drawing.clear();
+        // A window the script left open (a Begin without its End) is closed here, error or not, so the windows
+        // drawn after it do not nest inside it.
+        ImGui::ErrorRecoveryTryToRecoverState(&state);
+        end_script_windows(begun);
         if (status != LUA_OK) {
-            ImGui::ErrorRecoveryTryToRecoverState(&state);
             for (Script& s : m.scripts)
                 if (s.file == file) m.report(s, lua_tostring(L, -1));
             lua_pop(L, 1);

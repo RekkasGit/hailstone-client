@@ -619,9 +619,9 @@ rectangle (`u0, v0, u1, v1`).
 | Function | Args → returns | What |
 |---|---|---|
 | Begin | (title [, open [, flags [, collapseRight]]]) → visible, open | Begin a window. open nil = no close button |
-| End | () → — | |
-| BeginChild | (id [, w, h [, border [, flags]]]) → bool | |
-| EndChild | () → — | |
+| End | () → — | Ends the window the script's last `Begin` began; any other End does nothing |
+| BeginChild | (id [, w, h [, border [, flags]]]) → bool | Call `EndChild` whatever it returns |
+| EndChild | () → — | Ends the child the script's last `BeginChild` began; any other EndChild does nothing |
 | SetNextWindowSize | (w, h [, cond=FirstUseEver]) → — | |
 | SetNextWindowPos | (x, y [, cond=FirstUseEver]) → — | |
 | SetNextWindowBgAlpha | (a) → — | |
