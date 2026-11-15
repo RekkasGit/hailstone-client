@@ -1256,7 +1256,10 @@ public:
         }
         return nullptr;
     }
-    bool combo_select(EqHost&, std::string_view id, int index) override {
+    bool combo_select(EqHost& host, std::string_view id, int index) override {
+        // One of the combo's own choices only: the time zone and the class go into the packets as they are.
+        const ComboData* c = combo(host, id);
+        if (c && (index < 0 || index >= static_cast<int>(c->choices.size()))) return true;
         if (id == "PLFG_TimeZoneCombo") player_tz_.selected = index;
         else if (id == "GLFP_TimeZoneCombo") guild_tz_.selected = index;
         else if (id == "GSFP_TimeZoneCombo") search_tz_.selected = index;

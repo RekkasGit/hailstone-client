@@ -1653,7 +1653,8 @@ int ChatNewTab(lua_State* L) {
 // window stays)
 int ChatCloseTab(lua_State* L) {
     int w = window_of(L, 1);
-    lua_Integer t = luaL_checkinteger(L, 2) - 1;
+    const lua_Integer tab = luaL_checkinteger(L, 2);
+    const lua_Integer t = tab < 1 ? -1 : tab - 1; // (math.mininteger - 1 would overflow)
     if (w < 0) return 0;
     auto tabs = tabs_of(host_of(w));
     if (t < 0 || t >= static_cast<lua_Integer>(tabs.size())) return 0;
@@ -1664,7 +1665,8 @@ int ChatCloseTab(lua_State* L) {
 // eq.ChatSelectTab(slot, tab)   -- the tab that is up (a click on it)
 int ChatSelectTab(lua_State* L) {
     int w = window_of(L, 1);
-    lua_Integer t = luaL_checkinteger(L, 2) - 1;
+    const lua_Integer tab = luaL_checkinteger(L, 2);
+    const lua_Integer t = tab < 1 ? -1 : tab - 1; // (math.mininteger - 1 would overflow)
     if (w < 0) return 0;
     int host = host_of(w);
     auto tabs = tabs_of(host);
