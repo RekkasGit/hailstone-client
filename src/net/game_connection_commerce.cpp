@@ -155,10 +155,9 @@ void GameConnection::update_npc_interactions() {
     // (docs/unknowns.md); this client checks every update.
     if (merc_windows_[0] && merc_.liaison_id && out_of_reach(merc_.liaison_id)) set_merc_window_open(0, false);
     // CTradeWnd::OnProcessFrame @0x780b50: every 500 ms while trading, the partner within its avatar height + 20;
-    // else CTradeWnd_CancelAndClose, so the server returns the offer. Hand-ins only: the original checks player
-    // trades the same way, which this client does not do yet (docs/todo.md). Handle_OP_Death also cancels a trade
-    // with the partner who dies, which the corpse test stands in for.
-    if (trade_ && trade_->with_npc && trade_->open && due(npc_checks_.trade)) {
+    // else CTradeWnd_CancelAndClose, so the server returns the offer, for players and NPC hand-ins alike.
+    // Handle_OP_Death also cancels a trade with the partner who dies, which the corpse test stands in for.
+    if (trade_ && trade_->open && due(npc_checks_.trade)) {
         auto it = world_.spawns.find(trade_->partner_id);
         if (it == world_.spawns.end() || it->second.is_corpse ||
             distance_to(trade_->partner_id) > it->second.heights.avatar_height + kInteractRange)
