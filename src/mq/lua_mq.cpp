@@ -564,12 +564,15 @@ int l_flushevents(lua_State* L) {
 
 void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args, std::uint32_t limit = plugin::kCapAll);
 
-// fn, {args} = mq._next_event([name]): the oldest queued event (of that name).
+// fn, {args} = mq._next_event([name]): the oldest queued event (of that name); nil when there is none, false when it
+// ran one as a thread (below).
 // The event's text stays in the queue (the Script's) until it is on the stack: a push that fails longjmps (Lua is
 // built as C), and no C++ object of this frame may be alive then.
 // An event raised by another's line (a script's or plugin's print, Queued::origin) whose handler would get more than
 // that code may do runs as a thread of its own with no more (start_thread's limit), as a bind it ran would; doevents
-// goes on with the next. A thread so that the limit holds for each resume, if the handler waits.
+// goes on with the next. A thread so that the limit holds for each resume, if the handler waits. Each such event
+// returns to doevents' Lua loop rather than looping here: a handler whose own line raises its event again would keep
+// this C loop going forever, where no instruction hook could stop it.
 int l_next_event(lua_State* L) {
     Script& s = Script::of(L);
     const char* name = lua_isnoneornil(L, 1) ? nullptr : luaL_checkstring(L, 1);
@@ -589,7 +592,8 @@ int l_next_event(lua_State* L) {
             std::vector<std::string> args = std::move(it->args);
             s.queued.erase(it);
             start_thread(s, fn, args, origin);
-            continue;
+            lua_pushboolean(L, 0);
+            return 1;
         }
         lua_rawgeti(L, LUA_REGISTRYINDEX, fn);
         lua_createtable(L, static_cast<int>(it->args.size()), 0);
@@ -634,13 +638,17 @@ void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args, s
     const std::uint32_t caps = s.caps & s.narrowed & plugin::caller_caps() & limit;
     plugin::CallerScope scope(caps, s.name);
     const std::uint32_t narrowed = std::exchange(s.narrowed, caps);
-    s.slice_start = Clock::now();
+    // The thread gets a slice of its own; the code it ran from (doevents, an mq.cmd) goes on with what is left of
+    // its own after: handlers started one after another cannot keep that code from ever pausing or being stopped.
+    const Clock::time_point outer_slice = s.slice_start;
+    s.new_slice();
     int nres = 0;
     int st = 0;
     {
         ScriptRun run(s, t);
         st = lua_resume(t, nullptr, static_cast<int>(args.size()), &nres);
     }
+    s.slice_start = outer_slice;
     s.narrowed = narrowed;
     if (st == LUA_YIELD) {
         lua_pop(t, nres);
@@ -1161,8 +1169,8 @@ end
 function mq.doevents(name)
     while true do
         local fn, args = mq._next_event(name)
-        if not fn then return end
-        fn(table.unpack(args))
+        if fn == nil then return end
+        if fn then fn(table.unpack(args)) end
     end
 end
 

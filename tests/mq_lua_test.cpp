@@ -1803,3 +1803,30 @@ TEST_CASE("Lua socials: hailstone.ui_function, option and menu are refused") {
     h.scripts->press_button(press("hailstone.menu('M', '/sit')"));
     CHECK(printed_part(h, "hailstone.menu: a Lua social cannot add to the UI"));
 }
+
+TEST_CASE("MQ Lua: a narrowed event handler whose own line raises its event again does not hold the client") {
+    Host h;
+    int fed = 0;
+    // A line a read-only add-on writes each time the handler runs: the same event again, with the add-on's origin.
+    h.hooks.add_command(h.hooks.new_owner("feeder"), "/feed", [&](std::string_view) {
+        ++fed;
+        plugin::ChatLine again{"Bob tells you, 'loop'", 0, 0};
+        again.from_code = true;
+        again.origin_caps = plugin::kCapRead | plugin::kCapEvents;
+        h.hooks.chat(again);
+    });
+    h.write("loop.lua", R"(
+local mq = require('mq')
+mq.event('loop', "#1# tells you, 'loop'", function() mq.cmd('/feed') end)
+while true do mq.doevents() mq.delay(10) end
+)");
+    REQUIRE(h.scripts->run("loop", {}));
+    h.pulses(1);
+    plugin::ChatLine first{"Bob tells you, 'loop'", 0, 0};
+    first.from_code = true;
+    first.origin_caps = plugin::kCapRead | plugin::kCapEvents;
+    h.hooks.chat(first);
+    h.pulses(2, 10); // each pulse ends: the doevents loop is the script's own Lua, which pauses after its slice
+    CHECK(fed > 1);
+    CHECK(h.scripts->running("loop"));
+}
