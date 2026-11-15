@@ -443,6 +443,8 @@ void VkContext::pick_physical_device() {
         caps_.srgb_mip_blit = (fp.optimalTilingFeatures & need) == need;
     }
     caps_.max_anisotropy = features.samplerAnisotropy ? props.limits.maxSamplerAnisotropy : 0.0f;
+    // Frame generation's GPU time (the performance window): every graphics queue can time where this is set.
+    timestamp_period_ns_ = props.limits.timestampComputeAndGraphics ? props.limits.timestampPeriod : 0.0f;
     caps_.msaa_counts = props.limits.framebufferColorSampleCounts & props.limits.framebufferDepthSampleCounts;
     caps_.fsr3 = Fsr3Upscaler::supported(physical_);
     VkPhysicalDeviceDriverProperties driver{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
@@ -683,6 +685,12 @@ void VkContext::create_swapchain(VkSwapchainKHR old) {
     info.oldSwapchain = old; // retired by this call, whether it succeeds or not
     vk_check(vkCreateSwapchainKHR(device_, &info, nullptr, &swapchain_), "vkCreateSwapchainKHR");
     log::debug("swapchain: {}x{}, present mode {}", extent_.width, extent_.height, static_cast<int>(info.presentMode));
+    switch (info.presentMode) {
+    case VK_PRESENT_MODE_IMMEDIATE_KHR: present_mode_ = "immediate"; break;
+    case VK_PRESENT_MODE_MAILBOX_KHR: present_mode_ = "mailbox"; break;
+    case VK_PRESENT_MODE_FIFO_RELAXED_KHR: present_mode_ = "FIFO relaxed (adaptive vsync)"; break;
+    default: present_mode_ = "FIFO (vsync)"; break;
+    }
 
     vkGetSwapchainImagesKHR(device_, swapchain_, &count, nullptr);
     images_.resize(count);
@@ -841,6 +849,7 @@ void VkContext::set_scene_options(const SceneOptions& options, const std::filesy
         chosen.upscaler = Upscaler::Taa;
     }
     const bool upscaler_changed = chosen.upscaler != scene_options_.upscaler;
+    frame_gen_requested_ = chosen.frame_gen;
     // Frame generation follows the temporal upscaler's motion: without one it is off.
     if (chosen.frame_gen && chosen.upscaler == Upscaler::Fsr1) {
         if (!frame_gen_fallback_logged_)
@@ -1959,6 +1968,14 @@ void VkContext::create_frame_gen(const std::filesystem::path& shader_dir) {
         fullscreen_pipeline(device_, pipeline_cache_, frame_gen_->composite_layout(), vs, composite, swapchain_format_);
     rcas_picture_pipeline_ = fullscreen_pipeline(device_, pipeline_cache_, upscale_layout_, vs, rcas, kUpscaleFormat);
     for (VkShaderModule m : {vs, synth, composite, rcas}) vkDestroyShaderModule(device_, m, nullptr);
+    if (timestamp_period_ns_ > 0.0f) {
+        VkQueryPoolCreateInfo qi{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+        qi.queryType = VK_QUERY_TYPE_TIMESTAMP;
+        qi.queryCount = 2 * kFramesInFlight;
+        if (vkCreateQueryPool(device_, &qi, nullptr, &fg_queries_) != VK_SUCCESS) fg_queries_ = VK_NULL_HANDLE;
+    }
+    fg_query_state_.fill(0);
+    fg_stats_ = FrameGenStats{};
 }
 
 void VkContext::destroy_frame_gen() {
@@ -1967,7 +1984,33 @@ void VkContext::destroy_frame_gen() {
         *p = VK_NULL_HANDLE;
     }
     frame_gen_.reset();
+    if (fg_queries_) vkDestroyQueryPool(device_, fg_queries_, nullptr);
+    fg_queries_ = VK_NULL_HANDLE;
     picture_ready_ = false;
+}
+
+void VkContext::read_frame_gen_time(std::uint32_t frame_slot) {
+    // The slot's last frame is done (begin_frame waited for its fence), so its timestamps are there unless the
+    // device dropped them; nothing is waited for.
+    if (!fg_queries_ || fg_query_state_[frame_slot] == 0) return;
+    std::array<std::uint64_t, 2> t{};
+    if (vkGetQueryPoolResults(device_, fg_queries_, 2 * frame_slot, 2, sizeof t, t.data(), sizeof(std::uint64_t),
+                              VK_QUERY_RESULT_64_BIT) != VK_SUCCESS || t[1] < t[0])
+        return;
+    const float ms = static_cast<float>(static_cast<double>(t[1] - t[0]) * timestamp_period_ns_ / 1.0e6);
+    (fg_query_state_[frame_slot] == 2 ? fg_stats_.gpu_ms : fg_stats_.gpu_real_ms) = ms;
+}
+
+FrameGenStats VkContext::frame_gen_stats() const {
+    FrameGenStats s = fg_stats_;
+    s.requested = frame_gen_requested_;
+    s.active = frame_gen_active();
+    s.no_motion = frame_gen_requested_ && !scene_options_.frame_gen;
+    s.images = static_cast<std::uint32_t>(images_.size());
+    s.min_images = min_image_count_;
+    s.waits = frame_gen_fits(s.images, s.min_images);
+    s.present_mode = present_mode_;
+    return s;
 }
 
 void VkContext::bind_frame_gen() {
@@ -2024,6 +2067,13 @@ std::optional<std::uint32_t> VkContext::finish_frame_gen(const FrameInfo& frame)
                   VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                   VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     const std::uint32_t slot = picture_index_;
+    read_frame_gen_time(frame.frame_slot);
+    if (fg_queries_) {
+        vkCmdResetQueryPool(cmd, fg_queries_, 2 * frame.frame_slot, 2);
+        vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, fg_queries_, 2 * frame.frame_slot);
+    }
+    ++fg_stats_.real;
+    fg_stats_.pacing_wait_ms = 0.0f;
     FrameGenState state;
     state.enabled = true;
     state.temporal_frame = fg_temporal_;
@@ -2036,8 +2086,11 @@ std::optional<std::uint32_t> VkContext::finish_frame_gen(const FrameInfo& frame)
         const std::uint64_t timeout =
             frame_gen_fits(static_cast<std::uint32_t>(images_.size()), min_image_count_) ? UINT64_MAX : 0;
         std::uint32_t index = 0;
+        const auto wait_from = std::chrono::steady_clock::now();
         const VkResult r = vkAcquireNextImageKHR(device_, swapchain_, timeout,
                                                  frames_[frame.frame_slot].generated_available, VK_NULL_HANDLE, &index);
+        fg_stats_.pacing_wait_ms =
+            std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - wait_from).count();
         if (r == VK_SUCCESS || r == VK_SUBOPTIMAL_KHR) {
             if (r == VK_SUBOPTIMAL_KHR) resize_pending_ = true;
             frame_gen_->record_motion(cmd, kFrameGenTime);
@@ -2053,14 +2106,24 @@ std::optional<std::uint32_t> VkContext::finish_frame_gen(const FrameInfo& frame)
                           VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_NONE, 0);
             generated = index;
+            ++fg_stats_.generated;
         } else if (r == VK_ERROR_OUT_OF_DATE_KHR) {
             resize_pending_ = true;
+            ++fg_stats_.skipped_no_image;
         } else if (r != VK_TIMEOUT && r != VK_NOT_READY) {
             vk_check(r, "vkAcquireNextImageKHR (frame generation)");
+        } else {
+            ++fg_stats_.skipped_no_image;
         }
+    } else {
+        ++fg_stats_.skipped_cut;
     }
     // The real frame, left as the frame's own image always is at this point (the screenshot and the present follow).
     composite_into(cmd, frame.image_index, frame_gen_->composite_set(slot, false));
+    if (fg_queries_) {
+        vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, fg_queries_, 2 * frame.frame_slot + 1);
+        fg_query_state_[frame.frame_slot] = generated ? 2 : 1;
+    }
     picture_ready_ = true;
     picture_index_ ^= 1u;
     return generated;

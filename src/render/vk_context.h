@@ -18,6 +18,7 @@
 #include <vk_mem_alloc.h>
 
 #include "render/frame_gen.h"
+#include "render/frame_gen_logic.h"
 #include "render/fsr3_upscaler.h"
 #include "render/pipeline_cache.h"
 #include "render/point_shadows.h"
@@ -237,6 +238,8 @@ public:
     bool frame_gen_active() const { return frame_gen_ && overlay_.image != VK_NULL_HANDLE; }
     // Presented frames per real frame over the last frame: 2 when it generated one, else 1 (the performance window).
     std::uint32_t frames_presented() const { return presented_last_; }
+    // Frame generation's counters, pacing and GPU time (the performance window).
+    FrameGenStats frame_gen_stats() const;
     // Scene pipelines are made for the scene's colour attachments: the colour alone, or under a temporal upscaler
     // (scene_motion()) the colour, the object motion (kMotionFormat) and the reactive mask (kReactiveFormat), as
     // begin_scene renders into. A renderer drawing into targets of its own (the item previews) passes `scene` false
@@ -544,6 +547,14 @@ private:
     bool fg_history_kept_ = false; // and its history went on from the last frame's
     std::uint32_t presented_last_ = 1;
     bool frame_gen_fallback_logged_ = false;
+    bool frame_gen_requested_ = false; // SceneOptions::frame_gen as asked (scene_options_ drops it under FSR 1)
+    FrameGenStats fg_stats_;           // counters and the last measurements (frame_gen_stats fills in the rest)
+    const char* present_mode_ = "";    // the swapchain's present mode
+    // Two timestamps per frame in flight round finish_frame_gen's GPU work (none where the device cannot time).
+    VkQueryPool fg_queries_ = VK_NULL_HANDLE;
+    float timestamp_period_ns_ = 0.0f;  // VkPhysicalDeviceLimits::timestampPeriod, 0: no timestamps
+    std::array<std::uint8_t, kFramesInFlight> fg_query_state_{}; // 0 unwritten, 1 a real frame, 2 with an in-between
+    void read_frame_gen_time(std::uint32_t frame_slot);
     VkPipeline fg_synth_pipeline_ = VK_NULL_HANDLE;
     VkPipeline fg_composite_pipeline_ = VK_NULL_HANDLE;
     VkPipeline rcas_picture_pipeline_ = VK_NULL_HANDLE; // RCAS into a picture (kUpscaleFormat), not the swapchain

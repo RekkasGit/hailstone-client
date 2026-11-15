@@ -215,7 +215,8 @@ Cost and limits: two small compute passes at the scene's size and two full-scree
 plus one composite more. The game reacts up to one real frame later. A moving thing the depth does not hold (glass,
 water's surface) follows what is behind it; thin edges can leave a pixel-wide trace where they were about to cover the
 background. The viewer's `--screenshot-generated` saves the last in-between frame with the real ones round it
-(`FILE_prev`, `FILE_real`) for a side-by-side look; its `--frames` log counts the in-between frames presented.
+(`FILE_prev`, `FILE_real`) for a side-by-side look; its `--frames` log counts the in-between frames presented. The
+performance window shows its rates, skips, pacing and GPU time (`VkContext::frame_gen_stats`, docs/dev-ui.md).
 
 Screenshots copy the presented swapchain image, so the swapchain asks for `TRANSFER_SRC` when the surface offers it;
 where it does not, a screenshot is refused with a log line (and a chat line for the screenshot key) instead of an

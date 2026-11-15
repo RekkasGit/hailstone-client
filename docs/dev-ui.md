@@ -213,7 +213,13 @@ The windows are Lua scripts drawn with ImGui, grouped into user interfaces: ever
 - Developer windows: the info panel, the spawn list and the "Lua UI" control window are off unless `ui.dev_windows=1` in `hailstone.ini`; Ctrl+Shift+D turns them on or off.
 - The performance window (Ctrl+Shift+P, `/perf`, or `ui.perf_window=1`): frame times, where each frame's time goes
   (the main loop's phases, averaged over 60 frames beside the slowest frame of the last 300), renderer counts, memory
-  and traffic. "Log hitches" (`ui.perf_log_hitches=1`) writes every frame of 2.5 times the typical frame time
+  and traffic. With frame generation (docs/graphics.md "Frame generation") the headline shows the rendered and the
+  displayed frame rate (`app::frame_rates`: every image presented against the real frames), and a Frame generation
+  section adds the share of real frames that had an in-between frame, the totals and why frames were skipped (a cut
+  or resize; no free swapchain image), the present mode and image count, the last wait for the second image (part of
+  the Present phase) and the GPU time of frame generation's work, from timestamps round it (with an in-between frame,
+  and for a real frame's composite alone; not shown where the device cannot time). The graph and the phases stay
+  per real frame. "Log hitches" (`ui.perf_log_hitches=1`) writes every frame of 2.5 times the typical frame time
   (20 ms at least) to the log as `perf: hitch ...` with its phases, longest first, then the named sections of the
   frame that took 1 ms or more (`; in it: ...`). The sections are laps the main loop and `LuaUi::frame` mark
   (`core/frame_sections.h`): the Update, UI and Record phases' main calls (Update's: the connection, where a zone

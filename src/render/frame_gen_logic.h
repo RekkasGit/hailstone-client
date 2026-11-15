@@ -26,6 +26,23 @@ constexpr bool frame_gen_ready(const FrameGenState& s) {
     return s.enabled && s.temporal_frame && s.history_kept && s.previous_ready;
 }
 
+// What frame generation has done, for the performance window (VkContext::frame_gen_stats).
+struct FrameGenStats {
+    bool requested = false; // display.frame_gen asks for it
+    bool active = false;    // it runs (a temporal upscaler, its images made)
+    bool no_motion = false; // asked for under FSR 1, which has no motion to follow: off
+    std::uint64_t real = 0;      // real frames ended while it ran
+    std::uint64_t generated = 0; // in-between frames presented
+    std::uint64_t skipped_cut = 0;      // real frames with none: a cut, reset, resize or the first frame (not ready)
+    std::uint64_t skipped_no_image = 0; // ready, but no second swapchain image was free (or it was out of date)
+    float pacing_wait_ms = 0.0f;        // the last frame's wait for its second image (the vsync pacing)
+    float gpu_ms = -1.0f;    // the GPU time of the last measured frame with an in-between frame; < 0 not known
+    float gpu_real_ms = -1.0f; // the same for a real frame alone (its composite)
+    std::uint32_t images = 0, min_images = 0; // the swapchain's
+    bool waits = false;      // frame_gen_fits: the second image is waited for (paced), else taken only when free
+    const char* present_mode = "";
+};
+
 // The swapchain's image count for a surface's limits (`max_count` 0: none): one more than the minimum, as before, and
 // one more again with frame generation, which holds two images per real frame (the generated one and the real one).
 // With min + 2 images an application may wait without a timeout for its second (the Vulkan rule: at most
