@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Texture packs with generated trees: pines no longer show flat slabs of needles across their branches when seen from beside. Rebuild a pack's trees in the Texture Studio to get them
 - Texture packs with generated trees: the trees stand still in the wind again, so their needles and leaves no longer shimmer when you stand near them in the modern lighting. No rebuild needed
 - Options > Upscaler: the choice now takes effect. It was saved with the character but read at start-up from the shared settings, so Temporal and AMD FSR 3.1 never started (and Frame Generation stayed off); it is now one setting for every character, like Anti-aliasing. A choice saved with a character before is brought over when that character enters, and takes effect at the next start
 - Performance window (Ctrl+Shift+P): with Frame Generation on, it shows the rendered and the displayed frame rate, how many frames got an in-between frame and why any were skipped, the vsync pacing and what frame generation costs the GPU
