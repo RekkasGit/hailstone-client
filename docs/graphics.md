@@ -1602,7 +1602,7 @@ zone loads (`Zone::draw_objects`).
 - **Plants:** a replacement sways in the wind as the game's object would (`is_plant`): its cut-out parts flutter. One
   with levels of detail (a generated tree) does not flutter, and its branches sway whole (`render::plant_sway`,
   `assets::Mesh::sway_heights`): the generator gives each vertex the height it sways as, in the second UV set
-  (glTF TEXCOORD_1, asset extras `hailstone_sway`), a branch with its needle sprays and its clump the height of its
+  (glTF TEXCOORD_1, asset extras `hailstone_sway`), a branch with its needle sprays the height of its
   root on the trunk, the trunk and the far cards their own. A sway by each vertex's own height, or a flutter, moved
   a branch's crossing cards apart, so up close its leaves seemed to flip back and forth (a third of the bend without
   the flutter still did). A generated tree now stands still in any case: even with each branch swaying whole, its
@@ -1649,7 +1649,8 @@ trees are a trunk of a few solid prisms under crossed cut-out cards. Each new tr
   Faydark from 11 % to 5 % (the game's own trees 3.5 %) and standing by Lake Rathe's pines in the wind from 0.67 %
   to 0.14 %; the shadows, MSAA, anisotropic filtering and the levels of detail made little difference.
 - **Styles:** a pine (a single upright trunk up into leaves widest low down) grows whorls of drooping branches with
-  two crossed needle sprays and a clump at each end up a leader, the whorls three units apart or more (9 to 18) with
+  two crossed needle sprays up a leader (no clump of crossed cards at a branch's end: its upright card showed as a
+  flat slab from beside the tree), the whorls three units apart or more (9 to 18) with
   four to six branches each, so the crown shows gaps; a broadleaf tree grows branches into the crown by space
   colonisation (Runions, Lane and Prusinkiewicz 2007), leaf clusters at their tips; a willow hangs strands from its
   upper branches. A dead tree (`dead`: Everfrost's and Dagnor's Cauldron's bare pines) grows a few long limbs from its
