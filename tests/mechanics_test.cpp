@@ -445,6 +445,36 @@ TEST_CASE("build_sheet: the profile's fist values, the buff timer hold and the b
     CHECK_FALSE(s.buffs[1].caster_distance);
 }
 
+TEST_CASE("build_sheet: buff ticks left; permanent buffs and held timers do not count down") {
+    net::PlayerProfile p;
+    p.race = 1;
+    p.class_ = 1;
+    p.level = 60;
+    Inventory inventory;
+    SpellState spells;
+    spells.buffs[0].spell = 300;
+    spells.buffs[0].tics = 10;
+    spells.buffs[1].spell = 301;
+    spells.buffs[1].tics = 0xffffffffu;
+    spells.buffs[2].spell = 302;
+    spells.buffs[2].tics = 0xfffffffeu;
+    LiveState live;
+    live.level = 60;
+    live.now_ms = 3 * kBuffTickMs + 100; // three ticks after they arrived (received_ms 0)
+    CharacterSheet s = build_sheet(p, inventory, spells, live);
+    CHECK(s.buffs[0].duration == 7);
+    CHECK(s.buffs[1].duration == -1);
+    CHECK(s.buffs[2].duration == -2);
+    live.now_ms = 100 * kBuffTickMs;
+    s = build_sheet(p, inventory, spells, live);
+    CHECK(s.buffs[0].duration == 0);
+    CHECK(s.buffs[1].duration == -1);
+    spells.buff_timers_on_hold = true;
+    s = build_sheet(p, inventory, spells, live);
+    CHECK(s.buffs[0].duration == 10);
+    CHECK(s.buffs[1].duration == -1);
+}
+
 TEST_CASE("build_sheet: current intoxication replaces the received profile, including fully sober") {
     net::PlayerProfile profile;
     profile.intoxication = 80;
