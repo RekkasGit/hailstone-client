@@ -26,7 +26,7 @@ link. A pasted link (below the store in the Modern pack) still works for any add
 The client fetches the add-on's manifest and shows a card before it writes anything. The card holds:
 
 - the name, version, kind (script or plugin), author, description and repository;
-- what the add-on asks to do, in plain words ("read the game state", "cast spells, use abilities and items, attack");
+- what the add-on asks to do, in plain words ("read the game state", "cast spells, use abilities, items and AAs, attack, loot, order your pet");
 - whether it is signed, and the start of its key;
 - for a plugin, a warning: it is a program, so its permissions limit what it does through Hailstone, not what it can
   do on the computer;
