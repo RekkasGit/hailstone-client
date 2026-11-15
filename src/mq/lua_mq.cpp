@@ -1492,6 +1492,9 @@ bool ScriptHost::run(const std::string& name, const std::vector<std::string>& ar
     };
     m.reap();
     std::string key = lower(name);
+    // The Lua socials' names (button_name): a script of such a name would share a social's config folder and
+    // browser owner.
+    if (key.starts_with(kSocialPrefix)) return refuse(std::format("{}: a script's name cannot start with \"{}\"", key, kSocialPrefix));
     if (Script* old = m.find(key); old && !old->stop_requested) return refuse(key + " is already running");
     // reap() closed every stopped one nothing is in. One still running code (it stops itself and runs itself again)
     // would close later, and its close takes the name's UI registrations away: the new one's too.
@@ -2013,7 +2016,7 @@ namespace hailstone::mq {
 
 namespace {
 
-std::string button_name(const std::string& name) { return "social '" + name + "'"; }
+std::string button_name(const std::string& name) { return std::string(kSocialPrefix) + name + "'"; }
 
 // t[key] = the value at the top, popped (raw: no metamethods run).
 void raw_set(lua_State* L, int t, const char* key) {

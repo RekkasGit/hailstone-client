@@ -1830,3 +1830,14 @@ while true do mq.doevents() mq.delay(10) end
     CHECK(fed > 1);
     CHECK(h.scripts->running("loop"));
 }
+
+TEST_CASE("MQ Lua: no script may have a Lua social's name") {
+    Host h;
+    h.write("social 'test'.lua", "print('ran')\n");
+    std::string why;
+    CHECK_FALSE(h.scripts->run("social 'test'", {}, &why));
+    CHECK(why.find("a script's name cannot start with") != std::string::npos);
+    CHECK_FALSE(h.scripts->run("SOCIAL 'Test'", {}, &why));
+    h.pulses(1);
+    CHECK_FALSE(h.printed_line("ran"));
+}

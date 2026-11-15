@@ -55,6 +55,8 @@ inline constexpr std::size_t kMaxCommandLine = 2048;
 inline constexpr std::int64_t kPressMs = 50;            // a Lua social in press mode runs to its end within this
 inline constexpr std::int64_t kFaceMs = 5;              // a social's face
 inline constexpr std::int64_t kFaceEveryMs = 200;       // how often a face runs
+// A Lua social's name begins so ("social 'Name'"); no script's may (ScriptHost::run).
+inline constexpr std::string_view kSocialPrefix = "social '";
 inline constexpr int kMaxNesting = 16;                  // a bind's thread started from inside the script this deep
 
 struct Script;

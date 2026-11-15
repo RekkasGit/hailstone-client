@@ -406,6 +406,9 @@ command lines, and its hot button then runs that Lua with the same `mq` module s
   cooldown (0..1 of a sweep left), overlay (corner text), enabled (false: dimmed), tooltip}`, or just a label string.
   It runs at most every 200 ms, reads the game state only, and cannot send commands.
 
+A social is named `social '<title>'` in messages, its `mq.configDir` and its other folders; no script may have a name
+that starts `social '`.
+
 ```lua
 -- [press]: heal the target, the big heal under 50% health; Shift heals yourself
 if button.shift then mq.cmd('/target id ' .. mq.TLO.Me.ID()) end
