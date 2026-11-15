@@ -890,7 +890,7 @@ private:
     // display.distance_blur, display.depth_prepass (the zone's depth pre-pass, the modern lighting only),
     // display.bloom (0 off .. 1), display.brightness / contrast / gamma (the grade after the
     // tonemap), display.render_scale (percent, 33..100: below 100 the upscaler upscales), display.sharpness (0..1) and
-    // display.upscaler (fsr1 | taa, read at start-up: render/temporal.h). The Options window's Display page sets them
+    // display.upscaler (fsr1 | taa | fsr3 | off, read at start-up: render/temporal.h). The Options window's Display page sets them
     // (display_option / set_display_option).
     void apply_scene_options() {
         render::SceneOptions scene;
@@ -927,6 +927,12 @@ private:
         scene.gamma = config_float("display.gamma", 1.0f);
         scene.render_scale = static_cast<float>(std::clamp(config_.get_int("display.render_scale", 100), render::kMinRenderScalePercent, 100)) / 100.0f;
         scene.sharpness = std::clamp(config_float("display.sharpness", 0.5f), 0.0f, 1.0f);
+        // Upscaling off (render/temporal.h upscaling_off): full size and no frame generation, at once; a temporal
+        // upscaler the client started with stays on as anti-aliasing until the next start.
+        if (render::upscaling_off(config_.get_string("display.upscaler", "fsr1"))) {
+            scene.render_scale = 1.0f;
+            scene.frame_gen = false;
+        }
         vk_.set_scene_options(scene, shader_dir_);
     }
     std::uint32_t msaa_at_start_ = 0; // apply_scene_options: display.msaa as the client started, 0 before

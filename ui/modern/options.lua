@@ -678,32 +678,39 @@ local function graphicsTab()
     if msaa ~= nil and msaaAtStart ~= nil and msaa ~= msaaAtStart then
       note("Restart the game to change anti-aliasing.")
     end
-    if (upscalerAtStart or 0) >= 1 then note("The temporal upscalers smooth edges themselves: MSAA is off while one is on.") end
-    combo("upscaler", "Upscaler", { "AMD FSR 1", "Temporal (TAA)", "AMD FSR 3.1" },
-      "FSR 1 sharpens each frame on its own, below a render scale of 100. Temporal and FSR 3.1 build a smooth picture over several frames at every render scale and replace MSAA; FSR 3.1 is AMD's, Temporal is Hailstone's own. Takes effect the next time the game starts.")
+    -- 0 Off, 1 FSR 1, 2 Temporal, 3 FSR 3.1 (render/temporal.h upscaler_choice)
+    if (upscalerAtStart or 0) >= 2 then note("The temporal upscalers smooth edges themselves: MSAA is off while one is on.") end
+    combo("upscaler", "Upscaler", { "Off", "AMD FSR 1", "Temporal (TAA)", "AMD FSR 3.1" },
+      "Off draws the 3D world at full size with no upscaling and no Frame Generation. FSR 1 sharpens each frame on its own, below a render scale of 100. Temporal and FSR 3.1 build a smooth picture over several frames at every render scale and replace MSAA; FSR 3.1 is AMD's, Temporal is Hailstone's own. Takes effect the next time the game starts.")
     local upscaler = eq.Option("upscaler")
-    if upscaler ~= nil and upscalerAtStart ~= nil and upscaler ~= upscalerAtStart then
+    -- Off and FSR 1 draw the same way, so a change between them needs no restart.
+    if upscaler ~= nil and upscalerAtStart ~= nil and upscaler ~= upscalerAtStart
+        and (upscaler >= 2 or upscalerAtStart >= 2) then
       note("Restart the game to change the upscaler.")
     end
+    -- Off draws at full size without frame generation: the settings below would do nothing.
+    local off = upscaler == 0
     -- The usual presets (render/temporal.h UpscaleQuality), each a render scale; Custom is the slider's own.
-    local temporal = (upscalerAtStart or 0) >= 1
-    combo("upscale_quality", "Upscale Quality",
-      { temporal and "Native AA" or "Native (no anti-aliasing)", "Quality", "Balanced", "Performance",
-        "Ultra Performance", "Custom" },
-      "Native draws the 3D world at full size (with Temporal or FSR 3.1 that is anti-aliasing alone). Quality, Balanced, Performance and Ultra Performance draw it at 67, 59, 50 and 33 % and upscale it: lower is faster and softer. Custom is the Render Scale below.")
-    -- Frame generation needs a temporal upscaler running: one chosen but not yet started shows it with a note.
-    if temporal or (upscaler or 0) >= 1 then
-      check("frame_gen", "Frame Generation",
-        "Shows a frame made between each two the game draws, from their motion: smoother movement on a high refresh rate screen. The game then draws at most half the refresh rate, keeps vertical sync on and reacts a little later. Needs Temporal or AMD FSR 3.1.")
-      if not temporal and eq.Option("frame_gen") == 1 then
-        note("Frame Generation starts after a restart, when the new upscaler does.")
+    local temporal = (upscalerAtStart or 0) >= 2
+    if not off then
+      combo("upscale_quality", "Upscale Quality",
+        { temporal and "Native AA" or "Native (no anti-aliasing)", "Quality", "Balanced", "Performance",
+          "Ultra Performance", "Custom" },
+        "Native draws the 3D world at full size (with Temporal or FSR 3.1 that is anti-aliasing alone). Quality, Balanced, Performance and Ultra Performance draw it at 67, 59, 50 and 33 % and upscale it: lower is faster and softer. Custom is the Render Scale below.")
+      -- Frame generation needs a temporal upscaler running: one chosen but not yet started shows it with a note.
+      if temporal or (upscaler or 0) >= 2 then
+        check("frame_gen", "Frame Generation",
+          "Shows a frame made between each two the game draws, from their motion: smoother movement on a high refresh rate screen. The game then draws at most half the refresh rate, keeps vertical sync on and reacts a little later. Needs Temporal or AMD FSR 3.1.")
+        if not temporal and eq.Option("frame_gen") == 1 then
+          note("Frame Generation starts after a restart, when the new upscaler does.")
+        end
       end
-    end
-    slider("render_scale", "Render Scale", 33, 100, pct,
-      "Draws the 3D world at this share of its size and upscales it. Lower is faster and softer; the interface stays sharp.")
-    if (eq.Option("render_scale") or 100) < 100 or (upscalerAtStart or 0) >= 1 then
-      ticks("sharpness", "Upscale Sharpening", function(t) return pct(t * 5) end,
-        "How much the upscaled picture is sharpened.")
+      slider("render_scale", "Render Scale", 33, 100, pct,
+        "Draws the 3D world at this share of its size and upscales it. Lower is faster and softer; the interface stays sharp.")
+      if (eq.Option("render_scale") or 100) < 100 or temporal then
+        ticks("sharpness", "Upscale Sharpening", function(t) return pct(t * 5) end,
+          "How much the upscaled picture is sharpened.")
+      end
     end
     check("grass", "Radial Flora",
       "Grass, flowers and ferns on the newer zones' open ground, and Hailstone's grass on classic zones such as East Commonlands (/showgrass).")
