@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cmath>
+#include <cstdlib>
 
 #include "core/atomic_file.h"
 #include "platform/paths.h"
@@ -154,6 +156,14 @@ int Config::get_int(std::string_view key, int fallback) const {
     int out = 0;
     auto [p, ec] = std::from_chars(v->data(), v->data() + v->size(), out);
     return (ec == std::errc() && p == v->data() + v->size()) ? out : fallback;
+}
+
+float Config::get_float(std::string_view key, float fallback) const {
+    auto v = get(key);
+    if (!v || v->empty()) return fallback;
+    char* end = nullptr;
+    const float f = std::strtof(v->c_str(), &end);
+    return end != v->c_str() && std::isfinite(f) ? f : fallback;
 }
 
 bool Config::get_bool(std::string_view key, bool fallback) const {

@@ -26,12 +26,14 @@
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "core/path_utf8.h"
 #include "game/chat_windows.h"
 #include "game/combat.h"
 #include "game/eq_names.h"
 #include "game/item_links.h"
 #include "game/spells.h"
 #include "net/game_connection.h"
+#include "plugin/lua_keep.h"
 #include "platform/local_time.h"
 #include "ui/dev_screens.h"
 #include "ui/ui_ini.h"
@@ -269,8 +271,8 @@ std::string escape_linking(std::string_view text, std::string& name) {
     return escape(text);
 }
 
-// One line as STML: its colour, item links as <a WndNotify="27,tag"> (the tag between the two \x12); with `names`,
-// its player's name as a name link.
+// One line as STML: its colour, item links as <a WndNotify="27,data"> (the tag between the two \x12, encoded by
+// game::stml_link_data); with `names`, its player's name as a name link.
 // Hailstone: "[hh:mm:ss] " in grey before a line (local time), nothing for a line of unknown time.
 // eq.ChatText formats every line of a window again each time a line comes, and each local time read the time zone
 // again (glibc stats /etc/localtime every call): the stamps were most of a chat window's frame in a fight. Time zones
@@ -327,9 +329,7 @@ std::string line_stml(const ui::ChatLine& l, bool names, bool stamps = false) {
         }
         auto link = game::parse_item_link(tag);
         std::string shown = link ? link->text : tag;
-        std::string data;
-        for (char ch : tag) data += ch == '"' ? '\'' : ch;
-        out += std::format("<a WndNotify=\"27,{}\">{}</a>", data, escape(shown));
+        out += std::format("<a WndNotify=\"27,{}\">{}</a>", game::stml_link_data(tag), escape(shown));
         at = b + 1;
     }
     return out + "</c>";
@@ -368,7 +368,7 @@ void set_user_color(EqHost& host, int index, std::uint32_t rgb) {
     if (!save_chat_settings(chat_ini, "TextColors",
                             {{red, std::to_string((rgb >> 16) & 0xff)},
                              {green, std::to_string((rgb >> 8) & 0xff)},
-                             {blue, std::to_string(rgb & 0xff)}})) log::warn("cannot write {}", chat_ini.string());
+                             {blue, std::to_string(rgb & 0xff)}})) log::warn("cannot write {}", path_utf8(chat_ini));
 }
 
 // CChatWindowManager::GetRGBAFromIndex @0x6508a0: the basic colours below 256, the eqclient.ini user colours from 256
@@ -1402,8 +1402,7 @@ int ChatText(lua_State* L) {
     for (std::size_t k = from; k < h.chat->lines.size(); ++k) {
         const auto& l = h.chat->lines[k];
         if (line_seq(*h.chat, k) <= c.cleared || window_of_line(l) != w) continue;
-        std::string s = line_stml(l, names, stamps);
-        lua_pushlstring(L, s.data(), s.size());
+        plugin::push_made(L, line_stml(l, names, stamps)); // (out of this frame before the push: plugin/lua_keep.h)
         lua_rawseti(L, -2, ++i);
     }
     if (!since) return 2;
@@ -1528,12 +1527,16 @@ std::string slash_word(std::uint32_t id, const char* fallback) {
 // `text` (game::cycle_reply): its new text, nil when it stays
 int ChatCycleReply(lua_State* L) {
     EqHost& h = host(L);
-    std::string text = luaL_checkstring(L, 1);
+    const char* text = luaL_checkstring(L, 1);
+    const bool back = lua_toboolean(L, 2) != 0;
     if (!h.conn) return 0;
-    game::CycleReply r = game::cycle_reply(text, h.conn->social().last_tells, h.conn->last_tell_index(),
-                                           lua_toboolean(L, 2) != 0, slash_word(13974, "/tell"),
-                                           slash_word(14202, "/rtarget"));
-    for (std::uint32_t id : r.messages) h.conn->system_message(id);
+    // The reply in a box the state owns across its push (plugin/lua_keep.h).
+    game::CycleReply& r = plugin::lua_keep<game::CycleReply>(L);
+    plugin::cxx_guard(L, [&] {
+        r = game::cycle_reply(text, h.conn->social().last_tells, h.conn->last_tell_index(), back,
+                              slash_word(13974, "/tell"), slash_word(14202, "/rtarget"));
+        for (std::uint32_t id : r.messages) h.conn->system_message(id);
+    });
     if (r.text.empty()) return 0;
     lua_pushlstring(L, r.text.data(), r.text.size());
     return 1;
@@ -1864,7 +1867,8 @@ int ChatLink(lua_State* L) {
         return 0;
     }
     if (luaL_checkinteger(L, 2) != 27) return 0;
-    if (auto link = game::parse_item_link(luaL_checkstring(L, 3)); link && h.click_link) h.click_link(*link);
+    if (auto link = game::parse_item_link(game::stml_link_tag(luaL_checkstring(L, 3))); link && h.click_link)
+        h.click_link(*link);
     return 0;
 }
 

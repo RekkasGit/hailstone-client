@@ -59,6 +59,7 @@
 #include "game/zone_names.h"
 #include "game/zone_routes.h"
 #include "net/game_connection.h"
+#include "plugin/lua_keep.h"
 #include "ui/dev_screens.h"
 #include "ui/lua/lua_host.h"
 #include "ui/ui_ini.h"
@@ -2021,11 +2022,16 @@ std::string zone_title(std::uint32_t id) {
     std::string n = game::zone_long_name(id);
     return n.empty() ? game::zone_short_name(id) : n;
 }
+// A name made for a field, out of the caller's frame before the push (plugin/lua_keep.h).
+void set_made(lua_State* L, const char* key, std::string&& v) {
+    plugin::push_made(L, std::move(v));
+    lua_setfield(L, -2, key);
+}
 void push_zone(lua_State* L, std::uint32_t id) {
     lua_createtable(L, 0, 4);
     set_field(L, "id", id);
-    set_field(L, "zone", game::zone_short_name(id));
-    set_field(L, "name", zone_title(id));
+    set_made(L, "zone", game::zone_short_name(id));
+    set_made(L, "name", zone_title(id));
     set_field(L, "expansion", game::zone_expansion(id));
 }
 
@@ -2054,7 +2060,7 @@ int AtlasIndex(lua_State* L) {
         const auto& z = index.zones[i];
         const std::uint32_t id = game::zone_id_by_short_name(z.zone);
         lua_createtable(L, 0, 9);
-        set_field(L, "zone", id ? game::zone_short_name(id) : z.zone);
+        set_made(L, "zone", id ? game::zone_short_name(id) : std::string(z.zone));
         set_field(L, "name", z.name);
         set_field(L, "page", z.page);
         set_rect(L, z.rect);
@@ -2074,17 +2080,25 @@ int AtlasIndex(lua_State* L) {
 int AtlasPageData(lua_State* L) {
     MapState& s = *state_of(L);
     EqHost& h = *host_of(L);
-    const std::string file = luaL_checkstring(L, 1);
-    auto it = s.atlas_pages.find(lower(file));
-    if (it == s.atlas_pages.end()) {
-        auto text = s.read_atlas(h, file);
-        if (!text) {
-            lua_pushnil(L);
-            return 1;
+    const char* file_arg = luaL_checkstring(L, 1);
+    // Found or read in this scope: the page is the state's (MapState::atlas_pages), and nothing of this frame's is
+    // alive across the pushes after it (plugin/lua_keep.h).
+    const game::AtlasPage* found = nullptr;
+    plugin::cxx_guard(L, [&] {
+        const std::string file = file_arg;
+        auto it = s.atlas_pages.find(lower(file));
+        if (it == s.atlas_pages.end()) {
+            auto text = s.read_atlas(h, file);
+            if (!text) return;
+            it = s.atlas_pages.emplace(lower(file), game::parse_atlas_page(*text)).first;
         }
-        it = s.atlas_pages.emplace(lower(file), game::parse_atlas_page(*text)).first;
+        found = &it->second;
+    });
+    if (!found) {
+        lua_pushnil(L);
+        return 1;
     }
-    const game::AtlasPage& page = it->second;
+    const game::AtlasPage& page = *found;
     lua_createtable(L, 0, 9);
     set_field(L, "width", page.width());
     set_field(L, "height", page.height());
@@ -2120,7 +2134,7 @@ int AtlasPageData(lua_State* L) {
         lua_createtable(L, 0, 7);
         set_field(L, "action", l.action);
         const std::uint32_t id = l.action == 2 ? game::zone_id_by_short_name(l.target) : 0;
-        set_field(L, "target", id ? game::zone_short_name(id) : l.target);
+        set_made(L, "target", id ? game::zone_short_name(id) : std::string(l.target));
         set_field(L, "tip", l.tooltip);
         set_rect(L, l.rect);
         lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
@@ -2134,7 +2148,8 @@ int AtlasPageData(lua_State* L) {
 int AtlasTexture(lua_State* L) {
     MapState& s = *state_of(L);
     EqHost& h = *host_of(L);
-    const auto* t = h.textures ? h.textures->game_file("Atlas/" + s.atlas_skin + "/" + luaL_checkstring(L, 1)) : nullptr;
+    const char* file = luaL_checkstring(L, 1); // (checked first: the path below is a std::string)
+    const auto* t = h.textures ? h.textures->game_file("Atlas/" + s.atlas_skin + "/" + file) : nullptr;
     if (!t) {
         lua_pushnil(L);
         return 1;

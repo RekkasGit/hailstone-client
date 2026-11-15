@@ -23,6 +23,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "assets/character.h"
@@ -236,7 +237,7 @@ private:
     void load_layers(const Source& lay);
     std::unordered_map<std::string, Source> layer_sources_;       // "C_GBN_S01_M01" -> gbn.eqg / gbn.lay
     std::unordered_map<std::string, eqg_character::Layer> layers_; // upper-case name -> layer
-    std::vector<std::string> loaded_lays_;                         // "gus.eqg/gus.lay"
+    std::unordered_set<std::string> loaded_lays_;                  // "gus.eqg/gus.lay"
     std::optional<std::unordered_map<std::string, std::pair<std::string, std::string>>> layered_parts_; // read once
 };
 

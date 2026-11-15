@@ -5,6 +5,7 @@
 #include <initializer_list>
 
 #include "game/eq_strings.h"
+#include "game/item_links.h"
 #include "game/item_preview.h"
 #include "game/merchant.h"
 #include "game/mechanics/item_stats.h"
@@ -369,7 +370,8 @@ std::string augment_socket_row_text(const net::Item& item, int socket, const Aug
         third = str(s.strings, 6699); // empty
     } else {
         // CStmlWnd::MakeWndNotificationTag(27, name, "0^i") @0087e130.
-        third = std::format("<a WndNotify=\"27,0^{}\">{}</a>", socket, aug->name);
+        // (the name is the server's database text: escaped so it cannot end the tag)
+        third = std::format("<a WndNotify=\"27,0^{}\">{}</a>", socket, escape_stml(aug->name));
     }
     std::string row = str(s.strings, 3355, {std::to_string(socket + 1), type_name, third});
     auto wrap = [](std::uint32_t argb, const std::string& text) {

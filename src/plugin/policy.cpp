@@ -38,7 +38,11 @@ constexpr std::string_view kTarget[] = {"Send_OP_TargetCommand_004e9790", "Cmd_a
 constexpr std::string_view kActions[] = {"Cmd_cast",     "Cmd_discipline", "Cmd_doability", "Cmd_useitem",
                                          "Cmd_attack",   "Cmd_memspellset", "Cmd_stopcast",  "Cmd_stopdisc",
                                          "Cmd_bandolier", "Cmd_potionbelt", "Cmd_stopsong",  "Cmd_melody",
-                                         "Cmd_spellscribe", "Cmd_aggressive", "Cmd_stance"};
+                                         "Cmd_spellscribe", "Cmd_aggressive", "Cmd_stance",
+                                         // They act in the game too: order the pet, loot, move the cursor's item, use
+                                         // or buy an AA, give money away, let others drag the corpse, delete the guild.
+                                         "cmd_pet",      "__do_loot",     "cmd_autoinventory", "cmd_alternateadv",
+                                         "Cmd_split",    "Cmd_consent",   "Cmd_guilddelete"};
 constexpr std::string_view kMove[] = {"Cmd_follow", "Cmd_sit", "Cmd_stand", "Cmd_duck", "Cmd_dismount",
                                       "Cmd_corpsedrag", "Cmd_camp", "Cmd_kneel"};
 constexpr std::string_view kChat[] = {"Cmd_say",   "Cmd_gsay",     "Cmd_shout",     "Cmd_auction",  "Cmd_ooc",
@@ -105,9 +109,9 @@ std::vector<std::string> caps_described(std::uint32_t caps) {
     // The same order as kNames.
     static constexpr std::array<const char*, 13> kWords{
         "read the game state",
-        "run commands (windows, options, other plugins' commands)",
+        "run other commands (windows, options, /who, other plugins' commands)",
         "change your target",
-        "cast spells, use abilities and items, attack",
+        "cast spells, use abilities, items and AAs, attack, loot, order your pet",
         "move your character (face, follow, sit, camp)",
         "speak for you (say, tells, group, guild, channels)",
         "see the chat lines, and hide them",

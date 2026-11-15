@@ -44,7 +44,7 @@ While zoning (`LoginInfo::zoning = true`), world skips the guild list and charac
 
 | Packet | Dir | Opcode | Layout as implemented |
 |---|---|---|---|
-| SendLoginInfo | C→W | 0x7a09 | 464 B. +0 `char[64]` "account\0key\0"; +64 `char[124]` custom-files key (NUL-terminated, empty normally); +188 u8 zoning; +192 u8 0xcc; rest 0 |
+| SendLoginInfo | C→W | 0x7a09 | 464 B. +0 `char[64]` "account\0key\0"; +64 `char[124]` custom-files key (NUL-terminated, so at most 123 characters; empty normally); +188 u8 zoning; +192 u8 0xcc; rest 0 |
 | LogServer | W→C | 0x7ceb | 560 B. +4 u8 pvp, +8 u8 enable_FV, +36 `char[32]` world short name |
 | ApproveWorld | W→C | 0x7499 | 544-byte constant; not decoded |
 | EnterWorld | W→C | 0x578f | cstr name |
@@ -206,7 +206,7 @@ None of these has a RoF2 translator except OP_ShopPlayerBuy/Sell (field copies) 
 | TradeRequest | both | 0x77b5 | 8 B: u32 the other side, u32 the sender. C→Z on a left click on a spawn while holding an item (within AvatarHeight + 20, 12294; banker-type classes 40/63/64/66/74 refuse, 8505). Z→C (a player asks): the client opens its trade window at once and answers the Ack |
 | TradeRequestAck | both | 0x14bf | 8 B: {the other side, the sender}. For an NPC the server answers it itself ({me, NPC}); then the cursor item goes into the trade (OP_MoveItem cursor → {3, slot}, count 0; a stack merges first) and the give window (4 slots) opens; players get the trade window (8 slots) |
 | TradeAcceptClick | both | 0x69e2 | 8 B: u32 partner, u8 ready (1), 3 unset bytes. The server forwards it to a player partner (byte +4 = their ready flag); for an NPC it finishes the trade |
-| TradeCoins | Z→C | 0x4206 | 12 B: u32 the receiver's own id, u8 coin type (0 cp .. 3 pp), 3 B, u32 amount added (a delta) |
+| TradeCoins | Z→C | 0x4206 | 12 B: u32 the receiver's own id, u8 coin type (0 cp .. 3 pp), 3 B, u32 amount added (a delta; Hailstone holds the total at 0xffffffff rather than wrapping) |
 | MoveCoin | C→Z | 0x0bcf | 20 B: i32 from, i32 to (0 cursor, 1 inventory, 2 bank, 3 trade, 4 shared bank), i32 type from, type to, i32 amount. Coin goes into a trade in two moves, inventory → cursor and cursor → trade |
 | CancelTrade | both | 0x354c | 8 B: C→Z {partner, me}; Z→C {the receiver's own id (player partner) or the NPC id, action}. On receipt the client prints 1448/1450 and sends its own cancel back while a partner is set. Refunds come as item packets and OP_MoneyUpdate, then OP_FinishWindow/2 (empty) |
 | FinishTrade | Z→C | 0x3993 | empty: the trade window closes; received items follow as type 0x67 (or 0x6a onto the cursor) |
@@ -694,7 +694,7 @@ RoF2 has no OP_TraderBuy: everything goes through OP_Trader (trader mode) and OP
 | Barter 0x10 / 0x14 / 0x16 | Z→C | 0x243a | 0x10 {name}: 6060 "browsing"; 0x14 {name at +8, text at +0x48}: 6070 / 788 (EQEmu sends a chat line instead); 0x16: "Your inventory is full!" |
 | Barter 0x11 / 0x14 / 0x17 | C→Z | 0x243a | 0x11 4 B the hall's welcome; 0x14 8 B {0x14, buyer character} the buyer's greeting; 0x17 4 B the buyers for the search window's combo, once per zone |
 | Barter 0x1a / 0x1b, BuyerItems 0x19 | Z→C | both | 0x1a {zone, character id, spawn id, name[64]} adds a buyer to the combo, 0x1b {character id} removes one, BuyerItems 0x19 {count, records} replaces them (EQEmu never sends it; the records stop where the data does) |
-| BuyerItems 5 | Z→C | 0x1a6a | {5, u32 length, "<count>$<record>$..."}: lines in the BART ini format, stored and saved (EQEmu never sends it) |
+| BuyerItems 5 | Z→C | 0x1a6a | {5, u32 length, "<count>$<record>$..."}: lines in the BART ini format, stored and saved; records stop when the text does, whatever the count (EQEmu never sends it) |
 
 The trader window opens only with the membership feature 0xe and in The Bazaar (zone flag 0x10000000, only zone 151); Begin Trader needs the player standing on a trader stall (the floor switch under the feet, types 0x99 / 0x9b, else 6743); its 200 slots are the items in Trader's Satchels (bag type 51) in the general slots, in slot order; prices come from `[ItemToSell]` of `BZR_<name>_<server>.ini` (key: the item id, or "id:charges" for an item with a click spell), written by Set Price (6751) for every slot holding the same item. Prices show as "12p 3g 4s 5c". Each price button opens the amount dialog: gold, silver and copper 0..100 as on the original; platinum 0..4,294,967, where the original stops at 1,000,000 (a deliberate difference: the price fields are 32-bit copper on the wire and in EQEmu's `trader.item_cost`, so a price is held at 4,294,967,295 copper).
 

@@ -153,6 +153,9 @@ void ActionsUi::enter_zone(const std::filesystem::path& hot_buttons_ini) {
     loadouts_fresh_ = true;
     save_character(); // what waited for save_if_due, before the zone (or the next character's file)
     if (who == loaded_for_) return;
+    // Another character: the running social (an index into the last one's socials) and its counters stop, as
+    // /stopsocial does. The same character zoning leaves it as it is.
+    stop_social();
     loaded_for_ = who;
     char_ini_path_ = hot_buttons_ini;
     char_ini_.load(char_ini_path_);
@@ -1080,9 +1083,9 @@ void ActionsUi::draw_actions(net::GameConnection& conn, const mech::Character* c
                 int index = social_page_ * game::kSocialButtons + i;
                 game::Social& s = store_.social(index);
                 ImGui::PushID(index);
+                // Queued as a hot button's press is (/pause, /timer, /alt act and Lua socials run as there).
                 if (ImGui::Button(s.empty() ? "(empty)##s" : (s.name + "##s").c_str(), ImVec2(em * 6.0f, 0)) && !s.empty())
-                    for (const std::string& line : s.lines)
-                        if (!line.empty()) conn.send_command(line);
+                    press_social(index);
                 if (!s.empty() && ImGui::BeginDragDropSource()) {
                     HotButton hb;
                     hb.type = HotButtonType::Social;

@@ -85,7 +85,11 @@ Hailstone's limits.
 - **The close box** (Gamepad UI: B) puts the question away without an answer: the next zone-in asks again.
 - **Nothing covers it.** While the question is up, its window (the UI pack's, or the client's own when the pack has
   none) is raised above every other window at the end of each frame, and no plugin's window or script's ImGui can
-  draw over all windows (`ui.Foreground` is refused them) or find where the question is (`ui.FindWindowRect`).
+  draw over all windows (`ui.Foreground` is refused them), find where the question is (`ui.FindWindowRect`), or
+  draw into it: `ui.Begin` on the question's window (or the client's prompt's name, before its first frame too)
+  returns not visible and begins nothing, `ui.BeginChild` inside it likewise, and `ui.End` cannot close it. What a
+  script's draw function leaves open, or sets for a next window it never begins, is closed and dropped when it
+  returns, so it never reaches the question's window drawn after it.
   Only the pack's own code puts the client's prompt away for a window of its own (`eq.WindowShown("PluginConsent")`
   from a plugin's code does not), and a plugin's code neither sees the question nor answers it. A compiled plugin
   already loaded is native code and is not held by this.
@@ -150,9 +154,9 @@ extension's `command_line`) from the moment it lost the bit, and its web tabs cl
 | Bit | Name | Lets a script or plugin |
 |---|---|---|
 | 1 | `read` | read game state: `mq.TLO`, `${...}`, `mq.parse`, `ParseMacroData`, spawn events |
-| 2 | `commands` | run commands outside the groups below: windows, options, `/who`, other plugins' commands, `/lua`; add commands of its own (`mq.bind`, `AddCommand`) |
+| 2 | `commands` | run commands outside the groups below: windows, options, `/who`, other plugins' commands, `/lua`; add commands of its own (`mq.bind`, `AddCommand`). The player is told "run other commands (windows, options, /who, other plugins' commands)" |
 | 4 | `target` | change the target: `/target`, `/assist`, `/xtarget`, ... |
-| 8 | `actions` | act: `/cast`, `/disc`, `/doability`, `/useitem`, `/attack`, `/memspellset`, non-movement `/keypress`; Hailstone's own item commands `/destroy`, `/destroycursor` and `/stowcursor` |
+| 8 | `actions` | act: `/cast`, `/disc`, `/doability`, `/useitem`, `/attack`, `/memspellset`, `/pet`, `/loot`, `/autoinventory`, `/alternateadv` (`/alt`), `/split`, `/consent`, `/guilddelete`, non-movement `/keypress`; Hailstone's own item commands `/destroy`, `/destroycursor` and `/stowcursor` |
 | 16 | `move` | move: `/face`, movement `/keypress` (forward, jump, ...), `/follow`, `/sit`, `/stand`, `/duck`, `/camp` |
 | 32 | `chat` | speak: plain text, `/say`, `/tell`, `/g`, `/gu`, `/rs`, channels, emotes |
 | 64 | `events` | see chat lines: `mq.event`, `OnIncomingChat`, and hide them (`OnFilterChat`) |
@@ -202,7 +206,7 @@ end, after what it registered is taken back. For the same reason an `mq.TLO` val
 | `mq.web.open(url [, w, h])`, `.navigate`, `.nav`, `.close`, `.eval`, `.post`, `.messages`, `.text`, `.state`, `.tabs`, `.view(tab, w, h)`, `.available` | the script's own tabs of the in-game browser ("Web pages" below); `view` in an `mq.imgui` window |
 | `mq.parse(text)`, `mq.gettime()`, `mq.exit()` | |
 | `mq.getAllSpawns()`, `mq.getFilteredSpawns(fn)` | spawn values |
-| `mq.pickle(path, table)`, `dofile(path)` / `loadfile(path)` | settings files under `mq.configDir` (`scripts/config/`, or `scripts/config/<script>/` for a script without every capability, above); read back as data, with nothing to call |
+| `mq.pickle(path, table)`, `dofile(path)` / `loadfile(path)` | settings files under `mq.configDir` (`scripts/config/`, or `scripts/config/<script>/` for a script without every capability, above); read back as data, with nothing to call: the file runs with an empty environment, and `loadfile` hands back only what it returned, refusing a file whose values are or hold a function (`nil` and why; `dofile` raises it), since a script writes these files as it likes. A file is at most 8 MiB, and a write that would leave `mq.configDir` holding more than 1000 files or 64 MiB is refused (an error) |
 | `mq.luaDir`, `mq.configDir` | |
 | `print(...)`, `printf(fmt, ...)` | the chat window |
 | `require('mq')`, `require('ImGui')`, `require('mymodule')` | modules next to the script or in the script folders. **Each module file is checked like the script: the server's, or the player's when allowed. A module runs with the requiring script's capabilities, so its own file must be allowed at least those:** an add-on's module (under its manifest's ceiling) does not run in a script that may do more, while the player's own libraries (`lib/Write.lua`) still serve the player's scripts and add-ons. |
@@ -659,8 +663,9 @@ and say so in the chat window.
   spell's type (as above). An entry with spell id 0 is all zeros. The pet window's slot number is not included.
 
 - `get_spawns_data_bulk`: every spawn in the zone, as a 16-byte header followed by one record per spawn. Records are
-  added until fewer than 4096 bytes are left in `out`: below 4096 bytes it returns 0, and it needs at least 4112
-  bytes to write any record and a few hundred bytes per spawn on top; the header's count says how many records follow.
+  added until fewer than 4096 bytes are left in `out`, or until the next record (its fixed part and seven strings)
+  would not fit in what is left: below 4096 bytes it returns 0, and it needs at least 4112 bytes to write any record
+  and a few hundred bytes per spawn on top. Only whole records are written; the header's count says how many follow.
 
   Header (`HS_Bulk_SpawnHeader`, `HS_BULK_SPAWN_HEADER_SIZE` = 16 bytes):
 
@@ -884,9 +889,9 @@ a line in the log once.
 | Needs | `eq` functions |
 |---|---|
 | nothing | everything that reads or draws (`eq.Item`, `eq.AllItems`, `eq.ItemStats`, `eq.ItemKept`, `eq.ItemJob`, `eq.ChildState`, `eq.ListRow`, `eq.SpellBook`, `eq.DrawMap`, ...), a window's place and size (`eq.ReplaceWindow`, `eq.WindowPlaced`, `eq.SizeWindow`), the map's zoom and pan, opening a menu (`eq.WindowContextMenu`, `eq.ChatMenu`, `eq.HotBarMenu`; choosing a row is below), the close-top-window key's press (`eq.TakeCloseTopWindow`) |
-| `commands` | `eq.ShowWindow`, `eq.SetOption`, `eq.SetUiIni`, `eq.ShowSpell`, the chat windows' setup (`eq.ChatNewWindow`, `eq.ChatSetFilter`, ...), the spell sets' and the autoskill list's editing, the map's find path, the Find window (`eq.FindOpen`) and its guide path (`eq.FindNpcPath`), the social editors, `eq.gamepad.set_*` |
+| `commands` | `eq.ShowWindow`, `eq.SetOption`, `eq.SetUiIni`, `eq.ShowSpell`, the chat windows' setup (`eq.ChatNewWindow`, `eq.ChatSetFilter`, ...), the spell sets' and the autoskill list's editing, the map's find path, the Find window (`eq.FindOpen`) and its guide path (`eq.FindNpcPath`), the social editors, `eq.gamepad.set_*` and `eq.gamepad.request_focus` (menu mode, as `set_mode`) |
 | `target` | `eq.FindNpcTarget` (the Find window's row) |
-| `move` | `eq.FindNpcWalk` (the Find window's Walk there) and `eq.ZoneExitWalk` (the zone finder's), both `/nav` walks |
+| `move` | `eq.FindNpcWalk` (the Find window's Walk there) and `eq.ZoneExitWalk` (the zone finder's), both `/nav` walks. (`/nav` itself needs `move`, and the doors a walk opens on its way come with it; `/nav door ... click`, which clicks the door on arrival, needs `actions` too) |
 | `actions` | a stock window's controls (`eq.ClickChild`, `eq.ClickChildAt`, `eq.WindowButton`, `eq.StmlLink`, `eq.SetWindowText`, `eq.ListClick`, `eq.ListHeaderClick`, `eq.ComboSelect`, `eq.SetSlider`, `eq.SetTabPage`), the menus' rows (`eq.CascadeClick`, `eq.GameMenuClick`), items and the cursor (`eq.ClickSlot`, `eq.BagSlotClick`, `eq.BankSlotClick`, `eq.PlaceClick`, `eq.PickUp`, `eq.SortItems`, `eq.SellJunk`, `eq.BulkItems` (sell, tribute, destroy or withdraw chosen items), `eq.StopItemJob`, `eq.SetItemKept` / `eq.SetItemsKept` (a Keep mark taken off lets the item be destroyed), the parcels, `eq.gamepad.drop_cursor`), hot buttons and gems (`eq.ClickHotButton`, `eq.PressButtonFrom`, `eq.ClearCursorButton`, `eq.SpellGemClick`), spells and abilities (`eq.SpellBookClick`, `eq.SpellBookMemorize`, `eq.SpellBookSwap`, `eq.MemorizeSpellSet`, `eq.UseSkill`, `eq.AbilityBookUse`, `eq.AbilityBookAutoskillEnable`), socials (`eq.PressLuaSocial`, `eq.PressSocial`, `eq.StopSocial`, `eq.SocialToCursor`; `eq.SetLuaSocial` and `eq.LuaSocialDryRun`, which runs the code it is given with the server's Lua social capabilities, need `commands` too) |
 | checked by the function | the plugins' (above), the scripts' (refused), the pre-game screens' (nil), the web's (`web`); `eq.ChatSubmit`'s line goes through the command filter, which holds it to the plugin's capabilities as any command it sends (plain text needs `chat`, `/cast` needs `actions`) |
 

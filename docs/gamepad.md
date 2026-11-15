@@ -156,9 +156,9 @@ ls rs up down left right touchpad`. Axis names are `lx ly rx ry lt rt` (-1..1 af
 | `eq.gamepad.set_cross_slot(set, slot, bar, button)` | bool: the slot set and saved (`gamepad.cross.*`) |
 | `eq.gamepad.glyph(b)` | the label for the connected pad: `"A"`/`"Cross"`/`"B"` ..., `"LB"`/`"L1"`/`"L"` ... |
 | `eq.gamepad.binding(input)` / `set_binding(input, action)` | the action string for an input such as `"x"` or `"lt+a"`: `""` for a chord with no binding of its own (its cross slot applies), nil for an unknown input; `set_binding` returns bool, and `""` or nil puts the default back |
-| `eq.gamepad.setting(name)` / `set_setting(name, value)` | the `gamepad.*` numbers above, by name with or without the `gamepad.` prefix (booleans 0 / 1; `set_setting` also takes true / false, clamps, saves and returns bool); nil for an unknown name |
-| `eq.gamepad.rumble(low, high, ms)` | bool (0..1 strengths); false without a pad, rumble or with `gamepad.rumble = 0` |
-| `eq.gamepad.request_focus(window)` | puts the pad in menu mode with ImGui's focus on that Lua window (its `ui.Begin` title), from the next frame once the window exists |
+| `eq.gamepad.setting(name)` / `set_setting(name, value)` | the `gamepad.*` numbers above, by name with or without the `gamepad.` prefix (booleans 0 / 1; `set_setting` also takes true / false, clamps, saves and returns bool, false for NaN or an infinity); nil for an unknown name. A NaN or infinite value in `hailstone.ini` loads as the default |
+| `eq.gamepad.rumble(low, high, ms)` | bool (0..1 strengths, clamped; `ms` at most 5000); false without a pad, rumble, with `gamepad.rumble = 0`, or for a NaN or infinite strength |
+| `eq.gamepad.request_focus(window)` | puts the pad in menu mode with ImGui's focus on that Lua window (its `ui.Begin` title), from the next frame once the window exists. As `set_mode`, a plugin's code needs `commands` for it (docs/plugins.md "What plugin windows may do"): a plugin's window without it does not take the pad's focus when it appears |
 | `eq.gamepad.drop_cursor()` | bool: drops the cursor item on the ground as a click on the world with it does (`request_drop_cursor`, its confirmation when the game asks); false when nothing is held. The pad has no pointer to click the world with |
 | `eq.gamepad.takes_b()` | a UI window will close itself on B this frame (game mode), so the client's B (stop casting, close the top window, clear the target) leaves the target alone, as Escape closes only the top window |
 

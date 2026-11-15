@@ -185,6 +185,22 @@ TEST_CASE("UseSkill: kick goes through DoAttack with a hasted combat timer") {
     CHECK(use_skill(c, st, skill::kKick).sends.size() == 1);
 }
 
+TEST_CASE("UseSkill: SPA 227 past a combat skill's reuse leaves no timer instead of wrapping it") {
+    // A deliberate change from RoF2: the original's DoAttack keeps the negative reuse as an unsigned timer.
+    Fixture f;
+    f.sheet.skills[skill::kKick] = 10;
+    f.effects[{0xe3, skill::kKick}] = 10; // 10 s off an 8 s reuse
+    CHECK(skill_reuse_time(f.ch, skill::kKick) == -2000);
+    SkillState st;
+    SkillContext c = f.context(1000000);
+    c.target = Fixture::rat(10.0f);
+    REQUIRE(use_skill(c, st, skill::kKick).sends.size() == 1);
+    CHECK(st.timers.combat_ticks[0] == 0);
+    c.now += 1;
+    st.timers.update(f.ch, c.now, false, false);
+    CHECK(use_skill(c, st, skill::kKick).sends.size() == 1);
+}
+
 TEST_CASE("UseSkill: a skill the server's profile gives is used without the game's skill caps") {
     // No SkillCaps.txt (or another server's caps): GetAdjustedSkill alone says 0, which refused kick, bash and
     // taunt without a word.

@@ -555,16 +555,7 @@ int AbilityBookAutoskillMove(lua_State* L) {
     const char* key_arg = luaL_checkstring(L, 1);
     const auto delta = luaL_checkinteger(L, 2);
     const std::string key = key_arg; // (after the checks: a failed one longjmps past destructors)
-    auto& rules = state().rules;
-    auto it = std::ranges::find_if(rules, [&](const auto& r) { return r.key == key; });
-    if (it == rules.end()) return 0;
-    const auto from = static_cast<lua_Integer>(it - rules.begin());
-    const auto to = std::clamp<lua_Integer>(from + delta, 0, static_cast<lua_Integer>(rules.size()) - 1);
-    if (to == from) return 0;
-    auto r = std::move(*it);
-    rules.erase(it);
-    rules.insert(rules.begin() + to, std::move(r));
-    save(h);
+    if (game::move_autoskill_rule(state().rules, key, static_cast<std::int64_t>(delta))) save(h);
     return 0;
 }
 

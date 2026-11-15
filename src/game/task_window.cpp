@@ -69,9 +69,8 @@ std::string item_tags_stml(const std::string& text) {
         out += text.substr(at, a - at);
         std::string tag = text.substr(a + 1, b - a - 1);
         auto link = parse_item_link(tag);
-        std::string data;
-        for (char ch : tag) data += ch == '"' ? '\'' : ch;
-        out += std::format("<a WndNotify=\"27,{}\">{}</a>", data, link ? link->text : tag);
+        // (the link's data and text are the server's: encoded and escaped so they cannot end the tag)
+        out += std::format("<a WndNotify=\"27,{}\">{}</a>", stml_link_data(tag), escape_stml(link ? link->text : tag));
         at = b + 1;
     }
     return out;

@@ -397,12 +397,13 @@ void ClientApp::camera_command(const std::string& args) {
             return;
         }
     } else if (word == "pitch" || word == "fov" || word == "distance" || word == "reveal") {
-        std::string value = game::next_cmd_arg(rest);
-        float v = 0.0f;
-        if (value.empty() || float_from_chars(value.data(), value.data() + value.size(), v).ec != std::errc{}) {
+        // NaN would pass the clamps below, be saved and come back at every start (finite_float_from_text).
+        const std::optional<float> parsed = finite_float_from_text<float>(game::next_cmd_arg(rest));
+        if (!parsed) {
             say(std::format("Usage: /camera {} <value>", word));
             return;
         }
+        const float v = *parsed;
         if (word == "pitch") iso_settings_.pitch = glm::radians(std::clamp(v, 20.0f, 89.0f));
         else if (word == "fov") iso_settings_.fov_degrees = std::clamp(v, 10.0f, 90.0f);
         else if (word == "reveal") iso_reveal_radius_ = std::clamp(v, 0.0f, 60.0f);

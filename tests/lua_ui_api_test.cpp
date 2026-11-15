@@ -337,6 +337,18 @@ end)
         REQUIRE(luaL_dostring(L, "LIST = { { 'b' }, { '10' }, { 'A' }, { '9' } }") == LUA_OK);
         frames(2);
         CHECK(last("table.concat(f.drawn, ',')") == "9,10,A,b");
+        // numbers before texts, in one order: '10' < '5x' < '9' as texts and 9 < 10 as numbers made a cycle, which
+        // table.sort may refuse ("invalid order function for sorting")
+        REQUIRE(luaL_dostring(L, "LIST = {}; for i = 1, 60 do LIST[i] = { i % 3 == 0 and (i .. 'x') or tostring(100 - i) } end")
+                == LUA_OK);
+        frames(2);
+        REQUIRE_FALSE(ImGui::FindWindowByName("UI errors"));
+        CHECK(last("f.drawn[1] .. ',' .. f.drawn[2]") == "41,42");
+        REQUIRE(luaL_dostring(L, "LIST = { { '10' }, { '5x' }, { '9' } }") == LUA_OK);
+        frames(2);
+        CHECK(last("table.concat(f.drawn, ',')") == "9,10,5x");
+        REQUIRE(luaL_dostring(L, "LIST = { { 'b' }, { '10' }, { 'A' }, { '9' } }") == LUA_OK);
+        frames(2);
         // the filter, kept by its key
         REQUIRE(luaL_dostring(L, "FILTER = function(_, t) return t[1]:find('1') ~= nil or t[1] == 'b' end; "
                                  "FILTER_KEY = '1'") == LUA_OK);
@@ -830,6 +842,53 @@ TEST_CASE("Lua UI: ImGui's internal window flags are not a script's, and unbalan
                                                    "end)\n"));
 }
 
+// ui.End and ui.EndChild close only a window the script began, of their kind; a window left open when the draw
+// function returns is closed then, and what the script set for a next window it never began is dropped, so the
+// next script's window neither nests in it nor takes that place.
+TEST_CASE("Lua UI: a script ends only its own windows, and what it leaves open stays its own") {
+    bool nested = true, moved = true, seen = false;
+    CHECK(run_pack_frames("lua_ui_api_ends_test",
+                          "ui.window('A', function()\n"
+                          "  ui.End() ui.EndChild() ui.End()\n" // nothing begun: nothing ended (not the Debug window)
+                          "  ui.Begin('A')\n"
+                          "  if ui.BeginChild('c', 50, 50) then ui.End() end\n" // End is not EndChild
+                          "  ui.EndChild()\n"
+                          "  ui.Text('still A')\n"                              // and A is left open
+                          "  ui.SetNextWindowPos(333, 333, ui.Cond.Always)\n"   // for a window never begun
+                          "end)\n"
+                          "ui.window('B', function()\n"
+                          "  ui.SetNextWindowSize(100, 100)\n"
+                          "  ui.Begin('B') ui.Text('b') ui.End()\n"
+                          "  done = true\n"
+                          "end)\n",
+                          3, [&](int i) {
+                              if (i == 0) return;
+                              ImGuiWindow* b = ImGui::FindWindowByName("B");
+                              if (!b) return;
+                              seen = true;
+                              const ImGuiWindow* in = b->ParentWindowInBeginStack;
+                              nested = in && std::string(in->Name) == "A";
+                              moved = b->Pos.x == 333.0f && b->Pos.y == 333.0f;
+                          }));
+    CHECK(seen);
+    CHECK_FALSE(nested);
+    CHECK_FALSE(moved);
+}
+
+// A text longer than the capacity is cut to it, the NUL inside the buffer ImGui is given.
+TEST_CASE("Lua UI: InputText cuts a longer text to its capacity") {
+    CHECK(run_pack_frames("lua_ui_api_inputcap_test",
+                          "ui.window('I', function()\n"
+                          "  ui.Begin('I')\n"
+                          "  local a = ui.InputText('a', string.rep('x', 50), 10)\n"
+                          "  local b = ui.InputTextWithHint('b', 'hint', string.rep('y', 50), 12)\n"
+                          "  local c = ui.InputTextMultiline('c', string.rep('z', 50), 7)\n"
+                          "  local d = ui.InputText('d', 'short', 10)\n"
+                          "  ui.End()\n"
+                          "  done = #a == 10 and #b == 12 and #c == 7 and d == 'short'\n"
+                          "end)\n"));
+}
+
 TEST_CASE("Lua UI: style lists with NaN or huge indices and values push nothing undefined") {
     CHECK(run_pack_frames("lua_ui_api_style_nan_test",
                           "ui.window('S', function()\n"
@@ -1164,6 +1223,92 @@ TEST_CASE("Lua UI: a window rolls up, its collapse button at the right") {
         CHECK_FALSE(rolled());
         CHECK(ImGui::GetStyle().WindowMenuButtonPosition == ImGuiDir_Left);
         CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// ui/modern/browser.lua with a stand-in for eq's browser calls and lib/hud.lua: a first tab that cannot open is not
+// asked for again each frame, and why is shown; "+" failing keeps the tab in front.
+TEST_CASE("Modern UI: the browser shows why its first tab did not open and keeps the tab in front") {
+    hailstone::test::ScratchDir scratch("lua_ui_browser_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir / "lib");
+    const fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern" / "browser.lua";
+    if (!fs::exists(src)) return; // an installed test binary run away from the sources
+    fs::copy_file(src, dir / "browser.lua");
+    std::ofstream(dir / "lib" / "hud.lua") << R"lua(
+return { Dialog = function(_, title, _, draw)
+  ui.SetNextWindowPos(0, 0, ui.Cond.Always); ui.SetNextWindowSize(700, 500, ui.Cond.Always)
+  ui.Begin(title); draw(0, 0, 700, 500, 1); ui.End()
+end }
+)lua";
+    std::ofstream(dir / "a_eq.lua") << R"lua(
+B = { opens = 0, fail = "no browser process", tabs = {} }
+eq = {
+  WebAvailable = function() return true end,
+  WebTabs = function() return B.tabs end,
+  WebOpen = function()
+    B.opens = B.opens + 1
+    if B.fail then return nil, B.fail end
+    B.tabs[#B.tabs + 1] = #B.tabs + 1
+    return #B.tabs
+  end,
+  WebState = function(id) return { title = "t" .. id, url = "about:blank", canBack = false, canForward = false } end,
+  WebNav = function() end, WebNavigate = function() return true end, WebClose = function() end,
+  WebOpenExternal = function() end, WebView = function(id) B.viewed = id end,
+}
+-- what the window shows in red, and a button "pressed" by name for one frame
+local textColored, button, small = ui.TextColored, ui.Button, ui.SmallButton
+ui.TextColored = function(r, g, b, a, t) B.shown = t; return textColored(r, g, b, a, t) end
+local function pressing(real) return function(label, ...)
+  local hit = real(label, ...)
+  if B.press == label then B.press = nil; return true end
+  return hit
+end end
+ui.Button, ui.SmallButton = pressing(button), pressing(small)
+)lua";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        auto frames = [&](int n) {
+            for (int i = 0; i < n; ++i) {
+                ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+                ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+                ImGui::NewFrame();
+                lua.frame();
+                ImGui::Render();
+            }
+        };
+        auto eval = [&](const char* expr) {
+            REQUIRE(luaL_dostring(L, (std::string("return ") + expr).c_str()) == LUA_OK);
+            std::string out = luaL_tolstring(L, -1, nullptr);
+            lua_settop(L, 0);
+            return out;
+        };
+        frames(5);
+        REQUIRE_FALSE(ImGui::FindWindowByName("UI errors"));
+        CHECK(eval("B.opens") == "1"); // asked once, not each frame
+        CHECK(eval("B.shown") == "no browser process");
+        REQUIRE(luaL_dostring(L, "B.fail = nil") == LUA_OK);
+        frames(2);
+        CHECK(eval("B.opens") == "1"); // not again until asked
+        // "Try again" opens it
+        REQUIRE(luaL_dostring(L, "B.press = 'Try again##webretry'") == LUA_OK);
+        frames(3);
+        CHECK(eval("B.opens") == "2");
+        CHECK(eval("B.viewed") == "1");
+        // "+" failing: the tab in front stays, and why is shown
+        REQUIRE(luaL_dostring(L, "B.fail = 'too many tabs'; B.shown = nil; B.press = '+##newtab'") == LUA_OK);
+        frames(2);
+        CHECK(eval("B.opens") == "3");
+        CHECK(eval("B.viewed") == "1");
+        CHECK(eval("B.shown") == "too many tabs");
+        REQUIRE_FALSE(ImGui::FindWindowByName("UI errors"));
     }
     ImGui::DestroyContext(ctx);
 }

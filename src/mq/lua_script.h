@@ -37,6 +37,11 @@ inline constexpr std::size_t kMemoryLimit = 256u << 20; // a script's Lua heap
 inline constexpr std::int64_t kSliceMs = 3;             // run this long, then wait for the next frame
 inline constexpr std::int64_t kRunawayMs = 5000;        // this long without a chance to yield: the script is stopped
 inline constexpr std::size_t kMaxQueuedEvents = 1000;
+// mq.pickle's limits (docs/plugins.md): one file's size, and what the script's config directory (mq.configDir) may
+// hold before a write would add a file or bytes to it.
+inline constexpr std::size_t kMaxConfigFileBytes = 8u << 20;
+inline constexpr std::size_t kMaxConfigFiles = 1000;
+inline constexpr std::uintmax_t kMaxConfigBytes = 64u << 20;
 // mq.event's limits (docs/plugins.md): every pattern is matched against every chat line, outside the script's time
 // slice and memory limit, so a script's events are held well above what MQ macros use.
 inline constexpr std::size_t kMaxEvents = 256;                      // events of one script

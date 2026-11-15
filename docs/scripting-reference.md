@@ -430,7 +430,7 @@ The global `mq` (also `require('mq')`) in every script, Lua social and Lua plugi
 | `mq.getFilteredSpawns(fn)` | `read` | those for which `fn(spawn)` is true |
 | `mq.imgui.init(name, fn)` | `ui` | `fn` is called every frame to draw with `ImGui` |
 | `mq.imgui.destroy(name)`, `mq.imgui.exists(name)` | | |
-| `mq.pickle(path, table)` | | writes the table as Lua to `path` under `mq.configDir`. Read it back with `dofile` / `loadfile`, as data: no functions |
+| `mq.pickle(path, table)` | | writes the table as Lua to `path` under `mq.configDir`. Read it back with `dofile` / `loadfile`, as data: no functions (a file whose values are or hold one is refused). A file is at most 8 MiB, and `mq.configDir` at most 1000 files or 64 MiB |
 | `mq.web.*` | `web` | the script's own browser tabs (below) |
 | `mq.luaDir` | | the script folder the script was found in |
 | `mq.configDir` | | the folder `mq.pickle` writes to: `scripts/config/`, or `scripts/config/<script>/` for a script without every capability |
@@ -619,9 +619,9 @@ rectangle (`u0, v0, u1, v1`).
 | Function | Args → returns | What |
 |---|---|---|
 | Begin | (title [, open [, flags [, collapseRight]]]) → visible, open | Begin a window. open nil = no close button |
-| End | () → — | |
-| BeginChild | (id [, w, h [, border [, flags]]]) → bool | |
-| EndChild | () → — | |
+| End | () → — | Ends the window the script's last `Begin` began; any other End does nothing |
+| BeginChild | (id [, w, h [, border [, flags]]]) → bool | Call `EndChild` whatever it returns |
+| EndChild | () → — | Ends the child the script's last `BeginChild` began; any other EndChild does nothing |
 | SetNextWindowSize | (w, h [, cond=FirstUseEver]) → — | |
 | SetNextWindowPos | (x, y [, cond=FirstUseEver]) → — | |
 | SetNextWindowBgAlpha | (a) → — | |
@@ -1107,7 +1107,7 @@ achievement and reward-selection APIs.
 | ChatHistory | (slot, older) → text\|nil | Step through lines sent before | — |
 | ChatCycleReply | (text, back) → text\|nil | Tab / Shift+Tab reply cycling | — |
 | ChatPage | (slot) → -1\|1\|nil | PageUp / PageDown for this window, once | — |
-| ChatLink | (slot, message, data) → — | A link clicked in the output (27 item, 1001 name) | commands |
+| ChatLink | (slot, message, data) → — | A link clicked in the output (27 item, 1001 name, 1002 achievement). An item link's data in ChatText's STML is `x` and the tag as hex, so the sender's text cannot add markup; a raw tag is taken too | commands |
 | ChatActivate | (slot) → — | Make it the active window | commands |
 | ChatMenu | (slot) → — | The window's context menu at the mouse | — |
 | ChatSetAlwaysHere | (slot, on) → — | Always Chat Here | commands |

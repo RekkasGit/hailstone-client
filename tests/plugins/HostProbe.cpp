@@ -123,10 +123,19 @@ static_assert(sizeof(HS_Bulk_SpawnHeader) == HS_BULK_SPAWN_HEADER_SIZE);
 static_assert(sizeof(HS_Bulk_SpawnFixedRecord) == HS_BULK_SPAWN_RECORD_SIZE);
 
 // The header, then each spawn one line (id, level, class, race, HP percent, con colour, name), then the bytes left
-// over after the records the header counts (0 when every record's strings are framed right).
+// over after the records the header counts (0 when every record's strings are framed right). With n, also how many
+// bytes past the first n the host changed (guard bytes; 0 unless it wrote past the end).
 void probe_spawns(void*, const char* args) {
     static unsigned char buf[1024*1024];
-    const std::int32_t r = host->get_spawns_data_bulk(host->host, buf, size_arg(args, sizeof buf));
+    constexpr unsigned char guard = 0xA5;
+    std::memset(buf, guard, sizeof buf);
+    const std::int32_t n = size_arg(args, sizeof buf);
+    const std::int32_t r = host->get_spawns_data_bulk(host->host, buf, n);
+    if (n < static_cast<std::int32_t>(sizeof buf)) {
+        std::size_t changed = 0;
+        for (std::size_t i = static_cast<std::size_t>(n); i < sizeof buf; ++i) changed += buf[i] != guard;
+        WriteChatf("[Probe] spawns past the end %zu", changed);
+    }
     if (r <= 0 || static_cast<std::size_t>(r) < sizeof(HS_Bulk_SpawnHeader)) {
         WriteChatf("[Probe] spawns %d bytes", static_cast<int>(r));
         return;

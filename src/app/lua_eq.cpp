@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <format>
 #include <cfloat>
+#include <cmath>
 #include <cctype>
 #include <cstdlib>
 #include <map>
@@ -30,6 +31,7 @@
 #include "ui/lua/lua_host.h"
 #include "app/lua_eq_caps.h"
 #include "app/lua_eq_plugins.h"
+#include "plugin/lua_keep.h"
 #include "plugin/ui_bridge.h"
 #include "core/ini_file.h"
 #include "core/log.h"
@@ -1204,12 +1206,14 @@ int ItemPreviewImage(lua_State* L) {
 
 // eq.ItemPreviewControl(what [, x [, y [, view]]])   -- moves the preview's camera: "rotate" (radians across, up),
 // "pan" (fractions of the view across, up), "zoom" (a distance factor), "reset" (fitted again); view as
-// eq.ItemPreviewImage's
+// eq.ItemPreviewImage's. NaN, an infinity or a number past float's range moves nothing (any code may call it, and
+// the camera's matrices would carry it).
 int ItemPreviewControl(lua_State* L) {
     auto& h = Impl::of(L).host;
-    if (h.item_preview_control)
-        h.item_preview_control(luaL_checkstring(L, 1), static_cast<float>(luaL_optnumber(L, 2, 0.0)),
-                               static_cast<float>(luaL_optnumber(L, 3, 0.0)), preview_view(L, 4));
+    const char* what = luaL_checkstring(L, 1);
+    const float x = static_cast<float>(luaL_optnumber(L, 2, 0.0)), y = static_cast<float>(luaL_optnumber(L, 3, 0.0));
+    const int view = preview_view(L, 4);
+    if (h.item_preview_control && std::isfinite(x) && std::isfinite(y)) h.item_preview_control(what, x, y, view);
     return 0;
 }
 
@@ -1631,7 +1635,7 @@ const char* mode_name(net::GameConnection::ItemJobMode m) {
 // (or had nothing to do), else why not
 int SortItems(lua_State* L) {
     auto& m = Impl::of(L);
-    std::string where = luaL_checkstring(L, 1);
+    const char* where_arg = luaL_checkstring(L, 1);
     using M = net::GameConnection::ItemJobMode;
     M mode = M::Sort;
     if (lua_isboolean(L, 2)) mode = lua_toboolean(L, 2) ? M::Stack : M::Sort;
@@ -1643,48 +1647,61 @@ int SortItems(lua_State* L) {
         lua_pushstring(L, "Not in game.");
         return 1;
     }
-    net::GameConnection::ItemJobOptions opts;
+    // The options' fields onto the stack first (lua_getfield runs a table's __index, which may raise), then the
+    // options and the answer in a box the state owns across the reads and the push (plugin/lua_keep.h): a place
+    // that is a number becomes text on the stack, which allocates.
+    lua_settop(L, 3);
     ui::lua::unview(L, 3);
     if (lua_istable(L, 3)) {
         lua_getfield(L, 3, "locked");
-        ui::lua::unview(L, -1);
-        if (lua_istable(L, -1))
-            for (lua_Integer i = 1;; ++i) {
-                lua_rawgeti(L, -1, i);
-                bool more = lua_isstring(L, -1);
-                if (more)
-                    if (auto at = parse_place(lua_tostring(L, -1))) opts.locked.push_back(*at);
-                lua_pop(L, 1);
-                if (!more) break;
-            }
-        lua_pop(L, 1);
+        ui::lua::unview(L, 4);
         lua_getfield(L, 3, "filters");
-        ui::lua::unview(L, -1);
-        if (lua_istable(L, -1)) {
-            lua_pushnil(L);
-            while (lua_next(L, -2)) {
-                if (lua_type(L, -2) == LUA_TSTRING && lua_isstring(L, -1))
-                    if (auto at = parse_place(lua_tostring(L, -2)))
-                        if (auto c = game::category_by_name(lua_tostring(L, -1)); c != game::ItemCategory::None)
-                            opts.filters.push_back({at->parent(), c});
-                lua_pop(L, 1);
-            }
+        ui::lua::unview(L, 5);
+    } else {
+        lua_pushnil(L);
+        lua_pushnil(L);
+    }
+    struct Job {
+        net::GameConnection::ItemJobOptions opts;
+        std::string err;
+    };
+    Job& job = plugin::lua_keep<Job>(L);
+    auto& opts = job.opts;
+    if (lua_istable(L, 4))
+        for (lua_Integer i = 1;; ++i) {
+            lua_rawgeti(L, 4, i);
+            bool more = lua_isstring(L, -1);
+            if (more)
+                if (auto at = parse_place(lua_tostring(L, -1)))
+                    plugin::cxx_guard(L, [&] { opts.locked.push_back(*at); });
+            lua_pop(L, 1);
+            if (!more) break;
         }
-        lua_pop(L, 1);
+    if (lua_istable(L, 5)) {
+        lua_pushnil(L);
+        while (lua_next(L, 5)) {
+            if (lua_type(L, -2) == LUA_TSTRING && lua_isstring(L, -1))
+                if (auto at = parse_place(lua_tostring(L, -2)))
+                    if (auto c = game::category_by_name(lua_tostring(L, -1)); c != game::ItemCategory::None)
+                        plugin::cxx_guard(L, [&] { opts.filters.push_back({at->parent(), c}); });
+            lua_pop(L, 1);
+        }
     }
     using S = net::GameConnection::ItemJobScope;
-    std::string err;
-    if (where == "inventory") {
-        err = m.host.conn->start_item_job(S::Inventory, {}, mode, opts);
-    } else if (where == "bank") {
-        err = m.host.conn->start_item_job(S::Bank, {}, mode, opts);
-    } else {
-        StockWindow* w = m.window(where);
-        const net::ItemSlot* at = w ? w->bag_slot(m.host) : nullptr;
-        err = at ? m.host.conn->start_item_job(S::Bag, *at, mode, opts) : "That bag is not open.";
-    }
-    if (err.empty()) return 0;
-    lua_pushstring(L, err.c_str());
+    plugin::cxx_guard(L, [&] {
+        const std::string_view where = where_arg;
+        if (where == "inventory") {
+            job.err = m.host.conn->start_item_job(S::Inventory, {}, mode, opts);
+        } else if (where == "bank") {
+            job.err = m.host.conn->start_item_job(S::Bank, {}, mode, opts);
+        } else {
+            StockWindow* w = m.window(where);
+            const net::ItemSlot* at = w ? w->bag_slot(m.host) : nullptr;
+            job.err = at ? m.host.conn->start_item_job(S::Bag, *at, mode, opts) : "That bag is not open.";
+        }
+    });
+    if (job.err.empty()) return 0;
+    lua_pushstring(L, job.err.c_str());
     return 1;
 }
 

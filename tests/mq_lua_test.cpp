@@ -558,6 +558,98 @@ print(load, io, os.execute)
     CHECK(h.printed_line("nil nil nil"));
 }
 
+TEST_CASE("MQ Lua: loadfile and dofile give back only data, never a function a file made") {
+    Host h;
+    fs::create_directories(h.config_dir);
+    auto put = [&](const char* name, const char* text) {
+        std::ofstream(h.config_dir / name, std::ios::binary) << text;
+    };
+    put("data.lua", "local t = {a = 1, list = {'x', 'y'}} t.self = t return t, 'second'\n");
+    put("closure.lua", "return {run = function(mq) mq.cmd('/sit') end}\n");
+    put("bare.lua", "return function() return 1 end\n");
+    put("method.lua", "return ('').rep\n");
+    put("key.lua", "return {[function() end] = true}\n");
+    put("broken.lua", "return {} + 1\n"); // (no `error` in its empty environment)
+    h.write("cfg_data.lua", R"(
+local mq = require('mq')
+local t, second = dofile('data.lua')
+print('data', t.a, t.list[2], t.self == t, second)
+local f = assert(loadfile('data.lua'))
+print('again', f().a, f().a)
+for _, name in ipairs({'closure.lua', 'bare.lua', 'method.lua', 'key.lua'}) do
+    local g, why = loadfile(name)
+    print(name, g, why and why:find('not data', 1, true) ~= nil)
+    print(name, pcall(dofile, name))
+end
+print('broken', loadfile('broken.lua'))
+-- What the script writes itself is held to the same: text through mq.pickle's write, then loaded.
+mq._write_config('written.lua', 'return function(m) return m end')
+print('written', loadfile('written.lua'))
+)");
+    REQUIRE(h.scripts->run("cfg_data", {}));
+    h.pulses(1);
+    CHECK(h.printed_line("data 1 y true second"));
+    CHECK(h.printed_line("again 1 1"));
+    for (const char* name : {"closure.lua", "bare.lua", "method.lua", "key.lua"}) {
+        CHECK(h.printed_line(std::string(name) + " nil true"));
+        bool refused = false;
+        for (const auto& l : h.printed) refused |= l.rfind(std::string(name) + " false", 0) == 0;
+        CHECK(refused);
+    }
+    bool broken = false, written = false;
+    for (const auto& l : h.printed) {
+        broken |= l.rfind("broken nil", 0) == 0 && l.find("broken.lua:1:") != std::string::npos;
+        written |= l.rfind("written nil", 0) == 0 && l.find("not data") != std::string::npos;
+    }
+    CHECK(broken);
+    CHECK(written);
+}
+
+TEST_CASE("MQ Lua: mq.pickle's writes are held to a size per file and per config directory") {
+    Host h(plugin::kCapRead | plugin::kCapCommands); // a folder of its own: scripts/config/limits/
+    const fs::path own = h.config_dir / "limits";
+    fs::create_directories(own);
+    for (std::size_t i = 0; i + 1 < mq::kMaxConfigFiles; ++i)
+        std::ofstream(own / ("f" + std::to_string(i) + ".lua"), std::ios::binary) << "return {}\n";
+    h.write("limits.lua", R"(
+local mq = require('mq')
+print('big', pcall(mq.pickle, 'big.lua', {s = string.rep('a', 9 * 1024 * 1024)}))
+print('last', pcall(mq.pickle, 'last.lua', {v = 1}))
+print('full', pcall(mq.pickle, 'more.lua', {v = 2}))
+print('replace', pcall(mq.pickle, 'f1.lua', {v = 3}))
+print('read', dofile('f1.lua').v)
+)");
+    REQUIRE(h.scripts->run("limits", {}));
+    h.pulses(1);
+    bool big = false, full = false;
+    for (const auto& l : h.printed) {
+        big |= l.rfind("big false", 0) == 0 && l.find("over 8 MiB") != std::string::npos;
+        full |= l.rfind("full false", 0) == 0 && l.find("config directory is full") != std::string::npos;
+    }
+    CHECK(big);
+    CHECK(h.printed_line("last true"));
+    CHECK(full);
+    CHECK(h.printed_line("replace true"));
+    CHECK(h.printed_line("read 3"));
+    CHECK_FALSE(fs::exists(own / "big.lua"));
+    CHECK_FALSE(fs::exists(own / "more.lua"));
+}
+
+TEST_CASE("MQ Lua: require of a huge name that is not there is a plain error, and the script goes on") {
+    Host h;
+    h.write("huge_require.lua", R"(
+for i = 1, 3 do
+    local ok, why = pcall(require, string.rep('a', 4 * 1024 * 1024))
+    print('try', i, ok, #why > 4 * 1024 * 1024, why:sub(1, 8))
+end
+print('parse', mq == nil, require('mq').parse('${Me.PctHPs}'))
+)");
+    REQUIRE(h.scripts->run("huge_require", {}));
+    h.pulses(1);
+    for (int i = 1; i <= 3; ++i) CHECK(h.printed_line("try " + std::to_string(i) + " false true module '"));
+    CHECK(h.printed_line("parse false 75"));
+}
+
 TEST_CASE("MQ commands: /target, ${} for typed lines, /noparse, /squelch") {
     Host h;
     h.run("/target fippy");

@@ -1067,6 +1067,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/caster_bounds_test.cpp
     tests/descriptor_limits_test.cpp
     tests/swapchain_size_test.cpp
+    tests/input_script_test.cpp
     tests/texture_claims_test.cpp
     tests/zone_settle_test.cpp
     tests/work_budget_test.cpp
@@ -1241,6 +1242,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/server_ext_chain_test.cpp
     tests/native_extension_test.cpp
     tests/lua_folders_test.cpp
+    tests/lua_keep_test.cpp
     tests/lua_character_settings_test.cpp
     tests/lua_plugin_test.cpp
     tests/spell_projectiles_test.cpp
@@ -1285,6 +1287,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/achievements_test.cpp
     tests/achievement_connection_test.cpp
     tests/achievement_chat_test.cpp
+    tests/stml_link_injection_test.cpp
     tests/achievement_chat_input_test.cpp
     tests/lua_eq_achievements_test.cpp
     tests/achievements_ui_test.cpp
@@ -1452,7 +1455,7 @@ if(HAILSTONE_LIBFUZZER)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(FATAL_ERROR "HAILSTONE_LIBFUZZER needs Clang")
   endif()
-  foreach(target pfs wld texture soe packets decoders zip gpucache)
+  foreach(target pfs wld texture soe packets decoders zip gpucache models)
     string(TOUPPER ${target} upper)
     add_executable(fuzz_${target} tests/fuzz_libfuzzer.cpp)
     target_compile_definitions(fuzz_${target} PRIVATE HAILSTONE_FUZZ_${upper})

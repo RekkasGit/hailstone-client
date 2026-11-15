@@ -336,3 +336,17 @@ TEST_CASE("commerce: marking an unoffered satchel item Keep leaves the trader se
     CHECK_FALSE(trader.start_pending);
     CHECK_FALSE(trader.slots[0].active);
 }
+
+TEST_CASE("commerce: a compensation item's quantity is held at the maximum rather than wrapping") {
+    ScratchDir files("commerce_edges_compensation");
+    Rig rig(MockConfig::standard(), commerce_options(files));
+    auto& c = rig.conn;
+    auto& w = const_cast<game::BarterWindowState&>(c.barter_window());
+    w.inventory.push_back({1002, 0, 5, 500, "Rations"});
+    w.inventory_sel = 0;
+    c.barter_compensation_add(0xfffffff0u);
+    REQUIRE(w.editor.trade_items.size() == 1);
+    c.barter_compensation_add(0x20);
+    REQUIRE(w.editor.trade_items.size() == 1);
+    CHECK(w.editor.trade_items[0].quantity == 0xffffffffu);
+}

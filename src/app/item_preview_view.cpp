@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <imgui_impl_vulkan.h>
 
@@ -188,13 +189,16 @@ void* ItemPreviewView::image(int width, int height) {
 }
 
 void ItemPreviewView::control(std::string_view what, float x, float y) {
+    // NaN passes std::clamp and would reach the camera's matrices (eq.ItemPreviewControl refuses it too). The yaw
+    // stays within a turn and the pan within a few views, so repeated calls cannot grow them to an infinity either.
+    if (!std::isfinite(x) || !std::isfinite(y)) return;
     if (what == "reset") {
         reset_camera();
     } else if (what == "rotate") {
-        yaw_ += x;
+        yaw_ = std::remainder(yaw_ + x, glm::two_pi<float>());
         pitch_ = std::clamp(pitch_ + y, glm::radians(-85.0f), glm::radians(85.0f));
     } else if (what == "pan") {
-        pan_ += glm::vec2(x, y);
+        pan_ = glm::clamp(pan_ + glm::vec2(x, y), glm::vec2(-4.0f), glm::vec2(4.0f));
     } else if (what == "zoom") {
         zoom_ = std::clamp(zoom_ * x, 0.2f, 5.0f);
     }

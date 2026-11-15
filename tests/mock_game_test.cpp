@@ -689,6 +689,33 @@ TEST_CASE("mock server: on a boat the position goes out in its frame; a right cl
     CHECK(std::to_integer<int>(take->data[4]) == 1);
 }
 
+TEST_CASE("mock server: the boat being driven is forgotten on a zone change") {
+    // WorldState::driven_id keeps a driven boat out of smooth_vehicles; the new zone may reuse its id for another
+    // vehicle, so the zone change lets go of it as it does of controlled_boat.
+    Rig rig;
+    auto& conn = rig.conn;
+    auto& server = rig.server;
+    REQUIRE(rig.to_zone());
+    auto& w = conn.world_for_test();
+    auto& boat = w.spawns[9001];
+    boat.id = 9001;
+    boat.race = 141;
+    boat.gender = 2;
+    boat.is_npc = true;
+    ByteWriter take;
+    take.le<std::uint32_t>(9001);
+    take.le<std::uint8_t>(1);
+    take.zeros(3);
+    conn.receive_zone_packet_for_test(AppPacket(to_wire(Op::ControlBoat), take.take()));
+    REQUIRE(conn.controlled_boat() == 9001);
+    CHECK(conn.world().driven_id == 9001);
+    server.zone_change_answers = {1};
+    REQUIRE(conn.request_zone_change(1, 0, glm::vec3(10.0f, 20.0f, 3.0f)));
+    REQUIRE(rig.until([&] { return server.zone_entries == 2 && conn.state() == ConnectionState::InZone; }));
+    CHECK(conn.controlled_boat() == 0);
+    CHECK(conn.world().driven_id == 0);
+}
+
 TEST_CASE("mock server: /camp desk and /camp server send their kind; a camp ends at character select again") {
     // Cmd_camp: the argument's first four letters against eqstr 13258 "desk" and 13259 "server".
     Rig rig;

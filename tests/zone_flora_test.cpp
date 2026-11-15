@@ -310,6 +310,25 @@ TEST_CASE("zone flora: non-finite and absurd vertices grow nothing and cover not
     for (const auto& p : flora.instances) CHECK(p.position.x > p.position.y);
 }
 
+TEST_CASE("zone flora: a long sliver of ground is not binned into every tile its bounds touch") {
+    std::vector<eqg::FloraDefinition> defs = {definition("grass", 2.0f)};
+    auto rules = parse_zone_flora_rules("ground grass* 10 grass\n");
+    Zone zone;
+    zone.terrain.push_back(square("grass.bmp", 100.0f));
+    ZoneFloraGrower plain(zone, rules, defs, {});
+    // A triangle under kMaxGrowArea (so never split) whose bounds cover some 150,000 tiles.
+    Mesh sliver = square("grass.bmp", 100.0f);
+    sliver.vertices[0].position = {0.0f, 0.0f, 0.0f};
+    sliver.vertices[1].position = {50000.0f, 50000.0f, 0.0f};
+    sliver.vertices[2].position = {50000.0f, 50000.05f, 0.0f};
+    sliver.indices = {0, 1, 2};
+    sliver.parts = {{0, 3, 0, true}};
+    zone.terrain.push_back(sliver);
+    ZoneFloraGrower grower(zone, rules, defs, {});
+    CHECK(grower.triangles() == plain.triangles() + 1);
+    CHECK(grower.tiles().size() == plain.tiles().size());
+}
+
 TEST_CASE("zone flora: tile by tile, each plant once, in the tile its foot is in") {
     std::vector<eqg::FloraDefinition> defs = {definition("grass", 2.0f)};
     auto rules = parse_zone_flora_rules("ground grass* 10 grass\n");

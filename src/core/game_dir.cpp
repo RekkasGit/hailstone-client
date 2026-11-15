@@ -7,6 +7,7 @@
 #include <stdexcept>
 
 #include "core/ascii_case.h"
+#include "core/path_utf8.h"
 
 namespace hailstone {
 
@@ -128,8 +129,10 @@ std::shared_ptr<const GameDir::Index> GameDir::scan(const std::filesystem::path&
             }
         }
         if (!it->is_regular_file(type_ec)) continue;
-        auto rel = std::filesystem::relative(it->path(), root, type_ec).generic_string();
+        // (as UTF-8: generic_string() could throw for a file name, and then no folder with it would open)
+        const auto rel_path = std::filesystem::relative(it->path(), root, type_ec);
         if (type_ec) continue;
+        std::string rel = generic_path_utf8(rel_path);
         index->emplace(normalize(rel), Indexed{rel, it->path(), overlay, classic});
     }
     return index;

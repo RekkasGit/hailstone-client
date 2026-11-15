@@ -112,6 +112,7 @@ struct DdsSpec {
     std::uint32_t width = 4, height = 4, mips = 1;
     const char* fourcc = nullptr; // compressed when set
     std::uint32_t flags = 0x40, bits = 32, r = 0, g = 0, b = 0, a = 0;
+    std::uint32_t caps2 = 0;
 };
 
 ByteWriter dds_header(const DdsSpec& s) {
@@ -140,7 +141,8 @@ ByteWriter dds_header(const DdsSpec& s) {
         w.le<std::uint32_t>(s.a);
     }
     w.le<std::uint32_t>(0x1000);
-    w.zeros(16);
+    w.le<std::uint32_t>(s.caps2);
+    w.zeros(12);
     REQUIRE(w.size() == 128);
     return w;
 }
@@ -352,6 +354,18 @@ TEST_CASE("DDS mip chain is kept and clamped to the data present") {
     REQUIRE(rgba.mips.size() == 3);
     CHECK(rgba.mips[1].size() == 64);
     CHECK(rgba.mips[2].size() == 16);
+}
+
+TEST_CASE("DDS volume: only level 0's first slice, compressed or not") {
+    // Two slices of 4x4 DXT1, two levels: after the first slice come the second slice's bytes, not level 1.
+    auto w = dds_header({.width = 4, .height = 4, .mips = 2, .fourcc = "DXT1", .caps2 = 0x200000});
+    for (int i = 0; i < 4; ++i) bc1_block(w, 0xFFFF, 0, 0);
+    auto img = decode_ok(w.take());
+    CHECK(img.mips.size() == 1);
+    auto u = dds_header({.width = 2, .height = 2, .mips = 2, .bits = 32, .r = 0xff, .g = 0xff00, .b = 0xff0000,
+                         .caps2 = 0x200000});
+    for (int i = 0; i < 16; ++i) u.le<std::uint32_t>(0xff00ff00u);
+    CHECK(decode_ok(u.take()).mips.size() == 1);
 }
 
 TEST_CASE("DDS with non-multiple-of-4 size uses partial blocks") {

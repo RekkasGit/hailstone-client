@@ -379,7 +379,12 @@ public:
         return static_cast<std::uint32_t>(mechanics::combat_timer_index(skill));
     }
     std::uint32_t skill_reuse_time(std::uint32_t skill) override {
-        return static_cast<std::uint32_t>(mechanics::skill_reuse_time(*ctx_.ch, skill));
+        // A deliberate change from RoF2 (a fixed bug): the original's DoAttack stores GetSkillReuseTime unclamped
+        // in the unsigned combat timer, so SPA 227 taking more seconds off than the skill's reuse wraps it and
+        // locks the skill for ~49 days. Hailstone clamps it at 0, as the original's UseSkill does for the
+        // non-combat skills. Not switchable: no server relies on the lock.
+        const std::int32_t reuse = mechanics::skill_reuse_time(*ctx_.ch, skill);
+        return reuse < 0 ? 0u : static_cast<std::uint32_t>(reuse);
     }
     void set_skill_timer_duration(std::uint32_t skill, std::uint32_t ms) override {
         st_.timers.set_timer_duration(skill, ms);

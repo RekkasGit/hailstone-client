@@ -336,6 +336,7 @@ struct ZoneFloraGrower::Data {
         std::optional<std::uint32_t> at(glm::vec2 uv) const {
             if (rgb.empty()) return std::nullopt;
             auto wrap = [](float f, std::uint32_t n) {
+                if (!std::isfinite(f)) return 0u; // a damaged mesh's UV: the cast below would be undefined
                 const float t = f - std::floor(f);
                 return std::min(static_cast<std::uint32_t>(t * static_cast<float>(n)), n - 1);
             };
@@ -362,6 +363,13 @@ constexpr int kMaxSplits = 10; // 4^10 pieces at most, for a damaged mesh's tria
 // units a side makes some 400,000 (plus the triangles too small to split, a few hundred thousand in the densest
 // zone); only a damaged mesh asks for more, and its ground past this grows nothing.
 constexpr std::size_t kMaxPieces = std::size_t{1} << 21;
+
+// The most tiles one piece is binned into (its bounds with the lawn's margin): a piece is at most kMaxGrowArea, so
+// only a sliver comes near (a diagonal one 2,000 units long touches some 256); past this, only a damaged mesh's.
+constexpr std::uint64_t kMaxPieceTiles = 1024;
+// The most references the grower's tiles hold in all: 64 MB, some ten times the densest zone's pieces (kMaxPieces at
+// a few tiles each).
+constexpr std::uint64_t kMaxBinRefs = std::uint64_t{1} << 24;
 
 void add_split(std::vector<ZoneFloraGrower::Piece>& out, const ZoneFloraGrower::Piece& t, int depth) {
     if (out.size() >= kMaxPieces) return;
@@ -511,16 +519,25 @@ ZoneFloraGrower::ZoneFloraGrower(const Zone& zone, const ZoneFloraRules& rules,
 
     // Binned by the tiles their bounds touch (a plant belongs to the tile its foot is in). The pieces' corners are
     // within kMaxFloraCoord, so the tile numbers fit an int32.
+    // The split bounds a piece's area, not its extent: a long sliver (a damaged mesh's, kMaxFloraCoord long) would
+    // touch millions of tiles. As CoverGrid: a piece over kMaxPieceTiles tiles grows nothing, and the bins hold at
+    // most kMaxBinRefs references in all (the pieces past it grow nothing).
     auto tile_of = [](float v) { return static_cast<std::int32_t>(std::floor(v / kZoneFloraTile)); };
     std::map<std::pair<std::int32_t, std::int32_t>, std::vector<std::uint32_t>> bins;
+    std::uint64_t refs = 0;
     for (std::uint32_t i = 0; i < d.tris.size(); ++i) {
         const auto& t = d.tris[i];
         // A margin more: a tile grows the lawn of the squares round it too (soften_lawn_edges).
         const float margin = kLawnCell * static_cast<float>(kLawnEdgeCells);
         const glm::vec2 lo = glm::min(glm::min(glm::vec2(t.p[0]), glm::vec2(t.p[1])), glm::vec2(t.p[2])) - margin;
         const glm::vec2 hi = glm::max(glm::max(glm::vec2(t.p[0]), glm::vec2(t.p[1])), glm::vec2(t.p[2])) + margin;
-        for (std::int32_t y = tile_of(lo.y); y <= tile_of(hi.y); ++y)
-            for (std::int32_t x = tile_of(lo.x); x <= tile_of(hi.x); ++x) bins[{x, y}].push_back(i);
+        const std::int32_t x0 = tile_of(lo.x), x1 = tile_of(hi.x), y0 = tile_of(lo.y), y1 = tile_of(hi.y);
+        const std::uint64_t cells = std::uint64_t(x1 - x0 + 1) * std::uint64_t(y1 - y0 + 1);
+        if (cells > kMaxPieceTiles) continue;
+        if (refs + cells > kMaxBinRefs) break;
+        refs += cells;
+        for (std::int32_t y = y0; y <= y1; ++y)
+            for (std::int32_t x = x0; x <= x1; ++x) bins[{x, y}].push_back(i);
     }
     d.tile_start.push_back(0);
     for (const auto& [k, list] : bins) {

@@ -4,6 +4,7 @@
 #include <bit>
 #include <cmath>
 #include <cstring>
+#include <new>
 #include <string>
 #include <vector>
 
@@ -90,6 +91,13 @@ TEST_CASE("opcode table: stock achievement managers retain their native wire ide
     }
 }
 
+TEST_CASE("decode_with: a read past the end and an allocation failure both give nullopt") {
+    AppPacket p(0x1234);
+    CHECK_FALSE(detail::decode_with(p, [](ByteReader& r) { return r.le<std::uint32_t>(); }));
+    CHECK_FALSE(detail::decode_with(p, [](ByteReader&) -> int { throw std::bad_alloc(); }));
+    CHECK(detail::decode_with(p, [](ByteReader&) { return 7; }) == 7);
+}
+
 TEST_CASE("eq_crc32 is the client's __MemChecker0 (CRC32 without final inversion)") {
     const char* s = "123456789";
     // Standard CRC-32 of "123456789" is 0xcbf43926; without the final xor it is ~that.
@@ -118,6 +126,11 @@ TEST_CASE("OP_SendLoginInfo is 464 bytes with account\\0key and the zoning flag 
     p = encode(li);
     CHECK(byte_at(p, 188) == 0);
     CHECK(decode_login_info(p)->custom_files_key == "key1");
+    // A key as long as the field keeps its last byte a NUL.
+    li.custom_files_key = std::string(130, 'F');
+    p = encode(li);
+    CHECK(byte_at(p, 64 + 123) == 0);
+    CHECK(decode_login_info(p)->custom_files_key == std::string(123, 'F'));
 }
 
 TEST_CASE("OP_SendLoginInfo: a key that does not fit keeps the field's last NUL") {

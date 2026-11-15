@@ -623,6 +623,8 @@ void VkContext::create_swapchain(VkSwapchainKHR old) {
     vkGetPhysicalDeviceSurfaceFormatsKHR(physical_, surface_, &count, nullptr);
     std::vector<VkSurfaceFormatKHR> formats(count);
     vkGetPhysicalDeviceSurfaceFormatsKHR(physical_, surface_, &count, formats.data());
+    formats.resize(count);
+    if (formats.empty()) throw std::runtime_error("swapchain: the surface reports no formats");
     // The post pass writes sRGB-encoded values itself (shaders/post.frag), so a UNORM target is
     // preferred; an SRGB one also works (the pass then leaves the encoding to it).
     VkSurfaceFormatKHR chosen = formats[0];
@@ -664,6 +666,12 @@ void VkContext::create_swapchain(VkSwapchainKHR old) {
                      (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
     screenshots_supported_ = (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0;
     if (!screenshots_supported_) log::warn("swapchain: the surface cannot be copied from; screenshots are off");
+    // The readback (end_frame) is 4 bytes a pixel in BGRA or RGBA order: a fallback format (formats[0] above, say
+    // FP16 or 10-bit HDR) is not, and copying it would overrun the buffer.
+    if (screenshots_supported_ && !screenshot_format_supported(chosen.format)) {
+        screenshots_supported_ = false;
+        log::warn("swapchain: format {} is not 8-bit RGBA or BGRA; screenshots are off", static_cast<int>(chosen.format));
+    }
     info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     info.preTransform = caps.currentTransform;
     info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
@@ -1319,7 +1327,8 @@ std::vector<VkContext::HeapUse> VkContext::heap_use() const {
 
 bool VkContext::request_screenshot(std::filesystem::path path, std::uint32_t max_width) {
     if (!screenshots_supported_) {
-        log::warn("screenshot {} not taken: the swapchain's images cannot be copied from", path.string());
+        log::warn("screenshot {} not taken: the swapchain's images cannot be copied from or are not 8-bit RGBA",
+                  path.string());
         return false;
     }
     screenshot_path_ = std::move(path);
@@ -1348,12 +1357,16 @@ std::optional<FrameInfo> VkContext::begin_frame_commands() {
     if (swapchain_outdated({w, h}, {made_for_.width, made_for_.height}, surface, {extent_.width, extent_.height}))
         resize_pending_ = true;
     if (resize_pending_) recreate_swapchain();
-    // The 3D view's rectangle (set_scene_rect): a new size makes the scene targets again.
-    if (VkRect2D area = scene_area(); area.extent.width != view_extent_.width || area.extent.height != view_extent_.height) {
+    // The 3D view's rectangle (set_scene_rect): a new size makes the scene targets again, once it has settled
+    // (render/swapchain_size.h SceneResizeDebounce): dragging a /viewport edge would otherwise wait for the device
+    // and rebuild every target every frame. Until then the old rectangle is drawn whole; a move alone is taken at
+    // once.
+    if (VkRect2D area = scene_area(); scene_resize_.update(Extent{area.extent.width, area.extent.height},
+                                                           Extent{view_extent_.width, view_extent_.height})) {
         wait_idle();
         destroy_scene_targets();
         create_scene_targets();
-    } else {
+    } else if (area.extent.width == view_extent_.width && area.extent.height == view_extent_.height) {
         scene_area_ = area;
     }
 
@@ -1875,7 +1888,11 @@ void VkContext::draw_into(VkCommandBuffer cmd, const Image& target, VkExtent2D e
 void VkContext::draw_into(VkCommandBuffer cmd, std::span<const Image* const> targets, VkExtent2D extent,
                           VkPipeline pipeline, VkPipelineLayout layout, VkDescriptorSet set, const void* push,
                           std::uint32_t push_size) {
-    std::vector<VkRenderingAttachmentInfo> atts;
+    // At most kMaxDrawTargets attachments (the temporal prep writes two): a fixed array, as this runs several
+    // times a frame.
+    std::array<VkRenderingAttachmentInfo, kMaxDrawTargets> atts{};
+    std::uint32_t att_count = 0;
+    if (targets.size() > kMaxDrawTargets) throw std::logic_error("draw_into: too many targets");
     for (const Image* target : targets) {
         // The previous frame read it.
         image_barrier(cmd, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1886,12 +1903,12 @@ void VkContext::draw_into(VkCommandBuffer cmd, std::span<const Image* const> tar
         att.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         att.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        atts.push_back(att);
+        atts[att_count++] = att;
     }
     VkRenderingInfo r{VK_STRUCTURE_TYPE_RENDERING_INFO};
     r.renderArea = {{0, 0}, extent};
     r.layerCount = 1;
-    r.colorAttachmentCount = static_cast<std::uint32_t>(atts.size());
+    r.colorAttachmentCount = att_count;
     r.pColorAttachments = atts.data();
     vkCmdBeginRendering(cmd, &r);
     VkViewport vp{0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f};
@@ -2130,7 +2147,9 @@ std::optional<std::uint32_t> VkContext::finish_frame_gen(const FrameInfo& frame)
     composite_into(cmd, frame.image_index, frame_gen_->composite_set(slot, false));
     if (fg_queries_) {
         vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, fg_queries_, 2 * frame.frame_slot + 1);
-        fg_query_state_[frame.frame_slot] = generated ? 2 : 1;
+        // A shown-twice frame (frame_gen_repeat) also sets `generated` but synthesises nothing: only a synthesised
+        // in-between frame's GPU time is the generated one.
+        fg_query_state_[frame.frame_slot] = fg_generated_last_ ? 2 : 1;
     }
     picture_ready_ = true;
     picture_index_ ^= 1u;
@@ -2158,7 +2177,8 @@ void VkContext::end_frame(const FrameInfo& frame) {
     void* readback_data = nullptr;
     if (!screenshot_path_.empty() && !screenshots_supported_) {
         // Asked before a swapchain made without TRANSFER_SRC: the copy would be invalid.
-        log::warn("screenshot {} not taken: the swapchain's images cannot be copied from", screenshot_path_.string());
+        log::warn("screenshot {} not taken: the swapchain's images cannot be copied from or are not 8-bit RGBA",
+                  screenshot_path_.string());
         screenshot_path_.clear();
     }
     // --screenshot-generated: the in-between frame saved as asked and the real one beside it (the two are one frame
