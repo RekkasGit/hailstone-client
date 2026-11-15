@@ -30,12 +30,39 @@ local function heading(text)
 end
 local LABEL_W = 170 -- the label column, in unscaled pixels
 local U = 1         -- the UI scale, this frame
+local fuzzy = dofile("lib/fuzzy.lua")
+local search = "" -- the search field's text; a row that does not match it is left out
+local lastRowShown = true -- the last row() drew its row, so a note() under it goes too
+-- The section being drawn: its title counts in every row's search ("target ring" finds the Target Ring section's
+-- rows; a plugin's section is its name). While a search is typed its heading and table wait for the first row that
+-- matches (open: nil outside a section, "pending", "open", or "failed" when BeginTable said no).
+local cur = { title = nil, open = nil }
+
+local function matches(label, tooltip)
+  if cur.title then tooltip = (tooltip or "") .. " " .. cur.title end
+  return fuzzy.match(search, label, tooltip)
+end
 
 local function tip(text)
   if text and ui.IsItemHovered(ui.HoveredFlags.DelayShort) then ui.SetTooltip(text) end
 end
 
+local function beginSection(title)
+  heading(title)
+  if not ui.BeginTable("##" .. title, 2, ui.TableFlags.SizingFixedFit) then return false end
+  ui.TableSetupColumn("label", ui.TableColumnFlags.WidthFixed, LABEL_W * U)
+  ui.TableSetupColumn("value", ui.TableColumnFlags.WidthStretch, 0)
+  return true
+end
+
 local function row(label, tooltip, draw)
+  lastRowShown = matches(label, tooltip)
+  if not lastRowShown then return end
+  if cur.open == "pending" then cur.open = beginSection(cur.title) and "open" or "failed" end
+  if cur.open == "failed" then
+    lastRowShown = false
+    return
+  end
   ui.TableNextRow()
   ui.TableNextColumn()
   ui.Text(label)
@@ -46,29 +73,43 @@ local function row(label, tooltip, draw)
   tip(tooltip)
 end
 
--- A note under the row above, in the value column.
+-- A note under the row above, in the value column; it goes with its row.
 local function note(text)
+  if not lastRowShown then return end
   ui.TableNextRow()
   ui.TableNextColumn()
   ui.TableNextColumn()
   ui.TextDisabled(text)
 end
 
+-- A heading and a table of rows. While a search is typed, a section none of whose rows match is left out whole; the
+-- section bodies draw outside row() and note() only when the search is empty.
 local function section(title, body)
-  heading(title)
-  if ui.BeginTable("##" .. title, 2, ui.TableFlags.SizingFixedFit) then
-    ui.TableSetupColumn("label", ui.TableColumnFlags.WidthFixed, LABEL_W * U)
-    ui.TableSetupColumn("value", ui.TableColumnFlags.WidthStretch, 0)
+  cur.title = title
+  if search == "" then
+    cur.open = nil
+    if beginSection(title) then
+      body()
+      ui.EndTable()
+    end
+    ui.Spacing()
+  else
+    cur.open = "pending"
     body()
-    ui.EndTable()
+    if cur.open == "open" then ui.EndTable() end
+    if cur.open ~= "pending" then ui.Spacing() end
   end
-  ui.Spacing()
+  cur.title, cur.open = nil, nil
+  lastRowShown = true
 end
 
 -- A combo box over choices (1-based here, the option's values 0-based); `values` maps a choice to the option's value.
 local function combo(name, label, choices, tooltip, values)
   local v = eq.Option(name)
-  if v == nil then return end
+  if v == nil then
+    lastRowShown = false -- no row: a note() meant for it is left out too
+    return
+  end
   row(label, tooltip, function()
     local current = v
     if values then
@@ -89,7 +130,10 @@ end
 
 local function check(name, label, tooltip)
   local v = eq.Option(name)
-  if v == nil then return end
+  if v == nil then
+    lastRowShown = false -- no row: a note() meant for it is left out too
+    return
+  end
   row(label, tooltip, function()
     local on, changed = ui.Checkbox("##" .. name, v ~= 0)
     if changed then eq.SetOption(name, on and 1 or 0) end
@@ -99,7 +143,10 @@ end
 -- A check box shown inverted: checked while the option is 0 (SyncGeneralPage's TradeskillWnd CtrlBypass box).
 local function invcheck(name, label, tooltip)
   local v = eq.Option(name)
-  if v == nil then return end
+  if v == nil then
+    lastRowShown = false -- no row: a note() meant for it is left out too
+    return
+  end
   row(label, tooltip, function()
     local on, changed = ui.Checkbox("##" .. name, v == 0)
     if changed then eq.SetOption(name, on and 0 or 1) end
@@ -109,7 +156,10 @@ end
 -- A slider over the option's own values (min..max); text(v) is what it shows.
 local function slider(name, label, min, max, text, tooltip)
   local v = eq.Option(name)
-  if v == nil then return end
+  if v == nil then
+    lastRowShown = false -- no row: a note() meant for it is left out too
+    return
+  end
   row(label, tooltip, function()
     local nv, changed = ui.SliderInt("##" .. name, v, min, max, text and text(v) or nil)
     if changed then eq.SetOption(name, nv) end
@@ -127,7 +177,10 @@ local function pct(v) return string.format("%d %%", v) end
 -- One bit of an option (the click-through mask).
 local function bit(name, mask, label, tooltip)
   local v = eq.Option(name)
-  if v == nil then return end
+  if v == nil then
+    lastRowShown = false -- no row: a note() meant for it is left out too
+    return
+  end
   row(label, tooltip, function()
     local on, changed = ui.Checkbox("##" .. name .. mask, v & mask ~= 0)
     if changed then eq.SetOption(name, on and (v | mask) or (v & ~mask)) end
@@ -538,11 +591,13 @@ local function displayTab()
       "Spreads or narrows the picture's light and dark.")
     ticks("gamma", "Gamma", function(t) return string.format("%.2f", 0.5 + t * 0.05) end,
       "Brightens (higher) or darkens (lower) the shadows and mid tones.")
-    ui.TableNextRow()
-    ui.TableNextColumn()
-    ui.TableNextColumn()
-    if ui.Button("Reset Picture", 0, 0) then
-      for _, o in ipairs({ "brightness", "contrast", "gamma" }) do eq.SetOption(o, 10) end
+    if search == "" then
+      ui.TableNextRow()
+      ui.TableNextColumn()
+      ui.TableNextColumn()
+      if ui.Button("Reset Picture", 0, 0) then
+        for _, o in ipairs({ "brightness", "contrast", "gamma" }) do eq.SetOption(o, 10) end
+      end
     end
   end)
   -- The RoF2 asset folder the game reads (hailstone.ini assets.path); the picker changes it on the login screen.
@@ -553,19 +608,21 @@ local function displayTab()
         .. "Hailstone never changes it.", function()
         ui.TextWrapped(eq.OptionChoices("asset_folder")[1] or "?")
       end)
-      ui.TableNextRow()
-      ui.TableNextColumn()
-      ui.TableNextColumn()
-      if pick == 0 then
-        if ui.Button("Change Asset Folder", 0, 0) then eq.SetOption("asset_folder_pick", 1) end
-        tip("Shows the folder picker on the login screen (after camping out), or the next time the game starts.")
-      else
-        if ui.Button("Keep This Folder", 0, 0) then eq.SetOption("asset_folder_pick", 0) end
-      end
-      if pick ~= 0 then
-        note(eq.Option("asset_folder_override") == 1
-          and "Started with --game-dir or EQ_GAME_DIR: that folder is used while it is given."
-          or "The folder picker shows on the login screen: camp out to choose another asset folder.")
+      if search == "" then
+        ui.TableNextRow()
+        ui.TableNextColumn()
+        ui.TableNextColumn()
+        if pick == 0 then
+          if ui.Button("Change Asset Folder", 0, 0) then eq.SetOption("asset_folder_pick", 1) end
+          tip("Shows the folder picker on the login screen (after camping out), or the next time the game starts.")
+        else
+          if ui.Button("Keep This Folder", 0, 0) then eq.SetOption("asset_folder_pick", 0) end
+        end
+        if pick ~= 0 then
+          note(eq.Option("asset_folder_override") == 1
+            and "Started with --game-dir or EQ_GAME_DIR: that folder is used while it is given."
+            or "The folder picker shows on the login screen: camp out to choose another asset folder.")
+        end
       end
     end)
   end
@@ -701,18 +758,20 @@ local function graphicsTab()
           end
         end)
       if pack ~= packAtStart then note("Restart the game to change the texture pack.") end
-      ui.TableNextRow()
-      ui.TableNextColumn()
-      ui.TableNextColumn()
-      if eq.Option("texture_studio") == 1 then
-        if ui.Button("Texture Studio...", 0, 0) then eq.SetOption("texture_studio", 1) end
-        tip("Builds an HD texture pack from your own game files on your graphics card (a program of its own).")
-      else
-        ui.TextDisabled("Texture Studio builds HD packs: install it from Add-ons on the login screen.")
+      if search == "" then
+        ui.TableNextRow()
+        ui.TableNextColumn()
+        ui.TableNextColumn()
+        if eq.Option("texture_studio") == 1 then
+          if ui.Button("Texture Studio...", 0, 0) then eq.SetOption("texture_studio", 1) end
+          tip("Builds an HD texture pack from your own game files on your graphics card (a program of its own).")
+        else
+          ui.TextDisabled("Texture Studio builds HD packs: install it from Add-ons on the login screen.")
+        end
       end
     end)
   end
-  if ui.Button("Restore Default Graphics", 0, 0) then
+  if search == "" and ui.Button("Restore Default Graphics", 0, 0) then
     -- (anti-aliasing and the lighting mode stay as they are)
     eq.SetOption("view_distance", 6)
     eq.SetOption("exposure", 10)
@@ -752,6 +811,22 @@ end
 -- ---------------------------------------------------------------- Controls
 local KEYS_LIST, KEYS_FILTER = "OKP_KeyboardAssignmentList", "OKP_KeyboardFilterCombobox"
 
+-- The key list's command names by row, for the search: read for every row once, and again only when the Show filter
+-- or the number of rows changes. A rebind changes a row's keys, never its command.
+local keyNames = { key = nil, names = {} }
+local function keyCommandNames(rows, filter)
+  local key = rows .. ":" .. tostring(filter)
+  if keyNames.key ~= key then
+    local names = {}
+    for r = 0, rows - 1 do
+      local texts = eq.ListRow(WINDOW, KEYS_LIST, r)
+      names[r] = texts and texts[1] or ""
+    end
+    keyNames.key, keyNames.names = key, names
+  end
+  return keyNames.names
+end
+
 local function keyBindings()
   local choices, selected = eq.ComboInfo(WINDOW, KEYS_FILTER)
   if choices then
@@ -777,31 +852,50 @@ local function keyBindings()
     ui.TableSetupColumn("Key", ui.TableColumnFlags.WidthFixed, 120 * U)
     ui.TableSetupColumn("Alternate", ui.TableColumnFlags.WidthFixed, 120 * U)
     ui.TableHeadersRow()
-    -- Only the rows in view are read and drawn: a row out of view is its height alone (a line of text, as each of
-    -- its cells is), so the scrolled height stays the same without a list read and three widgets for each command.
-    local _, viewY = ui.GetWindowPos()
-    local _, viewH = ui.GetWindowSize()
-    local _, lineH = ui.CalcTextSize("Ag")
-    for r = 0, rows - 1 do
-      ui.TableNextRow()
-      ui.TableNextColumn()
-      local _, rowY = ui.GetCursorScreenPos()
-      local texts = rowY + lineH >= viewY and rowY <= viewY + viewH and eq.ListRow(WINDOW, KEYS_LIST, r)
-      if not texts then
-        ui.Dummy(0, lineH)
-      else
-        ui.Text(texts[1] or "")
-        for c = 2, 3 do
-          ui.TableNextColumn()
-          local t = texts[c] or ""
-          -- red: the key is bound to another command too
-          local kc = texts.colors and texts.colors[c]
-          if kc then ui.PushStyleColor(ui.Col.Text, kc[1], kc[2], kc[3], 1) end
-          if ui.Selectable((t ~= "" and t or "-") .. "##" .. r .. "_" .. c, false) then
-            eq.ListClick(WINDOW, KEYS_LIST, r, "left", c - 1)
+    -- A row's key cells (columns 2 and 3), after its command's name.
+    local function keyCells(r, texts)
+      ui.Text(texts[1] or "")
+      for c = 2, 3 do
+        ui.TableNextColumn()
+        local t = texts[c] or ""
+        -- red: the key is bound to another command too
+        local kc = texts.colors and texts.colors[c]
+        if kc then ui.PushStyleColor(ui.Col.Text, kc[1], kc[2], kc[3], 1) end
+        if ui.Selectable((t ~= "" and t or "-") .. "##" .. r .. "_" .. c, false) then
+          eq.ListClick(WINDOW, KEYS_LIST, r, "left", c - 1)
+        end
+        if kc then ui.PopStyleColor() end
+        if kc and ui.IsItemHovered() then ui.SetTooltip("This key is bound to another command too.") end
+      end
+    end
+    if search == "" then
+      -- Only the rows in view are read and drawn: a row out of view is its height alone (a line of text, as each of
+      -- its cells is), so the scrolled height stays the same without a list read and three widgets for each command.
+      local _, viewY = ui.GetWindowPos()
+      local _, viewH = ui.GetWindowSize()
+      local _, lineH = ui.CalcTextSize("Ag")
+      for r = 0, rows - 1 do
+        ui.TableNextRow()
+        ui.TableNextColumn()
+        local _, rowY = ui.GetCursorScreenPos()
+        local texts = rowY + lineH >= viewY and rowY <= viewY + viewH and eq.ListRow(WINDOW, KEYS_LIST, r)
+        if not texts then
+          ui.Dummy(0, lineH)
+        else
+          keyCells(r, texts)
+        end
+      end
+    else
+      -- Searching: the matching rows alone, found by the commands' names (read once, keyCommandNames).
+      local names = keyCommandNames(rows, selected)
+      for r = 0, rows - 1 do
+        if matches(names[r]) then
+          local texts = eq.ListRow(WINDOW, KEYS_LIST, r)
+          if texts then
+            ui.TableNextRow()
+            ui.TableNextColumn()
+            keyCells(r, texts)
           end
-          if kc then ui.PopStyleColor() end
-          if kc and ui.IsItemHovered() then ui.SetTooltip("This key is bound to another command too.") end
         end
       end
     end
@@ -838,7 +932,7 @@ local function chatTab()
     ui.TableHeadersRow()
     for r = 0, rows - 1 do
       local texts = eq.ListRow(WINDOW, FILTERS, r)
-      if texts then
+      if texts and matches(texts[1]) then
         ui.TableNextRow()
         ui.TableNextColumn()
         ui.Text(texts[1] or "")
@@ -876,7 +970,7 @@ local function colorsTab()
     ui.TableHeadersRow()
     for r = 0, rows - 1 do
       local texts = eq.ListRow(WINDOW, COLORS, r)
-      if texts then
+      if texts and matches(texts[1]) then
         ui.TableNextRow()
         ui.TableNextColumn()
         if ui.Selectable((texts[1] or "") .. "##c" .. r, r == selected, ui.SelectableFlags.SpanAllColumns) then
@@ -941,6 +1035,11 @@ local function pages(visible)
   if #options > 0 then -- the Plugins tab, while a loaded plugin has options
     tabs = { table.unpack(TABS) }
     tabs[#tabs + 1] = { "Plugins", function() pluginsTab(options) end }
+  end
+  if visible then
+    ui.SetNextItemWidth(-1)
+    search = ui.InputTextWithHint("##optionssearch", "Search this tab", search, 128)
+    if search:match("^%s*$") then search = "" end
   end
   if visible and ui.BeginTabBar("##optionstabs") then
     for _, t in ipairs(tabs) do

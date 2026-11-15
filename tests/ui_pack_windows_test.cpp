@@ -4498,3 +4498,99 @@ end
     }
     ImGui::DestroyContext(ctx);
 }
+
+TEST_CASE("UI packs (modern): the Options search draws every tab, and only the sections that match") {
+    test::ScratchDir scratch("ui_pack_options_search");
+    const fs::path dir = scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern", dir / "modern",
+             fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* pixels = nullptr;
+    int width = 0, height = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+    {
+        Session s(dir, "modern");
+        // Every option there (at 0), so every row is offered to the search.
+        s.host.find_option = [](std::string_view) -> std::optional<int> { return 0; };
+        lua_State* L = s.lua.state();
+        // The search field answers with optSearch, the tab optTab is selected, and the section headings drawn are
+        // kept; a plugin with one option gives the Plugins tab.
+        REQUIRE(luaL_dostring(L, R"lua(
+            optSearch, optTab, optTabs, headings = "", nil, {}, {}
+            local input, separator, tabItem = ui.InputTextWithHint, ui.SeparatorText, ui.BeginTabItem
+            ui.InputTextWithHint = function(label, ...)
+                local text, changed = input(label, ...)
+                if label == "##optionssearch" then return optSearch, true end
+                return text, changed
+            end
+            ui.SeparatorText = function(text)
+                headings[text] = true
+                return separator(text)
+            end
+            ui.BeginTabItem = function(name, flags)
+                if not optTabs[name] then
+                    optTabs[name] = true
+                    optTabs[#optTabs + 1] = name
+                end
+                if name == optTab then flags = (flags or 0) | ui.TabItemFlags.SetSelected end
+                return tabItem(name, flags)
+            end
+            eq.PluginOptions = function()
+                return { { plugin = "Demo Helper", owner = "plugin:demo", name = "on", label = "Enabled", min = 0,
+                           max = 1, value = 0 } }
+            end
+            eq.ShowWindow("OptionsWindow", true)
+        )lua") == LUA_OK);
+        s.frames(3);
+        auto lua_string = [&](const char* code) {
+            REQUIRE_MESSAGE(luaL_dostring(L, code) == LUA_OK, lua_tostring(L, -1));
+            std::string out = lua_tostring(L, -1) ? lua_tostring(L, -1) : "";
+            lua_settop(L, 0);
+            return out;
+        };
+        const std::string tabs = lua_string("return table.concat(optTabs, ',')");
+        REQUIRE(tabs.find("Plugins") != std::string::npos);
+        // Draws every tab with the search; gives the headings drawn in all of them, sorted.
+        auto headings_for = [&](const char* search) {
+            lua_pushstring(L, search);
+            lua_setglobal(L, "optSearch");
+            REQUIRE(luaL_dostring(L, "headings = {}") == LUA_OK);
+            for (int i = 1;; ++i) {
+                lua_getglobal(L, "optTabs");
+                lua_rawgeti(L, -1, i);
+                const bool more = lua_isstring(L, -1);
+                if (more) lua_setglobal(L, "optTab");
+                lua_settop(L, 0);
+                if (!more) break;
+                s.frames(3);
+            }
+            return lua_string("local t = {} for k in pairs(headings) do t[#t + 1] = k end table.sort(t) "
+                              "return table.concat(t, ',')");
+        };
+        const std::string all = headings_for("");
+        CHECK(all.find("Target Ring") != std::string::npos);
+        CHECK(all.find("Name Plates") != std::string::npos);
+        CHECK(all.find("Demo Helper") != std::string::npos);
+        auto has = [](const std::string& list, std::string_view name) {
+            return ("," + list + ",").find("," + std::string(name) + ",") != std::string::npos;
+        };
+        // The section's title is searched: all its rows show, and the sections with nothing that matches go (the
+        // controls tab's key list keeps its own heading).
+        const std::string ring = headings_for("target ring");
+        CHECK(has(ring, "Target Ring"));
+        CHECK_FALSE(has(ring, "Name Plates"));
+        CHECK_FALSE(has(ring, "Volume"));
+        const std::string demo = headings_for("demo"); // a plugin's section by the plugin's name
+        CHECK(demo == "Demo Helper,Key Bindings");
+        const std::string fov = headings_for("fov"); // Field of View, by its initials
+        CHECK(has(fov, "View"));
+        CHECK_FALSE(has(fov, "Target Ring"));
+        // Nothing matches: no section's heading or empty table, only the key list's own heading.
+        CHECK(headings_for("zzqqxx") == "Key Bindings");
+        CHECK(headings_for("") == all);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
+}
