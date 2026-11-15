@@ -777,11 +777,19 @@ local function keyBindings()
     ui.TableSetupColumn("Key", ui.TableColumnFlags.WidthFixed, 120 * U)
     ui.TableSetupColumn("Alternate", ui.TableColumnFlags.WidthFixed, 120 * U)
     ui.TableHeadersRow()
+    -- Only the rows in view are read and drawn: a row out of view is its height alone (a line of text, as each of
+    -- its cells is), so the scrolled height stays the same without a list read and three widgets for each command.
+    local _, viewY = ui.GetWindowPos()
+    local _, viewH = ui.GetWindowSize()
+    local _, lineH = ui.CalcTextSize("Ag")
     for r = 0, rows - 1 do
-      local texts = eq.ListRow(WINDOW, KEYS_LIST, r)
-      if texts then
-        ui.TableNextRow()
-        ui.TableNextColumn()
+      ui.TableNextRow()
+      ui.TableNextColumn()
+      local _, rowY = ui.GetCursorScreenPos()
+      local texts = rowY + lineH >= viewY and rowY <= viewY + viewH and eq.ListRow(WINDOW, KEYS_LIST, r)
+      if not texts then
+        ui.Dummy(0, lineH)
+      else
         ui.Text(texts[1] or "")
         for c = 2, 3 do
           ui.TableNextColumn()
