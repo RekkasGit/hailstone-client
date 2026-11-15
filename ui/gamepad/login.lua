@@ -7,7 +7,7 @@
 --                   Start logs in, or asks for the first field missing
 --   Server settings the server's name, address, port, its own files folder, Save and Delete
 --   More (Y)        the box set (each account boxed or not, its world and character, Forget), Log in box set, the
---                   game files, the add-ons, About Hailstone (What's new, its GitHub page), the music and Quit
+--                   game files, the texture pack, the add-ons, About Hailstone (What's new, its GitHub page), the music and Quit
 --   Add-ons         a GitHub link to an add-on (docs/addons.md) and its install card, the store (every add-on of the
 --                   add-on index: A on one installs it through its card), then every script and plugin: A on one
 --                   lists what can be done with it and what it may do (the server's own: nothing that removes or
@@ -629,7 +629,28 @@ local function morePage(v, x0, y, x1, w)
     items[#items + 1] = { label = "Browse...", sub = "Pick another EverQuest folder", fn = function() eq.LoginDo("browse") end }
     openPick("Game files", items, "##game", "In use")
   end
-  y = y + px(76) + px(22)
+  y = y + px(76) + gap
+
+  -- the texture pack (eq.Option "texture_pack", display.texture_folder; the Options page's row too): Off, then each
+  -- folder of Hailstone's textures/, such as a pack Hailstone Texture Studio built. Read at the next start.
+  local pack = eq.Option("texture_pack")
+  if pack ~= nil then
+    st.packAtStart = st.packAtStart or pack
+    local choices = eq.OptionChoices("texture_pack")
+    P.at(x0, y)
+    local packNote = pack ~= st.packAtStart and "Used from the next start" or "Replacement textures, from the next start"
+    if P.field(F, "##texpack", "Texture pack", choices[pack + 1] or "A folder of its own", w, px(76),
+          { chevron = true, note = packNote, disabled = busy }) then
+      local items = {}
+      for i, name in ipairs(choices) do
+        items[#items + 1] = { label = name, sub = i == 1 and "The game's own textures" or nil, current = i == pack + 1,
+          fn = function() if i ~= pack + 1 then eq.SetOption("texture_pack", i - 1) end end }
+      end
+      openPick("Texture pack", items, "##texpack", "Chosen")
+    end
+    y = y + px(76) + gap
+  end
+  y = y + px(22) - gap
 
   -- the add-ons (docs/addons.md): a page of their own
   local installed = 0

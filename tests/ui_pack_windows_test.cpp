@@ -1450,6 +1450,103 @@ end
     }
 }
 
+TEST_CASE("UI packs: the login screen's More options pick the texture pack (eq.Option texture_pack)") {
+    for (const char* pack : {"modern", "gamepad"}) {
+        INFO(pack);
+        fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
+        hailstone::test::ScratchDir dir_scratch("ui_pack_login_texture_pack_test");
+        fs::path dir = dir_scratch.path();
+        fs::create_directories(dir / "game");
+        fs::copy(src, dir / pack, fs::copy_options::recursive);
+        ImGuiContext* ctx = ImGui::CreateContext();
+        ImGui::GetIO().IniFilename = nullptr;
+        unsigned char* px = nullptr;
+        int w = 0, h = 0;
+        ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+        {
+            Session s(dir, pack);
+            s.host.in_game = s.host.ui_ready = false;
+            REQUIRE(luaL_dostring(s.lua.state(), "eq.InGame = function() return false end") == LUA_OK);
+            // A new server (no saved accounts, so the gamepad pack's More page has no box set list above).
+            ui::LoginView login;
+            login.servers_dir = dir / "servers";
+            login.ui_packs = {{"modern", "Modern", "", "mouse", false, {}}, {"gamepad", "Gamepad", "", "gamepad", false, {}}};
+            login.ui = login.default_ui = pack;
+            login.game_folders = {{"/games/rof2", false, true}};
+            s.host.login = &login;
+            int chosen = 0; // Off
+            bool asked = false;
+            std::vector<int> set;
+            s.host.find_option = [&](std::string_view o) -> std::optional<int> {
+                if (o != "texture_pack") return std::nullopt;
+                asked = true;
+                return chosen;
+            };
+            s.host.option_choices = [](std::string_view o) {
+                return o == "texture_pack" ? std::vector<std::string>{"Off", "classic", "default"} : std::vector<std::string>{};
+            };
+            s.host.set_option = [&](std::string_view o, int v) {
+                if (o != "texture_pack") return;
+                set.push_back(v);
+                chosen = v;
+            };
+            lua_State* L = s.lua.state();
+            // More options open from the first frame; a click on the pack "classic": the modern pack's list entry,
+            // the gamepad pack's field and then the second row of its list.
+            REQUIRE(luaL_dostring(L, R"lua(
+ui.SetSetting('test.login', 'more')
+clickPack, rows = false, 0
+local selectable, invisible = ui.Selectable, ui.InvisibleButton
+ui.Selectable = function(label, ...)
+  local hit = selectable(label, ...)
+  return hit or (clickPack and label == "classic")
+end
+ui.InvisibleButton = function(id, ...)
+  local hit = invisible(id, ...)
+  if not clickPack then return hit end
+  if id == "##texpack" then return true end
+  if id == "##row" then
+    rows = rows + 1
+    return hit or rows == 2
+  end
+  return hit
+end
+)lua") == LUA_OK);
+            s.frames(3);
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+            CHECK(asked);
+            CHECK(set.empty());
+            if (std::string(pack) == "modern") {
+                // the list drawn as an open combo would draw it (its entries in the row itself: no popup to end)
+                REQUIRE(luaL_dostring(L, R"lua(
+local begin, finish, faked = ui.BeginCombo, ui.EndCombo, false
+ui.BeginCombo = function(id, ...)
+  if id == "##texture_pack" and clickPack then faked = true; return true end
+  return begin(id, ...)
+end
+ui.EndCombo = function()
+  if faked then faked = false; return end
+  return finish()
+end
+clickPack = true
+)lua") == LUA_OK);
+                s.frames(1);
+            } else {
+                REQUIRE(luaL_dostring(L, "clickPack = true") == LUA_OK);
+                s.frames(1); // the field opens the list
+                REQUIRE(luaL_dostring(L, "rows = 0") == LUA_OK);
+                s.frames(1); // its second row
+            }
+            REQUIRE(luaL_dostring(L, "clickPack = false") == LUA_OK);
+            CHECK(set == std::vector<int>{1});
+            CHECK(chosen == 1);
+            s.frames(2); // the note that it is used from the next start
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        }
+        ImGui::DestroyContext(ctx);
+    }
+}
+
 TEST_CASE("UI packs: the marketplace draws its shelves, details and pages from a filled store") {
     for (const char* pack : {"modern", "gamepad"}) {
         INFO(pack);
