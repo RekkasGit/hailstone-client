@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Leadership window: both interfaces show the original green for ranks supplied by the current leader, gold for personal purchases, and white or grey for unpurchased abilities. These colours describe ranks and training availability; group size and leadership permissions still determine whether an ability can be used.
 - Linux: the release now runs natively on Wayland; before, its SDL was built with X11 only and ran through XWayland. SDL chooses Wayland when the compositor offers the `fifo-v1` protocol (recent KDE, GNOME and wlroots); `SDL_VIDEO_DRIVER=wayland` or `x11` overrides it
 - Item display: the Magic and Summoned tags show their names instead of a number ([3094]) with a live game folder, whose string table lacks them
 - Windows build under Wine or Proton: the shared asset cache now works there; it used to turn itself off and load everything privately, as if it were disabled
