@@ -210,14 +210,25 @@ holds the decisions (unit tested), `render::FrameGen` (`src/render/frame_gen.cpp
    covered between the two frames. It takes the motion of the farthest of the marks bordering it, looked for in eight
    directions out to 32 pixels (the background's: a hole is half as wide as the background moves against what
    covers it, tens of pixels as the camera turns past a still character), with that mark's depth, and is flagged, so
-   the synthesis takes it from the last frame alone; with no mark near, it is flagged with no motion.
+   the synthesis takes it from the last frame alone; with no mark near, it is flagged with no motion. A crack is
+   not a hole: a place with the same surface (depths within 5 %) marked a few pixels away on two opposite sides
+   (four pixels each way, along a row, a column or a diagonal) is a surface whose pixels spread apart between the
+   frames (a character turning, or nearing the camera: close up the whole body is a grid of them). It takes the
+   nearer side's motion and the synthesis blends it as usual, unless this frame shows something nearer along that
+   motion (then it is the background behind a thin figure, a hole after all). Taken for holes, the cracks read the
+   last frame along the background's motion, tens of pixels away while the camera turns, and sprinkled the
+   character with specks of whatever was there (its shield, its gloves).
 4. **The in-between frame** (`fg_synth.frag`, the view's size): each pixel samples this frame (back along the motion)
    and the last one (forward). The motion is at the scene's size and the pixel at the view's, so of the 3 x 3 motion
    texels round it the one along which the frames agree best is taken, nearer ones favoured and farther ones held
    back (the background's motion agrees through a figure thinner than it moves, a sword, and would cut it out). Where
    they agree it blends them by the time; a flagged pixel takes the last frame, or, where the last frame had
-   something nearer at that place (in neither frame: a thin sword the background passes behind), the nearest
-   last-frame sample round it that shows background; a pixel whose last-frame sample lands where something nearer
+   something nearer at that place, this frame along the motion when nothing nearer covers it there; and in neither
+   frame (the background between a character's legs, behind the other leg in each, or a thin sword the background
+   passes behind) the nearest sample of either frame round its own place that shows background, out to 64 pixels in
+   eight directions. Before, only the last frame was looked in, out to 16 pixels, and the gap between the legs
+   took the other leg's colour, a second leg. What is seen through a glass shield counts as covered: its colour is
+   the shield's too, and would lay a second shield beside it; a pixel whose last-frame sample lands where something nearer
    was then (the keys at the last frame's places, the 3 x 3 round it) came out from behind it and takes this frame,
    however alike the colours (a dark character against a dark world turning behind it); one whose sample of this
    frame lies at the edge of something nearer (this frame's depth round it: the picture's anti-aliased outline of a
@@ -248,7 +259,10 @@ both viewers' clocks step exactly, and a timed run (`--frames`) takes no input, 
 at half the step renders the frame the in-between one stands for, the truth to compare it with. At a 60 fps base the
 mean error round the character against that truth went from 2.37 to 1.32 at 360 degrees a second (two runs of the
 same frame: 0.98), from 1.74 to 1.02 at 180 (0.84), and at a 30 fps base from 2.29 to 1.44 at 180 (1.00), against
-4.8 .. 6 for a plain blend or the nearer real frame. `--screenshot-generated`
+4.8 .. 6 for a plain blend or the nearer real frame. Crack filling and the search of both frames then took it to
+1.28 at 360 (floor 0.96), 1.35 at 180 on a 30 fps base (1.01) and 1.19 at 90 (1.14); the larger gain was live, as
+Hailtest (an ice shield) in the arena at 3076 x 1366 with the camera turning, where the specks and the second leg
+were plain to see. `--screenshot-generated`
 saves the in-between frame with the real one after it (`FILE_real`) for a side-by-side look: the viewer's last frame
 (with the one before as `FILE_prev`), and in the client every screenshot, the input script's `shot` too; the
 viewer's `--frames` log counts the in-between frames presented. The
