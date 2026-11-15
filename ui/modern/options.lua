@@ -887,11 +887,12 @@ local function colorsTab()
 end
 
 -- The plugins' options (eq.PluginOptions; docs/plugins.md "Plugin windows"), one section per plugin: a switch, or
--- a slider over the option's range.
-local function pluginsTab()
+-- a slider over the option's range. `options`: this frame's eq.PluginOptions(), which pages() reads once (each call
+-- runs every option's get).
+local function pluginsTab(options)
   local by = {}
   local order = {}
-  for _, o in ipairs(eq.PluginOptions()) do -- by owner (a compiled plugin and a script may share a name)
+  for _, o in ipairs(options) do -- by owner (a compiled plugin and a script may share a name)
     if not by[o.owner] then
       by[o.owner] = {}
       order[#order + 1] = o.owner
@@ -928,9 +929,10 @@ local function pages(visible)
   local want = eq.TabPage(WINDOW, "OPTW_OptionsSubwindows")
   if want and want >= 0 then eq.SetTabPage(WINDOW, "OPTW_OptionsSubwindows", -1) end
   local tabs = TABS
-  if #eq.PluginOptions() > 0 then -- the Plugins tab, while a loaded plugin has options
+  local options = eq.PluginOptions()
+  if #options > 0 then -- the Plugins tab, while a loaded plugin has options
     tabs = { table.unpack(TABS) }
-    tabs[#tabs + 1] = { "Plugins", pluginsTab }
+    tabs[#tabs + 1] = { "Plugins", function() pluginsTab(options) end }
   end
   if visible and ui.BeginTabBar("##optionstabs") then
     for _, t in ipairs(tabs) do
