@@ -180,7 +180,7 @@ float extended_far_plane(float original, float multiplier);
 
 // The modern mode's view: the original's `view` drawn out to extended_far_plane when `extend` (not under water, in
 // lava or in a thick-fog region), with the fog distances moved out with it (the renderers cull characters at the fog
-// end), and the haze's length (the far plane, or the original fog's end when not extended).
+// end), and the haze's length (the far plane; when not extended, as thick as the original's fog with its density).
 struct ModernView {
     game::ViewDistance view;
     float haze_length = 0.0f;

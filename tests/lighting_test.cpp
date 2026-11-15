@@ -10,6 +10,7 @@
 #include <glm/geometric.hpp>
 
 #include "assets/model.h"
+#include "game/fog.h"
 #include "game/inventory.h"
 #include "assets/spell_effects.h"
 #include "game/light_list.h"
@@ -468,6 +469,24 @@ TEST_CASE("modern view: drawn further unless in a special region") {
     auto water = render::modern_view(v, 2.5f, false);
     CHECK(water.view.far_plane == 1000.0f);
     CHECK(water.haze_length == 850.0f);
+}
+
+TEST_CASE("modern view: not drawn further, the haze is as thick as the zone's fog with its density") {
+    // innothule: no sky (so not extended), fog 10..500 at density 0.1; a region's 0.33 fog is thicker.
+    for (float density : {0.1f, 0.33f}) {
+        game::ViewDistance v;
+        v.far_plane = 512.5f;
+        v.fog_start = 10.0f;
+        v.fog_end = 500.0f;
+        v.fog_density = density;
+        const float length = render::modern_view(v, 2.5f, false).haze_length;
+        for (float d : {100.0f, 250.0f, 400.0f}) {
+            const float x = d / length;
+            const float haze = std::exp(-render::kHazeDepth * x * x);
+            // The haze starts at the camera, the original's fog at its start: within a few hundredths.
+            CHECK(haze == doctest::Approx(game::fog_factor(d, 10, 500, density)).epsilon(0.06));
+        }
+    }
 }
 
 TEST_CASE("sun shafts: on screen, off screen, behind and set") {
