@@ -44,7 +44,7 @@ While zoning (`LoginInfo::zoning = true`), world skips the guild list and charac
 
 | Packet | Dir | Opcode | Layout as implemented |
 |---|---|---|---|
-| SendLoginInfo | C→W | 0x7a09 | 464 B. +0 `char[64]` "account\0key\0"; +64 `char[124]` custom-files key (NUL-terminated, empty normally); +188 u8 zoning; +192 u8 0xcc; rest 0 |
+| SendLoginInfo | C→W | 0x7a09 | 464 B. +0 `char[64]` "account\0key\0"; +64 `char[124]` custom-files key (NUL-terminated, so at most 123 characters; empty normally); +188 u8 zoning; +192 u8 0xcc; rest 0 |
 | LogServer | W→C | 0x7ceb | 560 B. +4 u8 pvp, +8 u8 enable_FV, +36 `char[32]` world short name |
 | ApproveWorld | W→C | 0x7499 | 544-byte constant; not decoded |
 | EnterWorld | W→C | 0x578f | cstr name |

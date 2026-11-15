@@ -126,6 +126,11 @@ TEST_CASE("OP_SendLoginInfo is 464 bytes with account\\0key and the zoning flag 
     p = encode(li);
     CHECK(byte_at(p, 188) == 0);
     CHECK(decode_login_info(p)->custom_files_key == "key1");
+    // A key as long as the field keeps its last byte a NUL.
+    li.custom_files_key = std::string(130, 'F');
+    p = encode(li);
+    CHECK(byte_at(p, 64 + 123) == 0);
+    CHECK(decode_login_info(p)->custom_files_key == std::string(123, 'F'));
 }
 
 TEST_CASE("OP_SendLoginInfo: a key that does not fit keeps the field's last NUL") {
