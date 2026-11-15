@@ -2,13 +2,22 @@
 
 What the client does not implement yet, or implements with an approximation it cannot confirm. Entries are removed once settled.
 
-## Evolving-item inspection
+## Evolving items
 
-- Final Result's native action-4 layout and action-0 instance progress updates were checked against RoF2. Packet,
-  mock-server, bridge and Lua-pack tests cover read-only inspection, identity matching and server-supplied
-  replacement levels. Live acceptance still needs owned/linked item inspection, progress through an actual
-  evolution and physical controller input. A zero final-id hint is preserved; a stock server that uses only
-  that hint may not answer, while servers that resolve the family from the source can return the final form.
+- Final Result (action 4), progress updates (action 0) and the experience transfer's actions (1 open, 2 details,
+  3 transfer) were checked against RoF2's handlers and EQEmu's serializer. Packet, mock-server, Lua bridge and
+  both packs' tests cover inspection, identity matching, server-supplied replacement levels and the transfer flow.
+  Live acceptance still needs owned and linked item inspection, progress through an actual evolution, a live
+  transfer and refusal, replacement items across zoning, and physical controller input.
+- A zero final-id hint is sent as received: a stock server that uses only that hint may not answer, while servers
+  that resolve the family from the source can return the final form.
+- RoF2's transfer details reply identifies only the source and destination evolving IDs, with no request nonce.
+  Hailstone checks the current pair, the live original items and a local approval revision, but an older reply for
+  the same pair cannot be told from a fresh one. The server recalculates on commit; a server-provided nonce would
+  settle this. If a server sends no preview (EQEmu sends none when it cannot find either item), closing and
+  reopening the window allows a fresh request; Hailstone never makes up compatibility or result items. There is
+  no success acknowledgment, so a submitted transfer waits for inventory changes and server messages rather than
+  declaring success locally.
 
 ## Adventures (LDoN)
 
