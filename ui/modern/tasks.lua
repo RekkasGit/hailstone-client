@@ -115,6 +115,13 @@ local function memberRow(rows, name)
   return -1
 end
 
+-- The native roster's selection set to `row` (-1: none), clicked only when it is not that already: a click drops
+-- every list the frame has read, so one each frame for nothing made the windows build their lists again.
+local function selectMember(row)
+  local _, _, current = eq.ListInfo(WINDOW, "STASK_MemberList")
+  if (current or -1) ~= row then eq.ListClick(WINDOW, "STASK_MemberList", row, "left", 0) end
+end
+
 local function sharedMembers(tasks, s)
   local popup = "##sharedMembers"
   if state.openMembers then
@@ -138,7 +145,7 @@ local function sharedMembers(tasks, s)
   -- name so a departing member cannot shift Remove/Make leader onto a different person at the same row index.
   local rows = K.Rows(WINDOW, "STASK_MemberList")
   local selected = memberRow(rows, state.memberName)
-  eq.ListClick(WINDOW, "STASK_MemberList", selected, "left", 0)
+  selectMember(selected)
   if #rows == 0 then
     state.memberName = nil
     K.Empty(shared and "Waiting for member details." or "You are not in a shared task.")
@@ -159,7 +166,7 @@ local function sharedMembers(tasks, s)
   ui.SameLine(0, 6 * s)
   -- Re-resolve immediately before the member actions; native selection is only an index.
   selected = memberRow(K.Rows(WINDOW, "STASK_MemberList"), state.memberName)
-  eq.ListClick(WINDOW, "STASK_MemberList", selected, "left", 0)
+  selectMember(selected)
   ui.BeginDisabled(selected < 0)
   W.Button(WINDOW, "STASK_RemovePlayerButton", "Remove member", { height = h, danger = true })
   ui.SameLine(0, 6 * s)
