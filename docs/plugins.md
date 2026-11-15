@@ -111,8 +111,11 @@ one window settles the same question in the others within a second.
 
 The packs draw the question (`ui/modern/pluginconsent.lua`, the Gamepad UI's `dialogs.lua`) with
 `eq.PluginConsent()` (nil, or `{server, serial, warning, plugins = {{name, file, size, sha256, short}}}`) and
-`eq.AnswerPluginConsent(true | false | nil)`. A plugin's own code in the UI gets nil and cannot answer. Without a
-pack window for it (`eq.ReplaceWindow("PluginConsent")`) the client draws its own.
+`eq.AnswerPluginConsent(true | false | nil, serial)`, where `serial` is the question's: an answer to a question that has
+since been replaced by another (another server's, or other bytes) is refused (false) and nothing is kept. Both packs
+leave Allow and Don't allow off for a second after a question shows or a new one takes its place, so a click or press
+meant for something else cannot answer it. A plugin's own code in the UI gets nil and cannot answer. Without a pack
+window for it (`eq.ReplaceWindow("PluginConsent")`) the client draws its own.
 
 ## For players
 

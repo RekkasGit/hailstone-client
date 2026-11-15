@@ -1258,7 +1258,7 @@ refused to plugin code (nil / false).
 | PluginMenu | () → {{plugin, owner, label, command}} | Plugin menu entries | self |
 | PluginMenuClick | (i) → — | Run entry i's command as its owner | self |
 | PluginConsent | () → {server, serial, warning, plugins={{name, file, size, sha256, short}}} \| nil | Pending consent question for the server's compiled plugins | self |
-| AnswerPluginConsent | (true\|false\|nil) → ok | Answer it (nil = ask later) | self |
+| AnswerPluginConsent | (true\|false\|nil, serial) → ok | Answer the question with that serial (nil = ask later); false when it is not the one pending | self |
 
 #### Scripts (lua_eq_scripts.cpp)
 

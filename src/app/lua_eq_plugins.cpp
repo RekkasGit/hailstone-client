@@ -322,7 +322,9 @@ int PluginConsent(lua_State* L) {
     return 1;
 }
 
-// ok = eq.AnswerPluginConsent(allow): true, false, or nil (put away until the next zone-in)
+// ok = eq.AnswerPluginConsent(allow, serial): allow true, false, or nil (put away until the next zone-in); serial the
+// question's (eq.PluginConsent().serial). An answer to a question that is no longer the one asked (another server's,
+// or the same server's with other bytes, come up between the draw and the click) is refused: false, nothing kept.
 int AnswerPluginConsent(lua_State* L) {
     EqHost& h = host_of(L);
     std::optional<bool> allow;
@@ -330,7 +332,14 @@ int AnswerPluginConsent(lua_State* L) {
         luaL_checktype(L, 1, LUA_TBOOLEAN);
         allow = lua_toboolean(L, 1) != 0;
     }
-    if (plugin_code() || !h.answer_plugin_consent || !h.plugin_consent || !h.plugin_consent()) {
+    const lua_Integer serial = luaL_checkinteger(L, 2);
+    bool asked = false;
+    plugin::cxx_guard(L, [&] {
+        if (plugin_code() || !h.answer_plugin_consent || !h.plugin_consent) return;
+        const auto q = h.plugin_consent();
+        asked = q && static_cast<lua_Integer>(q->serial) == serial;
+    });
+    if (!asked) {
         lua_pushboolean(L, 0);
         return 1;
     }
