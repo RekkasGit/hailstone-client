@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Item display: the Magic and Summoned tags show their names instead of a number ([3094]) with a live game folder, whose string table lacks them
 - Security: a script can no longer crash the client by nesting `/docommand`, `/noparse` or `/squelch` without end; they nest at most 16 deep, and an `mq.cmd` line is at most 2047 bytes
 - Security: a script or plugin window that catches its own time-limit stop with `pcall`, `xpcall` or a coroutine is stopped all the same, and a long string match (a pattern that backtracks) is now stopped at the time limit instead of freezing the client
 - Security: Lua socials can no longer use `hailstone.ui_function`, `option` and `menu`; a social that used them could crash the client once edited. No script may be named like a Lua social (`social '...'`)
