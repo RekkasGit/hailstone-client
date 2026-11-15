@@ -2881,6 +2881,50 @@ return "ok"
     CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_utf8_test") == "ok");
 }
 
+// A click deferred until A is released (lib/window.lua W.deferred, used by lib/exchange.lua and lib/markets.lua)
+// runs while the window it was asked in is still drawn, waits while A is held, and is dropped once that window is gone
+// rather than firing into whichever window draws next.
+TEST_CASE("UI packs (gamepad): a click deferred to A's release is dropped when its window closes") {
+    constexpr const char* kScript = R"lua(
+local W = dofile("lib/window.lua")
+local function check(ok, what) if not ok then error(what, 2) end end
+local held = false
+local real = eq.gamepad
+eq.gamepad = setmetatable({ down = function(b) return b == "a" and held end }, { __index = real or {} })
+local frame = ui.GetFrameCount()
+local ran = 0
+local slot = {}
+local function ask(owner)
+  GPSTATE.currentWindow = owner
+  W.deferred(slot, function() ran = ran + 1 end)
+  GPSTATE.currentWindow = nil
+end
+-- its window drawn last frame: waits for A, then runs once
+ask("Owner")
+GPSTATE.drawn.Owner = frame - 1
+held = true
+W.runDeferred(slot)
+check(ran == 0 and slot.fn ~= nil, "ran with A held")
+held = false
+W.runDeferred(slot)
+check(ran == 1 and slot.fn == nil, "did not run on release")
+W.runDeferred(slot)
+check(ran == 1, "ran twice")
+-- its window gone (not drawn for a few frames): dropped, even once A is up
+ask("Owner")
+GPSTATE.drawn.Owner = frame - 5
+W.runDeferred(slot)
+check(ran == 1 and slot.fn == nil, "a closed window's click fired")
+-- asked outside a window: as before, runs on release
+ask(nil)
+W.runDeferred(slot)
+check(ran == 2, "a click without a window did not run")
+eq.gamepad = real
+return "ok"
+)lua";
+    CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_deferred_test") == "ok");
+}
+
 // The gamepad windows keep what is costly to read or lay out (a raid's members, the raid's and the guild's message of
 // the day, the /who answer, an item's wrapped description) between frames: a change still shows. The stock windows'
 // texts and lists are stood in for from Lua, and every text the theme draws is recorded.

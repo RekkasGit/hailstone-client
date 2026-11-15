@@ -58,6 +58,7 @@ function W.begin(name, opts)
   local last = S.drawn[name]
   local appearing = not last or frame - last > 1
   S.drawn[name] = frame
+  S.currentWindow = name -- (between W.begin and W.finish: the libraries' copies of this file have no `current`)
   S.appeared = S.appeared or {}
   if appearing then S.appeared[name] = frame end
   local w, h = T.px(opts.w or 900), T.px(opts.h or 600)
@@ -181,7 +182,28 @@ function W.finish()
   ui.PopStyleColor(11)
   ui.PopStyleVar(6)
   current = nil
+  S.currentWindow = nil
   return c and c.close
+end
+
+-- A click to run once A is released (a click that opens the quantity dialog, so the A still held does not press the
+-- dialog): kept for the window being drawn, and dropped if that window is gone (not drawn last frame) before then,
+-- so it never fires into another window. W.deferred(slot, fn) keeps it in the table `slot`; W.runDeferred(slot)
+-- runs or drops it, each frame.
+function W.deferred(slot, fn)
+  slot.fn, slot.owner = fn, S.currentWindow
+end
+function W.runDeferred(slot)
+  local fn = slot.fn
+  if not fn then return end
+  local owner = slot.owner
+  if owner and (S.drawn[owner] or -1) < ui.GetFrameCount() - 1 then
+    slot.fn, slot.owner = nil, nil
+    return
+  end
+  if pad.down("a") then return end
+  slot.fn, slot.owner = nil, nil
+  fn()
 end
 
 -- Whether the window `name` (this pack's) has the focus, to give it the pad's shortcuts (Y, X, LB / RB, ...).
