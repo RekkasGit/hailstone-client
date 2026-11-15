@@ -64,6 +64,7 @@
 - Loot All ignores repeated activation while its queue runs or its last reply is awaited; an item being looted on its own no longer matters. With several NO DROP items requiring confirmation, the first question now stays open when the later item stops the queue
 - Task offers: Preview Reward opens the selected offer's rewards in both interfaces when the server enables it. The description also shows the native starting-zone hint.
 - Gamepad quest journal: Preview Reward no longer causes a script error for active tasks.
+- Combat chat: temporary pets with a server-supplied temporary flag and owner now use your pet's line filters and colour alongside your permanent pet. Their arrival no longer replaces the pet shown in the pet window.
 - With the Temporal or AMD FSR 3.1 upscaler: characters cost less CPU time each frame again. Keeping their last frame's pose for the upscaler read it back from memory meant only for writing, and reallocated it every frame
 - Texture packs with generated trees: the trees sway in the wind again, each branch moving as one piece, without the flicker they had before (rebuild a pack's trees in the Texture Studio to get the pines without their branch-end slabs)
 - EQG crystals and other static CBGG1/CBSG1 surfaces use their packed glow and gloss channels, keeping dark regions' normals facing outward. Luminous parts and additive zone rays can bloom in modern lighting

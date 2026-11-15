@@ -624,6 +624,14 @@ lookup 1500, follow AI 3000):
   somebody else under filter 15 shows exactly when the player's pet hit (even an unreported killing blow); an NPC
   hitting itself is never reported; a miss on the player is hidden under 16, the player's own under 13, somebody
   else's on somebody else under 14 shows exactly when the player's pet missed. The pet's lines take colour 0x148.
+  Owned-pet classification matches ReportSuccessfulHit @0x52efd3: the focused pet (PetID), or an attacker with
+  the spawn record's temporary-pet byte set and MasterID equal to the local player's SpawnID. The summoned bit
+  alone does not qualify. The temporary flag is retained on every full spawn update and ownership changes apply
+  to subsequent lines. Packet-driven coverage is in `tests/pet_combat_chat_test.cpp`; live acceptance is pending.
+  Temporary pets do not replace PetID on arrival (@0x59687a) or during the fallback scan (@0x4b9b10), so a swarm
+  leaves the permanent pet's window and commands alone.
+  Stock EQEmu's RoF2 encoder writes the temporary-pet byte as zero and its swarm spawns omit petOwnerId, so those
+  swarms cannot be attributed from the received record. Names and target-cycling flags do not establish ownership.
 - `game/social.*`: the class titles and the /who class column, name trimming, partial player name lookup.
 - `game/follow.*`: the follow AI's step with `Fpu` (each record's x87 precision): bearing (fpatan's 64-bit result,
   then the rounded multiplies; an equal x with y1 < y2 takes the 270 branch), heading difference, the turn (snap

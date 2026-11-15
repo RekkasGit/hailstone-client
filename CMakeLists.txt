@@ -1222,6 +1222,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/equipment_illusions_test.cpp
     tests/appearance_vectors_test.cpp
     tests/combat_test.cpp
+    tests/pet_combat_chat_test.cpp
     tests/plate_test_test.cpp
     tests/nameplate_overlap_test.cpp
     tests/nameplate_style_test.cpp
