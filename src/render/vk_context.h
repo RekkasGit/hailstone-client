@@ -348,6 +348,8 @@ public:
     const std::string& gpu_name() const { return gpu_name_; }
     // The GPU in use, for the first start's graphics settings (render/graphics_tier.h); cpu_threads left 0.
     const GpuProfile& gpu_profile() const { return gpu_profile_; }
+    // FSR 3.1's passes' mean GPU times (HAILSTONE_FSR3_TIMING); empty without them.
+    std::string fsr3_timing() const;
     // Each memory heap's use and budget as the allocator sees them (VMA's heap budgets), for the performance window.
     struct HeapUse {
         bool device_local = false; // VRAM, else system memory

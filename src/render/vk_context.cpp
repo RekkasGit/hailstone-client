@@ -909,6 +909,8 @@ void VkContext::set_scene_options(const SceneOptions& options, const std::filesy
     if (scene_options_.upscaler == Upscaler::Fsr3 && !fsr3_) {
         vkDeviceWaitIdle(device_);
         fsr3_ = std::make_unique<Fsr3Upscaler>(device_, allocator_, pipeline_cache_, shader_dir);
+        // HAILSTONE_FSR3_TIMING: each pass's GPU time (Fsr3Upscaler::timing_summary, logged by the viewer's --frames).
+        if (core::env("FSR3_TIMING")) fsr3_->enable_timing(timestamp_period_ns_);
     }
     std::uint32_t shadow = options.shadow_size > 0 ? std::clamp(options.shadow_size, 256u, 8192u) : 1u;
     if (shadow != shadow_size_) {
@@ -2047,6 +2049,10 @@ void VkContext::destroy_frame_gen() {
     if (fg_queries_) vkDestroyQueryPool(device_, fg_queries_, nullptr);
     fg_queries_ = VK_NULL_HANDLE;
     picture_ready_ = false;
+}
+
+std::string VkContext::fsr3_timing() const {
+    return fsr3_ ? fsr3_->timing_summary() : std::string{};
 }
 
 void VkContext::read_frame_gen_time(std::uint32_t frame_slot) {

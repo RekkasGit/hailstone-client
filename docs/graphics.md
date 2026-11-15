@@ -177,8 +177,9 @@ the history through `post_taa_sets_` under `taa`); `display.sharpness` drives FS
   passes' own `FSR3UPSCALER_BIND_*` numbers; descriptor sets are written each frame, one set per pass per frame in
   flight.
 - **Shaders**: `cmake/Shaders.cmake` (`hailstone_add_fsr3_shaders`) compiles each pass once as compute with glslc or
-  glslangValidator, no AMD tool: HDR colour, reverse depth, motion vectors at the render size without jitter, the
-  reference Lanczos, 32-bit maths; accumulate twice, with and without sharpening (`fsr3_*.spv`).
+  glslangValidator, no AMD tool: HDR colour, reverse depth, motion vectors at the render size without jitter, 32-bit maths,
+  the history reprojected with FSR's Lanczos table (the permutation AMD's runtime picks on its own GPUs; the reference
+  Lanczos, which it keeps elsewhere, computes a sin() per tap and doubled the accumulate pass on an Intel Iris Xe); accumulate twice, with and without sharpening (`fsr3_*.spv`).
 - **Inputs as FSR wants them**: our jitter (`jitter_px_`) is FSR's `jitterOffset` as it is (a texel's unjittered
   place is `t + 0.5 - jitter` in both), and its cycle length is ours (FSR's count rounded up: 15 against its 14 at a
   render scale of 75, the same at 50 and 100); our motion (UV to last frame's place) goes in with a scale of 1; near,
@@ -187,6 +188,9 @@ the history through `post_taa_sets_` under `taa`); `display.sharpness` drives FS
 - **Device**: storage images in FSR's formats (R8, R16F, RG16F: `shaderStorageImageExtendedFormats`, enabled when
   present) and quad subgroup operations in compute (`render::Fsr3Upscaler::supported`, `DeviceCaps::fsr3`). Without
   them `fsr3` falls back to `taa` with a log line.
+- **Timing**: with `HAILSTONE_FSR3_TIMING` set, GPU timestamps round the clears and each pass
+  (`Fsr3Upscaler::timing_summary`); the viewer's `--frames` logs their means ("FSR 3.1 GPU time"). On an Intel Iris
+  Xe (1280x720 from 858x482) FSR 3.1 takes 3.9 ms, the accumulate pass 2.0 of them; on an RX 9060 XT 0.26 ms.
 - **Motion and reactive mask**: the same as the resolve's (Temporal upscaling 6): the draws' own motion in
   `motion_`, and the scene's reactive mask as FSR's (`Fsr3Upscaler::Inputs::reactive`; none, FSR's default of 0,
   without `independentBlend`).

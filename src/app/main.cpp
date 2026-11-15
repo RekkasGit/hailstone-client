@@ -1170,6 +1170,7 @@ int main(int argc, char** argv) {
                               "triangles in {} calls, {} into shadows in {} calls",
                               ms / (frame - timed_from), timed_from, frame - 1, 1000.0 * (frame - timed_from) / ms,
                               drawn.triangles, drawn.calls, drawn.shadow_triangles, drawn.shadow_calls);
+                if (const std::string fsr3 = vk.fsr3_timing(); !fsr3.empty()) log::info("FSR 3.1 GPU time: {}", fsr3);
                 if (vk.frame_gen_active())
                     log::info("frame generation: {} in-between frames presented in frames {}..{}", generated_frames,
                               timed_from, frame - 1);
