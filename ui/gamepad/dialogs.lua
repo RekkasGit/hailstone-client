@@ -46,8 +46,12 @@ end
 
 -- ---------------------------------------------------------------- confirmation
 local CONFIRM = "ConfirmationDialogBox"
+local confirmFocused = false
 ui.window("Confirm", function()
-  if not W.shown(CONFIRM) then return end
+  if not W.shown(CONFIRM) then
+    confirmFocused = false
+    return
+  end
   T.frame()
   local okOnly = eq.ChildShown(CONFIRM, "OK_Button") == true and eq.ChildShown(CONFIRM, "Yes_Button") == false
   local hints = okOnly and { { "a", "OK" } } or { { "a", "Select" }, { "b", "No" } }
@@ -64,6 +68,11 @@ ui.window("Confirm", function()
     else
       if T.button("##yes", "Yes", bw, bh, { primary = true, glyph = "a" }, pad) then eq.ClickChild(CONFIRM, "Yes_Button", "left") end
       ui.SameLine(0, T.px(16))
+      -- the focus starts on No (as W.confirm): an A carried over (a destroy, a buy) must not answer Yes
+      if not confirmFocused then
+        ui.SetKeyboardFocusHere()
+        confirmFocused = true
+      end
       if T.button("##no", "No", bw, bh, { glyph = "b" }, pad) then eq.ClickChild(CONFIRM, "No_Button", "left") end
     end
   end
@@ -101,7 +110,7 @@ ui.window("Quantity", function()
       if pad.menuPressed("rb") then set(value + 10) end
       if pad.menuPressed("x") then set(0) end
       if pad.menuPressed("y") then set(maxv) end
-      if pad.menuPressed("a") then accept = true end
+      if T.settledPress(pad, "a") then accept = true end
     end
     -- buttons (the mouse; the pad's buttons are drawn on them)
     local wx, wy = ui.GetWindowPos()

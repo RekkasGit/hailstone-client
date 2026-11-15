@@ -67,7 +67,7 @@ local function fitStart(text, w)
     local mid = (lo + hi) // 2
     if ui.CalcTextSize("..." .. text:sub(mid)) > w then lo = mid + 1 else hi = mid end
   end
-  return "..." .. text:sub(lo)
+  return "..." .. text:sub(T.charStart(text, lo)) -- (on to a character's start: narrower, so it still fits)
 end
 
 -- ---------------------------------------------------------------- the keys
@@ -85,7 +85,7 @@ local function clean(e, t)
   if e.digits then t = t:gsub("%D", "") end
   if e.noBlank then t = t:gsub("%s", "") end
   local max = e.max or (e.digits and 5 or 64) -- (the client's keyboard keeps 64; a link up to 400)
-  if #t > max then t = t:sub(1, max) end
+  if #t > max then t = T.cutBytes(t, max) end
   return t
 end
 
