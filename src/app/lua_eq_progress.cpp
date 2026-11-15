@@ -24,6 +24,7 @@
 #include "game/tasks.h"
 #include "game/zone_names.h"
 #include "net/game_connection.h"
+#include "plugin/lua_keep.h"
 #include "ui/dev_screens.h"
 
 namespace hailstone::app {
@@ -936,11 +937,36 @@ int Tasks(lua_State* L) {
     task_integer(L, "requestTimerLeft", std::max<std::int64_t>(0, (c.tasks().request_timer_until_ms - now + 999) / 1000));
     const auto zone = game::zone_id_by_short_name(host.zone_short_name);
     const auto element_text = [&c](const game::TaskElement& e) { return c.task_element_text(e); };
+    // Each list and task's texts in a box the state owns across the pushes (plugin/lua_keep.h).
+    struct Built {
+        std::vector<game::TaskListRow> listed;
+        std::string description, rewards;
+        std::vector<game::TaskWindowRow> rows;
+    };
+    Built& b = plugin::lua_keep<Built>(L);
+    lua_insert(L, -2); // the result back on top
+    static const std::string kNone;
     int task_index = 0;
     for (const auto type : {game::kTaskTypeTask, game::kTaskTypeShared, game::kTaskTypeQuest}) {
-        for (const auto& listed : game::collect_task_rows(c.tasks(), type, now)) {
+        plugin::cxx_guard(L, [&] { b.listed = game::collect_task_rows(c.tasks(), type, now); });
+        for (const auto& listed : b.listed) {
             const auto* t = c.tasks().find(type, listed.index);
             if (!t || !t->task_id) continue;
+            plugin::cxx_guard(L, [&] {
+                b.description = game::task_description_text(*t, element_text);
+                // Keep the native reward formatting separate from the description. Reward-set previews use
+                // TaskWnd's existing Preview Reward action and the reward-selection window.
+                game::Task rewards;
+                rewards.type = t->type;
+                rewards.has_rewards = t->has_rewards;
+                rewards.coin_reward = t->coin_reward;
+                rewards.xp_reward = t->xp_reward;
+                rewards.reward_link = t->reward_link;
+                rewards.points = t->points;
+                rewards.reward_type = t->reward_type;
+                b.rewards = game::task_details_stml(rewards, c.strings(), element_text);
+                b.rows = game::objective_rows(*t, c.strings(), element_text, task_zone_name);
+            });
             lua_createtable(L, 0, 16);
             task_integer(L, "id", t->task_id);
             task_integer(L, "type", t->type);
@@ -948,21 +974,11 @@ int Tasks(lua_State* L) {
             task_integer(L, "duration", t->duration);
             task_integer(L, "left", t->duration ? game::task_seconds_left(*t, now) : 0);
             task_string(L, "title", t->title);
-            task_string(L, "description", game::task_description_text(*t, element_text));
-            // Keep the native reward formatting separate from the description. Reward-set previews use
-            // TaskWnd's existing Preview Reward action and the reward-selection window.
-            game::Task rewards;
-            rewards.type = t->type;
-            rewards.has_rewards = t->has_rewards;
-            rewards.coin_reward = t->coin_reward;
-            rewards.xp_reward = t->xp_reward;
-            rewards.reward_link = t->reward_link;
-            rewards.points = t->points;
-            rewards.reward_type = t->reward_type;
-            task_string(L, "rewards", game::task_details_stml(rewards, c.strings(), element_text));
+            task_string(L, "description", b.description);
+            task_string(L, "rewards", b.rewards);
             task_boolean(L, "hasRewards", t->has_rewards);
             task_boolean(L, "rewardSet", t->reward_set);
-            const auto rows = game::objective_rows(*t, c.strings(), element_text, task_zone_name);
+            const auto& rows = b.rows;
             lua_createtable(L, static_cast<int>(rows.size()), 0);
             std::size_t row = 0;
             int total = 0, done = 0;
@@ -990,7 +1006,7 @@ int Tasks(lua_State* L) {
                     task_boolean(L, "done", complete);
                     task_boolean(L, "currentZone", task_element_in_zone(e, zone));
                     task_string(L, "text", r.texts[0]);
-                    task_string(L, "status", hidden ? std::string() : r.texts[1]);
+                    task_string(L, "status", hidden ? kNone : r.texts[1]);
                     task_string(L, "zone", r.texts[2]);
                     if (!hidden) {
                         task_integer(L, "count", e.done_count);

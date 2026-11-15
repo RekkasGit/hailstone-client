@@ -35,6 +35,7 @@
 #include "game/hotbuttons.h"
 #include "game/slash_commands.h"
 #include "net/game_connection.h"
+#include "plugin/lua_keep.h"
 
 namespace hailstone::app {
 
@@ -173,10 +174,20 @@ int SocialEditorSocial(lua_State* L) {
 // split, game::parse_command_line; a plugin's or script's command reads as "invalid", as they are not the game's).
 int SocialLine(lua_State* L) {
     EqHost& h = *host_of(L);
-    std::string text = luaL_checkstring(L, 1);
-    game::SocialLineParts parts = game::split_social_line(text);
-    const bool gm = h.conn && h.conn->profile() && h.conn->profile()->gm;
-    game::CommandLine cl = game::parse_command_line(parts.command, gm, h.conn ? &h.conn->strings() : nullptr);
+    const char* text = luaL_checkstring(L, 1);
+    // The parts in a box the state owns across the pushes (plugin/lua_keep.h).
+    struct Line {
+        game::SocialLineParts parts;
+        game::CommandLine cl;
+    };
+    Line& line = plugin::lua_keep<Line>(L);
+    plugin::cxx_guard(L, [&] {
+        line.parts = game::split_social_line(text);
+        const bool gm = h.conn && h.conn->profile() && h.conn->profile()->gm;
+        line.cl = game::parse_command_line(line.parts.command, gm, h.conn ? &h.conn->strings() : nullptr);
+    });
+    const game::SocialLineParts& parts = line.parts;
+    const game::CommandLine& cl = line.cl;
     lua_createtable(L, 0, 5);
     if (parts.pause) {
         lua_pushinteger(L, *parts.pause);
@@ -210,8 +221,10 @@ int SocialLine(lua_State* L) {
 // eq.SlashCommands(prefix): the commands whose built-in name starts with prefix (case ignored), in table order.
 int SlashCommands(lua_State* L) {
     EqHost& h = *host_of(L);
-    std::string prefix = luaL_checkstring(L, 1);
-    for (char& c : prefix) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    // (Compared in place: no std::string alive across the pushes, which may raise.)
+    std::size_t len = 0;
+    const char* p = luaL_checklstring(L, 1, &len);
+    const std::string_view prefix(p, len);
     const bool gm = h.conn && h.conn->profile() && h.conn->profile()->gm;
     lua_newtable(L);
     lua_Integer n = 0;
@@ -221,7 +234,8 @@ int SlashCommands(lua_State* L) {
         if (name.size() < prefix.size()) continue;
         bool match = true;
         for (std::size_t i = 0; i < prefix.size() && match; ++i)
-            match = std::tolower(static_cast<unsigned char>(name[i])) == static_cast<unsigned char>(prefix[i]);
+            match = std::tolower(static_cast<unsigned char>(name[i])) ==
+                    std::tolower(static_cast<unsigned char>(prefix[i]));
         if (!match) continue;
         lua_pushlstring(L, name.data(), name.size());
         lua_rawseti(L, -2, ++n);

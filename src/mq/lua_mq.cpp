@@ -28,6 +28,7 @@
 #include "game/slash_commands.h"
 #include "game/world_state.h"
 #include "mq/parse.h"
+#include "plugin/lua_keep.h"
 #include "net/game_connection.h"
 #include "ui/lua/lua_host.h"
 
@@ -392,10 +393,13 @@ int l_delay_ms(lua_State* L) {
     return 1;
 }
 
+// (The text is made in the Script's scratch string, not this frame: the push may raise.)
 int l_parse(lua_State* L) {
     need(L, plugin::kCapRead, "mq.parse");
-    std::string out = parse_macro_data(ctx_of(L), luaL_checkstring(L, 1));
-    lua_pushlstring(L, out.data(), out.size());
+    const char* line = luaL_checkstring(L, 1);
+    Script& s = Script::of(L);
+    plugin::cxx_guard(L, [&] { s.scratch = parse_macro_data(ctx_of(L), line); });
+    lua_pushlstring(L, s.scratch.data(), s.scratch.size());
     return 1;
 }
 
@@ -858,7 +862,28 @@ std::optional<fs::path> config_path(lua_State* L, const char* given) {
     return p;
 }
 
-// mq._write_config(path, text): mq.pickle's file write.
+// What the config directory holds: its files and their bytes, `except` left out (the file a write replaces). Stops
+// counting a little past kMaxConfigFiles.
+struct ConfigUsage {
+    std::size_t files = 0;
+    std::uintmax_t bytes = 0;
+};
+ConfigUsage config_usage(const fs::path& dir, const fs::path& except) {
+    ConfigUsage u;
+    std::error_code ec;
+    for (fs::recursive_directory_iterator it(dir, fs::directory_options::skip_permission_denied, ec), end;
+         !ec && it != end && u.files <= kMaxConfigFiles; it.increment(ec)) {
+        std::error_code fec;
+        if (!it->is_regular_file(fec) || it->path() == except) continue;
+        ++u.files;
+        const auto size = it->file_size(fec);
+        if (!fec) u.bytes += size;
+    }
+    return u;
+}
+
+// mq._write_config(path, text): mq.pickle's file write, within kMaxConfigFileBytes for the file and kMaxConfigFiles
+// / kMaxConfigBytes for the script's config directory.
 int l_write_config(lua_State* L) {
     const char* given = luaL_checkstring(L, 1);
     std::size_t n = 0;
@@ -866,40 +891,75 @@ int l_write_config(lua_State* L) {
     const Script& s = Script::of(L);
     if (s.dry) return luaL_error(L, "mq.pickle does nothing in a dry run");
     if (s.closing) return luaL_error(L, "mq.pickle: the script is stopping");
-    int problem = 0; // 1 outside, 2 cannot write
-    {
+    int problem = 0; // 1 outside, 2 cannot write, 3 too big, 4 the directory is full
+    plugin::cxx_guard(L, [&] {
         auto p = config_path(L, given);
         if (!p) {
             problem = 1;
-        } else {
-            std::error_code ec;
-            fs::create_directories(p->parent_path(), ec);
-            std::ofstream f(*p, std::ios::binary | std::ios::trunc);
-            if (f) f.write(text, static_cast<std::streamsize>(n));
-            else problem = 2;
+            return;
         }
-    }
+        if (n > kMaxConfigFileBytes) {
+            problem = 3;
+            return;
+        }
+        std::error_code ec;
+        const ConfigUsage used = config_usage(fs::weakly_canonical(script_config_dir(s), ec), *p);
+        if (used.files + 1 > kMaxConfigFiles || used.bytes + n > kMaxConfigBytes) {
+            problem = 4;
+            return;
+        }
+        fs::create_directories(p->parent_path(), ec);
+        std::ofstream f(*p, std::ios::binary | std::ios::trunc);
+        if (f) f.write(text, static_cast<std::streamsize>(n));
+        else problem = 2;
+    });
     if (problem == 1) return luaL_error(L, "mq.pickle: '%s' is outside the config directory", given);
     if (problem == 2) return luaL_error(L, "mq.pickle: cannot write '%s'", given);
+    if (problem == 3)
+        return luaL_error(L, "mq.pickle: '%s' would be over %d MiB", given, static_cast<int>(kMaxConfigFileBytes >> 20));
+    if (problem == 4)
+        return luaL_error(L, "mq.pickle: the config directory is full (%d files or %d MiB)",
+                          static_cast<int>(kMaxConfigFiles), static_cast<int>(kMaxConfigBytes >> 20));
     return 0;
 }
 
-// loadfile(path): a data file under the config directory (mq.pickle's), as text, with an empty environment.
-int l_loadfile(lua_State* L) {
-    auto p = config_path(L, luaL_checkstring(L, 1));
-    if (!p) {
+// What loadfile read: the file's text and chunk name, or why not.
+struct ConfigFile {
+    bool found = false;
+    std::string text, chunk, msg;
+};
+
+// The prelude's load_config(path): a data file under the config directory (mq.pickle's), as text, with an empty
+// environment; the prelude's loadfile runs it and hands out only what it returns, if that is data (kPrelude). The
+// file's text and the messages live in a box the state owns (plugin::lua_keep) across the load and the pushes.
+int l_load_config(lua_State* L) {
+    const char* given = luaL_checkstring(L, 1);
+    ConfigFile& f = plugin::lua_keep<ConfigFile>(L);
+    plugin::cxx_guard(L, [&] {
+        auto p = config_path(L, given);
+        if (!p) {
+            f.msg = std::string("'") + given + "' is outside the config directory";
+            return;
+        }
+        auto text = read_file(*p);
+        if (!text) {
+            f.msg = "cannot open " + p->string();
+            return;
+        }
+        f.found = true;
+        f.text = std::move(*text);
+        f.chunk = "@" + p->string();
+    });
+    if (!f.found) {
         lua_pushnil(L);
-        lua_pushfstring(L, "'%s' is outside the config directory", lua_tostring(L, 1));
+        lua_pushlstring(L, f.msg.data(), f.msg.size());
+        lua_remove(L, -3); // the box
         return 2;
     }
-    auto text = read_file(*p);
-    if (!text) {
-        lua_pushnil(L);
-        lua_pushfstring(L, "cannot open %s", p->string().c_str());
-        return 2;
-    }
-    std::string chunk = "@" + p->string();
-    if (luaL_loadbufferx(L, text->data(), text->size(), chunk.c_str(), "t") != LUA_OK) {
+    const bool loaded = luaL_loadbufferx(L, f.text.data(), f.text.size(), f.chunk.c_str(), "t") == LUA_OK;
+    f = ConfigFile{};
+    lua_remove(L, -2);
+    if (!loaded) {
         lua_pushnil(L);
         lua_insert(L, -2);
         return 2;
@@ -909,37 +969,16 @@ int l_loadfile(lua_State* L) {
     return 1;
 }
 
-int l_dofile(lua_State* L) {
-    lua_settop(L, 1);
-    l_loadfile(L);
-    if (lua_isnil(L, -2)) return lua_error(L);
-    lua_call(L, 0, LUA_MULTRET);
-    return lua_gettop(L) - 1;
-}
+// What search_module found on disk: the module's text and chunk name, or why there is none.
+struct ModuleFile {
+    bool found = false;
+    std::string text, chunk, msg;
+};
 
-// require(name): mq, ImGui, or a module file next to the script or in the script directories; every file must be
-// allowed by the server's rules like the script. find_module leaves the module's chunk on the stack (1), the cached or
-// built-in value (2), or an error message (0); C++ objects are gone before anything can raise an error.
-int find_module(lua_State* L, const char* given) {
-    Script& s = Script::of(L);
-    std::string name = given;
-    lua_getfield(L, LUA_REGISTRYINDEX, "hailstone.loaded");
-    lua_getfield(L, -1, given);
-    lua_remove(L, -2);
-    if (!lua_isnil(L, -1)) return 2;
-    lua_pop(L, 1);
-    if (name == "mq") {
-        lua_getfield(L, LUA_REGISTRYINDEX, "hailstone.mq");
-        return 2;
-    }
-    if (name == "ImGui") {
-        lua_getglobal(L, "ImGui");
-        return 2;
-    }
-    if (name == "hailstone") {
-        lua_getglobal(L, "hailstone");
-        return 2;
-    }
+// The module file `given` names, next to the script or in the script directories, allowed by the server's rules like
+// the script. Calls no Lua.
+void search_module(const Script& s, std::string_view given, ModuleFile& out) {
+    const std::string name(given);
     std::string rel = name;
     std::replace(rel.begin(), rel.end(), '.', '/');
     // Inside the folders only: no "..", nothing absolute or rooted (operator/ would take it in place of the folder).
@@ -958,30 +997,58 @@ int find_module(lua_State* L, const char* given) {
                 const std::uint32_t module_caps =
                     s.host->env.policy ? s.host->env.policy->caps(plugin::FileKind::Script, h) : 0;
                 if (module_caps == 0) {
-                    std::string msg = std::format("module '{}' ({}) may not run: {}", name, cand.string(),
-                                                  s.host->env.policy ? s.host->env.policy->refusal(plugin::FileKind::Script)
-                                                                     : std::string("no rules"));
-                    lua_pushlstring(L, msg.data(), msg.size());
-                    return 0;
+                    out.msg = std::format("module '{}' ({}) may not run: {}", name, cand.string(),
+                                          s.host->env.policy ? s.host->env.policy->refusal(plugin::FileKind::Script)
+                                                             : std::string("no rules"));
+                    return;
                 }
                 // The module runs in this script's state, with this script's capabilities: its own file must be
                 // allowed every one of them. Otherwise an add-on with fewer (an add-on named "mq" shipping
                 // mq/Icons.lua) would have its code run with the capabilities of any script that requires it.
                 if ((module_caps & s.caps) != s.caps) {
-                    std::string msg = std::format(
+                    out.msg = std::format(
                         "module '{}' ({}) may not run in {}: the module may do only '{}', the script '{}'", name,
                         cand.string(), s.name, plugin::caps_text(module_caps), plugin::caps_text(s.caps));
-                    lua_pushlstring(L, msg.data(), msg.size());
-                    return 0;
+                    return;
                 }
-                std::string chunk = "@" + cand.string();
-                return luaL_loadbufferx(L, text->data(), text->size(), chunk.c_str(), "t") == LUA_OK ? 1 : 0;
+                out.found = true;
+                out.text = std::move(*text);
+                out.chunk = "@" + cand.string();
+                return;
             }
         }
     }
-    std::string msg = "module '" + name + "' not found";
-    lua_pushlstring(L, msg.data(), msg.size());
-    return 0;
+    out.msg = "module '" + name + "' not found";
+}
+
+// require(name): mq, ImGui, or a module file next to the script or in the script directories; every file must be
+// allowed by the server's rules like the script. find_module leaves the module's chunk on the stack (1), the cached or
+// built-in value (2), or an error message (0). The lookups come first, while no C++ object exists; the file's text,
+// its name and the message live in a box the state owns (plugin::lua_keep) across the load and the push.
+int find_module(lua_State* L, const char* given) {
+    lua_getfield(L, LUA_REGISTRYINDEX, "hailstone.loaded");
+    lua_getfield(L, -1, given);
+    lua_remove(L, -2);
+    if (!lua_isnil(L, -1)) return 2;
+    lua_pop(L, 1);
+    if (std::strcmp(given, "mq") == 0) {
+        lua_getfield(L, LUA_REGISTRYINDEX, "hailstone.mq");
+        return 2;
+    }
+    for (const char* global : {"ImGui", "hailstone"})
+        if (std::strcmp(given, global) == 0) {
+            lua_getglobal(L, global);
+            return 2;
+        }
+    const Script& s = Script::of(L);
+    ModuleFile& m = plugin::lua_keep<ModuleFile>(L);
+    plugin::cxx_guard(L, [&] { search_module(s, given, m); });
+    int found = 0;
+    if (m.found) found = luaL_loadbufferx(L, m.text.data(), m.text.size(), m.chunk.c_str(), "t") == LUA_OK ? 1 : 0;
+    else lua_pushlstring(L, m.msg.data(), m.msg.size());
+    m = ModuleFile{}; // (its text now, not when the collector comes)
+    lua_remove(L, -2);
+    return found;
 }
 
 int l_require(lua_State* L) {
@@ -1005,7 +1072,42 @@ int l_require(lua_State* L) {
 
 // The Lua half of the mq module and MQ's ImGui table over the client's `ui` (ui/lua/lua_imgui.cpp).
 constexpr const char* kPrelude = R"lua(
-local mq = ...
+local mq, load_config = ...
+
+-- loadfile(path) / dofile(path): mq.pickle's data back, from under mq.configDir. The file is run with an empty
+-- environment, and loadfile hands out only what it returned, as data: a value that is or holds a function (a
+-- closure the file made, a string method it took) refuses the file. A script writes these files as it likes
+-- (mq.pickle), so a function from one would be code no server's rules looked at (docs/plugins.md).
+do
+    local type, next, pcall, error, tostring = type, next, pcall, error, tostring
+    local pack, unpack = table.pack, table.unpack
+    local function only_data(v, seen)
+        local t = type(v)
+        if t == 'function' or t == 'userdata' or t == 'thread' then return false end
+        if t ~= 'table' or seen[v] then return true end
+        seen[v] = true
+        for k, x in next, v do
+            if not only_data(k, seen) or not only_data(x, seen) then return false end
+        end
+        return true
+    end
+    function loadfile(path)
+        local chunk, err = load_config(path)
+        if not chunk then return nil, err end
+        local r = pack(pcall(chunk))
+        if not r[1] then return nil, r[2] end
+        local seen = {}
+        for i = 2, r.n do
+            if not only_data(r[i], seen) then return nil, tostring(path) .. ': not data (it holds a function)' end
+        end
+        return function() return unpack(r, 2, r.n) end
+    end
+    function dofile(path)
+        local f, err = loadfile(path)
+        if not f then error(err, 0) end
+        return f()
+    end
+end
 local yield = coroutine.yield
 
 function mq.delay(t, cond)
@@ -1233,7 +1335,7 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
     lua_setglobal(L, "os");
     lua_pop(L, 1);
     for (auto [n, fn] : std::initializer_list<std::pair<const char*, lua_CFunction>>{
-             {"print", l_print}, {"require", l_require}, {"loadfile", l_loadfile}, {"dofile", l_dofile}}) {
+             {"print", l_print}, {"require", l_require}}) {
         lua_pushcfunction(L, fn);
         lua_setglobal(L, n);
     }
@@ -1314,7 +1416,8 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
         return false;
     }
     lua_insert(L, -2);
-    if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+    lua_pushcfunction(L, l_load_config); // (the prelude's alone: loadfile and dofile check what it loads)
+    if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
         std::string err = lua_tostring(L, -1);
         sc.close();
         why = "internal error: " + err;

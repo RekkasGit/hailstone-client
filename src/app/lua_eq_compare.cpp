@@ -25,6 +25,7 @@
 #include "game/mechanics/character.h"
 #include "game/server_ext.h"
 #include "net/game_connection.h"
+#include "plugin/lua_keep.h"
 
 namespace hailstone::app {
 
@@ -144,23 +145,28 @@ void push_comparison(lua_State* L, const game::ItemComparison& c) {
     lua_setfield(L, -2, "slots");
 }
 
-// The comparison of `item` (from the place `key` names), from the cache while it is fresh.
-int compare(lua_State* L, std::string key, const net::Item* item) {
+// The comparison of `item` (from the place make_key() names), from the cache while it is fresh. The key is made and
+// gone inside the guard, and the comparison is the cache's (the state's): nothing of this frame's or the caller's is
+// alive across the pushes (plugin/lua_keep.h).
+template <class MakeKey> int compare(lua_State* L, const MakeKey& make_key, const net::Item* item) {
     EqHost& h = host_up(L);
     CompareCache& c = cache_up(L);
     if (!item || !h.in_game || !h.conn || !h.character) {
         lua_pushnil(L);
         return 1;
     }
-    const auto now = std::chrono::steady_clock::now();
-    if (c.key != key || c.item_id != item->id || c.serial != item->serial ||
-        now - c.made > std::chrono::milliseconds(500)) {
-        c.result = game::compare_item(*h.character, *item, options_for(*h.conn), c.scratch);
-        c.key = std::move(key);
-        c.item_id = item->id;
-        c.serial = item->serial;
-        c.made = now;
-    }
+    plugin::cxx_guard(L, [&] {
+        std::string key = make_key();
+        const auto now = std::chrono::steady_clock::now();
+        if (c.key != key || c.item_id != item->id || c.serial != item->serial ||
+            now - c.made > std::chrono::milliseconds(500)) {
+            c.result = game::compare_item(*h.character, *item, options_for(*h.conn), c.scratch);
+            c.key = std::move(key);
+            c.item_id = item->id;
+            c.serial = item->serial;
+            c.made = now;
+        }
+    });
     if (!c.result) lua_pushnil(L);
     else push_comparison(L, *c.result);
     return 1;
@@ -176,7 +182,7 @@ int CompareItem(lua_State* L) {
         return 1;
     }
     const net::Item* item = h.conn && h.in_game ? h.conn->inventory().at(net::ItemSlot::possessions(slot, bag)) : nullptr;
-    return compare(L, "inv:" + std::to_string(slot) + ":" + std::to_string(bag), item);
+    return compare(L, [&] { return "inv:" + std::to_string(slot) + ":" + std::to_string(bag); }, item);
 }
 
 int CompareSlotItem(lua_State* L) {
@@ -184,7 +190,7 @@ int CompareSlotItem(lua_State* L) {
     const char* child = luaL_checkstring(L, 2);
     StockWindow* w = find_window(cache_up(L), name);
     const net::Item* item = w ? w->slot_item(host_up(L), child) : nullptr;
-    return compare(L, std::string("win:") + name + ":" + child, item);
+    return compare(L, [&] { return std::string("win:") + name + ":" + child; }, item);
 }
 
 int CompareBagSlotItem(lua_State* L) {
@@ -192,7 +198,7 @@ int CompareBagSlotItem(lua_State* L) {
     const int index = static_cast<int>(luaL_checkinteger(L, 2));
     StockWindow* w = find_window(cache_up(L), name);
     const net::Item* item = w ? w->bag_item(host_up(L), index) : nullptr;
-    return compare(L, std::string("bag:") + name + ":" + std::to_string(index), item);
+    return compare(L, [&] { return std::string("bag:") + name + ":" + std::to_string(index); }, item);
 }
 
 } // namespace
