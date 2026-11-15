@@ -130,6 +130,8 @@ def main():
             if not w or w[0] in ("hailstone-update", "signature"):
                 continue
             if w[0] == "version":
+                if len(w) != 2:
+                    sys.exit(f"{manifest}: \"{line.strip()}\" is not a version line (version <version>)")
                 if w[1:] != [a.version]:
                     sys.exit(f"{manifest} is for {' '.join(w[1:])}, not {a.version}")
                 continue
