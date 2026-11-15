@@ -39,9 +39,10 @@ void ClientApp::start_token_login(bool named_server, const std::filesystem::path
             if (p.id == id) named = &p;
     }
     const auto from_game = eqhost.empty() ? std::nullopt : profile_from_eqhost_file(eqhost);
-    // eqhost.txt only from a folder named for this run: a remembered one may be another server's.
+    // eqhost.txt only from a folder named for this run or the one Hailstone is installed in: a remembered one may be
+    // another server's.
     ServerProfile profile = token_login_profile(opts_.server, named, from_game,
-                                                asset_source_ == AssetFolderSource::Override, login_view_.profiles,
+                                                eqhost_names_ticket_server(asset_source_), login_view_.profiles,
                                                 opts_.auto_host, opts_.auto_port);
     pre_launch_profile_id_ = ui::selected_profile_id(login_view_);
     ui::begin_launcher_login_view(login_view_, profile);
