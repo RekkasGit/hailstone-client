@@ -233,8 +233,9 @@ The windows are Lua scripts drawn with ImGui, grouped into user interfaces: ever
   `LuaUi::allocated_bytes`; `core::frame_sections::add_bytes`): with the collector stopped between its slices, nearly
   all of it is garbage the slices take later, so it shows which windows make the collector's work. Short strings
   (40 bytes or less) are interned by Lua and cost nothing when the same text comes again; tables, closures and long
-  strings made in a draw function each frame are what it counts. The Actors row counts the instances not posed this frame (in neither the
-  view nor a shadow's reach).
+  strings made in a draw function each frame are what it counts. The table's history reuses its buffers, so keeping
+  it costs no allocation a frame while the window is closed. The Actors row counts the instances not posed this
+  frame (in neither the view nor a shadow's reach).
 - The Lua UI's garbage collector does not run on its own (`LUA_GCSTOP`): `LuaUi::frame` gives it a 1 ms slice at its
   end while a cycle is due (the heap twice what was live after the last cycle) or under way, and finishes a cycle in
   one go only if the heap reaches four times that. Lua's own pacing put a cycle's sweep into one or two frames, a

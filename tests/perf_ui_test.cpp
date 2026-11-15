@@ -84,6 +84,55 @@ TEST_CASE("perf: frame sections add up by name and are emptied when taken") {
     CHECK(fs::take_bytes().empty());
 }
 
+TEST_CASE("perf: taking the frame sections recycles the vectors handed back") {
+    // PerfUi takes each frame's sections into vectors the ring gives back, so a frame allocates nothing once warm.
+    namespace fs = hailstone::core::frame_sections;
+    static const char* const a = "a";
+    fs::take();
+    fs::take_bytes();
+    SectionAverages::Sections taken;
+    SectionAverages::Allocations bytes;
+    taken.reserve(16);
+    bytes.reserve(16);
+    const auto* storage = taken.data();
+    const auto* byte_storage = bytes.data();
+    fs::add(a, 1.0f);
+    fs::add_bytes(a, 10);
+    fs::take_into(taken);
+    fs::take_bytes_into(bytes);
+    REQUIRE(taken.size() == 1);
+    CHECK(taken[0].second == doctest::Approx(1.0f));
+    REQUIRE(bytes.size() == 1);
+    CHECK(fs::current().data() == storage); // the handed-in storage is now the next frame's, emptied
+    CHECK(fs::current().empty());
+    CHECK(fs::current_bytes().data() == byte_storage);
+
+    SectionAverages avg(2);
+    SectionAverages::Sections s{{a, 1.0f}};
+    SectionAverages::Allocations b;
+    avg.add_swap(s, b);
+    CHECK(s.empty()); // still filling: nothing to give back
+    s = {{a, 2.0f}};
+    avg.add_swap(s, b);
+    s = {{a, 3.0f}};
+    const auto* third = s.data();
+    avg.add_swap(s, b);
+    REQUIRE(s.size() == 1); // the dropped (oldest) frame comes back
+    CHECK(s[0].second == doctest::Approx(1.0f));
+    auto rows = avg.rows();
+    REQUIRE(rows.size() == 1);
+    CHECK(rows[0].avg_ms == doctest::Approx(2.5f));
+    s.clear();
+    avg.add_swap(s, b);
+    REQUIRE(s.size() == 1);
+    CHECK(s[0].second == doctest::Approx(2.0f));
+    s.clear();
+    avg.add_swap(s, b);
+    CHECK(s.data() == third); // the same storage goes round
+    fs::take();
+    fs::take_bytes();
+}
+
 TEST_CASE("perf: frame generation's rates count every image displayed against the real frames") {
     // Four real frames of 20 ms: three had an in-between frame.
     const FrameRates r = frame_rates({20.0f, 20.0f, 20.0f, 20.0f}, {2, 2, 1, 2});

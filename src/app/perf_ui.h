@@ -58,8 +58,11 @@ public:
         float avg_bytes = 0.0f;
         bool has_bytes = false; // bytes were counted for it (the Lua windows), so 0 means none allocated
     };
-    explicit SectionAverages(std::size_t frames = 60) : frames_(frames == 0 ? 1 : frames) {}
-    void add(Sections sections, Allocations bytes = {});
+    explicit SectionAverages(std::size_t frames = 60) : frames_(frames == 0 ? 1 : frames) { history_.reserve(frames_); }
+    void add(Sections sections, Allocations bytes = {}) { add_swap(sections, bytes); }
+    // add() without a copy: the frame's vectors go into the ring and come back holding the dropped frame's (or
+    // empty), whose storage the caller reuses (frame_sections::take_into), so the steady state allocates nothing.
+    void add_swap(Sections& sections, Allocations& bytes);
     std::vector<Row> rows() const;
     std::size_t frames() const { return history_.size(); }
 
@@ -142,6 +145,8 @@ private:
     std::array<std::uint8_t, kFrames> generated_{};
     PhaseTimes current_{};
     SectionAverages sections_;
+    SectionAverages::Sections taken_sections_; // the frame's sections, their storage recycled (add_swap)
+    SectionAverages::Allocations taken_bytes_;
     std::uint8_t current_presented_ = 1;
     std::uint8_t current_generated_ = 0;
     std::size_t head_ = 0;  // next slot to write

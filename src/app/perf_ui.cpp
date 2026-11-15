@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <numeric>
+#include <unordered_map>
 #include <vector>
 
 #include "core/frame_sections.h"
@@ -86,22 +87,28 @@ std::string hitch_text(float frame_ms, float typical_ms, const PhaseTimes& phase
     return text;
 }
 
-void SectionAverages::add(Sections sections, Allocations bytes) {
-    Frame f{std::move(sections), std::move(bytes)};
+void SectionAverages::add_swap(Sections& sections, Allocations& bytes) {
     if (history_.size() < frames_) {
-        history_.push_back(std::move(f));
+        history_.push_back(Frame{std::move(sections), std::move(bytes)});
+        sections.clear(); // (moved from: valid, its state unspecified)
+        bytes.clear();
         return;
     }
-    history_[head_] = std::move(f);
+    Frame& slot = history_[head_];
+    slot.sections.swap(sections);
+    slot.bytes.swap(bytes);
     head_ = (head_ + 1) % frames_;
 }
 
 std::vector<SectionAverages::Row> SectionAverages::rows() const {
     std::vector<Row> out;
-    auto row = [&out](const char* name) -> Row& {
-        auto it = std::find_if(out.begin(), out.end(), [name](const Row& r) { return r.name == name; });
-        if (it != out.end()) return *it;
-        return out.emplace_back(Row{name, 0.0f, 0.0f, 0.0f, false});
+    // Names match by address (frame_sections::add); an index keeps this linear in the entries, with hundreds of
+    // sections (plugin windows', lua_host.cpp kPluginSections) over 60 frames.
+    std::unordered_map<const char*, std::size_t> index;
+    auto row = [&out, &index](const char* name) -> Row& {
+        auto [it, added] = index.try_emplace(name, out.size());
+        if (added) out.push_back(Row{name, 0.0f, 0.0f, 0.0f, false});
+        return out[it->second];
     };
     for (const Frame& frame : history_) {
         for (const auto& [name, ms] : frame.sections) {
@@ -123,6 +130,7 @@ std::vector<SectionAverages::Row> SectionAverages::rows() const {
     std::stable_sort(out.begin(), out.end(), [](const Row& a, const Row& b) { return a.avg_ms > b.avg_ms; });
     return out;
 }
+
 FrameRates frame_rates(const std::vector<float>& ms, const std::vector<std::uint8_t>& presented,
                        const std::vector<std::uint8_t>& generated) {
     FrameRates r;
@@ -144,17 +152,18 @@ void PerfUi::begin_frame() {
     auto now = Clock::now();
     if (frames_++ > 0) {
         float frame = std::chrono::duration<float, std::milli>(now - frame_start_).count();
-        auto sections = core::frame_sections::take();
-        auto bytes = core::frame_sections::take_bytes();
+        // Into vectors that come back from the ring (add_swap): no allocation a frame, even with the window closed.
+        core::frame_sections::take_into(taken_sections_);
+        core::frame_sections::take_bytes_into(taken_bytes_);
         if (is_hitch(frame, typical_ms_)) {
-            if (log_hitches_) log::info("perf: {}", hitch_text(frame, typical_ms_, current_, sections));
+            if (log_hitches_) log::info("perf: {}", hitch_text(frame, typical_ms_, current_, taken_sections_));
         } else {
             typical_ms_ = typical_ms_ > 0.0f ? typical_ms_ * 0.95f + frame * 0.05f : frame;
         }
         if (!paused_) {
             frame_ms_[head_] = frame;
             phase_ms_[head_] = current_;
-            sections_.add(std::move(sections), std::move(bytes));
+            sections_.add_swap(taken_sections_, taken_bytes_);
             presented_[head_] = current_presented_;
             generated_[head_] = current_generated_;
             head_ = (head_ + 1) % kFrames;
