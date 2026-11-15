@@ -1401,6 +1401,21 @@ as purchasable assist or marker abilities. The records the RoF2 table marks untr
 listed at all, although stock EQEmu still sells 2, 3 and 18: ranks bought through another client do not show, and
 an old hot button for one of them does nothing.
 
+Ability names in both packs use the original window's colours (CLeadershipWnd's refresh @0x6b77f0), in this order:
+
+| Colour | Meaning |
+|---|---|
+| Green (`#00FF00`) | The current group or raid leader supplies at least rank one, even if the player has not purchased it. |
+| Gold (`#D6B228`) | The player has purchased a rank, but the current leader does not supply one. |
+| White (`#FFFFFF`) | Unpurchased and affordable at the displayed native cost; Delegate Mark NPC also requires the player's corresponding Mark NPC rank. |
+| Grey (`#C0C0C0`) | Unpurchased and not affordable, or that prerequisite is missing. |
+
+The rank column still shows personal purchases. Green uses Leadership_HasAbilityRank @0x55eb10, rather than
+Leadership_IsAbilityActive @0x55eb70: it does not check population, expansion or delegation permissions. EQEmu
+sends the leader's ranks even below three group members or eighteen raid members, so an ability can remain green
+while its bonus or action is unavailable. Those activation checks remain separate. White uses the native cost
+estimate; the server still decides the purchase price, as described below.
+
 The raid member menu is a Hailstone UI extension in both packs: right-click a member, or select one and use
 Member actions. The gamepad pack also opens it with Y on the focused row. Main Assist and Mark NPC delegate
 those roles to that member; they do not mark the member as an NPC target. The menu also offers Find PC,

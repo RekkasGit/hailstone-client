@@ -4288,6 +4288,224 @@ TEST_CASE("UI packs: raid member context menus and leadership hotkeys are reacha
     }
 }
 
+TEST_CASE("UI packs: leadership names follow received ranks, purchases and training eligibility") {
+    for (const char* pack : {"modern", "gamepad"}) {
+        INFO(pack);
+        const bool modern = std::string_view(pack) == "modern";
+        test::ScratchDir scratch("ui_pack_leadership_colors");
+        const fs::path dir = scratch.path();
+        fs::create_directories(dir / "game");
+        fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / pack, dir / pack,
+                 fs::copy_options::recursive);
+        std::ofstream(dir / "UI_Test_Server.ini") << "[Tips]\nShowTips=0\nShowTOTD=0\n";
+        ImGuiContext* ctx = ImGui::CreateContext();
+        ImGui::GetIO().IniFilename = nullptr;
+        unsigned char* pixels = nullptr;
+        int width = 0, height = 0;
+        ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+        {
+            Session s(dir, pack);
+            Config config;
+            app::Gamepad gamepad(config, {});
+            platform::GamepadState pad;
+            pad.connected = true;
+            gamepad.set_state(&pad);
+            gamepad.set_mode(app::PadMode::Menu);
+            s.host.gamepad = &gamepad;
+            test::Rig rig;
+            REQUIRE(rig.to_zone());
+            auto& conn = rig.conn;
+            s.host.conn = &conn;
+            const std::string me = conn.character_name();
+            auto owned = [&](std::uint32_t ability, std::uint32_t rank) {
+                ByteWriter w;
+                w.le(ability);
+                w.le(rank);
+                w.le<std::uint32_t>(0);
+                conn.receive_zone_packet_for_test(net::AppPacket(net::to_wire(net::Op::UpdateLeadershipAA), w.take()));
+            };
+            for (const std::uint32_t ability : {0u, 1u, 16u, 17u}) owned(ability, 1);
+            owned(0, 3);
+            auto group = [&](int count, const std::string& leader) {
+                net::GroupUpdateB u;
+                u.leader = leader;
+                for (int i = 0; i < count; ++i) {
+                    net::GroupUpdateMember member;
+                    member.slot = static_cast<std::uint32_t>(i);
+                    member.name = i ? "Friend" + std::to_string(i) : me;
+                    u.members.push_back(member);
+                }
+                conn.receive_zone_packet_for_test(net::encode(u));
+            };
+            net::GroupLeadershipUpdate active_group;
+            active_group.ranks[0] = active_group.ranks[1] = active_group.ranks[8] = 1;
+            group(2, "Friend1");
+            conn.receive_zone_packet_for_test(net::encode(active_group));
+            auto* L = s.lua.state();
+            auto run = [&](const std::string& code) {
+                const int rc = luaL_dostring(L, code.c_str());
+                INFO(code);
+                INFO((rc == LUA_OK ? "" : lua_tostring(L, -1)));
+                REQUIRE(rc == LUA_OK);
+                lua_settop(L, 0);
+            };
+            run(R"lua(
+                leadershipDrawn = {}
+                local draw = ui.DrawText
+                ui.DrawText = function(x, y, r, g, b, a, text, ...)
+                    if type(text) == 'string' then leadershipDrawn[text] = {r, g, b} end
+                    return draw(x, y, r, g, b, a, text, ...)
+                end
+                function checkLeadershipColor(list, name, r, g, b, rendered)
+                    local count = eq.ListInfo('LeadershipWindow', list)
+                    local found
+                    for i = 0, count - 1 do
+                        local row, cr, cg, cb = eq.ListRow('LeadershipWindow', list, i)
+                        if row[1] == name then found = {cr, cg, cb} break end
+                    end
+                    assert(found, 'Missing leadership row: ' .. name)
+                    local function check(c)
+                        assert(math.abs(c[1] - r) < 0.001 and math.abs(c[2] - g) < 0.001
+                            and math.abs(c[3] - b) < 0.001, 'Unexpected leadership color: ' .. name)
+                    end
+                    check(found)
+                    if rendered then
+                        assert(leadershipDrawn[name], 'Leadership name was not drawn: ' .. name)
+                        check(leadershipDrawn[name])
+                    end
+                end
+                ui.SetSetting('hud.size.LeadershipWindow', '1000,700')
+                ui.SetSetting('test.pos.LeadershipWindow', '20,20')
+                eq.ShowWindow('LeadershipWindow', true)
+            )lua");
+            auto render = [&] {
+                run("leadershipDrawn = {}");
+                s.frames(3);
+                REQUIRE(ImGui::FindWindowByName("UI errors") == nullptr);
+            };
+            auto gold = [&](const char* list, const char* name) {
+                run(std::string("checkLeadershipColor('") + list + "', '" + name +
+                    "', 214 / 255, 178 / 255, 40 / 255, true)");
+            };
+            auto green = [&](const char* list, const char* name) {
+                run(std::string("checkLeadershipColor('") + list + "', '" + name + "', 0, 1, 0, true)");
+            };
+            render();
+            CHECK_FALSE(conn.leadership_ability_active(1, 1));
+            green("LEList1", "NPC Health");
+            green("LEList1", "Mark NPC"); // leader rank 1 suffices even when the personal purchase is rank 3
+            group(3, "Friend1");
+            render();
+            CHECK(conn.leadership_ability_active(1, 1));
+            CHECK_FALSE(conn.leadership_ability_active(0, 1));
+            green("LEList1", "NPC Health");
+            green("LEList1", "Mark NPC"); // the window's color does not check the current member's role
+            const auto profile = *conn.profile();
+            auto without_god = profile;
+            without_god.expansions &= ~0x40u;
+            conn.set_profile_for_test(without_god);
+            render();
+            CHECK_FALSE(conn.leadership_ability_active(1, 1));
+            green("LEList1", "NPC Health");
+            conn.set_profile_for_test(profile);
+            // The current leader's ranks take precedence even without a personal purchase.
+            run("checkLeadershipColor('LEList1', 'Spell Awareness', 0, 1, 0, false)");
+            conn.receive_zone_packet_for_test(net::encode(net::GroupLeadershipUpdate{}));
+            render();
+            gold("LEList1", "NPC Health");
+            gold("LEList1", "Mark NPC");
+            run("checkLeadershipColor('LEList1', 'Spell Awareness', 192 / 255, 192 / 255, 192 / 255, false)");
+            owned(1, 0);
+            render();
+            run("checkLeadershipColor('LEList1', 'NPC Health', 192 / 255, 192 / 255, 192 / 255, true)");
+            net::LeadershipExp points;
+            points.group_points = 10;
+            conn.receive_zone_packet_for_test(net::encode(points));
+            render();
+            run("checkLeadershipColor('LEList1', 'NPC Health', 1, 1, 1, true)");
+            run("checkLeadershipColor('LEList1', 'Delegate Mark NPC', 1, 1, 1, true)");
+            owned(0, 0);
+            conn.receive_zone_packet_for_test(net::encode(points));
+            render();
+            run("checkLeadershipColor('LEList1', 'Delegate Mark NPC', 192 / 255, 192 / 255, 192 / 255, true)");
+            owned(0, 0xffffffffu);
+            conn.receive_zone_packet_for_test(net::encode(points));
+            render();
+            run("checkLeadershipColor('LEList1', 'Mark NPC', 192 / 255, 192 / 255, 192 / 255, true)");
+            run("checkLeadershipColor('LEList1', 'Delegate Mark NPC', 192 / 255, 192 / 255, 192 / 255, true)");
+            owned(1, 1);
+            render();
+            gold("LEList1", "NPC Health");
+            conn.receive_zone_packet_for_test(net::encode(active_group));
+            group(2, "Friend1");
+            render();
+            CHECK_FALSE(conn.leadership_ability_active(1, 1));
+            green("LEList1", "NPC Health");
+            conn.receive_zone_packet_for_test(net::encode_group_generic(net::Op::GroupDisbandYou, {me, me}));
+            render();
+            gold("LEList1", "NPC Health");
+
+            net::RaidUpdate raid;
+            raid.general.action = net::kRaidAddMember;
+            raid.general.leader_name = "Raider1";
+            for (int i = 0; i < 17; ++i) {
+                raid.general.player_name = i ? "Raider" + std::to_string(i) : me;
+                conn.receive_zone_packet_for_test(net::encode_raid_update(raid));
+            }
+            raid = {};
+            raid.general.action = net::kRaidSetLeader;
+            raid.general.leader_name = "Raider1";
+            raid.leadership[16] = raid.leadership[17] = 1;
+            conn.receive_zone_packet_for_test(net::encode_raid_update(raid));
+            if (modern) {
+                std::optional<ImVec2> at;
+                ImGuiContext& g = *ImGui::GetCurrentContext();
+                for (int i = 0; i < g.TabBars.GetMapSize() && !at; ++i)
+                    if (ImGuiTabBar* bar = g.TabBars.TryGetMapData(i))
+                        for (ImGuiTabItem& tab : bar->Tabs)
+                            if (std::string_view(ImGui::TabBarGetTabName(bar, &tab)) == "Raid abilities")
+                                at = ImVec2(bar->BarRect.Min.x + tab.Offset + tab.Width / 2,
+                                            (bar->BarRect.Min.y + bar->BarRect.Max.y) / 2);
+                REQUIRE(at);
+                auto& io = ImGui::GetIO();
+                io.AddMousePosEvent(at->x, at->y);
+                s.frames(1);
+                io.AddMouseButtonEvent(0, true);
+                s.frames(1);
+                io.AddMouseButtonEvent(0, false);
+            } else {
+                run("ui.SetWindowFocus('Leadership')");
+                pad.pressed[static_cast<std::size_t>(platform::PadButton::RB)] = true;
+                s.frames(1);
+                pad.pressed.fill(false);
+            }
+            render();
+            CHECK_FALSE(conn.leadership_ability_active(17, 1));
+            green("LEList2", "NPC Health");
+            green("LEList2", "Mark NPC");
+            raid = {};
+            raid.general.action = net::kRaidAddMember;
+            raid.general.player_name = "Raider17";
+            conn.receive_zone_packet_for_test(net::encode_raid_update(raid));
+            render();
+            CHECK(conn.leadership_ability_active(17, 1));
+            CHECK_FALSE(conn.leadership_ability_active(16, 1));
+            green("LEList2", "NPC Health");
+            green("LEList2", "Mark NPC");
+            raid.general.action = net::kRaidRemoveMember;
+            conn.receive_zone_packet_for_test(net::encode_raid_update(raid));
+            render();
+            CHECK_FALSE(conn.leadership_ability_active(17, 1));
+            green("LEList2", "NPC Health");
+            raid.general.action = net::kRaidDisband;
+            conn.receive_zone_packet_for_test(net::encode_raid_update(raid));
+            render();
+            gold("LEList2", "NPC Health");
+        }
+        ImGui::DestroyContext(ctx);
+    }
+}
+
 TEST_CASE("UI packs (modern): the Options window's Textures section picks the texture pack and starts the studio") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
     hailstone::test::ScratchDir dir_scratch("ui_pack_textures_test");
