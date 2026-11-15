@@ -1227,6 +1227,8 @@ private:
     bool grass_ = true;
     // Hailstone's Flora Distance (display.flora_distance): how far the flora is drawn, in units.
     float flora_reach_ = render::kFloraReach;
+    // Hailstone's Grass Density (display.grass_density, percent): how thick the lawn is (FloraRenderer::set_density).
+    int grass_density_ = 100;
     std::vector<render::FireSource> zone_fires_;
     std::vector<render::FireSource> zone_mesh_fires_; // the flame meshes' alone (no particle clouds)
     std::vector<render::FireSource> frame_fires_;            // the zone's with the moving ones', when there are any

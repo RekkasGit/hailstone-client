@@ -454,7 +454,11 @@ by 0.7 of its size, 3 to 12 units; a spawn more than 10 units above or below a p
 The reach is Hailstone's Flora Distance (`display.flora_distance`, the Options window's slider, the gamepad pack's
 Grass distance): 400 to 1,200 units, 400 by default. Past 400 units a share of the plants is kept by the square of
 the distance (`render::flora_keep`: a quarter at 800, a ninth at 1,200), the same ones from frame to frame, so the
-far ring costs about what the near circle does. The tiles are filled nearest first, so when a frame reaches
+far ring costs about what the near circle does. How thick the lawn grows is Hailstone's Grass Density
+(`display.grass_density`, the Options window's slider, the gamepad pack's Grass density): 25 to 200 %, 100 by
+default. It scales the blades each of the lawn's three draws gives a patch (`render::lawn_lod_blades`: 49, 16 and 9
+at 100 %, at least one), the blades keeping their width, so less is sparser and cheaper and more thicker and dearer;
+the other plants are not thinned. The tiles are filled nearest first, so when a frame reaches
 `FloraRenderer::kMaxPlants` (262,144) it is far plants that are left out. A plant is 40 bytes to the GPU a frame.
 
 ## Zone flora
@@ -1751,6 +1755,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.max_fps` | 0, 10 .. 1000 | 0 | frame cap (0 none); `--max-fps` takes precedence |
 | `display.background_fps` | -1, 0, 1 .. 1000 | 0 | frame cap while another window has the focus (0: as `display.max_fps`; -1: nothing drawn, the Options window's "0"). Below 10 the loop runs on at 10 a second (the game clock catches up at most 250 ms a frame) and draws only that many frames, or none (`app/frame_pace.h`); a frame not drawn is run as a minimised window's is |
 | `display.flora_distance` | units, 400 .. 1200 | 400 | how far the flora is drawn (Radial flora) |
+| `display.grass_density` | percent, 25 .. 200 | 100 | how thick Hailstone's lawn grows (`render::lawn_lod_blades`) |
 | `display.zone_flora` | on, off | on | Hailstone's flora for zones with a rules file (Zone flora), read as each zone loads |
 | `display.extra_shields` | on, off | on | a deliberate difference: shields RoF2 does not list (`game::is_shield_model`, docs/formats/characters.md "Held items") go on the shield point, not in the hand; read at start-up |
 | `display.texture_folder` | pack name, absolute folder, off | `textures/default` | replacement textures (Texture overrides): the folder indexed at start, its files read as each zone loads; the Options window's Textures section (from the next start) and Hailstone Texture Studio set it |
