@@ -383,6 +383,140 @@ end)
     ImGui::DestroyContext(ctx);
 }
 
+// lib/progress.lua's P.Rows keeps a copy of the list (no eq.WindowList, a few rows read a frame) and sorts it again
+// only when the rows shown change; lib/find.lua's rows are kept a moment and shared by its copies (the map's and the
+// minimap's).
+TEST_CASE("Modern UI libs: P.Rows' kept copy and sort, Find's kept rows") {
+    hailstone::test::ScratchDir scratch("lua_ui_modern_rows_test");
+    const fs::path dir = scratch.path() / "pack";
+    const fs::path lib = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern" / "lib";
+    REQUIRE(fs::exists(lib / "progress.lua"));
+    fs::create_directories(dir);
+    fs::copy(lib, dir / "lib", fs::copy_options::recursive);
+    std::ofstream(dir / "rows.lua") << R"lua(
+LIST = {}
+for i = 1, 200 do LIST[i] = { tostring(1000 - i) } end -- the list's order is descending
+reads, listCalls, sortCalls, finds = 0, 0, 0, 0
+SEARCH = ""
+eq = {
+  ListInfo = function() return #LIST, 1, -1, { "Value" }, { 0 } end,
+  ListRow = function(_, _, r)
+    reads = reads + 1
+    local t = LIST[r + 1]
+    if not t then return nil end
+    return { t[1] }, 1, 1, 1
+  end,
+  WindowList = function() listCalls = listCalls + 1; return {} end,
+  ListClick = function() end,
+  InGame = function() return true end,
+  ZoneName = function() return "Zone", "zone" end,
+  FindCategories = function() return { { "merchant", "Merchant" } } end,
+  FindNpcs = function(search)
+    finds = finds + 1
+    return { { id = 1, name = "A" .. search, category = "merchant" }, { id = 2, name = "B", category = "banker" } }
+  end,
+}
+local P = dofile("lib/progress.lua")
+local FL1, FL2 = dofile("lib/find.lua"), dofile("lib/find.lua")
+local function byValue(a, b)
+  sortCalls = sortCalls + 1
+  local x, y = tonumber(a.texts[1]) or 0, tonumber(b.texts[1]) or 0
+  if x ~= y then return x < y end
+  return a.row < b.row
+end
+FILTER, FILTER_KEY = nil, nil
+frames = {}
+ui.window("Rows", function()
+  ui.SetNextWindowPos(0, 0, ui.Cond.Always)
+  ui.SetNextWindowSize(400, 300, ui.Cond.Always)
+  ui.Begin("Rows")
+  local f = { drawn = {} }
+  reads, sortCalls = 0, 0
+  local total, _, shown = P.Rows("Wnd", "L", 0, 200, { rowH = 20, sort = byValue, filter = FILTER,
+    filterKey = FILTER_KEY, draw = function(_, texts) f.drawn[#f.drawn + 1] = texts[1] end })
+  f.total, f.shown = total, shown
+  f.reads, f.sorts = reads, sortCalls
+  FIND_STATE.search = SEARCH
+  local before = finds
+  local a, b = FL1.rows(), FL2.rows()
+  f.finds = finds - before
+  f.found, f.same = #a .. ":" .. (a[1] and a[1].name or ""), rawequal(a, b)
+  ui.End()
+  frames[#frames + 1] = f
+end)
+)lua";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        auto frames = [&](int n, float dt = 1.0f / 60.0f) {
+            for (int i = 0; i < n; ++i) {
+                ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+                ImGui::GetIO().DeltaTime = dt;
+                ImGui::NewFrame();
+                lua.frame();
+                ImGui::Render();
+            }
+        };
+        auto last = [&](const char* expr) {
+            std::string code = std::string("local f = frames[#frames]; return ") + expr;
+            REQUIRE(luaL_dostring(L, code.c_str()) == LUA_OK);
+            std::string out = lua_isstring(L, -1) ? lua_tostring(L, -1) : (lua_toboolean(L, -1) ? "true" : "false");
+            lua_settop(L, 0);
+            return out;
+        };
+        auto run = [&](const char* code) { REQUIRE(luaL_dostring(L, code) == LUA_OK); };
+        frames(3);
+        REQUIRE_FALSE(ImGui::FindWindowByName("UI errors"));
+        CHECK(last("f.drawn[1] .. ',' .. f.drawn[2]") == "800,801");
+        CHECK(last("f.total .. ',' .. f.shown") == "200,200");
+        CHECK(last("listCalls") == "0");
+        // not read whole each frame, and not sorted again while nothing changed
+        CHECK(std::stoi(last("f.reads")) < 60);
+        CHECK(last("f.sorts") == "0");
+        // a row out of view changes: sorted in within frames
+        run("LIST[100] = { '5' }");
+        frames(40);
+        CHECK(last("f.drawn[1] .. ',' .. f.drawn[2]") == "5,800");
+        CHECK(last("f.sorts") == "0");
+        // a row in view changes: drawn as the list has it at once, and sorted in
+        run("LIST[199] = { '1' }"); // (801)
+        frames(2);
+        CHECK(last("f.drawn[1] .. ',' .. f.drawn[2]") == "1,5");
+        // the filter: run over the copy each frame without a key (sorting again only when its rows change), kept
+        // with one
+        run("FILTER = function(_, t) return t[1]:find('9') ~= nil end");
+        frames(2);
+        CHECK(last("f.drawn[1] .. ',' .. f.drawn[2]") == "809,819");
+        CHECK(last("f.sorts") == "0");
+        run("FILTER_KEY = '9'");
+        frames(1);
+        CHECK(last("f.drawn[1]") == "809");
+        run("FILTER, FILTER_KEY = nil, nil");
+        frames(1);
+        CHECK(last("f.drawn[1] .. ',' .. f.total .. ',' .. f.shown") == "1,200,200");
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+
+        // Find: one read for both copies, again when the search changes or the moment passes
+        run("SEARCH = 'x'");
+        frames(1);
+        CHECK(last("f.finds") == "1");
+        CHECK(last("f.found") == "2:Ax");
+        CHECK(last("f.same") == "true");
+        run("finds = 0");
+        frames(6); // (0.1 s)
+        CHECK(last("finds") == "0");
+        frames(1, 0.25f);
+        CHECK(last("f.finds") == "1");
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 // The STML libraries' kept layouts (ui/modern/lib/stml.lua, ui/gamepad/lib/stml.lua): a line's wrap is worked out
 // once and kept until the width or the font change, and is the one the per-frame wrap gave; the chat output's lines
 // drawn from their summed heights land where the line-by-line walk put them; the gamepad's block cache keeps the
