@@ -24,6 +24,7 @@
 #include <unordered_set>
 
 #include "assets/eqg_character.h"
+#include "assets/wld_particles.h"
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/msvc_atoi.h"
@@ -235,6 +236,7 @@ bool CharacterMesh::append_skin_bones(std::vector<glm::mat4>& bones) const {
 
 CharacterMesh CharacterModel::default_mesh() const {
     CharacterMesh m;
+    m.emitters = clouds;
     m.vertices = vertices;
     m.indices = indices;
     m.parts = parts;
@@ -1040,6 +1042,21 @@ CharacterModel CharacterLibrary::build_actor(const std::string& code, const wld:
         const auto* def = ref ? w.get<wld::TrackDef>(ref->track) : nullptr;
         rest.tracks[i].push_back(def && !def->frames.empty() ? to_pose(def->frames.front()) : BonePose{});
     }
+    std::unordered_map<const wld::Fragment*, std::shared_ptr<const EmitterDefinition>> clouds;
+    for (std::size_t i = 0; i < n; ++i) {
+        const auto* f = w.resolve(sk->nodes[i].sprite);
+        if (!f || !f->holds<wld::ParticleCloud>()) continue;
+        // Duplicate named clouds use the first definition, just as the zone's WLD cloud registry does.
+        if (const auto* first = w.find(f->name); first && first->holds<wld::ParticleCloud>()) f = first;
+        auto& definition = clouds[f];
+        if (!definition) {
+            const auto& cloud = f->as<wld::ParticleCloud>();
+            auto texture = particle_texture(w, cloud.sprite);
+            if (!texture) continue;
+            definition = std::make_shared<const EmitterDefinition>(particle_cloud_definition(cloud, *texture, f->name));
+        }
+        m.clouds.push_back({static_cast<int>(i), glm::mat4(1.0f), {}, code, definition});
+    }
     const auto* race_model = game::find_model_code(code);
     const std::array<std::string, 3> name_dags{code + "HEAD_POINT_DAG", code + "HE_DAG",
         race_model && race_model->gender == 1 ? "HUFHEAD_POINT_DAG" : "HUMHEAD_POINT_DAG"};
@@ -1068,7 +1085,7 @@ CharacterModel CharacterLibrary::build_actor(const std::string& code, const wld:
     m.indices = std::move(geometry.indices);
     m.parts = std::move(geometry.parts);
     m.materials = std::move(geometry.materials);
-    if (m.indices.empty()) throw std::runtime_error("no visible mesh");
+    if (m.indices.empty() && m.clouds.empty()) throw std::runtime_error("no visible mesh");
 
     // Clips. Codes come from tracks named <code><bone track>, for the model's
     // own bones and for the donor's equivalent bones (donor code + the same
@@ -1230,8 +1247,8 @@ CharacterModel CharacterLibrary::build_actor(const std::string& code, const wld:
         lo = glm::min(lo, p);
         hi = glm::max(hi, p);
     }
-    m.bounds_min = lo;
-    m.bounds_max = hi;
+    m.bounds_min = m.vertices.empty() ? glm::vec3(0.0f) : lo;
+    m.bounds_max = m.vertices.empty() ? glm::vec3(0.0f) : hi;
     return m;
 }
 

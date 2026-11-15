@@ -788,6 +788,7 @@ hailstone_add_shaders(hailstone_shaders
   shaders/object_point_shadow.frag
   shaders/post.vert
   shaders/post.frag
+  shaders/item_preview.frag
   shaders/ao.frag
   shaders/plate_depth.vert
   shaders/plate_depth.frag
@@ -803,6 +804,8 @@ hailstone_add_shaders(hailstone_shaders
   shaders/fg_composite.frag
 )
 add_dependencies(hailstone_engine hailstone_shaders)
+hailstone_add_shader_variant(hailstone_actor_preview_shader actor_preview.frag shaders/actor.frag -DHAILSTONE_PREVIEW=1)
+add_dependencies(hailstone_engine hailstone_actor_preview_shader)
 hailstone_add_fsr3_shaders(hailstone_fsr3_shaders)
 add_dependencies(hailstone_engine hailstone_fsr3_shaders)
 

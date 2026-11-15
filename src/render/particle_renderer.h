@@ -102,7 +102,8 @@ public:
     static constexpr std::uint32_t kMaxTextures = 512; // at most; fewer where the device allows fewer
     static constexpr std::uint32_t kMaxVertices = 6 * 20000;
 
-    ParticleRenderer(VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir);
+    // scene=false targets a single-colour preview image, without the scene's motion/reactive attachments or depth copy.
+    ParticleRenderer(VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir, bool scene = true);
     ~ParticleRenderer();
     ParticleRenderer(const ParticleRenderer&) = delete;
     ParticleRenderer& operator=(const ParticleRenderer&) = delete;
@@ -134,6 +135,7 @@ private:
     void create_pipelines(const std::filesystem::path& shader_dir);
 
     VkContext& vk_;
+    bool scene_ = true;
     std::uint32_t max_textures_ = 0; // kMaxTextures, within DeviceCaps::max_sampled_images
     const GameDir& game_;
     TextureReader reader_;
@@ -157,7 +159,12 @@ private:
     // definition's texture slot and flipbook grid (`loading`: its texture is not up yet, so its particles are not
     // drawn rather than drawn white), and whether its particles are lit (-1 not known yet).
     struct OrderItem { float dist2; std::uint32_t emitter, particle; };
-    struct DefinitionLook { std::uint32_t tex = 0; glm::uvec2 grid{1}; bool known = false; bool loading = false; };
+    struct FrameLook { std::uint32_t tex = 0; bool loading = false; };
+    struct DefinitionLook {
+        std::vector<FrameLook> frames;
+        glm::uvec2 grid{1};
+        bool known = false, separate_frames = false;
+    };
     struct Batch { std::uint32_t first, count; int pipeline; };
     std::vector<OrderItem> order_;
     std::vector<DefinitionLook> looks_;

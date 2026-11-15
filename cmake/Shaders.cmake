@@ -21,6 +21,7 @@ set(HAILSTONE_SHADER_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/lighting.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sample_coverage.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/shaders/weather.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/shaders/puddle_cover.glsl
+                          ${CMAKE_CURRENT_SOURCE_DIR}/shaders/preview_alpha.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fsr1/ffx_a.h
                           ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fsr1/ffx_fsr1.h)
 # AMD's FSR 1 headers (fsr_easu.frag, fsr_rcas.frag).
@@ -47,6 +48,25 @@ function(hailstone_add_shaders target)
     list(APPEND outputs ${out})
   endforeach()
   add_custom_target(${target} DEPENDS ${outputs})
+endfunction()
+
+# A shared shader body compiled with a different policy. Preview fragments may write SampleMask; the world
+# variant must not declare it while fixed-function alpha-to-coverage is enabled on affected drivers.
+function(hailstone_add_shader_variant target name src)
+  set(out ${HAILSTONE_SHADER_OUT}/${name}.spv)
+  if(HAILSTONE_GLSLC)
+    set(cmd ${HAILSTONE_GLSLC} --target-env=vulkan1.3 -O -I ${HAILSTONE_SHADER_INCLUDE_DIR} ${ARGN} -o ${out} ${CMAKE_CURRENT_SOURCE_DIR}/${src})
+  else()
+    set(cmd ${HAILSTONE_GLSLANG} -V --target-env vulkan1.3 -I${HAILSTONE_SHADER_INCLUDE_DIR} ${ARGN} -o ${out} ${CMAKE_CURRENT_SOURCE_DIR}/${src})
+  endif()
+  add_custom_command(OUTPUT ${out}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${HAILSTONE_SHADER_OUT} ${HAILSTONE_SHADER_RUN}
+    COMMAND ${cmd}
+    COMMAND ${CMAKE_COMMAND} -E copy ${out} ${HAILSTONE_SHADER_RUN}/${name}.spv
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${src} ${HAILSTONE_SHADER_INCLUDES}
+    COMMENT "Compiling shader variant ${name}"
+    VERBATIM)
+  add_custom_target(${target} DEPENDS ${out})
 endfunction()
 
 # AMD FSR 3.1's upscaler passes (third_party/fidelityfx, compute): each pass compiled once in the permutation

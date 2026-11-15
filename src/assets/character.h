@@ -38,6 +38,7 @@
 #include "assets/model_points.h"
 #include "assets/model.h"
 #include "assets/pfs.h"
+#include "assets/spell_effects.h"
 #include "assets/texture.h"
 #include "assets/texture_overrides.h"
 #include "core/game_dir.h"
@@ -236,11 +237,20 @@ struct SkinnedVertex {
 // dressed mesh: the body's own or a held item's, hanging from `bone` (a bone
 // of the model; its frame) through `local` (the model point's matrix, in that
 // frame).
+struct ObjectAnimation;
+
 struct MeshEmitter {
     int bone = -1;
     glm::mat4 local{1.0f};
     ModelEmitter emitter;
     std::string model_code; // the point-owning model's moddat.ini PESFactor
+    // A classic skeleton's 0x34 cloud, converted through wld_particles. Shared by the model and its dressed meshes;
+    // null for an EQG .prt entry, whose emitter index addresses actoremittersnew.edd.
+    std::shared_ptr<const EmitterDefinition> cloud{};
+    // A held WLD skeleton's directly authored default tracks. Its sampled motion precedes the baked rest matrix
+    // in `local`; named character clips are not selected for an attached item.
+    std::shared_ptr<const ObjectAnimation> cloud_animation{};
+    std::uint32_t cloud_animation_node = 0;
 };
 
 // A number no other mesh made in this run has, so a mesh freed and another made at its address are told apart
@@ -287,7 +297,8 @@ struct CharacterMesh {
     // Per material: tint 0xAARRGGBB multiplied into the texture (a zero
     // high byte = none).
     std::vector<std::uint32_t> tints;
-    std::size_t retained_bytes() const; // estimate: object and owned payload sizes, excluding allocator overhead
+    std::size_t retained_bytes(std::unordered_set<const EmitterDefinition*>* shared_clouds = nullptr,
+                              std::unordered_set<const ObjectAnimation*>* shared_animations = nullptr) const;
 };
 
 struct CharacterModel {
@@ -331,6 +342,8 @@ struct CharacterModel {
     std::vector<ModelPoint> points;
     // EQG models: `<code>.prt`'s actor emitters on those points.
     std::vector<ModelEmitter> emitters;
+    // Classic skeleton clouds remain on their authored bones, so animations move their origins and axes too.
+    std::vector<MeshEmitter> clouds;
 
     const AnimationClip* clip(std::string_view code) const;
     // The clip a spawn plays for `code`, `holding` when PlayerClient_UpdateHoldingAnimation gives it a column other
@@ -371,7 +384,9 @@ struct CharacterModel {
     // Animation includes clips, aliases and skeleton arrays; geometry includes materials. Other includes the
     // object, identifying strings, points and emitters. Uses owned payload sizes with no allocator overhead.
     // A shared set counts track payloads once across multiple models in a cache snapshot.
-    MemoryBreakdown memory_breakdown(AnimationTrack::StorageSet* shared_tracks = nullptr) const;
+    MemoryBreakdown memory_breakdown(AnimationTrack::StorageSet* shared_tracks = nullptr,
+                                    std::unordered_set<const EmitterDefinition*>* shared_clouds = nullptr,
+                                    std::unordered_set<const ObjectAnimation*>* shared_animations = nullptr) const;
     std::size_t retained_bytes() const; // estimate: object and owned payload sizes, excluding allocator overhead
 };
 
