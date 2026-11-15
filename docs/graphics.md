@@ -452,6 +452,8 @@ fades) or the zone changes. An effect that arrives before its spawn's model has 
 as you zone in) keeps the point each emitter asks for and takes it once the model is drawn, at the spawn's place
 until then; the original's spawn always has its points. EQEmu sends a nimbus only to those in the zone when it is cast: a player zoning in later
 does not see it, on the original client either.
+A timed entry's elapsed time stops at 2^32 − 1 ms and the entry is then dropped (a deliberate change: the original's
+32-bit sum wraps, so an entry whose last stage starts near 2^32 stays for good).
 
 Hailstone's own: a spell that lands with no OP_BeginCast before it also gets the cast stage at its source, when its
 first OP_Action arrives, so an item, weapon or augment proc looks like a cast of the same spell. Stock EQEmu begins
