@@ -459,6 +459,7 @@ void ZoneRenderer::upload(Prepared& p) {
               p.vertices.size() * sizeof(GpuVertex) / (1024 * 1024), p.indices.size(),
               p.indices.size() * sizeof(std::uint32_t) / (1024 * 1024), p.instances.size() - 1);
     draws_ = std::move(p.draws);
+    opaque_blends_background_ = std::any_of(draws_.begin(), draws_.end(), blends_background);
     chunks_ = std::move(p.chunks);
     instance_origins_.clear();
     for (const GpuInstance& i : p.instances) instance_origins_.emplace_back(i.row[0].w, i.row[1].w, i.row[2].w);
@@ -2097,10 +2098,6 @@ void ZoneRenderer::bind_geometry(VkCommandBuffer cmd) const {
 }
 
 bool ZoneRenderer::modern_lighting() const { return scene_.lighting.params.x > 0.5f; }
-
-bool ZoneRenderer::opaque_blends_background() const {
-    return std::any_of(draws_.begin(), draws_.end(), blends_background);
-}
 
 bool ZoneRenderer::blends_background(const Draw& d) {
     return d.mode == kWldDetail && d.pass != Pass::Opaque;
