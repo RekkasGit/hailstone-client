@@ -189,7 +189,8 @@ TEST_CASE("update manifest: signature, records and refusals") {
 TEST_CASE("update install: the player's files are never an update's") {
     for (const char* p : {"hailstone.ini", "HAILSTONE.INI", "servers/a/server.ini", "logs/hailstone.log",
                           "update/state.txt", "ui/settings/modern.txt", "ui/loadingbackgrounds/a.png", "maps/x.txt",
-                          "scripts/a.lua", "textures/default/a.dds", "web/a/b", "notes.txt", "Servers/x"})
+                          "scripts/a.lua", "textures/default/a.dds", "web/a/b", "notes.txt", "Servers/x",
+                          "tools/texstudio/texstudio", "Tools/x/data.txt"})
         CHECK_MESSAGE(is_player_path(p), p);
     for (const char* p : {"hailstone", "hailstone.exe", "shaders/a.spv", "ui/modern/login.lua", "browser/libcef.so",
                           "plugins/nms/nms.so", "icons/hailstone.png", "servers.txt"})
@@ -486,6 +487,76 @@ TEST_CASE("update install: each move is in the journal, written before it") {
     REQUIRE(install_staged_update(inst, "0.1.0").ok);
     CHECK(get(inst / "update/journal.txt") == "moved hailstone\nadded icons/n.png\n");
     CHECK(get(inst / "update/previous/hailstone") == "old");
+}
+
+// An update replaces files: a folder where one of its files goes holds what it did not put there, so the install
+// stops before anything moves (docs/updater.md).
+TEST_CASE("update install: a folder where a file goes stops the install before anything moves") {
+    test::ScratchDir dir("updater_folder_target");
+    const fs::path inst = dir.path();
+    put(inst / "hailstone", "old");
+    put(inst / "shaders/a.spv/mine.txt", "the player's");
+    stage_one(inst, "core", zip_of({{"hailstone", "new"}, {"shaders/a.spv", "a"}}));
+    const auto r = install_staged_update(inst, "0.1.0");
+    CHECK_FALSE(r.ok);
+    CHECK(r.error.find("is a folder") != std::string::npos);
+    CHECK(get(inst / "hailstone") == "old");
+    CHECK(get(inst / "shaders/a.spv/mine.txt") == "the player's");
+    CHECK_FALSE(fs::exists(inst / "update/state.txt"));
+    CHECK_FALSE(fs::exists(inst / "update/previous"));
+    CHECK_FALSE(fs::exists(inst / "update/new"));
+}
+
+TEST_CASE("update install: the core package leaves an add-on's plugin folder and tools/ alone") {
+    test::ScratchDir dir("updater_core_addon");
+    const fs::path inst = dir.path();
+    put(inst / "hailstone", "old");
+    put(inst / "plugins/extra/extra.so", "the add-on's");
+    put(inst / "plugins/extra/old.lua", "the add-on's too");
+    InstalledAddon a;
+    a.name = "extra";
+    a.kind = AddonKind::Plugin;
+    a.source = "owner/extra";
+    a.version = "1.0.0";
+    REQUIRE(write_installed_addons(inst, {a}));
+    // An earlier core package shipped plugins/extra/old.lua; this one no longer does, and ships extra.so.
+    REQUIRE(write_file_atomic(inst / "update/installed.txt",
+                              "component core " + std::string(64, '0') + "\nfile core hailstone\n"
+                              "file core plugins/extra/old.lua\n"));
+    stage_one(inst, "core", zip_of({{"hailstone", "new"}, {"plugins/extra/extra.so", "the release's"},
+                                    {"plugins/other/other.so", "o"}}));
+    REQUIRE(install_staged_update(inst, "0.1.0").ok);
+    CHECK(get(inst / "hailstone") == "new");
+    CHECK(get(inst / "plugins/extra/extra.so") == "the add-on's");
+    CHECK(get(inst / "plugins/extra/old.lua") == "the add-on's too");
+    CHECK(get(inst / "plugins/other/other.so") == "o");
+    const InstalledUpdate now = read_installed_update(inst);
+    CHECK(now.files.at("core") == std::vector<std::string>{"hailstone", "plugins/other/other.so"});
+
+    // tools/ is the tool add-ons' (docs/addons.md): a package that writes there is refused whole.
+    stage_one(inst, "core", zip_of({{"hailstone", "newer"}, {"tools/x/x", "a program"}}), "0.3.0");
+    CHECK_FALSE(install_staged_update(inst, "0.2.0").ok);
+    CHECK(get(inst / "hailstone") == "new");
+    CHECK_FALSE(fs::exists(inst / "tools"));
+}
+
+// A package's declared sizes are added up before anything is written: one that would unpack past the limit (a zip
+// bomb within its declared sizes) is refused whole.
+TEST_CASE("update install: an update larger unpacked than the limit is refused before anything is written") {
+    test::ScratchDir dir("updater_unpacked_limit");
+    const fs::path inst = dir.path();
+    put(inst / "hailstone", "old");
+    std::string zip = zip_of({{"a", "x"}, {"b", "y"}});
+    // Each central directory entry's size made 3.75 GiB (the reader takes it; the extraction would stop at it).
+    for (std::size_t at = 0; (at = zip.find("PK\x01\x02", at)) != std::string::npos; at += 4)
+        for (std::size_t i = 0; i < 4; ++i) zip[at + 24 + i] = i == 3 ? '\xf0' : '\0';
+    stage_one(inst, "core", zip);
+    const auto r = install_staged_update(inst, "0.1.0");
+    CHECK_FALSE(r.ok);
+    CHECK(r.error.find("larger unpacked") != std::string::npos);
+    CHECK(get(inst / "hailstone") == "old");
+    CHECK_FALSE(fs::exists(inst / "update/new"));
+    CHECK_FALSE(fs::exists(inst / "a"));
 }
 
 TEST_CASE("update install: a cut-off install and a version that does not start are rolled back") {

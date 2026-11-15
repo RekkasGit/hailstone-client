@@ -20,6 +20,11 @@ namespace fs = std::filesystem;
 
 namespace {
 
+// All of an update's files, unpacked: a release is a few hundred MB (the browser's libraries most of it), so this
+// leaves it room to grow while a package that would fill the disk (a zip bomb within its declared sizes) is refused
+// before anything is written.
+constexpr std::uint64_t kMaxUnpackedBytes = 4ull * 1024 * 1024 * 1024;
+
 // A relative '/'-separated UTF-8 name as a path.
 fs::path rel(std::string_view name) {
     return fs::path(std::u8string(reinterpret_cast<const char8_t*>(name.data()), name.size()));
@@ -138,6 +143,15 @@ bool move_file(const fs::path& from, const fs::path& to, std::string* error) {
 bool is_directory_entry(const fs::path& p) {
     std::error_code ec;
     return fs::symlink_status(p, ec).type() == fs::file_type::directory;
+}
+
+// Whether `name` is in a plugin's folder (plugins/<x>/...) that an add-on installed into (docs/addons.md): the
+// add-on's files, which no package of an update writes or takes out.
+bool owned_by_addon(const fs::path& install_dir, std::string_view name) {
+    constexpr std::string_view plugins = "plugins/";
+    if (lower(name.substr(0, plugins.size())) != plugins) return false;
+    const auto slash = name.find('/', plugins.size());
+    return slash != std::string_view::npos && addon_owns_folder(install_dir, name.substr(0, slash));
 }
 
 // Moves a file out of the way into update/trash/ (removed at the next start, when nothing has it open). Never a
@@ -299,7 +313,7 @@ bool is_player_path(std::string_view path) {
     const std::string_view first = std::string_view(p).substr(0, p.find('/'));
     static const std::set<std::string_view> folders = {"update", "servers", "logs",  "cache", "screenshots",
                                                        "bug-reports", "maps", "scripts", "textures", "web",
-                                                       "addons"};
+                                                       "addons", "tools"};
     static const std::set<std::string_view> files = {"hailstone.ini", "hailstone-windows.ini", "notes.txt"};
     if (first.size() < p.size() && folders.count(first)) return true;
     if (files.count(p)) return true;
@@ -360,6 +374,12 @@ InstallResult install_staged_update(const fs::path& install_dir, const std::stri
     std::map<std::string, std::vector<std::string>> new_files;
     std::set<std::string> all_new; // lower-cased: one file of two components, or of two cases, is refused
     std::set<std::string> skipped;
+    std::uint64_t unpacked = 0;
+    auto refuse = [&](std::string why) {
+        r.error = std::move(why);
+        remove_quietly(dir / "new");
+        return r;
+    };
     for (const auto& p : staged->packages) {
         const std::string only = p.component.starts_with("plugin-") ? "plugins/" + p.component.substr(7) + "/" : "";
         // An add-on installed into the plugin's folder since the download (docs/addons.md) owns it now: the release's
@@ -381,15 +401,25 @@ InstallResult install_staged_update(const fs::path& install_dir, const std::stri
             remove_quietly(dir / "new");
             return r;
         }
+        // Every package's sizes before any file is written (each entry is cut off at its declared size).
+        for (const auto& e : reader.entries()) unpacked += e.size;
+        if (unpacked > kMaxUnpackedBytes)
+            return refuse(p.file + ": the update is larger unpacked than an update may be (4 GiB)");
         auto& files = new_files[p.component];
         for (const auto& e : reader.entries()) {
             if (e.is_directory()) continue;
             if (is_player_path(e.name) || (!only.empty() && !lower(e.name).starts_with(lower(only))) ||
-                !all_new.insert(lower(e.name)).second) {
-                r.error = p.file + " holds " + e.name + ", which an update may not write";
-                remove_quietly(dir / "new");
-                return r;
+                !all_new.insert(lower(e.name)).second)
+                return refuse(p.file + " holds " + e.name + ", which an update may not write");
+            // A plugin folder an add-on installed into (docs/addons.md) is the add-on's, whichever package names it:
+            // the core package's files there are left out, as a plugin package is above.
+            if (only.empty() && owned_by_addon(install_dir, e.name)) {
+                log::info("Update: {} is left out: an add-on owns its folder", e.name);
+                continue;
             }
+            // An update replaces files only: a folder where a file goes holds what the update did not put there.
+            if (is_directory_entry(install_dir / rel(e.name)))
+                return refuse(p.file + " holds " + e.name + ", but that is a folder in the Hailstone folder");
             if (!reader.extract_to_file(e, dir / "new" / rel(e.name))) {
                 r.error = p.file + ": " + reader.error();
                 remove_quietly(dir / "new");
@@ -452,9 +482,9 @@ InstallResult install_staged_update(const fs::path& install_dir, const std::stri
         auto it = old.files.find(component);
         if (it == old.files.end()) continue;
         for (const auto& name : it->second) {
-            if (all_new.count(lower(name)) || is_player_path(name)) continue;
+            if (all_new.count(lower(name)) || is_player_path(name) || owned_by_addon(install_dir, name)) continue;
             const fs::path target = install_dir / rel(name);
-            if (!fs::exists(target, ec)) continue;
+            if (!fs::exists(target, ec) || is_directory_entry(target)) continue;
             std::string why;
             if (!note("removed", name)) return fail("cannot write the update journal");
             if (!move_file(target, dir / "previous" / rel(name), &why)) return fail(why);

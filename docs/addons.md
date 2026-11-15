@@ -374,8 +374,9 @@ tools/<name>/     an installed tool (its program, its libraries, its data)
   still be in `previous/` after an undo (a journal the disk lost or damaged, a move back that failed), it may be the
   only copy of the player's old file: `previous/` is renamed `kept-<time>/` and a warning logged, not removed.
 - **The core updater** (docs/updater.md) never writes `addons/`, and skips its optional plugin package of a folder an
-  add-on installed, both when it downloads and again when it installs (an add-on installed in between wins). `scripts/` is the player's to it already. Its `core` package, though, is not yet kept out of an
-  add-on's plugin folder: a release that shipped a plugin of an installed add-on's name would write over it.
+  add-on installed, both when it downloads and again when it installs (an add-on installed in between wins).
+  `scripts/` and `tools/` are the player's to it already. Its `core` package's files in a plugin folder an add-on
+  installed are left out of the install, and those it shipped there before are not taken out.
 
 ## Settings (`hailstone.ini`)
 

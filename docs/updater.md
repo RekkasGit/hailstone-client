@@ -137,15 +137,20 @@ The client installs the update itself once it has quit, at the end of `run_clien
 helper and the plugins are gone:
 
 1. Each package is checked again and unpacked into `new/`. A package that holds one of the player's paths is refused
-   whole, and so is a plugin package with files outside `plugins/<name>/`. The player's paths (`is_player_path`)
-   are:
+   whole, and so is a plugin package with files outside `plugins/<name>/`. The player's paths (`is_player_path`,
+   and `tools/make_update.py`'s copy of it) are:
    - the files `hailstone.ini`, `hailstone-windows.ini` and `notes.txt`;
    - the folders `update/`, `servers/`, `logs/`, `cache/`, `screenshots/`, `bug-reports/`, `maps/`, `scripts/`,
-     `textures/`, `web/` and `addons/` (docs/addons.md);
+     `textures/`, `web/`, `addons/` and `tools/` (the last two the add-ons', docs/addons.md);
    - `ui/settings/` and `ui/loadingbackgrounds/`.
 
-   An update never writes or removes any of them. Each unpacked file is flushed to the disk before it is renamed
-   into `new/`.
+   An update never writes or removes any of them. A plugin folder an add-on installed into (`plugins/<name>/`,
+   `addon_owns_folder`) is the add-on's too: a plugin package for it is left out, and the core package's files there
+   are left out of the install (and of `installed.txt`), as are those it shipped there before and no longer does.
+   A package whose file would go where the folder has a folder is refused before anything moves: an update replaces
+   files only, and that folder holds what it did not put there. So is an update whose packages would unpack to more
+   than 4 GiB in all (their declared sizes added up before anything is written; a release is a few hundred MB).
+   Each unpacked file is flushed to the disk before it is renamed into `new/`.
 2. Each old file is moved into `previous/` and its new one into place. The move is written to the journal before
    it is made, and the journal's line is flushed to the disk first (write-ahead), so after a power cut every file in
    `previous/` has its line. Both moves are renames on one volume, which Windows allows for a running program and its
