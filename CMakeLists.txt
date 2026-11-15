@@ -825,9 +825,11 @@ set_target_properties(MQ2Example PROPERTIES PREFIX "" LIBRARY_OUTPUT_DIRECTORY $
 add_library(ExampleUpscaler MODULE plugins/example/upscaler/example.c)
 target_include_directories(ExampleUpscaler PRIVATE sdk)
 target_link_libraries(ExampleUpscaler PRIVATE Vulkan::Headers)
+# (MSVC's import library and .exp go to a folder of the target's own: the test fixture below has the same name.)
 set_target_properties(ExampleUpscaler PROPERTIES PREFIX "" OUTPUT_NAME example
                       LIBRARY_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/upscalers/example$<0:>
-                      RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/upscalers/example$<0:>)
+                      RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/upscalers/example$<0:>
+                      ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/upscaler-libs/ExampleUpscaler)
 
 # The server plugins are kept in repositories of their own and reach players as add-ons (docs/addons.md): the NMS
 # server's (projecthailstone/hailstone-nms) and the Project Triune server's (projecthailstone/hailstone-projecttriune,
@@ -1452,7 +1454,8 @@ if(HAILSTONE_BUILD_TESTS)
     target_link_libraries(TestUpscaler_${u} PRIVATE Vulkan::Headers)
     set_target_properties(TestUpscaler_${u} PROPERTIES PREFIX "" OUTPUT_NAME ${u}
                           LIBRARY_OUTPUT_DIRECTORY ${HAILSTONE_TEST_UPSCALERS_DIR}/${u}
-                          RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_TEST_UPSCALERS_DIR}/${u})
+                          RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_TEST_UPSCALERS_DIR}/${u}
+                          ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/upscaler-libs/TestUpscaler_${u})
     add_dependencies(hailstone_tests TestUpscaler_${u})
   endforeach()
   target_compile_definitions(TestUpscaler_refuse PRIVATE EXAMPLE_REFUSE)
