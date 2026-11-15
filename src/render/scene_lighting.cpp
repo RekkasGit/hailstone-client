@@ -228,26 +228,32 @@ ModernView modern_view(const game::ViewDistance& view, float multiplier, float e
     return out;
 }
 
+float zone_haze_length(const game::ViewDistance& view) {
+    if (!view.fog_enabled || !(view.fog_density > 0.0f)) return 0.0f;
+    // The original's exp(-(10 density (d - start) / (end - start))^2) (shaders/zone.vert fog_factor) is half clear
+    // at start + sqrt(ln 2) (end - start) / (10 density); the haze's exp(-kHazeDepth (d / length)^2) at
+    // length sqrt(ln 2 / kHazeDepth).
+    constexpr float kLn2 = 0.69314718f;
+    const float half = std::max(view.fog_start, 0.0f) +
+                       std::sqrt(kLn2) * std::max(view.fog_end - view.fog_start, 1.0f) / (10.0f * view.fog_density);
+    return std::max(half * std::sqrt(kHazeDepth / kLn2), 50.0f);
+}
+
 ModernView modern_view(const game::ViewDistance& view, float multiplier, bool extend) {
     ModernView out;
     out.view = view;
+    // The haze is as thick as the zone's fog (zone_haze_length), never longer than the view; without fog, the view.
+    const float zone = zone_haze_length(view);
     if (!extend) {
-        // As thick as the original's fog: its exp(-(10 density (d - start) / (end - start))^2) (shaders/zone.vert
-        // fog_factor) against the haze's kHazeDepth (d / length)^2, the start left out. Density 0.1 (innothule,
-        // nektulos, the commons) is a light fog, still a third clear at its end; the haze's fixed depth made it about
-        // 3.5 times as thick, washing the dark swamp near the camera into the fog's colour. Without a density (the
-        // fog off), the fog's end.
-        float length = std::min(view.fog_end, view.far_plane);
-        if (view.fog_enabled && view.fog_density > 0.0f)
-            length = std::sqrt(kHazeDepth) * std::max(view.fog_end - view.fog_start, 1.0f) / (10.0f * view.fog_density);
-        out.haze_length = std::max(length, 50.0f);
+        const float reach = std::max(std::min(view.fog_end, view.far_plane), 50.0f);
+        out.haze_length = zone > 0.0f ? zone : reach;
         return out;
     }
     float far = extended_far_plane(view.far_plane, multiplier);
     out.view.far_plane = far;
     out.view.fog_start = std::max(view.fog_start, 0.5f * far);
     out.view.fog_end = far;
-    out.haze_length = far;
+    out.haze_length = zone > 0.0f ? std::min(zone, far) : far;
     return out;
 }
 

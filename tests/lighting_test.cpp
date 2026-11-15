@@ -489,6 +489,34 @@ TEST_CASE("modern view: not drawn further, the haze is as thick as the zone's fo
     }
 }
 
+TEST_CASE("modern view: drawn further, the haze still as thick as the zone's fog") {
+    // nektulos version 1 (a sky, fog 10..1500 at 0.33) and qeytoqrg (500..2400 at 0.33): drawn 2.5 times further, the
+    // haze half clear where the original's fog is.
+    struct Zone { float start, end, far; };
+    for (Zone z : {Zone{10.0f, 1500.0f, 1500.0f}, Zone{500.0f, 2400.0f, 2400.0f}}) {
+        game::ViewDistance v;
+        v.far_plane = z.far;
+        v.fog_start = z.start;
+        v.fog_end = z.end;
+        v.fog_density = 0.33f;
+        const auto out = render::modern_view(v, 2.5f, true);
+        CHECK(out.view.far_plane == doctest::Approx(2.5f * z.far));
+        const float half = z.start + std::sqrt(std::log(2.0f)) * (z.end - z.start) / 3.3f;
+        CHECK(game::fog_factor(half, static_cast<std::int32_t>(z.start), static_cast<std::int32_t>(z.end), 0.33f) ==
+              doctest::Approx(0.5f).epsilon(0.02));
+        const float x = half / out.haze_length;
+        CHECK(std::exp(-render::kHazeDepth * x * x) == doctest::Approx(0.5f).epsilon(0.001));
+        CHECK(out.haze_length < 0.5f * out.view.far_plane); // not the old haze over the whole distance
+    }
+    // A thin fog's haze reaches no further than the view.
+    game::ViewDistance thin;
+    thin.far_plane = 1000.0f;
+    thin.fog_start = 10.0f;
+    thin.fog_end = 1000.0f;
+    thin.fog_density = 0.01f;
+    CHECK(render::modern_view(thin, 2.5f, true).haze_length == 2500.0f);
+}
+
 TEST_CASE("sun shafts: on screen, off screen, behind and set") {
     // Looking along +X with a simple projection: clip = (y-ish, z-ish) / x.
     glm::mat4 vp(0.0f);

@@ -178,9 +178,15 @@ void set_underwater(SceneLighting& lighting, const glm::vec3& camera, const glm:
 inline constexpr float kMaxViewDistance = 12000.0f;
 float extended_far_plane(float original, float multiplier);
 
+// The haze's length as thick as the zone's fog in `view` (SetFog's start, end and density): the original's fog and
+// the haze half clear at the same distance. Density 0.1 (innothule, nektulos version 0, the commons) is a light fog,
+// 0.33 (most zones) a thick one. 0 with the fog off.
+float zone_haze_length(const game::ViewDistance& view);
+
 // The modern mode's view: the original's `view` drawn out to extended_far_plane when `extend` (not under water, in
 // lava or in a thick-fog region), with the fog distances moved out with it (the renderers cull characters at the fog
-// end), and the haze's length (the far plane; when not extended, as thick as the original's fog with its density).
+// end), and the haze's length: the zone's fog's (zone_haze_length), at most the far plane; the far plane, or the
+// fog's end when not extended, with the fog off.
 struct ModernView {
     game::ViewDistance view;
     float haze_length = 0.0f;
