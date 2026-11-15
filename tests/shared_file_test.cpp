@@ -3,9 +3,22 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <aclapi.h>
+#endif
 
 #include "platform/process.h"
 #include "platform/shared_file.h"
@@ -41,6 +54,53 @@ void write_file(const fs::path& path, std::string_view text) {
     out.write(text.data(), static_cast<std::streamsize>(text.size()));
     REQUIRE(static_cast<bool>(out));
 }
+
+#if defined(_WIN32)
+// Creates the directory `path` with a protected DACL granting the current user and each of `others` full access.
+// The descriptor goes on at creation, as the client's own: Wine keeps it then, but reports a DACL set later from
+// the directory's Unix mode instead.
+bool create_with_dacl(const fs::path& path, std::initializer_list<WELL_KNOWN_SID_TYPE> others) {
+    HANDLE token = nullptr;
+    if (!::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token)) return false;
+    DWORD size = 0;
+    ::GetTokenInformation(token, TokenUser, nullptr, 0, &size);
+    std::vector<std::byte> user(size);
+    const bool got = size != 0 && ::GetTokenInformation(token, TokenUser, user.data(), size, &size);
+    ::CloseHandle(token);
+    if (!got) return false;
+    const PSID user_sid = reinterpret_cast<TOKEN_USER*>(user.data())->User.Sid;
+    std::vector<std::vector<std::byte>> sids;
+    std::vector<EXPLICIT_ACCESS_W> entries;
+    auto grant = [&](PSID sid) {
+        EXPLICIT_ACCESS_W entry{};
+        entry.grfAccessPermissions = FILE_ALL_ACCESS;
+        entry.grfAccessMode = GRANT_ACCESS;
+        entry.grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
+        entry.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+        entry.Trustee.ptstrName = static_cast<LPWSTR>(sid);
+        entries.push_back(entry);
+    };
+    grant(user_sid);
+    for (const auto type : others) {
+        DWORD sid_size = SECURITY_MAX_SID_SIZE;
+        auto& sid = sids.emplace_back(sid_size);
+        if (!::CreateWellKnownSid(type, nullptr, sid.data(), &sid_size)) return false;
+    }
+    for (auto& sid : sids) grant(sid.data());
+    PACL acl = nullptr;
+    if (::SetEntriesInAclW(static_cast<ULONG>(entries.size()), entries.data(), nullptr, &acl) != ERROR_SUCCESS)
+        return false;
+    SECURITY_DESCRIPTOR descriptor{};
+    bool ok = ::InitializeSecurityDescriptor(&descriptor, SECURITY_DESCRIPTOR_REVISION) &&
+              ::SetSecurityDescriptorOwner(&descriptor, user_sid, FALSE) &&
+              ::SetSecurityDescriptorDacl(&descriptor, TRUE, acl, FALSE) &&
+              ::SetSecurityDescriptorControl(&descriptor, SE_DACL_PROTECTED, SE_DACL_PROTECTED);
+    SECURITY_ATTRIBUTES attributes{sizeof(SECURITY_ATTRIBUTES), &descriptor, FALSE};
+    ok = ok && ::CreateDirectoryW(path.c_str(), &attributes);
+    ::LocalFree(acl);
+    return ok;
+}
+#endif
 } // namespace
 
 TEST_CASE("shared_file: a published mapping survives moves and independent opens") {
@@ -178,6 +238,14 @@ TEST_CASE("shared_file: private directories reject existing public leaves and un
     CHECK_FALSE(platform::CacheTempFile::create(public_leaf));
     CHECK_FALSE(platform::ScopedFileLock::try_acquire(public_leaf / "lock", platform::FileLockMode::Shared));
     CHECK((fs::status(nested).permissions() & fs::perms::all) == fs::perms::owner_all);
+#else
+    // A leaf granting this user and LocalSystem is private (Wine reports such an entry on every DACL); one that
+    // also grants Everyone is not.
+    REQUIRE(create_with_dacl(base / "system", {WinLocalSystemSid}));
+    CHECK(platform::prepare_private_cache_directory(base / "system"));
+    REQUIRE(create_with_dacl(base / "public", {WinLocalSystemSid, WinWorldSid}));
+    CHECK_FALSE(platform::prepare_private_cache_directory(base / "public"));
+    CHECK_FALSE(platform::CacheTempFile::create(base / "public"));
 #endif
 }
 
