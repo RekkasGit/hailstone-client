@@ -360,7 +360,7 @@ void GameConnection::forget_pet_spawn(std::uint32_t spawn_id) {
     pets_.pet_target = 0;
     pet_buffs_.clear();
     for (const auto& [id, s] : world_.spawns)
-        // The native PetID fallback @0x4b9b10 also excludes temporary pets.
+        // As PlayerClient_LinkPetToOwner @0x4b9b10 (run when an owner spawn is added) does, skip temporary pets.
         if (s.pet_owner_id == world_.player_id && world_.player_id && !s.temp_pet && !s.is_corpse && id != world_.player_id) {
             pets_.focused = id;
             break;

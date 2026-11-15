@@ -628,7 +628,8 @@ lookup 1500, follow AI 3000):
   the spawn record's temporary-pet byte set and MasterID equal to the local player's SpawnID. The summoned bit
   alone does not qualify. The temporary flag is retained on every full spawn update and ownership changes apply
   to subsequent lines. Packet-driven coverage is in `tests/pet_combat_chat_test.cpp`; live acceptance is pending.
-  Temporary pets do not replace PetID on arrival (@0x59687a) or during the fallback scan (@0x4b9b10), so a swarm
+  Temporary pets do not replace PetID on arrival (@0x59687a) or when an owner is linked to its pet
+  (PlayerClient_LinkPetToOwner @0x4b9b10; the client's fallback scan skips them the same way), so a swarm
   leaves the permanent pet's window and commands alone.
   Stock EQEmu's RoF2 encoder writes the temporary-pet byte as zero and its swarm spawns omit petOwnerId, so those
   swarms cannot be attributed from the received record. Names and target-cycling flags do not establish ownership.
@@ -1406,7 +1407,7 @@ Ability names in both packs use the original window's colours (CLeadershipWnd's 
 | Colour | Meaning |
 |---|---|
 | Green (`#00FF00`) | The current group or raid leader supplies at least rank one, even if the player has not purchased it. |
-| Gold (`#D6B228`) | The player has purchased a rank, but the current leader does not supply one. |
+| Gold (`#D6B228`) | The player has purchased a rank, but the current leader does not supply one (inferred: the check @0x55fb60 is unnamed in the analysis; it is the one used for the Mark NPC prerequisite, which must be the player's own rank). |
 | White (`#FFFFFF`) | Unpurchased and affordable at the displayed native cost; Delegate Mark NPC also requires the player's corresponding Mark NPC rank. |
 | Grey (`#C0C0C0`) | Unpurchased and not affordable, or that prerequisite is missing. |
 

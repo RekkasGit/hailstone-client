@@ -1525,7 +1525,8 @@ public:
             d.rows.push_back(ListRow{{std::string(ab.name), std::format("{} / {}", rank, game::leadership_max_rank(a)),
                                       cost ? std::to_string(cost) : std::string("-")}});
             // CLeadershipWnd's refresh @0x6b77f0 checks Leadership_HasAbilityRank @0x55eb10, not activation's
-            // population, expansion or role checks. Shared leader ranks are green, personal purchases gold.
+            // population, expansion or role checks. Shared leader ranks are green, personal purchases gold
+            // (gold's check @0x55fb60 is unnamed in the analysis; read as the personal rank, docs/mechanics.md).
             const auto points = raid ? l.raid_points : l.group_points;
             const bool prerequisite = (a != 4 || static_cast<std::int32_t>(l.ranks[0]) >= 1) &&
                                       (a != 20 || static_cast<std::int32_t>(l.ranks[16]) >= 1);
