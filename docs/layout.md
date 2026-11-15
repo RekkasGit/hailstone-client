@@ -68,7 +68,9 @@ hailstone/
   web/                       the in-game browser's data: web/<profile>/ one server's cookies and cache, cef.log
                              CEF's log (docs/browser.md)
   logs/hailstone.log         the log of this run, also on stdout; the earlier runs' are hailstone.1.log to .3.log;
-                             the viewers write viewer.log, a second client hailstone.<pid>.log
+                             the viewers write viewer.log, a second client hailstone.<pid>.log (removed at a later
+                             start, but for the newest 5 and those written in the last day). A run's file stops at
+                             100 MiB with a last line saying so; stdout and stderr still get every line
   logs/hailstone.lock        held while a client writes hailstone.log, so a second one writes its own (left behind
                              on Linux and macOS, where it is only locked; Windows deletes it at exit)
   logs/crash-<time>.txt      a crash's report (crash-<time>.reported.txt once bundled into bug-reports/)
