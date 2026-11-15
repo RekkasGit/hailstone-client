@@ -330,18 +330,31 @@ int l_cmd(lua_State* L) {
         lua_concat(L, 2);
         return lua_error(L);
     }
+    std::size_t len = 0;
+    const char* given = luaL_checklstring(L, 1, &len);
+    if (len >= kMaxCommandLine) {
+        luaL_where(L, 2);
+        lua_pushfstring(L, "mq.cmd: a command line is at most %d bytes", static_cast<int>(kMaxCommandLine - 1));
+        lua_concat(L, 2);
+        return lua_error(L);
+    }
     if (s.commands_left > 0) --s.commands_left;
-    std::string line = luaL_checkstring(L, 1);
+    // (The line lives only inside cxx_guard: an exception becomes a Lua error once it is gone.)
     if (s.dry) {
-        if ((s.caps & plugin::kCapRead) && !lower(line).starts_with("/noparse")) line = parse_macro_data(ctx_of(L), line);
-        std::uint32_t needs = plugin::command_caps(line);
-        if ((s.caps & needs) != needs) line += "    (blocked: needs '" + plugin::caps_text(needs & ~s.caps) + "')";
-        s.dry->push_back(std::move(line));
+        plugin::cxx_guard(L, [&] {
+            std::string line(given, len);
+            if ((s.caps & plugin::kCapRead) && !lower(line).starts_with("/noparse")) line = parse_macro_data(ctx_of(L), line);
+            std::uint32_t needs = plugin::command_caps(line);
+            if ((s.caps & needs) != needs) line += "    (blocked: needs '" + plugin::caps_text(needs & ~s.caps) + "')";
+            s.dry->push_back(std::move(line));
+        });
         return 0;
     }
     if (!s.host->env.run) return 0;
-    plugin::CallerScope scope(s.caps, s.name);
-    s.host->env.run(line);
+    plugin::cxx_guard(L, [&] {
+        plugin::CallerScope scope(s.caps, s.name);
+        s.host->env.run(std::string(given, len));
+    });
     return 0;
 }
 

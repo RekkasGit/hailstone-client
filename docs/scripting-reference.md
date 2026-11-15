@@ -399,6 +399,8 @@ them. These commands come from MacroQuest rather than the game:
 | `/squelch <cmd>` | runs the command without its chat output |
 | `/docommand <cmd>` | runs the command (useful after `${...}` builds it) |
 | `/noparse <cmd>` | runs the command without expanding `${...}` |
+
+`/squelch`, `/docommand` and `/noparse` nest at most 16 deep in one line; past that the rest of the line is dropped.
 | `/lua run <name> [args]` \| `stop [name]` \| `pause [name]` \| `list` | scripts |
 | `/plugin list` \| `/plugin <name> [load\|unload]` | compiled plugins |
 | `/nav`, `/moveto`, `/stick` | navigation (docs/navigation.md "Commands") |
@@ -413,7 +415,7 @@ The global `mq` (also `require('mq')`) in every script, Lua social and Lua plugi
 | Function | Needs | What |
 |---|---|---|
 | `mq.TLO.<Name>...` | `read` | the TLOs above |
-| `mq.cmd(...)` | per command | runs a command line; its arguments are joined with spaces and `${...}` is expanded |
+| `mq.cmd(...)` | per command | runs a command line; its arguments are joined with spaces and `${...}` is expanded. A line of 2048 bytes or more is an error |
 | `mq.cmd.<name>(args...)` | per command | `mq.cmd.target('id', 5)` runs `/target id 5` |
 | `mq.cmdf(fmt, ...)` | per command | `mq.cmd(string.format(fmt, ...))` |
 | `mq.delay(ms \| '2s' \| '500ms' \| '1m' [, cond])` | | waits until the time has passed or `cond()` is true (checked each frame). A wait beyond 9e15 ms (`math.huge`) is cut to that; NaN is an error |

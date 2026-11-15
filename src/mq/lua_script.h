@@ -50,6 +50,8 @@ inline constexpr std::size_t kMaxEventPatterns = std::size_t{32} << 10; // bytes
 inline constexpr std::size_t kMaxEventName = 256;                   // bytes of an event's name
 // A chat line this long or longer raises no events (LuaEventProcessor::Process: MQ_MAX_STRING, 2048).
 inline constexpr std::size_t kMaxEventLine = 2048;
+// mq.cmd's line, as MQ's own command buffer (MQ_MAX_STRING, 2048, with its terminator): longer is an error.
+inline constexpr std::size_t kMaxCommandLine = 2048;
 inline constexpr std::int64_t kPressMs = 50;            // a Lua social in press mode runs to its end within this
 inline constexpr std::int64_t kFaceMs = 5;              // a social's face
 inline constexpr std::int64_t kFaceEveryMs = 200;       // how often a face runs

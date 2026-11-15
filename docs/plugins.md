@@ -187,7 +187,9 @@ pause, is stopped the same way. Only the script's own run and its binds are paus
 early yield with no values, so long work inside one counts towards the 5 s and is not spread over frames. A bind
 whose function runs commands that start binds of the same script again (`mq.bind('/x', function() mq.cmd('/x')
 end)`) ends the script once they nest 16 deep; a command of more than 1000 words for a bind is refused (a line in
-the chat) and the script runs on. Each script's memory is capped at 256 MB: past it the script's own
+the chat) and the script runs on. An `mq.cmd` line is at most 2047 bytes (MQ's command buffer; longer is an
+error), and `/docommand`, `/noparse` and `/squelch` nest at most 16 deep in one line (the rest is dropped, with a
+line in the chat). Each script's memory is capped at 256 MB: past it the script's own
 code gets "not enough memory", and a script that ends that way is stopped with its error. A script's tables cannot have a `__gc`
 finalizer (`setmetatable` refuses one): Lua runs finalizers with no way to stop them, and the last at the script's
 end, after what it registered is taken back. For the same reason an `mq.TLO` value's metatable is locked

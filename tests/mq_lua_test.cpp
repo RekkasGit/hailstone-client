@@ -1377,10 +1377,10 @@ TEST_CASE("MQ Lua: a bind that runs its own command is stopped, not left to over
 TEST_CASE("MQ Lua: a bind's command with too many words is refused; the script runs on") {
     Host h;
     h.write("words.lua", "local mq = require('mq') mq.bind('/words', function(...) print('words', select('#', ...)) end)"
-                         " mq.cmd('/words' .. string.rep(' w', 1200)) mq.cmd('/words a b') mq.delay(100000)\n");
+                         " mq.cmd('/words' .. string.rep(' w', 1001)) mq.cmd('/words a b') mq.delay(100000)\n");
     REQUIRE(h.scripts->run("words", {}));
     h.pulses(2);
-    CHECK(printed_part(h, "too many words for its bind (1200) is refused"));
+    CHECK(printed_part(h, "too many words for its bind (1001) is refused"));
     CHECK(printed_part(h, "words 2"));
     CHECK(h.scripts->running("words"));
 }
@@ -1690,4 +1690,44 @@ TEST_CASE("MQ Lua: the memory limit comes back after an error skipped a HostWork
     }
     CHECK(s.limited == 0);
     CHECK(s.runs == 0);
+}
+
+TEST_CASE("MQ commands: /docommand, /noparse and /squelch nest at most 16 deep; mq.cmd's line is at most 2047 bytes") {
+    Host h;
+    auto nest = [](int n, const std::string& tail) {
+        std::string line;
+        for (int i = 0; i < n; ++i) line += i % 3 == 0 ? "/docommand " : i % 3 == 1 ? "/noparse " : "/docommand ";
+        return line + tail;
+    };
+    h.run(nest(16, "/echo deep enough"));
+    CHECK(h.printed_line("deep enough"));
+    h.run(nest(17, "/echo too deep"));
+    CHECK_FALSE(h.printed_line("too deep"));
+    CHECK(printed_part(h, "nest at most 16 deep"));
+    // Without end: no stack overflow.
+    std::string huge;
+    for (int i = 0; i < 100000; ++i) huge += "/docommand ";
+    h.run(huge + "/echo never");
+    CHECK_FALSE(h.printed_line("never"));
+    // Nested /noparse keeps the outer one's: the line is still not parsed after the inner one ends.
+    h.run("/noparse /docommand /noparse /tell Groupie ${Me.PctHPs}");
+    CHECK(h.sent.back() == "/tell Groupie ${Me.PctHPs}");
+
+    h.write("nest.lua", R"(
+local mq = require('mq')
+print('long', pcall(mq.cmd, string.rep('/docommand ', 100000) .. '/echo x'))
+mq.cmd(string.rep('/docommand ', 100) .. '/echo y')
+mq.cmd(string.rep('/docommand ', 15) .. '/echo fits')
+print('max', pcall(mq.cmd, '/echo ' .. string.rep('z', 2041)))
+print('over', pcall(mq.cmd, '/echo ' .. string.rep('z', 2042)))
+)");
+    REQUIRE(h.scripts->run("nest", {}));
+    h.pulses(1);
+    CHECK(printed_part(h, "long false"));
+    CHECK(printed_part(h, "mq.cmd: a command line is at most 2047 bytes"));
+    CHECK_FALSE(h.printed_line("x"));
+    CHECK_FALSE(h.printed_line("y"));
+    CHECK(h.printed_line("fits"));
+    CHECK(h.printed_line("max true"));
+    CHECK(printed_part(h, "over false"));
 }
