@@ -1335,6 +1335,8 @@ int main(int argc, char** argv) {
                 light.vision_lift = fog_frame.vision_lift;
                 game::SceneLight scene_light = game::compute_scene_light(light);
                 zone_renderer->set_scene_light(scene_light);
+                // The zone objects that play their own animation, on the viewer's clock (from its start).
+                zone_renderer->set_animation_time(static_cast<std::uint64_t>(std::max(t, 0.0) * 1000.0));
                 if (opts.modern) {
                     std::uint8_t tt = viewer_fog.time_type;
                     // --spell-effect: its glow lights the zone (game::particle_lights).

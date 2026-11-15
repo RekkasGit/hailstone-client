@@ -1372,6 +1372,15 @@ private:
     std::set<std::uint32_t> auto_drop_seen_;  // --auto-door 4: ground objects before the drop
     Clock::time_point auto_door_at_{};
     std::optional<game::CollisionMesh> collision_;
+    // The zone objects that play their own animation (game/animated_objects.h): their moving parts, out of
+    // collision_, posed each movement step on the zone's animation clock (zone_animation_ms).
+    std::optional<game::AnimatedObjects> animated_objects_;
+    // When the zone was loaded, on the steps' clock (Clock::now() - start_time_, ms): the animation clock's origin.
+    std::uint64_t zone_animation_origin_ms_ = 0;
+    // The zone's animation clock at `ms` on the steps' clock: every placed object's controller started with the zone.
+    std::uint64_t zone_animation_ms(std::uint64_t ms) const {
+        return ms > zone_animation_origin_ms_ ? ms - zone_animation_origin_ms_ : 0;
+    }
     std::vector<game::ZoneLadder> zone_ladders_; // the zone's own ladders (game/zone_ladders.h), clickable
     // Navigation (app/navigator.h): /nav, /moveto and the Navigation TLO; after collision_, which it reads.
     std::unique_ptr<Navigator> nav_;

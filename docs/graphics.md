@@ -966,7 +966,27 @@ placed object as a plant when it has a masked material and its name, or a materi
 bends, as the square of its height above the plant's foot, up to 4 % of the plant's height, and how much its leaves
 (the masked parts) flutter. `wind_offset` in `shaders/lighting.glsl` leans the plant with the wind, rocks it as gusts
 roll across the zone in the wind's direction, and shivers the leaves. The zone and shadow vertex shaders both apply
-it, so the shadows move with the leaves.
+it, so the shadows move with the leaves. An object that plays its own animation (below) is not given this sway: its
+animation is how it moves.
+
+## Animated zone objects
+
+A placed object whose skeleton plays its own animation (docs/formats/wld.md, "Placed-object animation") is drawn
+where the animation has it. `ZoneRenderer::build` draws its still triangles with every placement as any object's,
+and keeps its moving triangles as one instanced model per definition (the instancing of "Model overrides"): each
+vertex names its node in `GpuVertex::point_light.x` (its index among the definition's moving nodes + 1; 0 still;
+point lights reach only regions, so a placed object has no other use for it), and each placement's instance names
+the definition's first motion in `GpuInstance::normal_row[1].w`. A motion is one moving node's matrix: every frame
+`animate_instances` poses each definition once on the zone's animation clock (`set_animation_time`, milliseconds
+since the zone loaded, the clock the collision uses) and writes every motion's rows, now and a frame ago, into the
+frame slot's motion buffer (set 1, binding 4). `zone.vert` and `zone_shadow.vert` put a vertex through its motion
+before its placement, and the motion pass's previous place uses the rows a frame ago, so the temporal upscaler and
+frame generation see the parts move. The upload is a few matrices whatever the number of placements: Emerald Jungle's
+22,174 animated trees draw in fewer calls than their per-placement copies did (0.43 ms against 0.58 ms a frame
+classic, 2.36 against 2.60 modern, `--frames` at the same view). The instances' boxes reach as far as the animation
+takes the parts. The model's vertices carry the first placement's baked light; another placement's instance tints
+them by its own over that one's, channel by channel, so its gradient is the first one's. The point lights' shadow
+cubes (drawn once and kept) and the cover map keep the parts in their first pose.
 
 ## Zone lights
 

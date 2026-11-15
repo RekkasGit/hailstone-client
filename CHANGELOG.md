@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Zones: placed objects that animate in the original now do here too: Ssraeshza Temple's rings turn, and the branches of the trees in Emerald Jungle, Trakanon's Teeth, the Wakening Land and some 70 other zones sway. They are solid where they are, so in Ssraeshza Temple the turning rings again let a player into the water shaft and out at the top once their gaps come round; before, the rings stood still with their gaps facing away and nobody could get in
 - Modern lighting: fog-bound zones without a sky (Innothule Swamp, Nektulos Forest, Misty Thicket, Toxxulia Forest and others) take the thickness of their fog from the zone's fog density as the original does. Their light fog had been drawn about 3.5 times as thick, washing everything near the camera into the fog's colour, so these zones looked far brighter than the originals
 - Linux: the release now runs natively on Wayland; before, its SDL was built with X11 only and ran through XWayland. SDL chooses Wayland when the compositor offers the `fifo-v1` protocol (recent KDE, GNOME and wlroots); `SDL_VIDEO_DRIVER=wayland` or `x11` overrides it
 - Item display: the Magic and Summoned tags show their names instead of a number ([3094]) with a live game folder, whose string table lacks them

@@ -16,6 +16,7 @@
 
 #include <glm/glm.hpp>
 
+#include "assets/object_animation.h"
 #include "render/gpu.h"
 #include "render/horizon.h"
 #include "render/lod_bands.h"
@@ -221,6 +222,11 @@ public:
     void draw_point_shadow(const FrameInfo& frame, const PointReach& reach, std::uint32_t face);
     // Whether the zone has water surfaces (the water map is worth drawing).
     bool has_water() const;
+    // The zone's animation clock (assets/object_animation.h), ms since the zone was loaded: the objects that play their
+    // own animation are drawn where it has them at this time, from the next pass of the frame on.
+    void set_animation_time(std::uint64_t ms) { animation_ms_ = ms; }
+    // How many placed parts move with their object's animation (drawn instanced, posed each frame).
+    std::size_t animated_parts() const { return animated_instances_; }
     // Whether what draw_shadow draws into the cover or water map (kCoverLayer, kWaterLayer) moves from frame to frame
     // in the map's view, from the last set_lighting: the plants' swaying parts, with wind.
     bool map_moves(std::uint32_t layer) const;
@@ -393,6 +399,9 @@ private:
     std::vector<glm::vec3> instance_origins_;
     // Binds the vertex, instance and index buffers.
     void bind_geometry(VkCommandBuffer cmd) const;
+    // Writes the animated objects' motions at animation_ms_, and as they were a frame ago, into frame slot
+    // `frame_slot`'s motion buffer; once per frame (VkContext::frames_begun).
+    void animate_instances(std::uint32_t frame_slot);
     std::vector<Chunk> chunks_;
     // The casts_untextured draws merged for the shadow passes, one chunk a cell (render/shadow_chunks.h): its chunks
     // follow the draws' in chunks_, its indices the draws' in the index buffer. Only its chunk fields are set.
@@ -411,6 +420,23 @@ private:
     std::array<Buffer, 3> light_grid_buffers_{};
     Buffer vertex_buffer_;
     Buffer instance_buffer_; // GpuInstance: the identity, then the instanced models' placements
+    // The animated objects' moving nodes (assets/object_animation.h). Motion k (>= 1) is node motions_[k - 1].node of
+    // animations_[motions_[k - 1].animation]; an instance's normal_row[1].w names the motion its object space goes
+    // through before its placement (0: none). Each frame in flight has its motions' rows, now and a frame ago, in a
+    // storage buffer (zone.vert's and the shadow shaders' set 1 binding 4), written by animate_instances.
+    struct Motion {
+        std::uint32_t animation = 0;
+        std::uint16_t node = 0;
+    };
+    std::vector<Motion> motions_;
+    std::vector<assets::ObjectAnimation> animations_;
+    std::vector<std::vector<glm::mat4>> animation_poses_; // per animation, the last animate_instances' motion
+    std::vector<std::array<glm::vec4, 3>> motion_rows_;   // per motion, the rows last written (the next frame's past)
+    std::array<Buffer, VkContext::kFramesInFlight> motion_slots_{};
+    std::array<void*, VkContext::kFramesInFlight> motion_mapped_{};
+    std::size_t animated_instances_ = 0;
+    std::uint64_t animation_ms_ = 0;
+    std::uint64_t animated_frame_ = 0; // VkContext::frames_begun of the last animate_instances (0: none yet)
     Buffer index_buffer_;
     std::vector<Texture> textures_;
     VkSampler sampler_ = VK_NULL_HANDLE;

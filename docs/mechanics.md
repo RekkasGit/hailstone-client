@@ -372,6 +372,20 @@ How a move meets walls:
   21 classic zones, 655 of 665 closed doors sit in their doorways (the slab and the way through it clear of the
   zone's geometry); with the heading turned clockwise 313 do. Walked live: halas door 14 and felwithea door 1 stop
   the player closed (2.3 from the slab's centre) and let it through open.
+- Animated zone objects (`game/animated_objects.h`; the animation in docs/formats/wld.md, "Placed-object animation"):
+  a placed object whose skeleton plays its own animation (Ssraeshza Temple's turning rings, swaying branches) is
+  solid where the animation has it. `CS3DFile::CreateZoneActorFromActorInst` (0x1001cad0) gives a zone object the
+  collision-volume type 1 only with placement flag 0x80 (none shipped), else 0; both are tested by their polygons.
+  A WLD skeleton has no static collision mesh, so the line-segment test takes its per-part mesh path (0x100c66e0) on
+  the world segment, where each part is placed by its node; the sphere test's polygon path is taken to work the same
+  way (not traced, docs/unknowns.md). Here the moving triangles are left out of `CollisionMesh` and kept per moving node in
+  the first key's pose; each movement step poses every definition once (`set_time`, the zone's animation clock:
+  milliseconds since the zone loaded), and the player's sweep, floor test and a boat's hull probes meet the parts
+  near them through placement x the node's motion, as a door is met through its transform. The other spawns' contact
+  probes, the line of sight, picking and the navigation mesh do not see the moving parts. Checked against Ssraeshza
+  Temple's water shaft (`tests/object_animation_test.cpp`, the game files): with the rings in their first pose, as
+  they stood before, a walk from the north corridor cannot reach the water; turning, it gets in within a turn
+  wherever the turn starts, swims up and climbs out over the top platform's rim through the gap at the south.
 - Vector results measured before the capsule and parallel edge-region changes above
   (tests/movement_vectors_test.cpp). **The current sweep has not been replayed against these recordings**: the
   numbers below are the earlier implementation's, and `movement_vectors_test` must be run with

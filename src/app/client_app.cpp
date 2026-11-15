@@ -392,6 +392,10 @@ int ClientApp::run() {
                 }
                 game::SceneLight scene_light = game::compute_scene_light(light);
                 if (zone_renderer_) zone_renderer_->set_scene_light(scene_light);
+                // The zone objects that play their own animation, drawn where the zone's animation clock has them now.
+                if (zone_renderer_)
+                    zone_renderer_->set_animation_time(zone_animation_ms(static_cast<std::uint64_t>(
+                        std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time_).count())));
                 // modern or classic (/lighting, display.lighting): the same scene light for every renderer.
                 render::DynamicShadowLights moving_lights;
                 render::SceneLighting lighting = scene_lighting(scene_light, sky_hour, &moving_lights);

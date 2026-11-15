@@ -62,6 +62,8 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] NPC collision (Hailstone's own, switchable by the server's hailstone.cfg `[movement] npc_collision`): live NPCs stop the player; players, pets, mercenaries, corpses and mounts do not (game/npc_collision.h; unit tests).
 - [x] The jump's crouch window from the duck clip's length (453db92); the ceiling query and auto-duck match the original apart from the radius.
 - [x] New-style models' duck clip for the crouch window (CRCH_BA_1, 0x406740's row 0x7a - 0x4f); the jump animation from the playing animation (+0x10c0, vf24) rather than 500 ms after a jump (anim-fixes; unit tests).
+- [x] Placed objects that play their own animation (Ssraeshza Temple's turning rings, swaying tree branches in 75 zones): drawn moving (one instanced model per definition, a few matrices a frame) and solid where the animation has them, so the rings let a player into the water shaft and out at the top (animated-objects; unit tests and the game files' route through the shaft; the drawing seen in the viewer). Not tried live with a non-GM player.
+- [ ] Animated zone objects, open: the phase against the original's clock, D3DX's key compression, the other spawns' probes, sight, picking and /nav not meeting the moving parts (docs/unknowns.md).
 - [x] Lifts carry riders (already worked; checked live on the Paineel lift).
 - [x] Teleport doors (a Bazaar IT78 door, the PoK books' type, checked live; NMS sends PoK visitors to the Bazaar).
 - [x] Touch-activated switches: PlayerClient::TouchingSwitch ported, traps checked live (f500930).
