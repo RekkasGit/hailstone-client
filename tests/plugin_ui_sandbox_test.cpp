@@ -373,7 +373,12 @@ TEST_CASE("Plugin UI: what a plugin leaves in the pack's shared tables runs as t
     // Nor can rawset, setmetatable or a finalizer get past a view.
     CHECK(s.run("plugin:A", "return getmetatable(SHARED)") == "false");
     CHECK(s.run("plugin:A", "setmetatable(SHARED, {})").find("cannot be changed") != std::string::npos);
-    CHECK(s.run("plugin:A", "rawset(SHARED.mine, 'cb', function() end)").find("rawset") != std::string::npos);
+    CHECK(s.run("plugin:A", "rawset(SHARED.nested, 'cb', function() end)").find("rawset") != std::string::npos);
+    // (Its own table, read back through the pack's, is its own again: rawset there still leaves a function the pack
+    // reads through the owned view, which runs it as the plugin.)
+    CHECK(s.run("plugin:A", "rawset(SHARED.mine, 'raw', function() return eq.Who() end) "
+                            "return tostring(rawequal(SHARED.mine, SHARED.mine))") == "true");
+    CHECK(s.run("", "return SHARED.mine.raw()") == "plugin:A");
     CHECK(s.run("plugin:A", "setmetatable({}, { __gc = function() end })").find("__gc") != std::string::npos);
     CHECK(s.run("plugin:A", "return getmetatable(setmetatable({}, { __index = { x = 7 } })).__index.x") == "7");
 
@@ -499,4 +504,130 @@ TEST_CASE("Plugin UI: the clipboard is the pack's, and a plugin's only with ever
     CHECK(s.run("", ask) == "true");
     CHECK(s.run("plugin:All", ask) == "true");
     CHECK(s.run("plugin:Some", ask) == "false");
+}
+
+namespace {
+const char kThingMeta = 0; // (the registry key of eq.Thing's metatable, below)
+} // namespace
+
+// What crosses from the pack to a plugin comes as a view whatever way it comes: a pack function the plugin calls
+// returns views (call_pack), the pack's arguments to the plugin's functions are views (call_as), and getmetatable gives
+// the plugin a metatable it did not set only as a view. So a function the plugin plants there runs as the plugin.
+TEST_CASE("Plugin UI: what pack functions return and pass to a plugin comes as views") {
+    SandboxUi s;
+    s.add_pack_file("state.lua", "SHARED = { nested = {}, other = {} }\n"
+                                 "function GetShared() return SHARED end\n"
+                                 "function Fail() error(SHARED.other) end\n"
+                                 "SHARED.get = function() return SHARED.nested end\n"
+                                 "function Who() return eq.Who() end\n");
+    s.lua->add_eq_api([](lua_State* L) {
+        lua_pushcfunction(L, [](lua_State* S) -> int {
+            const std::string tag(ui::lua::LuaUi::caller_tag());
+            lua_pushstring(S, tag.empty() ? "pack" : tag.c_str());
+            return 1;
+        });
+        lua_setfield(L, -2, "Who");
+        // A userdata with a metatable of the client's (as a C type's): a plugin must not change what it does.
+        lua_pushcfunction(L, [](lua_State* S) -> int {
+            lua_newuserdatauv(S, 1, 0);
+            if (lua_rawgetp(S, LUA_REGISTRYINDEX, &kThingMeta) != LUA_TTABLE) {
+                lua_pop(S, 1);
+                lua_createtable(S, 0, 1);
+                lua_newtable(S);
+                lua_setfield(S, -2, "__index");
+                lua_pushvalue(S, -1);
+                lua_rawsetp(S, LUA_REGISTRYINDEX, &kThingMeta);
+            }
+            lua_setmetatable(S, -2);
+            return 1;
+        });
+        lua_setfield(L, -2, "Thing");
+    });
+    s.caps["plugin:A"] = plugin::kCapAll;
+    s.add_folder("plugin:A");
+    s.frame();
+
+    // A pack function's result: a view; a function planted in it runs as the plugin.
+    CHECK(s.run("plugin:A", "local t = GetShared() t.cb = function() return Who() end "
+                            "SHARED.get().f = function() return Who() end return 1") == "1");
+    CHECK(s.run("", "return SHARED.cb() .. ' ' .. SHARED.nested.f()") == "plugin:A plugin:A");
+    // What it raises comes the same way.
+    CHECK(s.run("plugin:A", "local ok, e = pcall(Fail) e.g = function() return Who() end return tostring(ok)") ==
+          "false");
+    CHECK(s.run("", "return SHARED.other.g()") == "plugin:A");
+    // The same pack function is the same value however the plugin reaches it, and goes back to the pack as itself.
+    CHECK(s.run("plugin:A", "return rawequal(GetShared, GetShared) and SHARED.get == SHARED.get") == "true");
+    CHECK(s.run("plugin:A", "SHARED.again = GetShared return 1") == "1");
+    CHECK(s.run("", "return rawequal(SHARED.again, GetShared)") == "true");
+
+    // The pack's arguments to the plugin's function: views.
+    CHECK(s.run("plugin:A", "SHARED.hook = function(t) t.h = function() return Who() end end return 1") == "1");
+    CHECK(s.run("", "local t = {} SHARED.hook(t) return t.h()") == "plugin:A");
+    // (its own table handed back is its own)
+    CHECK(s.run("plugin:A", "MINE = {} SHARED.mine = MINE SHARED.same = function(t) return rawequal(t, MINE) end "
+                            "return 1") == "1");
+    CHECK(s.run("", "return SHARED.same(SHARED.mine)") == "true");
+
+    // getmetatable: its own metatables as they are, the client's as views.
+    CHECK(s.run("plugin:A", "local mt = {} return rawequal(getmetatable(setmetatable({}, mt)), mt)") == "true");
+    CHECK(s.run("plugin:A", "getmetatable(eq.Thing()).__index = function() return Who() end return 1") == "1");
+    CHECK(s.run("", "return eq.Thing().anything") == "plugin:A");
+    CHECK(s.run("plugin:A", "return getmetatable('')") == "false");
+}
+
+// A plugin's code allocates up to the limit less the pack's reserve, so what it holds leaves the pack room.
+TEST_CASE("Plugin UI: what a plugin holds leaves the pack's code memory") {
+    SandboxUi s;
+    s.caps["plugin:A"] = plugin::kCapAll;
+    s.add_folder("plugin:A");
+    s.frame();
+    s.lua->set_limits_for_test(std::size_t{64} << 20, std::chrono::milliseconds(5000), std::chrono::milliseconds(5000));
+    CHECK(s.run("plugin:A", "HOLD = {} local ok = pcall(function() for i = 1, 1e9 do HOLD[i] = string.rep('x', 1 << 20) "
+                            ".. i end end) return tostring(ok) .. ' ' .. tostring(#HOLD > 16)") == "false true");
+    CHECK(s.run("", "local t = {} for i = 1, 8 do t[i] = string.rep('y', 1 << 20) .. i end return #t") == "8");
+}
+
+// A plugin folder's environment is made before the memory limit holds: made under it, a refused allocation there
+// was outside any protected call, and Lua aborted the client.
+TEST_CASE("Plugin UI: a plugin's globals are made outside the memory limit") {
+    SandboxUi s;
+    s.frame();
+    lua_State* L = s.lua->state();
+    lua_gc(L, LUA_GCCOLLECT);
+    const auto used = static_cast<std::size_t>(lua_gc(L, LUA_GCCOUNT)) * 1024 + static_cast<std::size_t>(lua_gc(L, LUA_GCCOUNTB));
+    s.lua->set_limits_for_test(used + 512, std::chrono::milliseconds(5000), std::chrono::milliseconds(5000));
+    const std::string out = s.run("plugin:Z", "return 1"); // (the first use of plugin:Z's globals)
+    CHECK((out == "1" || out.find("memory") != std::string::npos));
+    s.lua->push_folder_env_for_test("plugin:Z");
+    CHECK(lua_istable(L, -1));
+    lua_pop(L, 1);
+}
+
+// A plugin's share of the host's C++ state: its settings (count and size) and its windows.
+TEST_CASE("Plugin UI: a plugin's settings and windows are held to a share") {
+    SandboxUi s;
+    s.caps["plugin:A"] = plugin::kCapAll;
+    s.add_folder("plugin:A");
+    s.frame();
+    CHECK(s.run("plugin:A", "local n = 0 for i = 1, 1100 do if ui.SetSetting('k' .. i, 'v') then n = n + 1 end end "
+                            "return n") == "1024");
+    CHECK(s.run("plugin:A", "return tostring(ui.SetSetting('k1', 'changed'))") == "true"); // a key it has
+    CHECK(s.run("plugin:A", "return tostring(ui.SetSetting('big', string.rep('x', 20000)))") == "false");
+    CHECK(s.run("", "return tostring(ui.SetSetting('pack.key', 'v'))") == "true"); // the pack's own: not counted
+    CHECK(s.run("plugin:A", "local ok, e = pcall(function() for i = 1, 200 do ui.window('W' .. i, function() end) end "
+                            "end) return tostring(ok) .. ' ' .. tostring(e):match('may have %d+ windows')") ==
+          "false may have 128 windows");
+}
+
+// The vendored Lua's long-match check stops a plugin's match at its time limit.
+TEST_CASE("Plugin UI: a plugin's runaway string match is stopped") {
+    SandboxUi s;
+    s.lua->set_limits_for_test(std::size_t{256} << 20, std::chrono::milliseconds(400), std::chrono::milliseconds(100));
+    s.caps["plugin:A"] = plugin::kCapAll;
+    s.add_folder("plugin:A");
+    s.frame();
+    const auto start = std::chrono::steady_clock::now();
+    CHECK(s.run("plugin:A", "return string.find(('a'):rep(1e5), ('a-'):rep(20) .. 'b')").find("ran too long") !=
+          std::string::npos);
+    CHECK(std::chrono::steady_clock::now() - start < std::chrono::seconds(5));
 }
