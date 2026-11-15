@@ -270,6 +270,14 @@ bool forget_account(LoginView& view, Config& config, std::string_view username);
 void new_profile(LoginView& view);
 // Picks the profile with this id, else this name (both any case), for --server; false when there is none.
 bool select_profile_named(LoginView& view, std::string_view id_or_name);
+// A launcher ticket's login (app/login_launch.h): the view shows its server (the saved one with profile's id, else
+// a transient one) with no account in the fields, and keeps nothing (remember and save_password off).
+void begin_launcher_login_view(LoginView& view, const ServerProfile& profile);
+// The login screen again after a ticket's login, failed or ended: the normal view, not transient, with a saved
+// server's remember, account and saved password as select_profile shows them. The saved server is profile_id's;
+// else, given `endpoint`, that server as a new one (not saved until a login), so that Sign in with session still
+// finds it; else the first saved server.
+void end_launcher_login_view(LoginView& view, std::string_view profile_id, const ServerProfile* endpoint);
 // The view's server as a profile: the picked one's id and NMS keys with the edited fields, or for a new server an
 // id made from its name (the host when it has none). A test login's has no id. An empty name becomes the host.
 ServerProfile profile_from_view(const LoginView& view);

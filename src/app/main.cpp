@@ -51,6 +51,7 @@
 #include "app/window_icon.h"
 #include "platform/message_box.h"
 #include "platform/paths.h"
+#include "platform/process.h"
 #include "platform/window.h"
 #include "game/sky_clock.h"
 #include "render/camera.h"
@@ -171,10 +172,12 @@ void usage() {
         "                     log in and enter the world without clicks (testing: the password shows in\n"
         "                     the process list to anyone on this computer; use a test account's)\n"
         "  --ticket T        authenticate once with a launcher ticket (also: patchme /ticket:T)\n"
-        "  --ticket-env VAR  read the ticket from environment variable VAR instead of arguments\n"
-        "                     endpoint: --server, --host/--port, else the asset folder's eqhost.txt\n"
-        "  --world NAME|ID   play this exact world after login (also: /server:NAME); without it a\n"
-        "                     ticket stops at server select. --character optionally enters a character\n"
+        "  --ticket-env VAR  read the ticket from environment variable VAR (then removed from the\n"
+        "                     environment) instead of arguments. The server: --server, --host/--port,\n"
+        "                     or the eqhost.txt of the --game-dir / $EQ_GAME_DIR folder; never the\n"
+        "                     remembered asset folder's\n"
+        "  --world NAME|ID   play this exact world after login; without it a ticket stops at server\n"
+        "                     select. --character (also: /name:C) optionally enters a character\n"
         "  --host H --port P  the login server for --user (default: the dev server; never the\n"
         "                     remembered one), as a transient server that is not saved\n"
         "  --server S         pick the saved server S (its id, the servers/<id> folder, or its name) on\n"
@@ -327,10 +330,11 @@ Options parse_args(int argc, char** argv) {
     if (const char* env = std::getenv("EQ_GAME_DIR")) o.game_dir = env;
     std::vector<std::string_view> arguments;
     for (int i = 1; i < argc; ++i) arguments.emplace_back(argv[i]);
+    std::vector<std::string> unknown; // logged after the loop: a ticket later in the line hides their values
     for (int i = 1; i < argc; ++i) {
         std::size_t launch_at = static_cast<std::size_t>(i - 1);
         if (hailstone::app::consume_login_launch_arg(o.login_launch, arguments, launch_at,
-                                                    [](const char* name) { return std::getenv(name); })) {
+                                                    hailstone::platform::take_environment_variable)) {
             i = static_cast<int>(launch_at) + 1;
             continue;
         }
@@ -687,8 +691,16 @@ Options parse_args(int argc, char** argv) {
             usage();
             std::exit(0);
         } else {
-            hailstone::log::warn("unknown argument: {}", argv[i]);
+            unknown.emplace_back(argv[i]);
         }
+    }
+    for (const auto& line : hailstone::app::unknown_argument_warnings(o.login_launch, unknown))
+        hailstone::log::warn("{}", line);
+    // RoF2's /name:<char> is --character (login_launch.cpp).
+    if (!o.login_launch.character.empty()) {
+        if (!o.character.empty() && o.character != o.login_launch.character)
+            throw std::runtime_error("/name: and --character name different characters.");
+        o.character = o.login_launch.character;
     }
     hailstone::app::resolve_login_launch(o.login_launch, o.user, o.password, o.account,
                                        !o.zone.empty() || o.ui_demo.has_value() || !o.model.codes.empty());
@@ -791,10 +803,11 @@ int main(int argc, char** argv) {
         }
         if (opts.zone.empty() && !opts.ui_demo) {
             app::ClientOptions c;
-            // The updater is for a player's own runs, not the test drives that stop after some frames.
-            // A launcher ticket may expire or be single-use: a restart must not lose or replay it.
-            c.updates = !opts.login_launch.token_requested && opts.frames == 0 && opts.screenshot.empty();
-            if (c.updates) {
+            // The updater is for a player's own runs, not the test drives that stop after some frames. A ticket
+            // launch keeps it, but is never restarted into another version before its one-use ticket is sent
+            // (update_at_start_allowed); the next start without a ticket finishes what update_at_start would do.
+            c.updates = opts.frames == 0 && opts.screenshot.empty();
+            if (c.updates && app::update_at_start_allowed(opts.login_launch)) {
                 // A cut-off install, or an update that never reached the login screen, is put back first; when the
                 // folder then holds another version than this one, that one is started instead.
                 const app::StartNote note = app::update_at_start(platform::install_dir(), release_version());

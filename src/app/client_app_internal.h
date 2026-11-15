@@ -1051,6 +1051,10 @@ private:
     std::vector<std::size_t> server_rows_;
     bool auto_play_sent_ = false;
     bool token_login_active_ = false; // through world/character selection; no keyring/account persistence
+    // The login view is the launcher's (ui::begin_launcher_login_view) until back_to_login restores the normal one,
+    // on the saved server picked before it when the ticket's server was not a saved one.
+    bool launcher_view_ = false;
+    std::string pre_launch_profile_id_;
     LoginTokenSession login_token_session_; // only a token explicitly returned by the login server
     // A box login (Log in box, --account): play the world played last on the server without the server select, and
     // enter box_character_ (one time: after a camp the player chooses).

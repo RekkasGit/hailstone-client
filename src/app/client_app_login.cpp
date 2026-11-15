@@ -39,25 +39,13 @@ void ClientApp::start_token_login(bool named_server, const std::filesystem::path
             if (p.id == id) named = &p;
     }
     const auto from_game = eqhost.empty() ? std::nullopt : profile_from_eqhost_file(eqhost);
-    ServerProfile profile = token_login_profile(opts_.server, named, from_game, login_view_.profiles,
+    // eqhost.txt only from a folder named for this run: a remembered one may be another server's.
+    ServerProfile profile = token_login_profile(opts_.server, named, from_game,
+                                                asset_source_ == AssetFolderSource::Override, login_view_.profiles,
                                                 opts_.auto_host, opts_.auto_port);
-    if (!profile.id.empty()) ui::select_profile_named(login_view_, profile.id);
-    else {
-        login_view_.selected = -1;
-        login_view_.transient = true;
-        login_view_.accounts.clear();
-        login_view_.worlds.clear();
-        login_view_.account_choice.clear();
-        login_view_.quick_selected = -1;
-    }
-    login_view_.name = profile.name;
-    login_view_.host = profile.host;
-    login_view_.port = profile.port;
-    login_view_.ui = profile.ui;
-    login_view_.username.clear();
-    core::wipe(login_view_.password);
-    login_view_.remember = false;
-    login_view_.save_password = false;
+    pre_launch_profile_id_ = ui::selected_profile_id(login_view_);
+    ui::begin_launcher_login_view(login_view_, profile);
+    launcher_view_ = true;
     login_view_.busy = true;
     login_view_.status = {"Signing in with launcher ticket...", false};
     server_profile_ = std::move(profile);
@@ -70,7 +58,8 @@ void ClientApp::start_token_login(bool named_server, const std::filesystem::path
 }
 
 void ClientApp::start_session_login() {
-    const ServerProfile profile = ui::profile_from_view(login_view_);
+    ServerProfile profile = ui::profile_from_view(login_view_);
+    if (login_view_.selected < 0) profile.id.clear(); // a ticket's unsaved server (end_launcher_login_view): no id yet
     LoginLaunch renewed;
     if (!login_token_session_.take(profile.host, profile.port, renewed.ticket)) {
         login_view_.status = {"This server has no session token. Sign in again.", true};
@@ -494,6 +483,16 @@ void ClientApp::back_to_login(std::string message, bool is_error) {
         login_view_.username.clear();
         core::wipe(login_view_.password);
         login_view_.credentials = &platform::system_credentials();
+        if (std::exchange(launcher_view_, false)) {
+            // The launcher's view (transient, remember off) gives way to the normal one, so that the server list
+            // works again and a password login saves the profile's own remember and save_password; its remembered
+            // account (with a saved password) is in the fields as after any return to the login screen.
+            const bool session = login_token_session_.available(server_profile_.host, server_profile_.port);
+            const std::string id = !server_profile_.id.empty() ? server_profile_.id
+                                   : session                  ? std::string()
+                                                              : pre_launch_profile_id_;
+            ui::end_launcher_login_view(login_view_, id, server_profile_.id.empty() && session ? &server_profile_ : nullptr);
+        }
         message += login_token_session_.available(login_view_.host, login_view_.port)
                        ? " Sign in with session to reconnect, or log in here."
                        : " Sign in again from your launcher for a fresh ticket, or log in here.";

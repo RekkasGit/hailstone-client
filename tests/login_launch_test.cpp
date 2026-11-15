@@ -8,8 +8,9 @@ using namespace hailstone;
 
 namespace {
 
-void parse(app::LoginLaunch& launch, std::initializer_list<std::string_view> args,
-           const std::function<const char*(const char*)>& env = [](const char*) -> const char* { return nullptr; }) {
+std::optional<std::string> no_env(const std::string&) { return std::nullopt; }
+
+void parse(app::LoginLaunch& launch, std::initializer_list<std::string_view> args, const app::TakeEnv& env = no_env) {
     const std::span<const std::string_view> all(args.begin(), args.size());
     for (std::size_t at = 0; at < all.size(); ++at)
         if (!app::consume_login_launch_arg(launch, all, at, env))
@@ -32,13 +33,74 @@ ServerProfile profile(std::string name, std::string host, int port) {
 
 } // namespace
 
-TEST_CASE("launcher login: patcher's native ticket args and explicit world") {
+TEST_CASE("launcher login: patcher's native ticket args; /server: is RoF2's world host, not a world choice") {
     app::LoginLaunch launch;
-    parse(launch, {"patchme", "/TiCkEt:synthetic-ticket", "/server:Test World"});
+    parse(launch, {"patchme", "/TiCkEt:synthetic-ticket", "/server:world.example"});
     CHECK(launch.token_requested);
     CHECK(launch.ticket == "synthetic-ticket");
-    CHECK(launch.world == "Test World");
+    CHECK(launch.world.empty()); // taken and ignored: the play reply names the world's address
     CHECK_NOTHROW(resolve(launch));
+}
+
+TEST_CASE("launcher login: /ticket: loses one trailing quote as in RoF2 (InitGameInstance @005fe56a)") {
+    app::LoginLaunch quoted;
+    parse(quoted, {"/ticket:synthetic\""});
+    CHECK(quoted.ticket == "synthetic");
+    app::LoginLaunch two;
+    parse(two, {"/ticket:synthetic\"\""});
+    CHECK(two.ticket == "synthetic\"");
+    // 63 bytes and the quote: RoF2's strncpy of 63 keeps the same 63.
+    const std::string sixty_three(63, 'b');
+    app::LoginLaunch full;
+    const std::string full_arg = "/ticket:" + sixty_three + "\"";
+    parse(full, {full_arg});
+    CHECK(full.ticket == sixty_three);
+    app::LoginLaunch only_quote;
+    CHECK_THROWS(parse(only_quote, {"/ticket:\""}));
+    app::LoginLaunch explicit_ticket; // --ticket keeps its bytes as given
+    parse(explicit_ticket, {"--ticket", "synthetic\""});
+    CHECK(explicit_ticket.ticket == "synthetic\"");
+}
+
+TEST_CASE("launcher login: RoF2's /name: is --character") {
+    app::LoginLaunch launch;
+    parse(launch, {"patchme", "/ticket:synthetic-ticket", "/NAME:Somechar"});
+    CHECK(launch.character == "Somechar");
+    CHECK(launch.world.empty());
+    app::LoginLaunch twice;
+    CHECK_THROWS(parse(twice, {"/name:One", "/name:Two"}));
+    app::LoginLaunch empty;
+    CHECK_THROWS(parse(empty, {"/name:"}));
+    const std::string long_name = "/name:" + std::string(64, 'c');
+    app::LoginLaunch too_long;
+    CHECK_THROWS(parse(too_long, {long_name}));
+    app::LoginLaunch copy;
+    copy = launch;
+    CHECK(copy.character == "Somechar");
+}
+
+TEST_CASE("launcher login: unknown arguments are not named while a ticket is in use") {
+    app::LoginLaunch none;
+    const std::vector<std::string> unknown{"--bogus", "split-ticket-part"};
+    const auto plain = app::unknown_argument_warnings(none, unknown);
+    REQUIRE(plain.size() == 2);
+    CHECK(plain[0] == "unknown argument: --bogus");
+    app::LoginLaunch launch;
+    parse(launch, {"/ticket:first-half"});
+    const auto hidden = app::unknown_argument_warnings(launch, unknown);
+    REQUIRE(hidden.size() == 1);
+    CHECK(hidden[0].find("split-ticket-part") == std::string::npos);
+    CHECK(hidden[0].find("--bogus") == std::string::npos);
+    CHECK(hidden[0].starts_with("2 unknown arguments ignored"));
+    CHECK(app::unknown_argument_warnings(launch, {}).empty());
+}
+
+TEST_CASE("launcher login: a ticket launch is not restarted by the updater at start, other runs are") {
+    app::LoginLaunch none;
+    CHECK(app::update_at_start_allowed(none));
+    app::LoginLaunch launch;
+    parse(launch, {"--ticket", "synthetic-ticket"});
+    CHECK_FALSE(app::update_at_start_allowed(launch));
 }
 
 TEST_CASE("launcher login: explicit ticket and environment transports") {
@@ -47,8 +109,9 @@ TEST_CASE("launcher login: explicit ticket and environment transports") {
     CHECK(direct.ticket == "synthetic-ticket");
     CHECK(direct.world == "42");
     app::LoginLaunch environment;
-    parse(environment, {"--ticket-env", "TEST_LAUNCH_TICKET"}, [](const char* name) -> const char* {
-        return std::string_view(name) == "TEST_LAUNCH_TICKET" ? "environment-ticket" : nullptr;
+    parse(environment, {"--ticket-env", "TEST_LAUNCH_TICKET"}, [](const std::string& name) -> std::optional<std::string> {
+        if (name == "TEST_LAUNCH_TICKET") return std::string("environment-ticket");
+        return std::nullopt;
     });
     CHECK(environment.ticket == "environment-ticket");
     const std::string long_ticket(64, 'a');
@@ -68,7 +131,7 @@ TEST_CASE("launcher login: malformed tickets are rejected without echoing secret
         bool rejected = false;
         try {
             while (at < args.size()) {
-                if (!app::consume_login_launch_arg(launch, args, at, [](const char*) -> const char* { return nullptr; }))
+                if (!app::consume_login_launch_arg(launch, args, at, no_env))
                     throw std::runtime_error("Unsupported test launcher argument.");
                 ++at;
             }
@@ -113,11 +176,11 @@ TEST_CASE("launcher login: unrelated arguments are left for the client") {
     app::LoginLaunch launch;
     const std::vector<std::string_view> args{"--game-dir", "somewhere"};
     std::size_t at = 0;
-    CHECK_FALSE(app::consume_login_launch_arg(launch, args, at, [](const char*) -> const char* { return nullptr; }));
+    CHECK_FALSE(app::consume_login_launch_arg(launch, args, at, no_env));
     CHECK(at == 0);
     CHECK_FALSE(launch.token_requested);
     at = args.size();
-    CHECK_FALSE(app::consume_login_launch_arg(launch, args, at, [](const char*) -> const char* { return nullptr; }));
+    CHECK_FALSE(app::consume_login_launch_arg(launch, args, at, no_env));
 }
 
 TEST_CASE("launcher login: endpoint comes from explicit selection or game eqhost, never the remembered server") {
@@ -125,20 +188,44 @@ TEST_CASE("launcher login: endpoint comes from explicit selection or game eqhost
     const auto game = profile_from_eqhost("[LoginServer]\nHost=game.example:5999\n");
     const auto matching = profile("game-profile", "game.example", 5999);
     const std::vector<ServerProfile> saved{remembered, matching};
-    CHECK_THROWS(app::token_login_profile({}, nullptr, std::nullopt, saved, {}, 0));
-    CHECK_THROWS(app::token_login_profile("missing", nullptr, game, saved, {}, 0));
-    const auto from_game = app::token_login_profile({}, nullptr, game, saved, {}, 0);
+    CHECK_THROWS(app::token_login_profile({}, nullptr, std::nullopt, true, saved, {}, 0));
+    CHECK_THROWS(app::token_login_profile("missing", nullptr, game, true, saved, {}, 0));
+    const auto from_game = app::token_login_profile({}, nullptr, game, true, saved, {}, 0);
     CHECK(from_game.id == "game-profile");
     CHECK(from_game.host == "game.example");
     CHECK(from_game.port == 5999);
-    const auto explicit_profile = app::token_login_profile("remembered", &remembered, game, saved, {}, 0);
+    const auto explicit_profile = app::token_login_profile("remembered", &remembered, game, true, saved, {}, 0);
     CHECK(explicit_profile.id == "remembered");
     CHECK(explicit_profile.host == "other.example");
-    const auto explicit_host = app::token_login_profile({}, nullptr, game, saved, "explicit.example", 6000);
+    const auto explicit_host = app::token_login_profile({}, nullptr, game, true, saved, "explicit.example", 6000);
     CHECK(explicit_host.id.empty());
     CHECK(explicit_host.host == "explicit.example");
     CHECK(explicit_host.port == 6000);
-    CHECK_THROWS(app::token_login_profile({}, nullptr, game, saved, {}, 65536));
+    CHECK_THROWS(app::token_login_profile({}, nullptr, game, true, saved, {}, 65536));
+}
+
+TEST_CASE("launcher login: eqhost.txt only from a game folder named for this run (--game-dir, EQ_GAME_DIR)") {
+    const auto remembered = profile("remembered", "other.example", 5997);
+    const auto game = profile_from_eqhost("[LoginServer]\nHost=game.example:5999\n");
+    const std::vector<ServerProfile> saved{remembered};
+    // The asset folder came from hailstone.ini: its eqhost.txt may be another server's, so nothing is sent.
+    bool refused = false;
+    try {
+        (void)app::token_login_profile({}, nullptr, game, false, saved, {}, 0);
+    } catch (const std::runtime_error& e) {
+        refused = true;
+        const std::string_view why = e.what();
+        CHECK(why.find("--server") != std::string_view::npos);
+        CHECK(why.find("--host") != std::string_view::npos);
+        CHECK(why.find("--game-dir") != std::string_view::npos);
+    }
+    CHECK(refused);
+    CHECK_THROWS(app::token_login_profile({}, nullptr, std::nullopt, false, saved, {}, 0));
+    // Named for this run: its eqhost.txt is used.
+    CHECK(app::token_login_profile({}, nullptr, game, true, saved, {}, 0).host == "game.example");
+    // An explicit server or host needs no game folder.
+    CHECK(app::token_login_profile("remembered", &remembered, game, false, saved, {}, 0).host == "other.example");
+    CHECK(app::token_login_profile({}, nullptr, game, false, saved, "explicit.example", 5999).host == "explicit.example");
 }
 
 TEST_CASE("launcher login: world selection is exact, unique and includes locked worlds for server admission") {
