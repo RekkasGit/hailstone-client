@@ -118,8 +118,8 @@ own first (Roadmap 6). `render/temporal.h` holds the maths, `VkContext::begin_ov
 
 6. **The draws' own motion and the reactive mask.** Under a temporal upscaler (and with `independentBlend`, which
    every desktop driver has; without it the camera's motion is all there is) the scene has three colour
-   attachments: the colour, the object motion (RG16F, cleared to `kMotionUnset`) and the reactive mask (R8, cleared
-   to 0). Every scene pipeline is made for them through `VkContext::scene_rendering` and `scene_blends`, which mask
+   attachments: the colour, the object motion (RGBA16F: the motion in red and green, cleared to `kMotionUnset`;
+   blue below) and the reactive mask (R8, cleared to 0). Every scene pipeline is made for them through `VkContext::scene_rendering` and `scene_blends`, which mask
    off what its shader does not write (`SceneOutput`); the item previews, drawn into targets of their own, keep the
    colour alone. The scene shaders read the temporal block (the shared scene set's binding 5,
    `shaders/motion.glsl`: this frame's and last frame's plain view-projection), which `begin_scene` writes into the
@@ -132,9 +132,12 @@ own first (Roadmap 6). `render/temporal.h` holds the maths, `VkContext::begin_ov
      (`ObjectRenderer::Instance::motion_key`), written after this frame's at `kMaxInstances`;
    - flora and the lawn: their sway and the wind at last frame's clock (`Push::time.y`); the pushing spawns' bend
      is taken as it is now.
-   The opaque passes write the motion; the blended and additive draws (the zone's water, glass and glows, the
-   characters' and objects' blended parts, particles, fire, spell bolts, rain and snow, the target ring, the
-   isometric silhouette) write the reactive mask instead, `shaders/reactive.glsl`: the larger of their alpha and
+   The opaque passes write the motion; the characters' blended parts (a see-through shield, hair: `MotionReactive`)
+   write their motion too, over what shows through them, with their depth in blue, as they write none (frame
+   generation takes the nearer of it and the depth buffer, or a glass shield's pixels follow the background and it
+   breaks up; temporal_prep.frag passes blue on in `motion_`); the blended and additive draws (the zone's water,
+   glass and glows, the characters' additive glows and the objects' blended parts, particles, fire, spell bolts, rain
+   and snow, the target ring, the isometric silhouette) write the reactive mask, `shaders/reactive.glsl`: the larger of their alpha and
    brightness, at most 0.9, blended to the largest over the pixel (water a third of that, or its waves would keep no
    history). The resolve keeps that much less of the history. The sky and the spawns' stand-in boxes write neither.
    Under FSR 1 the same shaders run with the colour alone; the validation layer then warns once that locations 1 and

@@ -141,8 +141,10 @@ Tonemap parse_tonemap(std::string_view name);
 // What a scene pipeline's fragment shader writes besides the colour, under the temporal upscaler
 // (VkContext::scene_blends; docs/graphics.md "Temporal upscaling"): its own motion (`o_motion`, location 1: geometry
 // that moves by itself or sways) or how much the history should give way to it (`o_reactive`, location 2: blended and
-// additive draws, which have no motion of their own). The other attachments are masked off.
-enum class SceneOutput : std::uint8_t { Nothing, Motion, Reactive };
+// additive draws, which have no motion of their own), or both (`MotionReactive`: a blended part of something that
+// moves, a character's see-through shield or hair, whose pixels must move with it, not with what shows through:
+// frame generation would split it). The other attachments are masked off.
+enum class SceneOutput : std::uint8_t { Nothing, Motion, Reactive, MotionReactive };
 
 // A scene pipeline's colour blend states, one per colour attachment of the scene (VkContext::scene_blends). info()
 // points into `states`: keep this object alive while the pipeline is made.
@@ -394,8 +396,10 @@ private:
     static constexpr VkFormat kAoFormat = VK_FORMAT_R8_UNORM;
     // FSR 1's pictures: tonemapped and sRGB-encoded, in 10 bits so the steps do not band before the dither.
     static constexpr VkFormat kUpscaleFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-    // The temporal upscaler's motion vectors: UV to last frame's place (shaders/temporal_prep.frag).
-    static constexpr VkFormat kMotionFormat = VK_FORMAT_R16G16_SFLOAT;
+    // The temporal upscaler's motion vectors: UV to last frame's place (shaders/temporal_prep.frag), and in blue the
+    // depth of a see-through part drawn there with its own motion (SceneOutput::MotionReactive; 0 none), which writes
+    // no depth: frame generation takes it as the nearer surface there.
+    static constexpr VkFormat kMotionFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
     static constexpr VkFormat kReactiveFormat = VK_FORMAT_R8_UNORM;
     std::array<VkFormat, 3> scene_color_formats_{kSceneFormat, kMotionFormat, kReactiveFormat};
     // The temporal block the scene shaders read (shadow_set() binding 5, shaders/motion.glsl), written into the

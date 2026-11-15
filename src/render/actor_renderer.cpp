@@ -1784,9 +1784,13 @@ void ActorRenderer::create_pipelines(const std::filesystem::path& shader_dir) {
             ba.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
             ba.alphaBlendOp = VK_BLEND_OP_ADD;
         }
-        // The opaque pass draws the characters' own motion; the blended and additive ones the reactive mask.
-        const SceneBlends blends =
-            vk_.scene_blends(ba, pass == 0 ? SceneOutput::Motion : SceneOutput::Reactive, scene_);
+        // The opaque pass draws the characters' own motion; the blended one (a see-through shield, hair) its motion
+        // too, over what shows through it, and the reactive mask; the additive one (glows, faint and spread past the
+        // body) the reactive mask alone.
+        const SceneOutput output = pass == 0   ? SceneOutput::Motion
+                                   : pass == 1 ? SceneOutput::MotionReactive
+                                               : SceneOutput::Reactive;
+        const SceneBlends blends = vk_.scene_blends(ba, output, scene_);
         const VkPipelineColorBlendStateCreateInfo cb = blends.info();
         VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
         info.pNext = &ri;

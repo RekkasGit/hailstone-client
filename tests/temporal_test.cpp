@@ -168,6 +168,14 @@ TEST_CASE("temporal: scene pipelines' blend states for the motion and reactive a
     CHECK(reactive.states[2].colorWriteMask == VK_COLOR_COMPONENT_R_BIT);
     CHECK(reactive.states[2].blendEnable == VK_TRUE);
     CHECK(reactive.states[2].colorBlendOp == VK_BLEND_OP_MAX);
+    // A character's blended part (a see-through shield): its motion over what shows through, with its depth in
+    // blue (it writes none), and the reactive mask.
+    const SceneBlends both = make_scene_blends(color, SceneOutput::MotionReactive, true);
+    CHECK(both.states[1].colorWriteMask ==
+          (VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT));
+    CHECK(both.states[1].blendEnable == VK_FALSE);
+    CHECK(both.states[2].colorWriteMask == VK_COLOR_COMPONENT_R_BIT);
+    CHECK(both.states[2].colorBlendOp == VK_BLEND_OP_MAX);
     // The sky, the spawns' boxes: neither.
     const SceneBlends nothing = make_scene_blends(color, SceneOutput::Nothing, true);
     CHECK(nothing.count == 3);

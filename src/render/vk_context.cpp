@@ -220,9 +220,12 @@ SceneBlends make_scene_blends(const VkPipelineColorBlendAttachmentState& color, 
     // The motion is written as it is (the last draw over a pixel is the one in front, as the depth test keeps it);
     // the reactive mask keeps the largest of what was drawn over the pixel.
     VkPipelineColorBlendAttachmentState motion{};
-    motion.colorWriteMask = output == SceneOutput::Motion ? VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT : 0u;
+    // A see-through part with motion of its own also writes its depth in blue (kMotionFormat): it writes no depth.
+    const bool writes_motion = output == SceneOutput::Motion || output == SceneOutput::MotionReactive;
+    motion.colorWriteMask = writes_motion ? VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT : 0u;
+    if (output == SceneOutput::MotionReactive) motion.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
     VkPipelineColorBlendAttachmentState reactive{};
-    if (output == SceneOutput::Reactive) {
+    if (output == SceneOutput::Reactive || output == SceneOutput::MotionReactive) {
         reactive.colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
         reactive.blendEnable = VK_TRUE;
         reactive.srcColorBlendFactor = reactive.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
