@@ -3,6 +3,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -129,14 +130,15 @@ TEST_CASE("Lua UI: the client reads and writes a layout setting") {
 
 // ui.GetIO: one table a frame (the HUD asks for it from every window), with the frame's values; the next frame's is
 // another, with that frame's.
-TEST_CASE("Lua UI: GetIO gives one table a frame") {
+TEST_CASE("Lua UI: GetIO gives one read-only table, its values the frame's") {
     hailstone::test::ScratchDir scratch("lua_ui_api_io_test");
     const fs::path dir = scratch.path() / "pack";
     fs::create_directories(dir);
     std::ofstream(dir / "io.lua") << "frames = {}\n"
                                      "ui.window('IO', function()\n"
                                      "  local a, b = ui.GetIO(), ui.GetIO()\n"
-                                     "  frames[#frames + 1] = { same = rawequal(a, b), ctrl = a.ctrl, width = b.width, t = a }\n"
+                                     "  frames[#frames + 1] = { same = rawequal(a, b), ctrl = a.ctrl, width = b.width, t = a,\n"
+                                     "    write = pcall(function() a.width = 1 end), wrote = a.width ~= 1 }\n"
                                      "end)\n";
     ImGuiContext* ctx = ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
@@ -156,7 +158,9 @@ TEST_CASE("Lua UI: GetIO gives one table a frame") {
             ImGui::Render();
         }
         REQUIRE(luaL_dostring(L, "return frames[1].same and frames[2].same, frames[1].ctrl, frames[2].ctrl, "
-                                 "frames[1].width, frames[2].width, not rawequal(frames[1].t, frames[2].t)") == LUA_OK);
+                                 "frames[1].width, frames[2].width, rawequal(frames[1].t, frames[2].t) and "
+                                 "not frames[1].write and frames[1].wrote and getmetatable(frames[1].t) == false") ==
+                LUA_OK);
         CHECK(lua_toboolean(L, -6));
         CHECK_FALSE(lua_toboolean(L, -5));
         CHECK(lua_toboolean(L, -4));
@@ -383,6 +387,140 @@ end)
     ImGui::DestroyContext(ctx);
 }
 
+// lib/progress.lua's P.Rows keeps a copy of the list (no eq.WindowList, a few rows read a frame) and sorts it again
+// only when the rows shown change; lib/find.lua's rows are kept a moment and shared by its copies (the map's and the
+// minimap's).
+TEST_CASE("Modern UI libs: P.Rows' kept copy and sort, Find's kept rows") {
+    hailstone::test::ScratchDir scratch("lua_ui_modern_rows_test");
+    const fs::path dir = scratch.path() / "pack";
+    const fs::path lib = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern" / "lib";
+    REQUIRE(fs::exists(lib / "progress.lua"));
+    fs::create_directories(dir);
+    fs::copy(lib, dir / "lib", fs::copy_options::recursive);
+    std::ofstream(dir / "rows.lua") << R"lua(
+LIST = {}
+for i = 1, 200 do LIST[i] = { tostring(1000 - i) } end -- the list's order is descending
+reads, listCalls, sortCalls, finds = 0, 0, 0, 0
+SEARCH = ""
+eq = {
+  ListInfo = function() return #LIST, 1, -1, { "Value" }, { 0 } end,
+  ListRow = function(_, _, r)
+    reads = reads + 1
+    local t = LIST[r + 1]
+    if not t then return nil end
+    return { t[1] }, 1, 1, 1
+  end,
+  WindowList = function() listCalls = listCalls + 1; return {} end,
+  ListClick = function() end,
+  InGame = function() return true end,
+  ZoneName = function() return "Zone", "zone" end,
+  FindCategories = function() return { { "merchant", "Merchant" } } end,
+  FindNpcs = function(search)
+    finds = finds + 1
+    return { { id = 1, name = "A" .. search, category = "merchant" }, { id = 2, name = "B", category = "banker" } }
+  end,
+}
+local P = dofile("lib/progress.lua")
+local FL1, FL2 = dofile("lib/find.lua"), dofile("lib/find.lua")
+local function byValue(a, b)
+  sortCalls = sortCalls + 1
+  local x, y = tonumber(a.texts[1]) or 0, tonumber(b.texts[1]) or 0
+  if x ~= y then return x < y end
+  return a.row < b.row
+end
+FILTER, FILTER_KEY = nil, nil
+frames = {}
+ui.window("Rows", function()
+  ui.SetNextWindowPos(0, 0, ui.Cond.Always)
+  ui.SetNextWindowSize(400, 300, ui.Cond.Always)
+  ui.Begin("Rows")
+  local f = { drawn = {} }
+  reads, sortCalls = 0, 0
+  local total, _, shown = P.Rows("Wnd", "L", 0, 200, { rowH = 20, sort = byValue, filter = FILTER,
+    filterKey = FILTER_KEY, draw = function(_, texts) f.drawn[#f.drawn + 1] = texts[1] end })
+  f.total, f.shown = total, shown
+  f.reads, f.sorts = reads, sortCalls
+  FIND_STATE.search = SEARCH
+  local before = finds
+  local a, b = FL1.rows(), FL2.rows()
+  f.finds = finds - before
+  f.found, f.same = #a .. ":" .. (a[1] and a[1].name or ""), rawequal(a, b)
+  ui.End()
+  frames[#frames + 1] = f
+end)
+)lua";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        auto frames = [&](int n, float dt = 1.0f / 60.0f) {
+            for (int i = 0; i < n; ++i) {
+                ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+                ImGui::GetIO().DeltaTime = dt;
+                ImGui::NewFrame();
+                lua.frame();
+                ImGui::Render();
+            }
+        };
+        auto last = [&](const char* expr) {
+            std::string code = std::string("local f = frames[#frames]; return ") + expr;
+            REQUIRE(luaL_dostring(L, code.c_str()) == LUA_OK);
+            std::string out = lua_isstring(L, -1) ? lua_tostring(L, -1) : (lua_toboolean(L, -1) ? "true" : "false");
+            lua_settop(L, 0);
+            return out;
+        };
+        auto run = [&](const char* code) { REQUIRE(luaL_dostring(L, code) == LUA_OK); };
+        frames(3);
+        REQUIRE_FALSE(ImGui::FindWindowByName("UI errors"));
+        CHECK(last("f.drawn[1] .. ',' .. f.drawn[2]") == "800,801");
+        CHECK(last("f.total .. ',' .. f.shown") == "200,200");
+        CHECK(last("listCalls") == "0");
+        // not read whole each frame, and not sorted again while nothing changed
+        CHECK(std::stoi(last("f.reads")) < 60);
+        CHECK(last("f.sorts") == "0");
+        // a row out of view changes: sorted in within frames
+        run("LIST[100] = { '5' }");
+        frames(40);
+        CHECK(last("f.drawn[1] .. ',' .. f.drawn[2]") == "5,800");
+        CHECK(last("f.sorts") == "0");
+        // a row in view changes: drawn as the list has it at once, and sorted in
+        run("LIST[199] = { '1' }"); // (801)
+        frames(2);
+        CHECK(last("f.drawn[1] .. ',' .. f.drawn[2]") == "1,5");
+        // the filter: run over the copy each frame without a key (sorting again only when its rows change), kept
+        // with one
+        run("FILTER = function(_, t) return t[1]:find('9') ~= nil end");
+        frames(2);
+        CHECK(last("f.drawn[1] .. ',' .. f.drawn[2]") == "809,819");
+        CHECK(last("f.sorts") == "0");
+        run("FILTER_KEY = '9'");
+        frames(1);
+        CHECK(last("f.drawn[1]") == "809");
+        run("FILTER, FILTER_KEY = nil, nil");
+        frames(1);
+        CHECK(last("f.drawn[1] .. ',' .. f.total .. ',' .. f.shown") == "1,200,200");
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+
+        // Find: one read for both copies, again when the search changes or the moment passes
+        run("SEARCH = 'x'");
+        frames(1);
+        CHECK(last("f.finds") == "1");
+        CHECK(last("f.found") == "2:Ax");
+        CHECK(last("f.same") == "true");
+        run("finds = 0");
+        frames(6); // (0.1 s)
+        CHECK(last("finds") == "0");
+        frames(1, 0.25f);
+        CHECK(last("f.finds") == "1");
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 // The STML libraries' kept layouts (ui/modern/lib/stml.lua, ui/gamepad/lib/stml.lua): a line's wrap is worked out
 // once and kept until the width or the font change, and is the one the per-frame wrap gave; the chat output's lines
 // drawn from their summed heights land where the line-by-line walk put them; the gamepad's block cache keeps the
@@ -563,7 +701,7 @@ end)
 
 // The modern pack's STML links (ui/modern/lib/stml.lua): an href's target, also when its quote is never closed (the
 // storyline pages some servers ship: <a href="file:///storyline/Epic/BardEpic.txt>Bard</a>), a WndNotify link's
-// message and data, and an <a> with neither only coloured.
+// message and data, an <a> with neither only coloured, and a "<" that opens no tag kept as text.
 TEST_CASE("Lua UI: STML href links, an unclosed quote ending at the tag's end") {
     hailstone::test::ScratchDir scratch("lua_ui_api_stml_href_test");
     const fs::path dir = scratch.path() / "pack";
@@ -588,6 +726,12 @@ out = {
   notify = link('<a WndNotify="27,x">item</a>'),
   plain = link('<a name="top">here</a>'),
 }
+local function plain(line)
+  local t = {}
+  for _, seg in ipairs(stml.Parse(line)) do t[#t + 1] = seg[1] end
+  return table.concat(t)
+end
+out.lt = plain("a < b") .. "|" .. plain('<c "#ff0000">x &amp; <3') .. "|" .. plain("one <b>two</b> three")
 )lua";
     ImGuiContext* ctx = ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
@@ -617,6 +761,7 @@ out = {
         CHECK(get("unclosed") == "Bard=-1,file:///storyline/Epic/BardEpic.txt");
         CHECK(get("notify") == "item=27,x");
         CHECK(get("plain") == "here=plain");
+        CHECK(get("lt") == "a < b|x & <3|one two three"); // a "<" that opens no tag is text
     }
     ImGui::DestroyContext(ctx);
 }
@@ -1309,6 +1454,166 @@ ui.Button, ui.SmallButton = pressing(button), pressing(small)
         CHECK(eval("B.viewed") == "1");
         CHECK(eval("B.shown") == "too many tabs");
         REQUIRE_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// A script's PopStyleColor, PopStyleVar and PopFont pop only what it pushed: what the code drawing around it pushed
+// stays (ImGui's recovery after the window can push nothing back).
+TEST_CASE("Lua UI: a script pops only the style it pushed") {
+    hailstone::test::ScratchDir scratch("lua_ui_api_pops_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "s.lua") << "ui.window('P', function()\n"
+                                    "  ui.Begin('P')\n"
+                                    "  ui.PushStyleColor(ui.Col.Text, 1, 0, 0, 1)\n"
+                                    "  ui.PopStyleColor(5) ui.PopStyleVar(5) ui.PopFont() ui.PopFont()\n"
+                                    "  ui.End()\n"
+                                    "  done = true\n"
+                                    "end)\n";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        for (int i = 0; i < 2; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0, 1, 0, 1));
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5f);
+            ImGui::PushFont(ImGui::GetFont());
+            const int colors = GImGui->ColorStack.Size, vars = GImGui->StyleVarStack.Size,
+                      fonts = GImGui->FontStack.Size;
+            lua.frame();
+            CHECK(GImGui->ColorStack.Size == colors);
+            CHECK(GImGui->StyleVarStack.Size == vars);
+            CHECK(GImGui->FontStack.Size == fonts);
+            CHECK(ImGui::GetStyleColorVec4(ImGuiCol_Text).y == 1.0f);
+            ImGui::PopFont();
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor();
+            ImGui::Render();
+        }
+        lua_getglobal(lua.state(), "done");
+        CHECK(lua_toboolean(lua.state(), -1));
+        lua_pop(lua.state(), 1);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// EndDragDropSource and EndDragDropTarget without their Begin do nothing: ImGui's would end the tooltip it began, and
+// with none, in a release build, the script's own window.
+namespace {
+int current_window_name(lua_State* L) {
+    lua_pushstring(L, GImGui->CurrentWindow ? GImGui->CurrentWindow->Name : "");
+    return 1;
+}
+} // namespace
+
+TEST_CASE("Lua UI: ending a drag and drop never begun leaves the window open") {
+    hailstone::test::ScratchDir scratch("lua_ui_api_dragdrop_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "s.lua") << "ui.window('D', function()\n"
+                                    "  ui.Begin('D')\n"
+                                    "  ui.EndDragDropSource() ui.EndDragDropTarget()\n"
+                                    "  done = current_window_name() == 'D'\n"
+                                    "  ui.End()\n"
+                                    "end)\n";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_register(lua.state(), "current_window_name", &current_window_name);
+        ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+        ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+        ImGui::NewFrame();
+        lua.frame();
+        ImGui::Render();
+        lua_getglobal(lua.state(), "done");
+        CHECK(lua_toboolean(lua.state(), -1));
+        lua_pop(lua.state(), 1);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// InputText's options are read raw (a metamethod there could raise past the buffer's destructor), and the edited
+// text is pushed as before.
+TEST_CASE("Lua UI: InputText reads its options raw") {
+    CHECK(run_pack_frames("lua_ui_api_input_opts_test",
+                          "ui.window('I', function()\n"
+                          "  ui.Begin('I')\n"
+                          "  local proxy = setmetatable({}, { __index = function() touched = true; error('no') end })\n"
+                          "  local a = ui.InputText('a', 'abc', 10, 0, proxy)\n"
+                          "  local b = ui.InputText('b', 'xyz', 10, 0, { moveToEnd = true })\n"
+                          "  local n, changed = ui.SliderInt('s', 3, 0, 10, '%d%%')\n"
+                          "  ui.End()\n"
+                          "  done = a == 'abc' and b == 'xyz' and n == 3 and not touched\n"
+                          "end)\n"));
+}
+
+// A window registered outside its script's loading (by code run later) that fails is reported and logged on its
+// own, with no script to reload, and runs again once registered anew.
+TEST_CASE("Lua UI: a window with no script reports its error and comes back when registered again") {
+    hailstone::test::ScratchDir scratch("lua_ui_api_late_window_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "s.lua") << "ui.window('Base', function() end)\n";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        auto frame = [&] {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+        };
+        frame();
+        CHECK(lua.run_for_test("", "ui.window('Late', function() LATE = (LATE or 0) + 1 error('late boom') end) "
+                                   "return 1") == "1");
+        frame();
+        frame();
+        CHECK(lua.run_for_test("", "return LATE") == "1"); // failed once, then off
+        ImGuiWindow* errors = ImGui::FindWindowByName("UI errors");
+        REQUIRE(errors != nullptr);
+        CHECK(errors->Active);
+        CHECK(lua.run_for_test("", "ui.window('Late', function() LATE = LATE + 1 end) return 1") == "1");
+        frame();
+        frame();
+        CHECK(lua.run_for_test("", "return LATE") == "3");
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors")->Active);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// A pattern match runs no Lua instructions, so the count hook never stopped one: the vendored Lua's match calls the
+// state's check (lua_host.h kMatchCheckKey), which stops it at the code's time limit.
+TEST_CASE("Lua UI: a runaway string match is stopped at the time limit") {
+    hailstone::test::ScratchDir scratch("lua_ui_api_match_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua.set_limits_for_test(std::size_t{256} << 20, std::chrono::milliseconds(200), std::chrono::milliseconds(100));
+        const auto start = std::chrono::steady_clock::now();
+        for (const char* code : {"return string.find(('a'):rep(1e5), ('a-'):rep(20) .. 'b')",
+                                 "return (string.gsub(('a'):rep(1e5), ('a-'):rep(20) .. 'b', ''))",
+                                 "for x in string.gmatch(('a'):rep(1e5), ('a*'):rep(20) .. 'b') do end"})
+            CHECK(lua.run_for_test("", code).find("ran too long") != std::string::npos);
+        CHECK(std::chrono::steady_clock::now() - start < std::chrono::seconds(10));
+        CHECK(lua.run_for_test("", "return string.find(('a'):rep(100) .. 'b', 'a-b')") == "1"); // runs as before
     }
     ImGui::DestroyContext(ctx);
 }

@@ -13,6 +13,7 @@
 #include "app/actions_ui.h"
 #include "app/lua_eq_values.h"
 #include "app/lua_eq_windows.h"
+#include "core/ascii_case.h"
 #include "game/combat.h"
 #include "game/combat_ability_menu.h"
 #include "app/lua_eq_hotbar.h"
@@ -43,21 +44,16 @@ int index_after(std::string_view id, std::string_view prefix) {
     return ec == std::errc() && p == rest.data() + rest.size() ? v : -1;
 }
 
-std::string lower(std::string s) {
-    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return s;
-}
-
 const game::Spawn* find_spawn(const game::WorldState& w, std::uint32_t id) {
     if (!id) return nullptr;
     auto it = w.spawns.find(id);
     return it == w.spawns.end() ? nullptr : &it->second;
 }
 
+// Runs per group row every frame: compared in place, not lower-cased per spawn.
 const game::Spawn* spawn_named(const game::WorldState& w, const std::string& name) {
-    std::string want = lower(name);
     for (const auto& [id, s] : w.spawns)
-        if (lower(s.name) == want) return &s;
+        if (iequals(s.name, name)) return &s;
     return nullptr;
 }
 
@@ -69,10 +65,10 @@ std::string self_name(const net::GameConnection& c) {
 // The n-th (0-based) group member other than the player (CGroup_GetNthOtherMember).
 const game::GroupMember* other_member(const net::GameConnection& c, int n) {
     if (!c.group().active) return nullptr;
-    std::string me = lower(self_name(c));
+    const std::string me = self_name(c);
     int seen = 0;
     for (const auto& m : c.group().slots) {
-        if (m.name.empty() || lower(m.name) == me) continue;
+        if (m.name.empty() || iequals(m.name, me)) continue;
         if (seen++ == n) return &m;
     }
     return nullptr;
@@ -80,9 +76,9 @@ const game::GroupMember* other_member(const net::GameConnection& c, int n) {
 
 const game::GroupMember* self_member(const net::GameConnection& c) {
     if (!c.group().active) return nullptr;
-    std::string me = lower(self_name(c));
+    const std::string me = self_name(c);
     for (const auto& m : c.group().slots)
-        if (!m.name.empty() && lower(m.name) == me) return &m;
+        if (!m.name.empty() && iequals(m.name, me)) return &m;
     return nullptr;
 }
 
@@ -436,7 +432,9 @@ public:
             } else if (prefix == "PetGauge") {
                 bool pet = false;
                 if (s && !s->is_corpse)
-                    for (const auto& [pid, p] : c.world().spawns) pet = pet || (p.pet_owner_id == s->id && p.is_npc);
+                    pet = std::any_of(c.world().spawns.begin(), c.world().spawns.end(), [&](const auto& e) {
+                        return e.second.pet_owner_id == s->id && e.second.is_npc;
+                    });
                 out.shown = here && pet;
             } else if (prefix.starts_with("Mana")) {
                 out.shown = here && (s->id == c.world().player_id ? c.is_spellcaster() : is_spellcaster(s->class_id));

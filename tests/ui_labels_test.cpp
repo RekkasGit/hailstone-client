@@ -19,8 +19,10 @@
 #include "mq_test_world.h"
 #include "net/aggro_packets.h"
 #include "net/game_connection.h"
+#include "net/group_packets.h"
 #include "net/opcodes.h"
 #include "net/spell_packets.h"
+#include "scratch_dir.h"
 
 using namespace hailstone;
 
@@ -214,4 +216,60 @@ TEST_CASE("Aggro meter labels: percents, their colours and the lock") {
     CHECK(app::eq_label(t.host, 306).text.empty());
     CHECK(app::eq_label(t.host, 308).text.empty());
     CHECK(app::eq_label(t.host, 305).text == "80");
+}
+
+// The group window's labels find each member's spawn by name, ignoring case, by the spawn's name or its display name
+// (app/lua_eq_values.cpp spawn_by_name), and skip the player's own slot whatever its case (nth_other_member). The
+// lookup compares in place (game::display_name_iequals) instead of lower-casing every name each frame.
+TEST_CASE("Group labels: members are found by name or display name, ignoring case") {
+    test::ScratchDir dir("ui_labels_group_lookup");
+    GameDir game(dir.path());
+    Host t(game);
+    net::PlayerProfile pp;
+    pp.name = "Leader";
+    t.conn.set_profile_for_test(pp);
+    net::GroupUpdateB group;
+    group.leader = "Leader";
+    const char* names[] = {"leader", "Bob", "Carol", "Dave", "Eve"};
+    for (std::uint32_t i = 0; i < 5; ++i) {
+        net::GroupUpdateMember m;
+        m.name = names[i];
+        m.slot = i;
+        group.members.push_back(m);
+    }
+    t.conn.receive_zone_packet_for_test(net::encode(group));
+    auto add = [&](std::uint32_t id, const char* name, std::uint8_t hp) {
+        game::Spawn s;
+        s.id = id;
+        s.name = name;
+        s.hp_percent = hp;
+        t.conn.world_for_test().spawns[id] = s;
+    };
+    add(2, "BOB", 40);       // the name, another case
+    add(3, "carol00", 50);   // the display name ("carol")
+    add(4, "#Dave_01", 60);  // "Dave " is not "Dave"
+    add(5, "a_rat01", 70);   // not a member
+    CHECK(app::eq_label(t.host, 30).text == "Bob"); // "leader" is the player's slot
+    CHECK(app::eq_label(t.host, 35).text == "40");
+    CHECK(app::eq_label(t.host, 36).text == "50");
+    CHECK(app::eq_label(t.host, 37).text == "0");
+    CHECK(app::eq_label(t.host, 38).text == "0");
+    CHECK(app::eq_gauge(t.host, 11).value == 400);
+    CHECK(app::eq_gauge(t.host, 12).value == 500);
+    CHECK(app::eq_gauge(t.host, 13).value == -2); // no spawn: full in dark red
+    add(6, "#Dave01", 65);
+    CHECK(app::eq_label(t.host, 37).text == "65");
+}
+
+TEST_CASE("display_name_iequals is iequals over display_name") {
+    const char* names[] = {"a_rat01", "A_RAT", "#Guard_Bob00", "#", "##", "", "123", "#12", "Bob_", "bob ", "Bob",
+                           "_x_9_", "x9y", "Lord_Bob00"};
+    const char* others[] = {"a rat", "A RAT", "guard bob", "", "bob", "Bob ", "x9y", "x9", " x ", "lord bob", "#bob",
+                            "a_rat", "123"};
+    for (const char* n : names)
+        for (const char* o : others) {
+            CAPTURE(n);
+            CAPTURE(o);
+            CHECK(game::display_name_iequals(n, o) == iequals(game::display_name(n), o));
+        }
 }

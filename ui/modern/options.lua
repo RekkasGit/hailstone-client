@@ -777,11 +777,19 @@ local function keyBindings()
     ui.TableSetupColumn("Key", ui.TableColumnFlags.WidthFixed, 120 * U)
     ui.TableSetupColumn("Alternate", ui.TableColumnFlags.WidthFixed, 120 * U)
     ui.TableHeadersRow()
+    -- Only the rows in view are read and drawn: a row out of view is its height alone (a line of text, as each of
+    -- its cells is), so the scrolled height stays the same without a list read and three widgets for each command.
+    local _, viewY = ui.GetWindowPos()
+    local _, viewH = ui.GetWindowSize()
+    local _, lineH = ui.CalcTextSize("Ag")
     for r = 0, rows - 1 do
-      local texts = eq.ListRow(WINDOW, KEYS_LIST, r)
-      if texts then
-        ui.TableNextRow()
-        ui.TableNextColumn()
+      ui.TableNextRow()
+      ui.TableNextColumn()
+      local _, rowY = ui.GetCursorScreenPos()
+      local texts = rowY + lineH >= viewY and rowY <= viewY + viewH and eq.ListRow(WINDOW, KEYS_LIST, r)
+      if not texts then
+        ui.Dummy(0, lineH)
+      else
         ui.Text(texts[1] or "")
         for c = 2, 3 do
           ui.TableNextColumn()
@@ -887,11 +895,12 @@ local function colorsTab()
 end
 
 -- The plugins' options (eq.PluginOptions; docs/plugins.md "Plugin windows"), one section per plugin: a switch, or
--- a slider over the option's range.
-local function pluginsTab()
+-- a slider over the option's range. `options`: this frame's eq.PluginOptions(), which pages() reads once (each call
+-- runs every option's get).
+local function pluginsTab(options)
   local by = {}
   local order = {}
-  for _, o in ipairs(eq.PluginOptions()) do -- by owner (a compiled plugin and a script may share a name)
+  for _, o in ipairs(options) do -- by owner (a compiled plugin and a script may share a name)
     if not by[o.owner] then
       by[o.owner] = {}
       order[#order + 1] = o.owner
@@ -928,9 +937,10 @@ local function pages(visible)
   local want = eq.TabPage(WINDOW, "OPTW_OptionsSubwindows")
   if want and want >= 0 then eq.SetTabPage(WINDOW, "OPTW_OptionsSubwindows", -1) end
   local tabs = TABS
-  if #eq.PluginOptions() > 0 then -- the Plugins tab, while a loaded plugin has options
+  local options = eq.PluginOptions()
+  if #options > 0 then -- the Plugins tab, while a loaded plugin has options
     tabs = { table.unpack(TABS) }
-    tabs[#tabs + 1] = { "Plugins", pluginsTab }
+    tabs[#tabs + 1] = { "Plugins", function() pluginsTab(options) end }
   end
   if visible and ui.BeginTabBar("##optionstabs") then
     for _, t in ipairs(tabs) do

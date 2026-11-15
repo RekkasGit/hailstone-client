@@ -2104,6 +2104,17 @@ TEST_CASE("UI packs: the Lua Scripts window and eq.Scripts*: list, run, pause, s
             CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
             policy.set(plugin::Rules{}); // no hailstone.cfg: the player's scripts run
             run("local l = eq.Scripts(true); assert(l[1].allowed and l[1].caps ~= '')");
+            // A plugin's code: a script of its own name alone, and no folders.
+            fs::create_directories(dir / "pf" / "a");
+            fs::create_directories(dir / "pf" / "b");
+            std::ofstream(dir / "pf" / "a" / "w.lua") << "x = 1\n";
+            std::ofstream(dir / "pf" / "b" / "w.lua") << "x = 1\n";
+            s.lua.set_folders({{"loop", dir / "pf" / "a"}, {"plugin:x", dir / "pf" / "b"}});
+            CHECK(s.lua.run_for_test("loop", "local l, info = eq.Scripts() return #l .. ' ' .. l[1].name .. ' ' .. "
+                                             "#info.folders") == "1 loop 0");
+            CHECK(s.lua.run_for_test("plugin:x", "local l, info = eq.Scripts() return #l .. ' ' .. #info.folders") ==
+                  "0 0");
+            run("local l, info = eq.Scripts(); assert(#l == 2 and #info.folders >= 1)"); // the pack: all, as before
             run("assert(eq.ScriptRun('loop', 'a \\\"b c\\\"'))");
             CHECK(scripts.running("loop"));
             run("local l = eq.Scripts(); assert(l[1].status == 'running' and not l[1].kept)");
@@ -2468,6 +2479,81 @@ TEST_CASE("UI packs: the server plugins' question draws in each pack in the clie
     }
 }
 
+// A click meant for something else the instant the question pops up must not answer it: each pack's Allow waits a
+// second after the question shows (or a new one takes its place), and answers with the question's serial.
+TEST_CASE("UI packs: the server plugins' question takes no answer in its first second") {
+    for (const char* pack : {"modern", "gamepad"}) {
+        CAPTURE(pack);
+        fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
+        hailstone::test::ScratchDir dir_scratch(std::string("ui_pack_consent_arm_") + pack);
+        fs::path dir = dir_scratch.path();
+        fs::create_directories(dir / "game");
+        fs::copy(src, dir / pack, fs::copy_options::recursive);
+        ImGuiContext* ctx = ImGui::CreateContext();
+        ImGui::GetIO().IniFilename = nullptr;
+        unsigned char* px = nullptr;
+        int w = 0, h = 0;
+        ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+        {
+            Session s(dir, pack);
+            std::optional<plugin::ConsentPrompt> prompt;
+            std::vector<std::optional<bool>> answers;
+            s.host.plugin_consent = [&] { return prompt; };
+            s.host.answer_plugin_consent = [&](std::optional<bool> a) {
+                answers.push_back(a);
+                prompt.reset();
+            };
+            lua_State* L = s.lua.state();
+            REQUIRE(luaL_dostring(L, R"lua(
+local button, invisible = ui.Button, ui.InvisibleButton
+ui.Button = function(label, ...)
+  local hit = button(label, ...)
+  if label == "Allow##consent" then allowRect = { ui.GetItemRect() } end
+  return hit
+end
+ui.InvisibleButton = function(id, ...)
+  local hit = invisible(id, ...)
+  if id == "##consentallow" then allowRect = { ui.GetItemRect() } end
+  return hit
+end
+)lua") == LUA_OK);
+            auto click_allow = [&] {
+                lua_getglobal(L, "allowRect");
+                REQUIRE(lua_istable(L, -1));
+                float rect[4]{};
+                for (int i = 0; i < 4; ++i) {
+                    lua_rawgeti(L, -1, i + 1);
+                    rect[i] = static_cast<float>(lua_tonumber(L, -1));
+                    lua_pop(L, 1);
+                }
+                lua_settop(L, 0);
+                auto& io = ImGui::GetIO();
+                io.AddMousePosEvent((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2);
+                s.frames(1);
+                io.AddMouseButtonEvent(0, true);
+                s.frames(1);
+                io.AddMouseButtonEvent(0, false);
+                s.frames(1);
+            };
+            plugin::ConsentPrompt p;
+            p.server = "Alpha";
+            p.serial = 4;
+            p.files.push_back({"MQ2Thing", "MQ2Thing.so", 4096, {}});
+            prompt = p;
+            s.frames(3);
+            click_allow(); // within its first second: nothing
+            CHECK(answers.empty());
+            CHECK(prompt.has_value());
+            s.frames(65);
+            click_allow();
+            REQUIRE(answers.size() == 1);
+            CHECK(answers[0] == std::optional<bool>(true));
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        }
+        ImGui::DestroyContext(ctx);
+    }
+}
+
 // The gamepad pack has no popup of its own: the client's prompt stays, and its group window gives it the pad.
 TEST_CASE("UI packs (gamepad): an invitation to a group keeps the client's own prompt") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "gamepad";
@@ -2806,6 +2892,178 @@ return "ok"
         ImGui::Render();
     }
     ImGui::DestroyContext(ctx);
+}
+
+namespace {
+// Runs `script` in the gamepad pack (its lib/ files reachable with dofile) inside a window; it returns "ok".
+std::string run_gamepad_lib_script(const char* script, const char* scratch_name) {
+    fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "gamepad";
+    hailstone::test::ScratchDir dir_scratch(scratch_name);
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(src, dir / "gamepad", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    std::string out;
+    {
+        Session s(dir, "gamepad");
+        s.frames(1);
+        ImGui::GetIO().DisplaySize = ImVec2(1600, 900);
+        s.api.begin_frame();
+        ImGui::NewFrame();
+        lua_State* L = s.lua.state();
+        const int rc = luaL_dostring(L, script);
+        out = lua_tostring(L, -1) ? lua_tostring(L, -1) : "";
+        if (rc != LUA_OK) out = "error: " + out;
+        lua_settop(L, 0);
+        ImGui::Render();
+    }
+    ImGui::DestroyContext(ctx);
+    return out;
+}
+} // namespace
+
+// The gamepad pack's text edits (lib/theme.lua): Delete takes the last character, a length limit and a shortened
+// title cut, and a text shortened from its start begins, only between UTF-8 characters; a byte that is not UTF-8
+// (Latin-1) counts as one.
+TEST_CASE("UI packs (gamepad): text edits never split a UTF-8 character") {
+    constexpr const char* kScript = R"lua(
+local T = dofile("lib/theme.lua")
+local function check(ok, what) if not ok then error(what, 2) end end
+-- Delete
+check(T.dropChar("") == "", "empty")
+check(T.dropChar("ab") == "a", "ascii")
+check(T.dropChar("a\u{E9}") == "a", "two bytes")
+check(T.dropChar("a\u{20AC}") == "a", "three bytes")
+check(T.dropChar("a\u{1F600}") == "a", "four bytes")
+check(T.dropChar("\u{E9}") == "", "only one")
+check(T.dropChar("a\xA9") == "a", "latin-1 byte")
+check(T.dropChar("\xA9\xA9") == "\xA9", "stray continuation bytes, one at a time")
+-- a limit in bytes, cut between characters
+check(T.cutBytes("abc", 5) == "abc" and T.cutBytes("abc", 2) == "ab" and T.cutBytes("abc", 0) == "", "ascii cut")
+check(T.cutBytes("a\u{20AC}b", 1) == "a", "before")
+check(T.cutBytes("a\u{20AC}b", 2) == "a", "inside (1)")
+check(T.cutBytes("a\u{20AC}b", 3) == "a", "inside (2)")
+check(T.cutBytes("a\u{20AC}b", 4) == "a\u{20AC}", "after")
+check(T.cutBytes("\u{E9}\u{E9}", 3) == "\u{E9}", "two-byte")
+check(T.cutBytes("ab\xA9\xA9\xA9\xA9c", 4) == "ab\xA9\xA9", "not UTF-8: by bytes")
+-- every cut of a mixed text is a whole-character start of it
+local text = "\u{C9}l\u{E9}onore \u{1F600} d\u{2019}Ambr\u{E9}e"
+for n = 0, #text + 1 do
+  local c = T.cutBytes(text, n)
+  check(#c <= n and text:sub(1, #c) == c and utf8.len(c) ~= nil, "cut " .. n)
+  check(n > #text or #c > n - 4, "cut too short " .. n)
+end
+-- a start moved on to a character
+check(T.charStart("a\u{20AC}b", 1) == 1 and T.charStart("a\u{20AC}b", 2) == 2, "on a start")
+check(T.charStart("a\u{20AC}b", 3) == 5 and T.charStart("a\u{20AC}b", 4) == 5, "inside")
+check(T.charStart("a\u{E9}", 3) == 4, "to the end")
+check(T.charStart("a\xA9\xA9\xA9\xA9", 2) == 2, "not UTF-8: as it is")
+return "ok"
+)lua";
+    CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_utf8_test") == "ok");
+}
+
+// A click deferred until A is released (lib/window.lua W.deferred, used by lib/exchange.lua and lib/markets.lua)
+// runs while the window it was asked in is still drawn, waits while A is held, and is dropped once that window is gone
+// rather than firing into whichever window draws next.
+TEST_CASE("UI packs (gamepad): a click deferred to A's release is dropped when its window closes") {
+    constexpr const char* kScript = R"lua(
+local W = dofile("lib/window.lua")
+local function check(ok, what) if not ok then error(what, 2) end end
+local held = false
+local real = eq.gamepad
+eq.gamepad = setmetatable({ down = function(b) return b == "a" and held end }, { __index = real or {} })
+local frame = ui.GetFrameCount()
+local ran = 0
+local slot = {}
+local function ask(owner)
+  GPSTATE.currentWindow = owner
+  W.deferred(slot, function() ran = ran + 1 end)
+  GPSTATE.currentWindow = nil
+end
+-- its window drawn last frame: waits for A, then runs once
+ask("Owner")
+GPSTATE.drawn.Owner = frame - 1
+held = true
+W.runDeferred(slot)
+check(ran == 0 and slot.fn ~= nil, "ran with A held")
+held = false
+W.runDeferred(slot)
+check(ran == 1 and slot.fn == nil, "did not run on release")
+W.runDeferred(slot)
+check(ran == 1, "ran twice")
+-- its window gone (not drawn for a few frames): dropped, even once A is up
+ask("Owner")
+GPSTATE.drawn.Owner = frame - 5
+W.runDeferred(slot)
+check(ran == 1 and slot.fn == nil, "a closed window's click fired")
+-- asked outside a window: as before, runs on release
+ask(nil)
+W.runDeferred(slot)
+check(ran == 2, "a click without a window did not run")
+eq.gamepad = real
+return "ok"
+)lua";
+    CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_deferred_test") == "ok");
+}
+
+// A pad button a window reads itself (T.settledPress: the Quantity, colour, appearance and icon dialogs' A) is
+// dropped while the pack's settling time after a window gains the focus runs, as T.settle drops a button's press.
+TEST_CASE("UI packs (gamepad): a dialog's own A waits out the settling time") {
+    constexpr const char* kScript = R"lua(
+local T = dofile("lib/theme.lua")
+local function check(ok, what) if not ok then error(what, 2) end end
+local down = true
+local fake = { menuPressed = function(b) return b == "a" and down end }
+GPSTATE.padSettleUntil = ui.GetTime() + 1
+check(not T.settledPress(fake, "a"), "pressed while settling")
+GPSTATE.padSettleUntil = ui.GetTime() - 1
+check(T.settledPress(fake, "a"), "not pressed once settled")
+down = false
+check(not T.settledPress(fake, "a"), "pressed without a press")
+GPSTATE.padSettleUntil = nil
+down = true
+check(T.settledPress(fake, "a"), "no settling time yet")
+return "ok"
+)lua";
+    CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_settle_test") == "ok");
+}
+
+// The gamepad STML parser (lib/stml.lua): a "<" that opens no tag is text, shown with what follows it, in the colour
+// it is in; a closed tag is still dropped.
+TEST_CASE("UI packs (gamepad): STML keeps the text after an unmatched <") {
+    constexpr const char* kScript = R"lua(
+local S = dofile("lib/stml.lua")
+local function check(ok, what) if not ok then error(what, 2) end end
+check(S.plain(S.parse("a < b")) == "a < b", "a < b: " .. S.plain(S.parse("a < b")))
+check(S.plain(S.parse("<3")) == "<3", "<3")
+check(S.plain(S.parse("x <")) == "x <", "a < at the end")
+local segs = S.parse('<c "#ff0000">love &amp; <3', { 0, 0, 0, 1 })
+check(S.plain(segs) == "love & <3", "entities and the rest: " .. S.plain(segs))
+local last = segs[#segs]
+check(last[1] == "<3" and last[2][1] == 1 and last[2][2] == 0, "the rest takes the colour it is in")
+check(S.plain(S.parse("one <b>two</b> three")) == "one two three", "closed tags dropped")
+return "ok"
+)lua";
+    CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_stml_lt_test") == "ok");
+}
+
+// The gamepad bag grids' cell ids (lib/items.lua I.cellId) are the strings they were, made once.
+TEST_CASE("UI packs (gamepad): bag grid cell ids are kept") {
+    constexpr const char* kScript = R"lua(
+local I = dofile("lib/items.lua")
+local function check(ok, what) if not ok then error(what, 2) end end
+check(I.cellId("sell", 23) == "##sell23_-1", "a bag slot")
+check(I.cellId("sell", 25, 3) == "##sell25_3", "a bag's slot")
+check(I.cellId("inv", 25, 3) == "##inv25_3", "another grid")
+check(rawequal(I.cellId("sell", 25, 3), I.cellId("sell", 25, 3)), "kept")
+return "ok"
+)lua";
+    CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_cellid_test") == "ok");
 }
 
 // The gamepad windows keep what is costly to read or lay out (a raid's members, the raid's and the guild's message of

@@ -1234,6 +1234,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/perf_ui_test.cpp
     tests/lua_gc_test.cpp
     tests/lua_ui_api_test.cpp
+    tests/lua_ui_modern_windows_test.cpp
     tests/tradeskill_batch_test.cpp
     tests/tradeskill_combine_test.cpp
     tests/missiles_test.cpp

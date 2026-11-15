@@ -299,6 +299,7 @@ Real estate is built to the original (docs/protocol/rof2-packets.md "Real estate
 
 ## Scripts (MacroQuest's TLOs)
 
+- `String.Replace` results are cut to 2047 bytes (MQ's MAX_STRING less one is assumed), and `mq.doevents` handles events queued while it runs in the same call, one thread per event, returning to Lua between them. Neither is checked against MacroQuest; its `MQ2StringType` Replace and `LuaEventProcessor::RunEvents` would settle both.
 - `Math.Dec` past 32 bits (`${Math.Dec[123456789ab]}`) is held at 0xFFFFFFFF (-1), as strtoul does; MQ reads it with MSVC's `sscanf("%x")`, whose result there is not checked, and a blank-only index (where MQ's sscanf returns EOF and MQ uses an unset value) is NULL here. Running those two in MacroQuest on Windows would settle it.
 - `String.Compare` and `CompareCS` give -1, 0 or 1; MQ returns `_stricmp` / `strcmp` as they are, whose size (beyond the sign) on MSVC is not checked. `${String[abc].Compare[abz]}` in MacroQuest would settle it.
 

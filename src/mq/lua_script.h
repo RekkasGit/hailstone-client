@@ -50,9 +50,13 @@ inline constexpr std::size_t kMaxEventPatterns = std::size_t{32} << 10; // bytes
 inline constexpr std::size_t kMaxEventName = 256;                   // bytes of an event's name
 // A chat line this long or longer raises no events (LuaEventProcessor::Process: MQ_MAX_STRING, 2048).
 inline constexpr std::size_t kMaxEventLine = 2048;
+// mq.cmd's line, as MQ's own command buffer (MQ_MAX_STRING, 2048, with its terminator): longer is an error.
+inline constexpr std::size_t kMaxCommandLine = 2048;
 inline constexpr std::int64_t kPressMs = 50;            // a Lua social in press mode runs to its end within this
 inline constexpr std::int64_t kFaceMs = 5;              // a social's face
 inline constexpr std::int64_t kFaceEveryMs = 200;       // how often a face runs
+// A Lua social's name begins so ("social 'Name'"); no script's may (ScriptHost::run).
+inline constexpr std::string_view kSocialPrefix = "social '";
 inline constexpr int kMaxNesting = 16;                  // a bind's thread started from inside the script this deep
 
 struct Script;
@@ -163,6 +167,11 @@ struct Script {
     lua_State* resumed = nullptr; // the host's thread it resumes now: the only one preempt_hook yields
     plugin::Hooks::Owner owner = 0;
     Clock::time_point slice_start{};
+    // The runaway limit fired in this slice (raise_runaway): from then on every instruction of the script, and every
+    // pcall, xpcall or coroutine.resume it returns to, raises the same error again, so code that catches it cannot
+    // run on where the host cannot yield it (a window, a hook, a coroutine of the script's own). A new slice clears it.
+    bool runaway = false;
+    std::string runaway_why;
     // Text the host pushes for the script's code (hailstone.server_dir ...), kept here rather than in the C function's
     // frame: a push that fails longjmps (Lua is built as C), and the frame's objects would not be destroyed.
     std::string scratch;
@@ -223,6 +232,12 @@ struct Script {
     std::optional<game::CharacterVitals> vitals;
     bool registered = false;
     bool main_done = false;
+
+    // The host enters the script's code: its time and runaway limit start again.
+    void new_slice() {
+        slice_start = Clock::now();
+        runaway = false;
+    }
 
     static Script& of(lua_State* L) { return **static_cast<Script**>(lua_getextraspace(L)); }
 
@@ -288,6 +303,24 @@ struct HostWork {
 inline void repair_limit(Script& s) {
     if (s.runs > 0 && s.limited <= 0) s.limited = 1;
 }
+
+// The instruction hooks' runaway check (preempt_hook, runaway_hook), given the hook itself: an error once the slice
+// ran s.runaway_ms, and from then on at every instruction (Script::runaway; a count of 1 on this thread) until the
+// host starts a new slice, when the hook goes back to every 1000 instructions. `why` gets the error's text for a
+// runaway that fires now (the time it ran).
+template <class Why> inline void check_runaway(lua_State* L, Script& s, lua_Hook hook, std::int64_t ran, Why&& why) {
+    if (s.runaway) luaL_error(L, "%s", s.runaway_why.c_str());
+    if (lua_gethookcount(L) == 1) lua_sethook(L, hook, LUA_MASKCOUNT, 1000); // a runaway's, from an earlier slice
+    if (ran < s.runaway_ms) return;
+    s.runaway = true;
+    s.runaway_why = why();
+    lua_sethook(L, hook, LUA_MASKCOUNT, 1);
+    luaL_error(L, "%s", s.runaway_why.c_str());
+}
+
+// pcall, xpcall, coroutine.resume and coroutine.close in a script's state (open_state): Lua's own (upvalue 1), and
+// then the runaway's error raised again when it fired inside, rather than handed back as a result.
+int runaway_safe_call(lua_State* L);
 
 // The capability check of the script's functions (mq.*, hailstone.*): a Lua error when the script may not do `cap`.
 // Nothing but reading works in a closing state or in a Lua social's dry run (which notes its commands and waits, and

@@ -165,6 +165,7 @@ end
 local TARGET_BUFFS = {} -- TargetWindow's Buff0..Buff41
 for i = 0, 41 do TARGET_BUFFS[i + 1] = "Buff" .. i end
 local targetBuffs = {} -- the slots holding a buff this frame, in order
+local distFeet, distText -- the target's distance and its text, made again only when it changes
 
 ui.window("HUD Target", function()
   if not W.shown("TargetWindow") then return end
@@ -196,7 +197,9 @@ ui.window("HUD Target", function()
       local d = eq.TargetDistance()
       if d then
         T.font(18)
-        T.textIn(x1 - p - T.px(140), y0 + p, x1 - p, y0 + p + nh, string.format("%d ft", math.floor(d + 0.5)), C.dim, 1)
+        local feet = math.floor(d + 0.5)
+        if feet ~= distFeet then distFeet, distText = feet, string.format("%d ft", feet) end -- (made when it changes)
+        T.textIn(x1 - p - T.px(140), y0 + p, x1 - p, y0 + p + nh, distText, C.dim, 1)
         T.unfont()
       end
     end
@@ -516,12 +519,16 @@ local function miniZoom(step)
   ui.SetSetting("minimap.zoom", mini.zoom)
 end
 
+local clockH, clockM, clockText -- the clock's text, made again only when the time changes
 local function clock()
   local h, m = eq.GameTime()
   if not h then return nil end
-  local h12 = h % 12
-  if h12 == 0 then h12 = 12 end
-  return string.format("%d:%02d %s", h12, m, h < 12 and "AM" or "PM")
+  if h ~= clockH or m ~= clockM then
+    local h12 = h % 12
+    if h12 == 0 then h12 = 12 end
+    clockH, clockM, clockText = h, m, string.format("%d:%02d %s", h12, m, h < 12 and "AM" or "PM")
+  end
+  return clockText
 end
 
 -- A small round button on the ring: returns true when clicked.

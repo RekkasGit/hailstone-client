@@ -35,6 +35,7 @@
 #include <lua.hpp>
 
 #include "app/lua_eq.h"
+#include "app/lua_eq_windows.h"
 #include "ui/lua/lua_host.h"
 #include "game/spell_display.h"
 #include "net/game_connection.h"
@@ -166,7 +167,7 @@ int SpellIcon(lua_State* L) {
 
 int SpellBookClick(lua_State* L) {
     auto& h = host(L);
-    int slot = static_cast<int>(luaL_checkinteger(L, 1));
+    int slot = held_int(luaL_checkinteger(L, 1));
     bool ok = false;
     if (h.conn && slot >= 0 && slot < game::kSpellBookSize && h.conn->sitting()) {
         auto& c = *h.conn;
@@ -188,13 +189,13 @@ int SpellBookClick(lua_State* L) {
 
 int SpellBookSwap(lua_State* L) {
     auto& h = host(L);
-    if (h.conn) h.conn->spell_book_swap_click(static_cast<int>(luaL_checkinteger(L, 1)));
+    if (h.conn) h.conn->spell_book_swap_click(held_int(luaL_checkinteger(L, 1)));
     return 0;
 }
 
 int SpellBookMemorize(lua_State* L) {
     auto& h = host(L);
-    int slot = static_cast<int>(luaL_checkinteger(L, 1)), gem = static_cast<int>(luaL_checkinteger(L, 2));
+    int slot = held_int(luaL_checkinteger(L, 1)), gem = held_int(luaL_checkinteger(L, 2));
     // HandleSpellLeftClick's StartSpellMemorization(slot, gem, bReplace 0) @0x75bf30 refuses a gem that holds a
     // spell; Hailstone's replace_gem_spell lets it through (EqHost::gem_takes_book_spell). The book is never
     // written over.
@@ -327,7 +328,7 @@ int SaveSpellSet(lua_State* L) {
 
 int EditSpellSet(lua_State* L) {
     auto& h = host(L);
-    int n = static_cast<int>(luaL_checkinteger(L, 1)) - 1;
+    int n = held_index(luaL_checkinteger(L, 1));
     std::size_t len = 0;
     const char* name = luaL_checklstring(L, 2, &len);
     auto spells = loadout_spells(L, 3);
@@ -341,13 +342,13 @@ int EditSpellSet(lua_State* L) {
 
 int MemorizeSpellSet(lua_State* L) {
     auto& h = host(L);
-    lua_pushboolean(L, h.conn && h.conn->memorize_loadout(static_cast<int>(luaL_checkinteger(L, 1)) - 1));
+    lua_pushboolean(L, h.conn && h.conn->memorize_loadout(held_index(luaL_checkinteger(L, 1))));
     return 1;
 }
 
 int DeleteSpellSet(lua_State* L) {
     auto& h = host(L);
-    if (h.conn) h.conn->delete_loadout(static_cast<int>(luaL_checkinteger(L, 1)) - 1);
+    if (h.conn) h.conn->delete_loadout(held_index(luaL_checkinteger(L, 1)));
     return 0;
 }
 

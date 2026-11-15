@@ -1,5 +1,6 @@
 #include "app/lua_eq_values.h"
 #include "app/lua_eq_windows.h"
+#include "core/ascii_case.h"
 
 #include <algorithm>
 #include <cctype>
@@ -54,16 +55,11 @@ LabelValue int_value(std::int64_t value, std::int64_t base = 0, bool compare = f
     return v;
 }
 
-std::string lower(std::string s) {
-    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return s;
-}
-
+// The group gauges look members up every frame: compare in place rather than lower-casing each spawn's name.
 const game::Spawn* spawn_by_name(const game::WorldState& world, const std::string& name) {
     if (name.empty()) return nullptr;
-    std::string want = lower(name);
     for (const auto& [id, s] : world.spawns)
-        if (lower(s.name) == want || lower(game::display_name(s.name)) == want) return &s;
+        if (iequals(s.name, name) || game::display_name_iequals(s.name, name)) return &s;
     return nullptr;
 }
 
@@ -85,10 +81,10 @@ std::string my_name(const net::GameConnection& c) {
 const game::GroupMember* nth_other_member(const net::GameConnection& c, int n) {
     const auto& g = c.group();
     if (!g.active) return nullptr;
-    std::string me = lower(my_name(c));
+    const std::string me = my_name(c);
     int seen = 0;
     for (const auto& m : g.slots) {
-        if (m.name.empty() || lower(m.name) == me) continue;
+        if (m.name.empty() || iequals(m.name, me)) continue;
         if (seen++ == n) return &m;
     }
     return nullptr;
@@ -431,10 +427,10 @@ LabelValue stock_label(const EqHost& host, int type) {
         const auto* m = nth_other_member(c, type - 309);
         if (!m || !c.group().active) return {};
         int slot = -1, mine = -1;
-        std::string me = lower(my_name(c));
+        const std::string me = my_name(c);
         for (std::size_t i = 0; i < c.group().slots.size(); ++i) {
             if (&c.group().slots[i] == m) slot = static_cast<int>(i);
-            if (!c.group().slots[i].name.empty() && lower(c.group().slots[i].name) == me) mine = static_cast<int>(i);
+            if (!c.group().slots[i].name.empty() && iequals(c.group().slots[i].name, me)) mine = static_cast<int>(i);
         }
         if (slot < 0 || slot >= 6 || mine < 0 || mine >= 6) return {};
         int entry = slot + 2 - (mine < slot ? 1 : 0);

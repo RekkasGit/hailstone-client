@@ -78,10 +78,19 @@ local opts = {
   panel = false,
 }
 
+-- the drawing calls' options and colours, made once and filled each frame (the calls read them and keep nothing)
+local GLOW = { 0, 0, 0, 0.55 }
+local PANEL_OPTS = { glow = nil }
+local HP_BAR, TOT_BAR = { center = nil, font = nil }, { right = nil, font = nil }
+local NO_TRAIL = { noTrail = true }
+local BUFF_ICON = { radius = 4 }
+
 local function body(x, y, w, h, s)
   local con = conColor()
   local frameH = top * s
-  T.Panel(x, y, x + w, y + frameH, s, { glow = con and { con[1], con[2], con[3], 0.55 } or nil })
+  if con then GLOW[1], GLOW[2], GLOW[3] = con[1], con[2], con[3] end
+  PANEL_OPTS.glow = con and GLOW or nil
+  T.Panel(x, y, x + w, y + frameH, s, PANEL_OPTS)
   local pad = 10 * s
   local frac, _, raw = eq.Gauge(6)
   local pct = eq.Label(29) or ""
@@ -96,8 +105,8 @@ local function body(x, y, w, h, s)
   if pct ~= "" then T.Text(x + w - pad, y + pad - 3 * s, pct .. "%", C.text, T.font.large, "right") end
   local by = y + pad + nh + 4 * s
   local dead = raw == -3
-  T.Bar("target.hp", x + pad, by, x + w - pad, by + 18 * s, s, dead and 0 or frac, C.hp,
-    { center = dead and "Corpse" or nil, font = T.font.small })
+  HP_BAR.center, HP_BAR.font = dead and "Corpse" or nil, T.font.small
+  T.Bar("target.hp", x + pad, by, x + w - pad, by + 18 * s, s, dead and 0 or frac, C.hp, HP_BAR)
   if T.Hit("##hp", x + pad, by, x + w - pad, by + 18 * s) then eq.ClickChild(WINDOW, "TargetHP", "left") end
   by = by + 22 * s
   if hasTot then
@@ -107,8 +116,8 @@ local function body(x, y, w, h, s)
     local tx = x + pad + 12 * s
     local tw = (x + w - pad) - tx
     T.Text(tx, by - 2 * s, T.Fit(tname, tw * 0.5, T.font.small), C.muted, T.font.small)
-    T.Bar("target.tot", tx + tw * 0.52, by + 2 * s, x + w - pad, by + 10 * s, s, tf, C.hp,
-      { right = tpct ~= "" and (tpct .. "%") or nil, font = T.font.tiny })
+    TOT_BAR.right, TOT_BAR.font = tpct ~= "" and (tpct .. "%") or nil, T.font.tiny
+    T.Bar("target.tot", tx + tw * 0.52, by + 2 * s, x + w - pad, by + 10 * s, s, tf, C.hp, TOT_BAR)
   end
   if aggroOn then
     by = by + (hasTot and 18 or 0) * s
@@ -119,7 +128,7 @@ local function body(x, y, w, h, s)
     T.Text(x + pad, by, "Aggro", C.muted, T.font.tiny)
     local bx0 = x + pad + 44 * s
     T.Bar("target.aggro", bx0, by + 2 * s, x + w - pad - 40 * s, by + 10 * s, s, math.min(1, mine / 100), col,
-      { noTrail = true })
+      NO_TRAIL)
     T.Text(x + w - pad, by, mine .. "%", col, T.font.tiny, "right")
     local other, otherPct = eq.Label(303) or "", eq.Label(307) or ""
     if other ~= "" then
@@ -141,7 +150,7 @@ local function body(x, y, w, h, s)
     local yy = iy + row * (ICON + GAP) * s
     local tex, u0, v0, u1, v1 = eq.ChildArt(WINDOW, b.id, "decal")
     if type(tex) ~= "userdata" then tex = nil end
-    T.Icon(ix, yy, ICON * s, s, tex, u0, v0, u1, v1, b.good and C.good or C.bad, { radius = 4 })
+    T.Icon(ix, yy, ICON * s, s, tex, u0, v0, u1, v1, b.good and C.good or C.bad, BUFF_ICON)
     T.Hit(b.hit, ix, yy, ix + ICON * s, yy + ICON * s)
     if ui.IsItemHovered() then
       ui.SetTooltip(b.name .. "\n" .. T.LongDuration(b.ms))

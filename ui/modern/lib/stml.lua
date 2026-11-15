@@ -2,6 +2,7 @@
 -- them word-wrapped. Used by chat windows and every STMLbox (item and spell descriptions, tips, ...).
 --   <c "#rrggbb"> ... </c>  colour (nested)        <a WndNotify="n,data"> ... </a>  link (n: message to the window)
 --   <br>, <p>, new lines     line breaks            other tags are dropped; &lt; &gt; &amp; &quot; &apos; &nbsp;
+--   a "<" with no ">" after it is text
 local stml = {}
 
 -- (the palette's link and text colours: tables lib/theme.lua changes in place, so parsed lines follow a new palette)
@@ -34,7 +35,10 @@ function stml.Parse(line, color)
     end
     if not lt then break end
     local gt = line:find(">", lt, true)
-    if not gt then break end
+    if not gt then -- a "<" that opens no tag ("<3" in server text): the rest is text, not dropped
+      table.insert(segments, { entities(line:sub(lt)), link and stml.LINK or colors[#colors], link })
+      break
+    end
     local tag = line:sub(lt + 1, gt - 1)
     local name = tag:match("^/?(%a+)")
     name = name and name:lower()

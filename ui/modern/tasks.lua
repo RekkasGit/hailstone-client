@@ -82,10 +82,11 @@ local function button(label, id, selected, s)
   return hit
 end
 
+local CATEGORY_TABS = { { "Active", "active", "category.active" }, { "History", "history", "category.history" } }
 local function categories(tasks, history, s)
-  for i, tab in ipairs({ { "Active", "active", #tasks }, { "History", "history", #history } }) do
+  for i, tab in ipairs(CATEGORY_TABS) do
     if i > 1 then ui.SameLine(0, 5 * s) end
-    if button(tab[1] .. "  " .. tab[3], "category." .. tab[2], state.category == tab[2], s) then
+    if button(tab[1] .. "  " .. (i == 1 and #tasks or #history), tab[3], state.category == tab[2], s) then
       setCategory(tab[2])
       if tab[2] ~= "history" then
         local selected = find(tasks, state.selected)
@@ -115,6 +116,13 @@ local function memberRow(rows, name)
   return -1
 end
 
+-- The native roster's selection set to `row` (-1: none), clicked only when it is not that already: a click drops
+-- every list the frame has read, so one each frame for nothing made the windows build their lists again.
+local function selectMember(row)
+  local _, _, current = eq.ListInfo(WINDOW, "STASK_MemberList")
+  if (current or -1) ~= row then eq.ListClick(WINDOW, "STASK_MemberList", row, "left", 0) end
+end
+
 local function sharedMembers(tasks, s)
   local popup = "##sharedMembers"
   if state.openMembers then
@@ -138,7 +146,7 @@ local function sharedMembers(tasks, s)
   -- name so a departing member cannot shift Remove/Make leader onto a different person at the same row index.
   local rows = K.Rows(WINDOW, "STASK_MemberList")
   local selected = memberRow(rows, state.memberName)
-  eq.ListClick(WINDOW, "STASK_MemberList", selected, "left", 0)
+  selectMember(selected)
   if #rows == 0 then
     state.memberName = nil
     K.Empty(shared and "Waiting for member details." or "You are not in a shared task.")
@@ -159,7 +167,7 @@ local function sharedMembers(tasks, s)
   ui.SameLine(0, 6 * s)
   -- Re-resolve immediately before the member actions; native selection is only an index.
   selected = memberRow(K.Rows(WINDOW, "STASK_MemberList"), state.memberName)
-  eq.ListClick(WINDOW, "STASK_MemberList", selected, "left", 0)
+  selectMember(selected)
   ui.BeginDisabled(selected < 0)
   W.Button(WINDOW, "STASK_RemovePlayerButton", "Remove member", { height = h, danger = true })
   ui.SameLine(0, 6 * s)
@@ -196,8 +204,11 @@ local function card(task, s)
   if clicked then pick(task) end
 end
 
+local trackedList, otherList = {}, {} -- the list's two groups, emptied and filled again each frame
 local function taskList(tasks, needle, s)
-  local tracked, other = {}, {}
+  local tracked, other = trackedList, otherList
+  for k = #tracked, 1, -1 do tracked[k] = nil end
+  for k = #other, 1, -1 do other[k] = nil end
   for _, task in ipairs(tasks) do
     if needle == "" or (task.title or ""):lower():find(needle, 1, true) then
       local group = Q.isTracked(task) and tracked or other

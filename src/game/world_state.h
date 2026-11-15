@@ -34,6 +34,8 @@ namespace hailstone::game {
 	// "a_rat01" -> "a rat", "#Guard_Bob00" -> "Guard Bob": leading '#' and trailing digits stripped, underscores to
 // spaces.
 	std::string display_name(const std::string& name);
+	// iequals(display_name(name), other) without making the string: for lookups that run every frame.
+	bool display_name_iequals(std::string_view name, std::string_view other);
 	// Appearance::new_armor_bits for a spawn whose kind is not known: the player (8) or the NPC (0x10) bit of
 	// ActorNewArmorFilter shows its hero's forge armour.
 	inline constexpr std::uint8_t kNewArmorUnknownKind = 0x18;
