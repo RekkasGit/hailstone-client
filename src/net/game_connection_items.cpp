@@ -321,6 +321,7 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
     case Op::LootItem:
         if (auto l = decode_loot_item(p)) {
             if (!loot_) break;
+            if (loot_->pending_requests != 0) --loot_->pending_requests;
             // Handle_OP_LootItem @0x6bd210: a negative auto loot or slot is a refusal ("You may not loot that item
             // from this corpse.", 0x111); otherwise the looted item leaves the window, or with a count below its
             // stack only that many; then the loot-all queue sends its next request.
@@ -341,7 +342,12 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
                 break;
             }
             // The last answer of a Loot All closes the window (bCloseOnComplete, unless a no-drop question is open).
-            if (loot_close_on_complete_ && !loot_popup_pending_) end_loot();
+            // Every reply advances the queue, an individual loot's too, as in the original; Hailstone also waits
+            // for every outstanding reply before closing (the original's timing is untraced, docs/unknowns.md),
+            // and the Loot All counts as active until then, so a repeated Loot All cannot rescan meanwhile.
+            const bool closing = loot_close_on_complete_ && !loot_popup_pending_;
+            loot_all_active_ = loot_all_active_ && closing && loot_->pending_requests != 0;
+            if (closing && loot_->pending_requests == 0) end_loot();
         }
         break;
     case Op::LootComplete:
@@ -905,6 +911,7 @@ void GameConnection::loot(std::uint32_t corpse_id) {
     loot_->corpse_id = corpse_id;
     loot_->corpse_name = game::display_name(it->second.name);
     loot_all_queue_.clear();
+    loot_all_active_ = false;
     loot_all_deferred_ = false;
     loot_close_on_complete_ = false;
     send_zone(encode_loot_request(corpse_id));
@@ -915,6 +922,7 @@ void GameConnection::loot_failed(std::uint32_t eqstr) {
     if (eqstr) system(eqstr, {}, 0x111);
     loot_.reset();
     loot_all_queue_.clear();
+    loot_all_active_ = false;
 }
 
 void GameConnection::reset_loot_session() {
@@ -923,6 +931,7 @@ void GameConnection::reset_loot_session() {
     if (loot_) world_.target_id = 0;
     loot_.reset();
     loot_all_queue_.clear();
+    loot_all_active_ = false;
     loot_all_deferred_ = false;
     loot_close_on_complete_ = false;
     // A NO DROP or Loot All question still open was about this corpse: a later yes would loot that slot of the next
@@ -1018,13 +1027,25 @@ void GameConnection::send_loot_item(std::int16_t corpse_slot, bool auto_loot, st
     l.slot = static_cast<std::uint16_t>(corpse_slot);
     l.auto_loot = auto_loot ? 1 : 0;
     l.unknown16 = quantity; // the quantity asked (EQEmu loots the whole stack whatever it says)
-    send_zone(encode(l));
+    ++loot_->pending_requests;
+    if (!send_zone(encode(l)) && loot_ && loot_->corpse_id == l.lootee) {
+        // A dropped request has no reply to release the guard or advance the automatic queue. Whichever request
+        // was dropped (a Loot All one, an individual loot or a NO DROP answer), any Loot All is cancelled too, so
+        // the player can start it again.
+        if (loot_->pending_requests != 0) --loot_->pending_requests;
+        loot_all_queue_.clear();
+        loot_all_active_ = false;
+        loot_close_on_complete_ = false;
+    }
 }
 
 void GameConnection::loot_all() {
     // CLootWnd::WndNotification @0x6be180, Loot All: at once from the player's own corpse or without LootAllConfirm,
     // else "Loot all, are you sure?" (11018, 20 s) first.
     if (!loot_ || !loot_->open) return;
+    // Hailstone's own: the original opens the question even while a Loot All runs, and its yes is then ignored by
+    // LootAll's guard (loot_all_now); skip the question that would do nothing.
+    if (loot_all_active_) return;
     if (!game::loot_all_asks(looting_own_corpse(), client_options_.get(game::ClientOption::LootAllConfirm))) {
         loot_all_now();
         return;
@@ -1041,6 +1062,9 @@ void GameConnection::loot_all_now() {
     // asked about (a second one drops the whole list); one OP_LootItem at a time, the next on each answer; with
     // nothing to loot and no question the window closes.
     if (!loot_ || !loot_->open) return;
+    // LootAll's guard @0x6bdbf5: nothing while its list (+0x3a0) exists. It does not look at an individual loot
+    // request still awaiting its reply, and neither does the button (WndNotification @0x6be180).
+    if (loot_all_active_) return;
     if (std::any_of(cursor_coins_.begin(), cursor_coins_.end(), [](std::uint32_t c) { return c != 0; })) return;
     if (!loot_->complete) { // before the server's "every item sent" (6): runs when that arrives
         loot_all_deferred_ = true;
@@ -1067,6 +1091,7 @@ void GameConnection::loot_all_now() {
     }
     if (plan.queue.empty()) return;
     loot_all_queue_.assign(plan.queue.begin() + 1, plan.queue.end());
+    loot_all_active_ = true;
     send_loot_item(plan.queue.front(), true);
 }
 

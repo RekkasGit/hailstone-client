@@ -60,6 +60,7 @@
 - Fixed flickering square patches over grass with Modern lighting, ambient occlusion and MSAA on Radeon RX 9070 XT; ambient occlusion and grass depth remain enabled
 - `/who friends` now asks the server which friends are online and shows their who information, respecting anonymity, instead of printing the saved names. `/who all friends` uses the same lookup
 - Evolving items: both interfaces offer experience transfer from an owned item's display, with source and destination selection, the server's compatibility and result preview, max-transfer level and confirmation
+- Loot All ignores repeated activation while its queue runs or its last reply is awaited; an item being looted on its own no longer matters. With several NO DROP items requiring confirmation, the first question now stays open when the later item stops the queue
 - With the Temporal or AMD FSR 3.1 upscaler: characters cost less CPU time each frame again. Keeping their last frame's pose for the upscaler read it back from memory meant only for writing, and reallocated it every frame
 - Texture packs with generated trees: the trees sway in the wind again, each branch moving as one piece, without the flicker they had before (rebuild a pack's trees in the Texture Studio to get the pines without their branch-end slabs)
 - EQG crystals and other static CBGG1/CBSG1 surfaces use their packed glow and gloss channels, keeping dark regions' normals facing outward. Luminous parts and additive zone rays can bloom in modern lighting

@@ -803,6 +803,26 @@ find affect slot 1600). Each record is replayed call for call against the record
   sitting player (110), so a feigned one stays down until /sit or /stand (CEverQuest::Sit: anything but standing or
   ducking stands up). The client hands ProcessControls the feigned state as 115 (`CharacterInput::lying`).
 
+## Loot All
+
+CLootWnd::LootAll @0x6bdba0 visits bags first and then other items, keeping corpse-slot order within each pass,
+including on the player's own corpse. Its guard @0x6bdbf5 ignores activation while its list (+0x3a0) exists; neither
+it nor the button (WndNotification @0x6be180) looks at an individual loot request awaiting its reply. The list lives
+until the reply that exhausts it (Handle_OP_LootItem @0x6bd414). Every OP_LootItem reply advances the list by one,
+an individual loot's reply too, and the list is not checked against what is still on the corpse, so an item asked for
+on its own just before Loot All is asked for again. Hailstone does the same. Its own additions: while a Loot All is
+active the button does not open the "are you sure" question, whose yes would be ignored; and a request that cannot be
+sent (any loot request) cancels the automatic queue so the player can retry.
+
+A NO DROP item requiring confirmation is left out of the queue and opens the first question during the scan
+(@0x6bdf93). Another item requiring confirmation aborts the queue but leaves that first question alive; answering it
+still applies to its original slot. If a loot question was already pending before the scan, it stays unchanged and no
+new question is created.
+
+Closing after Loot All waits for every outstanding loot reply, such as a confirmed NO DROP request or an individual
+request sent alongside the queue, and the Loot All counts as active until then. The original's close timing for that
+overlap is untraced (docs/unknowns.md).
+
 ## Leaving an NPC interaction
 
 Each service window of the original checks its NPC in its OnProcessFrame with PlayerClient_IsWithinInteractRange
