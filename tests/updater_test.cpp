@@ -120,10 +120,12 @@ TEST_CASE("versions: SemVer precedence") {
     CHECK(cmp("0.2.0-alpha", "0.1.9") > 0);
     CHECK(cmp("v0.1.0-alpha", "0.1.0-alpha") == 0);
     CHECK(cmp("0.1.0+abc", "0.1.0") == 0);
+    CHECK(cmp("0.1.0-rc.1+build.007.x-y", "0.1.0-rc.1") == 0);
     CHECK(cmp("0.10.0", "0.9.0") > 0);
     CHECK(parse_version("0.1.0-alpha")->to_string() == "0.1.0-alpha");
     for (const char* bad : {"", "1", "1.2", "1.2.3.4", "01.2.3", "1.2.3-", "1.2.3-a..b", "1.2.3-01", "a.b.c",
-                            "1.2.3-é", "1.2.3+", "99999999999.0.0"})
+                            "1.2.3-é", "1.2.3+", "99999999999.0.0", "1.2.3+a..b", "1.2.3+a.", "1.2.3+.a",
+                            "1.2.3+a\x1b[2J", "1.2.3+a b", "1.2.3+\xc3\xa9", "1.2.3+a+b", "1.2.3+a\n"})
         CHECK_MESSAGE(!parse_version(bad), bad);
 }
 
