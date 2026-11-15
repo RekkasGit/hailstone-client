@@ -1241,6 +1241,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/server_ext_chain_test.cpp
     tests/native_extension_test.cpp
     tests/lua_folders_test.cpp
+    tests/lua_keep_test.cpp
     tests/lua_character_settings_test.cpp
     tests/lua_plugin_test.cpp
     tests/spell_projectiles_test.cpp
