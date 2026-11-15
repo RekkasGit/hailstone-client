@@ -349,6 +349,8 @@ int run_model_viewer(const ModelViewerOptions& opts) {
         }
 
         for (auto& a : draws) a.time = a.upper_time = opts.anim_time.value_or(static_cast<float>(t));
+        if (opts.spin != 0.0f)
+            for (auto& a : draws) a.yaw = game::heading_to_yaw(opts.heading) + glm::radians(opts.spin) * static_cast<float>(t);
         if (opts.ride)
             for (std::size_t i = 1; i < draws.size(); i += 2) {
                 bool seated = render::ActorRenderer::seat_rider(draws[i - 1], draws[i], &heights_data);

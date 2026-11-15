@@ -140,7 +140,11 @@ own first (Roadmap 6). `render/temporal.h` holds the maths, `VkContext::begin_ov
    The opaque passes write the motion; the characters' blended parts (a see-through shield, hair: `MotionReactive`)
    write their motion too, over what shows through them, with their depth in blue, as they write none (frame
    generation takes the nearer of it and the depth buffer, or a glass shield's pixels follow the background and it
-   breaks up; temporal_prep.frag passes blue on in `motion_`); the blended and additive draws (the zone's water,
+   breaks up; temporal_prep.frag passes blue on in `motion_`); the characters' additive parts (an ice shield's
+   glowing rim, a glow: `MotionReactiveWhereSeen`) do the same only where they add something to see (more than 0.02
+   in a channel: the shader's alpha, 0 or 1, blends the motion in), so a faint glow spread past the body leaves what
+   is behind it alone, while the rim no longer stays behind with the background as the character turns, flung off in
+   pieces in the generated frame; the blended and additive draws (the zone's water,
    glass and glows, the characters' additive glows and the objects' blended parts, particles, fire, spell bolts, rain
    and snow, the target ring, the isometric silhouette) write the reactive mask, `shaders/reactive.glsl`: the larger of their alpha and
    brightness, at most 0.9, blended to the largest over the pixel (water a third of that, or its waves would keep no
@@ -262,7 +266,10 @@ same frame: 0.98), from 1.74 to 1.02 at 180 (0.84), and at a 30 fps base from 2.
 4.8 .. 6 for a plain blend or the nearer real frame. Crack filling and the search of both frames then took it to
 1.28 at 360 (floor 0.96), 1.35 at 180 on a 30 fps base (1.01) and 1.19 at 90 (1.14); the larger gain was live, as
 Hailtest (an ice shield) in the arena at 3076 x 1366 with the camera turning, where the specks and the second leg
-were plain to see. `--screenshot-generated`
+were plain to see. `--spin D` turns the models on the spot instead (the player turning with the camera fixed); at
+20 degrees a frame (800 a second at a 40 fps base, FSR 3.1) an ice shield's rim, drawn additively, had the
+background's motion and left a second outline behind: 2.42 round the character (floor 0.86), 1.97 once the
+additive parts carried their motion. `--screenshot-generated`
 saves the in-between frame with the real one after it (`FILE_real`) for a side-by-side look: the viewer's last frame
 (with the one before as `FILE_prev`), and in the client every screenshot, the input script's `shot` too; the
 viewer's `--frames` log counts the in-between frames presented. The

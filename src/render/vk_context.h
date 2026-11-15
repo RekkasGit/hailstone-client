@@ -144,8 +144,11 @@ Tonemap parse_tonemap(std::string_view name);
 // that moves by itself or sways) or how much the history should give way to it (`o_reactive`, location 2: blended and
 // additive draws, which have no motion of their own), or both (`MotionReactive`: a blended part of something that
 // moves, a character's see-through shield or hair, whose pixels must move with it, not with what shows through:
-// frame generation would split it). The other attachments are masked off.
-enum class SceneOutput : std::uint8_t { Nothing, Motion, Reactive, MotionReactive };
+// frame generation would split it). `MotionReactiveWhereSeen` is the same for an additive part of something that
+// moves (a shield's glowing rim): its motion and depth are blended in by the fragment's alpha, which the shader sets
+// to 1 only where the glow adds something to see, so a faint glow spread past the body leaves what is behind it to
+// move as it does. The other attachments are masked off.
+enum class SceneOutput : std::uint8_t { Nothing, Motion, Reactive, MotionReactive, MotionReactiveWhereSeen };
 
 // A scene pipeline's colour blend states, one per colour attachment of the scene (VkContext::scene_blends). info()
 // points into `states`: keep this object alive while the pipeline is made.

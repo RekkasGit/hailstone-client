@@ -221,11 +221,22 @@ SceneBlends make_scene_blends(const VkPipelineColorBlendAttachmentState& color, 
     // the reactive mask keeps the largest of what was drawn over the pixel.
     VkPipelineColorBlendAttachmentState motion{};
     // A see-through part with motion of its own also writes its depth in blue (kMotionFormat): it writes no depth.
-    const bool writes_motion = output == SceneOutput::Motion || output == SceneOutput::MotionReactive;
+    const bool see_through = output == SceneOutput::MotionReactive || output == SceneOutput::MotionReactiveWhereSeen;
+    const bool writes_motion = output == SceneOutput::Motion || see_through;
     motion.colorWriteMask = writes_motion ? VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT : 0u;
-    if (output == SceneOutput::MotionReactive) motion.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+    if (see_through) motion.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+    if (output == SceneOutput::MotionReactiveWhereSeen) {
+        // The shader's alpha is 0 or 1: the motion is replaced or kept, never mixed.
+        motion.blendEnable = VK_TRUE;
+        motion.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        motion.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        motion.colorBlendOp = VK_BLEND_OP_ADD;
+        motion.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        motion.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        motion.alphaBlendOp = VK_BLEND_OP_ADD;
+    }
     VkPipelineColorBlendAttachmentState reactive{};
-    if (output == SceneOutput::Reactive || output == SceneOutput::MotionReactive) {
+    if (output == SceneOutput::Reactive || see_through) {
         reactive.colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
         reactive.blendEnable = VK_TRUE;
         reactive.srcColorBlendFactor = reactive.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;

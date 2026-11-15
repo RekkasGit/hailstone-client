@@ -300,6 +300,7 @@ void usage() {
         "                     --model-at X Y Z (with --zone: the first model's origin in the zone);\n"
         "                     --orbit D: the camera circles the first model at D degrees a second (with\n"
         "                     --frame-dt and --frame-gen, a still character against a turning world);\n"
+        "                     --spin D: the models turn on the spot at D degrees a second;\n"
         "                     appearance per model as CODE/key=value/..., or for all with --dress key=value/...:\n"
         "                     tex (NPC body texture), helm, face, hair, beard, armor (slots 1-6), head chest\n"
         "                     arms wrists"
@@ -625,6 +626,9 @@ Options parse_args(int argc, char** argv) {
         } else if (arg("--orbit")) {
             need(1);
             o.model.orbit = std::strtof(argv[++i], nullptr);
+        } else if (arg("--spin")) {
+            need(1);
+            o.model.spin = std::strtof(argv[++i], nullptr);
         } else if (arg("--fly")) {
             need(3);
             const float x = std::strtof(argv[++i], nullptr);

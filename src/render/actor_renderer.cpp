@@ -1755,14 +1755,16 @@ void ActorRenderer::create_pipelines(const std::filesystem::path& shader_dir) {
     // Multisampled, the opaque pass turns the alpha test into coverage: alpha-to-coverage, and the fragment
     // shader's constant_id 0 makes its alpha the coverage (shaders/zone.frag, actor.frag, object.frag).
     const VkBool32 coverage = vk_.scene_samples() != VK_SAMPLE_COUNT_1_BIT ? VK_TRUE : VK_FALSE;
-    VkSpecializationMapEntry spec_entry{0, 0, sizeof(VkBool32)};
-    VkBool32 spec_value = VK_FALSE;
-    VkSpecializationInfo spec{1, &spec_entry, sizeof(VkBool32), &spec_value};
+    // constant_id 2: the additive pass (actor.frag kAdditive).
+    const VkSpecializationMapEntry spec_entries[2] = {{0, 0, sizeof(VkBool32)}, {2, sizeof(VkBool32), sizeof(VkBool32)}};
+    VkBool32 spec_values[2] = {VK_FALSE, VK_FALSE};
+    VkSpecializationInfo spec{2, spec_entries, sizeof(spec_values), spec_values};
     stages[1].pSpecializationInfo = &spec;
 
     for (int pass = 0; pass < 3; ++pass) {
-        spec_value = pass == 0 ? coverage : VK_FALSE;
-        ms.alphaToCoverageEnable = spec_value;
+        spec_values[0] = pass == 0 ? coverage : VK_FALSE;
+        spec_values[1] = pass == 2 ? VK_TRUE : VK_FALSE;
+        ms.alphaToCoverageEnable = spec_values[0];
         VkPipelineDepthStencilStateCreateInfo dss{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
         dss.depthTestEnable = VK_TRUE;
         dss.depthWriteEnable = pass == 0 ? VK_TRUE : VK_FALSE;
@@ -1787,11 +1789,12 @@ void ActorRenderer::create_pipelines(const std::filesystem::path& shader_dir) {
             ba.alphaBlendOp = VK_BLEND_OP_ADD;
         }
         // The opaque pass draws the characters' own motion; the blended one (a see-through shield, hair) its motion
-        // too, over what shows through it, and the reactive mask; the additive one (glows, faint and spread past the
-        // body) the reactive mask alone.
+        // too, over what shows through it, and the reactive mask; the additive one (an ice shield's rim, a glow) the
+        // reactive mask, and its motion only where it adds something to see (actor.frag kAdditive): left to the
+        // background's motion, the rim stayed behind as the character turned, a second outline in the generated frame.
         const SceneOutput output = pass == 0   ? SceneOutput::Motion
                                    : pass == 1 ? SceneOutput::MotionReactive
-                                               : SceneOutput::Reactive;
+                                               : SceneOutput::MotionReactiveWhereSeen;
         const SceneBlends blends = vk_.scene_blends(ba, output, scene_);
         const VkPipelineColorBlendStateCreateInfo cb = blends.info();
         VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};

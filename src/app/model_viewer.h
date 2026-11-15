@@ -40,6 +40,7 @@ struct ModelViewerOptions {
     bool ride = false;    // --ride: the models in pairs, the second of each seated on the first (a mount)
     float frame_dt = 0.0f; // --frame-dt: > 0, the clock moves this many seconds a frame, not with the wall clock
     float orbit = 0.0f;    // --orbit: the camera circles the first model at this many degrees a second
+    float spin = 0.0f;     // --spin: the models turn on the spot at this many degrees a second
     bool screenshot_generated = false; // --screenshot-generated (with --frame-gen): the in-between frame too
 };
 
