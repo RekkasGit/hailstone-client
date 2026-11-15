@@ -288,6 +288,8 @@ void usage() {
         "                     --anim CODE (default P01), --anim-time T, --size S, --heading H (0..512),\n"
         "                     --upper-anim CODE (played by the upper body's bone group over --anim),\n"
         "                     --model-at X Y Z (with --zone: the first model's origin in the zone);\n"
+        "                     --orbit D: the camera circles the first model at D degrees a second (with\n"
+        "                     --frame-dt and --frame-gen, a still character against a turning world);\n"
         "                     appearance per model as CODE/key=value/..., or for all with --dress key=value/...:\n"
         "                     tex (NPC body texture), helm, face, hair, beard, armor (slots 1-6), head chest\n"
         "                     arms wrists"
@@ -596,6 +598,9 @@ Options parse_args(int argc, char** argv) {
         } else if (arg("--frame-dt")) {
             need(1);
             o.frame_dt = std::strtof(argv[++i], nullptr);
+        } else if (arg("--orbit")) {
+            need(1);
+            o.model.orbit = std::strtof(argv[++i], nullptr);
         } else if (arg("--fly")) {
             need(3);
             const float x = std::strtof(argv[++i], nullptr);
@@ -756,6 +761,8 @@ int main(int argc, char** argv) {
             m.frames = opts.frames;
             m.screenshot = opts.screenshot;
             m.scene = opts.scene;
+            m.frame_dt = opts.frame_dt;
+            m.screenshot_generated = opts.screenshot_generated;
             m.modern = opts.modern;
             m.hour = opts.time_hour;
             if (opts.modern && !opts.tonemap_given) m.scene.tonemap = render::Tonemap::AgX;
@@ -1154,7 +1161,9 @@ int main(int argc, char** argv) {
                 t = frame * static_cast<double>(opts.frame_dt);
             }
             // While the camera is being dragged the UI must not take the mouse.
-            update_camera(camera, window, dt, !ui_mouse || window.input().right_button, !ui_keys);
+            // A timed run (--frames: a test, a screenshot) takes no input: what the person at the computer types or
+            // moves while the window has the focus would move the camera.
+            if (!opts.frames) update_camera(camera, window, dt, !ui_mouse || window.input().right_button, !ui_keys);
             camera.position += opts.fly * dt;
 
             if (ui_layer) {

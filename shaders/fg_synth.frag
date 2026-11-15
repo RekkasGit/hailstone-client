@@ -15,6 +15,7 @@ layout(set = 0, binding = 8) uniform sampler2D motion_t;     // fg_fill.comp's (
 layout(set = 0, binding = 5) uniform sampler2D prev_img;     // the last real frame without the UI (view size)
 layout(set = 0, binding = 6) uniform sampler2D cur_img;      // this frame without the UI
 layout(set = 0, binding = 7) uniform sampler2D reactive_map; // the scene's reactive mask (scene size)
+layout(set = 0, binding = 0) uniform sampler2D depth_map;               // this frame's depth (scene size; nearest)
 layout(set = 0, binding = 2, r32ui) uniform readonly uimage2D key_img;      // fg_scatter.comp's: the key at each place
 layout(set = 0, binding = 9, r32ui) uniform readonly uimage2D prev_key_img; // and at each place a frame ago
 
@@ -33,10 +34,34 @@ float max3(vec3 d) { return max(d.r, max(d.g, d.b)); }
 // fg_scatter.comp's keys are a reverse-Z depth's bits + 1 (0: nothing there).
 float key_depth(uint k) { return uintBitsToFloat(k - 1u); }
 
+// The nearest key a frame ago round `up` (the 3 x 3 texels): the pictures are at the view's size and the keys at the
+// scene's, so a picture's pixel at an edge holds some of what the texels beside it mark (a character's outline).
+uint prev_key_round(vec2 up, ivec2 size) {
+    ivec2 q = ivec2(up * vec2(size));
+    uint k = 0u;
+    for (int y = -1; y <= 1; ++y)
+        for (int x = -1; x <= 1; ++x) k = max(k, imageLoad(prev_key_img, clamp(q + ivec2(x, y), ivec2(0), size - 1)).r);
+    return k;
+}
+
+// This frame's sample at `uc` holds some of something nearer than the point (`at`'s key): an edge's pixels at the
+// view's size are partly what the scene's texel beside them shows (a character's outline, carried along the
+// background's motion, would trace the character beside it).
+bool edge_now(ivec2 at, vec2 uc, ivec2 size) {
+    uint k = imageLoad(key_img, at).r;
+    if (k == 0u) return false;
+    float d = key_depth(k) * 1.05 + 1e-6;
+    ivec2 q = ivec2(uc * vec2(size));
+    for (int y = -1; y <= 1; ++y)
+        for (int x = -1; x <= 1; ++x)
+            if (texelFetch(depth_map, clamp(q + ivec2(x, y), ivec2(0), size - 1), 0).r > d) return true;
+    return false;
+}
+
 // The last frame's sample at `up` is of something nearer than `depth` (reverse Z; 0 unknown: no).
 bool hidden_from(vec2 up, float depth, ivec2 size) {
     if (depth <= 0.0) return false;
-    uint k0 = imageLoad(prev_key_img, clamp(ivec2(up * vec2(size)), ivec2(0), size - 1)).r;
+    uint k0 = prev_key_round(up, size);
     return k0 != 0u && key_depth(k0) > depth * 1.05 + 1e-6;
 }
 
@@ -44,7 +69,7 @@ bool hidden_from(vec2 up, float depth, ivec2 size) {
 // was (a still character the world turns behind): however alike their colours, they must not be blended.
 bool hidden_then(ivec2 at, vec2 up, ivec2 size) {
     uint k = imageLoad(key_img, at).r;
-    uint k0 = imageLoad(prev_key_img, clamp(ivec2(up * vec2(size)), ivec2(0), size - 1)).r;
+    uint k0 = prev_key_round(up, size);
     if (k == 0u || k0 == 0u) return false;
     return key_depth(k0) > key_depth(k) * 1.05 + 1e-6;
 }
@@ -122,12 +147,16 @@ void main() {
         }
     } else if (hidden_then(at, up, size)) {
         result = c; // the last frame had something nearer there (the point came out from behind it): this frame's
+    } else if (edge_now(at, uc, size)) {
+        result = p; // this frame's sample is at a nearer thing's edge, the last frame's is clear: the last frame's
     } else {
         vec3 d = abs(c - p);
         float disagree = smoothstep(0.08, 0.25, max(d.r, max(d.g, d.b)));
         result = mix(mix(p, c, pc.t), c, disagree);
     }
     float reactive = pc.reactive > 0.5 ? textureLod(reactive_map, uv, 0.0).r : 0.0;
-    if (in_c) result = mix(result, c, clamp(reactive / 0.9, 0.0, 1.0));
+    // Not in a hole: there this frame's sample is what covers the place (a character), and taking some of it would
+    // lay a see-through copy of the character over water, rain or a spell beside it.
+    if (in_c && f.z < 0.5) result = mix(result, c, clamp(reactive / 0.9, 0.0, 1.0));
     o_color = vec4(result, 1.0);
 }
