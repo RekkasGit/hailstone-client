@@ -519,13 +519,21 @@ void add_event(lua_State* L, Script& s, const char* name, std::string_view patte
                 plugin::CallerScope scope(sp->caps & plugin::kCapRead, sp->name);
                 return parse_macro_data(sp->host->env.context(), text);
             };
+            // Each text folded once for all the script's patterns.
+            std::optional<std::string> low_line, low_stripped;
             for (const auto& ev : sp->events) {
                 const std::string* text = &line.text;
+                const std::string* low = nullptr;
                 if (!ev.keep_links) {
                     if (!stripped) stripped = game::strip_links(line.text);
+                    if (!low_stripped) low_stripped = EventPattern::fold(*stripped);
                     text = &*stripped;
+                    low = &*low_stripped;
+                } else {
+                    if (!low_line) low_line = EventPattern::fold(line.text);
+                    low = &*low_line;
                 }
-                auto m = ev.pattern.match(*text, resolve);
+                auto m = ev.pattern.match(*text, *low, resolve);
                 if (!m) continue;
                 std::vector<std::string> args{*text};
                 for (auto& a : *m) args.push_back(std::move(a));
