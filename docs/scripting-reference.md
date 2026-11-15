@@ -470,7 +470,8 @@ whoever ran the command, both together.
 `os.date` and `os.difftime`. Tables cannot have a `__gc` finalizer.
 
 **Limits:** each script has its own Lua 5.4 state. It is paused after 3 ms without yielding and stopped if it cannot
-pause for 5 s. Its memory is capped at 256 MB.
+pause for 5 s; once stopped, `pcall`, `xpcall` and `coroutine.resume` pass the stop on rather than catch it. Its
+memory is capped at 256 MB.
 
 ## The `hailstone` module (Lua plugins)
 

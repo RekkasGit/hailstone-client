@@ -51,7 +51,7 @@ void runaway_hook(lua_State* L, lua_Debug*) {
     Script& s = Script::of(L);
     repair_limit(s);
     auto ran = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - s.slice_start).count();
-    if (ran >= s.runaway_ms) luaL_error(L, "ran longer than %d ms", static_cast<int>(s.runaway_ms));
+    check_runaway(L, s, runaway_hook, ran, [&] { return std::format("ran longer than {} ms", s.runaway_ms); });
 }
 
 // The script can be called now: running, not stopping, and not inside its own code.
@@ -68,7 +68,7 @@ bool call_script(Script& s, int nargs, int nres) {
     const std::int64_t runaway = s.runaway_ms;
     const Clock::time_point start = s.slice_start;
     s.runaway_ms = kHookMs;
-    s.slice_start = Clock::now();
+    s.new_slice();
     // The state's own hook (preempt_hook, ScriptHost::Impl::open_state) comes back after: it holds the script's
     // windows and a social's press to their limits.
     const lua_Hook hook = lua_gethook(L);

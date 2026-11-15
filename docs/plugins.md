@@ -184,7 +184,10 @@ script that runs more than 3 ms without yielding is paused until the next frame,
 cannot freeze the client. One that cannot pause for 5 s is stopped; an `mq.imgui` window's function, which cannot
 pause, is stopped the same way. Only the script's own run and its binds are paused: a coroutine the script made itself
 (`coroutine.create`, `coroutine.wrap`) is never yielded by the pause, which would hand its `coroutine.resume` an
-early yield with no values, so long work inside one counts towards the 5 s and is not spread over frames. A bind
+early yield with no values, so long work inside one counts towards the 5 s and is not spread over frames. Catching
+that stop does not keep code running: once it fires, every further instruction of the script, and every `pcall`,
+`xpcall`, `coroutine.resume` or `coroutine.close` it returns to, raises it again, until the client next enters the
+script (its next frame, a social's next press). A bind
 whose function runs commands that start binds of the same script again (`mq.bind('/x', function() mq.cmd('/x')
 end)`) ends the script once they nest 16 deep; a command of more than 1000 words for a bind is refused (a line in
 the chat) and the script runs on. An `mq.cmd` line is at most 2047 bytes (MQ's command buffer; longer is an

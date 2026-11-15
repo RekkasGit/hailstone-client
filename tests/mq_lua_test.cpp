@@ -1731,3 +1731,64 @@ print('over', pcall(mq.cmd, '/echo ' .. string.rep('z', 2042)))
     CHECK(h.printed_line("max true"));
     CHECK(printed_part(h, "over false"));
 }
+
+TEST_CASE("MQ Lua: a runaway caught by pcall, xpcall or a coroutine of the script's own still stops it") {
+    ImGuiFrame frame;
+    for (const char* body : {
+             "while true do pcall(function() while true do end end) end",
+             "while true do xpcall(function() while true do end end, function(e) return e end) end",
+             "while true do coroutine.resume(coroutine.create(function() while true do end end)) end",
+             "while true do coroutine.resume(coroutine.create(function() while true do pcall(function() while true do end end) end end)) end",
+             "while true do pcall(table.sort, {3, 2, 1, 4, 5}, function(a, b) while true do end end) end",
+         }) {
+        CAPTURE(body);
+        Host h(plugin::kCapAll, nullptr, 200);
+        h.write("spin.lua", std::string("local mq = require('mq')\nmq.imgui.init('Spin', function() ") + body +
+                                " end)\nmq.delay(100000)\n");
+        REQUIRE(h.scripts->run("spin", {}));
+        h.pulses(1);
+        h.scripts->imgui();
+        CHECK(printed_part(h, "ran longer than 200 ms"));
+        CHECK_FALSE(h.scripts->running("spin"));
+    }
+}
+
+TEST_CASE("MQ Lua: pcall, xpcall and coroutine.resume still work, and mq.delay yields through pcall") {
+    Host h;
+    h.write("pc.lua", R"(
+local mq = require('mq')
+print('p', pcall(function(a, b) return a + b end, 2, 3))
+print('e', select(2, pcall(error, 'boom', 0)))
+print('x', xpcall(function() error('bad', 0) end, function(e) return 'handled ' .. e end))
+local co = coroutine.create(function(a) local b = coroutine.yield(a + 1) return b * 2 end)
+print('c', coroutine.resume(co, 1))
+print('c', coroutine.resume(co, 5))
+print('closed', coroutine.close(coroutine.create(function() end)))
+print('d', pcall(function() mq.delay(10) return 'waited' end))
+)");
+    REQUIRE(h.scripts->run("pc", {}));
+    h.pulses(3, 20);
+    CHECK(h.printed_line("p true 5"));
+    CHECK(h.printed_line("e boom"));
+    CHECK(h.printed_line("x false handled bad"));
+    CHECK(h.printed_line("c true 2"));
+    CHECK(h.printed_line("c true 10"));
+    CHECK(h.printed_line("closed true"));
+    CHECK(h.printed_line("d true waited"));
+}
+
+TEST_CASE("Lua socials: a press that caught its runaway is stopped, and the next press runs again") {
+    Host h;
+    allow_buttons(h, plugin::ButtonMode::Press, plugin::kCapAll);
+    auto p = press(R"(
+if state.ran then mq.cmd('/sit') return end
+state.ran = true
+while true do pcall(function() while true do end end) end
+)");
+    CHECK_FALSE(h.scripts->press_button(p));
+    CHECK(printed_part(h, "ran longer than 50 ms"));
+    CHECK(h.sent.empty());
+    CHECK(h.scripts->press_button(p));
+    REQUIRE(h.sent.size() == 1);
+    CHECK(h.sent.back() == "/sit");
+}
