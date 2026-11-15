@@ -388,6 +388,7 @@ add_library(hailstone_engine STATIC
   src/render/zone_renderer.cpp
   src/render/sky_renderer.cpp
   src/render/temporal.cpp
+  src/render/frame_gen.cpp
   src/render/fsr3_upscaler.cpp
   src/render/particle_renderer.cpp
   src/render/fire_renderer.cpp
@@ -787,6 +788,10 @@ hailstone_add_shaders(hailstone_shaders
   shaders/fsr_rcas.frag
   shaders/temporal_prep.frag
   shaders/taa_resolve.frag
+  shaders/fg_scatter.comp
+  shaders/fg_fill.comp
+  shaders/fg_synth.frag
+  shaders/fg_composite.frag
 )
 add_dependencies(hailstone_engine hailstone_shaders)
 hailstone_add_fsr3_shaders(hailstone_fsr3_shaders)
@@ -1165,6 +1170,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/guild_tribute_page_test.cpp
     tests/guild_window_test.cpp
     tests/auto_inventory_ui_test.cpp
+    tests/cursor_origin_test.cpp
     tests/inventory_bags_key_test.cpp
     tests/parcel_money_ui_test.cpp
     tests/parcel_retrieve_ui_test.cpp
@@ -1187,6 +1193,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/lua_scripts_test.cpp
     tests/adventure_packets_test.cpp
     tests/adventure_request_test.cpp
+    tests/adventure_windows_test.cpp
     tests/dz_packets_test.cpp
     tests/guild_bank_packets_test.cpp
     tests/notice_packets_test.cpp
@@ -1208,6 +1215,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/nameplate_overlap_test.cpp
     tests/nameplate_style_test.cpp
     tests/spells_test.cpp
+    tests/spell_hit_modes_test.cpp
     tests/proc_cast_stage_test.cpp
     tests/passage_of_time_test.cpp
     tests/eye_control_test.cpp
@@ -1297,6 +1305,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/cameras_test.cpp
     tests/iso_camera_test.cpp
     tests/temporal_test.cpp
+    tests/frame_gen_test.cpp
     tests/click_intent_test.cpp
     tests/iso_occlusion_test.cpp
     tests/gamepad_bindings_test.cpp

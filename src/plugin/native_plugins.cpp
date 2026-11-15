@@ -1225,6 +1225,11 @@ int h_get_item(void* h, const HailstoneItemSlot* slot, HailstoneItem* out) {
     return it ? give(out, item_struct(*it)) : 0;
 }
 
+std::uint32_t h_cursor_origin(void* h) {
+    const net::GameConnection* c = readable(Loaded::of(h), "cursor_origin");
+    return c ? c->cursor_origin() : HAILSTONE_CURSOR_ORIGIN_UNKNOWN;
+}
+
 int h_get_buff(void* h, std::uint32_t index, HailstoneBuff* out) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_buff");
     if (!c) return 0;
@@ -2039,6 +2044,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.get_pet_buff_data_bulk = main_only<h_get_pet_buff_data_bulk>;
     p.table.get_spawns_data_bulk = main_only<h_get_spawns_data_bulk>;
     p.table.get_xtarget_data_bulk = main_only<h_get_xtarget_data_bulk>;
+    p.table.cursor_origin = main_only<h_cursor_origin>;
     p.owner = m.env.hooks->new_guest("plugin:" + name);
 
     Hooks& hooks = *m.env.hooks;

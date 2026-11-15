@@ -1004,6 +1004,15 @@ bool ActorRenderer::spawn_local_triangles(std::uint32_t id, std::vector<glm::vec
     return true;
 }
 
+ActorPassRange actor_phase_passes(ActorPhase phase) {
+    switch (phase) {
+    case ActorPhase::Opaque: return {0, 1};
+    case ActorPhase::Translucent: return {1, 3};
+    case ActorPhase::All: break;
+    }
+    return {0, 3};
+}
+
 bool actor_needs_pose(const Frustum* view, const glm::vec3& center, float radius, bool shadows,
                       const glm::vec3& shadow_from, float shadow_reach) {
     if (!view || box_in_frustum(*view, sphere_box(center, radius))) return true;
@@ -1224,7 +1233,10 @@ void ActorRenderer::draw_point_shadow(const FrameInfo& frame, const glm::vec3& l
 }
 
 void ActorRenderer::record(const FrameInfo& frame, const glm::mat4& view_proj, const glm::vec3& camera_pos,
-                           const game::ViewDistance& view) {
+                           const game::ViewDistance& view, int first_pass, int end_pass) {
+    static_assert(static_cast<int>(Pass::Opaque) == 0 && static_cast<int>(Pass::Blended) == 1 &&
+                      static_cast<int>(Pass::Additive) == 2,
+                  "actor_phase_passes counts the passes in this order");
     VkCommandBuffer cmd = frame.cmd;
     PushConstants pc{};
     pc.view_proj = view_proj;
@@ -1232,14 +1244,14 @@ void ActorRenderer::record(const FrameInfo& frame, const glm::mat4& view_proj, c
     pc.camera_pos = glm::vec4(camera_pos, 0.0f);
     bool bound_set = false;
     int bound_pipeline = -1;
-    // Only what can show in this view (posed for a shadow is not seen), tested once for the three passes.
+    // Only what can show in this view (posed for a shadow is not seen), tested once for the passes.
     const Frustum frustum = frustum_from(view_proj);
     seen_.assign(prepared_.size(), 0);
     for (std::size_t i = 0; i < prepared_.size(); ++i)
         seen_[i] = prepared_[i].gpu && box_in_frustum(frustum, sphere_box(prepared_[i].center, prepared_[i].radius));
     // The dynamic states set only when they change (unknown on entry: another renderer set them last).
     int cull = -1, front = -1;
-    for (int pass = 0; pass < 3; ++pass) {
+    for (int pass = first_pass; pass < end_pass; ++pass) {
         for (std::size_t i = 0; i < prepared_.size(); ++i) {
             if (!seen_[i]) continue;
             const Prepared& p = prepared_[i];
@@ -1341,8 +1353,10 @@ const std::unordered_set<std::uint32_t>& ActorRenderer::draw_spawns(const FrameI
 const std::unordered_set<std::uint32_t>& ActorRenderer::draw_prepared(const FrameInfo& frame,
                                                                       const glm::mat4& view_proj,
                                                                       const glm::vec3& camera_pos,
-                                                                      const game::ViewDistance& view) {
-    record(frame, view_proj, camera_pos, view);
+                                                                      const game::ViewDistance& view, ActorPhase phase) {
+    const ActorPassRange passes = actor_phase_passes(phase);
+    record(frame, view_proj, camera_pos, view, passes.first, passes.end);
+    if (phase == ActorPhase::Translucent) return drawn_;
     drawn_.clear();
     for (auto id : prepared_ids_) drawn_.insert(id);
     for (auto id : empty_ids_) drawn_.insert(id);

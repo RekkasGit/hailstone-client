@@ -668,6 +668,10 @@ public:
     // game::report_hit_line): 0 full sentence (the default), 1 short, 2 number.
     const game::HitModes& hit_modes() const { return hit_modes_; }
     void set_hit_modes(const game::HitModes& modes) { hit_modes_ = modes; }
+    // Hailstone's spell display modes: direct damage, DoTs, heals and HoTs.
+    // Logging and incoming-chat hooks always receive the full sentence.
+    const game::SpellHitModes& spell_hit_modes() const { return spell_hit_modes_; }
+    void set_spell_hit_modes(const game::SpellHitModes& modes) { spell_hit_modes_ = modes; }
     // OP_Consider for the current target; the answer prints the con line.
     void consider();
     // unk_SetStandState @0x5a0bc0 (PlayerZoneClient::ChangePosition)
@@ -1114,27 +1118,34 @@ public:
     // ---- LDoN adventures (net/game_connection_adventure.cpp, net/adventure_packets.h): the recruiter's window (a
     // right click on a class-60 NPC: OP_AdventureInfoRequest), the request and the offer to accept, the current
     // adventure, points, stats and the leaderboard. EQEmu's world server picks the adventure and checks the group.
+    struct AdventureLeaderboardSelection {
+        std::uint32_t order = 0, theme = 0, risk = 0;
+        bool operator==(const AdventureLeaderboardSelection&) const = default;
+    };
     struct Adventure {
         std::uint32_t recruiter = 0;     // the recruiter whose window is open
         std::string npc_text;            // OP_AdventureInfo: the recruiter's words or the server's refusal
         std::string offer;               // OP_AdventureDetails: awaiting accept / decline
         AdventureData data;              // the current adventure (assigned false: none)
-        std::int64_t data_at = 0;        // when it came (now_ms); its times count down from there
+        std::int64_t data_at = 0;        // when it came (session_now_ms); its times count down from there
         AdventureCount count;
         AdventurePoints points;
         std::optional<AdventureStats> stats;
         std::optional<AdventureLeaderboard> leaderboard;
-        bool stats_open = false, leaderboard_open = false;
+        bool window_open = false, stats_open = false, leaderboard_open = false;
+        std::int64_t request_next_ms = 0, stats_next_ms = 0, leaderboard_next_ms = 0, leaderboard_deadline_ms = 0;
+        AdventureLeaderboardSelection leaderboard_selection;
+        std::optional<AdventureLeaderboardSelection> leaderboard_inflight;
+        bool stats_queued = false, leaderboard_queued = false, leaderboard_failed = false;
     };
     const Adventure& adventure() const { return adventure_; }
     bool open_adventure_recruiter(std::uint32_t npc);
-    // CAdventureRequestWnd::AboutToHide @0x618420 (0x41fe10): an offer up is declined (OP_LDoNButton 0) and the
-    // recruiter state goes back to 0.
-    void close_adventure_recruiter() {
-        adventure_answer(false);
-        recruiter_state_ = 0;
-        adventure_.recruiter = 0;
-    }
+    void set_adventure_window_open(bool open);
+    // CAdventureRequestWnd::AboutToHide @0x618420: declines an offer up and forgets the recruiter after its words or
+    // an offer; a request still awaiting its answer keeps the recruiter, and the answer shows the window again.
+    void close_adventure_recruiter();
+    bool adventure_recruiter_available() const;
+    bool adventure_request_ready() const;
     void adventure_request(std::uint32_t risk, std::uint32_t type);
     void adventure_answer(bool accept);
     // OP_LeaveAdventure (no body): leave the current adventure (EQEmu's world server may refuse, with its own line).
@@ -1143,6 +1154,12 @@ public:
     void set_adventure_leaderboard_open(bool open);
     void adventure_stats_request();
     void adventure_leaderboard_request(std::uint32_t order, std::uint32_t theme, std::uint32_t risk);
+    bool adventure_stats_ready() const;
+    bool adventure_leaderboard_ready() const;
+    std::int64_t adventure_elapsed_seconds() const;
+    // Process the latest queued leaderboard selection after the native window's ten-second request guard.
+    void adventure_frame();
+    void reset_adventure_for_zone();
 
     // ---- guild tribute (net/game_connection_tribute.cpp): the guild's tributes (asked for while zoning in), its two
     // benefits, favour and timer, our opt-in, and a guild tribute master's window (class 64:
@@ -1645,6 +1662,14 @@ public:
 
     // ---- items (game/inventory.h; net/game_connection_items.cpp) ----
     const game::Inventory& inventory() const { return inventory_; }
+    // Hailstone: how the item now on the cursor got there (the plugin host's cursor_origin, docs/plugins.md), as
+    // HAILSTONE_CURSOR_ORIGIN_*: 0 unknown or empty, 1 the player's own pickup, 2 the server put it there. The note
+    // is kept with the cursor placement it describes (Inventory::cursor_placement), so any change to the cursor
+    // that no path marked reads as unknown; unknown must never be used for automated destruction.
+    std::uint32_t cursor_origin() const {
+        if (!inventory_.cursor() || cursor_origin_placement_ != inventory_.cursor_placement()) return 0;
+        return static_cast<std::uint32_t>(cursor_origin_);
+    }
     const net::Coins& coins() const { return coins_; }
     // A left click on an inventory, bank or shared bank slot
     // (CInvSlot::HandleLButtonUp): with an empty cursor picks the item up
@@ -2726,7 +2751,7 @@ private:
     void set_spawn_motion(game::Spawn& s, const Motion& m);
     void connect_world(bool zoning);
     void chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0,
-              std::string peer = {});
+              std::string peer = {}, std::optional<std::string> display_text = std::nullopt);
     // ReportSuccessfulHit's melee line for an attack by `source`, through the chat filters (`report`: its argument).
     void report_hit(const game::HitLine& line, std::uint32_t source, bool report = true);
     void handle_combat(Op op, const AppPacket& p);
@@ -3209,9 +3234,18 @@ private:
     // Spells.
     std::shared_ptr<const game::SpellTable> spell_table_;
     game::HitModes hit_modes_{};
+    game::SpellHitModes spell_hit_modes_{};
     game::SpellState spells_;
 
     // Items.
+    enum class CursorOrigin : std::uint8_t { Unknown = 0, Inventory = 1, Server = 2 };
+    // Notes the origin of the item on the cursor now; call it after the inventory change that put it there.
+    void mark_cursor_origin(CursorOrigin origin) {
+        cursor_origin_ = origin;
+        cursor_origin_placement_ = inventory_.cursor_placement();
+    }
+    CursorOrigin cursor_origin_ = CursorOrigin::Unknown;
+    std::uint64_t cursor_origin_placement_ = 0;
     game::Inventory inventory_;
     game::KeptItems kept_items_;  // Hailstone: the Keep marks (kept_items.txt)
     std::uint64_t kept_revision_ = 0;
@@ -3284,7 +3318,8 @@ private:
     };
     NpcRangeChecks npc_checks_;
     // AdventureMgr +4 as far as the recruiter's range check needs it: 1 the recruiter's words shown
-    // (OP_AdventureInfo), 2 an offer up (OP_AdventureDetails), 0 otherwise (none, answered, or on an adventure).
+    // (OP_AdventureInfo), 2 an offer up (OP_AdventureDetails), 0 otherwise (none, a request sent, answered, or on
+    // an adventure).
     std::uint8_t recruiter_state_ = 0;
     void set_recruiter_state(std::uint8_t state) {
         recruiter_state_ = state;

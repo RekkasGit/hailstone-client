@@ -622,14 +622,24 @@ local function graphicsTab()
       note("Restart the game to change anti-aliasing.")
     end
     if (upscalerAtStart or 0) >= 1 then note("The temporal upscalers smooth edges themselves: MSAA is off while one is on.") end
-    slider("render_scale", "Render Scale", 50, 100, pct,
-      "Draws the 3D world at this share of its size and upscales it. Lower is faster and softer; the interface stays sharp.")
     combo("upscaler", "Upscaler", { "AMD FSR 1", "Temporal (TAA)", "AMD FSR 3.1" },
       "FSR 1 sharpens each frame on its own, below a render scale of 100. Temporal and FSR 3.1 build a smooth picture over several frames at every render scale and replace MSAA; FSR 3.1 is AMD's, Temporal is Hailstone's own. Takes effect the next time the game starts.")
     local upscaler = eq.Option("upscaler")
     if upscaler ~= nil and upscalerAtStart ~= nil and upscaler ~= upscalerAtStart then
       note("Restart the game to change the upscaler.")
     end
+    -- The usual presets (render/temporal.h UpscaleQuality), each a render scale; Custom is the slider's own.
+    local temporal = (upscalerAtStart or 0) >= 1
+    combo("upscale_quality", "Upscale Quality",
+      { temporal and "Native AA" or "Native (no anti-aliasing)", "Quality", "Balanced", "Performance",
+        "Ultra Performance", "Custom" },
+      "Native draws the 3D world at full size (with Temporal or FSR 3.1 that is anti-aliasing alone). Quality, Balanced, Performance and Ultra Performance draw it at 67, 59, 50 and 33 % and upscale it: lower is faster and softer. Custom is the Render Scale below.")
+    if temporal then
+      check("frame_gen", "Frame Generation",
+        "Shows a frame made between each two the game draws, from their motion: smoother movement on a high refresh rate screen. The game then draws at most half the refresh rate, keeps vertical sync on and reacts a little later. Needs Temporal or AMD FSR 3.1.")
+    end
+    slider("render_scale", "Render Scale", 33, 100, pct,
+      "Draws the 3D world at this share of its size and upscales it. Lower is faster and softer; the interface stays sharp.")
     if (eq.Option("render_scale") or 100) < 100 or (upscalerAtStart or 0) >= 1 then
       ticks("sharpness", "Upscale Sharpening", function(t) return pct(t * 5) end,
         "How much the upscaled picture is sharpened.")

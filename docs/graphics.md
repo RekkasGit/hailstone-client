@@ -71,7 +71,7 @@ covers the whole window, and the app maps the nameplates and mouse picking onto 
 (`ClientApp::view_area_`).
 
 The scene can be drawn below the view's size and upscaled (`display.render_scale`, `SceneOptions::render_scale`,
-50 .. 100 %): the scene targets are made at the view's size times the scale (`render::scaled_extent`, each side
+33 .. 100 %, `render::kMinRenderScalePercent`): the scene targets are made at the view's size times the scale (`render::scaled_extent`, each side
 rounded), and `FrameInfo::extent` is that size, so the scene's projection, AO, SSR and bloom all work at it; the view's
 rectangle in the window (picking, nameplates) is unchanged. Below 100 % `begin_overlay` runs AMD FidelityFX FSR 1
 (`third_party/fsr1`, MIT; spatial, no motion vectors): `post.frag` draws into a 10-bit image at the scene's size,
@@ -178,6 +178,46 @@ the history through `post_taa_sets_` under `taa`); `display.sharpness` drives FS
   `motion_`, and the scene's reactive mask as FSR's (`Fsr3Upscaler::Inputs::reactive`; none, FSR's default of 0,
   without `independentBlend`).
 
+### Frame generation
+
+`display.frame_gen = true` (Options > Frame Generation, shown with a temporal upscaler; the viewer's `--frame-gen`)
+presents a frame made between each two real ones. It needs `taa` or `fsr3`: their motion (`motion_`, the draws' own
+and the camera's) and depth are what it follows; under `fsr1` it stays off with a log line. It is Hailstone's own,
+fed by the engine, not a layer guessing motion from finished images; the choices of what to show where the two frames
+disagree follow kettle-framegen (the same author's BSD-3 Vulkan layer; no code taken). `render/frame_gen_logic.h`
+holds the decisions (unit tested), `render::FrameGen` (`src/render/frame_gen.cpp`) the GPU side.
+
+1. **Pictures without the UI.** The post pass draws into one of two pictures (`pictures_`, `kUpscaleFormat`, the
+   view's size; written in turn) instead of the swapchain, and the UI draws into an image of its own (`overlay_`,
+   the swapchain's format, cleared transparent, premultiplied). The in-between frame is made from pictures alone, so
+   text and windows never warp; each presented image is the picture with the UI laid over it (`fg_composite.frag`,
+   which also encodes sRGB for an sRGB swapchain).
+2. **Motion at the in-between time** (`fg_scatter.comp`, two runs): each pixel of this frame is moved back along its
+   motion to where it stood at t = 0.5 (`kFrameGenTime`); the nearest depth that lands on each place wins (reverse
+   Z, atomic max on the depth's bits), and the winner's motion is written there. What moves in front covers what is
+   behind, as in the frame.
+3. **Holes** (`fg_fill.comp`): a place nothing landed on shows something this frame does not, because it is being
+   covered between the two frames. It takes the motion of the farthest mark within 3 pixels (the background's) and is
+   flagged, so the synthesis takes it from the last frame alone; with no mark near, it is flagged with no motion.
+4. **The in-between frame** (`fg_synth.frag`, the view's size): each pixel samples this frame (back along the motion)
+   and the last one (forward). Where they agree it blends them by the time; a flagged pixel takes the last frame;
+   anything else that disagrees was uncovered and takes this frame; a sample off the screen takes the other frame.
+   Where the reactive mask is set (particles, spells, rain: no motion of their own) it takes this frame along the
+   motion, sharp, rather than two copies a little apart.
+5. **Presenting**: a second swapchain image is acquired (`Frame::generated_available`) and both are submitted
+   together, the in-between frame presented first. FIFO is forced whatever `display.vsync` says, and the swapchain
+   gets one image more (`swapchain_image_count`, min + 2): waiting for the second image is what holds the game to
+   half the refresh, so the two presents alternate evenly. With fewer images (a surface's maximum) the second is
+   taken only when one is free. No frame is made across a cut, a reset, a resize or the first frame after any of them
+   (`frame_gen_ready`): the real frame is presented alone.
+
+Cost and limits: two small compute passes at the scene's size and two full-screen draws at the view's per real frame,
+plus one composite more. The game reacts up to one real frame later. A moving thing the depth does not hold (glass,
+water's surface) follows what is behind it; thin edges can leave a pixel-wide trace where they were about to cover the
+background. The viewer's `--screenshot-generated` saves the last in-between frame with the real ones round it
+(`FILE_prev`, `FILE_real`) for a side-by-side look; its `--frames` log counts the in-between frames presented. The
+performance window shows its rates, skips, pacing and GPU time (`VkContext::frame_gen_stats`, docs/dev-ui.md).
+
 Screenshots copy the presented swapchain image, so the swapchain asks for `TRANSFER_SRC` when the surface offers it;
 where it does not, a screenshot is refused with a log line (and a chat line for the screenshot key) instead of an
 invalid copy. The swapchain is made again when the window's framebuffer size changes from the size it was made for,
@@ -206,11 +246,14 @@ client's own, a new one made when they fill, with a set layout defined as the ba
 most 1024 files (`kMaxFiles`); past that the one asked for least recently is retired.
 
 In the modern lighting the scene is split for the water. The zone's opaque draws (`render::ZonePhase::Opaque`, with
-the water held back), the placed objects and the characters go first. `begin_translucent` then ends rendering and
+the water held back), the placed objects and the characters' opaque and alpha-tested parts (`render::ActorPhase::Opaque`)
+go first. `begin_translucent` then ends rendering and
 copies the resolved colour and depth (sample 0) into images that `shadow_set()` binds as 1 and 2. Drawing then goes
 on into the same targets (stored and loaded, the multisampled ones too): the grass (opaque, but left out of the copies
-so the target ring lies on the ground under it), then `ZonePhase::Translucent`: the water first, then the blended and
-additive draws.
+so the target ring lies on the ground under it), then the characters' blended and additive parts
+(`ActorPhase::Translucent`: they write no depth, so grass drawn after them would cover a glass shield or a glow; in
+every lighting), then `ZonePhase::Translucent`: the water first, then the blended and additive draws. Being after the
+copies, a character's blended parts are missing from what the water shows through it.
 
 With `display.depth_prepass` (off by default; the viewer's `--depth-prepass`) the zone's opaque and alpha-tested
 geometry is drawn depth-only first (`ZoneRenderer::draw_depth`, `shaders/zone_depth.frag`), then coloured with the
@@ -1578,7 +1621,13 @@ trees are a trunk of a few solid prisms under crossed cut-out cards. Each new tr
   for leaves) are filled with a shadowed base (a closing of the cut-out), so a spray is cut out along its outer edge
   only: thin holes showing the dark or the sky behind it shimmered as the camera moved. A needle spray's two
   layers are close in shade and its twigs a darker shade of the needles, not brown: stark stripes and bright twig
-  lines shimmered as the camera moved and read as streaks from afar.
+  lines shimmered as the camera moved and read as streaks from afar. Each needle's shade goes only 0.4 of the way
+  from the spray's mean towards the palette colour it picked (the game textures' palettes reach near white), and
+  the gaps are filled at 0.8 of the mean: needles a few texels wide in stark light and dark changed every pixel
+  they covered as a spray swayed or the camera moved, a flicker standing by a tree and a shimmer walking through a
+  forest. In the zone viewer (frames 4 ms apart, pixels changing by more than 12) that took a flight over Greater
+  Faydark from 11 % to 5 % (the game's own trees 3.5 %) and standing by Lake Rathe's pines in the wind from 0.67 %
+  to 0.14 %; the shadows, MSAA, anisotropic filtering and the levels of detail made little difference.
 - **Styles:** a pine (a single upright trunk up into leaves widest low down) grows whorls of drooping branches with
   two crossed needle sprays and a clump at each end up a leader, the whorls three units apart or more (9 to 18) with
   four to six branches each, so the crown shows gaps; a broadleaf tree grows branches into the crown by space
@@ -1662,13 +1711,14 @@ The target's highlight (the dark plate, the edge in its colour and the bobbing m
 In `hailstone.ini`, and in the Options window (`ui/modern/options.lua`, this client's own window: its Display and
 Graphics tabs; the client's options by name in `app/client_app_options.cpp`, the graphics ones `display_option`); the
 viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--render-scale`, `--sharpness` and
-`--upscaler`.
+`--upscaler`, `--frame-gen` and `--screenshot-generated`.
 
 | Key | Values | Default | |
 |---|---|---|---|
 | `display.msaa` | 1, 2, 4 | 4 | samples per pixel, at most 4 (`render::kMaxMsaa`; 8 and up are drawn at 4), cut to what the GPU supports; off under `display.upscaler = taa`; read at start-up |
-| `display.render_scale` | 50 .. 100 | 100 | percent of the 3D view's size the scene is drawn at; below 100 FSR 1 upscales it (The frame); the UI stays sharp |
+| `display.render_scale` | 33 .. 100 | 100 | percent of the 3D view's size the scene is drawn at; below 100 the upscaler (`display.upscaler`) brings it up (The frame); the UI stays sharp. Options > Upscale Quality's presets set it (`render::UpscaleQuality`): Native AA 100, Quality 67, Balanced 59, Performance 50, Ultra Performance 33 (FSR's ratios, 1.5x .. 3x); any other value shows as Custom |
 | `display.upscaler` | fsr1, taa, fsr3 | fsr1 | fsr1: FSR 1 below a render scale of 100; taa: temporal anti-aliasing and upscaling at every render scale, MSAA off (Temporal upscaling); fsr3: the same with AMD FSR 3.1's upscaler (AMD FSR 3.1; taa where the GPU lacks what it needs); read at start-up |
+| `display.frame_gen` | true, false | false | present a frame made between each two real ones (Frame generation); only with `display.upscaler` taa or fsr3; forces vertical sync and holds the game to half the refresh; applied at once |
 | `display.sharpness` | 0 .. 1 | 0.5 | RCAS sharpening: FSR 1's below a render scale of 100, the temporal upscaler's or FSR 3.1's own at every scale; 0 none |
 | `display.tonemap` | auto, none, agx, aces | auto | auto: AgX (with a little extra saturation) for modern, none for classic |
 | `display.exposure` | EV | 0 | the scene is scaled by 2^EV before the tonemap |
@@ -1735,5 +1785,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
    (done) motion written by the scene pipelines (last frame's bones, wind time and object matrices) and a reactive
    mask; (done) FSR 3.1 (MIT) as a second temporal upscaler (`display.upscaler = fsr3`, AMD FSR 3.1); next a negative
    texture LOD bias. MSAA is off while a temporal upscaler runs, so cut-outs lose alpha-to-coverage;
-   particles, spells, water and lava need a reactive mask rather than motion vectors. DLSS, XeSS and frame
-   generation are not planned.
+   particles, spells, water and lava need a reactive mask rather than motion vectors; (done) frame generation of our
+   own on the engine's motion and depth (`display.frame_gen`, Frame generation); next maybe a choice of more than one
+   in-between frame for very high refresh rates, or AMD FSR 3.1's frame generation should ours fall short. DLSS and
+   XeSS are not planned.

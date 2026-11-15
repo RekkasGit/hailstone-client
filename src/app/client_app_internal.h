@@ -854,7 +854,7 @@ private:
     // 0 off; the modern lighting only), display.ao (screen-space ambient occlusion, the modern lighting only),
     // display.distance_blur, display.depth_prepass (the zone's depth pre-pass, the modern lighting only),
     // display.bloom (0 off .. 1), display.brightness / contrast / gamma (the grade after the
-    // tonemap), display.render_scale (percent, 50..100: below 100 FSR 1 upscales), display.sharpness (0..1) and
+    // tonemap), display.render_scale (percent, 33..100: below 100 the upscaler upscales), display.sharpness (0..1) and
     // display.upscaler (fsr1 | taa, read at start-up: render/temporal.h). The Options window's Display page sets them
     // (display_option / set_display_option).
     void apply_scene_options() {
@@ -869,6 +869,9 @@ private:
         if (!upscaler_at_start_)
             upscaler_at_start_ = render::parse_upscaler(config_.get_string("display.upscaler", "fsr1"));
         scene.upscaler = *upscaler_at_start_;
+        // Frame generation (render/frame_gen.h): applied at once (the swapchain is made again); only with a temporal
+        // upscaler, which VkContext checks.
+        scene.frame_gen = config_.get_bool("display.frame_gen", false);
         std::string tonemap = config_.get_string("display.tonemap", "auto");
         scene.tonemap = tonemap != "auto" ? render::parse_tonemap(tonemap)
                         : lighting_mode_ == render::LightingMode::Modern ? render::Tonemap::AgX
@@ -887,7 +890,7 @@ private:
         scene.brightness = config_float("display.brightness", 0.0f);
         scene.contrast = config_float("display.contrast", 1.0f);
         scene.gamma = config_float("display.gamma", 1.0f);
-        scene.render_scale = static_cast<float>(std::clamp(config_.get_int("display.render_scale", 100), 50, 100)) / 100.0f;
+        scene.render_scale = static_cast<float>(std::clamp(config_.get_int("display.render_scale", 100), render::kMinRenderScalePercent, 100)) / 100.0f;
         scene.sharpness = std::clamp(config_float("display.sharpness", 0.5f), 0.0f, 1.0f);
         vk_.set_scene_options(scene, shader_dir_);
     }

@@ -17,6 +17,7 @@
 #include "platform/paths.h"
 #include "platform/window.h"
 #include "render/descriptor_limits.h"
+#include "render/frame_gen_logic.h"
 #include "render/frame_sync.h"
 #include "render/gpu_requirements.h"
 #include "render/gpu_shared_cache.h"
@@ -191,7 +192,7 @@ SunShafts sun_shafts_for(const glm::mat4& view_proj, const glm::vec3& to_sun, co
 }
 
 VkExtent2D scaled_extent(VkExtent2D view, float scale) {
-    scale = std::clamp(scale, 0.5f, 1.0f);
+    scale = std::clamp(scale, kMinRenderScale, 1.0f);
     auto side = [scale](std::uint32_t n) {
         return static_cast<std::uint32_t>(std::max(1L, std::lround(static_cast<double>(n) * scale)));
     };
@@ -275,10 +276,12 @@ VkContext::~VkContext() {
     for (auto& f : frames_) {
         if (f.in_flight) vkDestroyFence(device_, f.in_flight, nullptr);
         if (f.image_available) vkDestroySemaphore(device_, f.image_available, nullptr);
+        if (f.generated_available) vkDestroySemaphore(device_, f.generated_available, nullptr);
         if (f.pool) vkDestroyCommandPool(device_, f.pool, nullptr);
     }
     destroy_swapchain();
     fsr3_.reset();
+    destroy_frame_gen();
     destroy_post_pipeline();
     destroy_shadow_map();
     destroy_point_shadow_map();
@@ -440,6 +443,8 @@ void VkContext::pick_physical_device() {
         caps_.srgb_mip_blit = (fp.optimalTilingFeatures & need) == need;
     }
     caps_.max_anisotropy = features.samplerAnisotropy ? props.limits.maxSamplerAnisotropy : 0.0f;
+    // Frame generation's GPU time (the performance window): every graphics queue can time where this is set.
+    timestamp_period_ns_ = props.limits.timestampComputeAndGraphics ? props.limits.timestampPeriod : 0.0f;
     caps_.msaa_counts = props.limits.framebufferColorSampleCounts & props.limits.framebufferDepthSampleCounts;
     caps_.fsr3 = Fsr3Upscaler::supported(physical_);
     VkPhysicalDeviceDriverProperties driver{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
@@ -641,8 +646,9 @@ void VkContext::create_swapchain(VkSwapchainKHR old) {
     }
 
     min_image_count_ = std::max(caps.minImageCount, 2u);
-    std::uint32_t image_count = caps.minImageCount + 1;
-    if (caps.maxImageCount && image_count > caps.maxImageCount) image_count = caps.maxImageCount;
+    // One more image under frame generation, which holds two per real frame (render/frame_gen_logic.h).
+    const std::uint32_t image_count =
+        swapchain_image_count(caps.minImageCount, caps.maxImageCount, scene_options_.frame_gen);
 
     VkSwapchainCreateInfoKHR info{VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
     info.surface = surface_;
@@ -665,7 +671,10 @@ void VkContext::create_swapchain(VkSwapchainKHR old) {
         std::vector<VkPresentModeKHR> modes(n);
         vkGetPhysicalDeviceSurfacePresentModesKHR(physical_, surface_, &n, modes.data());
         auto has = [&](VkPresentModeKHR m) { return std::find(modes.begin(), modes.end(), m) != modes.end(); };
-        if (vsync_ == Vsync::Off) {
+        // Frame generation keeps FIFO whatever the vsync setting: it paces the generated frame and the real one a
+        // refresh apart.
+        if (scene_options_.frame_gen) {
+        } else if (vsync_ == Vsync::Off) {
             if (has(VK_PRESENT_MODE_IMMEDIATE_KHR)) info.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
             else if (has(VK_PRESENT_MODE_MAILBOX_KHR)) info.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
         } else if (vsync_ == Vsync::Adaptive && has(VK_PRESENT_MODE_FIFO_RELAXED_KHR)) {
@@ -676,6 +685,12 @@ void VkContext::create_swapchain(VkSwapchainKHR old) {
     info.oldSwapchain = old; // retired by this call, whether it succeeds or not
     vk_check(vkCreateSwapchainKHR(device_, &info, nullptr, &swapchain_), "vkCreateSwapchainKHR");
     log::debug("swapchain: {}x{}, present mode {}", extent_.width, extent_.height, static_cast<int>(info.presentMode));
+    switch (info.presentMode) {
+    case VK_PRESENT_MODE_IMMEDIATE_KHR: present_mode_ = "immediate"; break;
+    case VK_PRESENT_MODE_MAILBOX_KHR: present_mode_ = "mailbox"; break;
+    case VK_PRESENT_MODE_FIFO_RELAXED_KHR: present_mode_ = "FIFO relaxed (adaptive vsync)"; break;
+    default: present_mode_ = "FIFO (vsync)"; break;
+    }
 
     vkGetSwapchainImagesKHR(device_, swapchain_, &count, nullptr);
     images_.resize(count);
@@ -786,8 +801,18 @@ void VkContext::create_scene_targets() {
                                      VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT, view_extent_);
         fsr3_->resize(scene_extent_, view_extent_); // every caller has the device idle
     }
+    if (frame_gen_ && (taa || fsr3)) {
+        // Frame generation's pictures at the view's size, and the UI's image at the window's.
+        for (Image& p : pictures_)
+            p = create_target(kUpscaleFormat, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT, view_extent_);
+        generated_ = create_target(kUpscaleFormat, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT, view_extent_);
+        overlay_ = create_target(swapchain_format_, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT, extent_);
+        frame_gen_->resize(scene_extent_);
+    }
     history_valid_ = false; // new targets hold nothing
+    picture_ready_ = false;
     write_post_descriptors();
+    bind_frame_gen();
 }
 
 void VkContext::destroy_scene_targets() {
@@ -807,6 +832,9 @@ void VkContext::destroy_scene_targets() {
     destroy_target(reactive_);
     for (Image& h : history_) destroy_target(h);
     destroy_target(fsr3_output_);
+    for (Image& p : pictures_) destroy_target(p);
+    destroy_target(generated_);
+    destroy_target(overlay_);
 }
 
 void VkContext::set_scene_options(const SceneOptions& options, const std::filesystem::path& shader_dir) {
@@ -821,6 +849,15 @@ void VkContext::set_scene_options(const SceneOptions& options, const std::filesy
         chosen.upscaler = Upscaler::Taa;
     }
     const bool upscaler_changed = chosen.upscaler != scene_options_.upscaler;
+    frame_gen_requested_ = chosen.frame_gen;
+    // Frame generation follows the temporal upscaler's motion: without one it is off.
+    if (chosen.frame_gen && chosen.upscaler == Upscaler::Fsr1) {
+        if (!frame_gen_fallback_logged_)
+            log::warn("frame generation needs a temporal upscaler (display.upscaler taa or fsr3); it stays off");
+        frame_gen_fallback_logged_ = true;
+        chosen.frame_gen = false;
+    }
+    const bool frame_gen_changed = chosen.frame_gen != scene_options_.frame_gen;
     scene_options_ = chosen;
     // The largest supported count not above the request; one under the temporal upscaler, which resolves the edges
     // itself (and whose motion and depth are taken per pixel).
@@ -828,6 +865,14 @@ void VkContext::set_scene_options(const SceneOptions& options, const std::filesy
     for (std::uint32_t n = 2; n <= kMaxMsaa && n <= options.msaa && scene_options_.upscaler == Upscaler::Fsr1; n *= 2)
         if (caps_.msaa_counts & n) samples = static_cast<VkSampleCountFlagBits>(n);
     if (!post_pipeline_) create_post_pipeline(shader_dir);
+    if (frame_gen_changed) { // after the post pipelines: its RCAS uses their layout
+        vkDeviceWaitIdle(device_);
+        if (scene_options_.frame_gen)
+            create_frame_gen(shader_dir);
+        else
+            destroy_frame_gen();
+        resize_pending_ = true; // the swapchain's image count and present mode
+    }
     if (scene_options_.upscaler == Upscaler::Fsr3 && !fsr3_) {
         vkDeviceWaitIdle(device_);
         fsr3_ = std::make_unique<Fsr3Upscaler>(device_, allocator_, pipeline_cache_, shader_dir);
@@ -843,16 +888,17 @@ void VkContext::set_scene_options(const SceneOptions& options, const std::filesy
         vkDeviceWaitIdle(device_);
         create_point_shadow_map(point_size, point_slots);
     }
-    if (samples != scene_samples_ || rescaled || upscaler_changed) {
+    if (samples != scene_samples_ || rescaled || upscaler_changed || frame_gen_changed) {
         vkDeviceWaitIdle(device_);
         destroy_scene_targets();
         scene_samples_ = samples;
         create_scene_targets();
     }
-    log::info("scene: {}x MSAA, upscaler {}, render scale {:.2f} ({}x{}), tonemap {}, exposure {:+.2f} EV, shadows {}, "
+    log::info("scene: {}x MSAA, upscaler {}{}, render scale {:.2f} ({}x{}), tonemap {}, exposure {:+.2f} EV, shadows {}, "
               "light shadows {} x {}, grade {:+.2f} / {:.2f} / {:.2f}",
               static_cast<int>(scene_samples_), upscaler_name(scene_options_.upscaler),
-              std::clamp(options.render_scale, 0.5f, 1.0f), scene_extent_.width,
+              scene_options_.frame_gen ? " + frame generation" : "",
+              std::clamp(options.render_scale, kMinRenderScale, 1.0f), scene_extent_.width,
               scene_extent_.height, static_cast<int>(options.tonemap), options.exposure,
               options.shadow_size ? shadow_size_ : 0u, point_slots_, point_slots_ ? point_size_ : 0u,
               options.brightness, options.contrast, options.gamma);
@@ -1103,6 +1149,7 @@ void VkContext::create_frames() {
         vk_check(vkAllocateCommandBuffers(device_, &a, &f.cmd), "vkAllocateCommandBuffers");
         VkSemaphoreCreateInfo s{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
         vk_check(vkCreateSemaphore(device_, &s, nullptr, &f.image_available), "vkCreateSemaphore");
+        vk_check(vkCreateSemaphore(device_, &s, nullptr, &f.generated_available), "vkCreateSemaphore");
         VkFenceCreateInfo fe{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
         fe.flags = VK_FENCE_CREATE_SIGNALED_BIT;
         vk_check(vkCreateFence(device_, &fe, nullptr, &f.in_flight), "vkCreateFence");
@@ -1647,8 +1694,10 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
     VkDescriptorSet post_set = post_set_;
     // Under FSR 3.1 its upscaler takes the resolve's place (render/fsr3_upscaler.h), on the same inputs.
     const bool fsr3 = taa && fsr3_ && fsr3_output_.image;
+    bool kept_history = false; // the temporal history went on from the last frame's (frame generation's test)
     if (taa) {
         const bool keep = history_valid_ && !camera_cut(prev_view_.view, view->view);
+        kept_history = keep;
         PrepPush prep;
         if (history_valid_) prep.reproject = reprojection(prev_view_.view, prev_view_.proj, view->view, view->proj);
         prep.depth = glm::vec4(depth_x, depth_y, scene_options_.ao_strength, ao ? 1.0f : 0.0f);
@@ -1735,6 +1784,48 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
         up.sizes = glm::vec4(static_cast<float>(scene_extent_.width), static_cast<float>(scene_extent_.height),
                              static_cast<float>(view_extent_.width), static_cast<float>(view_extent_.height));
         draw_into(cmd, upscaled_, view_extent_, easu_pipeline_, upscale_layout_, easu_set_, &up, sizeof(up));
+    }
+
+    if (frame_gen_active()) {
+        // Frame generation: the picture without the UI into this frame's picture (display-encoded, dithered), and the
+        // UI into its own image below instead of the swapchain; end_frame composites them (finish_frame_gen).
+        const Image& picture = pictures_[picture_index_];
+        if (sharpen) {
+            UpscalePush into = up;
+            into.offset = glm::vec4(0.0f);
+            into.flags = kPostEncodeOutput | (push.flags & kPostDither);
+            draw_into(cmd, picture, view_extent_, rcas_picture_pipeline_, upscale_layout_, rcas_set_, &into, sizeof(into));
+        } else {
+            PostPush into = push;
+            into.flags |= kPostEncodeOutput;
+            into.offset = glm::vec4(0.0f);
+            draw_into(cmd, picture, view_extent_, post_upscale_pipeline_, post_layout_, post_set, &into, sizeof(into));
+        }
+        fg_temporal_ = taa;
+        fg_history_kept_ = kept_history;
+        // The UI's image: cleared to nothing; the UI's blending leaves its colour premultiplied and its alpha the
+        // coverage (fg_composite.frag).
+        image_barrier(cmd, overlay_.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
+                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+        VkRenderingAttachmentInfo ui{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+        ui.imageView = overlay_.view;
+        ui.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        ui.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        ui.clearValue.color = {{0.0f, 0.0f, 0.0f, 0.0f}};
+        ui.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        VkRenderingInfo r{VK_STRUCTURE_TYPE_RENDERING_INFO};
+        r.renderArea = {{0, 0}, extent_};
+        r.layerCount = 1;
+        r.colorAttachmentCount = 1;
+        r.pColorAttachments = &ui;
+        vkCmdBeginRendering(cmd, &r);
+        VkViewport uvp{static_cast<float>(area.offset.x), static_cast<float>(area.offset.y + static_cast<std::int32_t>(area.extent.height)),
+                       static_cast<float>(area.extent.width), -static_cast<float>(area.extent.height), 0.0f, 1.0f};
+        vkCmdSetViewport(cmd, 0, 1, &uvp);
+        vkCmdSetScissor(cmd, 0, 1, &area);
+        overlay_open_ = true;
+        return;
     }
 
     image_barrier(cmd, images_[frame.image_index], VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1866,11 +1957,192 @@ void VkContext::draw_bloom(VkCommandBuffer cmd) {
     }
 }
 
+void VkContext::create_frame_gen(const std::filesystem::path& shader_dir) {
+    frame_gen_ = std::make_unique<FrameGen>(device_, allocator_, pipeline_cache_, shader_dir);
+    VkShaderModule vs = load_module(device_, shader_dir / "post.vert.spv");
+    VkShaderModule synth = load_module(device_, shader_dir / "fg_synth.frag.spv");
+    VkShaderModule composite = load_module(device_, shader_dir / "fg_composite.frag.spv");
+    VkShaderModule rcas = load_module(device_, shader_dir / "fsr_rcas.frag.spv");
+    fg_synth_pipeline_ = fullscreen_pipeline(device_, pipeline_cache_, frame_gen_->synth_layout(), vs, synth, kUpscaleFormat);
+    fg_composite_pipeline_ =
+        fullscreen_pipeline(device_, pipeline_cache_, frame_gen_->composite_layout(), vs, composite, swapchain_format_);
+    rcas_picture_pipeline_ = fullscreen_pipeline(device_, pipeline_cache_, upscale_layout_, vs, rcas, kUpscaleFormat);
+    for (VkShaderModule m : {vs, synth, composite, rcas}) vkDestroyShaderModule(device_, m, nullptr);
+    if (timestamp_period_ns_ > 0.0f) {
+        VkQueryPoolCreateInfo qi{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+        qi.queryType = VK_QUERY_TYPE_TIMESTAMP;
+        qi.queryCount = 2 * kFramesInFlight;
+        if (vkCreateQueryPool(device_, &qi, nullptr, &fg_queries_) != VK_SUCCESS) fg_queries_ = VK_NULL_HANDLE;
+    }
+    fg_query_state_.fill(0);
+    fg_stats_ = FrameGenStats{};
+}
+
+void VkContext::destroy_frame_gen() {
+    for (VkPipeline* p : {&fg_synth_pipeline_, &fg_composite_pipeline_, &rcas_picture_pipeline_}) {
+        if (*p) vkDestroyPipeline(device_, *p, nullptr);
+        *p = VK_NULL_HANDLE;
+    }
+    frame_gen_.reset();
+    if (fg_queries_) vkDestroyQueryPool(device_, fg_queries_, nullptr);
+    fg_queries_ = VK_NULL_HANDLE;
+    picture_ready_ = false;
+}
+
+void VkContext::read_frame_gen_time(std::uint32_t frame_slot) {
+    // The slot's last frame is done (begin_frame waited for its fence), so its timestamps are there unless the
+    // device dropped them; nothing is waited for.
+    if (!fg_queries_ || fg_query_state_[frame_slot] == 0) return;
+    std::array<std::uint64_t, 2> t{};
+    if (vkGetQueryPoolResults(device_, fg_queries_, 2 * frame_slot, 2, sizeof t, t.data(), sizeof(std::uint64_t),
+                              VK_QUERY_RESULT_64_BIT) != VK_SUCCESS || t[1] < t[0])
+        return;
+    const float ms = static_cast<float>(static_cast<double>(t[1] - t[0]) * timestamp_period_ns_ / 1.0e6);
+    (fg_query_state_[frame_slot] == 2 ? fg_stats_.gpu_ms : fg_stats_.gpu_real_ms) = ms;
+}
+
+FrameGenStats VkContext::frame_gen_stats() const {
+    FrameGenStats s = fg_stats_;
+    s.requested = frame_gen_requested_;
+    s.active = frame_gen_active();
+    s.no_motion = frame_gen_requested_ && !scene_options_.frame_gen;
+    s.images = static_cast<std::uint32_t>(images_.size());
+    s.min_images = min_image_count_;
+    s.waits = frame_gen_fits(s.images, s.min_images);
+    s.present_mode = present_mode_;
+    return s;
+}
+
+void VkContext::bind_frame_gen() {
+    if (!frame_gen_ || !overlay_.image) return;
+    FrameGen::Views v;
+    v.depth = (depth_resolved_.image ? depth_resolved_ : depth_).view;
+    v.motion = motion_.view;
+    v.reactive = reactive_.view;
+    v.placeholder = ao_.view;
+    v.pictures = {pictures_[0].view, pictures_[1].view};
+    v.generated = generated_.view;
+    v.overlay = overlay_.view;
+    v.nearest = post_sampler_;
+    v.linear = post_linear_sampler_;
+    frame_gen_->bind(v);
+}
+
+void VkContext::composite_into(VkCommandBuffer cmd, std::uint32_t image_index, VkDescriptorSet set) {
+    image_barrier(cmd, images_[image_index], VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
+                  VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+    VkRenderingAttachmentInfo color{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+    color.imageView = views_[image_index];
+    color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    color.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // the composite covers the whole image
+    color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    VkRenderingInfo r{VK_STRUCTURE_TYPE_RENDERING_INFO};
+    r.renderArea = {{0, 0}, extent_};
+    r.layerCount = 1;
+    r.colorAttachmentCount = 1;
+    r.pColorAttachments = &color;
+    vkCmdBeginRendering(cmd, &r);
+    VkViewport vp{0.0f, 0.0f, static_cast<float>(extent_.width), static_cast<float>(extent_.height), 0.0f, 1.0f};
+    VkRect2D scissor{{0, 0}, extent_};
+    vkCmdSetViewport(cmd, 0, 1, &vp);
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+    FrameGen::CompositePush push;
+    push.area[0] = static_cast<float>(scene_area_.offset.x);
+    push.area[1] = static_cast<float>(scene_area_.offset.y);
+    push.area[2] = static_cast<float>(scene_area_.extent.width);
+    push.area[3] = static_cast<float>(scene_area_.extent.height);
+    push.flags = swapchain_format_ == VK_FORMAT_B8G8R8A8_SRGB || swapchain_format_ == VK_FORMAT_R8G8B8A8_SRGB ? 1u : 0u;
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, fg_composite_pipeline_);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, frame_gen_->composite_layout(), 0, 1, &set, 0, nullptr);
+    vkCmdPushConstants(cmd, frame_gen_->composite_layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+    vkCmdEndRendering(cmd);
+}
+
+std::optional<std::uint32_t> VkContext::finish_frame_gen(const FrameInfo& frame) {
+    VkCommandBuffer cmd = frame.cmd;
+    image_barrier(cmd, overlay_.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                  VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    const std::uint32_t slot = picture_index_;
+    read_frame_gen_time(frame.frame_slot);
+    if (fg_queries_) {
+        vkCmdResetQueryPool(cmd, fg_queries_, 2 * frame.frame_slot, 2);
+        vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, fg_queries_, 2 * frame.frame_slot);
+    }
+    ++fg_stats_.real;
+    fg_stats_.pacing_wait_ms = 0.0f;
+    FrameGenState state;
+    state.enabled = true;
+    state.temporal_frame = fg_temporal_;
+    state.history_kept = fg_history_kept_;
+    state.previous_ready = picture_ready_;
+    std::optional<std::uint32_t> generated;
+    if (frame_gen_ready(state)) {
+        // A second image for the in-between frame. With min + 2 images it may be waited for (FIFO frees one each
+        // refresh: that wait is what holds the game at half the refresh); with fewer, only taken when free.
+        const std::uint64_t timeout =
+            frame_gen_fits(static_cast<std::uint32_t>(images_.size()), min_image_count_) ? UINT64_MAX : 0;
+        std::uint32_t index = 0;
+        const auto wait_from = std::chrono::steady_clock::now();
+        const VkResult r = vkAcquireNextImageKHR(device_, swapchain_, timeout,
+                                                 frames_[frame.frame_slot].generated_available, VK_NULL_HANDLE, &index);
+        fg_stats_.pacing_wait_ms =
+            std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - wait_from).count();
+        if (r == VK_SUCCESS || r == VK_SUBOPTIMAL_KHR) {
+            if (r == VK_SUBOPTIMAL_KHR) resize_pending_ = true;
+            frame_gen_->record_motion(cmd, kFrameGenTime);
+            FrameGen::SynthPush push;
+            push.view_w = static_cast<float>(view_extent_.width);
+            push.view_h = static_cast<float>(view_extent_.height);
+            push.t = kFrameGenTime;
+            push.reactive = reactive_.image ? 1.0f : 0.0f;
+            draw_into(cmd, generated_, view_extent_, fg_synth_pipeline_, frame_gen_->synth_layout(),
+                      frame_gen_->synth_set(slot), &push, sizeof(push));
+            composite_into(cmd, index, frame_gen_->composite_set(slot, true));
+            image_barrier(cmd, images_[index], VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_NONE, 0);
+            generated = index;
+            ++fg_stats_.generated;
+        } else if (r == VK_ERROR_OUT_OF_DATE_KHR) {
+            resize_pending_ = true;
+            ++fg_stats_.skipped_no_image;
+        } else if (r != VK_TIMEOUT && r != VK_NOT_READY) {
+            vk_check(r, "vkAcquireNextImageKHR (frame generation)");
+        } else {
+            ++fg_stats_.skipped_no_image;
+        }
+    } else {
+        ++fg_stats_.skipped_cut;
+    }
+    // The real frame, left as the frame's own image always is at this point (the screenshot and the present follow).
+    composite_into(cmd, frame.image_index, frame_gen_->composite_set(slot, false));
+    if (fg_queries_) {
+        vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, fg_queries_, 2 * frame.frame_slot + 1);
+        fg_query_state_[frame.frame_slot] = generated ? 2 : 1;
+    }
+    picture_ready_ = true;
+    picture_index_ ^= 1u;
+    return generated;
+}
+
 void VkContext::end_frame(const FrameInfo& frame) {
     Frame& f = frames_[frame.frame_slot];
     VkImage image = images_[frame.image_index];
     begin_overlay(frame);
     vkCmdEndRendering(frame.cmd);
+    // Frame generation: the UI went into its own image; the real frame and the in-between one are composited now.
+    std::optional<std::uint32_t> generated;
+    if (overlay_open_) {
+        overlay_open_ = false;
+        generated = finish_frame_gen(frame);
+    } else {
+        picture_ready_ = false; // a frame without its picture: the next one has nothing to start from
+    }
+    presented_last_ = generated ? 2u : 1u;
 
     // Optional screenshot: copy the finished image into a host-visible buffer.
     VkBuffer readback = VK_NULL_HANDLE;
@@ -1881,11 +2153,15 @@ void VkContext::end_frame(const FrameInfo& frame) {
         log::warn("screenshot {} not taken: the swapchain's images cannot be copied from", screenshot_path_.string());
         screenshot_path_.clear();
     }
+    // --screenshot-generated: the in-between frame saved as asked and the real one beside it (the two are one frame
+    // apart; the real one before the in-between came from the last frame).
+    const bool shot_generated = !screenshot_path_.empty() && screenshot_generated_ && generated.has_value();
+    const VkDeviceSize shot_bytes = VkDeviceSize{extent_.width} * extent_.height * 4;
     if (!screenshot_path_.empty()) {
         // The command buffer is open: a failure here is logged and the frame goes on without the copy (a throw
         // would leave it half recorded).
         VkBufferCreateInfo bi{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-        bi.size = VkDeviceSize{extent_.width} * extent_.height * 4;
+        bi.size = shot_bytes * (shot_generated ? 2 : 1);
         bi.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
         VmaAllocationCreateInfo ai{};
         ai.usage = VMA_MEMORY_USAGE_AUTO;
@@ -1902,14 +2178,27 @@ void VkContext::end_frame(const FrameInfo& frame) {
         }
     }
     if (readback) {
-        image_barrier(frame.cmd, image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COPY_BIT,
-                      VK_ACCESS_2_TRANSFER_READ_BIT);
-        VkBufferImageCopy region{};
-        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.imageExtent = {extent_.width, extent_.height, 1};
-        vkCmdCopyImageToBuffer(frame.cmd, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback, 1, &region);
+        // The images copied: the frame's own, and first its in-between frame's (already in PRESENT_SRC:
+        // finish_frame_gen) with --screenshot-generated.
+        struct Shot {
+            VkImage image;
+            VkImageLayout layout;
+        };
+        std::vector<Shot> shots;
+        if (shot_generated) shots.push_back({images_[*generated], VK_IMAGE_LAYOUT_PRESENT_SRC_KHR});
+        shots.push_back({image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+        for (std::size_t i = 0; i < shots.size(); ++i) {
+            image_barrier(frame.cmd, shots[i].image, VK_IMAGE_ASPECT_COLOR_BIT, shots[i].layout,
+                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COPY_BIT,
+                          VK_ACCESS_2_TRANSFER_READ_BIT);
+            VkBufferImageCopy region{};
+            region.bufferOffset = shot_bytes * i;
+            region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            region.imageExtent = {extent_.width, extent_.height, 1};
+            vkCmdCopyImageToBuffer(frame.cmd, shots[i].image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback, 1,
+                                   &region);
+        }
         // The copy's writes made available to the host, which reads the buffer after the fence.
         VkBufferMemoryBarrier2 host{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2};
         host.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
@@ -1925,9 +2214,10 @@ void VkContext::end_frame(const FrameInfo& frame) {
         host_dep.bufferMemoryBarrierCount = 1;
         host_dep.pBufferMemoryBarriers = &host;
         vkCmdPipelineBarrier2(frame.cmd, &host_dep);
-        image_barrier(frame.cmd, image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
-                      VK_PIPELINE_STAGE_2_NONE, 0);
+        for (const Shot& shot : shots)
+            image_barrier(frame.cmd, shot.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
+                          VK_PIPELINE_STAGE_2_NONE, 0);
     } else {
         image_barrier(frame.cmd, image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                       VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1965,24 +2255,36 @@ void VkContext::end_frame(const FrameInfo& frame) {
     }
     vk_check(vkEndCommandBuffer(frame.cmd), "vkEndCommandBuffer");
 
-    VkSemaphoreSubmitInfo wait{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
-    wait.semaphore = f.image_available;
-    wait.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-    VkSemaphoreSubmitInfo signal{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
-    signal.semaphore = render_finished_[frame.image_index];
-    signal.stageMask = kPresentSignalStage;
+    // The frame's image, and under frame generation the in-between frame's too.
+    std::array<VkSemaphoreSubmitInfo, 2> waits{};
+    std::array<VkSemaphoreSubmitInfo, 2> signals{};
+    for (auto& w : waits) {
+        w.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        w.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    }
+    for (auto& s : signals) {
+        s.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        s.stageMask = kPresentSignalStage;
+    }
+    waits[0].semaphore = f.image_available;
+    signals[0].semaphore = render_finished_[frame.image_index];
+    if (generated) {
+        waits[1].semaphore = f.generated_available;
+        signals[1].semaphore = render_finished_[*generated];
+    }
+    const std::uint32_t semaphores = generated ? 2u : 1u;
     std::array<VkCommandBufferSubmitInfo, 3> commands{};
     for (auto& command : commands) command.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
     commands[0].commandBuffer = shared_frame ? f.shared_acquire : frame.cmd;
     commands[1].commandBuffer = frame.cmd;
     commands[2].commandBuffer = f.shared_release;
     VkSubmitInfo2 submit{VK_STRUCTURE_TYPE_SUBMIT_INFO_2};
-    submit.waitSemaphoreInfoCount = 1;
-    submit.pWaitSemaphoreInfos = &wait;
+    submit.waitSemaphoreInfoCount = semaphores;
+    submit.pWaitSemaphoreInfos = waits.data();
     submit.commandBufferInfoCount = shared_frame ? 3u : 1u;
     submit.pCommandBufferInfos = commands.data();
-    submit.signalSemaphoreInfoCount = 1;
-    submit.pSignalSemaphoreInfos = &signal;
+    submit.signalSemaphoreInfoCount = semaphores;
+    submit.pSignalSemaphoreInfos = signals.data();
     if (shared_frame) {
         // Only the GPU's use of the imports is serialized across clients: the frame takes the lease, submits, waits
         // for its own fence (bounded) and gives the lease back. Whatever goes wrong detaches sharing for this client
@@ -2022,6 +2324,20 @@ void VkContext::end_frame(const FrameInfo& frame) {
         recording_ = false;
     }
 
+    // The in-between frame first: FIFO shows it a refresh before the real one.
+    if (generated) {
+        VkPresentInfoKHR first{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
+        first.waitSemaphoreCount = 1;
+        first.pWaitSemaphores = &render_finished_[*generated];
+        first.swapchainCount = 1;
+        first.pSwapchains = &swapchain_;
+        first.pImageIndices = &*generated;
+        const VkResult gr = vkQueuePresentKHR(queue_, &first);
+        if (gr == VK_ERROR_OUT_OF_DATE_KHR || gr == VK_SUBOPTIMAL_KHR)
+            resize_pending_ = true;
+        else
+            vk_check(gr, "vkQueuePresentKHR (generated frame)");
+    }
     VkPresentInfoKHR present{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     present.waitSemaphoreCount = 1;
     present.pWaitSemaphores = &render_finished_[frame.image_index];
@@ -2049,35 +2365,39 @@ void VkContext::end_frame(const FrameInfo& frame) {
     if (readback) {
         vk_check(vkWaitForFences(device_, 1, &f.in_flight, VK_TRUE, UINT64_MAX), "vkWaitForFences");
         vk_check(vmaInvalidateAllocation(allocator_, readback_alloc, 0, VK_WHOLE_SIZE), "invalidate readback");
-        std::vector<std::byte> rgba(static_cast<const std::byte*>(readback_data),
-                                    static_cast<const std::byte*>(readback_data) + std::size_t{extent_.width} * extent_.height * 4);
-        if (swapchain_format_ == VK_FORMAT_B8G8R8A8_UNORM || swapchain_format_ == VK_FORMAT_B8G8R8A8_SRGB)
-            for (std::size_t i = 0; i < rgba.size(); i += 4) std::swap(rgba[i], rgba[i + 2]);
-        for (std::size_t i = 3; i < rgba.size(); i += 4) rgba[i] = std::byte{0xff};
-        std::uint32_t width = extent_.width, height = extent_.height;
-        if (screenshot_max_width_ && width > screenshot_max_width_) {
-            // Shrunk by a whole factor, each pixel the average of its block.
-            const std::uint32_t factor = (width + screenshot_max_width_ - 1) / screenshot_max_width_;
-            const std::uint32_t w = width / factor, h = height / factor;
-            std::vector<std::byte> small(std::size_t{w} * h * 4);
-            for (std::uint32_t y = 0; y < h; ++y)
-                for (std::uint32_t x = 0; x < w; ++x)
-                    for (std::uint32_t c = 0; c < 4; ++c) {
-                        std::uint32_t sum = 0;
-                        for (std::uint32_t dy = 0; dy < factor; ++dy)
-                            for (std::uint32_t dx = 0; dx < factor; ++dx)
-                                sum += std::to_integer<std::uint32_t>(
-                                    rgba[((std::size_t{y} * factor + dy) * width + std::size_t{x} * factor + dx) * 4 + c]);
-                        small[(std::size_t{y} * w + x) * 4 + c] = static_cast<std::byte>(sum / (factor * factor));
-                    }
-            rgba = std::move(small);
-            width = w;
-            height = h;
+        for (std::size_t shot = 0; shot < (shot_generated ? 2u : 1u); ++shot) {
+            std::filesystem::path path = screenshot_path_;
+            if (shot == 1) path.replace_filename(path.stem().string() + "_real" + path.extension().string());
+            const auto* bytes = static_cast<const std::byte*>(readback_data) + shot_bytes * shot;
+            std::vector<std::byte> rgba(bytes, bytes + shot_bytes);
+            if (swapchain_format_ == VK_FORMAT_B8G8R8A8_UNORM || swapchain_format_ == VK_FORMAT_B8G8R8A8_SRGB)
+                for (std::size_t i = 0; i < rgba.size(); i += 4) std::swap(rgba[i], rgba[i + 2]);
+            for (std::size_t i = 3; i < rgba.size(); i += 4) rgba[i] = std::byte{0xff};
+            std::uint32_t width = extent_.width, height = extent_.height;
+            if (screenshot_max_width_ && width > screenshot_max_width_) {
+                // Shrunk by a whole factor, each pixel the average of its block.
+                const std::uint32_t factor = (width + screenshot_max_width_ - 1) / screenshot_max_width_;
+                const std::uint32_t w = width / factor, h = height / factor;
+                std::vector<std::byte> small(std::size_t{w} * h * 4);
+                for (std::uint32_t y = 0; y < h; ++y)
+                    for (std::uint32_t x = 0; x < w; ++x)
+                        for (std::uint32_t c = 0; c < 4; ++c) {
+                            std::uint32_t sum = 0;
+                            for (std::uint32_t dy = 0; dy < factor; ++dy)
+                                for (std::uint32_t dx = 0; dx < factor; ++dx)
+                                    sum += std::to_integer<std::uint32_t>(
+                                        rgba[((std::size_t{y} * factor + dy) * width + std::size_t{x} * factor + dx) * 4 + c]);
+                            small[(std::size_t{y} * w + x) * 4 + c] = static_cast<std::byte>(sum / (factor * factor));
+                        }
+                rgba = std::move(small);
+                width = w;
+                height = h;
+            }
+            if (write_png_rgba(path, rgba, width, height))
+                log::info("screenshot saved to {}", path.string());
+            else
+                log::error("could not write screenshot {}", path.string());
         }
-        if (write_png_rgba(screenshot_path_, rgba, width, height))
-            log::info("screenshot saved to {}", screenshot_path_.string());
-        else
-            log::error("could not write screenshot {}", screenshot_path_.string());
         vmaDestroyBuffer(allocator_, readback, readback_alloc);
         screenshot_path_.clear();
     }

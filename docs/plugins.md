@@ -152,7 +152,7 @@ extension's `command_line`) from the moment it lost the bit, and its web tabs cl
 | 1 | `read` | read game state: `mq.TLO`, `${...}`, `mq.parse`, `ParseMacroData`, spawn events |
 | 2 | `commands` | run commands outside the groups below: windows, options, `/who`, other plugins' commands, `/lua`; add commands of its own (`mq.bind`, `AddCommand`) |
 | 4 | `target` | change the target: `/target`, `/assist`, `/xtarget`, ... |
-| 8 | `actions` | act: `/cast`, `/disc`, `/doability`, `/useitem`, `/attack`, `/memspellset`, non-movement `/keypress` |
+| 8 | `actions` | act: `/cast`, `/disc`, `/doability`, `/useitem`, `/attack`, `/memspellset`, non-movement `/keypress`; Hailstone's own item commands `/destroy`, `/destroycursor` and `/stowcursor` |
 | 16 | `move` | move: `/face`, movement `/keypress` (forward, jump, ...), `/follow`, `/sit`, `/stand`, `/duck`, `/camp` |
 | 32 | `chat` | speak: plain text, `/say`, `/tell`, `/g`, `/gu`, `/rs`, channels, emotes |
 | 64 | `events` | see chat lines: `mq.event`, `OnIncomingChat`, and hide them (`OnFilterChat`) |
@@ -166,7 +166,9 @@ extension's `command_line`) from the moment it lost the bit, and its web tabs cl
 The check sits in one place, the command filter (`src/mq/commands.cpp`). It looks at the capabilities of the code
 running now (`plugin::caller_caps()`). So a command reaches the same check whether a script sends it with `mq.cmd`,
 `/docommand`, `/squelch`, a bind, or a plugin's `DoCommand`. The game's own commands are classified by their entry in the
-command table (`plugin::command_caps`). MQ's and plugins' commands declare what they need.
+command table (`plugin::command_caps`). Hailstone's own commands are not in that table and need `commands`, except
+the ones that destroy or move items (`/destroy`, `/destroycursor`, `/stowcursor`, the short `kOwnActions` list in
+`src/plugin/policy.cpp`), which need `actions`. MQ's and plugins' commands declare what they need.
 
 ## MacroQuest Lua scripts
 
@@ -463,6 +465,10 @@ Callbacks:
   client's own, not those a script or plugin writes (`print`, `/echo`, `WriteChatf`, a reply to its command), as MQ
   hands its own lines to `OnWriteChatColor` and not here: a plugin that answers "Bob tells you, ..." would otherwise
   answer whatever another add-on printed
+  Combat hit lines (melee and spell damage, heals) reach these hooks as the full sentence whatever the player's Hit
+  Modes: unlike MQ, whose hook sees the line as RoF2 displays it, an abbreviated or number-only line is never what a
+  hook gets, so a parser matches one form. A hook that rewrites such a line shows its rewrite in full, the hit mode
+  set aside for that line
 - `OnUpdateImGui`, `OnPacket(stream, direction, packet)` (nonzero drops it)
 
 Host functions: `WriteChatf`, `DoCommand(f)`, `AddCommand` (needs `commands`; 0 for one of the client's own commands, as `mq.bind`), `RemoveCommand`, `ParseMacroData` (`${...}`, so the
@@ -587,6 +593,40 @@ call, since a client older than the call has a shorter table. The structs a plug
 Buff, spawn and extended target records: `get_buff_data_bulk(host, out, out_size)`,
 `get_pet_buff_data_bulk(host, out, out_size)`, `get_spawns_data_bulk(host, out, out_size)` and
 `get_xtarget_data_bulk(host, out, out_size)` (with `read`; added later in ABI 3, so test `HAILSTONE_HOST_HAS(host, <field>)` first;
+The cursor item's origin: `cursor_origin(host)` (with `read`; added later in ABI 3, so test
+`HAILSTONE_HOST_HAS(host, cursor_origin)` first) says how the item on the cursor now got there, for a plugin that
+puts away or destroys what the server hands the player:
+
+| Value | Meaning |
+|---|---|
+| `HAILSTONE_CURSOR_ORIGIN_UNKNOWN` (0) | not known, or nothing on the cursor, or the plugin lacks `read`. The item was on the cursor at the zone-in (OP_CharInventory), replaced an item already on the cursor, or got there some way the client does not mark. Treat it as the player's: never destroy it unattended. |
+| `HAILSTONE_CURSOR_ORIGIN_INVENTORY` (1) | the player picked it up from their own inventory: a click on a slot, or part of a stack split off with the quantity slider. |
+| `HAILSTONE_CURSOR_ORIGIN_SERVER` (2) | the server put it on the empty cursor. |
+
+SERVER goes by how the item arrives, not by whether the player chose it. Traced in EQEmu's zone code: summoned items,
+tradeskill results and quest rewards (`Client::SummonItem`), and anything else EQEmu queues on the cursor
+(`Client::PushItemOnCursor`: the cursor queue's item packet type 0x6a, and the queue's next item moved up with
+OP_MoveItem), arrive that way; so do a ground item the player clicks to pick up (`Object::HandleClick`) and an item
+looted onto the cursor (`Client::PutLootInInventory`), which come as item packets of type 0x67 to the empty cursor.
+An item packet or a server OP_MoveItem onto a cursor that already holds an item (a merge, a swap) reads UNKNOWN.
+
+The answer belongs to the item it was noted for: every change to the cursor slot counts
+(`game::Inventory::cursor_placement`), and the origin is kept with the count it was noted at, so when the cursor
+changes by a path that marks nothing the answer is UNKNOWN, never an earlier item's origin. Read it beside
+`get_item` on the cursor, then act with one of the two commands below, giving the id just read; each does nothing
+when the cursor no longer holds an item of that id, so an item the player put there in the meantime is not touched
+(the check is by item id, so it cannot tell two items of the same id apart):
+
+- `/destroycursor <id>`: destroys the item on the cursor (OP_MoveItem to nowhere, as `/destroy` without its
+  question). Never coin, never a bag (it may hold other items), never an item with a Keep mark, and only in a zone.
+  It does not refuse a real-estate item (docs/unknowns.md).
+- `/stowcursor <id>`: puts the item on the cursor into the first free general slot, else the first bag with room
+  that takes it, never a worn slot; "There are no open slots for the held item in your inventory." when there is none.
+
+Both need `actions`, as `/destroy` does. The id is a plain decimal number above 0; anything else does nothing.
+
+Buff and spawn records: `get_buff_data_bulk(host, out, out_size)`, `get_pet_buff_data_bulk(host, out, out_size)` and
+`get_spawns_data_bulk(host, out, out_size)` (with `read`; added later in ABI 3, so test `HAILSTONE_HOST_HAS(host, <field>)` first;
 `out` is an `unsigned char*` and `out_size` an `int32_t`) write records into `out` and return the bytes written.
 The records are the SDK's packed structs (`HS_Bulk_BuffData`, `HS_Bulk_PetBuffData`, `HS_Bulk_SpawnHeader`,
 `HS_Bulk_SpawnFixedRecord`, all in `#pragma pack(push, 1)`), in the machine's byte order (little-endian on every

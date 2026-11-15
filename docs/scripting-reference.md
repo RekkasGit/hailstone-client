@@ -1126,8 +1126,8 @@ achievement and reward-selection APIs.
 | ChatClear | (slot) → — | Empty the tab | commands |
 | ChatTellWindows | () → bool | Tells open a window per player | — |
 | ChatSetTellWindows | (on) → — | Set that | commands |
-| ChatHitModes | () → {{name, mode, modes={names}}} | Melee report categories | — |
-| ChatSetHitMode | (index, mode) → — | 1-based index (7 = ALL) | commands |
+| ChatHitModes | () → {{id, name, mode, modes={names}}} | 1..6 melee, 7 ALL, 8 direct spell damage, 9 DoT damage, 10 healing, 11 HoT healing; ALL mode is -1 when mixed | — |
+| ChatSetHitMode | (index, mode) → — | Indices above; 0 Normal, 1 Abbreviated, 2 Number Only (Miss Only for melee misses); 7 sets all categories | commands |
 
 #### Hot bars and icon selection (lua_eq_hotbar.cpp)
 
@@ -1399,6 +1399,7 @@ or -1 and say so in the chat window. Only call these on the client's thread, fro
 | `open_bank(banker)` | `actions` | the bank window at a spawn (0 the player), without a banker's checks. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, open_bank)` first |
 | `get_buff_data_bulk(out, size)`, `get_pet_buff_data_bulk(out, size)`, `get_spawns_data_bulk(out, size)` | `read` | every buff slot of the player (`size` must hold every buff and song slot, RoF2's 1798 bytes, or 0 comes back; one record more, 1827, brings the discipline slot, the last), the pet window's buffs, or every spawn in the zone (`size` at least 4096, or 0 comes back; 4112 for any record), as packed records in the machine's byte order (layout in docs/plugins.md "Buff and spawn records"); returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, <field>)` first |
 | `get_xtarget_data_bulk(out, size)` | `read` | every extended target slot: type, spawn id, aggro meter percent and HP percent, 16 bytes a slot, as many whole records as fit (layout in docs/plugins.md "Buff and spawn records"); returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_xtarget_data_bulk)` first |
+| `cursor_origin()` | `read` | how the item on the cursor got there: `HAILSTONE_CURSOR_ORIGIN_UNKNOWN` (0, also empty), `_INVENTORY` (1, the player's pickup) or `_SERVER` (2, the server put it on the empty cursor); docs/plugins.md "The cursor item's origin". Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, cursor_origin)` first |
 | `add_ui_function(name, fn, user)`, `remove_ui_function` | `ui` | a function the plugin's windows call as `eq.Plugin("<name>").<name>(...)` |
 | `arg_count`, `arg(i, out)`, `arg_field(i, key, out)` | | a UI function's arguments |
 | `out_value`, `out_begin_array`, `out_begin_table`, `out_key`, `out_end` | | a UI function's result |

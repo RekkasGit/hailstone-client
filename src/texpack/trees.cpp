@@ -622,6 +622,9 @@ glm::vec3 pick(const std::vector<glm::vec3>& palette, const glm::vec3& mean, Rng
     return base * vary(rng, amount);
 }
 
+// How far a needle's shade goes from its spray's mean towards the colour draw_needles picked from the palette.
+constexpr float kNeedleShadeSpread = 0.4f;
+
 // A spray of needles along a twig up the middle, base at v = 0 (row 0), tip at v = 1.
 // `strands`: a willow's hanging strand instead, its leaves long and close along the twig.
 assets::Image draw_needles(std::uint32_t size, const glm::vec3& colour, const std::vector<glm::vec3>& palette, Rng& rng,
@@ -653,8 +656,14 @@ assets::Image draw_needles(std::uint32_t size, const glm::vec3& colour, const st
                     const float angle = strands ? rng.range(0.2f, 0.45f) : rng.range(0.55f, 1.05f);
                     const glm::vec2 nd = glm::normalize(perp * side * std::sin(angle) + dir * std::cos(angle));
                     const float nl = s * tw.reach * (layer ? 0.33f : 0.36f) * (strands ? 1.6f : 1.0f) * taper * rng.range(0.75f, 1.1f);
-                    // The layers close in shade: stark stripes shimmer as the tree sways or the camera moves.
-                    const glm::vec3 c = pick(palette, colour, rng, 0.08f) * (layer ? (side > 0 ? 1.04f : 0.98f) : 0.84f);
+                    // Each needle's shade only part of the way from the spray's mean to the palette's (whose lightest
+                    // are near white), and the layers close in shade: needles a few texels wide in stark light and dark
+                    // turned over every pixel they cover as a spray swayed or the camera moved, a flicker standing still
+                    // and a shimmer walking through a forest. Measured (the zone viewer, frames 4 ms apart): pixels
+                    // changing by more than 12 between frames in a flight over Greater Faydark 11 % -> 5 % (the game's
+                    // own trees 3.5 %), and standing by Lake Rathe's pines in the wind 0.67 % -> 0.14 %.
+                    const glm::vec3 c = glm::mix(colour, pick(palette, colour, rng, 0.08f), kNeedleShadeSpread) *
+                                        (layer ? (side > 0 ? 1.03f : 0.99f) : 0.9f);
                     cv.line(p, p + nd * nl, std::max(2.0f, s * (layer ? 0.007f : 0.011f) * (strands ? 1.8f : 1.0f)), c);
                 }
             }
@@ -663,7 +672,7 @@ assets::Image draw_needles(std::uint32_t size, const glm::vec3& colour, const st
     for (const auto& tw : twigs) cv.line(tw.a, tw.b, twig_w, colour * 0.55f + glm::vec3(0.04f, 0.02f, 0.0f));
     // The gaps between needles filled up to a few dozen texels across: a spray is cut out along its outer edge only.
     // Thin holes showing the dark behind the spray shimmered as the camera moved.
-    cv.fill_gaps(std::max(2, int(s * 0.035f)), colour * 0.7f);
+    cv.fill_gaps(std::max(2, int(s * 0.035f)), colour * 0.8f);
     return cv.image(colour);
 }
 

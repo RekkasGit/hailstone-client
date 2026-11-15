@@ -62,7 +62,8 @@ TEST_CASE("temporal: jitter phases grow with the upscale") {
     CHECK(jitter_phases(1.0f) == 8);
     CHECK(jitter_phases(0.5f) == 32);
     CHECK(jitter_phases(0.75f) == 15); // 8 x 1.78, rounded up
-    CHECK(jitter_phases(0.1f) == 32);  // kept to the render scale's range
+    CHECK(jitter_phases(0.33f) == 74); // Ultra Performance: 8 x 9.18
+    CHECK(jitter_phases(0.1f) == 74);  // kept to the render scale's range
     CHECK(jitter_phases(2.0f) == 8);
 }
 
@@ -186,4 +187,21 @@ TEST_CASE("temporal: object motion keys tell things apart") {
     CHECK(door != 0);
     CHECK(ObjectRenderer::make_motion_key(1, 0) != 0);
     CHECK(ObjectRenderer::make_motion_key(1, 8) != door);
+}
+
+TEST_CASE("temporal: upscale quality presets are render scales") {
+    CHECK(upscale_quality_percent(UpscaleQuality::NativeAa) == 100);
+    CHECK(upscale_quality_percent(UpscaleQuality::Quality) == 67);           // 1.5x
+    CHECK(upscale_quality_percent(UpscaleQuality::Balanced) == 59);          // 1.7x
+    CHECK(upscale_quality_percent(UpscaleQuality::Performance) == 50);       // 2x
+    CHECK(upscale_quality_percent(UpscaleQuality::UltraPerformance) == 33);  // 3x
+    CHECK(upscale_quality_percent(UpscaleQuality::Custom) == 0);             // the slider's own
+    for (int i = 0; i < 5; ++i) {
+        const auto q = static_cast<UpscaleQuality>(i);
+        CHECK(upscale_quality_for(upscale_quality_percent(q)) == q);
+        CHECK(upscale_quality_percent(q) >= kMinRenderScalePercent);
+    }
+    CHECK(upscale_quality_for(75) == UpscaleQuality::Custom);
+    CHECK(upscale_quality_for(66) == UpscaleQuality::Custom);
+    CHECK(static_cast<float>(kMinRenderScalePercent) / 100.0f == doctest::Approx(kMinRenderScale));
 }

@@ -9,6 +9,7 @@
 //   get_spawns_data_bulk into n bytes (the whole buffer without n), read through the SDK's HS_Bulk_* structs cast
 //   onto the buffer
 //   /probextargets [n]  get_xtarget_data_bulk the same way, through HS_Bulk_XTargetData
+//   /probecursor   cursor_origin, when the host table has it
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
 #include <cstddef>
@@ -172,6 +173,14 @@ void probe_xtargets(void*, const char* args) {
     WriteChatf("[Probe] xtargets %d bytes", static_cast<int>(r));
 }
 
+void probe_cursor(void*, const char*) {
+    if (!HAILSTONE_HOST_HAS(host, cursor_origin)) {
+        WriteChatf("[Probe] cursor origin: not in this client");
+        return;
+    }
+    WriteChatf("[Probe] cursor origin %u", static_cast<unsigned>(host->cursor_origin(host->host)));
+}
+
 int probe_tlo(void*, const char*, const char* member, const char*, HailstoneValue* out) {
     if (member && std::strcmp(member, "Throw") == 0) throw std::runtime_error("the TLO threw");
     out->kind = HAILSTONE_STRING;
@@ -192,6 +201,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probepetbuffs", probe_pet_buffs, nullptr);
     AddCommand("/probespawns", probe_spawns, nullptr);
     AddCommand("/probextargets", probe_xtargets, nullptr);
+    AddCommand("/probecursor", probe_cursor, nullptr);
     AddTopLevelObject("Probe", probe_tlo, nullptr);
 #ifdef HAILSTONE_PROBE_THROW_INIT
     throw std::runtime_error("InitializePlugin threw");
@@ -208,6 +218,7 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probepetbuffs");
     RemoveCommand("/probespawns");
     RemoveCommand("/probextargets");
+    RemoveCommand("/probecursor");
     RemoveTopLevelObject("Probe");
 }
 HAILSTONE_API void OnUpdateImGui(void) { throw std::runtime_error("OnUpdateImGui threw"); }

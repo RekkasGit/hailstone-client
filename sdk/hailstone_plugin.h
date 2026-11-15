@@ -712,8 +712,22 @@ typedef struct PluginHostApi {
     int32_t (*get_buff_data_bulk)(void* host, unsigned char* out, int32_t out_size);
     int32_t (*get_pet_buff_data_bulk)(void* host, unsigned char* out, int32_t out_size);
     int32_t (*get_spawns_data_bulk)(void* host, unsigned char* out, int32_t out_size);
+    /* How the item on the cursor now got there, HAILSTONE_CURSOR_ORIGIN_* (HAILSTONE_CAP_READ; without it, or with
+     * nothing on the cursor, UNKNOWN). The answer belongs to that one item: any change to the cursor the client does
+     * not recognise reads UNKNOWN, never an older item's origin. Read it beside get_item(cursor), then act with
+     * /destroycursor <id> or /stowcursor <id>, which do nothing unless the cursor still holds that id. */
+    uint32_t (*cursor_origin)(void* host);
     int32_t (*get_xtarget_data_bulk)(void* host, unsigned char* out, int32_t out_size);
 } PluginHostApi;
+/* Not known: it was on the cursor at zone-in, replaced a cursor item, or came by a path the client does not mark.
+ * Treat it as the player's; never destroy it unattended. */
+#define HAILSTONE_CURSOR_ORIGIN_UNKNOWN 0
+/* The player picked it up from their own inventory (a click, a stack split). */
+#define HAILSTONE_CURSOR_ORIGIN_INVENTORY 1
+/* The server put it on the empty cursor: summoned items, tradeskill results and quest rewards (EQEmu's cursor queue),
+ * and also a ground item the player picked up and an item looted onto the cursor (EQEmu sends those to the empty
+ * cursor as item packets too). So SERVER does not mean the player did not choose it. */
+#define HAILSTONE_CURSOR_ORIGIN_SERVER 2
 #define HAILSTONE_BUFF_RECORD_SIZE 29
 /* get_buff_data_bulk's last byte: the window the slot belongs to (0 also for an empty slot). */
 /* The records run long buffs, then songs, then the one discipline slot (RoF2: 0-41, 42-61, 62); the counts are the
