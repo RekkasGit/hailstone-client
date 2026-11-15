@@ -214,23 +214,37 @@ TEST_CASE("mock evolving transfer: delayed previews for other pairs and closed w
     CHECK(conn.evolving_transfer_items().empty());
 }
 
-TEST_CASE("mock evolving transfer: live item updates invalidate confirmation and issue a fresh preview") {
+TEST_CASE("mock evolving transfer: a progress tick keeps the approval; a changed item asks again") {
     Rig rig(evolving_config());
     REQUIRE(rig.to_zone());
     auto& conn = rig.conn;
     select_pair(conn);
     conn.receive_zone_packet_for_test(encode(preview()));
     REQUIRE(conn.can_transfer_evolving());
+    REQUIRE(rig.until([&] { return requests(rig).size() == 1; }));
     const auto revision = conn.evolving_transfer().revision;
     conn.receive_zone_packet_for_test(encode(EvolvingUpdate{EvolvingAction::Update, source_id, 60, 1}));
     CHECK(conn.inventory().at(ItemSlot::possessions(24))->evolving.progress == 60.0);
     CHECK(conn.inventory().at(ItemSlot::possessions(24))->evolving.activated == 1);
+    rig.step();
+    rig.run_for(std::chrono::milliseconds(20));
+    CHECK(conn.evolving_transfer().revision == revision); // an open confirmation stays valid
+    CHECK_FALSE(conn.evolving_transfer().pending);
+    CHECK(conn.can_transfer_evolving());
+    CHECK(requests(rig).size() == 1); // no new Details request
+    // A replaced original (a new template or level) does invalidate it, at once and in the next frame.
+    auto evolved = evolving(source_id, 10, 24);
+    evolved.evolving.evolve_level = 3;
+    conn.receive_zone_packet_for_test(encode_item_packet(false, ItemPacket{kItemPacketTrade, evolved}));
+    CHECK_FALSE(conn.can_transfer_evolving());
     CHECK_FALSE(conn.request_evolving_transfer(revision));
-    rig.step(); // the frame's update_evolving_transfer() sees the changed original and asks again
+    rig.step();
     CHECK(conn.evolving_transfer().pending);
+    CHECK(conn.evolving_transfer().revision != revision);
+    REQUIRE(rig.until([&] { return requests(rig).size() == 2; }));
+    CHECK(requests(rig)[1].action == EvolvingAction::Details);
     conn.receive_zone_packet_for_test(encode(preview()));
     CHECK(conn.can_transfer_evolving());
-    // Revalidation also catches a changed live original before the next frame refreshes the view.
     conn.receive_zone_packet_for_test(encode_item_packet(false, ItemPacket{kItemPacketTrade, evolving(source_id, 99, 24)}));
     CHECK_FALSE(conn.can_transfer_evolving());
     CHECK_FALSE(conn.request_evolving_transfer(conn.evolving_transfer().revision));

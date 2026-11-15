@@ -1476,7 +1476,9 @@ Vectors in `tests/hotbutton_tracking_vectors_test.cpp` (do-hot-button 4000, hot-
   the compatibility percent, the max-transfer level (zero is valid) and the projected source and destination
   forms; Transfer stays disabled until both projections exist and compatibility is nonzero. Transfer asks the
   native confirmation question (eqstr 6148); Cancel sends nothing. Confirmation is bound to the original IDs, the
-  preview's revision and the live originals as serialized, and sends action 3 once. The previews are never put
+  preview's revision and the live originals as serialized less their progress and activation (an action-0 tick
+  neither cancels it nor asks for a new preview; the preview's projected progress may then lag), and sends action
+  3 once. The previews are never put
   into the inventory and no success is reported locally: the server recalculates, replaces both items on the
   cursor and sends its own messages. A refusal changes no items (EQEmu prints "Transfer Failed" in chat), so the
   window says the transfer was sent and that choosing an item starts over; RoF2 clears both selections once it

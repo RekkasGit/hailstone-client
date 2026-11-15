@@ -30,9 +30,18 @@ const Item* by_id(const std::vector<Item>& items, std::uint64_t id) {
     return it == items.end() ? nullptr : &*it;
 }
 
+// What a confirmation is bound to: the item as serialised, less its progress and activation. Action 0 updates those
+// as experience comes in; a tick changes neither which items move nor their level, and the server recalculates the
+// transfer from its own records on commit, so it must not cancel an open confirmation or ask for a new preview each
+// time (the preview's projected progress may then lag by the ticks since it came).
 std::vector<std::byte> snapshot(const Item* item) {
     ByteWriter w;
-    if (item) write_item(w, *item);
+    if (item) {
+        Item bound = *item;
+        bound.evolving.progress = 0.0;
+        bound.evolving.activated = 0;
+        write_item(w, bound);
+    }
     return w.take();
 }
 
