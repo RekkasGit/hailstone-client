@@ -2966,6 +2966,20 @@ return "ok"
     CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_stml_lt_test") == "ok");
 }
 
+// The gamepad bag grids' cell ids (lib/items.lua I.cellId) are the strings they were, made once.
+TEST_CASE("UI packs (gamepad): bag grid cell ids are kept") {
+    constexpr const char* kScript = R"lua(
+local I = dofile("lib/items.lua")
+local function check(ok, what) if not ok then error(what, 2) end end
+check(I.cellId("sell", 23) == "##sell23_-1", "a bag slot")
+check(I.cellId("sell", 25, 3) == "##sell25_3", "a bag's slot")
+check(I.cellId("inv", 25, 3) == "##inv25_3", "another grid")
+check(rawequal(I.cellId("sell", 25, 3), I.cellId("sell", 25, 3)), "kept")
+return "ok"
+)lua";
+    CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_cellid_test") == "ok");
+}
+
 // The gamepad windows keep what is costly to read or lay out (a raid's members, the raid's and the guild's message of
 // the day, the /who answer, an item's wrapped description) between frames: a change still shows. The stock windows'
 // texts and lists are stood in for from Lua, and every text the theme draws is recorded.
