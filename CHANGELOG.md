@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- With the Temporal or AMD FSR 3.1 upscaler: characters cost less CPU time each frame again. Keeping their last frame's pose for the upscaler read it back from memory meant only for writing, and reallocated it every frame
 - Texture packs with generated trees: the trees sway in the wind again, each branch moving as one piece, without the flicker they had before (rebuild a pack's trees in the Texture Studio to get the pines without their branch-end slabs)
 - Texture packs with generated trees: pines no longer show flat slabs of needles across their branches when seen from beside. Rebuild a pack's trees in the Texture Studio to get them
 - Options > Upscaler: the choice now takes effect. It was saved with the character but read at start-up from the shared settings, so Temporal and AMD FSR 3.1 never started (and Frame Generation stayed off); it is now one setting for every character, like Anti-aliasing. A choice saved with a character before is brought over when that character enters, and takes effect at the next start

@@ -127,7 +127,9 @@ own first (Roadmap 6). `render/temporal.h` holds the maths, `VkContext::begin_ov
    - the zone: its plants' wind sway at last frame's wind clock (`SceneLighting::time.y`, kept per zone renderer);
      the rest of it stands still, so its motion is the camera's, drawn exactly;
    - characters: their bones a frame ago, kept per spawn (`ActorDraw::motion_key`) and written after this frame's at
-     `kMaxBones` in the same buffer; a spawn new this frame, or with another number of bones, moves with the camera;
+     `kMaxBones` in the same buffer; a spawn new this frame, or with another number of bones, moves with the camera.
+     They are kept on the CPU (`render::BoneHistory`), and both halves are built there and copied into the buffer at
+     once: it is write-only memory to the CPU, so nothing is read back from it;
    - doors, objects, placed items, the placement ghost and missiles: their transforms a frame ago, kept per thing
      (`ObjectRenderer::Instance::motion_key`), written after this frame's at `kMaxInstances`;
    - flora and the lawn: their sway and the wind at last frame's clock (`Push::time.y`); the pushing spawns' bend

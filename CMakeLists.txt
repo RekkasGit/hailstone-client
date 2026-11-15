@@ -1048,6 +1048,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/plugin_ui_sandbox_test.cpp
     tests/lighting_test.cpp
     tests/shadows_test.cpp
+    tests/bone_history_test.cpp
     tests/culling_test.cpp
     tests/shadow_chunks_test.cpp
     tests/wrap_math_test.cpp
