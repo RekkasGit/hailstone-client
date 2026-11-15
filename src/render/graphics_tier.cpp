@@ -15,8 +15,9 @@ constexpr std::uint64_t kGiB = 1024ull * 1024ull * 1024ull;
 // Each tier lists the same keys in the same order (tests/graphics_tier_test.cpp checks). The first five are the
 // Options window's quality preset (ui/modern/options.lua PRESETS: Low, Medium, High), so the window shows the tier's
 // name there; view_distance is written as its slider writes it.
-// The upscaler and frame generation: Low turns FSR 3.1 and frame generation off (both cost a fixed share of the frame
-// at the output's size, whatever the render scale, too much for an integrated GPU); Medium and High keep the player's.
+// The upscaler and frame generation: Low turns upscaling and frame generation off, as the defaults have them (FSR 3.1
+// costs a fixed share of the frame at the output's size, whatever the render scale, too much for an integrated GPU),
+// so Detect turns them off too; Medium and High keep the player's.
 // The lighting: Low draws with the classic lighting (the original's look, far lighter than the modern one's per-pixel
 // sun, sky and point lights); Medium and High keep the player's choice.
 // Radial flora (the Options window's Radial Flora, ShowGrass): off on Low; Medium and High keep the player's.
@@ -29,12 +30,12 @@ constexpr std::array<TierSetting, kKeyCount> kLow = {{
     {"display.distance_blur", "0"},
     {"display.view_distance", "1.50"},
     {"display.light_shadows", "0"},
-    {"display.render_scale", "67"}, // Upscale Quality's Quality (render/temporal.h)
+    {"display.render_scale", ""}, // the upscaler is off: the view is drawn at full size
     {"display.neighbour_zones", "0"},
     {"display.horizon_hills", "0"},
     {"display.grass_density", "50"},
     {"display.tree_detail", "50"},
-    {"display.upscaler", "fsr1"},
+    {"display.upscaler", "off"},
     {"display.frame_gen", "0"},
     {"display.lighting", "classic"},
     {"display.grass", "0"},

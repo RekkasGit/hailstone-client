@@ -1889,7 +1889,7 @@ everything at its highest. Before the settings are first read, the GPU in use an
 
 Low and Medium are the Options window's quality presets of the same names (Graphics > Preset: shadows,
 anti-aliasing, ambient occlusion, distance blur, view distance), with a few more of the costlier settings; High
-leaves every one at its default, so it never picks Ultra. Low also turns AMD FSR 3.1 and frame generation off (each
+leaves every one at its default, so it never picks Ultra. Low also turns upscaling and frame generation off, as they are by default, so Detect turns off an FSR 3.1 the player picked (each
 costs a fixed share of the frame at the output's size, whatever the render scale; on an Intel Iris Xe tablet FSR 3.1
 was far slower than FSR 1) and draws with the classic lighting and no radial flora; Medium and High keep what the player chose for
 those four (kept), and Options > Graphics notes on a Low computer that FSR 3.1 and frame generation are slow there:
@@ -1902,12 +1902,12 @@ those four (kept), and Options > Graphics notes on a Low computer that FSR 3.1 a
 | `display.distance_blur` | 0 | (default) |
 | `display.view_distance` | 1.5 | 2.0 |
 | `display.light_shadows` | 0 | 4 |
-| `display.render_scale` | 67 (Upscale Quality's Quality) | (default) |
+| `display.render_scale` | (default) | (default) |
 | `display.neighbour_zones` | 0 | (default) |
 | `display.horizon_hills` | 0 | (default) |
 | `display.grass_density` | 50 | 75 |
 | `display.tree_detail` | 50 | (default) |
-| `display.upscaler` | fsr1 | (kept) |
+| `display.upscaler` | off | (kept) |
 | `display.frame_gen` | 0 | (kept) |
 | `display.lighting` | classic | (kept) |
 | `display.grass` | 0 (Radial Flora off) | (kept) |
@@ -1935,7 +1935,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 |---|---|---|---|
 | `display.msaa` | 1, 2, 4 | 4 | samples per pixel, at most 4 (`render::kMaxMsaa`; 8 and up are drawn at 4), cut to what the GPU supports; off under `display.upscaler = taa`; read at start-up |
 | `display.render_scale` | 33 .. 100 | 100 | percent of the 3D view's size the scene is drawn at; below 100 the upscaler (`display.upscaler`) brings it up (The frame); the UI stays sharp. Options > Upscale Quality's presets set it (`render::UpscaleQuality`): Native AA 100, Quality 67, Balanced 59, Performance 50, Ultra Performance 33 (FSR's ratios, 1.5x .. 3x); any other value shows as Custom |
-| `display.upscaler` | off, fsr1, taa, fsr3 | fsr1 | off: no upscaling and no frame generation, the view drawn at full size whatever `display.render_scale` and `display.frame_gen` say (both kept for later; applied at once, a temporal upscaler already running stays as anti-aliasing until the next start); fsr1: FSR 1 below a render scale of 100; taa: temporal anti-aliasing and upscaling at every render scale, MSAA off (Temporal upscaling); fsr3: the same with AMD FSR 3.1's upscaler (AMD FSR 3.1; taa where the GPU lacks what it needs); read at start-up |
+| `display.upscaler` | off, fsr1, taa, fsr3 | off | off (the default on every computer): no upscaling and no frame generation, the view drawn at full size whatever `display.render_scale` and `display.frame_gen` say (both kept for later; applied at once, a temporal upscaler already running stays as anti-aliasing until the next start); fsr1: FSR 1 below a render scale of 100; taa: temporal anti-aliasing and upscaling at every render scale, MSAA off (Temporal upscaling); fsr3: the same with AMD FSR 3.1's upscaler (AMD FSR 3.1; taa where the GPU lacks what it needs); read at start-up |
 | `display.frame_gen` | true, false | false | present a frame made between each two real ones (Frame generation); only with `display.upscaler` taa or fsr3; forces vertical sync and holds the game to half the refresh; applied at once |
 | `display.sharpness` | 0 .. 1 | 0.5 | RCAS sharpening: FSR 1's below a render scale of 100, the temporal upscaler's or FSR 3.1's own at every scale; 0 none |
 | `display.tonemap` | auto, none, agx, aces | auto | auto: AgX (with a little extra saturation) for modern, none for classic |

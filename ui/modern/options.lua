@@ -672,7 +672,7 @@ local function graphicsTab()
     if tier ~= nil then
       local tierName = ({ [0] = "Low", [1] = "Medium", [2] = "High" })[tier] or "High"
       row("Detect", "Sets the graphics this computer's graphics card and processor suit, as the first start did: "
-          .. tierName .. " here (Low also uses the classic lighting and AMD FSR 1, without radial flora). Anti-aliasing and the upscaler change the next time the game starts.", function()
+          .. tierName .. " here (Low also uses the classic lighting, without upscaling or radial flora). Anti-aliasing and the upscaler change the next time the game starts.", function()
         if ui.Button("Use " .. tierName .. " for This Computer", 0, 0) then eq.SetOption("detect_graphics", 1) end
       end)
     end
@@ -699,7 +699,7 @@ local function graphicsTab()
     end
     -- A Low computer (render/graphics_tier.h): FSR 3.1 and frame generation cost more than they give back there.
     if tier == 0 and (upscaler == 3 or eq.Option("frame_gen") == 1) then
-      note("AMD FSR 3.1 and Frame Generation are slow on this computer's graphics: AMD FSR 1 is faster here.")
+      note("AMD FSR 3.1 and Frame Generation are slow on this computer's graphics: Off or AMD FSR 1 is faster here.")
     end
     -- Off draws at full size without frame generation: the settings below would do nothing.
     local off = upscaler == 0

@@ -779,7 +779,7 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
             std::clamp(config_.get_int("display.render_scale", 100), render::kMinRenderScalePercent, 100)));
     // 0 Off, 1 FSR 1 (spatial), 2 temporal, 3 FSR 3.1 (render/temporal.h upscaler_choice); as saved, which shows at
     // the next start.
-    if (name == "upscaler") return render::upscaler_choice(config_.get_string("display.upscaler", "fsr1"));
+    if (name == "upscaler") return render::upscaler_choice(config_.get_string("display.upscaler", "off"));
     if (name == "distance_blur") return config_.get_bool("display.distance_blur", true) ? 1 : 0;
     if (name == "color_grade") return config_.get_bool("display.color_grade", true) ? 1 : 0;
     if (name == "neighbour_zones") return neighbour_zones_ ? 1 : 0;

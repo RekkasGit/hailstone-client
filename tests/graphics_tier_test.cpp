@@ -67,7 +67,7 @@ TEST_CASE("graphics tier: every tier decides the same keys, and High leaves each
     for (std::size_t i = 0; i < low.size(); ++i) {
         CHECK(low[i].key == medium[i].key);
         CHECK(low[i].key == high[i].key);
-        CHECK_FALSE(low[i].value.empty());
+        CHECK_FALSE(low[i].keep); // Low decides every key: set, or its default
         CHECK(high[i].value.empty());
     }
 }
@@ -81,7 +81,7 @@ TEST_CASE("graphics tier: Low and Medium match the Options window's presets") {
     CHECK_FALSE(c.get_bool("display.ao", true));
     CHECK_FALSE(c.get_bool("display.distance_blur", true));
     CHECK(c.get_float("display.view_distance", 0) == doctest::Approx(1.5f));
-    CHECK(c.get_int("display.render_scale", -1) == 67);
+    CHECK_FALSE(c.get("display.render_scale")); // full size: the upscaler is off
 
     apply_graphics_tier(c, GraphicsTier::Medium);
     CHECK(c.get_int("display.shadows", -1) == 1024);
@@ -89,14 +89,13 @@ TEST_CASE("graphics tier: Low and Medium match the Options window's presets") {
     CHECK_FALSE(c.get_bool("display.ao", true));
     CHECK_FALSE(c.get("display.distance_blur")); // its default, on
     CHECK(c.get_float("display.view_distance", 0) == doctest::Approx(2.0f));
-    CHECK_FALSE(c.get("display.render_scale")); // Low's 67 erased
 
     apply_graphics_tier(c, GraphicsTier::High);
     for (const TierSetting& s : graphics_tier_settings(GraphicsTier::High))
         if (!s.keep) CHECK_FALSE(c.get(s.key)); // the kept ones (upscaler, frame generation, lighting) stay as Low left them
 }
 
-TEST_CASE("graphics tier: Low turns FSR 3.1 and frame generation off; Medium and High keep the player's") {
+TEST_CASE("graphics tier: Low turns upscaling and frame generation off; Medium and High keep the player's") {
     Config c;
     c.set("display.upscaler", "fsr3");
     c.set("display.frame_gen", "1");
@@ -107,7 +106,7 @@ TEST_CASE("graphics tier: Low turns FSR 3.1 and frame generation off; Medium and
     CHECK(c.get_string("display.upscaler") == "fsr3");
     CHECK(c.get_string("display.frame_gen") == "1");
     apply_graphics_tier(c, GraphicsTier::Low);
-    CHECK(c.get_string("display.upscaler") == "fsr1");
+    CHECK(c.get_string("display.upscaler") == "off");
     CHECK_FALSE(c.get_bool("display.frame_gen", true));
 }
 
