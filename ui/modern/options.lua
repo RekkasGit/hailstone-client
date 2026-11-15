@@ -648,6 +648,8 @@ local function graphicsTab()
       "Grass, flowers and ferns on the newer zones' open ground, and Hailstone's grass on classic zones such as East Commonlands (/showgrass).")
     slider("flora_distance", "Flora Distance", 400, 1200, function(v) return string.format("%d units", v) end,
       "How far round the camera the grass is drawn. Past 400 units it thins out with distance. Further is slower.")
+    slider("grass_density", "Grass Density", 25, 200, pct,
+      "How thick Hailstone's grass on the classic zones grows. Lower is sparser and faster; higher is thicker and slower.")
     check("ao", "Ambient Occlusion", "Soft contact shadows where surfaces meet (modern lighting).")
     check("distance_blur", "Distance Blur", "Softens the far distance a little (modern lighting).")
     check("neighbour_zones", "Neighbour Zones",
@@ -721,6 +723,7 @@ local function graphicsTab()
     if eq.Option("sharpness") ~= nil then eq.SetOption("sharpness", 10) end
     eq.SetOption("max_camera_distance", 60)
     if eq.Option("flora_distance") ~= nil then eq.SetOption("flora_distance", 400) end
+    if eq.Option("grass_density") ~= nil then eq.SetOption("grass_density", 100) end
   end
 end
 

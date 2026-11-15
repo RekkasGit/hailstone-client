@@ -18,7 +18,7 @@ layout(push_constant) uniform Push {
     vec4 time; // x seconds, y the last frame's (the motion's)
     vec4 lod;    // x this draw's blades, y segments, z kLawnCell, w kLawnBladeWidth
     vec4 curve;  // x kLawnFull, y kLawnNear, z kLawnMid
-    vec4 counts; // xyz kLawnLods' blades
+    vec4 counts; // xyz kLawnLods' blades at Grass Density (render::lawn_lod_blades)
 } pc;
 
 // render/scene_lighting.h SceneLighting.
