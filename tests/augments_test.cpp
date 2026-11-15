@@ -691,3 +691,18 @@ TEST_CASE("worn_look: the ornament a worn item shows on its wearer") {
     sword = with_aug(sword, 0, gone);
     CHECK(game::worn_look(sword, 7).material == 5);
 }
+
+TEST_CASE("Augment socket rows: the augment's name is escaped inside its link") {
+    game::EqStrings s;
+    s.set(3355, "Slot %1, type %2: %3");
+    game::AugmentStrings as;
+    as.strings = &s;
+    net::Item host = choker();
+    net::BagItem b;
+    b.index = 1;
+    b.item = egg();
+    b.item.name = "Egg</a><c \"#ff0000\">x";
+    host.contents.push_back(b);
+    const std::string row = game::augment_socket_row_text(host, 1, as, false);
+    CHECK(row.find("<a WndNotify=\"27,0^1\">Egg&lt;/a&gt;&lt;c \"#ff0000\"&gt;x</a>") != std::string::npos);
+}

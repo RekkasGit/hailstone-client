@@ -1285,6 +1285,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/achievements_test.cpp
     tests/achievement_connection_test.cpp
     tests/achievement_chat_test.cpp
+    tests/stml_link_injection_test.cpp
     tests/achievement_chat_input_test.cpp
     tests/lua_eq_achievements_test.cpp
     tests/achievements_ui_test.cpp
