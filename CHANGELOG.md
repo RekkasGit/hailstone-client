@@ -54,6 +54,7 @@
 - Player trades now cancel when the partners separate by more than the trade partner's avatar height plus 20 units, checked twice a second as NPC hand-ins are. The server returns offered items and coin through the normal cancellation path
 - Evolving items: Final Result now requests the server's final form for inspection, with a controller-accessible action in the gamepad UI. Received evolution progress updates refresh the displayed instance; advancement waits for the server's replacement item.
 - Tracking stops when the tracked spawn dies, and dead spawns disappear from the tracking list immediately
+- Loot All ignores repeated activation while items are queued or a loot request awaits its reply. With several NO DROP items requiring confirmation, the first question now stays open when the later item stops the queue
 - With the Temporal or AMD FSR 3.1 upscaler: characters cost less CPU time each frame again. Keeping their last frame's pose for the upscaler read it back from memory meant only for writing, and reallocated it every frame
 - Texture packs with generated trees: the trees sway in the wind again, each branch moving as one piece, without the flicker they had before (rebuild a pack's trees in the Texture Studio to get the pines without their branch-end slabs)
 - Texture packs with generated trees: pines no longer show flat slabs of needles across their branches when seen from beside. Rebuild a pack's trees in the Texture Studio to get them

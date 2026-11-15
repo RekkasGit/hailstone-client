@@ -92,6 +92,9 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Trades with players: CTradeWnd::OnProcessFrame @0x780b50 cancels them beyond the partner's avatar height + 20 on the same 500 ms check as hand-ins; outstanding items and coin return through the server (unit and mock-server coverage).
 - [ ] Trades with players: live separation with outstanding items and coin; the merchant page-handler-2 exception (docs/mechanics.md "Leaving an NPC interaction").
 - [x] Partial-stack looting asks the quantity (EQEmu ignores it); Link All; the loot music (entry 5 has no asset).
+- [x] Loot All preserves an active queue or outstanding loot request on repeated activation, and retains the first NO DROP question when a later confirmation aborts the queue (planner and mock-server regressions; docs/mechanics.md "Loot All").
+- [ ] Loot All: live rapid activation with delayed replies and recovery from several NO DROP items requiring confirmation.
+- [ ] Loot All: trace native auto-close timing when an accepted NO DROP question overlaps the last automatic request (docs/unknowns.md).
 - [x] Ctrl + right-click bag swapping; Ctrl+click bag contents' slot order and refusal text (game/bag_move).
 - [x] The tradeskill window: favourites, request waits, combine checks, trivial colours (experiment and auto-combine were already in).
 - [x] Hailstone's tradeskill window: each component's carried count (green / red), how many can be made, Combine / Combine N / Combine All with each result put away and a stop when the inventory is full (docs/mechanics.md; unit and mock tests, not seen live).
