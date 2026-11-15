@@ -554,7 +554,8 @@ helm) and `net/game_connection_vehicle.cpp` (the helm's packets); tests in `test
   is refused and stops the boat; the turn alone is still tried, so the bow can swing away, and it can back off. The
   hull is 16 probes (spheres of radius 1 just inside the model's outline, at the outermost point each way) swept from
   the old pose to the new; a probe touching something where it starts is not held by it. Its position goes out as OP_ClientUpdate under the boat's id ten times a second while it moves;
-  EQEmu moves the boat there and passes it on. Leaving the deck lets go.
+  EQEmu moves the boat there and passes it on. Leaving the deck lets go, and so do a zone change and a same-zone
+  respawn (the new zone may give the boat's id to another vehicle, which then smooths as any other).
 - EQEmu's warp detector measures the rider's world position, so a boat faster than the rider's run speed is logged
   as a warp for a player below the exempt status; it only logs.
 

@@ -383,6 +383,29 @@ TEST_CASE("Hover respawn: same-zone publication replaces player identity and pla
     CHECK(c.world().spawns.at(60).is_corpse);
 }
 
+TEST_CASE("Hover respawn: a same-zone respawn lets go of the boat being driven") {
+    HoverRig h;
+    REQUIRE(h.start());
+    auto& c = h.rig.conn;
+    auto& boat = c.world_for_test().spawns[9001];
+    boat.id = 9001;
+    boat.race = 141;
+    boat.gender = 2;
+    boat.is_npc = true;
+    ByteWriter take;
+    take.le<std::uint32_t>(9001);
+    take.le<std::uint8_t>(1);
+    take.zeros(3);
+    c.receive_zone_packet_for_test(AppPacket(to_wire(Op::ControlBoat), take.take()));
+    REQUIRE(c.world().driven_id == 9001);
+    h.rig.server.zone.send_reliable(bind_packet());
+    REQUIRE(h.rig.until([&] { return !c.respawn_window(); }));
+    h.publish(60);
+    REQUIRE(h.rig.until([&] { return c.world().player_id == 60; }));
+    CHECK(c.controlled_boat() == 0);
+    CHECK(c.world().driven_id == 0);
+}
+
 TEST_CASE("Hover respawn: Yes keeps both destinations and the timer until a destination is selected") {
     HoverRig h;
     REQUIRE(h.start(1000));
