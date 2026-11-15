@@ -670,14 +670,14 @@ and say so in the chat window.
   other than 0), 14 named, 15 roleplaying, 16 sitting, 17 sneaking, 18 standing, 19 stunned (player state 0x20),
   20 targetable, 21 trader, 22 underwater. Bits 8, 17 and 22 are never set at present.
 
-- `get_xtarget_data_bulk`: one record of `HS_XTARGET_RECORD_SIZE` (16) bytes per extended target slot, slot 0
+- `get_xtarget_data_bulk`: one record (`HS_Bulk_XTargetData`) of `HS_BULK_XTARGET_RECORD_SIZE` (16) bytes per extended target slot, slot 0
   first, as many as fit in `out_size` (only whole records; 0 bytes before the server sent the list). The slots are
   the same ones `get_xtarget` reads by index, a slot the server's extension hides from the window included. RoF2 has
   at most 20 slots (EQEmu: 5 plus the AA's), so 512 bytes is plenty.
 
   | Offset | Type | Field |
   |---|---|---|
-  | 0 | i32 | the slot's type, as `HailstoneXTarget.type`: an `HS_XTARGET_*` value (`enum HS_XTargetType`, the protocol's 0 to 26: 0 empty, 1 auto hater, 2 / 3 a specific PC / NPC, ... 25 / 26 the mercenary and its target) |
+  | 0 | i32 | the slot's type, as `HailstoneXTarget.type`: an `HS_BULK_XTARGET_*` value (`enum HS_BULK_XTargetTypes`, the protocol's 0 to 26: 0 empty, 1 auto hater, 2 / 3 a specific PC / NPC, ... 25 / 26 the mercenary and its target) |
   | 4 | i32 | the slot's spawn id, 0 for none |
   | 8 | i32 | the aggro meter's percent for the slot's spawn, as the server sent it (entries 7 to 26 of the meter, the extended target window's aggro labels; on EQEmu an NPC's is our hate against its current target's, a player's is its hate against our target's top). 0 with no spawn in the zone, without the meter (EQEmu's `Character:EnableAggroMeter`), or for a slot past the 20th |
   | 12 | i32 | the spawn's HP percent, as the extended target window draws it: the player's own from its points (items' HP included), anyone else's as the server last sent it (EQEmu sends it to everyone with the spawn on their list when the percent changes); 0 with no spawn in the zone or for a corpse |

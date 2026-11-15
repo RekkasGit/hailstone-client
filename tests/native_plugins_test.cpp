@@ -778,10 +778,10 @@ TEST_CASE("native plugins: get_xtarget_data_bulk, laid out as docs/plugins.md sa
     CHECK(h.printed_line("[Probe] xtargets 0 bytes"));
     auto& xs = A::xtargets(*h.world.conn).slots;
     xs.resize(5);
-    xs[0] = {1, 2, 10, "a_rat01"};          // an auto hater, a_rat01 at 80%
-    xs[1] = {1, 2, 11, "Fippy_Darkpaw000"}; // Fippy, set to 55% below
-    xs[2] = {1, 2, 13, "a_rat02"};          // the test world's corpse: no HP
-    xs[3] = {3, 1, 0, "Somebody"};          // a named slot without a spawn in the zone
+    xs[0] = {HS_BULK_XTARGET_AUTO_HATER, 2, 10, "a_rat01"};          // an auto hater, a_rat01 at 80%
+    xs[1] = {HS_BULK_XTARGET_AUTO_HATER, 2, 11, "Fippy_Darkpaw000"}; // Fippy, set to 55% below
+    xs[2] = {HS_BULK_XTARGET_AUTO_HATER, 2, 13, "a_rat02"};          // the test world's corpse: no HP
+    xs[3] = {HS_BULK_XTARGET_SPECIFIC_NPC, 1, 0, "Somebody"};        // a named slot without a spawn in the zone
     // slot 4 empty
     auto& aggro = A::aggro(*h.world.conn).pct;
     aggro[net::kAggroXTarget1] = 100;

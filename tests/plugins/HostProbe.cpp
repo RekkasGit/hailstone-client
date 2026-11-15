@@ -8,7 +8,7 @@
 //   /probebuffs [n], /probepetbuffs [n], /probespawns [n]  get_buff_data_bulk / get_pet_buff_data_bulk /
 //   get_spawns_data_bulk into n bytes (the whole buffer without n), read through the SDK's HS_Bulk_* structs cast
 //   onto the buffer
-//   /probextargets [n]  get_xtarget_data_bulk the same way
+//   /probextargets [n]  get_xtarget_data_bulk the same way, through HS_Bulk_XTargetData
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
 #include <cstddef>
@@ -156,16 +156,18 @@ void probe_spawns(void*, const char* args) {
     WriteChatf("[Probe] spawns %u, player %.2f %.2f %.2f, %zu bytes left", header->spawnCount,
         header->playerX, header->playerY, header->playerZ, size - at);
 }
-// Each extended target slot one line: slot, type, spawn id, aggro percent, HP percent.
+static_assert(sizeof(HS_Bulk_XTargetData) == HS_BULK_XTARGET_RECORD_SIZE);
+
+// Each extended target slot one line: slot, type (HS_BULK_XTARGET_*), spawn id, aggro percent, HP percent.
 void probe_xtargets(void*, const char* args) {
     unsigned char buf[512];
     const std::int32_t r = host->get_xtarget_data_bulk(host->host, buf, size_arg(args, sizeof buf));
-    hailstone::ByteReader rd(buf, r > 0 ? static_cast<std::size_t>(r) : 0);
-    for (int slot = 0; rd.remaining() >= HS_XTARGET_RECORD_SIZE; ++slot) {
-        const auto type = rd.le<std::int32_t>(), id = rd.le<std::int32_t>(), aggro = rd.le<std::int32_t>(),
-            hp = rd.le<std::int32_t>();
-        WriteChatf("[Probe] xtarget %d: %d %d %d %d", slot, static_cast<int>(type), static_cast<int>(id),
-            static_cast<int>(aggro), static_cast<int>(hp));
+    const std::size_t count = r > 0 ? static_cast<std::size_t>(r) / sizeof(HS_Bulk_XTargetData) : 0;
+    const auto* recs = reinterpret_cast<const HS_Bulk_XTargetData*>(buf);
+    for (std::size_t slot = 0; slot < count; ++slot) {
+        const HS_Bulk_XTargetData* rec = recs + slot;
+        WriteChatf("[Probe] xtarget %d: %d %d %d %d", static_cast<int>(slot), rec->targetType, rec->id,
+            rec->aggroPct, rec->pctHPs);
     }
     WriteChatf("[Probe] xtargets %d bytes", static_cast<int>(r));
 }
