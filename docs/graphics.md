@@ -254,7 +254,9 @@ generated GPU time is only a frame's that synthesised an in-between frame, not o
 
 Screenshots copy the presented swapchain image, so the swapchain asks for `TRANSFER_SRC` when the surface offers it;
 where it does not, a screenshot is refused with a log line (and a chat line for the screenshot key) instead of an
-invalid copy. The swapchain is made again when the window's framebuffer size changes from the size it was made for,
+invalid copy. The readback is 4 bytes a pixel, so it is also refused when the swapchain is not 8-bit RGBA or BGRA
+(`render::screenshot_format_supported`): a surface that offers no such format with sRGB colour space gets its first
+format, which may be FP16 or 10-bit HDR. A surface that reports no format at all fails the swapchain's creation. The swapchain is made again when the window's framebuffer size changes from the size it was made for,
 not whenever the surface's `currentExtent` differs from the window's size.
 
 Uploads do not wait for the GPU. `render::UploadBatch::submit` records its copies (and mip blits) into a command buffer

@@ -3,6 +3,7 @@
 #include <doctest/doctest.h>
 
 #include "render/swapchain_size.h"
+#include "render/vk_util.h"
 
 using namespace hailstone::render;
 
@@ -24,4 +25,11 @@ TEST_CASE("Swapchain size: a surface that lags a resize is caught up; one that d
     CHECK(surface_watch_frames(scaled, new_size) == kSurfaceWatchFrames);
     CHECK_FALSE(swapchain_outdated(new_size, new_size, scaled, scaled));
     CHECK_FALSE(swapchain_outdated(new_size, new_size, std::nullopt, scaled));
+}
+
+TEST_CASE("Screenshots: only 8-bit RGBA and BGRA swapchains are read back") {
+    CHECK(screenshot_format_supported(VK_FORMAT_B8G8R8A8_UNORM));
+    CHECK(screenshot_format_supported(VK_FORMAT_R8G8B8A8_SRGB));
+    CHECK_FALSE(screenshot_format_supported(VK_FORMAT_R16G16B16A16_SFLOAT));
+    CHECK_FALSE(screenshot_format_supported(VK_FORMAT_A2B10G10R10_UNORM_PACK32));
 }

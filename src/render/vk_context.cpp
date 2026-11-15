@@ -623,6 +623,8 @@ void VkContext::create_swapchain(VkSwapchainKHR old) {
     vkGetPhysicalDeviceSurfaceFormatsKHR(physical_, surface_, &count, nullptr);
     std::vector<VkSurfaceFormatKHR> formats(count);
     vkGetPhysicalDeviceSurfaceFormatsKHR(physical_, surface_, &count, formats.data());
+    formats.resize(count);
+    if (formats.empty()) throw std::runtime_error("swapchain: the surface reports no formats");
     // The post pass writes sRGB-encoded values itself (shaders/post.frag), so a UNORM target is
     // preferred; an SRGB one also works (the pass then leaves the encoding to it).
     VkSurfaceFormatKHR chosen = formats[0];
@@ -664,6 +666,12 @@ void VkContext::create_swapchain(VkSwapchainKHR old) {
                      (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
     screenshots_supported_ = (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0;
     if (!screenshots_supported_) log::warn("swapchain: the surface cannot be copied from; screenshots are off");
+    // The readback (end_frame) is 4 bytes a pixel in BGRA or RGBA order: a fallback format (formats[0] above, say
+    // FP16 or 10-bit HDR) is not, and copying it would overrun the buffer.
+    if (screenshots_supported_ && !screenshot_format_supported(chosen.format)) {
+        screenshots_supported_ = false;
+        log::warn("swapchain: format {} is not 8-bit RGBA or BGRA; screenshots are off", static_cast<int>(chosen.format));
+    }
     info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     info.preTransform = caps.currentTransform;
     info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
@@ -1319,7 +1327,8 @@ std::vector<VkContext::HeapUse> VkContext::heap_use() const {
 
 bool VkContext::request_screenshot(std::filesystem::path path, std::uint32_t max_width) {
     if (!screenshots_supported_) {
-        log::warn("screenshot {} not taken: the swapchain's images cannot be copied from", path.string());
+        log::warn("screenshot {} not taken: the swapchain's images cannot be copied from or are not 8-bit RGBA",
+                  path.string());
         return false;
     }
     screenshot_path_ = std::move(path);
@@ -2160,7 +2169,8 @@ void VkContext::end_frame(const FrameInfo& frame) {
     void* readback_data = nullptr;
     if (!screenshot_path_.empty() && !screenshots_supported_) {
         // Asked before a swapchain made without TRANSFER_SRC: the copy would be invalid.
-        log::warn("screenshot {} not taken: the swapchain's images cannot be copied from", screenshot_path_.string());
+        log::warn("screenshot {} not taken: the swapchain's images cannot be copied from or are not 8-bit RGBA",
+                  screenshot_path_.string());
         screenshot_path_.clear();
     }
     // --screenshot-generated: the in-between frame saved as asked and the real one beside it (the two are one frame
