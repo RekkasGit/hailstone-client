@@ -96,8 +96,12 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
     case Op::EvolveItem: {
         // Native receive @0x461120: action 0 changes the received instance's progress/activation only. Crossing
         // 100% never grants a level or replaces a template locally: the server sends it through OP_ItemPacket.
+        // The transfer window's actions (1 open, 2 details) go to game_connection_evolving.cpp.
         const auto update = decode_evolving_item_update(p);
-        if (!update) break;
+        if (!update) {
+            handle_evolving_item(p);
+            break;
+        }
         const auto matches = [&](const Item& it) {
             const auto unique_id = static_cast<std::uint64_t>(it.instance_id) |
                                    (static_cast<std::uint64_t>(it.parcel_item_id) << 32);

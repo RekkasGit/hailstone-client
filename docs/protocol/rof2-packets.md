@@ -169,7 +169,7 @@ Hover completion (EQEmu source sequence, covered by the loopback tests in `tests
 | AugmentItem | C→Z | 0x661b | 40 B: u64 host serial (instance id, parcel id; ignored by the server), InventorySlot host, u32 socket 0..5, InventorySlot distiller (-1, -1, 0xffff and 2 unwritten bytes when none), u32 action (0 insert, 1 remove, 2 swap, 3 destroy). The cursor augment is never named. No reply packet: the server answers with OP_ItemPacket 0x67 (the host rebuilt, same serial), OP_MoveItem / OP_DeleteItem, OP_ItemPacket 0x6a (an augment back on the cursor) or red chat |
 | AugmentInfo | both | 0x0afb | 76 B: u32 item id, u32 window, `char[64]` name, u32 (EQEmu unknown072). Request: the augment's SolventItemID and the display's index, the rest 0; reply: the solvent's name (shown as eqstr 5881; 13325 when the last field is 55, never from EQEmu) |
 | EvolveItem | C→Z | 0x7cfb | Final Result: 24 B, six u32 values: action **4**, source template id, final template id hint, current evolution level, unaugmented item-link hash, !Shift (1 normally, 0 with Shift). The item display's hyperlink action 1 maps to this wire action 4. The server answers with an ordinary ItemPacketViewLink / ItemLinkResponse, never a local grant |
-| EvolveItem | Z→C | 0x7cfb | Progress: 24 B, u32 action **0**, u32 unused, u64 persistent instance id, u32 percentage, u32 activated. The id is `instance_id \| (u64(parcel_item_id) << 32)` from item serialization. Updates only the matching received evolving instance; the level and template change only through subsequent inventory item packets. Transfer actions 1/2 are outside this inspection path |
+| EvolveItem | Z→C | 0x7cfb | Progress: 24 B, u32 action **0**, u32 unused, u64 persistent instance id, u32 percentage, u32 activated. The id is `instance_id \| (u64(parcel_item_id) << 32)` from item serialization. Updates only the matching received evolving instance; the level and template change only through subsequent inventory item packets. Transfer actions 1–3: see "Evolving items" below |
 
 **Serialized item** (`SerializeItem`, all `#pragma pack(1)`; every field read one by one in `read_item`, and `write_item` reproduces the server's bytes exactly, which the live fixture test checks):
 
@@ -227,6 +227,27 @@ Observed sequences (EQEmu server, `playprobe --shop/--hail/--handin/--trade-with
 - Hand-in: OP_TradeRequest → OP_TradeRequestAck {me, Tabure}; OP_MoveItem cursor → trade 0; OP_TradeAcceptClick → OP_FinishTrade, item packet 0x6a "Dirty Training Tunic (Legendary)" onto the cursor, his speech and five faction messages.
 - Player trade: the partner gets OP_TradeRequest, acknowledges, receives the offer as item packet 0x65 (slot 0) and the coin as OP_TradeCoins (+2 silver); both OP_TradeAcceptClick, then OP_MoneyUpdate, the item as 0x67 (stacked into an existing stack), OP_FinishTrade. A client that disconnects with an open give window gets its item back (server refund).
 - On every camp the server sends OP_CancelTrade {own id, action 7}; with no trade open it is ignored.
+
+### Evolving items (`net/evolving_packets.h`, `net/game_connection_evolving.cpp`)
+
+`OP_EvolveItem` is `0x7cfb`. Layouts were checked against EQEmu's RoF2 serializer and the native handlers
+`0x6af8e0` (details), `0x6b0230` (selection/confirmation) and `0x6b00b0` (confirmed transfer). Action 0 (progress)
+and action 4 (Final Result) are the EvolveItem rows of the item table above.
+
+| Action | Direction | Payload |
+|---|---|---|
+| 1 open | Z→C | 24 B, action 0's envelope; opens the transfer window and clears its selection; no client open request |
+| 2 details request | C→Z | 24 B: `u32 action, u32 zero, u64 source ID, u64 destination ID` |
+| 2 details reply | Z→C | 30 B header: `u32 action, u64 source ID, u64 destination ID, u32 compatibility percent, u32 max level, u8 source present, u8 destination present`, followed by each present serialized item |
+| 3 transfer | C→Z | 24 B, same layout as the details request, sent only after explicit confirmation |
+
+An evolving item's ID combines the serialized header's `parcel_item_id` high word and `instance_id` low word;
+the serial text is a different identity. The details reply uses original IDs in its header, but its serialized
+items are projected resulting forms. Hailstone matches the selected original pair and rejects invalid presence
+flags, truncated items and trailing data. Confirmation rechecks live originals and the approval revision.
+The protocol has no request nonce: two replies for the same pair cannot be distinguished (see `docs/unknowns.md`).
+The server rechecks on action 3 and supplies results through ordinary inventory updates and messages, with no
+dedicated success reply. No preview is applied optimistically to inventory.
 
 ### Bank, coin moves and stack splits (`GameConnection` in `net/game_connection_bank.cpp` and `net/game_connection_items.cpp`, rules in `game/bank.{h,cpp}`)
 

@@ -13,6 +13,7 @@
 #include <string>
 
 #include <imgui.h>
+#include <lua.hpp>
 
 #include "app/lua_eq.h"
 #include "app/lua_eq_windows.h"
@@ -25,11 +26,168 @@
 #include "game/server_ext.h"
 #include "game/spells.h"
 #include "net/game_connection.h"
+#include "net/evolving_packets.h"
 #include "ui/lua/lua_host.h"
 
 namespace hailstone::app {
 
 namespace {
+
+EqHost& transfer_host(lua_State* L) {
+    return *static_cast<EqHost*>(lua_touserdata(L, lua_upvalueindex(1)));
+}
+
+bool transfer_token(lua_State* L, int at, std::uint64_t& value) {
+    if (lua_type(L, at) != LUA_TSTRING) return false;
+    std::size_t length = 0;
+    const char* begin = lua_tolstring(L, at, &length);
+    if (!length || length > 20 || (length > 1 && *begin == '0')) return false;
+    const auto result = std::from_chars(begin, begin + length, value);
+    return result.ec == std::errc{} && result.ptr == begin + length;
+}
+
+void transfer_text(lua_State* L, const char* key, const std::string& value) {
+    lua_pushlstring(L, value.data(), value.size());
+    lua_setfield(L, -2, key);
+}
+
+void transfer_bool(lua_State* L, const char* key, bool value) {
+    lua_pushboolean(L, value);
+    lua_setfield(L, -2, key);
+}
+
+void transfer_item(lua_State* L, const net::Item& item) {
+    lua_newtable(L);
+    transfer_text(L, "id", std::to_string(net::evolving_item_id(item)));
+    transfer_text(L, "name", item.name);
+    lua_pushinteger(L, item.evolving.evolve_level);
+    lua_setfield(L, -2, "level");
+    lua_pushinteger(L, item.evolving.evolve_max_level);
+    lua_setfield(L, -2, "maxLevel");
+    lua_pushnumber(L, std::isfinite(item.evolving.progress) ? item.evolving.progress : 0.0);
+    lua_setfield(L, -2, "progress");
+    lua_pushinteger(L, item.icon);
+    lua_setfield(L, -2, "icon");
+}
+
+int ItemExpTransfer(lua_State* L) {
+    auto& h = transfer_host(L);
+    lua_newtable(L);
+    const auto* c = h.in_game ? h.conn : nullptr;
+    const auto* state = c ? &c->evolving_transfer() : nullptr;
+    transfer_bool(L, "shown", state && state->shown);
+    transfer_bool(L, "pending", state && state->pending);
+    transfer_bool(L, "submitted", state && state->submitted);
+    transfer_bool(L, "canTransfer", c && c->can_transfer_evolving());
+    transfer_bool(L, "hasDetails", state && state->details.has_value());
+    transfer_bool(L, "compatible", state && state->details && state->details->compatibility != 0);
+    transfer_text(L, "source", state && state->source_id ? std::to_string(state->source_id) : "");
+    transfer_text(L, "destination", state && state->destination_id ? std::to_string(state->destination_id) : "");
+    transfer_text(L, "revision", state ? std::to_string(state->revision) : "0");
+    transfer_text(L, "status", state ? state->status : "");
+    lua_pushinteger(L, state && state->details ? state->details->compatibility : 0);
+    lua_setfield(L, -2, "compatibility");
+    lua_pushinteger(L, state && state->details ? state->details->max_transfer_level : 0);
+    lua_setfield(L, -2, "maxTransferLevel");
+    if (state && state->details) {
+        if (state->details->source) {
+            transfer_item(L, *state->details->source);
+            lua_setfield(L, -2, "previewSource");
+        }
+        if (state->details->destination) {
+            transfer_item(L, *state->details->destination);
+            lua_setfield(L, -2, "previewDestination");
+        }
+    }
+    lua_newtable(L);
+    if (c && state->shown) {
+        int index = 0;
+        for (const auto& item : c->evolving_transfer_items()) {
+            transfer_item(L, item);
+            lua_rawseti(L, -2, ++index);
+        }
+    }
+    lua_setfield(L, -2, "items");
+    return 1;
+}
+
+int ItemExpTransferSelect(lua_State* L) {
+    auto& h = transfer_host(L);
+    std::uint64_t id = 0;
+    std::size_t length = 0;
+    const char* data = lua_type(L, 1) == LUA_TSTRING ? lua_tolstring(L, 1, &length) : nullptr;
+    const std::string_view side(data ? data : "", length);
+    const bool valid = side == "source" || side == "destination";
+    const bool empty = lua_type(L, 2) == LUA_TSTRING && lua_rawlen(L, 2) == 0;
+    lua_pushboolean(L, valid && h.conn && h.in_game && (empty || transfer_token(L, 2, id)) &&
+                       h.conn->select_evolving_transfer(side == "source", id));
+    return 1;
+}
+
+int ItemExpTransferConfirm(lua_State* L) {
+    auto& h = transfer_host(L);
+    std::uint64_t source = 0, destination = 0, revision = 0;
+    bool accepted = false;
+    if (h.conn && h.in_game && transfer_token(L, 1, source) && transfer_token(L, 2, destination) &&
+        transfer_token(L, 3, revision)) {
+        const auto& state = h.conn->evolving_transfer();
+        if (source == state.source_id && destination == state.destination_id)
+            accepted = h.conn->request_evolving_transfer(revision);
+    }
+    lua_pushboolean(L, accepted);
+    return 1;
+}
+
+const net::Item* displayed_transfer_item(EqHost& h, std::string_view screen) {
+    if (!h.conn || !h.in_game || !h.item_displays) return nullptr;
+    std::size_t index = 0;
+    if (screen != "ItemDisplayWindow") {
+        constexpr std::string_view prefix = "ItemDisplayWindow#";
+        if (!screen.starts_with(prefix)) return nullptr;
+        const auto number = screen.substr(prefix.size());
+        const auto parsed = std::from_chars(number.data(), number.data() + number.size(), index);
+        if (parsed.ec != std::errc{} || parsed.ptr != number.data() + number.size() || index < 2) return nullptr;
+        --index;
+    }
+    if (index >= h.item_displays->size()) return nullptr;
+    const auto& item = h.item_displays->at(index);
+    if (!item.is_evolving || !net::evolving_item_id(item)) return nullptr;
+    for (const auto& owned : h.conn->evolving_transfer_items())
+        if (net::evolving_item_id(owned) == net::evolving_item_id(item) && owned.id == item.id) return &item;
+    return nullptr;
+}
+
+int ItemDisplayCanTransfer(lua_State* L) {
+    std::size_t length = 0;
+    const char* name = luaL_checklstring(L, 1, &length);
+    lua_pushboolean(L, displayed_transfer_item(transfer_host(L), {name, length}) != nullptr);
+    return 1;
+}
+
+int ItemDisplayTransfer(lua_State* L) {
+    auto& h = transfer_host(L);
+    std::size_t length = 0;
+    const char* name = luaL_checklstring(L, 1, &length);
+    const auto* item = displayed_transfer_item(h, {name, length});
+    if (item) {
+        const auto id = net::evolving_item_id(*item);
+        h.conn->open_evolving_transfer();
+        lua_pushboolean(L, h.conn->select_evolving_transfer(true, id));
+    } else lua_pushboolean(L, false);
+    return 1;
+}
+
+class ItemExpTransferWindow final : public StockWindow {
+public:
+    ItemExpTransferWindow() : StockWindow("ItemExpTransferWnd", false) {}
+    bool shown(EqHost& h) override { return h.conn && h.in_game && h.conn->evolving_transfer().shown; }
+    void set_shown(EqHost& h, bool show) override {
+        if (!h.conn) return;
+        if (show && h.in_game) h.conn->open_evolving_transfer();
+        else h.conn->close_evolving_transfer();
+    }
+    std::string title(EqHost&) override { return "Evolving Item Experience Transfer"; }
+};
 
 // "IDW_Row12Col3Value" -> {12, 3, "Value"}
 bool parse_cell(std::string_view id, int& row, int& col, std::string_view& part) {
@@ -576,10 +734,20 @@ public:
 };
 
 void add_item_display_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
+    out.push_back(std::make_unique<ItemExpTransferWindow>());
     out.push_back(std::make_unique<ObjectPreviewWindow>());
     for (int n = 0; n < kItemDisplayWindows; ++n)
         out.push_back(std::make_unique<ItemDisplayWindow>(
             n, n == 0 ? std::string("ItemDisplayWindow") : "ItemDisplayWindow#" + std::to_string(n + 1)));
+}
+
+void register_item_transfer_api(lua_State* L, EqHost& host) {
+    static const luaL_Reg functions[] = {
+        {"ItemExpTransfer", ItemExpTransfer}, {"ItemExpTransferSelect", ItemExpTransferSelect},
+        {"ItemExpTransferConfirm", ItemExpTransferConfirm}, {"ItemDisplayCanTransfer", ItemDisplayCanTransfer},
+        {"ItemDisplayTransfer", ItemDisplayTransfer}, {nullptr, nullptr}};
+    lua_pushlightuserdata(L, &host);
+    luaL_setfuncs(L, functions, 1);
 }
 
 } // namespace hailstone::app

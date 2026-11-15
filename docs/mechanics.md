@@ -1467,6 +1467,22 @@ Vectors in `tests/hotbutton_tracking_vectors_test.cpp` (do-hot-button 4000, hot-
   once. Progress above 100% is retained (a large XP reward can overshoot before replacement). Neither reaching
   nor exceeding 100% advances a level locally: the server must send the evolved replacement item.
   Packet, mock-server, bridge and gamepad UI tests cover this path; live evolution and controller acceptance remain open.
+- Evolving-item experience transfer (`net/game_connection_evolving.cpp`): both packs offer Transfer evolving
+  experience on an owned evolving item's display and open `ItemExpTransferWnd`; the server's action 1 opens it too,
+  clearing any selection. RoF2's two selection buttons take the item on the cursor (CItemExpTransferWnd::WndNotification
+  @0x6b0230); Hailstone instead lists worn, carried, bagged and cursor items in two selectors, the places EQEmu
+  searches (`HasEvolvingItem` over personal, worn and cursor). Each complete selection sends action 2 with both
+  64-bit evolving IDs (the header's `parcel_item_id` high word, `instance_id` low word). The server answers with
+  the compatibility percent, the max-transfer level (zero is valid) and the projected source and destination
+  forms; Transfer stays disabled until both projections exist and compatibility is nonzero. Transfer asks the
+  native confirmation question (eqstr 6148); Cancel sends nothing. Confirmation is bound to the original IDs, the
+  preview's revision and the live originals as serialized less their progress and activation (an action-0 tick
+  neither cancels it nor asks for a new preview; the preview's projected progress may then lag), and sends action
+  3 once. The previews are never put
+  into the inventory and no success is reported locally: the server recalculates, replaces both items on the
+  cursor and sends its own messages. A refusal changes no items (EQEmu prints "Transfer Failed" in chat), so the
+  window says the transfer was sent and that choosing an item starts over; RoF2 clears both selections once it
+  has sent the transfer (`0x6b00b0`). Zoning or disconnecting closes the window.
 - The stats-disabled flags on items (`game::update_stats_disabled`): set from the UseItem (0x13) and Ornament (0x15)
   game features and the OP_SendMembership entries, on the worn items before the stat sums and on a shown item; a
   disabled child adds nothing to SumStat unless its owner is disabled too. EQEmu sends UseItem -1 and Ornament 1, so
