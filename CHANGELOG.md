@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Graphics: the first start fits the graphics settings to the computer. A laptop or tablet with integrated graphics, a graphics card with under 3 GiB of memory, or a processor with fewer than 4 threads starts at Low (which also uses the classic lighting and AMD FSR 1, without Frame Generation), and a card with 3 to 6 GiB starts at Medium; other computers keep today's settings. Existing installs keep their settings. Options > Graphics > Detect (gamepad: Display) applies the settings for this computer at any time
+- Graphics: the first start fits the graphics settings to the computer. A laptop or tablet with integrated graphics, a graphics card with under 3 GiB of memory, or a processor with fewer than 4 threads starts at Low (which also uses the classic lighting and AMD FSR 1, without Frame Generation or radial flora), and a card with 3 to 6 GiB starts at Medium; other computers keep today's settings. Existing installs keep their settings. Options > Graphics > Detect (gamepad: Display) applies the settings for this computer at any time
 
 ## 0.7.1-beta (2026-11-15)
 

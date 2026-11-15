@@ -19,7 +19,8 @@ constexpr std::uint64_t kGiB = 1024ull * 1024ull * 1024ull;
 // at the output's size, whatever the render scale, too much for an integrated GPU); Medium and High keep the player's.
 // The lighting: Low draws with the classic lighting (the original's look, far lighter than the modern one's per-pixel
 // sun, sky and point lights); Medium and High keep the player's choice.
-constexpr std::size_t kKeyCount = 14;
+// Radial flora (the Options window's Radial Flora, ShowGrass): off on Low; Medium and High keep the player's.
+constexpr std::size_t kKeyCount = 15;
 
 constexpr std::array<TierSetting, kKeyCount> kLow = {{
     {"display.shadows", "0"},
@@ -36,6 +37,7 @@ constexpr std::array<TierSetting, kKeyCount> kLow = {{
     {"display.upscaler", "fsr1"},
     {"display.frame_gen", "0"},
     {"display.lighting", "classic"},
+    {"display.grass", "0"},
 }};
 
 constexpr std::array<TierSetting, kKeyCount> kMedium = {{
@@ -53,6 +55,7 @@ constexpr std::array<TierSetting, kKeyCount> kMedium = {{
     {"display.upscaler", "", true},
     {"display.frame_gen", "", true},
     {"display.lighting", "", true},
+    {"display.grass", "", true},
 }};
 
 constexpr std::array<TierSetting, kKeyCount> kHigh = {{
@@ -70,6 +73,7 @@ constexpr std::array<TierSetting, kKeyCount> kHigh = {{
     {"display.upscaler", "", true},
     {"display.frame_gen", "", true},
     {"display.lighting", "", true},
+    {"display.grass", "", true},
 }};
 
 } // namespace

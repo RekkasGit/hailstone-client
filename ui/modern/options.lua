@@ -672,7 +672,7 @@ local function graphicsTab()
     if tier ~= nil then
       local tierName = ({ [0] = "Low", [1] = "Medium", [2] = "High" })[tier] or "High"
       row("Detect", "Sets the graphics this computer's graphics card and processor suit, as the first start did: "
-          .. tierName .. " here (Low also uses the classic lighting and AMD FSR 1). Anti-aliasing and the upscaler change the next time the game starts.", function()
+          .. tierName .. " here (Low also uses the classic lighting and AMD FSR 1, without radial flora). Anti-aliasing and the upscaler change the next time the game starts.", function()
         if ui.Button("Use " .. tierName .. " for This Computer", 0, 0) then eq.SetOption("detect_graphics", 1) end
       end)
     end

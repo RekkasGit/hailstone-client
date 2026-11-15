@@ -1887,8 +1887,8 @@ Low and Medium are the Options window's quality presets of the same names (Graph
 anti-aliasing, ambient occlusion, distance blur, view distance), with a few more of the costlier settings; High
 leaves every one at its default, so it never picks Ultra. Low also turns AMD FSR 3.1 and frame generation off (each
 costs a fixed share of the frame at the output's size, whatever the render scale; on an Intel Iris Xe tablet FSR 3.1
-was far slower than FSR 1) and draws with the classic lighting; Medium and High keep what the player chose for those
-three (kept), and Options > Graphics notes on a Low computer that FSR 3.1 and frame generation are slow there:
+was far slower than FSR 1) and draws with the classic lighting and no radial flora; Medium and High keep what the player chose for
+those four (kept), and Options > Graphics notes on a Low computer that FSR 3.1 and frame generation are slow there:
 
 | Key | Low | Medium |
 |---|---|---|
@@ -1906,6 +1906,7 @@ three (kept), and Options > Graphics notes on a Low computer that FSR 3.1 and fr
 | `display.upscaler` | fsr1 | (kept) |
 | `display.frame_gen` | 0 | (kept) |
 | `display.lighting` | classic | (kept) |
+| `display.grass` | 0 (Radial Flora off) | (kept) |
 
 The tier is written only to a new install's `hailstone.ini` (one with no `display.` key yet; the asset folder the
 picker saves first does not count). An existing install keeps its settings. Either way the tier found is saved as

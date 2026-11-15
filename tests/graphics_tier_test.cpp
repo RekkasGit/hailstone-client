@@ -111,10 +111,11 @@ TEST_CASE("graphics tier: Low turns FSR 3.1 and frame generation off; Medium and
     CHECK_FALSE(c.get_bool("display.frame_gen", true));
 }
 
-TEST_CASE("graphics tier: Low draws with the classic lighting; Medium and High keep the player's") {
+TEST_CASE("graphics tier: Low draws with the classic lighting and no radial flora; Medium and High keep the player's") {
     Config c;
     apply_graphics_tier(c, GraphicsTier::Low);
     CHECK(c.get_string("display.lighting") == "classic");
+    CHECK_FALSE(c.get_bool("display.grass", true)); // radial flora off
     apply_graphics_tier(c, GraphicsTier::Medium);
     CHECK(c.get_string("display.lighting") == "classic"); // not forced back to modern
     c.set("display.lighting", "modern");
