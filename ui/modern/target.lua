@@ -1,8 +1,10 @@
 -- Target frame: replaces the game's TargetWindow. The target's name in its con colour, its health, its target (the
 -- target of target, when the server sends it), the aggro meter (the AggroMeterWnd's values: our share of the
 -- target's hate, gauge 149 / label 305, and the most hated besides us, labels 303 / 307; aggro.lua keeps the stock
--- window from showing) and its buffs under the frame. Hidden while nothing is targeted.
+-- window from showing) and its buffs under the frame, each with the buff's menu on a right click (lib/buffmenu.lua:
+-- Spell Info). Hidden while nothing is targeted.
 local hud = dofile("lib/hud.lua")
+local buffmenu = dofile("lib/buffmenu.lua")
 local T = hud.T
 local C = T.color
 local WINDOW = "TargetWindow"
@@ -36,7 +38,7 @@ local function targetBuffs()
         b = {}
         buffs[nBuffs] = b
       end
-      b.id, b.hit, b.ms, b.name, b.good = IDS[i], HITS[i], ms, name, good
+      b.id, b.hit, b.spell, b.ms, b.name, b.good = IDS[i], HITS[i], spell, ms, name, good
       -- the time left on it (T.Duration), formatted again only when what it shows changes
       local key = (not ms or ms < 0 or ms >= 100 * 3600000) and -1 or math.floor(ms / 1000)
       if b.durKey ~= key then b.durKey, b.duration = key, T.Duration(ms) end
@@ -142,14 +144,19 @@ local function body(x, y, w, h, s)
     local tex, u0, v0, u1, v1 = eq.ChildArt(WINDOW, b.id, "decal")
     if type(tex) ~= "userdata" then tex = nil end
     T.Icon(ix, yy, ICON * s, s, tex, u0, v0, u1, v1, b.good and C.good or C.bad, { radius = 4 })
-    T.Hit(b.hit, ix, yy, ix + ICON * s, yy + ICON * s)
+    T.Hit(b.hit, ix, yy, ix + ICON * s, yy + ICON * s, false)
     if ui.IsItemHovered() then
-      ui.SetTooltip(b.name .. "\n" .. T.LongDuration(b.ms))
+      ui.SetTooltip(b.name .. "\n" .. T.LongDuration(b.ms) .. "\n" .. buffmenu.Hint())
+    end
+    if ui.IsItemClicked(ui.Mouse.Right) and not ui.GetIO().alt then
+      buffmenu.Open(WINDOW, b)
+      T.TakeRightClick()
     end
     if b.ms and b.ms >= 0 and b.ms < 60000 then
       T.Text(ix + ICON * s / 2, yy + ICON * s - 9 * s, b.duration, C.text, T.font.tiny, "center")
     end
   end
+  buffmenu.Draw(WINDOW)
 end
 
 ui.window("Target", function()

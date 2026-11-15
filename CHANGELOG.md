@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Modern interface: a right click on a buff in the target window or the pet window opens that buff's menu, as your own buffs' does: Spell Info, and for the pet's buffs Add to Blocked Pet Spells. Before, the target's buffs opened the frame's menu and the pet's did nothing
 - Texture packs with generated trees: the pines are less dense, with gaps in their crowns, and their needles no longer show bright twig streaks. Trees no longer visibly change their leaves as you move towards or away from them, and forests such as Greater Faydark draw faster (about 15 % in a dense view). Rebuild a pack's trees in the Texture Studio to get them
 - Your own character now keeps the ornaments on what you wear when you equip, swap or unequip gear: a weapon ornament's model and an armour ornament's Hero's Forge model. Before, your own model went back to the plain item's look on every gear change until you zoned, though other players still saw the ornament
 - Modern lighting: in rain and snow, trees from a texture pack with generated trees no longer turn pale, sky-coloured or white. Leaves and other cut-out surfaces no longer get puddles or snow, and get a lighter wet look
