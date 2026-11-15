@@ -644,7 +644,7 @@ function hud.Dialog(screen, title, opts, body)
   local shown, sx, sy = gameShown(screen)
   if opts.shown ~= nil then shown = opts.shown end
   if not shown then return end
-  if sx == nil then _, sx, sy = eq.ReplaceWindow(screen) end -- (where the stock window sits)
+  if sx == nil then sx, sy = select(2, eq.ReplaceWindow(screen)) end -- (where the stock window sits)
   local k = keysOf(key)
   local io = ui.GetIO()
   local ownScale = num(k.scale, 1.0)
