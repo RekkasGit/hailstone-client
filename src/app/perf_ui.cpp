@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <numeric>
+#include <unordered_map>
 #include <vector>
 
 #include "core/frame_sections.h"
@@ -86,6 +87,50 @@ std::string hitch_text(float frame_ms, float typical_ms, const PhaseTimes& phase
     return text;
 }
 
+void SectionAverages::add_swap(Sections& sections, Allocations& bytes) {
+    if (history_.size() < frames_) {
+        history_.push_back(Frame{std::move(sections), std::move(bytes)});
+        sections.clear(); // (moved from: valid, its state unspecified)
+        bytes.clear();
+        return;
+    }
+    Frame& slot = history_[head_];
+    slot.sections.swap(sections);
+    slot.bytes.swap(bytes);
+    head_ = (head_ + 1) % frames_;
+}
+
+std::vector<SectionAverages::Row> SectionAverages::rows() const {
+    std::vector<Row> out;
+    // Names match by address (frame_sections::add); an index keeps this linear in the entries, with hundreds of
+    // sections (plugin windows', lua_host.cpp kPluginSections) over 60 frames.
+    std::unordered_map<const char*, std::size_t> index;
+    auto row = [&out, &index](const char* name) -> Row& {
+        auto [it, added] = index.try_emplace(name, out.size());
+        if (added) out.push_back(Row{name, 0.0f, 0.0f, 0.0f, false});
+        return out[it->second];
+    };
+    for (const Frame& frame : history_) {
+        for (const auto& [name, ms] : frame.sections) {
+            Row& r = row(name);
+            r.avg_ms += ms; // the sums until the division below
+            r.max_ms = std::max(r.max_ms, ms);
+        }
+        for (const auto& [name, b] : frame.bytes) {
+            Row& r = row(name);
+            r.avg_bytes += static_cast<float>(b);
+            r.has_bytes = true;
+        }
+    }
+    const auto n = static_cast<float>(std::max<std::size_t>(1, history_.size()));
+    for (Row& r : out) {
+        r.avg_ms /= n;
+        r.avg_bytes /= n;
+    }
+    std::stable_sort(out.begin(), out.end(), [](const Row& a, const Row& b) { return a.avg_ms > b.avg_ms; });
+    return out;
+}
+
 FrameRates frame_rates(const std::vector<float>& ms, const std::vector<std::uint8_t>& presented,
                        const std::vector<std::uint8_t>& generated) {
     FrameRates r;
@@ -107,15 +152,18 @@ void PerfUi::begin_frame() {
     auto now = Clock::now();
     if (frames_++ > 0) {
         float frame = std::chrono::duration<float, std::milli>(now - frame_start_).count();
-        auto sections = core::frame_sections::take();
+        // Into vectors that come back from the ring (add_swap): no allocation a frame, even with the window closed.
+        core::frame_sections::take_into(taken_sections_);
+        core::frame_sections::take_bytes_into(taken_bytes_);
         if (is_hitch(frame, typical_ms_)) {
-            if (log_hitches_) log::info("perf: {}", hitch_text(frame, typical_ms_, current_, std::move(sections)));
+            if (log_hitches_) log::info("perf: {}", hitch_text(frame, typical_ms_, current_, taken_sections_));
         } else {
             typical_ms_ = typical_ms_ > 0.0f ? typical_ms_ * 0.95f + frame * 0.05f : frame;
         }
         if (!paused_) {
             frame_ms_[head_] = frame;
             phase_ms_[head_] = current_;
+            sections_.add_swap(taken_sections_, taken_bytes_);
             presented_[head_] = current_presented_;
             generated_[head_] = current_generated_;
             head_ = (head_ + 1) % kFrames;
@@ -312,6 +360,38 @@ void PerfUi::draw(const PerfInputs& in) {
         ImGui::TextDisabled("A large Wait means the GPU (or vsync) sets the pace; large Update/UI/Record, the CPU.");
         ImGui::TextDisabled("slowest: the %.1f ms frame of the last %zu.", static_cast<double>(frame_ms_[slowest]),
                             count_);
+    }
+
+    // The named laps inside the phases (core/frame_sections.h): each Lua window, the Lua collector, draw_ui, ...
+    if (ImGui::CollapsingHeader("Frame sections (avg of the last 60 frames, and the slowest)") &&
+        sections_.frames() > 0) {
+        static ImGuiTextFilter filter;
+        filter.Draw("Filter##sections", -1.0f);
+        const auto rows = sections_.rows();
+        constexpr ImGuiTableFlags kScroll = kTable | ImGuiTableFlags_ScrollY;
+        if (ImGui::BeginTable("sections", 4, kScroll, ImVec2(0.0f, 260.0f))) {
+            ImGui::TableSetupScrollFreeze(0, 1);
+            ImGui::TableSetupColumn("Section");
+            ImGui::TableSetupColumn("avg ms", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+            ImGui::TableSetupColumn("slowest", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+            ImGui::TableSetupColumn("KB/frame", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+            ImGui::TableHeadersRow();
+            for (const auto& r : rows) {
+                if (!filter.PassFilter(r.name)) continue;
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(r.name);
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%.3f", static_cast<double>(r.avg_ms));
+                ImGui::TableSetColumnIndex(2);
+                ImGui::Text("%.3f", static_cast<double>(r.max_ms));
+                ImGui::TableSetColumnIndex(3);
+                if (r.has_bytes) ImGui::Text("%.1f", static_cast<double>(r.avg_bytes) / 1024.0);
+            }
+            ImGui::EndTable();
+        }
+        ImGui::TextDisabled("Sections nest: \"Lua UI frame\" holds every \"Lua window\" row and the Lua collector.");
+        ImGui::TextDisabled("KB/frame: what the Lua state allocated in it, most of it garbage for the collector.");
     }
 
     if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen) && ImGui::BeginTable("render", 2, kTable)) {
