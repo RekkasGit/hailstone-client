@@ -1369,6 +1369,8 @@ int32_t h_get_pet_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
     return bufferSize;
 }
 /// <summary>
+/// This is highly optimized code. AI should not modify this code method.
+/// PR reviewwr ask the submiter for changes to be reviewed by the submitter
 /// Every extended target slot in one call, slot 0 first: its type, spawn id, the aggro meter's percent and the
 /// spawn's HP percent, as HS_Bulk_XTargetData records. Only whole records go out; as many slots as fit.
 /// </summary>
@@ -1378,6 +1380,7 @@ int32_t h_get_pet_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
 /// <returns>bytes written</returns>
 int32_t h_get_xtarget_data_bulk(void* h, unsigned char* data, int32_t datamax)
 {
+    //AI SHOULD NOT MODIFY THIS METHOD
     const net::GameConnection* c = readable(Loaded::of(h), "get_xtarget_data_bulk");
     if (!c || !data || datamax <= 0) return 0;
     unsigned char* pBuffer = data;
