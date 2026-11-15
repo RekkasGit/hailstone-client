@@ -806,19 +806,22 @@ find affect slot 1600). Each record is replayed call for call against the record
 ## Loot All
 
 CLootWnd::LootAll @0x6bdba0 visits bags first and then other items, keeping corpse-slot order within each pass,
-including on the player's own corpse. Its queue-pointer guard @0x6bdbf5 ignores activation while a queue already
-exists. Hailstone keeps that queue and any outstanding OP_LootItem request intact on repeated activation, including
-the wait for the final item's reply when no later slots remain queued. Replies advance the queue one item at a
-time. A request that cannot be sent releases its busy state and cancels the automatic queue so the player can retry.
+including on the player's own corpse. Its guard @0x6bdbf5 ignores activation while its list (+0x3a0) exists; neither
+it nor the button (WndNotification @0x6be180) looks at an individual loot request awaiting its reply. The list lives
+until the reply that exhausts it (Handle_OP_LootItem @0x6bd414). Every OP_LootItem reply advances the list by one,
+an individual loot's reply too, and the list is not checked against what is still on the corpse, so an item asked for
+on its own just before Loot All is asked for again. Hailstone does the same. Its own additions: while a Loot All is
+active the button does not open the "are you sure" question, whose yes would be ignored; and a request that cannot be
+sent (any loot request) cancels the automatic queue so the player can retry.
 
 A NO DROP item requiring confirmation is left out of the queue and opens the first question during the scan
-(@0x6bdf93). Encountering another item requiring confirmation aborts the queue but leaves that first question alive;
-answering it still applies to its original slot. Closing after Loot All waits for every outstanding loot reply,
-including a confirmed NO DROP request sent while an ordinary item is still pending (native close timing for that
-overlap remains untraced; docs/unknowns.md). If a loot question was already
-pending before the scan, it stays unchanged and no new question is created. Bags-first ordering and the player's
-own-corpse exemption from NO DROP questions are unchanged. Planner and mock-server regressions cover these paths;
-rapid activation with delayed replies and recovery from several NO DROP items still need live acceptance.
+(@0x6bdf93). Another item requiring confirmation aborts the queue but leaves that first question alive; answering it
+still applies to its original slot. If a loot question was already pending before the scan, it stays unchanged and no
+new question is created.
+
+Closing after Loot All waits for every outstanding loot reply, such as a confirmed NO DROP request or an individual
+request sent alongside the queue, and the Loot All counts as active until then. The original's close timing for that
+overlap is untraced (docs/unknowns.md).
 
 ## Leaving an NPC interaction
 

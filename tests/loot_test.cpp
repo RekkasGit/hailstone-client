@@ -280,7 +280,10 @@ TEST_CASE("loot: rapid Loot All activation preserves the active queue through it
     CHECK(MockEqServer::count(rig.server.zone_log, Op::EndLootRequest) == 1);
 }
 
-TEST_CASE("loot: Loot All waits for a preceding individual item request and recovers after its reply") {
+TEST_CASE("loot: Loot All does not wait for an individual item request still awaiting its reply") {
+    // LootAll's guard (@0x6bdbf5) and the button (WndNotification @0x6be180) ignore an individual request in flight.
+    // Each reply advances the queue, the individual one's too, and the queue was built while that item was still
+    // listed, so it is asked for again, as the original's stored list does.
     Rig rig;
     auto& conn = rig.conn;
     REQUIRE(rig.to_zone());
@@ -295,49 +298,42 @@ TEST_CASE("loot: Loot All waits for a preceding individual item request and reco
     conn.receive_zone_packet_for_test(money(6));
 
     conn.loot_item(24, true);
+    conn.loot_all();
     for (int click = 0; click < 10; ++click) conn.loot_all();
     flush_loot_requests(rig);
-    CHECK(loot_requests(rig) == std::vector<std::uint16_t>{24});
+    CHECK(loot_requests(rig) == std::vector<std::uint16_t>{24, 23});
 
     LootItem answer;
     answer.lootee = corpse;
     answer.slot = 24;
     answer.auto_loot = 1;
-    bool refused = false, reset = false;
-    SUBCASE("an accepted individual request releases busy state") {}
-    SUBCASE("a refused individual request releases busy state and leaves its slot for the new queue") {
-        answer.auto_loot = -1;
-        refused = true;
-    }
-    SUBCASE("a session reset drops the outstanding request before a fresh corpse opens") {
-        conn.receive_zone_packet_for_test(AppPacket{to_wire(Op::LootComplete), {}});
-        CHECK_FALSE(conn.loot_session());
-        auto next_corpse = conn.world_for_test().spawns.at(corpse);
-        next_corpse.id = corpse + 1;
-        conn.world_for_test().spawns[next_corpse.id] = next_corpse;
-        conn.loot(next_corpse.id);
-        conn.receive_zone_packet_for_test(money(1));
-        conn.receive_zone_packet_for_test(loot_item_packet(23, "Fresh Corpse Item"));
-        conn.receive_zone_packet_for_test(money(6));
-        answer.lootee = next_corpse.id;
-        reset = true;
-    }
-    if (!reset) conn.receive_zone_packet_for_test(encode(answer));
-    answer.auto_loot = 1;
-    conn.loot_all();
+    conn.receive_zone_packet_for_test(encode(answer));
     flush_loot_requests(rig);
-    CHECK(loot_requests(rig) == std::vector<std::uint16_t>{24, 23});
+    CHECK(loot_requests(rig) == std::vector<std::uint16_t>{24, 23, 24});
     answer.slot = 23;
     conn.receive_zone_packet_for_test(encode(answer));
     flush_loot_requests(rig);
-    if (refused) {
-        CHECK(loot_requests(rig) == std::vector<std::uint16_t>{24, 23, 24});
-        CHECK(MockEqServer::count(rig.server.zone_log, Op::EndLootRequest) == 0);
-        answer.slot = 24;
+    // The queue is done, but a reply is still owed: the window waits, and Loot All stays busy.
+    CHECK(MockEqServer::count(rig.server.zone_log, Op::EndLootRequest) == 0);
+    for (int click = 0; click < 10; ++click) conn.loot_all();
+    flush_loot_requests(rig);
+    CHECK(loot_requests(rig) == std::vector<std::uint16_t>{24, 23, 24});
+
+    answer.slot = 24;
+    SUBCASE("the repeated request's reply closes the window") {
         conn.receive_zone_packet_for_test(encode(answer));
         flush_loot_requests(rig);
+        CHECK(MockEqServer::count(rig.server.zone_log, Op::EndLootRequest) == 1);
     }
-    CHECK(MockEqServer::count(rig.server.zone_log, Op::EndLootRequest) == 1);
+    SUBCASE("a refusal keeps the window open and Loot All usable again") {
+        answer.auto_loot = -1;
+        conn.receive_zone_packet_for_test(encode(answer));
+        flush_loot_requests(rig);
+        CHECK(MockEqServer::count(rig.server.zone_log, Op::EndLootRequest) == 0);
+        conn.loot_all(); // nothing left to loot: the window closes
+        flush_loot_requests(rig);
+        CHECK(MockEqServer::count(rig.server.zone_log, Op::EndLootRequest) == 1);
+    }
 }
 
 TEST_CASE("loot: a dropped LootItem handoff leaves Loot All retryable") {
@@ -388,7 +384,7 @@ TEST_CASE("loot: a dropped LootItem handoff leaves Loot All retryable") {
     hooks.remove(owner);
 }
 
-TEST_CASE("loot: a delayed Loot All confirmation cannot replace an individual request started meanwhile") {
+TEST_CASE("loot: a delayed Loot All confirmation runs with an individual request started meanwhile") {
     Rig rig;
     auto& conn = rig.conn;
     REQUIRE(rig.to_zone());
@@ -408,7 +404,7 @@ TEST_CASE("loot: a delayed Loot All confirmation cannot replace an individual re
     conn.answer_confirmation(true);
     CHECK_FALSE(conn.confirmation());
     flush_loot_requests(rig);
-    CHECK(loot_requests(rig) == std::vector<std::uint16_t>{24});
+    CHECK(loot_requests(rig) == std::vector<std::uint16_t>{24, 23});
 
     LootItem answer;
     answer.lootee = corpse;
@@ -416,14 +412,12 @@ TEST_CASE("loot: a delayed Loot All confirmation cannot replace an individual re
     answer.auto_loot = 1;
     conn.receive_zone_packet_for_test(encode(answer));
     flush_loot_requests(rig);
-    CHECK(MockEqServer::count(rig.server.zone_log, Op::EndLootRequest) == 0);
-    conn.loot_all();
-    REQUIRE(conn.confirmation());
-    CHECK(conn.confirmation()->id == kConfirmLootAll);
-    conn.answer_confirmation(true);
-    flush_loot_requests(rig);
-    CHECK(loot_requests(rig) == std::vector<std::uint16_t>{24, 23});
+    CHECK(loot_requests(rig) == std::vector<std::uint16_t>{24, 23, 24});
     answer.slot = 23;
+    conn.receive_zone_packet_for_test(encode(answer));
+    flush_loot_requests(rig);
+    CHECK(MockEqServer::count(rig.server.zone_log, Op::EndLootRequest) == 0);
+    answer.slot = 24;
     conn.receive_zone_packet_for_test(encode(answer));
     flush_loot_requests(rig);
     CHECK(MockEqServer::count(rig.server.zone_log, Op::EndLootRequest) == 1);

@@ -3263,6 +3263,10 @@ private:
     bool loot_popup_pending_ = false; // CLootWnd +0x398 (bPopupPending): a no-drop question is showing
     bool loot_close_on_complete_ = false; // +0x2f8 (bCloseOnComplete): a Loot All closes the window when done
     bool loot_all_deferred_ = false;      // +0x2f9: Loot All asked for before every item arrived
+    // +0x3a0 (the Loot All list) exists: set when a Loot All sends its first request, cleared by the reply that
+    // finds the queue empty (Handle_OP_LootItem @0x6bd43b frees the list there). The last slot has left
+    // loot_all_queue_ by then, so the queue alone cannot tell.
+    bool loot_all_active_ = false;
     std::int64_t loot_check_ms_ = 0;      // CLootWnd::nNextRefreshTime
     void loot_all_now();              // CLootWnd::LootAll(1)
     void send_loot_item(std::int16_t corpse_slot, bool auto_loot, std::uint32_t quantity = 0); // OP_LootItem
