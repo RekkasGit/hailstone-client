@@ -51,7 +51,10 @@ endfunction()
 
 # AMD FSR 3.1's upscaler passes (third_party/fidelityfx, compute): each pass compiled once in the permutation
 # Hailstone uses (render/fsr3_upscaler.cpp): HDR colour, reverse depth, motion vectors at the render size and
-# without jitter, the reference Lanczos, 32-bit maths; the accumulate pass twice, with and without sharpening.
+# without jitter, 32-bit maths; the accumulate pass twice, with and without sharpening. The history is reprojected
+# with the Lanczos table (REPROJECT_USE_LANCZOS_TYPE=1, the r_lanczos_lut image), the permutation AMD's runtime picks
+# on its own GPUs (ffx_fsr3upscaler.cpp useLut; the reference elsewhere): the reference's sin() per tap made the
+# accumulate pass take 3.7 ms of a 6.4 ms frame on an Intel Iris Xe (1280x720 from 67 %), the table 2.0 ms.
 # Output as build/hailstone/shaders/fsr3_<pass>.spv.
 set(HAILSTONE_FSR3_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fidelityfx)
 file(GLOB HAILSTONE_FSR3_HEADERS ${HAILSTONE_FSR3_DIR}/gpu/*.h ${HAILSTONE_FSR3_DIR}/gpu/*/*.h)
@@ -62,7 +65,7 @@ function(hailstone_add_fsr3_shaders target)
               -DFFX_FSR3UPSCALER_OPTION_REPROJECT_SAMPLERS_USE_DATA_HALF=0
               -DFFX_FSR3UPSCALER_OPTION_POSTPROCESSLOCKSTATUS_SAMPLERS_USE_DATA_HALF=0
               -DFFX_FSR3UPSCALER_OPTION_UPSAMPLE_USE_LANCZOS_TYPE=2
-              -DFFX_FSR3UPSCALER_OPTION_REPROJECT_USE_LANCZOS_TYPE=0
+              -DFFX_FSR3UPSCALER_OPTION_REPROJECT_USE_LANCZOS_TYPE=1
               -DFFX_FSR3UPSCALER_OPTION_HDR_COLOR_INPUT=1
               -DFFX_FSR3UPSCALER_OPTION_LOW_RESOLUTION_MOTION_VECTORS=1
               -DFFX_FSR3UPSCALER_OPTION_JITTERED_MOTION_VECTORS=0

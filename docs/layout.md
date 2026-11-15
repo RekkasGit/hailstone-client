@@ -490,6 +490,9 @@ maps go without reading this. Folders and files already there are left alone; a 
 of that name is in the way, or the disk refuses) is named in the log, and the start goes on. Each writer still makes
 its own folder before it writes, so deleting one while Hailstone runs is harmless.
 
+A new install's graphics settings are fitted to the computer before they are first read: the GPU and CPU are
+sorted into a tier whose settings go into `hailstone.ini` (docs/graphics.md "Detected settings").
+
 Older builds kept their settings in a per-user folder (`~/.config/hailstone`, earlier `~/.config/nms-client`).
 Hailstone no longer reads it or copies anything from it: a new Hailstone folder starts empty. That old folder can be
 deleted.

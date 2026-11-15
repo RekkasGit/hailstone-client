@@ -386,6 +386,7 @@ add_library(hailstone_engine STATIC
   src/app/plate_test.cpp
   src/app/nameplate_layer.cpp
   src/render/gpu_requirements.cpp
+  src/render/graphics_tier.cpp
   src/render/gpu_cache_protocol.cpp
   src/render/gpu_share_link.cpp
   src/render/gpu_shared_cache.cpp
@@ -1046,6 +1047,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/login_launch_test.cpp
     tests/login_token_session_test.cpp
     tests/gpu_requirements_test.cpp
+    tests/graphics_tier_test.cpp
     tests/gpu_ipc_test.cpp
     tests/gpu_cache_protocol_test.cpp
     tests/gpu_shared_texture_owner_test.cpp

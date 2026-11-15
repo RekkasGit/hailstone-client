@@ -372,6 +372,27 @@ TEST_CASE("a Luclin erudite plays the human's clips" * doctest::skip(!hailstone:
           doctest::Approx(m->clips.at("").tracks[static_cast<std::size_t>(jaw)].front().translation.y).epsilon(0.01));
 }
 
+TEST_CASE("Luclin clips of more than 15 keys play at 50 ms, classic ones at 100" *
+          doctest::skip(!hailstone::test::game_dir())) {
+    // The Luclin dark elf female's C01 has 16 keys (the classic one 8): at 100 ms her swing took twice as long.
+    auto luclin = CharacterLibrary::load(*hailstone::test::game_dir(), "", true);
+    auto daf = luclin.model("DAF");
+    REQUIRE(daf);
+    if (daf->luclin) { // eqclient.ini may turn the Luclin dark elf female off
+        REQUIRE(daf->clip("C01"));
+        CHECK(daf->clip("C01")->frame_count > 15);
+        CHECK(daf->clip("C01")->frame_ms == 50u);
+    }
+    // global_chr (TFFFC) is not a halving archive: the classic idle of 31 keys stays at 100 ms.
+    auto classic = CharacterLibrary::load(*hailstone::test::game_dir(), "", false);
+    auto old = classic.model("DAF");
+    REQUIRE(old);
+    REQUIRE_FALSE(old->luclin);
+    REQUIRE(old->clip("O01"));
+    CHECK(old->clip("O01")->frame_count > 15);
+    CHECK(old->clip("O01")->frame_ms == 100u);
+}
+
 TEST_CASE("a Luclin model borrows nothing from the classic donor's skeleton" * doctest::skip(!hailstone::test::game_dir())) {
     // global_chr's classic ELF has C10, C11 and T07..T09, the Luclin ELF has not; the few bone names the two share
     // lent a Luclin human those clips with every other bone in the rest pose: a T-pose.
@@ -1059,6 +1080,28 @@ TEST_CASE("GlobalLoad.txt: a phase past int32 wraps as the original's atoi, the 
     REQUIRE(out.size() >= 2);
     CHECK(out[0] == "second_chr.s3d");
     CHECK(out[1] == "first_chr.s3d");
+}
+
+TEST_CASE("long_track_archives: GlobalLoad.txt's fourth FLAGS letter and the Luclin player models") {
+    test::ScratchDir dir("long_track_archives");
+    std::filesystem::create_directories(dir.path() / "Resources");
+    std::ofstream(dir.path() / "Resources" / "GlobalLoad.txt", std::ios::binary)
+        << "1,1,TFFTC,GlobalPCFroglok_chr,x\r\n1,1,TFFFC,GlobalDRK_chr,x\r\n3,1,TFFFC,Global_chr,x\r\n"
+           "1,1,TFFtC,lower_chr.s3d,x\r\n1,1,TFT,short_chr,x\r\n";
+    for (const char* f : {"globaldaf_chr.s3d", "globaldaf_chr2.s3d", "lgequip.s3d"}) std::ofstream(dir.path() / f) << "x";
+    const GameDir game(dir.path());
+    auto classic = long_track_archives(game);
+    CHECK(classic.contains("globalpcfroglok_chr.s3d"));
+    CHECK(classic.contains("lower_chr.s3d"));
+    CHECK_FALSE(classic.contains("globaldrk_chr.s3d"));
+    CHECK_FALSE(classic.contains("global_chr.s3d"));
+    CHECK_FALSE(classic.contains("short_chr.s3d"));
+    CHECK_FALSE(classic.contains("globaldaf_chr.s3d"));
+    auto luclin = long_track_archives(game, true);
+    CHECK(luclin.contains("globaldaf_chr.s3d"));
+    CHECK(luclin.contains("globaldaf_chr2.s3d"));
+    CHECK_FALSE(luclin.contains("lgequip.s3d"));
+    CHECK_FALSE(luclin.contains("global_chr.s3d"));
 }
 
 TEST_CASE("CharacterMesh serial: every mesh has its own, a copy a new one, a move keeps it") {

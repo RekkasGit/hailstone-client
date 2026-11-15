@@ -202,7 +202,7 @@ inline float ui_scale_setting(const ClientOptions& o) {
 inline std::unique_ptr<render::UpscalerProvider> start_upscaler_provider() {
     Config c;
     if (!c.load(default_config_path())) return nullptr;
-    return render::load_upscaler_setting(c.get_string("display.upscaler", "fsr1"), platform::upscalers_dir(),
+    return render::load_upscaler_setting(c.get_string("display.upscaler", "off"), platform::upscalers_dir(),
                                          platform::cache_dir() / "upscalers");
 }
 
@@ -282,6 +282,8 @@ public:
             log::info("shared asset cache: on, {} MiB disk budget", shared->budget_bytes >> 20);
             game_.set_shared_file_cache(std::make_shared<SharedFileCache>(std::move(*shared)));
         }
+        // A new install's graphics settings for this computer (render/graphics_tier.h), before they are first read.
+        detect_graphics_at_first_start();
         // The settings (hailstone.ini's until a character enters, then the character's: apply_settings), before the
         // renderers: their pipelines take the sample count.
         apply_settings();
@@ -841,6 +843,10 @@ private:
     // Sets game_'s base folder (core/asset_folder_choice.h), running the asset-folder picker when nothing usable is
     // known; false when the player quit it (app/client_app_options.cpp).
     bool choose_asset_folder();
+    // The GPU in use and the CPU's threads (render/graphics_tier.h GpuProfile).
+    render::GpuProfile graphics_profile() const;
+    // render::first_start_graphics on hailstone.ini, saved and logged.
+    void detect_graphics_at_first_start();
     // The Options window's "Change Asset Folder" (assets.pick) once the login screen is idle: the picker again, its
     // folder made game_'s base and the game files read again (reload_server_files); Cancel keeps the folder. Not
     // with --game-dir or EQ_GAME_DIR, which the picker does not change.
@@ -901,7 +907,7 @@ private:
     // display.distance_blur, display.depth_prepass (the zone's depth pre-pass, the modern lighting only),
     // display.bloom (0 off .. 1), display.brightness / contrast / gamma (the grade after the
     // tonemap), display.render_scale (percent, 33..100: below 100 the upscaler upscales), display.sharpness (0..1) and
-    // display.upscaler (fsr1 | taa | fsr3 | off, read at start-up: render/temporal.h). The Options window's Display page sets them
+    // display.upscaler (off, the default | fsr1 | taa | fsr3, read at start-up: render/temporal.h). The Options window's Display page sets them
     // (display_option / set_display_option).
     void apply_scene_options() {
         render::SceneOptions scene;
@@ -913,7 +919,7 @@ private:
         scene.msaa = msaa_at_start_;
         // Taken at start-up too: the temporal upscaler draws with one sample, so it changes the pipelines' count.
         if (!upscaler_at_start_)
-            upscaler_at_start_ = render::upscaler_from_setting(config_.get_string("display.upscaler", "fsr1"));
+            upscaler_at_start_ = render::upscaler_from_setting(config_.get_string("display.upscaler", "off"));
         scene.upscaler = *upscaler_at_start_;
         // Frame generation (render/frame_gen.h): applied at once (the swapchain is made again); only with a temporal
         // upscaler, which VkContext checks.
@@ -940,7 +946,7 @@ private:
         scene.sharpness = std::clamp(config_float("display.sharpness", 0.5f), 0.0f, 1.0f);
         // Upscaling off (render/temporal.h upscaling_off): full size and no frame generation, at once; a temporal
         // upscaler the client started with stays on as anti-aliasing until the next start.
-        if (render::upscaling_off(config_.get_string("display.upscaler", "fsr1"))) {
+        if (render::upscaling_off(config_.get_string("display.upscaler", "off"))) {
             scene.render_scale = 1.0f;
             scene.frame_gen = false;
         }
