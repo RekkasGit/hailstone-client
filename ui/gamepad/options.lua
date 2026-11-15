@@ -57,6 +57,15 @@ local function upscaleQualityRow()
   end }
 end
 
+-- The graphics this computer suits (render/graphics_tier.h: 0 Low, 1 Medium, 2 High); A applies them again, as the
+-- first start did.
+local function detectGraphicsRow()
+  local tier = eq.Option("gpu_tier")
+  if tier == nil then return nil end
+  local name = ({ [0] = "Low", [1] = "Medium", [2] = "High" })[tier] or "High"
+  return { "Graphics for this computer", "Use " .. name, function() eq.SetOption("detect_graphics", 1) end }
+end
+
 -- What a binding can be (docs/gamepad.md section 4), with friendly names.
 local ACTIONS = {
   { "interact", "Interact / use" }, { "cancel", "Cancel" }, { "AUTOPRIM", "Auto attack" }, { "JUMP", "Jump" },
@@ -256,6 +265,7 @@ local PAGES = {
     local list = table.pack(
       optionRow("Display mode", "window_mode", { "Windowed", "Borderless", "Fullscreen" }),
       optionRow("Vertical sync", "vsync", { "Off", "On", "Adaptive" }),
+      detectGraphicsRow(),
       optionRow("Shadows", "shadows", { "Off", "Low", "Medium", "High" }),
       optionRow("Anti-aliasing", "msaa", { "Off", "2x", "4x" }),
       upscaleQualityRow(),

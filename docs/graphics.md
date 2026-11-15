@@ -177,8 +177,9 @@ the history through `post_taa_sets_` under `taa`); `display.sharpness` drives FS
   passes' own `FSR3UPSCALER_BIND_*` numbers; descriptor sets are written each frame, one set per pass per frame in
   flight.
 - **Shaders**: `cmake/Shaders.cmake` (`hailstone_add_fsr3_shaders`) compiles each pass once as compute with glslc or
-  glslangValidator, no AMD tool: HDR colour, reverse depth, motion vectors at the render size without jitter, the
-  reference Lanczos, 32-bit maths; accumulate twice, with and without sharpening (`fsr3_*.spv`).
+  glslangValidator, no AMD tool: HDR colour, reverse depth, motion vectors at the render size without jitter, 32-bit maths,
+  the history reprojected with FSR's Lanczos table (the permutation AMD's runtime picks on its own GPUs; the reference
+  Lanczos, which it keeps elsewhere, computes a sin() per tap and doubled the accumulate pass on an Intel Iris Xe); accumulate twice, with and without sharpening (`fsr3_*.spv`).
 - **Inputs as FSR wants them**: our jitter (`jitter_px_`) is FSR's `jitterOffset` as it is (a texel's unjittered
   place is `t + 0.5 - jitter` in both), and its cycle length is ours (FSR's count rounded up: 15 against its 14 at a
   render scale of 75, the same at 50 and 100); our motion (UV to last frame's place) goes in with a scale of 1; near,
@@ -187,6 +188,9 @@ the history through `post_taa_sets_` under `taa`); `display.sharpness` drives FS
 - **Device**: storage images in FSR's formats (R8, R16F, RG16F: `shaderStorageImageExtendedFormats`, enabled when
   present) and quad subgroup operations in compute (`render::Fsr3Upscaler::supported`, `DeviceCaps::fsr3`). Without
   them `fsr3` falls back to `taa` with a log line.
+- **Timing**: with `HAILSTONE_FSR3_TIMING` set, GPU timestamps round the clears and each pass
+  (`Fsr3Upscaler::timing_summary`); the viewer's `--frames` logs their means ("FSR 3.1 GPU time"). On an Intel Iris
+  Xe (1280x720 from 858x482) FSR 3.1 takes 3.9 ms, the accumulate pass 2.0 of them; on an RX 9060 XT 0.26 ms.
 - **Motion and reactive mask**: the same as the resolve's (Temporal upscaling 6): the draws' own motion in
   `motion_`, and the scene's reactive mask as FSR's (`Fsr3Upscaler::Inputs::reactive`; none, FSR's default of 0,
   without `independentBlend`).
@@ -1881,6 +1885,58 @@ Names that overlap each other are drawn from the farthest to the nearest, so the
 
 The target's highlight (the dark plate, the edge in its colour and the bobbing marker) is the option `target_plate_highlight` (Options > Display "Highlight Target Name", `display.target_plate_highlight`, default on); off, the target's name is plain in its colour. If the pipeline cannot be made (a missing shader) the log says so and the names are drawn over the scene. Offline check (the zone viewer, no server; needs a GPU, a display and the game folder, so not in `hailstone_tests`): `tools/probe_test.py --hailstone build/hailstone/hailstone --game-dir DIR` runs the viewer twice in the Bazaar. `--plate-test` draws test names (magenta) through the same `NameplateLayer` as the client, each placed from the CPU's rays into the zone (`app/plate_test.h`) so that it is known what the scene should do to it: in front of everything it covers, behind it all, or in between. `--plate-test-no-depth` draws the same names with no depth test. The script counts the magenta pixels of each name in both screenshots: a front name must keep 95 % of them, a behind name lose all but 2 %, a partial one lose some. The CPU side is in `tests/plate_test_test.cpp`.
 
+## Detected settings
+
+The first start fits the graphics to the computer (`render/graphics_tier.h`), so a weak machine does not start with
+everything at its highest. Before the settings are first read, the GPU in use and the CPU are sorted into a tier:
+
+| | Tier |
+|---|---|
+| Discrete GPU, 6 GiB of its own memory or more (its largest device-local heap) | High |
+| Discrete GPU, 3 to 6 GiB | Medium |
+| Discrete GPU under 3 GiB | Low |
+| Integrated GPU: Apple's | Medium |
+| Integrated GPU: any other (Intel, AMD); a software renderer or a virtual GPU | Low |
+| Then the CPU: under 4 threads | Low at most |
+| Under 6 threads | Medium at most |
+
+Low and Medium are the Options window's quality presets of the same names (Graphics > Preset: shadows,
+anti-aliasing, ambient occlusion, distance blur, view distance), with a few more of the costlier settings; High
+leaves every one at its default, so it never picks Ultra. Low also turns upscaling and frame generation off, as they are by default, so Detect turns off an FSR 3.1 the player picked (each
+costs a fixed share of the frame at the output's size, whatever the render scale; on an Intel Iris Xe tablet FSR 3.1
+was far slower than FSR 1) and draws with the classic lighting and no radial flora; Medium and High keep what the player chose for
+those four (kept), and Options > Graphics notes on a Low computer that FSR 3.1 and frame generation are slow there:
+
+| Key | Low | Medium |
+|---|---|---|
+| `display.shadows` | 0 | 1024 |
+| `display.msaa` | 1 | 2 |
+| `display.ao` | 0 | 0 |
+| `display.distance_blur` | 0 | (default) |
+| `display.view_distance` | 1.5 | 2.0 |
+| `display.light_shadows` | 0 | 4 |
+| `display.render_scale` | (default) | (default) |
+| `display.neighbour_zones` | 0 | (default) |
+| `display.horizon_hills` | 0 | (default) |
+| `display.grass_density` | 50 | 75 |
+| `display.tree_detail` | 50 | (default) |
+| `display.upscaler` | off | (kept) |
+| `display.frame_gen` | 0 | (kept) |
+| `display.lighting` | classic | (kept) |
+| `display.grass` | 0 (Radial Flora off) | (kept) |
+
+The tier is written only to a new install's `hailstone.ini` (one with no `display.` key yet; the asset folder the
+picker saves first does not count). An existing install keeps its settings. Either way the tier found is saved as
+`display.gpu_tier`, and the detection does not run again while that key is there; the log names the GPU, its
+memory, the CPU's threads and the tier. A character's settings file starts as a copy of `hailstone.ini`'s keys, so
+characters made later start at the tier too.
+
+Options > Graphics > Detect (gamepad: Display > Graphics for this computer) detects again and applies the tier over
+the settings there, each key a tier leaves at its default erased; anti-aliasing and the upscaler change at the next
+start, as always. The thresholds are a guess at what each class of hardware runs well, not a measurement: a GPU's memory
+stands in for its speed, and an integrated GPU's heap (the system's memory) says nothing, so every integrated GPU
+but Apple's is Low.
+
 ## Settings
 
 In `hailstone.ini`, and in the Options window (`ui/modern/options.lua`, this client's own window: its Display and
@@ -1892,7 +1948,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 |---|---|---|---|
 | `display.msaa` | 1, 2, 4 | 4 | samples per pixel, at most 4 (`render::kMaxMsaa`; 8 and up are drawn at 4), cut to what the GPU supports; off under `display.upscaler = taa`; read at start-up |
 | `display.render_scale` | 33 .. 100 | 100 | percent of the 3D view's size the scene is drawn at; below 100 the upscaler (`display.upscaler`) brings it up (The frame); the UI stays sharp. Options > Upscale Quality's presets set it (`render::UpscaleQuality`): Native AA 100, Quality 67, Balanced 59, Performance 50, Ultra Performance 33 (FSR's ratios, 1.5x .. 3x); any other value shows as Custom |
-| `display.upscaler` | off, fsr1, taa, fsr3 | fsr1 | off: no upscaling and no frame generation, the view drawn at full size whatever `display.render_scale` and `display.frame_gen` say (both kept for later; applied at once, a temporal upscaler already running stays as anti-aliasing until the next start); fsr1: FSR 1 below a render scale of 100; taa: temporal anti-aliasing and upscaling at every render scale, MSAA off (Temporal upscaling); fsr3: the same with AMD FSR 3.1's upscaler (AMD FSR 3.1; taa where the GPU lacks what it needs); read at start-up |
+| `display.upscaler` | off, fsr1, taa, fsr3 | off | off (the default on every computer): no upscaling and no frame generation, the view drawn at full size whatever `display.render_scale` and `display.frame_gen` say (both kept for later; applied at once, a temporal upscaler already running stays as anti-aliasing until the next start); fsr1: FSR 1 below a render scale of 100; taa: temporal anti-aliasing and upscaling at every render scale, MSAA off (Temporal upscaling); fsr3: the same with AMD FSR 3.1's upscaler (AMD FSR 3.1; taa where the GPU lacks what it needs); read at start-up |
 | `display.frame_gen` | true, false | false | present a frame made between each two real ones (Frame generation); only with `display.upscaler` taa or fsr3; forces vertical sync and holds the game to half the refresh; applied at once |
 | `display.sharpness` | 0 .. 1 | 0.5 | RCAS sharpening: FSR 1's below a render scale of 100, the temporal upscaler's or FSR 3.1's own at every scale; 0 none |
 | `display.tonemap` | auto, none, agx, aces | auto | auto: AgX (with a little extra saturation) for modern, none for classic |
@@ -1932,6 +1988,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.extra_shields` | on, off | on | a deliberate difference: shields RoF2 does not list (`game::is_shield_model`, docs/formats/characters.md "Held items") go on the shield point, not in the hand; read at start-up |
 | `display.texture_folder` | pack name, absolute folder, off | `textures/default` | replacement textures (Texture overrides): the folder indexed at start, its files read as each zone loads; the Options window's Textures section and the login screen's More options (both packs; from the next start) and Hailstone Texture Studio set it |
 | `display.fov` | fov units | none | the camera's field of view in 512ths of a circle (none: the classic 90, 63.3 degrees across below an aspect of 2); the Options window shows degrees, 45 .. 120 |
+| `display.gpu_tier` | low, medium, high | (detected) | the tier the first start found for this computer (Detected settings); present, the detection does not run again; kept in `hailstone.ini` with a character's settings |
 | `ui.scale` | percent, 0 | 0 | the UI's scale (0: the display's); read at start-up; `--ui-scale` takes precedence |
 
 ## Roadmap
