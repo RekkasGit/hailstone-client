@@ -1053,7 +1053,10 @@ Vectors in `tests/zoning_vectors_test.cpp` (OP_Death handler 2500, teleport inde
 teleport index request and wait 300, do-teleport-B 2000, zone player to bind 1200). `game/death_report.*`,
 `game/zoning.*`, `net/game_connection_death.cpp`:
 
-- OP_Death: the killing blow is reported unless neither side is us and it died more than 50 away.
+- OP_Death: the killing blow is reported unless neither side is us and it died more than 50 away. If the dead
+  spawn is being tracked, tracking ends with one OP_TrackTarget {u32 0} and message 12102 in tracking colour
+  0x111. Every known death removes that spawn from the cached tracking list, including the local player's own
+  entry; an unrelated tracked spawn stays tracked. Loopback coverage is in `tests/tracking_death_test.cpp`.
 - Zone lines: the region change hands the teleport the region's text; an ATP region's is "DRNTP00255%05d0..." of
   atoi(name + 4), which reads back as zone point 10 x N. The teleport index resolve reads the zone (5 digits), then
   each 6-character field only when the text is long enough (x and the zone point number from the same field), and

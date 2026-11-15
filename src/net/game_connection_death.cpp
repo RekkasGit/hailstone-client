@@ -58,6 +58,8 @@ void GameConnection::handle_death(const Death& d) {
     in.dead_is_merchant = merchant_ && merchant_->npc_id == d.spawn_id;
     in.dead_is_banker = bank_ && bank_->banker_id == d.spawn_id;
     in.dead_is_trainer = training_ && training_->trainer_id == d.spawn_id;
+    in.tracking_on = tracking_.tracked != 0;
+    in.dead_is_tracked = static_cast<std::uint32_t>(tracking_.tracked) == d.spawn_id;
     in.dead_is_target = world_.target_id != 0 && world_.target_id == d.spawn_id;
     in.in_group = group_.active;
     game::DeathResult r = game::report_death(in);
@@ -73,9 +75,25 @@ void GameConnection::handle_death(const Death& d) {
     };
     std::size_t chat_at = 0;
     auto say_next = [&](ChatEvent::Kind kind) {
-        if (chat_at < r.chat.size()) chat(kind, text(r.chat[chat_at++]));
+        if (chat_at < r.chat.size()) {
+            const auto& c = r.chat[chat_at++];
+            chat(kind, text(c), 0, c.color);
+        }
     };
     if (in.dead_is_duel_opponent) say_next(ChatEvent::Kind::System);
+    auto remove_tracking_entry = [&] {
+        bool removed = false;
+        for (auto& e : tracking_.list) {
+            if (static_cast<std::uint32_t>(e.spawn_id) != d.spawn_id) continue;
+            // Retire the cached row before filters or sorting can offer the corpse again. Keep the level,
+            // as the list's normal reset does, and leave the other entries in their current order.
+            const auto level = e.level;
+            e = {};
+            e.level = level;
+            removed = true;
+        }
+        if (removed) ++tracking_.revision;
+    };
     for (const auto& c : r.calls) {
         switch (c.fn) {
         case F::SendDuelDecline:
@@ -86,7 +104,17 @@ void GameConnection::handle_death(const Death& d) {
         case F::TradeCancelAndClose: trade_cancel(); break;
         case F::BankWindowClose: close_bank(); break;
         case F::LootResetSession: loot_.reset(); break;
-        case F::SendTrackTarget: say_next(ChatEvent::Kind::System); break; // tracking is not modelled
+        case F::SendTrackTarget: {
+            // Send_OP_TrackTarget(-1, 0) clears the activity and sends OP_TrackTarget {0} once.
+            remove_tracking_entry(); // an outgoing hook must not be able to track this dying spawn again
+            tracking_.tracked = 0;
+            ByteWriter w;
+            w.le<std::uint32_t>(0);
+            // An outgoing hook may begin tracking someone else; do not let this stop cancel its new request.
+            send_zone(make_packet(Op::TrackTarget, std::move(w)), true, [&] { return tracking_.tracked == 0; });
+            say_next(ChatEvent::Kind::System);
+            break;
+        }
         case F::SetAutoAttackOff:
             // Hailstone: attack_until_xtarget_clear keeps it on while the extended target list has more to fight.
             if (attack_until_xtarget_clear_ && auto_attack_ && !in.dead_is_local && xtarget_holds_spawn(d.spawn_id)) {
@@ -97,7 +125,7 @@ void GameConnection::handle_death(const Death& d) {
             break;
         case F::SetAutoRangeAttackOff: set_auto_fire(false); break;
         case F::GroupGetMember: break;
-        case F::TrackingRemove: break;
+        case F::TrackingRemove: remove_tracking_entry(); break;
         case F::SpawnDied: break; // below
         }
     }
