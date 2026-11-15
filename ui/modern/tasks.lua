@@ -82,10 +82,11 @@ local function button(label, id, selected, s)
   return hit
 end
 
+local CATEGORY_TABS = { { "Active", "active", "category.active" }, { "History", "history", "category.history" } }
 local function categories(tasks, history, s)
-  for i, tab in ipairs({ { "Active", "active", #tasks }, { "History", "history", #history } }) do
+  for i, tab in ipairs(CATEGORY_TABS) do
     if i > 1 then ui.SameLine(0, 5 * s) end
-    if button(tab[1] .. "  " .. tab[3], "category." .. tab[2], state.category == tab[2], s) then
+    if button(tab[1] .. "  " .. (i == 1 and #tasks or #history), tab[3], state.category == tab[2], s) then
       setCategory(tab[2])
       if tab[2] ~= "history" then
         local selected = find(tasks, state.selected)
@@ -203,8 +204,11 @@ local function card(task, s)
   if clicked then pick(task) end
 end
 
+local trackedList, otherList = {}, {} -- the list's two groups, emptied and filled again each frame
 local function taskList(tasks, needle, s)
-  local tracked, other = {}, {}
+  local tracked, other = trackedList, otherList
+  for k = #tracked, 1, -1 do tracked[k] = nil end
+  for k = #other, 1, -1 do other[k] = nil end
   for _, task in ipairs(tasks) do
     if needle == "" or (task.title or ""):lower():find(needle, 1, true) then
       local group = Q.isTracked(task) and tracked or other
