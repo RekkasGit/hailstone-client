@@ -1630,6 +1630,7 @@ void ScriptHost::Impl::draw_windows(Script& s) {
         if (std::find(s.windows.begin(), s.windows.end(), w) == s.windows.end()) continue;
         ImGuiErrorRecoveryState state;
         ImGui::ErrorRecoveryStoreState(&state);
+        const std::size_t begun = ui::lua::windows_begun();
         lua_rawgeti(s.L, LUA_REGISTRYINDEX, w.second);
         s.slice_start = Clock::now();
         int st = 0;
@@ -1637,8 +1638,11 @@ void ScriptHost::Impl::draw_windows(Script& s) {
             ScriptRun run(s);
             st = lua_pcall(s.L, 0, 0, 0);
         }
+        // What the script left open is closed, error or not: the next windows (the consent prompt among them) do
+        // not nest in it or take its next-window settings.
+        ImGui::ErrorRecoveryTryToRecoverState(&state);
+        ui::lua::end_script_windows(begun);
         if (st != LUA_OK) {
-            ImGui::ErrorRecoveryTryToRecoverState(&state);
             if (lua_touserdata(s.L, -1) == &kExitKey) {
                 if (s.social < 0) s.stop_requested = true;
                 else stop_threads(s);

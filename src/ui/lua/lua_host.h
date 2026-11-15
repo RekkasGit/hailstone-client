@@ -57,6 +57,15 @@ void guard_current_window();
 void guard_drawing_window();
 // At the end of the frame's windows: the guarded ones to the front.
 void raise_guarded_windows();
+// The client's own consent prompt's ImGui window (app/automation.cpp): while the question is up, only the pack's
+// code may begin a window of this name, before the prompt's first frame too.
+inline constexpr const char* kConsentWindowName = "Allow this server's plugin?##hailstone_plugin_consent";
+// Around each script's draw function (the Lua UI's windows, an MQ script's): how many windows ui.Begin and
+// ui.BeginChild have open before it runs; after it returns (normally or not, once ImGui's stacks are restored)
+// that count is put back and anything the script set for the next window or item is dropped, so nothing it left
+// reaches the windows drawn after it.
+std::size_t windows_begun();
+void end_script_windows(std::size_t depth);
 // Whether `L` runs the pack's own code now: the UI pack's state (LuaUi; its registry holds kPackStateKey), with no
 // plugin folder's code running.
 bool pack_code(lua_State* L);

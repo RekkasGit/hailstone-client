@@ -85,7 +85,11 @@ Hailstone's limits.
 - **The close box** (Gamepad UI: B) puts the question away without an answer: the next zone-in asks again.
 - **Nothing covers it.** While the question is up, its window (the UI pack's, or the client's own when the pack has
   none) is raised above every other window at the end of each frame, and no plugin's window or script's ImGui can
-  draw over all windows (`ui.Foreground` is refused them) or find where the question is (`ui.FindWindowRect`).
+  draw over all windows (`ui.Foreground` is refused them), find where the question is (`ui.FindWindowRect`), or
+  draw into it: `ui.Begin` on the question's window (or the client's prompt's name, before its first frame too)
+  returns not visible and begins nothing, `ui.BeginChild` inside it likewise, and `ui.End` cannot close it. What a
+  script's draw function leaves open, or sets for a next window it never begins, is closed and dropped when it
+  returns, so it never reaches the question's window drawn after it.
   Only the pack's own code puts the client's prompt away for a window of its own (`eq.WindowShown("PluginConsent")`
   from a plugin's code does not), and a plugin's code neither sees the question nor answers it. A compiled plugin
   already loaded is native code and is not held by this.
@@ -659,8 +663,9 @@ and say so in the chat window.
   spell's type (as above). An entry with spell id 0 is all zeros. The pet window's slot number is not included.
 
 - `get_spawns_data_bulk`: every spawn in the zone, as a 16-byte header followed by one record per spawn. Records are
-  added until fewer than 4096 bytes are left in `out`: below 4096 bytes it returns 0, and it needs at least 4112
-  bytes to write any record and a few hundred bytes per spawn on top; the header's count says how many records follow.
+  added until fewer than 4096 bytes are left in `out`, or until the next record (its fixed part and seven strings)
+  would not fit in what is left: below 4096 bytes it returns 0, and it needs at least 4112 bytes to write any record
+  and a few hundred bytes per spawn on top. Only whole records are written; the header's count says how many follow.
 
   Header (`HS_Bulk_SpawnHeader`, `HS_BULK_SPAWN_HEADER_SIZE` = 16 bytes):
 

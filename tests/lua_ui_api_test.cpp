@@ -830,6 +830,53 @@ TEST_CASE("Lua UI: ImGui's internal window flags are not a script's, and unbalan
                                                    "end)\n"));
 }
 
+// ui.End and ui.EndChild close only a window the script began, of their kind; a window left open when the draw
+// function returns is closed then, and what the script set for a next window it never began is dropped, so the
+// next script's window neither nests in it nor takes that place.
+TEST_CASE("Lua UI: a script ends only its own windows, and what it leaves open stays its own") {
+    bool nested = true, moved = true, seen = false;
+    CHECK(run_pack_frames("lua_ui_api_ends_test",
+                          "ui.window('A', function()\n"
+                          "  ui.End() ui.EndChild() ui.End()\n" // nothing begun: nothing ended (not the Debug window)
+                          "  ui.Begin('A')\n"
+                          "  if ui.BeginChild('c', 50, 50) then ui.End() end\n" // End is not EndChild
+                          "  ui.EndChild()\n"
+                          "  ui.Text('still A')\n"                              // and A is left open
+                          "  ui.SetNextWindowPos(333, 333, ui.Cond.Always)\n"   // for a window never begun
+                          "end)\n"
+                          "ui.window('B', function()\n"
+                          "  ui.SetNextWindowSize(100, 100)\n"
+                          "  ui.Begin('B') ui.Text('b') ui.End()\n"
+                          "  done = true\n"
+                          "end)\n",
+                          3, [&](int i) {
+                              if (i == 0) return;
+                              ImGuiWindow* b = ImGui::FindWindowByName("B");
+                              if (!b) return;
+                              seen = true;
+                              const ImGuiWindow* in = b->ParentWindowInBeginStack;
+                              nested = in && std::string(in->Name) == "A";
+                              moved = b->Pos.x == 333.0f && b->Pos.y == 333.0f;
+                          }));
+    CHECK(seen);
+    CHECK_FALSE(nested);
+    CHECK_FALSE(moved);
+}
+
+// A text longer than the capacity is cut to it, the NUL inside the buffer ImGui is given.
+TEST_CASE("Lua UI: InputText cuts a longer text to its capacity") {
+    CHECK(run_pack_frames("lua_ui_api_inputcap_test",
+                          "ui.window('I', function()\n"
+                          "  ui.Begin('I')\n"
+                          "  local a = ui.InputText('a', string.rep('x', 50), 10)\n"
+                          "  local b = ui.InputTextWithHint('b', 'hint', string.rep('y', 50), 12)\n"
+                          "  local c = ui.InputTextMultiline('c', string.rep('z', 50), 7)\n"
+                          "  local d = ui.InputText('d', 'short', 10)\n"
+                          "  ui.End()\n"
+                          "  done = #a == 10 and #b == 12 and #c == 7 and d == 'short'\n"
+                          "end)\n"));
+}
+
 TEST_CASE("Lua UI: style lists with NaN or huge indices and values push nothing undefined") {
     CHECK(run_pack_frames("lua_ui_api_style_nan_test",
                           "ui.window('S', function()\n"
