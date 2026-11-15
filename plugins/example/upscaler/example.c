@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: MIT (sdk/LICENSE) */
 /* The SDK's example upscaler provider (sdk/hailstone_upscaler.h, docs/plugins.md "Upscaler providers"): it stretches
  * the scene's colour to the view's size with a linear blit. No temporal accumulation: it shows the calls, the
- * layouts and the Vulkan plumbing a real provider (XeSS, FSR 4, DLSS) needs, and is a test fixture. Built with the
+ * layouts and the Vulkan plumbing a real provider (XeSS, FSR 4) needs, and is a test fixture. Built with the
  * client into build/hailstone/upscalers/example/; display.upscaler = example (or --upscaler example) runs it.
  *
  * Built three ways for the tests (CMakeLists.txt): as it is; with EXAMPLE_REFUSE, whose hailstone_upscaler says no;

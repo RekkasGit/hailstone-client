@@ -123,7 +123,7 @@ that has this section.
 ## Upscalers
 
 An upscaler is an upscaler provider (docs/plugins.md "Upscaler providers", `sdk/hailstone_upscaler.h`): a temporal
-upscaler the client cannot ship itself, such as Intel XeSS, AMD FSR 4 or NVIDIA DLSS, with the vendor's runtime it
+upscaler the client cannot ship itself, such as Intel XeSS or AMD FSR 4, with the vendor's runtime it
 loads. It installs, updates and is removed as any add-on, into `upscalers/<name>/`, and appears in Options, Graphics,
 Upscaler after the client's own (both packs; `option_choices("upscaler_providers")`). Picked there, it loads at the
 next start (docs/graphics.md "Upscaler providers"):

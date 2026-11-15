@@ -949,7 +949,7 @@ through the client, so their capabilities hold. All of this is enforced by the c
 
 ## Upscaler providers
 
-An upscaler provider is a temporal upscaler from outside the client (Intel XeSS, AMD FSR 4, NVIDIA DLSS ...),
+An upscaler provider is a temporal upscaler from outside the client (Intel XeSS, AMD FSR 4 ...),
 built against `sdk/hailstone_upscaler.h`. It is not a game plugin: it has no host table, no capabilities and no
 callbacks, sees nothing of the game, and no server sends one or rules on one. The player installs it with the add-on
 manager (an add-on of the kind `upscaler`, docs/addons.md "Upscalers") and picks it under Options, Graphics,

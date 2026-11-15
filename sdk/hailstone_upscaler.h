@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MIT (sdk/LICENSE) */
 /* Hailstone upscaler providers: the C interface a temporal upscaler from outside the client (Intel XeSS, AMD FSR 4,
- * NVIDIA DLSS, ...) is built against, as an add-on of the kind `upscaler` (docs/plugins.md "Upscaler providers").
+ * ...) is built against, as an add-on of the kind `upscaler` (docs/plugins.md "Upscaler providers").
  *
  * A provider is a .dll / .so / .dylib in upscalers/<name>/ of the Hailstone folder, named after its folder
  * (<name>.dll, <name>.so, <name>.dylib), with whatever runtime it needs beside it. It is not a game plugin: it loads

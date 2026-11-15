@@ -205,8 +205,8 @@ the history through `post_taa_sets_` under `taa`); `display.sharpness` drives FS
 
 `display.upscaler = <name>` (the viewer's `--upscaler <name>`), where `<name>` is an upscaler add-on in
 `upscalers/<name>/` (docs/addons.md "Upscalers"), runs that add-on's temporal upscaler in FSR 3.1's place
-(`render::Upscaler::External`). This is how upscalers the client cannot ship come in: Intel XeSS, AMD FSR 4 and NVIDIA
-DLSS are closed binaries, so each is an add-on of its own repository, built against `sdk/hailstone_upscaler.h` (MIT;
+(`render::Upscaler::External`). This is how upscalers the client cannot ship come in: Intel XeSS and AMD FSR 4 are
+closed binaries, so each is an add-on of its own repository, built against `sdk/hailstone_upscaler.h` (MIT;
 docs/plugins.md "Upscaler providers" has the interface) and NOTICE.md's add-on exception. The client never names,
 links or ships any of them.
 
@@ -2058,5 +2058,5 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
    texture LOD bias. MSAA is off while a temporal upscaler runs, so cut-outs lose alpha-to-coverage;
    particles, spells, water and lava need a reactive mask rather than motion vectors; (done) frame generation of our
    own on the engine's motion and depth (`display.frame_gen`, Frame generation); next maybe a choice of more than one
-   in-between frame for very high refresh rates, or AMD FSR 3.1's frame generation should ours fall short. DLSS and
-   XeSS are not planned.
+   in-between frame for very high refresh rates, or AMD FSR 3.1's frame generation should ours fall short. XeSS and
+   FSR 4 are add-ons ("Upscaler providers"); DLSS is not planned.
