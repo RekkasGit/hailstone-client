@@ -590,7 +590,10 @@ int ClientApp::run() {
         }
         for (auto& slot : previews_)
             if (slot.view) slot.view->record(*f, dt); // the item previews' own passes (their images)
-        if (web_textures_ && browser_) web_textures_->record(*f, *browser_); // the browser tabs' changes
+        if (web_textures_) { // the browser tabs' changes; without a browser, only the retired textures reaped
+            if (browser_) web_textures_->record(*f, *browser_);
+            else web_textures_->collect();
+        }
         lap.mark("item preview record");
         // The temporal upscaler follows the plain camera (render/temporal.h); begin_scene hands it to the scene's
         // shaders for their own motion, so it is given first.

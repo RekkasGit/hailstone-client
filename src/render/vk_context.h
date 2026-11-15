@@ -24,6 +24,7 @@
 #include "render/point_shadows.h"
 #include "render/retire_queue.h"
 #include "render/shadows.h"
+#include "render/swapchain_size.h"
 #include "render/temporal.h"
 
 namespace hailstone::platform { class Window; }
@@ -484,6 +485,7 @@ private:
     VkRect2D scene_rect_{};  // set_scene_rect's
     VkRect2D scene_area_{};  // the rectangle drawn this frame (scene_rect_ within the image)
     VkExtent2D view_extent_{};  // scene_area_'s size when the scene targets were made
+    SceneResizeDebounce scene_resize_; // when a new scene_rect_ size makes them again
     VkExtent2D scene_extent_{}; // the scene targets' size: view_extent_ at the render scale
     bool upscaling() const { return scene_extent_.width != view_extent_.width || scene_extent_.height != view_extent_.height; }
     VkRect2D scene_area() const;
@@ -507,6 +509,7 @@ private:
     void draw_into(VkCommandBuffer cmd, const Image& target, VkExtent2D extent, VkPipeline pipeline,
                    VkPipelineLayout layout, VkDescriptorSet set, const void* push, std::uint32_t push_size);
     // The same into several targets of one size at once (the pipeline's colour attachments, in order).
+    static constexpr std::size_t kMaxDrawTargets = 4;
     void draw_into(VkCommandBuffer cmd, std::span<const Image* const> targets, VkExtent2D extent, VkPipeline pipeline,
                    VkPipelineLayout layout, VkDescriptorSet set, const void* push, std::uint32_t push_size);
 

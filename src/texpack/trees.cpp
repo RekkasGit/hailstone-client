@@ -8,6 +8,7 @@
 #include <map>
 #include <numeric>
 #include <system_error>
+#include <unordered_map>
 
 #include "assets/gltf_mesh.h"
 #include "assets/zone.h"
@@ -48,6 +49,9 @@ struct Rng {
 };
 
 glm::vec4 texel(const assets::Image& img, glm::vec2 uv) {
+    // A NaN or infinite UV (a damaged mesh's) reads the first texel: its float-to-integer cast would be undefined.
+    if (!std::isfinite(uv.x)) uv.x = 0.0f;
+    if (!std::isfinite(uv.y)) uv.y = 0.0f;
     const float u = uv.x - std::floor(uv.x), v = uv.y - std::floor(uv.y);
     const auto x = std::min(img.width - 1, static_cast<std::uint32_t>(u * float(img.width)));
     const auto y = std::min(img.height - 1, static_cast<std::uint32_t>(v * float(img.height)));
@@ -79,6 +83,8 @@ float percentile(std::vector<float> v, float p) {
     return v[k];
 }
 
+constexpr float kWeld = 0.05f; // trunk corners nearer than this are one point (measure_tree)
+
 } // namespace
 
 std::optional<TreeShape> measure_tree(const assets::Mesh& mesh, const TreeTextureLookup& texture, std::string* why) {
@@ -98,11 +104,35 @@ std::optional<TreeShape> measure_tree(const assets::Mesh& mesh, const TreeTextur
     std::vector<LeafTri> leaves;
     glm::dvec3 bark_sum(0.0);
     double bark_n = 0;
+    // The first point within kWeld, as a search of every point would find it, through a grid of kWeld cells (only
+    // the 27 round a point can hold one that near): a search of all is quadratic in a large trunk.
+    std::unordered_map<std::uint64_t, std::vector<int>> weld_cells;
+    auto weld_cell = [](const glm::vec3& p, int dx, int dy, int dz) {
+        auto c = [](float v, int d) {
+            const double cell = std::clamp(std::floor(static_cast<double>(v) / kWeld), -1.0e6 * 1024, 1.0e6 * 1024);
+            return static_cast<std::uint64_t>(static_cast<std::int64_t>(cell) + d) & 0x1fffffu;
+        };
+        return c(p.x, dx) | c(p.y, dy) << 21 | c(p.z, dz) << 42;
+    };
     auto weld = [&](const glm::vec3& p) {
-        for (std::size_t i = 0; i < pts.size(); ++i)
-            if (glm::distance(pts[i], p) < 0.05f) return static_cast<int>(i);
+        const bool finite = std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z);
+        if (finite) { // a NaN is within kWeld of nothing
+            int found = -1;
+            for (int dz = -1; dz <= 1; ++dz)
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        auto it = weld_cells.find(weld_cell(p, dx, dy, dz));
+                        if (it == weld_cells.end()) continue;
+                        for (int i : it->second)
+                            if ((found < 0 || i < found) && glm::distance(pts[static_cast<std::size_t>(i)], p) < kWeld)
+                                found = i;
+                    }
+            if (found >= 0) return found;
+        }
         pts.push_back(p);
-        return static_cast<int>(pts.size() - 1);
+        const int index = static_cast<int>(pts.size() - 1);
+        if (finite) weld_cells[weld_cell(p, 0, 0, 0)].push_back(index);
+        return index;
     };
     for (const auto& part : mesh.parts) {
         if (part.material >= mesh.materials.size()) continue;
@@ -1459,6 +1489,11 @@ bool write_tree(const std::filesystem::path& pack_dir, const std::string& zone, 
     };
     std::string stem = tree_texture_name(actor, "");
     stem = stem.substr(7, stem.size() - 7 - 5); // the actor's short name
+    // A bare file name, whoever made the rule (materials.cpp refuses others): nothing is written outside `dir`.
+    if (stem.empty() || stem.find_first_of("/\\:") != std::string::npos || stem.find("..") != std::string::npos) {
+        if (error) *error = "not a file name: " + actor;
+        return false;
+    }
     if (!put(dir / (stem + ".glb"), assets::write_glb(tree.mesh, source_hash))) return false;
     init_encoders();
     auto texture = [&](const assets::Image& img, FileKind kind, const char* what, const char* suffix) {

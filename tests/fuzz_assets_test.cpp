@@ -6,6 +6,8 @@
 #include <doctest/doctest.h>
 
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <limits>
 #include <span>
@@ -17,14 +19,18 @@
 #include "assets/eqg.h"
 #include "assets/eqg_character.h"
 #include "assets/gltf_mesh.h"
+#include "assets/jpeg_read.h"
+#include "assets/model_points.h"
 #include "assets/pfs.h"
 #include "assets/regions.h"
 #include "assets/sound_files.h"
 #include "assets/spell_effects.h"
 #include "assets/texture.h"
 #include "assets/wld.h"
+#include "assets/wld_detail.h"
 #include "assets/xmi.h"
 #include "core/byte_io.h"
+#include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/server_profile.h"
 #include "core/shared_file_cache.h"
@@ -33,6 +39,7 @@
 #include "render/gpu_cache_protocol.h"
 #include "render/horizon.h"
 #include "fuzz_support.h"
+#include "scratch_dir.h"
 #include "pfs_fixtures.h"
 #include "wld_fixtures.h"
 
@@ -514,6 +521,69 @@ TEST_CASE("fuzz: EQG models, ZON, heightmap, ECO, TOG, water and character files
     sweep("parse_animation", anim_seeds, 4, 600, [](std::span<const std::byte> d) { (void)eqg_character::parse_animation(d); });
 }
 
+TEST_CASE("fuzz: model side files (EQGL layers, PTS, PRT), texture animations and radial flora") {
+    fuzz::QuietLog quiet;
+    Rng rng(0x51de);
+    // EQGL version 4: a string table and one entry of 8 words.
+    Bytes lay = text_bytes("EQGL");
+    {
+        const std::string strings = std::string("C_GUS_S01_M01\0C_GUS_BD_S01_C.DDS\0C_GUS_BD_S00_N.DDS\0", 52);
+        ByteWriter w;
+        w.le<std::uint32_t>(4);
+        w.le<std::uint32_t>(static_cast<std::uint32_t>(strings.size()));
+        w.le<std::uint32_t>(1);
+        w.bytes(text_bytes(strings));
+        for (std::uint32_t v : {0u, 33u, 14u, 0xffffffffu, 0xffffffffu, 0xffffffffu, 0x41400000u, 0u}) w.le(v);
+        Bytes body = w.take();
+        lay.insert(lay.end(), body.begin(), body.end());
+    }
+    sweep("parse_layers", {lay}, 4, 500, [](std::span<const std::byte> d) { (void)eqg_character::parse_layers(d); });
+    // PTS (0xa4-byte records) and PRT (version 5, 0x6c-byte records), two records each.
+    auto points_file = [&](const char* magic, std::uint32_t version, std::size_t record) {
+        ByteWriter w;
+        w.bytes(text_bytes(magic));
+        w.le<std::uint32_t>(2);
+        w.le(version);
+        Bytes recs = fuzz::random_bytes(rng, 2 * record);
+        for (std::size_t i = 0; i < recs.size(); i += 5) recs[i] = std::byte{'A'};
+        w.bytes(recs);
+        return w.take();
+    };
+    sweep("parse_pts", {points_file("EQPT", 1, 0xa4)}, 12, 400, [](std::span<const std::byte> d) { (void)parse_pts(d); });
+    sweep("parse_prt", {points_file("PTCL", 5, 0x6c), points_file("PTCL", 1, 0x5c)}, 12, 400,
+          [](std::span<const std::byte> d) { (void)parse_prt(d); });
+    sweep("parse_texture_animation", {text_bytes("10\r\n200\r\nblood01_c.dds\r\nBlood02_C.dds\r\n"), text_bytes("02\n150\na.dds\nb.dds\n")},
+          0, 300, [](std::span<const std::byte> d) { (void)eqg::parse_texture_animation(d); });
+    sweep("parse_eco_flora",
+          {text_bytes("*FLORAPART\n*LAYER heather\n*MINHEIGHT -10\n*MAXHEIGHT 140\n*MINSLOPE 25\n*SLOPETOL 10\n*FLORA Grass\n"
+                      "*TEXTURELAYER Flowers\n*DENSITY 700.5\n*ITERATIONS 100\n*MINALPHA 128\n*END_LAYER\n*END_FLORAPART\n")},
+          0, 400, [](std::span<const std::byte> d) { (void)eqg::parse_eco_flora(d); });
+    sweep("parse_radial_flora",
+          {text_bytes("*BEGIN_RADIALFLORA\n*FLORADEFINITION Grass\n*TEXTURENAME g.dds\n*MINWIDTH 3.0\n*MAXWIDTH 6.0\n"
+                      "*SWAY ENABLED\n*SWAYPERIOD 5.0\n*QUADTEXTURE ENABLED\n*TEXTUREINDEX 3\n*END_DEFINITION\n*END_RADIALFLORA\n")},
+          0, 400, [](std::span<const std::byte> d) { (void)eqg::parse_radial_flora(d); });
+}
+
+TEST_CASE("fuzz: Resources/OnDemandResources.txt") {
+    fuzz::QuietLog quiet;
+    test::ScratchDir dir("ondemand_fuzz");
+    std::filesystem::create_directories(dir.path() / "Resources");
+    const std::filesystem::path file = dir.path() / "Resources" / "OnDemandResources.txt";
+    const Bytes seed = text_bytes("gus.eqg^gus.mod^GUS_ACTORDEF^EQGS\ngus.eqg^gus.lay^GUS^EQGL\n"
+                                  "gus.eqg^walk.ani^L01_A_1_GUS^EQGA\n../x.eqg^a^B_ACTORDEF^EQGM\n^^^\n");
+    auto load = [&](std::span<const std::byte> d) {
+        std::ofstream(file, std::ios::binary | std::ios::trunc)
+            .write(reinterpret_cast<const char*>(d.data()), static_cast<std::streamsize>(d.size()));
+        EqgCharacterStore store{GameDir(dir.path())};
+        (void)store.codes();
+    };
+    Rng rng(0x0dd);
+    for (std::size_t n = 0; n <= seed.size(); n += 4)
+        fuzz::run_case("OnDemandResources", Bytes(seed.begin(), seed.begin() + static_cast<std::ptrdiff_t>(n)),
+                       Throws::Errors, load);
+    for (int i = 0; i < 120; ++i) fuzz::run_case("OnDemandResources", fuzz::mutate(seed, rng), Throws::Errors, load);
+}
+
 TEST_CASE("fuzz: textures (DDS, BMP, TGA, PNG)") {
     fuzz::QuietLog quiet;
     std::vector<Bytes> seeds = {dds(16, 16, 3, "DXT1", 0, 8 * 16 + 8 * 4 + 8), dds(8, 8, 1, "DXT5", 0, 16 * 4), dds(4, 4, 1, nullptr, 32, 64),
@@ -529,6 +599,23 @@ TEST_CASE("fuzz: textures (DDS, BMP, TGA, PNG)") {
             if (img) (void)to_rgba8(*img);
         }
         (void)describe_texture(d);
+    });
+    // A cube map made octahedral (DDSCAPS2 0xfe00: all six faces), the WLD detail palette map (an 8-bit BMP), and
+    // JPEG behind its markers.
+    Bytes cube = dds(4, 4, 1, nullptr, 32, 6 * 64);
+    cube[113] = std::byte{0xfe};
+    sweep("decode_cube_as_octahedral", {cube}, 24, 400,
+          [](std::span<const std::byte> d) { (void)decode_cube_as_octahedral(d, 16); });
+    sweep("decode_palette_map", {bmp(8, 8, 8, 0, 64), bmp(5, 3, 8, 0, 24)}, 2, 400,
+          [](std::span<const std::byte> d) { (void)wld::decode_palette_map(d); });
+    Rng rng(0x1be9);
+    Bytes jpeg = {std::byte{0xff}, std::byte{0xd8}, std::byte{0xff}, std::byte{0xc0}, std::byte{0x00}, std::byte{0x11},
+                  std::byte{0x08}, std::byte{0x00}, std::byte{0x08}, std::byte{0x00}, std::byte{0x10}, std::byte{0x03}};
+    Bytes tail = fuzz::random_bytes(rng, 300);
+    jpeg.insert(jpeg.end(), tail.begin(), tail.end());
+    sweep("decode_jpeg", {jpeg}, 4, 300, [](std::span<const std::byte> d) {
+        std::string err;
+        (void)decode_jpeg(d, &err);
     });
 }
 

@@ -7,6 +7,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <unordered_map>
 
 #include <cgltf.h>
 
@@ -20,6 +21,31 @@ namespace {
 // Limits on what a replacement may hold: well past a detailed tree, short of what would stall a zone load.
 constexpr std::size_t kMaxVertices = 1u << 20;
 constexpr std::size_t kMaxIndices = 3u << 20;
+
+// Primitives read under one transform from the same accessors share their vertices (load_gltf_mesh). Kept in a hash
+// map: a file with many primitives would make a list's search quadratic.
+struct ReadKey {
+    std::array<const void*, 5> accessors;
+    glm::mat4 world;
+    // A NaN in the transform never equals itself, so such a primitive is never shared, as with ==.
+    bool operator==(const ReadKey& o) const { return accessors == o.accessors && world == o.world; }
+};
+
+struct ReadKeyHash {
+    std::size_t operator()(const ReadKey& k) const {
+        std::uint64_t h = 1469598103934665603ull;
+        auto mix = [&h](std::uint64_t v) { h = (h ^ v) * 1099511628211ull; };
+        for (const void* a : k.accessors) mix(reinterpret_cast<std::uintptr_t>(a));
+        for (int c = 0; c < 4; ++c)
+            for (int r = 0; r < 4; ++r) {
+                const float f = k.world[c][r] + 0.0f; // -0 as +0: they compare equal
+                std::uint32_t bits = 0;
+                std::memcpy(&bits, &f, sizeof bits);
+                mix(bits);
+            }
+        return static_cast<std::size_t>(h);
+    }
+};
 
 glm::vec3 from_gltf(const glm::vec3& v) { return {v.x, -v.z, v.y}; }
 glm::vec3 to_gltf(const glm::vec3& v) { return {v.x, v.z, -v.y}; }
@@ -161,31 +187,60 @@ std::optional<GltfMesh> read_glb(std::span<const std::byte> bytes, std::string* 
     std::size_t default_material = std::numeric_limits<std::size_t>::max();
 
     const cgltf_scene* scene = data->scene ? data->scene : data->scenes_count ? &data->scenes[0] : nullptr;
-    std::vector<const cgltf_node*> nodes;
-    struct ReadVertices {
-        std::array<const void*, 5> key;
+    // Each node with its world transform, made top-down as the tree is walked: cgltf_node_transform_world walks the
+    // parent chain for every node, quadratic in a deep chain.
+    struct PlacedNode {
+        const cgltf_node* node;
         glm::mat4 world;
-        std::size_t base;
     };
-    std::vector<ReadVertices> read_vertices;
+    std::vector<PlacedNode> nodes;
+    std::unordered_map<ReadKey, std::size_t, ReadKeyHash> read_vertices;
+    auto to_mat = [](const float m[16]) {
+        glm::mat4 mat;
+        std::memcpy(&mat[0][0], m, sizeof(float) * 16);
+        return mat;
+    };
     if (scene) {
         // In the file's order, depth first (a stack filled backwards).
-        std::vector<const cgltf_node*> stack(scene->nodes, scene->nodes + scene->nodes_count);
-        std::reverse(stack.begin(), stack.end());
+        // A scene's nodes are roots; one that is not (against the spec) keeps its parents' transform, as before. Those
+        // are made once each, remembered, so a scene listing every node of a deep chain stays linear too.
+        std::unordered_map<const cgltf_node*, glm::mat4> ancestors;
+        auto world_of = [&](const cgltf_node* node) {
+            std::vector<const cgltf_node*> chain;
+            glm::mat4 above(1.0f);
+            for (const cgltf_node* p = node->parent; p; p = p->parent) {
+                if (auto it = ancestors.find(p); it != ancestors.end()) {
+                    above = it->second;
+                    break;
+                }
+                chain.push_back(p);
+            }
+            for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+                float m[16];
+                cgltf_node_transform_local(*it, m);
+                above = above * to_mat(m);
+                ancestors.emplace(*it, above);
+            }
+            float m[16];
+            cgltf_node_transform_local(node, m);
+            return above * to_mat(m);
+        };
+        std::vector<PlacedNode> stack;
+        for (cgltf_size i = scene->nodes_count; i-- > 0;) stack.push_back({scene->nodes[i], world_of(scene->nodes[i])});
         while (!stack.empty() && nodes.size() < 65536) {
-            const cgltf_node* n = stack.back();
+            const PlacedNode n = stack.back();
             stack.pop_back();
             nodes.push_back(n);
-            for (cgltf_size c = n->children_count; c-- > 0;) stack.push_back(n->children[c]);
+            for (cgltf_size c = n.node->children_count; c-- > 0;) {
+                float m[16];
+                cgltf_node_transform_local(n.node->children[c], m);
+                stack.push_back({n.node->children[c], n.world * to_mat(m)});
+            }
         }
     }
-    for (const cgltf_node* node : nodes) {
+    for (const auto& [node, world] : nodes) {
         if (!node->mesh) continue;
         const auto lod = parse_lod(node->extras);
-        float m[16];
-        cgltf_node_transform_world(node, m);
-        glm::mat4 world;
-        std::memcpy(&world[0][0], m, sizeof m);
         const glm::mat3 normal_world = glm::transpose(glm::inverse(glm::mat3(world)));
         for (cgltf_size pi = 0; pi < node->mesh->primitives_count; ++pi) {
             const cgltf_primitive& prim = node->mesh->primitives[pi];
@@ -203,15 +258,9 @@ std::optional<GltfMesh> read_glb(std::span<const std::byte> bytes, std::string* 
             // Primitives that share their vertex data under the same transform (one part per material, one node per
             // level of detail) share the vertices.
             const std::array<const void*, 5> key{pos, nrm, uv, uv2, col};
-            std::size_t base = mesh.vertices.size();
-            bool shared = false;
-            for (const auto& r : read_vertices)
-                if (r.key == key && r.world == world) {
-                    base = r.base;
-                    shared = true;
-                    break;
-                }
-            if (!shared) read_vertices.push_back({key, world, base});
+            const auto [found, added] = read_vertices.try_emplace(ReadKey{key, world}, mesh.vertices.size());
+            const std::size_t base = found->second;
+            const bool shared = !added;
             const std::size_t count = prim.indices ? prim.indices->count : pos->count;
             if (mesh.vertices.size() + pos->count > kMaxVertices || mesh.indices.size() + count > kMaxIndices) {
                 fail(error, "too many vertices");

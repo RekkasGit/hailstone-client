@@ -3,11 +3,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
+#include <set>
 
 #include <doctest/doctest.h>
-
-#include <set>
 
 #include "assets/gltf_mesh.h"
 #include "assets/zone.h"
@@ -155,6 +155,17 @@ TEST_CASE("trees: a game tree's trunk, leaves and colours measured") {
     CHECK_FALSE(measure_tree(no_leaves, pine.lookup(), &why));
     CHECK(why == "no cut-out leaves");
     CHECK_FALSE(measure_tree(mesh, [](const assets::Material&) { return nullptr; }, &why));
+}
+
+TEST_CASE("trees: NaN and infinite leaf UVs read a texel, not past the image") {
+    assets::Mesh mesh = game_tree();
+    const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+    const auto first_leaf = mesh.vertices.size() - 8;
+    mesh.vertices[first_leaf].uv = {nan, 0.5f};
+    mesh.vertices[first_leaf + 1].uv = {inf, -inf};
+    const Textures pine(true);
+    measure_tree(mesh, pine.lookup()); // whatever it makes of them, defined
+    CHECK(true);
 }
 
 TEST_CASE("trees: a tall trunk's short bottom prism is its own ring, so the tree stands on its foot") {
@@ -459,6 +470,11 @@ TEST_CASE("trees: the rules' tree lines") {
     CHECK(error == "z.txt:1: expected tree <actor> = auto|pine|broadleaf|willow|dead|palm [bark material]");
     CHECK_FALSE(parse_material_rules(materials, {{"z", "\ntree x = pine birch"}}, &error));
     CHECK(error == "z.txt:2: no material [birch] in materials.txt");
+    // The actor names the tree's files: a path is refused.
+    for (const char* line : {"tree ../../evil = pine", "tree a/b = pine", "tree c:\\x = pine", "tree .. = pine"}) {
+        CHECK_FALSE(parse_material_rules(materials, {{"z", line}}, &error));
+        CHECK(error == "z.txt:1: a tree's actor is a name of letters, digits, '_' and '-'");
+    }
 }
 
 TEST_CASE("trees: Qeynos Hills' trees measured from the game files") {

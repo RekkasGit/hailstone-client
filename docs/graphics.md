@@ -68,7 +68,10 @@ The 3D view can take a rectangle of the window (/viewport, `VkContext::set_scene
 its size (`FrameInfo::extent`, with its place in `FrameInfo::offset`), the post pass draws into that rectangle (its
 push constant's offset gives the scene texel under each pixel) and clears the rest of the image to black; the UI still
 covers the whole window, and the app maps the nameplates and mouse picking onto the rectangle
-(`ClientApp::view_area_`).
+(`ClientApp::view_area_`). A move of the rectangle is taken at once; a new size makes the scene targets again (a
+device wait and every target rebuilt), so it waits until the size has held for 4 frames, or at most 30 frames after
+it first changed (`render::SceneResizeDebounce`, render/swapchain_size.h): dragging an edge does not stall every
+frame, and the old rectangle is drawn meanwhile.
 
 The scene can be drawn below the view's size and upscaled (`display.render_scale`, `SceneOptions::render_scale`,
 33 .. 100 %, `render::kMinRenderScalePercent`): the scene targets are made at the view's size times the scale (`render::scaled_extent`, each side
@@ -249,11 +252,14 @@ same frame: 0.98), from 1.74 to 1.02 at 180 (0.84), and at a 30 fps base from 2.
 saves the in-between frame with the real one after it (`FILE_real`) for a side-by-side look: the viewer's last frame
 (with the one before as `FILE_prev`), and in the client every screenshot, the input script's `shot` too; the
 viewer's `--frames` log counts the in-between frames presented. The
-performance window shows its rates, skips, pacing and GPU time (`VkContext::frame_gen_stats`, docs/dev-ui.md).
+performance window shows its rates, skips, pacing and GPU time (`VkContext::frame_gen_stats`, docs/dev-ui.md); the
+generated GPU time is only a frame's that synthesised an in-between frame, not one that showed the real frame twice.
 
 Screenshots copy the presented swapchain image, so the swapchain asks for `TRANSFER_SRC` when the surface offers it;
 where it does not, a screenshot is refused with a log line (and a chat line for the screenshot key) instead of an
-invalid copy. The swapchain is made again when the window's framebuffer size changes from the size it was made for,
+invalid copy. The readback is 4 bytes a pixel, so it is also refused when the swapchain is not 8-bit RGBA or BGRA
+(`render::screenshot_format_supported`): a surface that offers no such format with sRGB colour space gets its first
+format, which may be FP16 or 10-bit HDR. A surface that reports no format at all fails the swapchain's creation. The swapchain is made again when the window's framebuffer size changes from the size it was made for,
 not whenever the surface's `currentExtent` differs from the window's size.
 
 Uploads do not wait for the GPU. `render::UploadBatch::submit` records its copies (and mip blits) into a command buffer
@@ -602,7 +608,9 @@ Karana would hold some 6.5 million plants at once). Setting a zone up takes some
 mesh is bounded: a triangle with a non-finite vertex or one over 100,000 units out (the zones lie within some 20,000)
 neither grows plants nor covers any, the ground is cut into at most 2 million pieces, and the cover test holds at most
 16 million cell references, a triangle over more than 1,024 of its 64-unit cells (at most 256 such) being tested at
-every point instead. A triangle past those bounds is no cover.
+every point instead. A triangle past those bounds is no cover. The split bounds a piece's area, not its length, so the
+tiles are bounded as well: a piece whose bounds touch more than 1,024 tiles (only a damaged mesh's sliver) grows
+nothing, and the tiles hold at most 16 million piece references in all.
 
 They are looks only: collision, line of sight, the navigation mesh and picking do not see them.
 `tools/florascan GAME_DIR flora ZONE...` lists, per zone, the rules it takes and the plants on each ground texture
@@ -1520,6 +1528,9 @@ three-stage build and the pack's files).
      Lanczos and thresholded.
    - Textures of 16 texels or less, the game's own normal maps and EQG data maps (coverage, palettes, masks) are
      only Lanczos-scaled and get no maps.
+   - The built-in upscaler (`texpack::upscale_texture`) refuses a texture whose output, or its colour model's padded
+     output, would pass 8192 x 8192 texels (`kMaxUpscaleTexels`): its float planes take 16 bytes a texel. The job
+     notes the error and goes on.
    - A stopped run resumes.
    - `--redo-alpha STAMP` makes the textures with an alpha channel again where their outputs are older than the file
      STAMP: for a work folder upscaled while a DDS's colour under alpha 0 was still overwritten (packs built before
@@ -1603,7 +1614,9 @@ The pack folder is the one `display.texture_folder` (the viewer's `--textures`) 
 zone loads (`Zone::draw_objects`).
 
 - **Frame:** glTF's own, Y up; its units are EQ units, and glTF (x, y, z) is the zone's (x, -z, y). Front faces are
-  counter-clockwise; each node's transform is applied.
+  counter-clockwise; each node's transform is applied, made top-down as the node tree is walked, and primitives
+  that share their accessors under one transform share their vertices (found in a hash map), so a file of many
+  nodes or primitives loads in time linear in them.
 - **Materials:** a material's base colour texture names its texture by its image's URI: the file name is looked up as
   a replacement texture is (the zone's subfolder first, so a model's textures can sit beside it), any extension, with
   its `.n` and `.r` maps. `MASK` is drawn as a cut-out, `BLEND` at 50 %, `doubleSided` without culling. Images inside
@@ -1702,7 +1715,8 @@ trees are a trunk of a few solid prisms under crossed cut-out cards. Each new tr
   in a view full of trees (3.29 ms from 3.47; zone viewer, offscreen). Each kind of tree is stored once (instanced),
   so the triangles cost no memory per tree.
 
-The rules are lines of the studio's zone files (`tree <object> = <style> [<bark material>]`); the 34 zones with
+The rules are lines of the studio's zone files (`tree <object> = <style> [<bark material>]`; the object a name of
+letters, digits, `_` and `-`, since it names the tree's files); the 34 zones with
 ground rules have them (129 trees in the 30 that have trees). A tree comes out the same on every build (its seed is its zone and name). Seen in the zone viewer, not
 in a live session. Open: leaves thin out in the smaller mips of a cut-out.
 
