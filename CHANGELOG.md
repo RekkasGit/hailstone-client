@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Login screen: More options (both interfaces) has a Texture pack choice, the same as Options > Textures, so an HD pack built with Texture Studio can be picked before logging in. As in Options, the new pack is used from the next start
 - Options: the Upscaler list has an Off choice that turns upscaling and Frame Generation off completely: the 3D world is drawn at full size, whatever the render scale and Frame Generation settings say, and those settings are hidden until an upscaler is chosen again
 - Zones: placed objects that animate in the original now do here too: Ssraeshza Temple's rings turn, and the branches of the trees in Emerald Jungle, Trakanon's Teeth, the Wakening Land and some 70 other zones sway. They are solid where they are, so in Ssraeshza Temple the turning rings again let a player into the water shaft and out at the top once their gaps come round; before, the rings stood still with their gaps facing away and nobody could get in
 - Modern lighting: every zone's haze is now as thick as the zone's own fog (its distances and density), as in the original. Foggy zones such as Nektulos Forest, Innothule Swamp and Misty Thicket are murky again instead of clear and bright; the longer modern view only lets distant scenery fade into the fog instead of being cut off, and clear-sky zones such as Qeynos Hills are as hazy as the original
