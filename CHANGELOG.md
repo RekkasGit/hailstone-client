@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- Security: a plugin's bulk spawn read can no longer write past the plugin's buffer when a spawn has a very long name or suffix
+- Security: plugin windows and scripts can no longer draw into, or close, the plugin consent question; a script window left open no longer swallows the windows drawn after it
+- Security: a player's item link can no longer add colours or fake text to other players' chat
+- Plugins and scripts now need the `actions` permission for /pet, /loot, /autoinventory, /alt, /split, /consent and /guilddelete, and for `/nav door … click`; `eq.gamepad.request_focus` needs `commands`. Before, `commands` alone allowed them
+- Scripts: `loadfile` and `dofile` give back only data, so text a script writes can no longer be run as code; `mq.pickle` refuses a file over 8 MiB and a write that would leave the script's config folder with more than 1000 files or 64 MiB
+- Scripts: `${String[...].Arg[n]}` with a huge n no longer freezes the game, and failed Lua calls in `require` and many `eq.*` functions no longer leak memory
+- Updates and add-on installs survive a power cut: each step is on the disk before the next, and a file a rollback cannot account for is kept in `kept-<time>/`, never deleted. An update no longer writes into `tools/` or a plugin folder an add-on installed, refuses to replace a folder with a file or to unpack more than 4 GiB, and stops a download as soon as it passes the size the release gives
+- Add-on versions with invalid build metadata (after `+`) are refused
+- Logs: a second client's old `hailstone.<pid>.log` files are cleaned up, and one run's log stops at 100 MiB
+- The browser helper and other programs the client starts no longer inherit its network connections
+- Damaged or hostile texture-pack models (`.glb`), ecosystem files, zone geometry, MIDI music, DDS and TGA textures and Texture Studio rules can no longer stall a zone load, use gigabytes of memory, or write outside the pack
+- Screenshots are refused with a message on a display that offers only HDR or 10-bit formats, instead of writing past their buffer
+- /viewport: dragging an edge no longer stalls every frame; the view follows once the size settles
+- Performance window: with Frame Generation on, the generated-frame GPU time no longer counts frames that were only shown twice
+- Zoning or respawning while at a boat's helm no longer leaves a boat in the new zone jumping between updates
+- A running social stops when you switch characters; the Actions window's Socials tab now honours /pause, /timer and Lua socials
+- Permanent buffs no longer drift in the character's stats, and buffs no longer count down there while buff timers are on hold
+- A skill reuse reduction (SPA 227) larger than a combat skill's reuse no longer locks the skill (fixes a RoF2 bug)
+- `/camera pitch|fov|distance|reveal` refuse `nan` and `inf`, and a broken number in `hailstone.ini` loads as its default; `/mousespeed` holds the speed to 0..10; `/copylayout` looks up an unknown ini only by its bare name beside the current layout
+- Gamepad: rumble is capped at 5 seconds and NaN settings are refused
+- Conversation journal: NPC names or lines with line breaks no longer corrupt the saved journal
+- Sortable lists that mix numbers and words no longer stop with a sort error
+- Web Browser: a tab that fails to open says why instead of retrying every frame, and a failed open keeps the current tab (both interfaces)
+- Barter: a buyer-lines reply that claims more lines than it holds no longer blanks your first buy line
+- Server script: `enabled = 0` now also stops client file downloads and the zone-start file scan
 - With the Temporal or AMD FSR 3.1 upscaler: characters cost less CPU time each frame again. Keeping their last frame's pose for the upscaler read it back from memory meant only for writing, and reallocated it every frame
 - Texture packs with generated trees: the trees sway in the wind again, each branch moving as one piece, without the flicker they had before (rebuild a pack's trees in the Texture Studio to get the pines without their branch-end slabs)
 - Texture packs with generated trees: pines no longer show flat slabs of needles across their branches when seen from beside. Rebuild a pack's trees in the Texture Studio to get them

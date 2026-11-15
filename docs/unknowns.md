@@ -59,6 +59,7 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 - A cumulative Ack (`00 15`) whose 16 bits equal the next sequence to send widens to that sequence itself (it is not ahead of it), not 65536 back, so it acknowledges every packet in flight, including ones the server cannot have received yet. That is the original's AckAll (@0x8cdf50: `ack > next` moves it back, `ack == next` does not) and the client keeps it; a stock server acknowledges only what it received, and with at most 400 packets in flight such an ack can only be one 65536 sequences old. Whether the original meant it, or a live capture of an old ack arriving that late, would settle whether to treat it as one behind the oldest instead.
 - eqhost.txt: a `Host` line without a port gives the new server the login screen's default port (`ServerProfile::port`, 5997), not one taken from the original; EQEmu's login server takes RoF2 on 5999 by default (docs/protocol/login.md). The original's missing-port default is not traced (`LoginClient::Host::Host` 0x10008390 passes the part after `:` through atoi; what it does with none is not read). eqmain's `LoginClient::ReadHosts` (0x1000e1d0, rof2decomp notes/eqmain.md) reads `Host`, then `Host1`, `Host2` and so on until an empty value, moving to the next on a failed connect; Hailstone's application still reads only `[LoginServer]`'s first `Host` (its network API separately accepts a host list).
 - Membership details: the feature ids' names and the refusal lines are decoded (`game/feature_restrictions.h`); the other uses of the 22 entries are not.
+- Spawn suffix in destructible form (OtherData 0xe1): the client reads no suffix there. EQEmu writes one only when it is not empty; the original appears to read one whenever bit 0x20 is set (`EQPlayer::UnSerializeSpawn`) and to treat only bit 0x04 as interactive. A capture of a destructible spawn with a suffix, or the original's register use at `UnSerializeSpawn`, would settle it.
 
 ## Updates
 
@@ -164,6 +165,7 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - The zip-code and quest-reward popups: the original's callback (0x6d8570) is read for the purchase answer (Results OK, then the buttons enabled); for the other popups this client only enables the window again and stays on the page.
   - Not done: the Alt modifier on MKPW_DetailsIcon's right click (the preview instead of Inspect), the monster shroud check (profile +0x340c, not kept), 0x5f8920 → 0x5f84c0 after a wallet or result (may send 0x7679), what the Results OK click's 0x88e060(1) does, and the tree's starting state of a new branch (closed is assumed; only the toggle of "All Items" was read).
   - The original's ResetView, SyncShelfToSelection and NavigateToEntry set the shelf to array[1] ("Player Studio") while they highlight "All Items"; this client uses "All Items" (a deliberate difference, docs/mechanics.md).
+- Merchant sell price for a unit price outside int32 (a tiny, negative or NaN rate): `game::sell_value` gives 0x80000000, the x86 conversion's result. A capture with an odd merchant rate would settle it.
 
 ## Reward selection
 
@@ -232,6 +234,7 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   name, the piece the actor shows and whether it plays bcn_default.ani were not traced. The NMS server does not send
   that door, so it was not seen live.
 - Zone bounds for the map use the collision mesh.
+- The zone-wide radial flora cap (4,194,304 plants, about 16 times Moors) was set without measuring every stock EQG zone; a run over the game folder with `EQ_GAME_DIR` set would confirm the margin.
 
 ## Audio
 

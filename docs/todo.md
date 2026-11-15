@@ -23,6 +23,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Native vitality gauges and inventory bars in both packs, campsite categories loaded from the player's resources, DBString type-0 kit descriptions, gamepad leader markers and a server-expiry countdown. Category masks and description lookup were checked against the original handlers.
 
 ### Combat and spells (do first)
+- [ ] Shadow step (SPA 379) does nothing live: `land_spell` has no zone collision (point_in_world, collide_sphere, collide_line, floor_height and is_valid_teleport are stubbed in src/game/hit_landing.cpp) and the result has no position for the connection to apply. Needs collision in HitLandingContext, a port of IsValidTeleport and a teleport result applied with a position update.
 - [x] Spell Hit Modes: Normal, Abbreviated and Number Only for direct damage, DoTs, heals and HoTs, preserving full spell and melee log lines and incoming-chat hooks. Structured message and UI tests; live gameplay remains unverified (docs/mechanics.md "Spell hit modes").
 - [x] Personal and guild tribute: received bonus items feed local stats/effects and retire on received deactivation, selection changes, opt-out and context changes; guild benefit controls enforce received permissions, and guild platinum donations wait for matching replies. Packet, mechanics and mock/UI regressions; full live tribute workflow acceptance remains open.
 - [x] Raid leadership controls and leadership hotkey creation in both UI packs, correct trainable ability identities, delegate/mark synchronization and lifecycle cleanup, active leadership bonuses in local stats, and raid invitations from expedition/shared-task rosters (unit, mock-server and UI coverage).
@@ -362,6 +363,16 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] Shared GPU textures on Linux (a Unix socket passing opaque FDs) and more than 16 clients (docs/research/shared-gpu-memory.md).
 
 - [ ] The layer order (`app` -> `game` / ... -> `assets` / `net` / `web` -> `core` / `platform`, docs/plan.md and AGENTS.md) does not hold for `net` and `assets`: they include `game/` headers. In `net`: every `game_connection*.cpp` (GameConnection keeps the game state), and the packet codecs `zone_packets.cpp` (`game/mechanics/remote_spawns.h`: the bit-packed positions), `spell_packets.h` (`game::mechanics::cast::Packet`), `task_packets.h` (`game::Task`), `training_packets.h` (`game::kTrainSkills`, `kTrainLanguages`), `aa_packets.h` (`game/alt_adv.h`) and `ability_packets.h` (`game/mechanics/abilities.h`). In `assets`: `wld_zone.cpp` (`game/zone_names.h`), `model_points.cpp` (`game/sine_table.h`), `eqg_character.cpp` (`game/mechanics/anim_select.h`, `game/race_models.h`), `character.cpp`, `character_parts.cpp` and `character_dress.cpp` (`game/appearance*.h`, `game/actor_look.h`, `game/race_models.h`). Everything builds into the one `hailstone_engine` library, so nothing fails to link today, but the documented order is not what the code does, and no check enforces it. Either move the shared pieces down (the position unpacking, race and appearance tables, zone names and the sine table into `core/` or the layer that reads them, and the packet structs out of `game::` types), or write the real order into docs/plan.md and AGENTS.md (GameConnection above `game`; the tables `assets` reads as a lower part of `game`). Then add a check (a CI grep like the NMS one) so it stays true.
+- [ ] Far shadow cascades are redrawn every frame; reusing them needs per-cascade tracking of moving casters first.
+- [ ] Session-long caches (`ModelArchiveStore` libraries' dress and model caches, `EqgCharacterStore`) never evict.
+- [ ] `tlo_index` makes a finalized userdata holding a `std::string` and a `Value` for every `.Member` step; it could keep the name as a Lua string.
+- [ ] Other `eq.*` functions still build `std::string` temporaries inside push expressions; move them to `plugin/lua_keep.h` as they are touched.
+- [ ] The pack's consent window is guarded from its first draw only: a script drawing before it on that first frame can still add to it once. Pre-register it as guarded.
+- [ ] Windows: about 260 `path::string()` calls rely on `cmake/utf8.manifest` making UTF-8 the ANSI code page. Sweep them to `core/path_utf8.h`, or record that the manifest is required.
+- [ ] Tests for /camera, /mousespeed and /copylayout through ClientApp itself (their helpers are tested), and for the gamepad pack's browser change.
+- [ ] `net::server_file_destination` still accepts versioned shared libraries (`.so.N`) in scripts and plugins as data, while `tools/make_addon.py` refuses them.
+- [ ] Updates: `kept-<time>/` folders left by a rollback are never cleaned up; offer to remove them.
+- [ ] Conversation journal texts over 0xffe characters still split on reload (the fgets limit), as in the original.
 
 ## Not planned
 
