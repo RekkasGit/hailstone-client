@@ -2962,7 +2962,7 @@ void register_luasocial_api(lua_State* L, EqHost& host);  // app/lua_eq_luasocia
 void register_hotbar_api(lua_State* L, EqHost& host);     // app/lua_eq_hotbar.cpp
 void register_web_api(lua_State* L, EqHost& host);        // app/lua_eq_web.cpp
 void register_find_api(lua_State* L, EqHost& host);       // app/lua_eq_find.cpp
-void register_compare_api(lua_State* L, EqHost& host, std::vector<std::unique_ptr<StockWindow>>& windows); // app/lua_eq_compare.cpp
+void register_compare_api(lua_State* L, EqHost& host, std::function<StockWindow*(std::string_view)> find_window); // app/lua_eq_compare.cpp
 void register_task_api(lua_State* L, EqHost& host, std::vector<std::unique_ptr<StockWindow>>& windows); // app/lua_eq_progress.cpp
 int CompassStrips(lua_State* L);                     // app/lua_eq_misc.cpp
 int CompassMarkers(lua_State* L);                    // app/lua_eq_misc.cpp
@@ -2984,7 +2984,7 @@ void EqApi::register_functions(lua_State* L) {
     register_hotbar_api(L, impl_->host);
     register_web_api(L, impl_->host);
     register_find_api(L, impl_->host);
-    register_compare_api(L, impl_->host, impl_->windows);
+    register_compare_api(L, impl_->host, [impl = impl_.get()](std::string_view name) { return impl->window(name); });
     register_task_api(L, impl_->host, impl_->windows);
     // Opening a tracker entry changes TaskWnd's selected objective list in this frame. Its next ListInfo/ListRow
     // read must not retain the previously selected task's cached list.
