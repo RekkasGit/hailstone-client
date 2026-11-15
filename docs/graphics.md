@@ -1223,19 +1223,24 @@ specks against the sky.
   by it (strength 0.85) before the exposure. Applied to everything, not to the ambient alone (there is no depth
   prepass), so it is kept to contact shadows.
 
-- **View distance and haze** (`render::modern_view`, `set_haze_linear`, `apply_haze` in `shaders/lighting.glsl`): the far
-  plane is the classic far plane x `display.view_distance` (not under water, in lava or thick-fog regions, which keep the
-  classic one), and the fog distances move with it, so characters are drawn out to it. Instead of the exp2 fog wall,
-  a haze with optical depth 3.5 (d / far)^2, thinner above the camera (scale 600 units), towards the zone's fog
-  colour with a glow around the sun; the sky blends into it within about 7 degrees of the horizon. The post pass
-  blurs up to 1.75 pixels from a quarter of the way out to the far plane. Mouse picking keeps the classic yon.
-  - **Where it is not drawn further** (the sky flag off: a zone without a sky, as innothule, nektulos, misty and
-    toxxulia, or under water, in lava, in a thick-fog region) the haze is as thick as the original's fog: its
-    exp(-(10 density (d - start) / (end - start))^2) matched by a haze length of sqrt(3.5) (end - start) /
-    (10 density), the start left out (`render::modern_view`). Density 0.1, those zones' value, is a light fog, a third
-    clear at its end. The haze's length had been the fog's end whatever the density, about 3.5 times as thick: the
-    dark swamp near the camera went the fog's bright colour, innothule over three times the original's brightness.
-    With the fog off (no density) the length is the fog's end.
+- **View distance and haze** (`render::modern_view`, `render::zone_haze_length`, `set_haze_linear`, `apply_haze` in
+  `shaders/lighting.glsl`): the far plane is the classic far plane x `display.view_distance` (not where the sky flag is
+  off: a zone without a sky, under water, in lava or a thick-fog region, which keep the classic one), and the fog
+  distances move with it, so characters are drawn out to it. Instead of the exp2 fog wall, a haze with optical depth
+  3.5 (d / length)^2, thinner above the camera (scale 600 units), towards the zone's fog colour with a glow around
+  the sun; the sky blends into it within about 7 degrees of the horizon. The post pass blurs up to 1.75 pixels from a
+  quarter of the way out to the far plane. Mouse picking keeps the classic yon.
+  - **As thick as the zone's fog**: the haze's length is set so that it is half clear where the original's fog,
+    exp(-(10 density (d - start) / (end - start))^2), is: at start + sqrt(ln 2) (end - start) / (10 density), the
+    length sqrt(3.5 / ln 2) times that. It is never longer than the far plane; with the fog off (no density), it is the
+    far plane, or the fog's end where the view is not drawn further. So a zone keeps the murk its builders gave it, and
+    the longer view only lets what lies past the original's far plane fade into the haze instead of being cut off.
+    Density 0.1 (innothule, nektulos version 0, the commons) is a light fog, a third clear at its end; 0.33 (most
+    zones, nektulos version 1) a thick one, nearly opaque by about 60 % of the way. Before, the haze ran over the
+    whole extended distance (nektulos version 1, served from Rain of Fear on, showed no fog at all, half clear at
+    1670 units against the original's 390), and where the view was not extended its length was the fog's end
+    whatever the density (innothule's light fog about 3.5 times as thick, the dark swamp near the camera washed into
+    the fog's bright colour).
   - **The glow** is the sunlight the haze scatters, so it is no brighter than the haze's own colour allows
     (`render::haze_glow`): full in a day's fog (linear luminance 0.05 and up), less in a darker one. The fog
     colour darkens by the classic hour tables, which lag this sun: at 5:50 nektulos's fog is 19/14/10 while the sun
