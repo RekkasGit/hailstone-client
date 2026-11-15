@@ -17,6 +17,7 @@ set(HAILSTONE_SHADER_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/lighting.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/shaders/motion.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/shaders/reactive.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/shaders/coverage.glsl
+                          ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sample_coverage.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/shaders/weather.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/shaders/puddle_cover.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fsr1/ffx_a.h
