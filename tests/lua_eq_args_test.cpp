@@ -105,6 +105,13 @@ TEST_CASE("eq API: bad arguments are Lua errors before anything is made; odd num
                      "eq.ItemPreviewControl('rotate', 1e300, 0) return 'ok'") == "ok");
         CHECK(controls == 1);
         CHECK(run(L, "return (pcall(eq.GemOverlay, 'CastSpellWnd', 'CSPW_Spell0', 0/0, -math.huge))") == "true");
+        // A record table with a metatable is not filled (its metamethods would run mid-fill): a new one comes back.
+        CHECK(run(L, "local t = setmetatable({}, {__newindex = function() error('no') end, __index = function() "
+                     "error('no') end}) local r = eq.GemInfo('CastSpellWnd', 'CSPW_Spell0', t) "
+                     "return tostring(r ~= t and rawget(t, 'tooltip') == nil and r.tooltip ~= nil)") == "true");
+        CHECK(run(L, "local t = setmetatable({}, {__newindex = function() error('no') end}) "
+                     "local r = eq.HotButtonInfo('HotButtonWnd', 'HB_Button1', t) return tostring(r ~= t)") == "true");
+        CHECK(run(L, "local t = {} return tostring(eq.GemInfo('CastSpellWnd', 'CSPW_Spell0', t) == t)") == "true");
         lua_close(L);
     }
     ImGui::DestroyContext(ctx);

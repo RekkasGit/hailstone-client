@@ -923,7 +923,7 @@ send a request. `OpenTask` changes the journal selection and visibility, not tas
 |---|---|---|---|
 | GemTint | (name, child) → r, g, b, a | Spell gem tint by category | — |
 | GemOverlay | (name, child, y0, y1) → top, r, g, b, a \| nil | Gem cool-down rectangle | — |
-| GemInfo | (name, child [, into [, y0, y1]]) → t | All gem looks in one call: {shown, tooltip, tex,u0,v0,u1,v1, tintR..tintA, overlay, coolR..coolA, top} | — |
+| GemInfo | (name, child [, into [, y0, y1]]) → t | All gem looks in one call: {shown, tooltip, tex,u0,v0,u1,v1, tintR..tintA, overlay, coolR..coolA, top}. `into` is filled only when it has no metatable (else a new table) | — |
 | ButtonCoolDown | (name, child, y0, y1) → top, r, g, b, a, remainingMs, reuseMs | A button's cool-down rectangle; first five answers unchanged (nil when idle), with remaining/focus-adjusted reuse milliseconds for combat ability buttons (both 0 while idle or without timing detail). Shared remaining time can exceed this ability's reuse | — |
 | BuffSlot | (name, child [, overlays]) → spellId, msLeft, name, beneficial, fade [, counter,cr,cg,cb, limit,lr,lg,lb] \| nil | Buff on a buff button. msLeft < 0 = permanent | — |
 | BuffOverlay | (name, child, "timer"\|"counter"\|"limit") → text, r, g, b \| nil | Overlay text on a buff button | — |
@@ -937,7 +937,7 @@ send a request. `OpenTask` changes the journal selection and visibility, not tas
 | HotButtonFace | (name, child) → {color={r,g,b}, lua, running, enabled, cooldown, overlay, tooltip} \| nil | A social's face extras | — |
 | HotButtonChecked | (name, child) → bool | Drawn pressed (a pet command that is on) | — |
 | HotButtonState | (name, child [, y0, y1]) → {checked, left, cooldown, top, color, tint} \| nil | Check and cool-down state | — |
-| HotButtonInfo | (name, child [, into [, y0, y1]]) → t | HotButton + Face + State in one table (kind, label, tex…, social, color, lua, running, enabled, faceCooldown, overlay, tooltip, state, checked, left, cooldown, top, tint, iconAlpha) | — |
+| HotButtonInfo | (name, child [, into [, y0, y1]]) → t | HotButton + Face + State in one table (kind, label, tex…, social, color, lua, running, enabled, faceCooldown, overlay, tooltip, state, checked, left, cooldown, top, tint, iconAlpha). `into` as GemInfo's | — |
 | ClickHotButton | (name, child [, "left"\|"right"\|"rightheld" [, x, y]]) → ok | Use the button, or open its menu (at x, y) | actions |
 | PickUp | (window, child [, row]) → ok | Drag from a child: its hotbutton goes on the cursor | actions |
 | PressButtonFrom | (window, child [, row]) → ok | Run the hotbutton a drag would make (a pad's "use"). Not for hot bars | actions |

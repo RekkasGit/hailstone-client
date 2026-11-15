@@ -1054,11 +1054,19 @@ void set_art_fields(lua_State* L, int n) {
     for (int k = 4; k >= 0; --k) lua_setfield(L, -2 - k, kFields[k]);
 }
 
-// The record table an eq.*Info call fills: the argument at `arg` when it is a table (a caller's, kept from frame to
-// frame), else a new one; left on the top of the stack.
+// The record table an eq.*Info call fills: the argument at `arg` when it is a plain table (a caller's, kept from frame
+// to frame), else a new one; left on the top of the stack. A table with a metatable (a plugin's view of the pack's,
+// or one of its own) is not filled: its __newindex or __index would run Lua code in the middle of the fill, which can
+// raise past the C++ objects the fill reads from, or call back in.
 void push_record(lua_State* L, int arg, int fields) {
-    if (lua_istable(L, arg)) lua_pushvalue(L, arg);
-    else lua_createtable(L, 0, fields);
+    if (lua_type(L, arg) == LUA_TTABLE) {
+        if (!lua_getmetatable(L, arg)) {
+            lua_pushvalue(L, arg);
+            return;
+        }
+        lua_pop(L, 1);
+    }
+    lua_createtable(L, 0, fields);
 }
 
 void set_number(lua_State* L, const char* field, double v) {
@@ -1110,8 +1118,11 @@ int GemInfo(lua_State* L) {
     auto& m = Impl::of(L);
     const bool span = lua_isnumber(L, 4) && lua_isnumber(L, 5);
     const std::int32_t y0 = span ? number_to_int(lua_tonumber(L, 4)) : 0, y1 = span ? number_to_int(lua_tonumber(L, 5)) : 0;
-    StockWindow* w = nullptr;
-    Child c = m.child(L, w);
+    // (as m.child, the arguments first; the child's looks in a box across the pushes: plugin/lua_keep.h)
+    StockWindow* w = m.window(luaL_checkstring(L, 1));
+    const char* id = w ? luaL_checkstring(L, 2) : nullptr;
+    Child& c = plugin::lua_keep<Child>(L);
+    if (w) w->child(m.host, id, c);
     push_record(L, 3, 16);
     if (c.shown) lua_pushboolean(L, *c.shown);
     else lua_pushnil(L);
@@ -1407,7 +1418,8 @@ int HotButtonInfoFn(lua_State* L) {
     const char* child = w ? luaL_checkstring(L, 2) : nullptr;
     const bool span = lua_isnumber(L, 4) && lua_isnumber(L, 5);
     const std::int32_t y0 = span ? number_to_int(lua_tonumber(L, 4)) : 0, y1 = span ? number_to_int(lua_tonumber(L, 5)) : 0;
-    auto hb = w ? w->hot_button(m.host, child) : std::nullopt;
+    auto& hb = plugin::lua_keep<std::optional<HotButtonInfo>>(L); // across the pushes (plugin/lua_keep.h)
+    if (w) hb = w->hot_button(m.host, child);
     const HotButtonInfo empty;
     const HotButtonInfo& info = hb ? *hb : empty;
     push_record(L, 3, 24);
@@ -1423,7 +1435,7 @@ int HotButtonInfoFn(lua_State* L) {
     }
     // Fills the table in field `name` with `n` numbers (a new table when the field holds none).
     auto set_list = [L](const char* name, const float* v, int n) {
-        lua_getfield(L, -1, name);
+        lua_getfield(L, -1, name); // (the record has no metatable: push_record; the list is written raw)
         if (!lua_istable(L, -1)) {
             lua_pop(L, 1);
             lua_createtable(L, n, 0);

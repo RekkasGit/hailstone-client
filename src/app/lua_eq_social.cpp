@@ -13,6 +13,7 @@
 #include <format>
 #include <functional>
 #include <string>
+#include <vector>
 
 #include <imgui.h>
 #include <lua.hpp>
@@ -28,6 +29,7 @@
 #include "mq/commands.h"
 #include "net/game_connection.h"
 #include "net/social_packets.h"
+#include "plugin/lua_keep.h"
 #include "ui/ui_ini.h"
 
 namespace hailstone::app {
@@ -1666,6 +1668,14 @@ namespace {
 int WhoResults(lua_State* L) {
     auto& h = *static_cast<EqHost*>(lua_touserdata(L, lua_upvalueindex(1)));
     const net::WhoResponse* r = h.conn ? h.conn->last_who() : nullptr;
+    // Each entry's texts in a box the state owns across the pushes (plugin/lua_keep.h): a push that fails longjmps
+    // past this frame's own strings. (Below the two results.)
+    struct Entry {
+        net::WhoResponse one;
+        std::vector<std::string> lines;
+        std::string race, zone;
+    };
+    Entry& t = plugin::lua_keep<Entry>(L);
     lua_pushinteger(L, h.conn ? h.conn->who_count() : 0);
     lua_newtable(L);
     if (!r) return 2;
@@ -1684,21 +1694,24 @@ int WhoResults(lua_State* L) {
     int n = 0;
     for (const auto& e : r->entries) {
         if (e.format == 5026 || e.format == 5027) continue; // "ZONE: %1 is UP": not a player
-        // The player's own line: the reply cut down to this entry, without its title and footer.
-        net::WhoResponse one;
-        one.entries.push_back(e);
-        auto ext = h.conn->server_ext().who_lines(*h.conn, one);
-        auto lines = ext ? std::move(*ext) : game::format_who_response(one, h.conn->strings(), false);
+        plugin::cxx_guard(L, [&] {
+            // The player's own line: the reply cut down to this entry, without its title and footer.
+            t.one.entries.assign(1, e);
+            auto ext = h.conn->server_ext().who_lines(*h.conn, t.one);
+            t.lines = ext ? std::move(*ext) : game::format_who_response(t.one, h.conn->strings(), false);
+            t.race = e.race ? game::race_name(e.race) : std::string();
+            t.zone.clear();
+            if (e.zone_string != 0xffffffff)
+                t.zone = (e.zone_id >> 15) & 1 ? e.zone_name : game::zone_short_name(e.zone_id);
+        });
         lua_newtable(L);
         set_str("name", e.name);
         set_int("level", e.level);
         set_int("class", e.class_);
         set_int("race", e.race);
-        set_str("raceName", e.race ? game::race_name(e.race) : std::string());
+        set_str("raceName", t.race);
         set_str("guild", e.guild);
-        std::string zone;
-        if (e.zone_string != 0xffffffff) zone = (e.zone_id >> 15) & 1 ? e.zone_name : game::zone_short_name(e.zone_id);
-        set_str("zone", zone);
+        set_str("zone", t.zone);
         set_bool("anonymous", e.format == 5024);
         set_bool("roleplay", e.format == 5023);
         set_bool("afk", (e.flags & 1) != 0);
@@ -1706,7 +1719,7 @@ int WhoResults(lua_State* L) {
         set_bool("trader", (e.flags & 0x10) != 0);
         set_bool("buyer", (e.flags & 0x20) != 0);
         set_bool("offline", (e.flags & 0x400) != 0);
-        set_str("line", lines.empty() ? e.name : lines.front());
+        set_str("line", t.lines.empty() ? e.name : t.lines.front());
         lua_rawseti(L, -2, ++n);
     }
     return 2;
