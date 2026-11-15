@@ -386,7 +386,7 @@ end
     ImGui::DestroyContext(ctx);
 }
 
-TEST_CASE("UI packs: offered-task description summary and explicit preview follow the selected offer") {
+TEST_CASE("UI packs: offered-task starting-zone hint and explicit preview follow the selected offer") {
     for (const char* pack : {"modern", "gamepad"}) {
         CAPTURE(pack);
         test::ScratchDir scratch("ui_pack_task_offer_rewards");

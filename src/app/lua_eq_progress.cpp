@@ -544,6 +544,11 @@ public:
         list_.columns = 2;
         list_.labels = {"Task Title", "Duration"};
         list_.widths = {220, 60};
+        // A replaced offer list (another giver, type or set of tasks) starts again at its first row, so Accept and
+        // Preview never act on whatever new offer landed on the old row.
+        bool same = o.giver_id == giver_id_ && o.type == type_ && o.shared == shared_ && o.offers.size() == ids_.size();
+        for (std::size_t i = 0; same && i < ids_.size(); ++i) same = o.offers[i].task_id == ids_[i];
+        if (!same) selected_ = -1;
         if (selected_ >= static_cast<int>(o.offers.size())) selected_ = -1;
         if (selected_ < 0 && !o.offers.empty()) selected_ = 0;
         list_.selected = selected_;
@@ -559,9 +564,16 @@ public:
         }
         return &list_;
     }
-    bool list_click(EqHost&, std::string_view id, int row, bool, int) override {
+    bool list_click(EqHost& host, std::string_view id, int row, bool, int) override {
         if (id != "TaskList") return false;
         selected_ = row;
+        // CTaskSelectWnd_SelectTask @0x76b5c0 hides the reward window when it is showing a preview and the newly
+        // selected offer has no preview, so it never shows one task's rewards beside another's description.
+        if (host.conn) {
+            const auto* t = selected_offer(*host.conn);
+            if (t && !t->reward_preview && host.conn->rewards().lane(game::RewardLane::Preview).shown)
+                host.conn->close_reward_selection(game::RewardLane::Preview);
+        }
         return true;
     }
     void child(EqHost& host, std::string_view id, Child& out) override {

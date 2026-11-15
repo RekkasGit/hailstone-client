@@ -78,7 +78,10 @@ Both packs use the registered `eq.ChildState` API to read the active-task previe
 TaskSelectWnd also provides Preview Reward in both packs, using `TSEL_PreviewRewardButton` and the selected
 offer's received preview flag. Opening or drawing offers does not request rewards; preview leaves the offers
 open. Its Description includes the native starting-zone hint from element slot 0. This is eqstr 6029, not a
-reward summary; reward details come from the server's separate preview response.
+reward summary; reward details come from the server's separate preview response. Selecting an offer without a
+preview hides a preview already shown, as the native selection handler does, and a replaced offer list starts again
+at its first row. Accept and Preview Reward report disabled through `eq.ChildState` until the offers have been
+listed (`eq.ListInfo`), since only a listed row can be acted on.
 
 The header's Shared members control shows the roster count and opens a dismissible shared-task management popup.
 Its Member and Role columns read the native `STASK_MemberList`; selecting a member drives Remove member and

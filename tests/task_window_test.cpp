@@ -398,6 +398,67 @@ TEST_CASE("task offers: Preview Reward uses the selected received offer and refu
     }
 }
 
+TEST_CASE("task offers: selecting an offer without a preview hides a shown preview; a replaced list starts at row 0") {
+    test::ManualClock clock;
+    auto options = test::quick_options();
+    options.session.clock = clock.source();
+    test::Rig rig(test::MockConfig::standard(), options);
+    REQUIRE(rig.to_zone());
+    clock.hold();
+
+    TaskOffers offers;
+    offers.giver_id = 123;
+    offers.type = kTaskTypeQuest;
+    TaskOffer plain;
+    plain.task_id = 9001;
+    plain.title = "Plain offer";
+    TaskOffer previewed = plain;
+    previewed.task_id = 9002;
+    previewed.title = "Previewed offer";
+    previewed.reward_preview = true;
+    previewed.description = "Previewed story";
+    TaskOffer other = previewed;
+    other.task_id = 9003;
+    offers.offers = {plain, previewed, other};
+    rig.conn.receive_zone_packet_for_test(net::encode_task_select(offers, net::Op::TaskSelectWindow));
+
+    app::EqHost host;
+    host.conn = &rig.conn;
+    host.game = &rig.game;
+    host.in_game = host.ui_ready = true;
+    std::vector<std::unique_ptr<app::StockWindow>> windows;
+    app::add_progress_windows(windows);
+    const auto found = std::find_if(windows.begin(), windows.end(), [](const auto& w) { return w->screen() == "TaskSelectWnd"; });
+    REQUIRE(found != windows.end());
+    auto& window = **found;
+    REQUIRE(window.list(host, "TaskList"));
+    REQUIRE(window.list_click(host, "TaskList", 1, false, 0));
+    REQUIRE(window.click(host, "TSEL_PreviewRewardButton", "left", false));
+    REQUIRE(rig.conn.rewards().lane(RewardLane::Preview).shown);
+
+    // CTaskSelectWnd_SelectTask @0x76b5c0: another offer with a preview leaves the window up...
+    REQUIRE(window.list_click(host, "TaskList", 2, false, 0));
+    CHECK(rig.conn.rewards().lane(RewardLane::Preview).shown);
+    // ...one without a preview hides it.
+    REQUIRE(window.list_click(host, "TaskList", 0, false, 0));
+    CHECK_FALSE(rig.conn.rewards().lane(RewardLane::Preview).shown);
+    CHECK(rig.conn.tasks().offers.has_value());
+
+    // The same list redrawn keeps the selection; a replaced list starts again at its first row.
+    REQUIRE(window.list_click(host, "TaskList", 2, false, 0));
+    const auto* rows = window.list(host, "TaskList");
+    REQUIRE(rows);
+    CHECK(rows->selected == 2);
+    offers.offers = {previewed, plain, other};
+    rig.conn.receive_zone_packet_for_test(net::encode_task_select(offers, net::Op::TaskSelectWindow));
+    rows = window.list(host, "TaskList");
+    REQUIRE(rows);
+    CHECK(rows->selected == 0);
+    app::Child description;
+    window.child(host, "Description", description);
+    CHECK(description.text == previewed.description);
+}
+
 TEST_CASE("task window: Preview Reward sends the selected task ID and refuses stale slots") {
     plugin::Hooks hooks;
     const auto owner = hooks.new_owner("task preview fixture");
