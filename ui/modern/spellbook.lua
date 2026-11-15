@@ -71,11 +71,27 @@ local function readSettings()
   cfg.grid = setting("grid", false)
 end
 
-local bookStamp = 0 -- counts the reads of the book: the filtered lists below are kept until it (or a filter) changes
+-- Whether a read of the book holds what the last one did: the same spells in the same slots, memorized in the same
+-- gems (and read with the same level and names: the rest of an entry follows from its spell).
+local function sameBook(a, b)
+  if #a ~= #b then return false end
+  for i = 1, #a do
+    local x, y = a[i], b[i]
+    if x.slot ~= y.slot or x.id ~= y.id or x.gem ~= y.gem or x.level ~= y.level or x.name ~= y.name
+        or x.categoryName ~= y.categoryName or x.subcategoryName ~= y.subcategoryName then
+      return false
+    end
+  end
+  return true
+end
+
+local bookStamp = 0 -- counts the changes to the book: the filtered lists below are kept until it (or a filter) changes
 local function refresh()
   if ui.GetTime() - lastRead < 0.25 then return end
   lastRead = ui.GetTime()
-  book = eq.SpellBook() or {}
+  local read = eq.SpellBook() or {}
+  if sameBook(read, book) then return end -- nothing changed: the entries, lists and categories made are kept
+  book = read
   bookStamp = bookStamp + 1
   byId, bySlot = {}, {}
   for _, e in ipairs(book) do
