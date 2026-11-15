@@ -188,6 +188,12 @@ the history through `post_taa_sets_` under `taa`); `display.sharpness` drives FS
 - **Device**: storage images in FSR's formats (R8, R16F, RG16F: `shaderStorageImageExtendedFormats`, enabled when
   present) and quad subgroup operations in compute (`render::Fsr3Upscaler::supported`, `DeviceCaps::fsr3`). Without
   them `fsr3` falls back to `taa` with a log line.
+- **Why 32-bit**: AMD's runtime picks a 16-bit permutation (`FFX_HALF=1`) where the device has 16-bit floats, but
+  in the vendored 3.1.4 it has nothing to give. The accumulate pass, most of the cost, has no 16-bit code (compiled
+  with `FFX_HALF=1` it holds no 16-bit float), and the luma and shading change pyramids' 16-bit SPD callbacks are
+  stubs (`SpdLoadSourceImageH` and `SpdLoadH` return 0, `SpdStoreH` stores nothing). Tried on an Intel Iris Xe, the
+  pyramids looked 13 times faster because they did nothing: the picture came out about 9 % darker (the exposure from
+  an empty pyramid) and softer. Writing those callbacks would save at most about 0.3 ms there.
 - **Timing**: with `HAILSTONE_FSR3_TIMING` set, GPU timestamps round the clears and each pass
   (`Fsr3Upscaler::timing_summary`); the viewer's `--frames` logs their means ("FSR 3.1 GPU time"). On an Intel Iris
   Xe (1280x720 from 858x482) FSR 3.1 takes 3.9 ms, the accumulate pass 2.0 of them; on an RX 9060 XT 0.26 ms.
