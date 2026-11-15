@@ -18,6 +18,17 @@ std::string_view upscaler_name(Upscaler u) {
     return u == Upscaler::Fsr3 ? "fsr3" : u == Upscaler::Taa ? "taa" : "fsr1";
 }
 
+bool upscaling_off(std::string_view name) { return name == kUpscalerOff; }
+
+int upscaler_choice(std::string_view name) {
+    return upscaling_off(name) ? 0 : static_cast<int>(parse_upscaler(name)) + 1;
+}
+
+std::string_view upscaler_choice_name(int choice) {
+    if (choice == 0) return kUpscalerOff;
+    return upscaler_name(choice == 3 ? Upscaler::Fsr3 : choice == 2 ? Upscaler::Taa : Upscaler::Fsr1);
+}
+
 UpscaleQuality upscale_quality_for(int percent) {
     for (std::size_t i = 0; i < std::size(kUpscaleQualityPercent); ++i)
         if (kUpscaleQualityPercent[i] == percent) return static_cast<UpscaleQuality>(i);

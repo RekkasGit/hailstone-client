@@ -260,7 +260,7 @@ local PAGES = {
       optionRow("Anti-aliasing", "msaa", { "Off", "2x", "4x" }),
       upscaleQualityRow(),
       optionRow("Render scale", "render_scale", { 33, 100, 1, " %" }),
-      optionRow("Upscaler (next start)", "upscaler", { "FSR 1", "Temporal", "FSR 3.1" }),
+      optionRow("Upscaler (next start)", "upscaler", { "Off", "FSR 1", "Temporal", "FSR 3.1" }),
       optionRow("Frame generation (Temporal, FSR 3.1)", "frame_gen", "bool"),
       optionRow("Ambient occlusion", "ao", "bool"),
       optionRow("Grass", "grass", "bool"),

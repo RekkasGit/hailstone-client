@@ -33,9 +33,21 @@ UpscaleQuality upscale_quality_for(int percent);
 // A preset's render scale in percent; Custom has none (nullopt-like: 0).
 int upscale_quality_percent(UpscaleQuality q);
 
-// display.upscaler's values: "fsr1", "taa", "fsr3"; anything else is Fsr1.
+// display.upscaler's values: "fsr1", "taa", "fsr3"; anything else is Fsr1 ("off" too, below).
 Upscaler parse_upscaler(std::string_view name);
 std::string_view upscaler_name(Upscaler u);
+
+// display.upscaler = "off": no upscaling and no frame generation at all. The view is drawn at its full size whatever
+// display.render_scale says (Fsr1 at 100 draws as it is, MSAA as display.msaa says), and display.frame_gen is
+// ignored; both settings are kept for when an upscaler is chosen again.
+inline constexpr std::string_view kUpscalerOff = "off";
+bool upscaling_off(std::string_view name);
+
+// The Options window's Upscaler choices (display_option "upscaler"): 0 Off, then 1 FSR 1, 2 Temporal, 3 FSR 3.1
+// (each Upscaler's value + 1). upscaler_choice gives the choice display.upscaler's value is; upscaler_choice_name the
+// value a choice saves (out of range is FSR 1).
+int upscaler_choice(std::string_view name);
+std::string_view upscaler_choice_name(int choice);
 
 // The radical inverse of `index` in `base` (the Halton sequence): 1 -> 1/2, 2 -> 1/4, 3 -> 3/4 in base 2.
 float halton(std::uint32_t index, std::uint32_t base);
