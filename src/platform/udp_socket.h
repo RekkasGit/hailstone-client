@@ -63,6 +63,9 @@ public:
     bool open(Endpoint::Family family, std::string& error, const Endpoint* bind_to = nullptr);
     void close();
     bool is_open() const;
+    // Whether a child process started now would get this socket (an inheritable handle, or no close-on-exec): false
+    // for every socket opened here, so the browser helper and other children never hold the client's sockets.
+    bool inherited_by_children() const;
 
     std::optional<Endpoint> local_endpoint() const;
 

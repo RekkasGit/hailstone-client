@@ -71,6 +71,24 @@ bool would_block(int e) { return e == WSAEWOULDBLOCK; }
 bool transient(int e) { return e == WSAECONNRESET || e == WSAEMSGSIZE; }
 std::string error_text(int e) { return std::format("winsock error {}", e); }
 void close_native(NativeSocket s) { closesocket(s); }
+// winsock2.h's since Windows 7 SP1; older SDKs lack the name.
+#ifndef WSA_FLAG_NO_HANDLE_INHERIT
+#define WSA_FLAG_NO_HANDLE_INHERIT 0x80
+#endif
+bool inheritable(NativeSocket s) {
+    DWORD flags = 0;
+    return GetHandleInformation(reinterpret_cast<HANDLE>(s), &flags) && (flags & HANDLE_FLAG_INHERIT) != 0;
+}
+// A socket no child process inherits (SDL starts the helpers with inheritable pipes, so handles are passed on).
+// WSA_FLAG_OVERLAPPED is what socket() gives; a system without the no-inherit flag takes the plain call instead.
+NativeSocket open_socket(int af, int type, int protocol) {
+    NativeSocket s = WSASocketW(af, type, protocol, nullptr, 0, WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
+    if (s == kInvalid) {
+        s = ::socket(af, type, protocol);
+        if (s != kInvalid) SetHandleInformation(reinterpret_cast<HANDLE>(s), HANDLE_FLAG_INHERIT, 0);
+    }
+    return s;
+}
 #else
 using NativeSocket = int;
 const NativeSocket kInvalid = -1;
@@ -83,6 +101,24 @@ bool would_block(int e) { return e == EAGAIN || e == EWOULDBLOCK; }
 bool transient(int e) { return e == ECONNREFUSED || e == EINTR; }
 std::string error_text(int e) { return std::strerror(e); }
 void close_native(NativeSocket s) { ::close(s); }
+bool inheritable(NativeSocket s) {
+    const int flags = fcntl(s, F_GETFD);
+    return flags >= 0 && (flags & FD_CLOEXEC) == 0;
+}
+// A socket closed across exec, so no child process (the browser helper) holds it: SOCK_CLOEXEC where the system has it
+// (Linux, the BSDs), else (macOS) fcntl after it.
+NativeSocket open_socket(int af, int type, int protocol) {
+#ifdef SOCK_CLOEXEC
+    NativeSocket s = ::socket(af, type | SOCK_CLOEXEC, protocol);
+    if (s != kInvalid) return s;
+#endif
+    NativeSocket plain = ::socket(af, type, protocol);
+    if (plain != kInvalid) {
+        const int flags = fcntl(plain, F_GETFD);
+        if (flags >= 0) fcntl(plain, F_SETFD, flags | FD_CLOEXEC);
+    }
+    return plain;
+}
 #endif
 
 NativeSocket native(std::intptr_t h) { return static_cast<NativeSocket>(h); }
@@ -318,6 +354,8 @@ UdpSocket& UdpSocket::operator=(UdpSocket&& other) noexcept {
 
 bool UdpSocket::is_open() const { return valid(handle_); }
 
+bool UdpSocket::inherited_by_children() const { return valid(handle_) && inheritable(native(handle_)); }
+
 void UdpSocket::close() {
     if (valid(handle_)) close_native(native(handle_));
     handle_ = widen(kInvalid);
@@ -331,7 +369,7 @@ bool UdpSocket::open(Endpoint::Family family, std::string& error, const Endpoint
         return false;
     }
     int af = family == Endpoint::Family::V4 ? AF_INET : AF_INET6;
-    NativeSocket s = ::socket(af, SOCK_DGRAM, IPPROTO_UDP);
+    NativeSocket s = open_socket(af, SOCK_DGRAM, IPPROTO_UDP);
     if (s == kInvalid) {
         error = "socket(): " + error_text(last_socket_error());
         return false;

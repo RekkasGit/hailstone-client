@@ -365,6 +365,7 @@ TEST_CASE("udp socket: a datagram larger than the buffer is dropped, not cut sho
     platform::UdpSocket a, rx;
     REQUIRE(a.open(platform::Endpoint::Family::V4, err, &local));
     REQUIRE(rx.open(platform::Endpoint::Family::V4, err, &local));
+    CHECK_FALSE(rx.inherited_by_children()); // close-on-exec (Windows: not inheritable)
     auto to = *rx.local_endpoint();
     REQUIRE(a.send_to(to, noise(200, 1)));
     Bytes fits = noise(50, 2);
