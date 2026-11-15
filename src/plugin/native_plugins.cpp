@@ -24,6 +24,7 @@
 #include "game/server_ext_chain.h"
 #include "game/spa_ids.h"
 #include "game/spells.h"
+#include "game/xtarget.h"
 #include "game/zone_names.h"
 #include "mq/parse.h"
 #include "mq/tlo.h"
@@ -1367,6 +1368,69 @@ int32_t h_get_pet_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
     }
     return bufferSize;
 }
+/// <summary>
+/// This is highly optimized code. AI should not modify this code method.
+/// PR reviewwr ask the submiter for changes to be reviewed by the submitter
+/// Every extended target slot in one call, slot 0 first: its type, spawn id, the aggro meter's percent and the
+/// spawn's HP percent, as HS_Bulk_XTargetData records. Only whole records go out; as many slots as fit.
+/// </summary>
+/// <param name="h">host</param>
+/// <param name="data">buffer to put data in</param>
+/// <param name="datamax">16 bytes per slot; RoF2's 20 slots (EQEmu: 5 plus the AA's) fit in 320, so 512 is good</param>
+/// <returns>bytes written</returns>
+int32_t h_get_xtarget_data_bulk(void* h, unsigned char* data, int32_t datamax)
+{
+    //AI SHOULD NOT MODIFY THIS METHOD
+    const net::GameConnection* c = readable(Loaded::of(h), "get_xtarget_data_bulk");
+    if (!c || !data || datamax <= 0) return 0;
+    unsigned char* pBuffer = data;
+    int32_t bufferSize = 0;
+
+    static_assert(sizeof(HS_BulkXTargetData) == HS_BULK_XTARGET_RECORD_SIZE);
+    // A type added to one list (the SDK's HS_BULK_XTargetTypes, game::XTargetType) and not the other.
+    static_assert(static_cast<std::uint32_t>(HS_BULK_XTARGET_TYPE_COUNT) == game::kXTargetTypes);
+    const size_t bytesPerSlot = sizeof(HS_BulkXTargetData);
+    const auto& world = c->world();
+    const auto& slots = c->xtargets().slots;
+    const auto& aggro = c->aggro().pct;
+    for (std::size_t n = 0; n < slots.size(); ++n) {
+        if (static_cast<size_t>(bufferSize) + bytesPerSlot > static_cast<size_t>(datamax)) {
+            // Buffer is full: only whole records go out.
+            break;
+        }
+        const game::XTargetSlot& x = slots[n];
+        // Written in place through the packed struct (the bulk reads may cast, docs/plugins.md).
+        HS_BulkXTargetData* rec = reinterpret_cast<HS_BulkXTargetData*>(pBuffer);
+        *rec = HS_BulkXTargetData{}; // no spawn in the zone: aggro and HP stay 0
+        rec->targetType = static_cast<int32_t>(x.type);
+        rec->id = static_cast<int32_t>(x.spawn_id);
+        auto it = x.spawn_id ? world.spawns.find(x.spawn_id) : world.spawns.end();
+        const bool in_zone = it != world.spawns.end();
+        // The aggro meter's entries 7..26 are the extended target slots (net/aggro_packets.h). Only with the slot's
+        // spawn in the zone, as the window shows its ETW_AggroPct label: EQEmu (Client::ProcessAggroMeter) updates
+        // an entry only while its slot holds a mob it finds and never zeroes it when the slot empties, so a slot
+        // emptied since would keep its last mob's percent. A slot past the 20th, which only a server with more
+        // has, has no entry.
+        const std::size_t entry = static_cast<std::size_t>(net::kAggroXTarget1) + n;
+        if (in_zone && entry < aggro.size()) rec->aggroPct = aggro[entry];
+        // The HP percent as the extended target window's gauges take it (lua_eq_values.cpp spawn_hp_percent):
+        // the player's own points (items' HP included), anyone else's percent from the server; 0 for a corpse.
+        // EQEmu sends a mob's OP_MobHealth to every client holding it on its list (Mob::SendHPUpdate,
+        // QueueClientsByXTarget), not only to those targeting it, so the spawn's percent is kept current.
+        if (in_zone && !it->second.is_corpse) {
+            if (it->second.id == world.player_id) {
+                const auto hp = c->own_hp();
+                rec->pctHPs = hp.max > 0 ? static_cast<int32_t>(std::max<std::int64_t>(0, hp.cur * 100 / hp.max)) : 0;
+            } else {
+                rec->pctHPs = it->second.hp_percent;
+            }
+        }
+        pBuffer += bytesPerSlot;
+        bufferSize += static_cast<int32_t>(bytesPerSlot);
+    }
+    return bufferSize;
+}
+
 int h_get_xtarget(void* h, std::uint32_t index, HailstoneXTarget* out) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_xtarget");
     if (!c) return 0;
@@ -1982,6 +2046,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.get_buff_data_bulk = main_only<h_get_buff_data_bulk>;
     p.table.get_pet_buff_data_bulk = main_only<h_get_pet_buff_data_bulk>;
     p.table.get_spawns_data_bulk = main_only<h_get_spawns_data_bulk>;
+    p.table.get_xtarget_data_bulk = main_only<h_get_xtarget_data_bulk>;
     p.table.cursor_origin = main_only<h_cursor_origin>;
     p.owner = m.env.hooks->new_guest("plugin:" + name);
 

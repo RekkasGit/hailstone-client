@@ -186,6 +186,49 @@ typedef struct HS_Bulk_PetBuffData {
 } HS_BulkPetBuffData;
 #pragma pack(pop)
 
+/* An extended target slot's type: HailstoneXTarget.type and HS_BulkXTargetData.targetType. The values are the
+ * protocol's (EQEmu's XTargetType, zone/client.h). Named with HS_BULK_ (Hailstone's bulk reads) in front, as the
+ * other bulk-read names are, so a plugin ported from MacroQuest, whose eqlib has the same names without it, can
+ * include both. */
+enum HS_BULK_XTargetTypes {
+    HS_BULK_XTARGET_EMPTY_TARGET = 0,
+    HS_BULK_XTARGET_AUTO_HATER = 1,
+    HS_BULK_XTARGET_SPECIFIC_PC = 2,
+    HS_BULK_XTARGET_SPECIFIC_NPC = 3,
+    HS_BULK_XTARGET_TARGETS_TARGET = 4,
+    HS_BULK_XTARGET_GROUP_TANK = 5,
+    HS_BULK_XTARGET_GROUP_TANKS_TARGET = 6,
+    HS_BULK_XTARGET_GROUP_ASSIST = 7,
+    HS_BULK_XTARGET_GROUP_ASSIST_TARGET = 8,
+    HS_BULK_XTARGET_GROUP_PULLER = 9,
+    HS_BULK_XTARGET_GROUP_PULLER_TARGET = 10,
+    HS_BULK_XTARGET_GROUP_MARK1 = 11,
+    HS_BULK_XTARGET_GROUP_MARK2 = 12,
+    HS_BULK_XTARGET_GROUP_MARK3 = 13,
+    HS_BULK_XTARGET_RAID_ASSIST1 = 14,
+    HS_BULK_XTARGET_RAID_ASSIST2 = 15,
+    HS_BULK_XTARGET_RAID_ASSIST3 = 16,
+    HS_BULK_XTARGET_RAID_ASSIST1_TARGET = 17,
+    HS_BULK_XTARGET_RAID_ASSIST2_TARGET = 18,
+    HS_BULK_XTARGET_RAID_ASSIST3_TARGET = 19,
+    HS_BULK_XTARGET_RAID_MARK1 = 20,
+    HS_BULK_XTARGET_RAID_MARK2 = 21,
+    HS_BULK_XTARGET_RAID_MARK3 = 22,
+    HS_BULK_XTARGET_MY_PET = 23,
+    HS_BULK_XTARGET_MY_PET_TARGET = 24,
+    HS_BULK_XTARGET_MY_MERCENARY = 25,
+    HS_BULK_XTARGET_MY_MERCENARY_TARGET = 26,
+    HS_BULK_XTARGET_TYPE_COUNT = 27
+};
+/* get_xtarget_data_bulk: one record per extended target slot, in slot order (HS_BULK_XTARGET_RECORD_SIZE bytes). */
+#pragma pack(push, 1)
+typedef struct HS_Bulk_XTargetData {
+    int32_t targetType; /* the slot's type (HS_BULK_XTARGET_*), as get_xtarget's HailstoneXTarget.type */
+    int32_t id;         /* the slot's spawn id, 0 for none */
+    int32_t aggroPct;   /* the aggro meter's percent for this slot (0 without the meter or past its 20 slots) */
+    int32_t pctHPs;     /* the spawn's HP percent; 0 without a spawn or for a corpse */
+} HS_BulkXTargetData;
+#pragma pack(pop)
 /* A TLO the plugin adds (AddTopLevelObject): asked for ${Name[index]} (member NULL: the TLO's own value) and for
  * ${Name[index].Member[member_index]}. Return nonzero when `out` was set; zero is NULL. */
 typedef int (*HailstoneTloFn)(void* user, const char* index, const char* member, const char* member_index,
@@ -370,7 +413,7 @@ typedef struct HailstoneBuff {
 
 typedef struct HailstoneXTarget {
     uint32_t size;
-    uint32_t type;   /* the slot's type on this side: 0 empty target, 1 auto hater, 3 a specific NPC, ... */
+    uint32_t type;   /* the slot's type on this side (HS_BULK_XTARGET_*): 0 empty, 1 auto hater, ... */
     uint32_t status; /* the server's: 0 empty, 1 a spawn, 2 a named absent one */
     uint32_t spawn_id;
     char name[64];
@@ -674,6 +717,7 @@ typedef struct PluginHostApi {
      * not recognise reads UNKNOWN, never an older item's origin. Read it beside get_item(cursor), then act with
      * /destroycursor <id> or /stowcursor <id>, which do nothing unless the cursor still holds that id. */
     uint32_t (*cursor_origin)(void* host);
+    int32_t (*get_xtarget_data_bulk)(void* host, unsigned char* out, int32_t out_size);
 } PluginHostApi;
 /* Not known: it was on the cursor at zone-in, replaced a cursor item, or came by a path the client does not mark.
  * Treat it as the player's; never destroy it unattended. */
@@ -692,6 +736,7 @@ typedef struct PluginHostApi {
 #define HAILSTONE_BUFF_SLOT_SONG 1 /* a song slot; was "1 for a song", so old checks still hold */
 #define HAILSTONE_BUFF_SLOT_DISC 2 /* the discipline slot, the last, sent only with room for one record more */
 #define HAILSTONE_PET_BUFF_RECORD_SIZE 12
+#define HS_BULK_XTARGET_RECORD_SIZE 16
 /* Whether this client's host table has `field` (one added after the plugin's ABI) and it is set. */
 #define HAILSTONE_HOST_HAS(h, field)                                                                                   \
     ((h) && (h)->size >= offsetof(PluginHostApi, field) + sizeof((h)->field) && (h)->field)

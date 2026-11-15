@@ -8,6 +8,7 @@
 //   /probebuffs [n], /probepetbuffs [n], /probespawns [n]  get_buff_data_bulk / get_pet_buff_data_bulk /
 //   get_spawns_data_bulk into n bytes (the whole buffer without n), read through the SDK's HS_Bulk_* structs cast
 //   onto the buffer
+//   /probextargets [n]  get_xtarget_data_bulk the same way, through HS_Bulk_XTargetData
 //   /probecursor   cursor_origin, when the host table has it
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
@@ -73,9 +74,13 @@ void probe_tcp_send(void*, const char* args) {
     WriteChatf("[Probe] tcp send %lld state %d", sent, static_cast<int>(host->tcp_state(host->host, handle)));
 }
 
-// A bulk read's buffer size: the command's number, at most `whole`; `whole` without one.
+// A bulk read's buffer size: the command's number, at most `whole`; `whole` without one (no argument, only spaces,
+// or no number at its start).
 std::int32_t size_arg(const char* args, std::size_t whole) {
-    const std::size_t n = args && *args ? std::strtoul(args, nullptr, 10) : whole;
+    if (!args) return static_cast<std::int32_t>(whole);
+    char* end = nullptr;
+    const std::size_t n = std::strtoul(args, &end, 10);
+    if (end == args) return static_cast<std::int32_t>(whole); // nothing read as a number
     return static_cast<std::int32_t>(n < whole ? n : whole);
 }
 
@@ -120,7 +125,7 @@ static_assert(sizeof(HS_Bulk_SpawnFixedRecord) == HS_BULK_SPAWN_RECORD_SIZE);
 // The header, then each spawn one line (id, level, class, race, HP percent, con colour, name), then the bytes left
 // over after the records the header counts (0 when every record's strings are framed right).
 void probe_spawns(void*, const char* args) {
-    static unsigned char buf[1024 * 1024];
+    static unsigned char buf[1024*1024];
     const std::int32_t r = host->get_spawns_data_bulk(host->host, buf, size_arg(args, sizeof buf));
     if (r <= 0 || static_cast<std::size_t>(r) < sizeof(HS_Bulk_SpawnHeader)) {
         WriteChatf("[Probe] spawns %d bytes", static_cast<int>(r));
@@ -152,6 +157,22 @@ void probe_spawns(void*, const char* args) {
     WriteChatf("[Probe] spawns %u, player %.2f %.2f %.2f, %zu bytes left", header->spawnCount,
         header->playerX, header->playerY, header->playerZ, size - at);
 }
+static_assert(sizeof(HS_Bulk_XTargetData) == HS_BULK_XTARGET_RECORD_SIZE);
+
+// Each extended target slot one line: slot, type (HS_BULK_XTARGET_*), spawn id, aggro percent, HP percent.
+void probe_xtargets(void*, const char* args) {
+    unsigned char buf[512];
+    const std::int32_t r = host->get_xtarget_data_bulk(host->host, buf, size_arg(args, sizeof buf));
+    const std::size_t count = r > 0 ? static_cast<std::size_t>(r) / sizeof(HS_Bulk_XTargetData) : 0;
+    const auto* recs = reinterpret_cast<const HS_Bulk_XTargetData*>(buf);
+    for (std::size_t slot = 0; slot < count; ++slot) {
+        const HS_Bulk_XTargetData* rec = recs + slot;
+        WriteChatf("[Probe] xtarget %d: %d %d %d %d", static_cast<int>(slot), rec->targetType, rec->id,
+            rec->aggroPct, rec->pctHPs);
+    }
+    WriteChatf("[Probe] xtargets %d bytes", static_cast<int>(r));
+}
+
 void probe_cursor(void*, const char*) {
     if (!HAILSTONE_HOST_HAS(host, cursor_origin)) {
         WriteChatf("[Probe] cursor origin: not in this client");
@@ -179,6 +200,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probebuffs", probe_buffs, nullptr);
     AddCommand("/probepetbuffs", probe_pet_buffs, nullptr);
     AddCommand("/probespawns", probe_spawns, nullptr);
+    AddCommand("/probextargets", probe_xtargets, nullptr);
     AddCommand("/probecursor", probe_cursor, nullptr);
     AddTopLevelObject("Probe", probe_tlo, nullptr);
 #ifdef HAILSTONE_PROBE_THROW_INIT
@@ -195,6 +217,7 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probebuffs");
     RemoveCommand("/probepetbuffs");
     RemoveCommand("/probespawns");
+    RemoveCommand("/probextargets");
     RemoveCommand("/probecursor");
     RemoveTopLevelObject("Probe");
 }
