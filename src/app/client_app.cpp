@@ -648,11 +648,17 @@ int ClientApp::run() {
                 sky_frame.flash = weather_look_.flash;
             }
             const bool sky_drawn = sky_renderer_ && (!fog_frame || fog_frame->sky);
-            if (sky_drawn) sky_renderer_->draw(*f, proj, camera_.view(), sky_frame);
-            lap.mark("sky");
-            // Where no sky is drawn, the modern haze fills the background as it fills the distance (with the sun's glow
-            // in it), not the plain fog colour; under water, the water.
-            if (zone_renderer_ && (under_water || (modern && !sky_drawn))) zone_renderer_->draw_backdrop(*f, vp);
+            const auto draw_background = [&] {
+                if (sky_drawn) sky_renderer_->draw(*f, proj, camera_.view(), sky_frame);
+                // Where no sky is drawn, the modern haze; under water, the water.
+                if (zone_renderer_ && (under_water || (modern && !sky_drawn))) zone_renderer_->draw_backdrop(*f, vp);
+                lap.mark("sky");
+            };
+            // Classic draws all zone parts together; WLD details can blend over uncovered samples.
+            const bool background_first = !modern ||
+                (zone_renderer_ && zone_renderer_->opaque_blends_background()) ||
+                (neighbours_ && modern && neighbour_zones_ && in_game && neighbours_->opaque_blends_background());
+            if (background_first) draw_background();
             // The land round an outdoor zone (render/horizon.h), under an open sky or none (not the planes' and
             // Luclin's painted skies); not where a neighbour zone is drawn.
             if (zone_renderer_) {
@@ -674,6 +680,10 @@ int ClientApp::run() {
             const bool neighbours = neighbours_ && modern && neighbour_zones_ && in_game;
             if (neighbours) neighbours_->draw(*f, vp, camera_.position, lit, t, first);
             lap.mark("neighbour zones draw");
+            // Objects still draw their blended parts in the same call as their opaque parts.
+            // Keep their background first, and the existing object/actor/silhouette order intact.
+            // The water colour copy must also already contain the sky (flora follows that copy).
+            if (!background_first) draw_background();
             if (world_objects_) {
                 world_objects_->set_brightness(brightness);
                 world_objects_->draw(*f, vp, camera_.position, lit);

@@ -352,6 +352,10 @@ ZoneRenderer::PreparedCounts ZoneRenderer::prepared_counts(const Prepared& p) {
             p.draw_chunks};
 }
 
+bool ZoneRenderer::prepared_blends_background(const Prepared& p) {
+    return std::any_of(p.draws.begin(), p.draws.end(), blends_background);
+}
+
 ZoneRenderer::PreparedLand ZoneRenderer::prepared_land(const Prepared& p) {
     PreparedLand out;
     out.build = p.horizon_build;
@@ -2094,6 +2098,14 @@ void ZoneRenderer::bind_geometry(VkCommandBuffer cmd) const {
 
 bool ZoneRenderer::modern_lighting() const { return scene_.lighting.params.x > 0.5f; }
 
+bool ZoneRenderer::opaque_blends_background() const {
+    return std::any_of(draws_.begin(), draws_.end(), blends_background);
+}
+
+bool ZoneRenderer::blends_background(const Draw& d) {
+    return d.mode == kWldDetail && d.pass != Pass::Opaque;
+}
+
 std::uint64_t ZoneRenderer::begin_draw(const FrameInfo& frame, const glm::mat4& view_proj,
                                        const glm::vec3& camera_pos, const game::ViewDistance& view,
                                        double time_seconds) {
@@ -2292,8 +2304,12 @@ void ZoneRenderer::create_underwater_pipeline(const std::filesystem::path& shade
     rs.lineWidth = 1.0f;
     VkPipelineMultisampleStateCreateInfo ms{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
     ms.rasterizationSamples = vk_.scene_samples();
-    // Behind everything: drawn first, no depth test or write.
+    // Reverse Z: underwater.vert emits the clear depth (0). Only uncovered samples
+    // receive the background; keep their depth clear for the sky and later effects.
     VkPipelineDepthStencilStateCreateInfo dss{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+    dss.depthTestEnable = VK_TRUE;
+    dss.depthWriteEnable = VK_FALSE;
+    dss.depthCompareOp = VK_COMPARE_OP_EQUAL;
     VkPipelineColorBlendAttachmentState ba{};
     ba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
                         VK_COLOR_COMPONENT_A_BIT;

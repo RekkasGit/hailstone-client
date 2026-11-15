@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Modern lighting: the sky and the haze behind it are drawn only where the zone leaves the background open, which saves GPU time outdoors
+
 ## 0.7.1-beta (2026-11-15)
 
 - Login screen: More options (both interfaces) has a Texture pack choice, the same as Options > Graphics > Textures, so an HD pack built with Texture Studio can be picked before logging in. As in Options, the new pack is used from the next start
