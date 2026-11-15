@@ -634,9 +634,13 @@ local function graphicsTab()
       { temporal and "Native AA" or "Native (no anti-aliasing)", "Quality", "Balanced", "Performance",
         "Ultra Performance", "Custom" },
       "Native draws the 3D world at full size (with Temporal or FSR 3.1 that is anti-aliasing alone). Quality, Balanced, Performance and Ultra Performance draw it at 67, 59, 50 and 33 % and upscale it: lower is faster and softer. Custom is the Render Scale below.")
-    if temporal then
+    -- Frame generation needs a temporal upscaler running: one chosen but not yet started shows it with a note.
+    if temporal or (upscaler or 0) >= 1 then
       check("frame_gen", "Frame Generation",
         "Shows a frame made between each two the game draws, from their motion: smoother movement on a high refresh rate screen. The game then draws at most half the refresh rate, keeps vertical sync on and reacts a little later. Needs Temporal or AMD FSR 3.1.")
+      if not temporal and eq.Option("frame_gen") == 1 then
+        note("Frame Generation starts after a restart, when the new upscaler does.")
+      end
     end
     slider("render_scale", "Render Scale", 33, 100, pct,
       "Draws the 3D world at this share of its size and upscales it. Lower is faster and softer; the interface stays sharp.")
