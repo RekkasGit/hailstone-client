@@ -730,7 +730,7 @@ public:
         // XWM_LINK (27) on TASK_Description: an item link (the reward's) asks the server for the item
         // (ParseItemLinkBody, OP_ItemLinkClick).
         if (id != "TASK_Description" || message != 27 || !host.conn) return false;
-        if (auto link = game::parse_item_link(data)) host.conn->request_item(*link);
+        if (auto link = game::parse_item_link(game::stml_link_tag(data))) host.conn->request_item(*link);
         return true;
     }
 

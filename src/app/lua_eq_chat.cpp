@@ -26,6 +26,7 @@
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "core/path_utf8.h"
 #include "game/chat_windows.h"
 #include "game/combat.h"
 #include "game/eq_names.h"
@@ -269,8 +270,8 @@ std::string escape_linking(std::string_view text, std::string& name) {
     return escape(text);
 }
 
-// One line as STML: its colour, item links as <a WndNotify="27,tag"> (the tag between the two \x12); with `names`,
-// its player's name as a name link.
+// One line as STML: its colour, item links as <a WndNotify="27,data"> (the tag between the two \x12, encoded by
+// game::stml_link_data); with `names`, its player's name as a name link.
 // Hailstone: "[hh:mm:ss] " in grey before a line (local time), nothing for a line of unknown time.
 // eq.ChatText formats every line of a window again each time a line comes, and each local time read the time zone
 // again (glibc stats /etc/localtime every call): the stamps were most of a chat window's frame in a fight. Time zones
@@ -327,9 +328,7 @@ std::string line_stml(const ui::ChatLine& l, bool names, bool stamps = false) {
         }
         auto link = game::parse_item_link(tag);
         std::string shown = link ? link->text : tag;
-        std::string data;
-        for (char ch : tag) data += ch == '"' ? '\'' : ch;
-        out += std::format("<a WndNotify=\"27,{}\">{}</a>", data, escape(shown));
+        out += std::format("<a WndNotify=\"27,{}\">{}</a>", game::stml_link_data(tag), escape(shown));
         at = b + 1;
     }
     return out + "</c>";
@@ -368,7 +367,7 @@ void set_user_color(EqHost& host, int index, std::uint32_t rgb) {
     if (!save_chat_settings(chat_ini, "TextColors",
                             {{red, std::to_string((rgb >> 16) & 0xff)},
                              {green, std::to_string((rgb >> 8) & 0xff)},
-                             {blue, std::to_string(rgb & 0xff)}})) log::warn("cannot write {}", chat_ini.string());
+                             {blue, std::to_string(rgb & 0xff)}})) log::warn("cannot write {}", path_utf8(chat_ini));
 }
 
 // CChatWindowManager::GetRGBAFromIndex @0x6508a0: the basic colours below 256, the eqclient.ini user colours from 256
@@ -1864,7 +1863,8 @@ int ChatLink(lua_State* L) {
         return 0;
     }
     if (luaL_checkinteger(L, 2) != 27) return 0;
-    if (auto link = game::parse_item_link(luaL_checkstring(L, 3)); link && h.click_link) h.click_link(*link);
+    if (auto link = game::parse_item_link(game::stml_link_tag(luaL_checkstring(L, 3))); link && h.click_link)
+        h.click_link(*link);
     return 0;
 }
 

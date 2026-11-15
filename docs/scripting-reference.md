@@ -1107,7 +1107,7 @@ achievement and reward-selection APIs.
 | ChatHistory | (slot, older) → text\|nil | Step through lines sent before | — |
 | ChatCycleReply | (text, back) → text\|nil | Tab / Shift+Tab reply cycling | — |
 | ChatPage | (slot) → -1\|1\|nil | PageUp / PageDown for this window, once | — |
-| ChatLink | (slot, message, data) → — | A link clicked in the output (27 item, 1001 name) | commands |
+| ChatLink | (slot, message, data) → — | A link clicked in the output (27 item, 1001 name, 1002 achievement). An item link's data in ChatText's STML is `x` and the tag as hex, so the sender's text cannot add markup; a raw tag is taken too | commands |
 | ChatActivate | (slot) → — | Make it the active window | commands |
 | ChatMenu | (slot) → — | The window's context menu at the mouse | — |
 | ChatSetAlwaysHere | (slot, on) → — | Always Chat Here | commands |
