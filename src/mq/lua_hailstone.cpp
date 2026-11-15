@@ -51,7 +51,7 @@ void runaway_hook(lua_State* L, lua_Debug*) {
     Script& s = Script::of(L);
     repair_limit(s);
     auto ran = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - s.slice_start).count();
-    if (ran >= s.runaway_ms) luaL_error(L, "ran longer than %d ms", static_cast<int>(s.runaway_ms));
+    check_runaway(L, s, runaway_hook, ran, [&] { return std::format("ran longer than {} ms", s.runaway_ms); });
 }
 
 // The script can be called now: running, not stopping, and not inside its own code.
@@ -68,7 +68,7 @@ bool call_script(Script& s, int nargs, int nres) {
     const std::int64_t runaway = s.runaway_ms;
     const Clock::time_point start = s.slice_start;
     s.runaway_ms = kHookMs;
-    s.slice_start = Clock::now();
+    s.new_slice();
     // The state's own hook (preempt_hook, ScriptHost::Impl::open_state) comes back after: it holds the script's
     // windows and a social's press to their limits.
     const lua_Hook hook = lua_gethook(L);
@@ -739,10 +739,17 @@ int l_send_packet(lua_State* L) {
 
 // ---------------------------------------------------------------- ui
 
+// A Lua social cannot add to the client's UI: what it adds would call into its state by a name it does not own (its
+// title, which two socials may share and an edit changes), and the state goes when the social is edited or forgotten.
+void no_social(lua_State* L, const char* what) {
+    if (Script::of(L).social >= 0) luaL_error(L, "%s: a Lua social cannot add to the UI (a script can)", what);
+}
+
 // hailstone.ui_function(name, fn): eq.Plugin("<script>").<name>(...) in the Lua UI calls fn(...); its result goes
 // back (plain values and tables).
 int l_ui_function(lua_State* L) {
     need_cap(L, plugin::kCapUi, "hailstone.ui_function");
+    no_social(L, "hailstone.ui_function");
     const char* given = luaL_checkstring(L, 1);
     luaL_checktype(L, 2, LUA_TFUNCTION);
     Script& s = Script::of(L);
@@ -772,6 +779,7 @@ int l_ui_function(lua_State* L) {
 // hailstone.option{name =, label =, min = 0, max = 1, get = function() return v end, set = function(v) end}
 int l_option(lua_State* L) {
     need_cap(L, plugin::kCapUi, "hailstone.option");
+    no_social(L, "hailstone.option");
     luaL_checktype(L, 1, LUA_TTABLE);
     Script& s = Script::of(L);
     if (!s.host->env.ui) return 0;
@@ -822,6 +830,7 @@ int l_option(lua_State* L) {
 // hailstone.menu(label, command)
 int l_menu(lua_State* L) {
     need_cap(L, plugin::kCapUi, "hailstone.menu");
+    no_social(L, "hailstone.menu");
     Script& s = Script::of(L);
     const char* label = luaL_checkstring(L, 1);
     const char* command = luaL_checkstring(L, 2);

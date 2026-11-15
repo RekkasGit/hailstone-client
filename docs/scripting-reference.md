@@ -399,6 +399,8 @@ them. These commands come from MacroQuest rather than the game:
 | `/squelch <cmd>` | runs the command without its chat output |
 | `/docommand <cmd>` | runs the command (useful after `${...}` builds it) |
 | `/noparse <cmd>` | runs the command without expanding `${...}` |
+
+`/squelch`, `/docommand` and `/noparse` nest at most 16 deep in one line; past that the rest of the line is dropped.
 | `/lua run <name> [args]` \| `stop [name]` \| `pause [name]` \| `list` | scripts |
 | `/plugin list` \| `/plugin <name> [load\|unload]` | compiled plugins |
 | `/nav`, `/moveto`, `/stick` | navigation (docs/navigation.md "Commands") |
@@ -413,7 +415,7 @@ The global `mq` (also `require('mq')`) in every script, Lua social and Lua plugi
 | Function | Needs | What |
 |---|---|---|
 | `mq.TLO.<Name>...` | `read` | the TLOs above |
-| `mq.cmd(...)` | per command | runs a command line; its arguments are joined with spaces and `${...}` is expanded |
+| `mq.cmd(...)` | per command | runs a command line; its arguments are joined with spaces and `${...}` is expanded. A line of 2048 bytes or more is an error |
 | `mq.cmd.<name>(args...)` | per command | `mq.cmd.target('id', 5)` runs `/target id 5` |
 | `mq.cmdf(fmt, ...)` | per command | `mq.cmd(string.format(fmt, ...))` |
 | `mq.delay(ms \| '2s' \| '500ms' \| '1m' [, cond])` | | waits until the time has passed or `cond()` is true (checked each frame). A wait beyond 9e15 ms (`math.huge`) is cut to that; NaN is an error |
@@ -468,7 +470,8 @@ whoever ran the command, both together.
 `os.date` and `os.difftime`. Tables cannot have a `__gc` finalizer.
 
 **Limits:** each script has its own Lua 5.4 state. It is paused after 3 ms without yielding and stopped if it cannot
-pause for 5 s; a long string match (a pattern that backtracks) cannot pause, and is stopped at that limit too. Its
+pause for 5 s; a long string match (a pattern that backtracks) cannot pause, and is stopped at that limit too. Once
+stopped, `pcall`, `xpcall` and `coroutine.resume` pass the stop on rather than catch it. Its
 memory is capped at 256 MB.
 
 ## The `hailstone` module (Lua plugins)
@@ -516,7 +519,7 @@ code. A script that registers any of these stays loaded after its main chunk ret
 | `chat(text [, color])` | | a chat line in one of the game's chat colours (15 yellow, 2 green, 6 grey, ...) |
 | `on_packet(stream, direction, opcode, fn)` | `packets` | `fn(opcode, data)` for each matching packet; `stream` is `'world'` or `'zone'`, `direction` `'in'` or `'out'`, and opcode 0 matches every packet. Return `true` to drop the packet, or a string to replace its data. Use `string.pack` / `string.unpack` for the layout |
 | `send_packet(stream, opcode, data)` | `packets` | sends a packet to the server |
-| `ui_function(name, fn)` | `ui` | a function the script's windows call as `eq.Plugin("<script>").<name>(...)` |
+| `ui_function(name, fn)` | `ui` | a function the script's windows call as `eq.Plugin("<script>").<name>(...)`. Not from a Lua social, nor `option` or `menu` |
 | `option{name, label, min, max, get, set}` | `ui` | an option in the Options window's Plugins section; `max = 1` makes a switch, otherwise a slider |
 | `menu(label, command)` | `ui` | an entry in the EQ menu's Plugins submenu that runs `command` |
 

@@ -90,26 +90,51 @@ void preempt_hook(lua_State* L, lua_Debug*) {
     Script& s = Script::of(L);
     repair_limit(s);
     auto ran = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - s.slice_start).count();
-    if (ran >= kSliceMs && L == s.resumed && lua_isyieldable(L)) {
+    if (!s.runaway && ran >= kSliceMs && L == s.resumed && lua_isyieldable(L)) {
         lua_yield(L, 0);
         return;
     }
-    if (ran >= s.runaway_ms) {
-        if (s.runaway_ms < 1000) luaL_error(L, "ran longer than %d ms", static_cast<int>(s.runaway_ms));
-        luaL_error(L, "ran %d seconds without a chance to pause", static_cast<int>(ran / 1000));
-    }
+    check_runaway(L, s, preempt_hook, ran, [&] {
+        if (s.runaway_ms < 1000) return std::format("ran longer than {} ms", s.runaway_ms);
+        return std::format("ran {} seconds without a chance to pause", ran / 1000);
+    });
 }
 
 void watch(lua_State* thread) { lua_sethook(thread, preempt_hook, LUA_MASKCOUNT, 1000); }
 
 // A long string match (the vendored Lua's check, ui::lua::kMatchCheckKey) is held to runaway_ms as Lua code is; it
-// cannot pause mid-match.
+// cannot pause mid-match. It stops the script as the hooks' runaway does (sticky: a pcall around it passes it on).
 int match_check(lua_State* L) {
-    const Script& s = Script::of(L);
+    Script& s = Script::of(L);
     auto ran = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - s.slice_start).count();
-    if (ran >= s.runaway_ms) luaL_error(L, "ran longer than %d ms", static_cast<int>(s.runaway_ms));
+    lua_Hook hook = lua_gethook(L);
+    check_runaway(L, s, hook ? hook : preempt_hook, ran,
+                  [&] { return std::format("ran longer than {} ms", s.runaway_ms); });
     return 0;
 }
+
+int raise_runaway_again(lua_State* L) {
+    lua_pushstring(L, Script::of(L).runaway_why.c_str());
+    return lua_error(L);
+}
+
+int runaway_safe_done(lua_State* L, int, lua_KContext) {
+    if (Script::of(L).runaway) return raise_runaway_again(L);
+    return lua_gettop(L);
+}
+
+} // namespace
+
+// (lua_callk: a pcall around mq.delay in the script's main coroutine still yields through it.)
+int runaway_safe_call(lua_State* L) {
+    if (Script::of(L).runaway) return raise_runaway_again(L);
+    lua_pushvalue(L, lua_upvalueindex(1));
+    lua_insert(L, 1);
+    lua_callk(L, lua_gettop(L) - 1, LUA_MULTRET, 0, runaway_safe_done);
+    return runaway_safe_done(L, LUA_OK, 0);
+}
+
+namespace {
 
 // setmetatable without __gc (upvalue 1: Lua's own). A finalizer runs whenever the collector likes, with no hook
 // (Lua turns hooks off in it, so a loop there is never stopped), and at close, after the script's hooks are gone.
@@ -339,18 +364,31 @@ int l_cmd(lua_State* L) {
         lua_concat(L, 2);
         return lua_error(L);
     }
+    std::size_t len = 0;
+    const char* given = luaL_checklstring(L, 1, &len);
+    if (len >= kMaxCommandLine) {
+        luaL_where(L, 2);
+        lua_pushfstring(L, "mq.cmd: a command line is at most %d bytes", static_cast<int>(kMaxCommandLine - 1));
+        lua_concat(L, 2);
+        return lua_error(L);
+    }
     if (s.commands_left > 0) --s.commands_left;
-    std::string line = luaL_checkstring(L, 1);
+    // (The line lives only inside cxx_guard: an exception becomes a Lua error once it is gone.)
     if (s.dry) {
-        if ((s.caps & plugin::kCapRead) && !lower(line).starts_with("/noparse")) line = parse_macro_data(ctx_of(L), line);
-        std::uint32_t needs = plugin::command_caps(line);
-        if ((s.caps & needs) != needs) line += "    (blocked: needs '" + plugin::caps_text(needs & ~s.caps) + "')";
-        s.dry->push_back(std::move(line));
+        plugin::cxx_guard(L, [&] {
+            std::string line(given, len);
+            if ((s.caps & plugin::kCapRead) && !lower(line).starts_with("/noparse")) line = parse_macro_data(ctx_of(L), line);
+            std::uint32_t needs = plugin::command_caps(line);
+            if ((s.caps & needs) != needs) line += "    (blocked: needs '" + plugin::caps_text(needs & ~s.caps) + "')";
+            s.dry->push_back(std::move(line));
+        });
         return 0;
     }
     if (!s.host->env.run) return 0;
-    plugin::CallerScope scope(s.caps, s.name);
-    s.host->env.run(line);
+    plugin::cxx_guard(L, [&] {
+        plugin::CallerScope scope(s.caps, s.name);
+        s.host->env.run(std::string(given, len));
+    });
     return 0;
 }
 
@@ -492,13 +530,21 @@ void add_event(lua_State* L, Script& s, const char* name, std::string_view patte
                 plugin::CallerScope scope(sp->caps & plugin::kCapRead, sp->name);
                 return parse_macro_data(sp->host->env.context(), text);
             };
+            // Each text folded once for all the script's patterns.
+            std::optional<std::string> low_line, low_stripped;
             for (const auto& ev : sp->events) {
                 const std::string* text = &line.text;
+                const std::string* low = nullptr;
                 if (!ev.keep_links) {
                     if (!stripped) stripped = game::strip_links(line.text);
+                    if (!low_stripped) low_stripped = EventPattern::fold(*stripped);
                     text = &*stripped;
+                    low = &*low_stripped;
+                } else {
+                    if (!low_line) low_line = EventPattern::fold(line.text);
+                    low = &*low_line;
                 }
-                auto m = ev.pattern.match(*text, resolve);
+                auto m = ev.pattern.match(*text, *low, resolve);
                 if (!m) continue;
                 std::vector<std::string> args{*text};
                 for (auto& a : *m) args.push_back(std::move(a));
@@ -537,12 +583,15 @@ int l_flushevents(lua_State* L) {
 
 void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args, std::uint32_t limit = plugin::kCapAll);
 
-// fn, {args} = mq._next_event([name]): the oldest queued event (of that name).
+// fn, {args} = mq._next_event([name]): the oldest queued event (of that name); nil when there is none, false when it
+// ran one as a thread (below).
 // The event's text stays in the queue (the Script's) until it is on the stack: a push that fails longjmps (Lua is
 // built as C), and no C++ object of this frame may be alive then.
 // An event raised by another's line (a script's or plugin's print, Queued::origin) whose handler would get more than
 // that code may do runs as a thread of its own with no more (start_thread's limit), as a bind it ran would; doevents
-// goes on with the next. A thread so that the limit holds for each resume, if the handler waits.
+// goes on with the next. A thread so that the limit holds for each resume, if the handler waits. Each such event
+// returns to doevents' Lua loop rather than looping here: a handler whose own line raises its event again would keep
+// this C loop going forever, where no instruction hook could stop it.
 int l_next_event(lua_State* L) {
     Script& s = Script::of(L);
     const char* name = lua_isnoneornil(L, 1) ? nullptr : luaL_checkstring(L, 1);
@@ -562,7 +611,8 @@ int l_next_event(lua_State* L) {
             std::vector<std::string> args = std::move(it->args);
             s.queued.erase(it);
             start_thread(s, fn, args, origin);
-            continue;
+            lua_pushboolean(L, 0);
+            return 1;
         }
         lua_rawgeti(L, LUA_REGISTRYINDEX, fn);
         lua_createtable(L, static_cast<int>(it->args.size()), 0);
@@ -607,13 +657,17 @@ void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args, s
     const std::uint32_t caps = s.caps & s.narrowed & plugin::caller_caps() & limit;
     plugin::CallerScope scope(caps, s.name);
     const std::uint32_t narrowed = std::exchange(s.narrowed, caps);
-    s.slice_start = Clock::now();
+    // The thread gets a slice of its own; the code it ran from (doevents, an mq.cmd) goes on with what is left of
+    // its own after: handlers started one after another cannot keep that code from ever pausing or being stopped.
+    const Clock::time_point outer_slice = s.slice_start;
+    s.new_slice();
     int nres = 0;
     int st = 0;
     {
         ScriptRun run(s, t);
         st = lua_resume(t, nullptr, static_cast<int>(args.size()), &nres);
     }
+    s.slice_start = outer_slice;
     s.narrowed = narrowed;
     if (st == LUA_YIELD) {
         lua_pop(t, nres);
@@ -1134,8 +1188,8 @@ end
 function mq.doevents(name)
     while true do
         local fn, args = mq._next_event(name)
-        if not fn then return end
-        fn(table.unpack(args))
+        if fn == nil then return end
+        if fn then fn(table.unpack(args)) end
     end
 end
 
@@ -1319,7 +1373,7 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
     watch(L);
     lua_pushcfunction(L, match_check);
     lua_setfield(L, LUA_REGISTRYINDEX, ui::lua::kMatchCheckKey);
-    sc.slice_start = Clock::now(); // the prelude below
+    sc.new_slice(); // the prelude below
     luaL_requiref(L, "_G", luaopen_base, 1);
     luaL_requiref(L, LUA_TABLIBNAME, luaopen_table, 1);
     luaL_requiref(L, LUA_STRLIBNAME, luaopen_string, 1);
@@ -1328,6 +1382,19 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
     luaL_requiref(L, LUA_COLIBNAME, luaopen_coroutine, 1);
     luaL_requiref(L, LUA_OSLIBNAME, luaopen_os, 1);
     lua_settop(L, 0);
+    // The calls that catch errors raise the runaway limit's again (Script::runaway).
+    lua_getglobal(L, "coroutine");
+    for (const char* name : {"resume", "close"}) {
+        lua_getfield(L, -1, name);
+        lua_pushcclosure(L, runaway_safe_call, 1);
+        lua_setfield(L, -2, name);
+    }
+    lua_pop(L, 1);
+    for (const char* name : {"pcall", "xpcall"}) {
+        lua_getglobal(L, name);
+        lua_pushcclosure(L, runaway_safe_call, 1);
+        lua_setglobal(L, name);
+    }
     // No code from strings or files beyond allowed modules; os only for the clock.
     for (const char* drop : {"load", "loadstring"}) {
         lua_pushnil(L);
@@ -1446,6 +1513,9 @@ bool ScriptHost::run(const std::string& name, const std::vector<std::string>& ar
     };
     m.reap();
     std::string key = lower(name);
+    // The Lua socials' names (button_name): a script of such a name would share a social's config folder and
+    // browser owner.
+    if (key.starts_with(kSocialPrefix)) return refuse(std::format("{}: a script's name cannot start with \"{}\"", key, kSocialPrefix));
     if (Script* old = m.find(key); old && !old->stop_requested) return refuse(key + " is already running");
     // reap() closed every stopped one nothing is in. One still running code (it stops itself and runs itself again)
     // would close later, and its close takes the name's UI registrations away: the new one's too.
@@ -1636,7 +1706,7 @@ void ScriptHost::pulse() {
         }
         ++s.busy;
         plugin::CallerScope scope(s.caps, s.name);
-        s.slice_start = Clock::now();
+        s.new_slice();
         int nargs = 0;
         if (!s.started) {
             s.started = true;
@@ -1693,7 +1763,7 @@ void ScriptHost::pulse() {
 void ScriptHost::Impl::resume_threads(Script& s) {
     for (std::size_t t = 0; t < s.threads.size() && !s.stop_requested;) {
         const auto [thread, ref, caps] = s.threads[t];
-        s.slice_start = Clock::now();
+        s.new_slice();
         int tn = 0;
         int ts = 0;
         {
@@ -1746,7 +1816,7 @@ void ScriptHost::Impl::draw_windows(Script& s) {
         ImGui::ErrorRecoveryStoreState(&state);
         const std::size_t begun = ui::lua::windows_begun();
         lua_rawgeti(s.L, LUA_REGISTRYINDEX, w.second);
-        s.slice_start = Clock::now();
+        s.new_slice();
         int st = 0;
         {
             ScriptRun run(s);
@@ -1967,7 +2037,7 @@ namespace hailstone::mq {
 
 namespace {
 
-std::string button_name(const std::string& name) { return "social '" + name + "'"; }
+std::string button_name(const std::string& name) { return std::string(kSocialPrefix) + name + "'"; }
 
 // t[key] = the value at the top, popped (raw: no metamethods run).
 void raw_set(lua_State* L, int t, const char* key) {
@@ -2212,7 +2282,7 @@ bool ScriptHost::press_button(const ButtonPress& p, std::string* why) {
     bool ok = true;
     {
         plugin::CallerScope scope(s->caps, s->name);
-        s->slice_start = Clock::now();
+        s->new_slice();
         lua_rawgeti(s->L, LUA_REGISTRYINDEX, s->press_ref);
         int st = 0;
         {
@@ -2259,7 +2329,7 @@ ButtonDryRun ScriptHost::dry_run_button(const ButtonPress& p) {
     ++s->busy;
     {
         plugin::CallerScope scope(s->caps, s->name);
-        s->slice_start = Clock::now();
+        s->new_slice();
         lua_rawgeti(s->L, LUA_REGISTRYINDEX, s->press_ref);
         int st = 0;
         {
@@ -2305,7 +2375,7 @@ const ButtonFace& ScriptHost::button_face(int social, const std::string& name, c
     ButtonFace f;
     {
         plugin::CallerScope scope(plugin::kCapRead, s->name);
-        s->slice_start = Clock::now();
+        s->new_slice();
         lua_rawgeti(s->L, LUA_REGISTRYINDEX, s->face_ref);
         int st = 0;
         {
