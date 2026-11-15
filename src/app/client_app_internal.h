@@ -248,6 +248,7 @@ public:
               ui::ImGuiLayerDesc{.scale_override = ui_scale_setting(options),
                                  .ini_path = platform::imgui_ini()}) {
         log_memory("startup: window, Vulkan, fonts");
+        vk_.screenshot_generated(options.screenshot_generated);
         apply_window_icon(window_);
         shader_dir_ = platform::shaders_dir();
         config_path_ = default_config_path();

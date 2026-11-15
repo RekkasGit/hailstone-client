@@ -195,13 +195,23 @@ holds the decisions (unit tested), `render::FrameGen` (`src/render/frame_gen.cpp
 2. **Motion at the in-between time** (`fg_scatter.comp`, two runs): each pixel of this frame is moved back along its
    motion to where it stood at t = 0.5 (`kFrameGenTime`); the nearest depth that lands on each place wins (reverse
    Z, atomic max on the depth's bits), and the winner's motion is written there. What moves in front covers what is
-   behind, as in the frame.
+   behind, as in the frame. The first run also marks where each pixel was a frame ago, with its depth (the keys at
+   the last frame's places), so step 4 can tell a last-frame sample that was hidden behind something nearer.
 3. **Holes** (`fg_fill.comp`): a place nothing landed on shows something this frame does not, because it is being
-   covered between the two frames. It takes the motion of the farthest mark within 3 pixels (the background's) and is
-   flagged, so the synthesis takes it from the last frame alone; with no mark near, it is flagged with no motion.
+   covered between the two frames. It takes the motion of the farthest of the marks bordering it, looked for in eight
+   directions out to 32 pixels (the background's: a hole is half as wide as the background moves against what
+   covers it, tens of pixels as the camera turns past a still character), with that mark's depth, and is flagged, so
+   the synthesis takes it from the last frame alone; with no mark near, it is flagged with no motion.
 4. **The in-between frame** (`fg_synth.frag`, the view's size): each pixel samples this frame (back along the motion)
-   and the last one (forward). Where they agree it blends them by the time; a flagged pixel takes the last frame;
-   anything else that disagrees was uncovered and takes this frame; a sample off the screen takes the other frame.
+   and the last one (forward). The motion is at the scene's size and the pixel at the view's, so of the 3 x 3 motion
+   texels round it the one along which the frames agree best is taken, nearer ones favoured and farther ones held
+   back (the background's motion agrees through a figure thinner than it moves, a sword, and would cut it out). Where
+   they agree it blends them by the time; a flagged pixel takes the last frame, or, where the last frame had
+   something nearer at that place (in neither frame: a thin sword the background passes behind), the nearest
+   last-frame sample round it that shows background; a pixel whose last-frame sample lands where something nearer
+   was then (the keys at the last frame's places) came out from behind it and takes this frame, however alike the
+   colours (a dark character against a dark world turning behind it); anything else that disagrees was uncovered
+   and takes this frame; a sample off the screen takes the other frame.
    Where the reactive mask is set (particles, spells, rain: no motion of their own) it takes this frame along the
    motion, sharp, rather than two copies a little apart.
 5. **Presenting**: a second swapchain image is acquired (`Frame::generated_available`) and both are submitted
@@ -214,8 +224,10 @@ holds the decisions (unit tested), `render::FrameGen` (`src/render/frame_gen.cpp
 Cost and limits: two small compute passes at the scene's size and two full-screen draws at the view's per real frame,
 plus one composite more. The game reacts up to one real frame later. A moving thing the depth does not hold (glass,
 water's surface) follows what is behind it; thin edges can leave a pixel-wide trace where they were about to cover the
-background. The viewer's `--screenshot-generated` saves the last in-between frame with the real ones round it
-(`FILE_prev`, `FILE_real`) for a side-by-side look; its `--frames` log counts the in-between frames presented. The
+background, and a thin, fast-swinging part (a sword) can break up as the camera turns. `--screenshot-generated`
+saves the in-between frame with the real one after it (`FILE_real`) for a side-by-side look: the viewer's last frame
+(with the one before as `FILE_prev`), and in the client every screenshot, the input script's `shot` too; the
+viewer's `--frames` log counts the in-between frames presented. The
 performance window shows its rates, skips, pacing and GPU time (`VkContext::frame_gen_stats`, docs/dev-ui.md).
 
 Screenshots copy the presented swapchain image, so the swapchain asks for `TRANSFER_SRC` when the surface offers it;

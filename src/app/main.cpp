@@ -257,8 +257,9 @@ void usage() {
         "  --sharpness N      FSR 1's sharpening below a render scale of 100, 0..1 (default 0.5)\n"
         "  --upscaler NAME    fsr1 (spatial, below a render scale of 100), taa (temporal, MSAA off) or fsr3 (AMD FSR 3.1)\n"
         "  --frame-gen        generate a frame between each two (needs --upscaler taa or fsr3; vsync on)\n"
-        "  --screenshot-generated  viewer, with --frame-gen: --screenshot FILE saves the last in-between frame,\n"
-        "                     and the real frames around it as FILE_prev and FILE_real\n"
+        "  --screenshot-generated  with frame generation: --screenshot FILE saves the last in-between frame,\n"
+        "                     and the real frame after it as FILE_real (the viewer: the one before as FILE_prev;\n"
+        "                     the client: every screenshot, the input script's too)\n"
         "  --fire X Y Z H W   viewer: a flame H high and W wide standing at X Y Z (modern; repeatable)\n"
         "  --no-fire          viewer: no flames at all in the modern lighting (to time them)\n"
         "  --no-grass         viewer: no flora (radial flora, and Hailstone's zone flora: flora/<zone>.txt); the\n"
@@ -785,6 +786,7 @@ int main(int argc, char** argv) {
             c.validation = opts.validation;
             c.frames = opts.frames;
             c.screenshot = opts.screenshot;
+            c.screenshot_generated = opts.screenshot_generated;
             c.ui_scale = opts.ui_scale;
             c.window_width = opts.window_width;
             c.window_height = opts.window_height;
