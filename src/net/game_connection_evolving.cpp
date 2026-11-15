@@ -38,14 +38,45 @@ std::vector<std::byte> snapshot(const Item* item) {
 
 } // namespace
 
-std::vector<Item> GameConnection::evolving_transfer_items() const {
+std::vector<Item> GameConnection::collect_evolving_items() const {
     std::vector<Item> items;
     std::set<std::uint64_t> seen;
-    if (state_ != ConnectionState::InZone) return items;
     for (const auto& [key, item] : inventory_.items())
         if (key.first == kInvPossessions && key.second >= 0 && key.second <= kSlotCursor)
             collect_evolving(item, ItemSlot::possessions(key.second), items, seen);
     return items;
+}
+
+const std::vector<Item>& GameConnection::evolving_transfer_items() const {
+    static const std::vector<Item> none;
+    if (state_ != ConnectionState::InZone) return none;
+    auto& cache = evolving_cache_;
+    if (!cache.items_valid || cache.items_revision != inventory_.revision()) {
+        cache.items = collect_evolving_items();
+        cache.items_revision = inventory_.revision();
+        cache.items_valid = true;
+        ++cache.builds;
+    }
+    return cache.items;
+}
+
+// Whether the selected pair's live items (or their absence) are those the snapshots were taken of. `fresh` builds
+// the list again and ignores the cache, for the check just before the transfer goes out.
+bool GameConnection::evolving_originals_match(bool fresh) const {
+    const auto& view = evolving_transfer_;
+    auto compare = [&](const std::vector<Item>& items) {
+        return snapshot(by_id(items, view.source_id)) == evolving_source_snapshot_ &&
+               snapshot(by_id(items, view.destination_id)) == evolving_destination_snapshot_;
+    };
+    if (fresh) return compare(state_ == ConnectionState::InZone ? collect_evolving_items() : std::vector<Item>{});
+    auto& cache = evolving_cache_;
+    if (!cache.match_valid || cache.match_revision != inventory_.revision()) {
+        cache.match = compare(evolving_transfer_items());
+        cache.match_revision = inventory_.revision();
+        cache.match_valid = true;
+        ++cache.checks;
+    }
+    return cache.match;
 }
 
 void GameConnection::close_evolving_transfer() {
@@ -54,6 +85,7 @@ void GameConnection::close_evolving_transfer() {
     evolving_transfer_.revision = revision;
     evolving_source_snapshot_.clear();
     evolving_destination_snapshot_.clear();
+    evolving_cache_.match_valid = false;
 }
 
 void GameConnection::open_evolving_transfer() {
@@ -65,7 +97,7 @@ void GameConnection::open_evolving_transfer() {
 
 bool GameConnection::select_evolving_transfer(bool source, std::uint64_t id) {
     if (state_ != ConnectionState::InZone || !evolving_transfer_.shown) return false;
-    const auto items = evolving_transfer_items();
+    const auto& items = evolving_transfer_items();
     if (id && !by_id(items, id)) return false;
     if (id && id == (source ? evolving_transfer_.destination_id : evolving_transfer_.source_id)) return false;
     // A refused transfer changes no items: EQEmu only prints "Transfer Failed" in chat (DoEvolveTransferXP), so the
@@ -82,11 +114,14 @@ void GameConnection::request_evolving_details() {
     ++view.revision;
     view.details.reset();
     view.pending = false;
-    const auto items = evolving_transfer_items();
+    const auto& items = evolving_transfer_items();
     const auto* source = by_id(items, view.source_id);
     const auto* destination = by_id(items, view.destination_id);
     evolving_source_snapshot_ = snapshot(source);
     evolving_destination_snapshot_ = snapshot(destination);
+    evolving_cache_.match = true; // taken from these items just now
+    evolving_cache_.match_revision = inventory_.revision();
+    evolving_cache_.match_valid = state_ == ConnectionState::InZone;
     if (!source || !destination) {
         view.status = "Select source and destination evolving items.";
         return;
@@ -108,15 +143,13 @@ bool GameConnection::can_transfer_evolving() const {
     if (state_ != ConnectionState::InZone || !view.shown || view.pending || view.submitted || !view.details ||
         !view.details->compatibility || !view.details->source || !view.details->destination ||
         !view.source_id || !view.destination_id || view.source_id == view.destination_id) return false;
-    const auto items = evolving_transfer_items();
-    const auto* source = by_id(items, view.source_id);
-    const auto* destination = by_id(items, view.destination_id);
-    return source && destination && snapshot(source) == evolving_source_snapshot_ &&
-           snapshot(destination) == evolving_destination_snapshot_;
+    const auto& items = evolving_transfer_items();
+    return by_id(items, view.source_id) && by_id(items, view.destination_id) && evolving_originals_match();
 }
 
 bool GameConnection::request_evolving_transfer(std::uint64_t expected_revision) {
-    if (evolving_transfer_.revision != expected_revision || !can_transfer_evolving()) return false;
+    if (evolving_transfer_.revision != expected_revision || !can_transfer_evolving() ||
+        !evolving_originals_match(true)) return false;
     auto& view = evolving_transfer_;
     const auto source = view.source_id, destination = view.destination_id;
     view.submitted = true;
@@ -129,11 +162,7 @@ bool GameConnection::request_evolving_transfer(std::uint64_t expected_revision) 
                    [this, source, destination, revision] {
                        return state_ == ConnectionState::InZone && evolving_transfer_.shown &&
                               evolving_transfer_.submitted && evolving_transfer_.source_id == source &&
-                              evolving_transfer_.destination_id == destination && evolving_transfer_.revision == revision && [&] {
-                                  const auto items = evolving_transfer_items();
-                                  return snapshot(by_id(items, source)) == evolving_source_snapshot_ &&
-                                         snapshot(by_id(items, destination)) == evolving_destination_snapshot_;
-                              }();
+                              evolving_transfer_.destination_id == destination && evolving_transfer_.revision == revision && evolving_originals_match(true);
                    })) {
         if (view.revision == revision) {
             view.submitted = false;
@@ -151,11 +180,11 @@ void GameConnection::update_evolving_transfer() {
     }
     auto& view = evolving_transfer_;
     if (!view.shown) return;
-    const auto items = evolving_transfer_items();
+    const auto& items = evolving_transfer_items();
     const auto* source = by_id(items, view.source_id);
     const auto* destination = by_id(items, view.destination_id);
     if (view.submitted && source && destination) return;
-    if (snapshot(source) == evolving_source_snapshot_ && snapshot(destination) == evolving_destination_snapshot_) return;
+    if (evolving_originals_match()) return;
     if (!source) view.source_id = 0;
     if (!destination) view.destination_id = 0;
     if (view.submitted) {
@@ -181,9 +210,7 @@ void GameConnection::handle_evolving_item(const AppPacket& p) {
     // the server recalculates the transfer rather than accepting the projected items as a request.
     if (!view.shown || !view.pending || state_ != ConnectionState::InZone ||
         view.source_id != details->source_id || view.destination_id != details->destination_id) return;
-    const auto items = evolving_transfer_items();
-    if (snapshot(by_id(items, view.source_id)) != evolving_source_snapshot_ ||
-        snapshot(by_id(items, view.destination_id)) != evolving_destination_snapshot_) {
+    if (!evolving_originals_match()) {
         update_evolving_transfer();
         return;
     }

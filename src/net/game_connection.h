@@ -1789,7 +1789,8 @@ public:
         std::string status;
     };
     const EvolvingTransfer& evolving_transfer() const { return evolving_transfer_; }
-    std::vector<Item> evolving_transfer_items() const;
+    // Cached on the inventory's revision (Inventory::revision); valid until the inventory next changes.
+    const std::vector<Item>& evolving_transfer_items() const;
     void open_evolving_transfer();
     void close_evolving_transfer();
     bool select_evolving_transfer(bool source, std::uint64_t id);
@@ -3289,6 +3290,19 @@ private:
     std::map<std::uint32_t, std::string> augment_info_;   // SolventText by display window (OP_AugmentInfo)
     EvolvingTransfer evolving_transfer_;
     std::vector<std::byte> evolving_source_snapshot_, evolving_destination_snapshot_;
+    // The evolving possessions, and whether the selected pair still matches its snapshots, as of an inventory
+    // revision: update(), ItemExpTransfer and each item display read them every frame, and building them copies
+    // every evolving item and serialises two. An edit made in place through Inventory::at() (a stack count) does
+    // not count as a change until the next one that does; the transfer itself rechecks uncached before it is sent.
+    struct EvolvingCache {
+        bool items_valid = false, match_valid = false, match = false;
+        std::uint64_t items_revision = 0, match_revision = 0;
+        std::vector<Item> items;
+        std::uint64_t builds = 0, checks = 0; // for tests
+    };
+    mutable EvolvingCache evolving_cache_;
+    std::vector<Item> collect_evolving_items() const;
+    bool evolving_originals_match(bool fresh = false) const;
     void handle_evolving_item(const AppPacket& p);
     void update_evolving_transfer();
     void request_evolving_details();

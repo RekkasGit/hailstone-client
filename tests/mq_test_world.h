@@ -27,6 +27,10 @@ struct GameConnectionTestAccess {
     static game::GroupState& group(GameConnection& c) { return c.group_; }
     static std::vector<std::pair<std::uint32_t, game::BuffSlot>>& pet_buffs(GameConnection& c) { return c.pet_buffs_; }
     static game::Inventory& inventory(GameConnection& c) { return c.inventory_; }
+    // How often the evolving transfer's item list was built, and its pair compared with the snapshots.
+    static std::pair<std::uint64_t, std::uint64_t> evolving_cache_work(const GameConnection& c) {
+        return {c.evolving_cache_.builds, c.evolving_cache_.checks};
+    }
     static game::XTargetState& xtargets(GameConnection& c) { return c.xtargets_; }
     static GameConnection::Aggro& aggro(GameConnection& c) { return c.aggro_; }
     static Coins& coins(GameConnection& c) { return c.coins_; }

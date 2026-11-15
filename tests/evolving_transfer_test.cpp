@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "mock_server/harness.h"
+#include "mq_test_world.h"
 #include "net/evolving_packets.h"
 
 using namespace hailstone;
@@ -283,4 +284,32 @@ TEST_CASE("mock evolving transfer: after a refused transfer a new selection star
     CHECK(conn.request_evolving_transfer(conn.evolving_transfer().revision));
     REQUIRE(rig.until([&] { return requests(rig).size() == 4; }));
     CHECK(requests(rig)[3].action == EvolvingAction::Transfer);
+}
+
+// update(), eq.ItemExpTransfer and each item display ask every frame; the item list and the snapshot comparison are
+// built again only when the inventory changes.
+TEST_CASE("mock evolving transfer: an unchanged inventory costs no rebuild per frame") {
+    Rig rig(evolving_config());
+    REQUIRE(rig.to_zone());
+    auto& conn = rig.conn;
+    select_pair(conn);
+    conn.receive_zone_packet_for_test(encode(preview()));
+    REQUIRE(conn.can_transfer_evolving());
+    const auto before = GameConnectionTestAccess::evolving_cache_work(conn);
+    for (int frame = 0; frame < 20; ++frame) {
+        rig.step();
+        CHECK(conn.can_transfer_evolving());
+        CHECK(conn.evolving_transfer_items().size() == 3);
+    }
+    CHECK(GameConnectionTestAccess::evolving_cache_work(conn) == before);
+    // A changed original is still noticed: one build and one comparison, then a fresh preview request.
+    conn.receive_zone_packet_for_test(encode_item_packet(false, ItemPacket{kItemPacketTrade, evolving(source_id, 99, 24)}));
+    CHECK_FALSE(conn.can_transfer_evolving());
+    rig.step();
+    CHECK(conn.evolving_transfer().pending);
+    const auto after = GameConnectionTestAccess::evolving_cache_work(conn);
+    CHECK(after.first == before.first + 1);
+    CHECK(after.second == before.second + 1);
+    for (int frame = 0; frame < 5; ++frame) rig.step();
+    CHECK(GameConnectionTestAccess::evolving_cache_work(conn) == after);
 }
