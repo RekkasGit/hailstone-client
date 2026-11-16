@@ -103,6 +103,16 @@ without a pool (the tests, the tools) or from inside a worker it runs the loop i
   frame is submitted and the next one begins; every other call on them waits for the step. The next frame draws the
   result, from the same poses the step used before (those drawn the frame before), the particles' own time one frame
   behind. The item previews' and the tests' emitters still step inline.
+- The scene's command recording (`render::SceneRecorder`, `display.parallel_record`). Each draw between `begin_scene`
+  and the scene's end is a job in a lane: a renderer's own draws share its lane, and the characters, the spawn boxes,
+  the target ring and the isometric markers share one (the markers ask the character renderer's caches, and the
+  spawn boxes take the set the characters drew). At `begin_translucent` and before the name plates, the lanes are
+  recorded at once, a lane's jobs in order on one thread, each job into a secondary command buffer of its own
+  (`VkCommandBufferInheritanceRenderingInfo` from `VkContext::scene_inheritance`, the viewport and scissor from
+  `set_scene_state`), and the buffers are executed in the order the jobs came, so the draws and their order are as
+  they were. The scene's renderings then begin with `VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT`
+  (`VkContext::set_scene_secondary`). Each frame slot keeps a command pool per lane, reset when the slot comes round.
+  Off (or without workers), the jobs run at once into the frame's own command buffer.
 
 ### Temporal upscaling
 
@@ -2096,6 +2106,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.horizon_hills` | 0, 1 | 1 | land round an outdoor zone past its edges (Horizon hills); modern only; viewer `--no-horizon` |
 | `display.volumetric_clouds` | 0, 1 | 1 | clouds marched through the air over the plain skies, in place of the painted cloud layer and patches (Volumetric Clouds); modern only; viewer `--no-clouds` |
 | `display.worker_threads` | -1, 0 .. 16 | -1 | the frame's worker threads (Worker threads); -1 one fewer than the hardware threads, at most 6; 0 none; read at start-up |
+| `display.parallel_record` | 0, 1 | 1 | the scene's draws recorded on the worker threads into secondary command buffers (Worker threads); 0 records them on the main thread; read at start-up |
 | `display.smooth_ground` | 0, 1 | 1 | a classic zone's ground drawn smooth and curved (Smoothed ground); read as each zone loads; viewer `--no-smooth-ground` |
 | `display.tree_detail` | 50 to 200 | 100 | how far a texture pack's replacement models (generated trees) keep their nearer levels of detail, in percent of their own distances (Tree Detail Distance); viewer `--tree-detail` |
 | `display.target_ring_cues` | 0, 1 | 1 | the target ring's sweep on a new target and pulse while attacking (Target Ring Cues; The target ring) |

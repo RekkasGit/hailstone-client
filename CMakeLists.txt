@@ -402,6 +402,7 @@ add_library(hailstone_engine STATIC
   src/render/frame_gen.cpp
   src/render/fsr3_upscaler.cpp
   src/render/particle_renderer.cpp
+  src/render/scene_recorder.cpp
   src/render/fire_renderer.cpp
   src/render/flora_renderer.cpp
   src/render/spell_fx_renderer.cpp

@@ -264,6 +264,16 @@ public:
     // Without independentBlend (DeviceCaps) the temporal upscaler runs on the camera's motion alone.
     bool scene_motion() const { return scene_options_.upscaler != Upscaler::Fsr1 && caps_.independent_blend; }
     VkPipelineRenderingCreateInfo scene_rendering(bool scene = true) const;
+    // This frame's scene takes its draws from secondary command buffers (render/scene_recorder.h): set before
+    // begin_scene, cleared when the scene ends (begin_overlay). The scene's renderings then hold nothing but
+    // vkCmdExecuteCommands.
+    void set_scene_secondary(bool on) { scene_secondary_ = on; }
+    bool scene_secondary() const { return scene_secondary_; }
+    // A secondary command buffer's inheritance for the scene's rendering: its attachments' formats and samples.
+    VkCommandBufferInheritanceRenderingInfo scene_inheritance() const;
+    // The scene's dynamic state as begin_scene sets it (the flipped viewport, the scissor), into `cmd`: each secondary
+    // command buffer of the scene starts with it.
+    void set_scene_state(VkCommandBuffer cmd) const;
     SceneBlends scene_blends(const VkPipelineColorBlendAttachmentState& color, SceneOutput output,
                              bool scene = true) const;
     std::uint32_t shadow_size() const { return shadow_size_; }
@@ -466,6 +476,7 @@ private:
     void destroy_point_shadow_map();
     void write_water_descriptors();
     void begin_scene_rendering(VkCommandBuffer cmd, bool load, const glm::vec4& clear_color);
+    bool scene_secondary_ = false; // set_scene_secondary
 
     platform::Window& window_;
     VkInstance instance_ = VK_NULL_HANDLE;

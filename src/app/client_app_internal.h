@@ -10,6 +10,7 @@
 #include "platform/process.h"
 #include "core/step_clock.h"
 #include "core/worker_pool.h"
+#include "render/scene_recorder.h"
 #include "app/addon_manager.h"
 #include "app/addon_suggest.h"
 #include "app/window_icon.h"
@@ -1051,6 +1052,10 @@ private:
     // Declared after vk_, so it is destroyed before the Vulkan device it holds objects of: draw_nameplates makes it at its
     // first use.
     std::unique_ptr<NameplateLayer> plate_layer_; // draw_nameplates, made at its first use
+    // The scene's draws recorded on the worker threads (render/scene_recorder.h; display.parallel_record), made in
+    // run(); after vk_, so it goes before the device.
+    std::unique_ptr<render::SceneRecorder> scene_recorder_;
+    bool parallel_record_ = true;
     // draw_nameplates' lists, kept for their capacity (and the plates' strings for theirs): the first plate_count_.
     struct PlateEntry {
         std::uint32_t id = 0;
