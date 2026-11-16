@@ -244,7 +244,7 @@ void NameplateLayer::paint(const NameplateText& p) const {
         dl_->AddText(f, size, at, c, s);
         if (style_.faux_bold) dl_->AddText(f, size, ImVec2(at.x + 1.0f, at.y), c, s);
     };
-    auto line = [&](float y, float size, const std::string& s) {
+    auto line = [&](float y, float size, const std::string& s, bool gm_name = false) {
         const float w = f->CalcTextSizeA(size, FLT_MAX, 0.0f, s.c_str()).x + (style_.faux_bold ? 1.0f : 0.0f);
         const ImVec2 at(px - w * 0.5f, y);
         if (style_.edge == game::PlateEdge::Shadow) {
@@ -256,7 +256,24 @@ void NameplateLayer::paint(const NameplateText& p) const {
                         text(ImVec2(at.x + static_cast<float>(dx) * ring, at.y + static_cast<float>(dy) * ring), size,
                              edge, s.c_str());
         }
-        text(at, size, color, s.c_str());
+        if (gm_name) {
+            text(at, size, color, s.c_str());
+            const float band_width = std::max(size * 1.4f, w * 0.28f);
+            const float position = game::gm_plate_sweep_position(static_cast<float>(ImGui::GetTime()));
+            const float center = at.x - band_width * 0.5f + (w + band_width) * position;
+            constexpr int kBands = 9;
+            const float band_step = band_width / static_cast<float>(kBands);
+            for (int i = 0; i < kBands; ++i) {
+                const float along = (static_cast<float>(i) + 0.5f) / static_cast<float>(kBands) * 2.0f - 1.0f;
+                const int alpha = static_cast<int>(std::lround(16.0f + 224.0f * (1.0f - std::abs(along))));
+                const float x = center - band_width * 0.5f + static_cast<float>(i) * band_step;
+                dl_->PushClipRect(ImVec2(x, y), ImVec2(x + band_step, y + size), true);
+                text(at, size, fade(IM_COL32(190, 255, 210, alpha)), s.c_str());
+                dl_->PopClipRect();
+            }
+        } else {
+            text(at, size, color, s.c_str());
+        }
     };
     if (p.highlight) {
         // The target: its colour on a dark plate edged in that colour, with a marker bobbing above it (Hailstone's
@@ -273,7 +290,7 @@ void NameplateLayer::paint(const NameplateText& p) const {
         dl_->AddTriangleFilled(ImVec2(t0.x, t0.y + 1.5f), ImVec2(t1.x, t1.y + 1.5f), ImVec2(t2.x, t2.y + 1.5f), shadow);
         dl_->AddTriangleFilled(t0, t1, t2, color);
     }
-    line(py, fs, p.name);
+    line(py, fs, p.name, p.gm);
     float y = py + fs;
     for (const auto& l : p.lines) {
         line(y, tag, l);

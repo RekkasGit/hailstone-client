@@ -184,6 +184,8 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
             const std::uint32_t rgb = game::con_rgb(game::con_level(s, conn_->player_status().level, conn_->pvp_rules()));
             plate.color = IM_COL32((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff, 255);
         }
+        plate.gm = player && s.gm;
+        if (plate.gm) plate.color = IM_COL32(29, 166, 75, 255);
         entry.id = id;
         ++plate_count_;
     }

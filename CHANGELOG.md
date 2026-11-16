@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Name plates: GM players' names are green (`#1da64b`) whether targeted or not, with a pale mint alpha highlight sweeping across each name and back
 - For plugin authors: a new host function, `get_buff_name_data_bulk`, reads the player's buffs as `get_buff_data_bulk` does but with each caster's name in place of the caster's spawn id: a 29-byte `HS_Bulk_BuffNameFixedRecord` followed by the name for each slot (docs/plugins.md "Buff and spawn records"). `get_buff_data_bulk` is unchanged
 - For plugin authors: `get_buff_data_bulk`, `get_pet_buff_data_bulk` and `get_target_buff_data_bulk` give each buff's ticks left (the server's count less the 6 s ticks since it came), not the count as the server last sent it, and a permanent buff as the negative count the server sent (EQEmu: -1, -4 for an aura's, -1000 for one a script made permanent); `hailstone.buff(i).tics` in Lua is that negative count too, where it was a large unsigned number; `get_avail_aa_data_bulk` and `get_avail_disc_data_bulk` give a count of 0 before the character's profile or with no game connection
 - For plugin authors: two new host functions, `get_avail_aa_data_bulk` and `get_avail_disc_data_bulk`, list the character's owned alternate abilities (by ability id) and combat abilities (by spell id) in one call, each with its name, as a count followed by that many records of a 32-bit id, a 32-bit name size and the name (`HAILSTONE_ID_NAME_RECORD`; docs/plugins.md "Buff and spawn records")

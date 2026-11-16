@@ -44,4 +44,7 @@ bool set_plate_style_option(PlateStyle& style, std::string_view name, int value)
 // staying there beyond it.
 float plate_distance_factor(float distance, float range, int far_scale);
 
+// GM nameplate highlight position, 0 at the left and 1 at the right, returning left every pi seconds.
+float gm_plate_sweep_position(float time_seconds);
+
 } // namespace hailstone::game

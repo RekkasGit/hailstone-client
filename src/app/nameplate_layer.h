@@ -26,6 +26,7 @@ struct NameplateText {
     std::string name;
     std::vector<std::string> lines; // under the name, one a line: an NPC's owner, a player's guild
     ImU32 color = IM_COL32_WHITE;
+    bool gm = false;                // draw the moving alpha highlight over this player's name
     bool target = false;            // drawn last, never faded by the names over it
     bool through_walls = false;     // never hidden by the scene (the target's, option target_plate_through_walls)
     bool highlight = false;         // the dark plate, edge and marker (the target's, option target_plate_highlight)
