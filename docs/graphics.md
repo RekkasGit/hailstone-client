@@ -1688,8 +1688,27 @@ puts it behind anything nearer. Scenery only: nothing collides with it.
   2500 units past the zone, which the neighbours' ground needs), culled with the zone's; no shadows (neither cast nor
   drawn into the sun's cascades or the cover and water maps). Looking out over it, 9,000 more triangles and 70 more
   draw calls; the frame time did not move.
+- **Its trees** (`render::horizon_trees`, `render/tree_impostor.h`): the zone's own trees stand on the land's woods.
+  The zone's commonest placed plants at least 20 units tall (`render::kLandTreeMinHeight`) are its trees, at most
+  three kinds, each placed at least a quarter as often as the commonest and at most twice its height (North Karana
+  walls its edges with RPINE1, 304 units tall by its 91-unit TREE5, which across the land stood as a wall of giants).
+  Each is drawn once at load, on the CPU, into a picture from two sides (its own textures, the far side of its crown
+  a little darker; 2 x 2 samples a texel, the cover in alpha) carried by two crossed cards, cut out and two-sided,
+  with their normals up so they take the light the land does; thousands of them are drawn instanced, 4 triangles
+  each, tinted by the median of the zone's light on that tree's placements. They stand from 256 units past the
+  zone's edge out to 7000, as far apart as the zone's own trees stand over its level ground (a third of that in the
+  land's woods, the darker patches its shade paints, and one and a half times it elsewhere), fewer past 2500 (as
+  2500 over the distance), on the land's surface as its mesh draws it, 2 units sunk; not on the sea, the mountains'
+  rock, slopes steeper than 0.85, a neighbour's ground (it draws its own trees there when drawn) or in the zone's
+  pockets; at most 40,000, the nearest kept. Over an atlas zone's ground (below, "World atlas") they stand only where
+  that zone's own trees stand, as thick, up to one a spot. They cast no shadows and go with the land (`set_distant`).
+  The trees are always the current zone's own, also on an atlas zone's ground. Seen in the zone viewer: Qeynos Hills
+  2,610 trees, Butcherblock 4,823, South Karana 13,949 (2,348 of them where the atlas zones' trees stand); placing
+  them takes 16 to 58 ms of the zone's build; in South Karana at 2560 x 1440 the frame took 1.29 ms with them and
+  1.22 without (178 more draw calls).
 
-`display.horizon_hills` (Options, Horizon Hills) turns it off; the viewer takes `--no-horizon`.
+`display.horizon_hills` (Options, Horizon Hills) turns it off, its trees with it; the viewer takes `--no-horizon`, and
+`--no-land-trees` for the land without its trees.
 
 ## World atlas
 
@@ -1708,7 +1727,9 @@ zone's own geometry. `game/world_atlas.h` holds the records and the walk, `app/w
   and its water (`app::measure_water`, as a neighbour's above, an EQG zone's level RegionWater surfaces too); its
   ground's colour (`app::measure_ground_color`: the average, in linear light, of the texture on the terrain whose
   height at the square's middle is nearest the ground there, within 24 units; not the water, what is not drawn, cut
-  out or glowing); the share of its ground under open sky (no surface
+  out or glowing); how many of its trees stand in each square (`app::measure_trees`: placed plants at least 20 units
+  tall at their placement's scale, up to 255; the land's trees stand as thick there, above, "Horizon hills"); the
+  share of its ground under open sky (no surface
   within 400 units over it); and its zone lines' cells with their targets (`game::ZoneLineCell`), so they are grouped
   again without its files. The neighbour zones' loader measures the records the atlas asks for, one at a time once
   nothing else is loading (15 to 60 ms a zone past loading it, in the modern lighting with display.neighbour_zones
