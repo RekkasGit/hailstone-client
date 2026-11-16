@@ -184,6 +184,16 @@ typedef struct HS_Bulk_PetBuffData {
     int32_t duration;
     int32_t spellType;
 } HS_BulkPetBuffData;
+/* get_target_buff_data_bulk: one record per buff of the current target, HAILSTONE_TARGET_BUFF_RECORD_SIZE fixed bytes
+ * each, immediately followed by casterNameLength bytes of the caster's name (no NUL); the next record starts after
+ * them. */
+typedef struct HS_Bulk_TargetBuffFixedRecord {
+    int32_t spellID;          /* 0 for an entry with no spell, whose other fields are all 0 */
+    int32_t duration;         /* tics left, as the server sent them */
+    int32_t spellType;        /* 0 detrimental, 1 beneficial, 2 beneficial group-only (0 for an unknown spell) */
+    int32_t slot;             /* the target's buff slot, as the server sent it (EQEmu: the mob's own slot index) */
+    int32_t casterNameLength; /* bytes of the caster's name that follow; 0 for none */
+} HS_BulkTargetBuffFixedRecord;
 #pragma pack(pop)
 
 /* An extended target slot's type: HailstoneXTarget.type and HS_BulkXTargetData.targetType. The values are the
@@ -718,6 +728,7 @@ typedef struct PluginHostApi {
      * /destroycursor <id> or /stowcursor <id>, which do nothing unless the cursor still holds that id. */
     uint32_t (*cursor_origin)(void* host);
     int32_t (*get_xtarget_data_bulk)(void* host, unsigned char* out, int32_t out_size);
+    int32_t (*get_target_buff_data_bulk)(void* host, unsigned char* out, int32_t out_size);
 } PluginHostApi;
 /* Not known: it was on the cursor at zone-in, replaced a cursor item, or came by a path the client does not mark.
  * Treat it as the player's; never destroy it unattended. */
@@ -737,6 +748,7 @@ typedef struct PluginHostApi {
 #define HAILSTONE_BUFF_SLOT_DISC 2 /* the discipline slot, the last, sent only with room for one record more */
 #define HAILSTONE_PET_BUFF_RECORD_SIZE 12
 #define HS_BULK_XTARGET_RECORD_SIZE 16
+#define HAILSTONE_TARGET_BUFF_RECORD_SIZE 20
 /* Whether this client's host table has `field` (one added after the plugin's ABI) and it is set. */
 #define HAILSTONE_HOST_HAS(h, field)                                                                                   \
     ((h) && (h)->size >= offsetof(PluginHostApi, field) + sizeof((h)->field) && (h)->field)

@@ -563,8 +563,8 @@ same changes as a plugin, with no change to Hailstone itself. With the `extend` 
   game string with its `%1` filled. A spawn also carries its rider, mercenary and GM flags, whether it is one of the
   player's group, its con colour and its body types. Each struct starts with its size; the client fills what both know, so a plugin built
   for an older client keeps working. `get_buff_data_bulk` gives every buff slot of the player in one call,
-  `get_pet_buff_data_bulk` the pet window's buffs and `get_spawns_data_bulk` every spawn in the zone, as packed
-  records (Buff and spawn records below). `server_info` gives the
+  `get_pet_buff_data_bulk` the pet window's buffs, `get_target_buff_data_bulk` the target window's buffs and
+  `get_spawns_data_bulk` every spawn in the zone, as packed records (Buff and spawn records below). `server_info` gives the
   server this login is on (the saved server's name, host and port, the world's name and address), so a plugin for
   one server can tell it from another that sends the same packets.
 - **take item clicks** (`item_right_click`, then the client's own with `right_click_item`, which needs `actions`)
@@ -639,10 +639,11 @@ when the cursor no longer holds an item of that id, so an item the player put th
 Both need `actions`, as `/destroy` does. The id is a plain decimal number above 0; anything else does nothing.
 
 Buff and spawn records: `get_buff_data_bulk(host, out, out_size)`, `get_pet_buff_data_bulk(host, out, out_size)`,
-`get_spawns_data_bulk(host, out, out_size)` and `get_xtarget_data_bulk(host, out, out_size)` (with `read`; added later in ABI 3, so test `HAILSTONE_HOST_HAS(host, <field>)` first;
+`get_spawns_data_bulk(host, out, out_size)`, `get_xtarget_data_bulk(host, out, out_size)` and
+`get_target_buff_data_bulk(host, out, out_size)` (with `read`; added later in ABI 3, so test `HAILSTONE_HOST_HAS(host, <field>)` first;
 `out` is an `unsigned char*` and `out_size` an `int32_t`) write records into `out` and return the bytes written.
 The records are the SDK's packed structs (`HS_Bulk_BuffData`, `HS_Bulk_PetBuffData`, `HS_Bulk_SpawnHeader`,
-`HS_Bulk_SpawnFixedRecord`, `HS_Bulk_XTargetData`, all in `#pragma pack(push, 1)`), in the machine's byte order (little-endian on every
+`HS_Bulk_SpawnFixedRecord`, `HS_Bulk_XTargetData`, `HS_Bulk_TargetBuffFixedRecord`, all in `#pragma pack(push, 1)`), in the machine's byte order (little-endian on every
 platform Hailstone runs on) and unaligned. For speed, the bulk reads are the one place where a struct may be cast
 onto the buffer, by the client writing it and by a plugin reading it: read each field through the packed struct
 (`rec->level`), which the compiler reads unaligned, and never keep a plain pointer or reference to a field (`&rec->x`),
@@ -735,6 +736,28 @@ and say so in the chat window.
   | 4 | i32 | the slot's spawn id, 0 for none |
   | 8 | i32 | the aggro meter's percent for the slot's spawn, as the server sent it (entries 7 to 26 of the meter, the extended target window's aggro labels; on EQEmu an NPC's is our hate against its current target's, a player's is its hate against our target's top). 0 with no spawn in the zone, without the meter (EQEmu's `Character:EnableAggroMeter`), or for a slot past the 20th |
   | 12 | i32 | the spawn's HP percent, as the extended target window draws it: the player's own from its points (items' HP included), anyone else's as the server last sent it (EQEmu sends it to everyone with the spawn on their list when the percent changes); 0 with no spawn in the zone or for a corpse |
+
+- `get_target_buff_data_bulk`: the current target's buffs, the ones the target window shows (what `OP_TargetBuffs`
+  last gave for that spawn), one record per buff the server sent, in the order the client keeps them, each with its
+  slot. EQEmu sends only the slots that hold a spell, in slot order, and resends the whole list when one fades, so
+  against it the records are packed (no empty ones) and the slot numbers can skip. 0 bytes with no target, or while
+  the buffs the client holds are still another
+  spawn's (the server has not yet sent the new target's; EQEmu sends them only where the target window shows buffs,
+  so an NPC target on a server without that shows none). Each record is a fixed part
+  (`HS_Bulk_TargetBuffFixedRecord`, `HAILSTONE_TARGET_BUFF_RECORD_SIZE` = 20 bytes) followed at once by the caster's
+  name, `casterNameLength` bytes with no terminating NUL; the next record starts after the name, so walk them one by
+  one rather than by a fixed stride. Records are written as many as fit in `out_size`, each whole with its name; the
+  return value is the bytes written. A name is as long as the server sent it, so pass room to spare (2048 bytes holds
+  a full target window of ordinary names).
+
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | spell id; 0 an entry with no spell, whose other fields are all 0 (and no name follows) |
+  | 4 | i32 | tics left, as the server sent them |
+  | 8 | i32 | the spell's type: 0 detrimental, 1 beneficial, 2 beneficial group-only (0 for a spell not in spells_us.txt) |
+  | 12 | i32 | the target's buff slot, as the server sent it (EQEmu: the mob's own slot index, not mapped to RoF2's); 0 in an empty entry, so test the spell id first |
+  | 16 | i32 | `casterNameLength`: the bytes of the caster's name that follow; 0 when the server sent none |
+  | 20 | bytes | the caster's name, `casterNameLength` bytes |
 
 ### Connections (ABI 2)
 

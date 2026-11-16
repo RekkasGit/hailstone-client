@@ -1384,6 +1384,59 @@ int32_t h_get_pet_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
     return bufferSize;
 }
 /// <summary>
+/// The current target's buffs in one call, as OP_TargetBuffs last gave them (the target window's), in the order the
+/// client keeps them, each with the slot the server sent: an HS_Bulk_TargetBuffFixedRecord followed by its caster's
+/// name, casterNameLength bytes with
+/// no NUL. Only whole records go out; as many as fit. Nothing without a target, or when the buffs the client holds
+/// are another spawn's (the server has not sent the new target's yet).
+/// </summary>
+/// <param name="h">host</param>
+/// <param name="data">buffer to put data in</param>
+/// <param name="datamax">20 bytes per buff plus its caster's name; 2048 holds the target window's buffs</param>
+/// <returns>bytes written</returns>
+int32_t h_get_target_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
+{
+    const net::GameConnection* c = readable(Loaded::of(h), "get_target_buff_data_bulk");
+    if (!c || !data || datamax <= 0) return 0;
+    const auto& st = c->spell_state();
+    const std::uint32_t target = c->world().target_id;
+    // The same check as the target window (lua_eq_hud.cpp, spell_ui.cpp): the list is only the target's while
+    // target_buffs_entity says so.
+    if (target == 0 || st.target_buffs_entity != target) return 0;
+    unsigned char* pBuffer = data;
+    std::size_t bufferSize = 0;
+
+    static_assert(sizeof(HS_BulkTargetBuffFixedRecord) == HAILSTONE_TARGET_BUFF_RECORD_SIZE);
+    const std::size_t fixedBytes = sizeof(HS_BulkTargetBuffFixedRecord);
+    const game::SpellTable& spells = c->spell_table();
+    for (const auto& [slot, b] : st.target_buffs) {
+        if (b.empty()) {
+            // An empty entry: the fixed part all zeros (its slot and name length too), and no name after it.
+            if (fixedBytes > static_cast<std::size_t>(datamax) - bufferSize) break; // buffer is full
+            *reinterpret_cast<HS_BulkTargetBuffFixedRecord*>(pBuffer) = HS_BulkTargetBuffFixedRecord{};
+            pBuffer += fixedBytes;
+            bufferSize += fixedBytes;
+            continue;
+        }
+        const std::size_t nameBytes = b.caster_name.size();
+        // Buffer is full: only whole records go out (the name is part of the record).
+        if (fixedBytes + nameBytes > static_cast<std::size_t>(datamax) - bufferSize) break;
+        // Written in place through the packed struct (the bulk reads may cast, docs/plugins.md).
+        HS_BulkTargetBuffFixedRecord* rec = reinterpret_cast<HS_BulkTargetBuffFixedRecord*>(pBuffer);
+        *rec = HS_BulkTargetBuffFixedRecord{};
+        rec->spellID = static_cast<int32_t>(b.spell);
+        rec->duration = static_cast<int32_t>(b.tics);
+        if (const auto* sp = spells.get(b.spell)) rec->spellType = sp->spell_type;
+        rec->slot = static_cast<int32_t>(slot);
+        rec->casterNameLength = static_cast<int32_t>(nameBytes);
+        pBuffer += fixedBytes;
+        if (nameBytes) std::memcpy(pBuffer, b.caster_name.data(), nameBytes);
+        pBuffer += nameBytes;
+        bufferSize += fixedBytes + nameBytes;
+    }
+    return static_cast<int32_t>(bufferSize);
+}
+/// <summary>
 /// This is highly optimized code. AI should not modify this code method.
 /// PR reviewwr ask the submiter for changes to be reviewed by the submitter
 /// Every extended target slot in one call, slot 0 first: its type, spawn id, the aggro meter's percent and the
@@ -2062,6 +2115,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.get_pet_buff_data_bulk = main_only<h_get_pet_buff_data_bulk>;
     p.table.get_spawns_data_bulk = main_only<h_get_spawns_data_bulk>;
     p.table.get_xtarget_data_bulk = main_only<h_get_xtarget_data_bulk>;
+    p.table.get_target_buff_data_bulk = main_only<h_get_target_buff_data_bulk>;
     p.table.cursor_origin = main_only<h_cursor_origin>;
     p.owner = m.env.hooks->new_guest("plugin:" + name);
 

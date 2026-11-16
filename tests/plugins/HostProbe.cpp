@@ -9,6 +9,8 @@
 //   get_spawns_data_bulk into n bytes (the whole buffer without n), read through the SDK's HS_Bulk_* structs cast
 //   onto the buffer
 //   /probextargets [n]  get_xtarget_data_bulk the same way, through HS_Bulk_XTargetData
+//   /probetargetbuffs [n]  get_target_buff_data_bulk the same way, through HS_Bulk_TargetBuffFixedRecord and the
+//   caster's name after each
 //   /probecursor   cursor_origin, when the host table has it
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
@@ -17,6 +19,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
+#include <string>
 #include <thread>
 
 #include "hailstone_byte_io.h"
@@ -100,7 +103,7 @@ void probe_buffs(void*, const char* args) {
             ++empty;
             continue;
         }
-        WriteChatf("[Probe] buff %d: %d %d %d %d %d %d %d %u", static_cast<int>(slot), rec->ID, rec->casterID,
+        WriteChatf("[Probe] buff slot %d: %d %d %d %d %d %d %d %u", static_cast<int>(slot), rec->ID, rec->casterID,
             rec->duration, rec->hitcount, rec->spelltype, rec->counterType, rec->counterTotal,
             static_cast<unsigned>(rec->slotType)); // HAILSTONE_BUFF_SLOT_*
     }
@@ -182,6 +185,47 @@ void probe_xtargets(void*, const char* args) {
     WriteChatf("[Probe] xtargets %d bytes", static_cast<int>(r));
 }
 
+static_assert(sizeof(HS_Bulk_TargetBuffFixedRecord) == HAILSTONE_TARGET_BUFF_RECORD_SIZE);
+
+// Each occupied entry one line, by the buff slot the server sent (spell id, tics, spell type, caster's name); a
+// slot number skipped is one the server sent nothing for. The empty ones only counted, and only when laid out as empty (all zeros, no name). Then the bytes left over after
+// the last whole record (0 when every name is framed right). With n, also how many bytes past the first n the host
+// changed (guard bytes; 0 unless it wrote past the end).
+void probe_target_buffs(void*, const char* args) {
+    unsigned char buf[2048];
+    constexpr unsigned char guard = 0xA5;
+    std::memset(buf, guard, sizeof buf);
+    const std::int32_t n = size_arg(args, sizeof buf);
+    const std::int32_t r = host->get_target_buff_data_bulk(host->host, buf, n);
+    if (n < static_cast<std::int32_t>(sizeof buf)) {
+        std::size_t changed = 0;
+        for (std::size_t i = static_cast<std::size_t>(n); i < sizeof buf; ++i) changed += buf[i] != guard;
+        WriteChatf("[Probe] target buffs past the end %zu", changed);
+    }
+    const std::size_t size = r > 0 ? static_cast<std::size_t>(r) : 0;
+    std::size_t at = 0;
+    int count = 0;
+    int empty = 0;
+    while (size - at >= sizeof(HS_Bulk_TargetBuffFixedRecord)) {
+        const auto* rec = reinterpret_cast<const HS_Bulk_TargetBuffFixedRecord*>(buf + at);
+        ++count;
+        at += sizeof(HS_Bulk_TargetBuffFixedRecord);
+        if (rec->spellID == 0 && rec->duration == 0 && rec->spellType == 0 && rec->slot == 0 &&
+            rec->casterNameLength == 0) {
+            ++empty; // an empty entry: every field 0 and no name follows
+            continue;
+        }
+        const auto len = rec->casterNameLength > 0 ? static_cast<std::size_t>(rec->casterNameLength) : 0;
+        if (len > size - at) break; // a name running past the end: the "left" count shows it
+        const std::string caster(reinterpret_cast<const char*>(buf + at), len);
+        at += len;
+        WriteChatf("[Probe] target buff slot %d: %d %d %d %s", rec->slot, rec->spellID, rec->duration, rec->spellType,
+            caster.empty() ? "-" : caster.c_str());
+    }
+    WriteChatf("[Probe] target buffs %d bytes, %d records, %d empty, %zu bytes left", static_cast<int>(r), count,
+        empty, size - at);
+}
+
 void probe_cursor(void*, const char*) {
     if (!HAILSTONE_HOST_HAS(host, cursor_origin)) {
         WriteChatf("[Probe] cursor origin: not in this client");
@@ -210,6 +254,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probepetbuffs", probe_pet_buffs, nullptr);
     AddCommand("/probespawns", probe_spawns, nullptr);
     AddCommand("/probextargets", probe_xtargets, nullptr);
+    AddCommand("/probetargetbuffs", probe_target_buffs, nullptr);
     AddCommand("/probecursor", probe_cursor, nullptr);
     AddTopLevelObject("Probe", probe_tlo, nullptr);
 #ifdef HAILSTONE_PROBE_THROW_INIT
@@ -227,6 +272,7 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probepetbuffs");
     RemoveCommand("/probespawns");
     RemoveCommand("/probextargets");
+    RemoveCommand("/probetargetbuffs");
     RemoveCommand("/probecursor");
     RemoveTopLevelObject("Probe");
 }
