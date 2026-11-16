@@ -8,6 +8,10 @@
 - For plugin authors: two new host functions, `get_avail_aa_data_bulk` and `get_avail_disc_data_bulk`, list the character's owned alternate abilities (by ability id) and combat abilities (by spell id) in one call, each with its name, as a count followed by that many records of a 32-bit id, a 32-bit name size and the name (`HAILSTONE_ID_NAME_RECORD`; docs/plugins.md "Buff and spawn records")
 - For plugin authors: a new host function, `get_target_buff_data_bulk`, reads the current target's buffs in one call: spell id, tics, spell type, buff slot and the caster's name for each, as a 20-byte `HS_Bulk_TargetBuffFixedRecord` followed by the name (docs/plugins.md "Buff and spawn records")
 - Modern lighting: the zones beyond a zone line no longer freeze the game for about a third of a second as each one comes into view while you play; it now takes a few milliseconds
+- Server add-ons: optional requirements, allow lists and named blocks in `hailstone.cfg`, enabled with `[addons] enforce = on`
+- Required add-ons keep normal installation review and native-code approval. Missing, changed, refused or failed requirements prevent play on that server
+- External upscalers can participate in opted-in add-on policies, with restart instructions when an active provider is blocked
+
 - Modern lighting: volumetric clouds over the open skies, with real depth, drifting with the wind, lit by the sun (glowing at their edges, warm at sunrise and sunset, silver under the moon) and closing over into a dark overcast as a storm comes in, lit up by its lightning. They replace the painted cloud layer; Options > Graphics > Volumetric Clouds turns them off, and the Low graphics setting leaves them off
 - Luclin player models: combat swings, casting, socials (wave, cheer) and every other animation of more than 15 frames play at the original's speed; before, they ran at about half speed. The classic models are unchanged
 - Graphics: the upscaler is off by default on every computer, so the 3D world is drawn at full size. A player who never chose an upscaler, and was on AMD FSR 1, is now at Off; Options > Graphics > Upscaler turns FSR 1, Temporal or FSR 3.1 back on

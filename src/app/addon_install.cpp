@@ -992,9 +992,40 @@ bool library_file(std::string_view path) {
 }
 } // namespace
 
-std::vector<plugin::Ceiling> addon_ceilings(const fs::path& data_dir) {
+std::vector<plugin::Ceiling> addon_ceilings(const fs::path& data_dir, bool scan_for_enforcement) {
     const AddonRegistry reg = read_addon_registry(data_dir);
     std::vector<plugin::Ceiling> out = addon_ceilings(reg.addons);
+    // Changed or extra code in a managed folder still belongs to that source for explicit blocks. Its bytes are
+    // not manifest-verified, so it cannot satisfy a closed allowlist or a requirement. With enforcement off it
+    // keeps the existing behavior of a player-edited file, rather than gaining the original manifest's ceiling.
+    if (scan_for_enforcement) {
+        for (const auto& a : reg.addons) {
+            if (a.kind != AddonKind::Script && a.kind != AddonKind::Plugin) continue;
+            const fs::path folder = addon_folder(data_dir, a.kind, a.name);
+            std::error_code ec;
+            if (!fs::is_directory(folder, ec)) continue;
+            auto take = [&](const fs::path& file, plugin::FileKind kind) {
+                const auto bytes = read_text_file(file);
+                if (!bytes) return;
+                const auto hash = sha256(*bytes);
+                const auto relative = file.lexically_relative(folder).generic_string();
+                if (std::any_of(a.files.begin(), a.files.end(), [&](const AddonFile& f) {
+                        return iequal(f.path, relative) && f.sha256 == hash;
+                    })) return;
+                out.push_back({kind, hash, 0, a.name, a.source, false, false});
+            };
+            if (a.kind == AddonKind::Script) {
+                for (auto it = fs::recursive_directory_iterator(folder, ec); !ec && it != fs::recursive_directory_iterator();
+                     it.increment(ec))
+                    if (it->is_regular_file(ec) && extension_of(it->path().filename().string()) == ".lua")
+                        take(it->path(), plugin::FileKind::Script);
+            } else {
+                for (const auto& e : fs::directory_iterator(folder, ec))
+                    if (e.is_regular_file(ec) && library_file(e.path().filename().string()))
+                        take(e.path(), plugin::FileKind::Plugin);
+            }
+        }
+    }
     // An add-on whose record does not read: what it was allowed is not known, so its files may do nothing (not what
     // a file put in by hand may). Every Lua file of its folder, and every library at its top, by their bytes now.
     for (const auto& u : reg.unreadable) {
@@ -1006,7 +1037,7 @@ std::vector<plugin::Ceiling> addon_ceilings(const fs::path& data_dir) {
             if (!fs::is_directory(folder, ec)) continue;
             auto take = [&](const fs::path& file, plugin::FileKind fk) {
                 if (auto bytes = read_text_file(file)) {
-                    out.push_back({fk, sha256(*bytes), 0});
+                    out.push_back({fk, sha256(*bytes), 0, u.name, {}, true, false});
                     ++refused;
                 }
             };
@@ -1035,11 +1066,12 @@ std::vector<plugin::Ceiling> addon_ceilings(const std::vector<InstalledAddon>& a
     for (const auto& a : addons)
         for (const auto& f : a.files) {
             const std::string ext = extension_of(f.path);
-            if (a.kind == AddonKind::Script && ext == ".lua") out.push_back({plugin::FileKind::Script, f.sha256, a.caps});
+            if (a.kind == AddonKind::Script && ext == ".lua")
+                out.push_back({plugin::FileKind::Script, f.sha256, a.caps, a.name, a.source, true, iequal(f.path, "init.lua")});
             else if (a.kind == AddonKind::Plugin && (ext == ".so" || ext == ".dll" || ext == ".dylib") &&
                      f.path.find('/') == std::string::npos &&
                      iequal(plugin::plugin_name(rel(f.path)), a.name))
-                out.push_back({plugin::FileKind::Plugin, f.sha256, a.caps});
+                out.push_back({plugin::FileKind::Plugin, f.sha256, a.caps, a.name, a.source});
         }
     return out;
 }

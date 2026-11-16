@@ -4,6 +4,13 @@ What is left before the client is feature complete, in the order to work on it. 
 
 Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 
+## Server add-on policy
+
+- [ ] Resolve stale cached admission, mid-session requirement failures and event-driven readiness checks.
+
+- [x] Optional required/allow/block lists, intact package identities, required autorun and consent gates, and active upscaler checks; disabled unless `[addons] enforce = on`.
+- [ ] Live acceptance of first-visit and cached policies, missing/refused/failed requirements, both UI packs and controller input, and provider changes followed by restart.
+
 ## Launcher login
 
 - [x] Explicit one-use token authentication, native-style `patchme /ticket:`, environment/argument transports, endpoint selection, optional world/character entry and memory-only returned-token session sign-in, with packet/launcher/mock-server and UI regression coverage.

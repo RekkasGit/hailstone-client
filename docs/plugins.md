@@ -47,6 +47,9 @@ Then:
 | has no `hailstone.cfg` (plain EQEmu, or the script without one) | run, with every capability | run, with every capability |
 | has a `hailstone.cfg` | run only when it allows them, with the capabilities it grants | always run, with every capability; scripts start by themselves, and the player cannot stop them or unload its plugins. Its compiled plugins load only once the player allowed them (below) |
 
+The separate opt-in add-on policy below can also restrict identities, including server-owned files. Without
+`[addons] enforce = on`, the table describes the unchanged behavior.
+
 A file is the server's when its SHA-256 is one the server listed for its `scripts/` or `plugins/` this login. Editing
 one makes it the player's.
 
@@ -69,6 +72,8 @@ its capabilities say (they limit only what it does through Hailstone). So a libr
 (`servers/<profile>/plugins/`) does not load until the player said yes to its bytes, on every server, with or without
 a `hailstone.cfg`. The server's Lua scripts and its plugins' Lua windows are not asked about: they run inside
 Hailstone's limits.
+
+An opted-in policy's required player-installed compiled plugins use this same per-server, per-hash approval.
 
 - **The question.** When such a plugin would load (the zone-in, the world login for a `login` one, `/plugin <name>
   load`) and the player has not answered for its SHA-256 on this server, it stays unloaded and a window asks: which
@@ -1031,7 +1036,8 @@ through the client, so their capabilities hold. All of this is enforced by the c
 
 An upscaler provider is a temporal upscaler from outside the client (Intel XeSS, AMD FSR 4 ...),
 built against `sdk/hailstone_upscaler.h`. It is not a game plugin: it has no host table, no capabilities and no
-callbacks, sees nothing of the game, and no server sends one or rules on one. The player installs it with the add-on
+callbacks and sees nothing of the game. Servers do not send providers; an opted-in add-on policy can restrict
+which provider is active while joining that server ("Opt-in add-on policies" below). The player installs it with the add-on
 manager (an add-on of the kind `upscaler`, docs/addons.md "Upscalers") and picks it under Options, Graphics,
 Upscaler (`display.upscaler = <name>`); it loads at the next start. docs/graphics.md "Upscaler providers" says what the
 client does around it.
@@ -1201,6 +1207,66 @@ unless the server's file says `[movement] passable_ladders = off`. Solid ladders
 meets a ladder as one slab instead of its rungs (docs/mechanics.md "Ladders") unless the file says
 `[movement] solid_ladders = off`.
 Players get a change at their next login, with the rest of the file.
+
+### Opt-in add-on policies
+
+Servers that need required add-ons or a named allow/block list can enable this separately. Leaving `enforce` off
+keeps the existing behavior, including optional suggestions. `server/hailstone-addon-policy.cfg.example` is a
+separate example; copy it to `client_files/hailstone.cfg` and edit it for the server.
+
+```ini
+[scripts]
+player = off
+;player_caps = read,ui
+[plugins]
+player = off
+;player_caps = read
+[addons]
+enforce = on
+;required =
+;allow =
+;suggest = owner/repo
+;block = unwanted-addon
+default = allow
+```
+
+- `required` names add-ons that must be installed intact and running before play. Missing packages open the
+  add-on manager's local requirements list. Reviewing an entry fetches its manifest and opens the normal install
+  card; no server-chosen repository is fetched before that click. Installation approval, signatures, pinned keys,
+  platform checks and capability checks still apply; this setting never silently installs native code or approves its execution.
+  Required scripts and plugins start independently of the player's autorun settings and cannot be stopped or
+  unloaded while required. A required script that exits or a plugin that fails prevents play on this server.
+- `allow` permits optional add-ons. `default = deny` refuses every add-on not named by `allow` or `required`;
+  `default = allow` permits the rest. The default is `allow`. `block` takes precedence, even over `required`.
+  Contradictory required/block rules or malformed enforced settings prevent joining and explain the problem.
+- Identities are manifest names (`dpsmeter`) or GitHub repositories (`projecthailstone/hailstone-dpsmeter`), compared
+  without case. A GitHub link also works. Repository matches use the installed package's recorded source, not its
+  folder name. These are package identities, not version pins; the manager's normal update rules still apply.
+  With `default = deny`, player files need a matching installed package's recorded hashes; merely
+  renaming a manual script, plugin or edited file does not admit unknown bytes. Server-supplied hashes can be
+  permitted by their add-on's name. Repositories are preferable when two authors might choose the same name.
+- Permission is separate from capabilities: `allow` does not enable `[scripts] player` or `[plugins] player`, or
+  grant capabilities beyond `player_caps` and the add-on's manifest. The template leaves player code off and its
+  identity lists blank. Explicitly enable the intended kind and choose its capabilities when configuring those
+  lists. A suggestion remains optional and does not grant permission; under
+  `default = deny`, also name it in `allow` if it should run.
+- Required compiled plugins still ask for approval for their bytes on this server. The loading screen waits for
+  the answer. Refusing, closing the prompt, a missing requirement or a failed start returns to login rather than
+  letting the character play without the requirement. Cached policy is checked before subsequent logins; the
+  first visit can learn the policy only after the server sends its files at zone-in.
+
+**Warning when actively blocking add-ons:** external upscalers such as FSR4 and XeSS are add-ons too. With
+`default = deny`, explicitly name the upscalers you want to allow, unless you deliberately want to exclude them.
+Built-in rendering choices need no entry. A provider loads before login and adds
+Vulkan device requirements, so the client cannot exchange it while playing: a blocked active provider prevents
+joining, with instructions to select an allowed or built-in option and restart. Its actual loaded copy is checked,
+so installing an update while an older copy is active may also require a restart. Requiring a particular provider
+also requires selecting and successfully loading it, and therefore excludes hardware that cannot run it.
+
+The policy applies to playing on this server, not to the player's whole add-on library. Other servers retain
+their own rules, and installed packages are not deleted. The client's tool-launch buttons respect opted-in rules;
+a standalone program started outside Hailstone is outside them. This is client behavior, not proof for a server:
+an older or modified client, or already approved native code, can bypass it.
 
 A server folder for every platform its players use:
 

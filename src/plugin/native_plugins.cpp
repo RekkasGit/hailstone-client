@@ -124,6 +124,7 @@ struct NativePlugins::Impl {
     Hooks::Owner owner = 0;
     std::vector<std::unique_ptr<Loaded>> loaded;
     std::vector<Info> failures; // the last load error by name
+    std::vector<std::pair<std::string, Sha256Digest>> required; // files found at the last policy check
 
     Loaded* find(std::string_view name) const;
     std::optional<fs::path> file_of(std::string_view name) const;
@@ -138,7 +139,7 @@ struct NativePlugins::Impl {
     // One of the server's own plugins under its hailstone.cfg: the player cannot unload it.
     bool kept(const Sha256Digest& hash) const {
         return env.policy && env.policy->current() && env.policy->current()->configured &&
-               env.policy->server_file(FileKind::Plugin, hash);
+               (env.policy->server_file(FileKind::Plugin, hash) || env.policy->required_file(FileKind::Plugin, hash));
     }
     void say(const std::string& text) const {
         if (env.print) env.print(text, 0);
@@ -151,12 +152,16 @@ struct NativePlugins::Impl {
     std::uint32_t consent_serial = 0;
     std::vector<PluginApproval> session_answers;
     // A file from the server's plugins/ folder (set_server_dir): it loads only with the player's word.
-    bool asks(const fs::path& file) const {
+    bool asks(const fs::path& file, const Sha256Digest& hash) const {
+        if (env.policy && env.policy->required_file(FileKind::Plugin, hash)) return true;
         if (server_dir.empty()) return false;
         const fs::path rel = file.lexically_relative(server_dir);
         return !rel.empty() && *rel.begin() != "..";
     }
-    fs::path profile_dir() const { return server_dir.parent_path(); }
+    fs::path profile_dir() const {
+        if (!server_dir.empty()) return server_dir.parent_path();
+        return env.policy && env.policy->current() ? env.policy->current()->dir : fs::path();
+    }
     Consent consent_for(const Sha256Digest& hash) const {
         Consent c = plugin_consent(profile_dir(), hash);
         if (c == Consent::Unasked)
@@ -2054,7 +2059,7 @@ NativePlugins::NativePlugins(NativeEnv env) : impl_(std::make_unique<Impl>()) {
         std::vector<std::string> pending;
         for (const auto& l : m->loaded)
             if (l->unload_pending && !l->busy) pending.push_back(l->name);
-        for (const auto& n : pending) m->self->unload(n);
+        for (const auto& n : pending) m->self->unload_file(n);
     });
 }
 
@@ -2074,10 +2079,10 @@ std::vector<NativePlugins::Info> NativePlugins::list() const {
         if (auto bytes = read_file(file)) {
             Sha256Digest h = sha256(*bytes);
             i.sha256 = to_hex(h);
-            i.caps = impl_->env.policy ? impl_->env.policy->caps(FileKind::Plugin, h) : 0;
+            i.caps = impl_->env.policy ? impl_->env.policy->caps(FileKind::Plugin, h, i.name) : 0;
             i.server = impl_->env.policy && impl_->env.policy->server_file(FileKind::Plugin, h);
             i.kept = impl_->kept(h);
-            i.asks = impl_->asks(file);
+            i.asks = impl_->asks(file, h);
             if (i.asks) i.consent = impl_->consent_for(h);
         }
         if (const Loaded* l = impl_->find(i.name)) {
@@ -2147,12 +2152,12 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     if (!bytes) return refuse("cannot read " + file->string());
     Sha256Digest hash = sha256(*bytes);
     if (!m.env.policy) return refuse("plugins are off");
-    std::uint32_t caps = m.env.policy->caps(FileKind::Plugin, hash);
+    std::uint32_t caps = m.env.policy->caps(FileKind::Plugin, hash, name);
     if (caps == 0) return refuse(std::format("{} may not load: {}", name, m.env.policy->refusal(FileKind::Plugin)));
     // The server's own library is native code with the player's rights: it loads only once the player allowed these
     // bytes for this server. Until then it waits for the answer (the game goes on); a refused one is asked about
     // again only when the player loads it. A script or plugin never puts the question up: it could, at will.
-    if (m.asks(*file)) {
+    if (m.asks(*file, hash)) {
         const Consent c = m.consent_for(hash);
         if (c != Consent::Allowed) {
             if (asker == Asker::Script)
@@ -2425,6 +2430,16 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
 
 bool NativePlugins::unload(std::string_view name) {
     Impl& m = *impl_;
+    if (const Loaded* l = m.find(name); l && m.env.policy &&
+        m.env.policy->required_file(FileKind::Plugin, l->hash)) {
+        m.say("[Plugin] " + l->name + " is required by this server: it stays loaded");
+        return false;
+    }
+    return unload_file(name);
+}
+
+bool NativePlugins::unload_file(std::string_view name) {
+    Impl& m = *impl_;
     auto it = std::find_if(m.loaded.begin(), m.loaded.end(), [&](const auto& l) { return iequal(l->name, name); });
     if (it == m.loaded.end()) return false;
     if ((*it)->busy) { // the plugin asked from its own code: not under its feet
@@ -2442,20 +2457,20 @@ bool NativePlugins::unload(std::string_view name) {
 void NativePlugins::unload_all() {
     std::vector<std::string> names;
     for (const auto& l : impl_->loaded) names.push_back(l->name);
-    for (auto it = names.rbegin(); it != names.rend(); ++it) unload(*it);
+    for (auto it = names.rbegin(); it != names.rend(); ++it) unload_file(*it);
 }
 
 void NativePlugins::policy_changed(const std::vector<std::string>& autoload) {
     Impl& m = *impl_;
     std::vector<std::string> drop, revoked;
     for (auto& l : m.loaded) {
-        std::uint32_t caps = m.env.policy ? m.env.policy->caps(FileKind::Plugin, l->hash) : 0;
+        std::uint32_t caps = m.env.policy ? m.env.policy->caps(FileKind::Plugin, l->hash, l->name) : 0;
         if (caps == 0) {
             drop.push_back(l->name);
             continue;
         }
         // The player took back the permission for the server's plugin.
-        if (m.asks(l->file) && m.consent_for(l->hash) != Consent::Allowed) {
+        if (m.asks(l->file, l->hash) && m.consent_for(l->hash) != Consent::Allowed) {
             revoked.push_back(l->name);
             continue;
         }
@@ -2473,13 +2488,14 @@ void NativePlugins::policy_changed(const std::vector<std::string>& autoload) {
     }
     for (const auto& n : drop) {
         m.say("[Plugin] " + n + ": it may not run here");
-        unload(n);
+        unload_file(n);
     }
     for (const auto& n : revoked) {
         m.say("[Plugin] " + n + ": you no longer allow it on this server");
-        unload(n);
+        unload_file(n);
     }
     if (!m.env.policy || !m.env.policy->received()) {
+        m.required.clear();
         if (!m.pending.empty()) ++m.consent_serial;
         m.pending.clear(); // nothing runs out of the world: no question either
         return;
@@ -2487,6 +2503,9 @@ void NativePlugins::policy_changed(const std::vector<std::string>& autoload) {
     // The server's own plugins always load; the player's those `autoload` names.
     bool all = std::find(autoload.begin(), autoload.end(), "*") != autoload.end();
     const auto found = list();
+    m.required.clear();
+    if (m.env.policy->current() && !m.env.policy->current()->provisional)
+        m.required = m.env.policy->required_entries(FileKind::Plugin);
     // A question about a plugin that may no longer run, or whose bytes changed, goes.
     const auto before = m.pending.size();
     std::erase_if(m.pending, [&](const ConsentFile& p) {
@@ -2498,10 +2517,50 @@ void NativePlugins::policy_changed(const std::vector<std::string>& autoload) {
     for (const Info& i : found) {
         if (i.loaded || i.caps == 0) continue;
         if (i.asks && i.consent == Consent::Denied) continue; // the player said no: not asked again at each zone-in
-        bool wanted = i.server || all ||
+        const auto hash = parse_sha256(i.sha256);
+        const bool required = hash && std::any_of(m.required.begin(), m.required.end(), [&](const auto& entry) {
+            return iequal(entry.first, i.name) && entry.second == *hash;
+        });
+        bool wanted = i.server || required || all ||
                       std::any_of(autoload.begin(), autoload.end(), [&](const std::string& a) { return iequal(a, i.name); });
         if (wanted) load_file(i.name, nullptr, Asker::Rules);
     }
+}
+
+bool NativePlugins::required_addons_ready(std::string* problem) const {
+    if (problem) problem->clear();
+    const Impl& m = *impl_;
+    if (!m.env.policy || !m.env.policy->current()) return true;
+    const auto& rules = *m.env.policy->current();
+    if (!rules.addons.enabled || rules.provisional) return true;
+    auto fail = [&](std::string text) {
+        if (problem) *problem = std::move(text);
+        return false;
+    };
+    for (const auto& l : m.loaded)
+        if (m.env.policy->caps(FileKind::Plugin, l->hash, l->name) == 0)
+            return fail(l->name + " is still loaded but is not allowed by this server");
+    for (const auto& entry : m.required) {
+        const auto& name = entry.first;
+        const auto& hash = entry.second;
+        if (m.env.policy->caps(FileKind::Plugin, hash, name) == 0)
+            return fail("Required add-on " + name + " is not permitted by this server's rules");
+        const Loaded* l = m.find(name);
+        if (l && l->hash != hash)
+            return fail("Required add-on " + name + " is shadowed by a different plugin");
+        const Consent consent = m.consent_for(hash);
+        if (consent == Consent::Denied) return fail("Required add-on " + name + " was not approved");
+        if (consent == Consent::Unasked) {
+            if (std::any_of(m.pending.begin(), m.pending.end(), [&](const ConsentFile& p) { return p.sha256 == hash; }))
+                return false;
+            return fail("Required add-on " + name + " needs your approval");
+        }
+        if (l && l->hash == hash && l->caps != 0) continue;
+        for (const auto& f : m.failures)
+            if (iequal(f.name, name)) return fail("Required add-on " + name + ": " + f.error);
+        return fail("Required add-on " + name + " did not load");
+    }
+    return true;
 }
 
 void NativePlugins::set_server_dir(const fs::path& dir) {

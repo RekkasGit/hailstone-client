@@ -468,6 +468,129 @@ TEST_CASE("native plugins: the player's own plugins do not ask") {
     CHECK_FALSE(fs::exists(profile / plugin::kApprovalsName));
 }
 
+TEST_CASE("native plugins: required managed plugins autoload with consent and stay loaded") {
+    Host h;
+    const fs::path profile = h.world.dir / "servers" / "required";
+    fs::create_directories(profile / "plugins");
+    h.plugins->set_server_dir(profile / "plugins");
+    auto rules = plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\ndefault = deny\n"
+                                          "required = owner/example\n");
+    rules.dir = profile;
+    h.policy.set_ceilings({{plugin::FileKind::Plugin, h.hash(), plugin::kCapAll, "MQ2Example", "owner/example"}});
+    h.policy.set(rules);
+    h.plugins->policy_changed({}); // neither autoload nor a server-delivered file
+    REQUIRE(h.plugins->consent());
+    CHECK_FALSE(h.plugins->loaded("MQ2Example"));
+    std::string problem;
+    CHECK_FALSE(h.plugins->required_addons_ready(&problem));
+    CHECK(problem.empty());
+    h.plugins->answer_consent(false);
+    CHECK_FALSE(h.plugins->required_addons_ready(&problem));
+    CHECK(problem.find("not approved") != std::string::npos);
+    CHECK_FALSE(h.plugins->load("MQ2Example")); // the player's explicit retry asks again
+    REQUIRE(h.plugins->consent());
+    h.plugins->answer_consent(true);
+    REQUIRE(h.plugins->loaded("MQ2Example"));
+    CHECK(h.plugins->required_addons_ready(&problem));
+    CHECK(problem.empty());
+    CHECK_FALSE(h.plugins->unload("MQ2Example"));
+    h.run("/plugin MQ2Example unload");
+    CHECK(h.plugins->loaded("MQ2Example"));
+    rules.addons.required.clear();
+    rules.addons.block = {"owner/example"};
+    h.policy.set(rules);
+    CHECK_FALSE(h.plugins->required_addons_ready(&problem)); // the loaded plugin must retire first
+    h.plugins->policy_changed({});
+    CHECK_FALSE(h.plugins->loaded("MQ2Example"));
+    CHECK(h.plugins->required_addons_ready());
+}
+
+TEST_CASE("native plugins: named blocks apply to hand-installed plugins") {
+    Host h;
+    h.policy.set(plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\ndefault = allow\n"
+                                          "block = MQ2Example\n"));
+    CHECK(h.plugins->list().front().caps == 0);
+    CHECK_FALSE(h.plugins->load("mq2example"));
+    CHECK_FALSE(h.plugins->loaded("MQ2Example"));
+    CHECK_FALSE(h.plugins->consent());
+}
+
+TEST_CASE("native plugins: a required hash also supplied by a blocked add-on refuses readiness without consent") {
+    Host h;
+    h.policy.set_ceilings({{plugin::FileKind::Plugin, h.hash(), plugin::kCapAll, "MQ2Example", "owner/needed"},
+                          {plugin::FileKind::Plugin, h.hash(), plugin::kCapAll, "blocked", "owner/blocked"}});
+    h.policy.set(plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\ndefault = deny\n"
+                                         "required = owner/needed\nblock = owner/blocked\n"));
+    h.plugins->policy_changed({});
+    CHECK_FALSE(h.plugins->loaded("MQ2Example"));
+    CHECK_FALSE(h.plugins->consent());
+    std::string problem;
+    CHECK_FALSE(h.plugins->required_addons_ready(&problem));
+    CHECK(problem.find("not permitted") != std::string::npos);
+}
+
+TEST_CASE("native plugins: missing or shadowed required libraries cannot disappear from readiness checks") {
+    Host h;
+    const auto expected = h.hash();
+    const fs::path profile = h.world.dir / "servers/required";
+    fs::create_directories(profile / "plugins");
+    h.plugins->set_server_dir(profile / "plugins");
+    auto rules = plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\ndefault = deny\n"
+                                          "required = owner/example\nallow = MQ2Example\n");
+    h.policy.set_ceilings({{plugin::FileKind::Plugin, expected, plugin::kCapAll, "MQ2Example", "owner/example"}});
+    SUBCASE("the managed library is missing") {
+        fs::remove(h.file);
+    }
+    SUBCASE("a different server library shadows the managed entry") {
+        const fs::path shadow = profile / "plugins" / h.file.filename();
+        fs::copy_file(h.file, shadow);
+        std::ofstream(shadow, std::ios::binary | std::ios::app) << "different bytes";
+        std::ifstream f(shadow, std::ios::binary);
+        const auto hash = sha256(std::string(std::istreambuf_iterator<char>(f), {}));
+        rules.server_files.push_back({plugin::FileKind::Plugin, "plugins/" + shadow.filename().string(), hash});
+    }
+    h.policy.set(rules);
+    h.plugins->policy_changed({});
+    CHECK_FALSE(h.plugins->loaded("MQ2Example"));
+    std::string problem;
+    CHECK_FALSE(h.plugins->required_addons_ready(&problem));
+    CHECK_FALSE(problem.empty());
+}
+
+TEST_CASE("native plugins: dismissing required consent reports a failure instead of waiting without a prompt") {
+    Host h;
+    const fs::path profile = h.world.dir / "servers" / "required";
+    fs::create_directories(profile / "plugins");
+    h.plugins->set_server_dir(profile / "plugins");
+    auto rules = plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\nrequired = MQ2Example\n");
+    h.policy.set_ceilings({{plugin::FileKind::Plugin, h.hash(), plugin::kCapAll, "MQ2Example", "owner/example"}});
+    h.policy.set(rules);
+    h.plugins->policy_changed({});
+    REQUIRE(h.plugins->consent());
+    h.plugins->answer_consent(std::nullopt);
+    CHECK_FALSE(h.plugins->consent());
+    std::string problem;
+    CHECK_FALSE(h.plugins->required_addons_ready(&problem));
+    CHECK(problem.find("needs your approval") != std::string::npos);
+}
+
+TEST_CASE("native plugins: a required plugin initialization failure prevents readiness after consent") {
+    Host h(false, nullptr, HAILSTONE_PROBE_THROW_PLUGIN);
+    const fs::path profile = h.world.dir / "servers" / "required";
+    fs::create_directories(profile / "plugins");
+    h.plugins->set_server_dir(profile / "plugins");
+    auto rules = plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\nrequired = HostProbeThrow\n");
+    h.policy.set_ceilings({{plugin::FileKind::Plugin, h.hash(), plugin::kCapAll, "HostProbeThrow", "owner/throw"}});
+    h.policy.set(rules);
+    h.plugins->policy_changed({});
+    REQUIRE(h.plugins->consent());
+    h.plugins->answer_consent(true);
+    CHECK_FALSE(h.plugins->loaded("HostProbeThrow"));
+    std::string problem;
+    CHECK_FALSE(h.plugins->required_addons_ready(&problem));
+    CHECK(problem.find("InitializePlugin failed") != std::string::npos);
+}
+
 TEST_CASE("native plugins: a binary in the plugin's own folder under plugins/") {
     Host h(true);
     auto all = h.plugins->list();

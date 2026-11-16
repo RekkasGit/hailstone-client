@@ -126,7 +126,8 @@ std::vector<plugin::Ceiling> addon_ceilings(const std::vector<InstalledAddon>& a
 // The ceilings of the data folder's add-ons: addon_ceilings of the records that read, and a ceiling of no
 // capabilities on each Lua file and library now in the folder of an add-on whose record does not
 // (AddonRegistry::unreadable), each logged.
-std::vector<plugin::Ceiling> addon_ceilings(const std::filesystem::path& data_dir);
+// Only an opted-in server needs the additional scan of readable add-ons for changed/extra code identities.
+std::vector<plugin::Ceiling> addon_ceilings(const std::filesystem::path& data_dir, bool scan_for_enforcement = false);
 
 // First thing at start: an install or a removal that was cut off is undone, and what it left in new/ and previous/
 // goes. A lost or damaged installed.txt is written again from its backup when that has every add-on it names; else

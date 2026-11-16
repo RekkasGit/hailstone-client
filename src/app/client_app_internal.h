@@ -10,6 +10,7 @@
 #include "platform/process.h"
 #include "core/step_clock.h"
 #include "app/addon_manager.h"
+#include "app/addon_requirements.h"
 #include "app/addon_suggest.h"
 #include "app/window_icon.h"
 #include "app/automation.h"
@@ -316,7 +317,7 @@ public:
         } token_login_worker;
         if (opts_.login_launch.token_requested) {
             start_token_login(named_server, eqhost);
-            token_login_worker.thread = std::thread([pending = login_.get(), &token_login_worker] {
+            if (login_) token_login_worker.thread = std::thread([pending = login_.get(), &token_login_worker] {
                 try {
                     while (!token_login_worker.stop.load(std::memory_order_relaxed)) {
                         pending->update();
@@ -631,6 +632,14 @@ private:
     void start_addons();
     void update_addons();
     void addons_login_action(ui::LoginAction action);
+    std::vector<RequiredAddonCandidate> addon_requirement_candidates(const plugin::Rules& rules,
+                                                                     bool verify_files = true) const;
+    // Cached policy before every login route; fresh policy before the world is shown. No code is installed here.
+    bool addon_login_allowed(const ServerProfile& profile);
+    bool addon_world_allowed();
+    void show_addon_requirement(const std::vector<AddonRequirementProblem>& problems, std::string message);
+    // The upscaler loaded at startup must be allowed, and a required provider must be selected and loaded.
+    std::string upscaler_addon_problem(const plugin::Rules& rules) const;
     // Starts the installed tool add-on `name` (tools/<name>/, docs/addons.md), told the data folder; false with
     // *error why not (not installed, its program gone, or the system would not start it).
     bool start_addon_tool(std::string_view name, std::string* error);
@@ -1117,6 +1126,8 @@ private:
     std::vector<ServerAddon> server_addons_;
     std::vector<ManualAddon> manual_addons_;
     plugin::Rules addons_rules_;
+    std::uint32_t addon_rules_checked_serial_ = ~0u;
+    bool addon_rules_wait_frame_ = false;
     // Suggested add-ons (app/addon_suggest.h): the picked server's, as the login screen shows them, and those put
     // away for this run (by profile and addon_repo_key).
     std::vector<AddonSuggestion> suggestions_;
