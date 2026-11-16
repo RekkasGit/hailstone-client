@@ -1765,16 +1765,24 @@ This is a deliberate display addition; it changes no spell rules, filters or cha
 original's six melee report helpers (`0x4f7d70..0x4f8270`) confirm modes 0/1/2 select the display while a separate
 `OutputTextToLog` call receives the original full input. The spell branch of `ReportSuccessfulHit` (`0x52ee40`)
 bypasses those mode helpers. Recognition of the new spell display forms uses
-OP_FormattedMessage's string id and validated numeric substitutions (`game::spell_message_hit_report`), never a
-scan of the rendered sentence. Direct damage uses ids 9073, 434 and 12481, critical blasts 428/1040; DoTs
+OP_FormattedMessage's string id and validated numeric substitutions (`game::spell_message_hit_report`). Direct
+damage uses ids 9073, 434 and 12481, critical blasts 428/1040; DoTs
 9072/12954/13327; heals 9068/419, critical heals 427/1039; HoTs 12976/12997/12998. The legacy non-melee messages
 434/12481 also include damage shields when the server sends them that way. Critical healing has no direct/tick
 discriminator in these messages, so both use **Healing**. A critical sends its own notice (428/1040, 427/1039) beside the hit line, so **Number Only** shows two bare numbers for one crit: the crit's amount and the hit's. Chat hooks (`OnIncomingChat`, `OnFilterChat`, `mq.event`) get the full sentence whatever the mode, unlike MQ's hook on `dsp_chat`, which sees the line as displayed (docs/plugins.md). Incoming/observer DoTs omit ambiguous caster/spell
 substitutions from the abbreviation rather than assigning the names incorrectly.
 
+Some servers send a complete English combat sentence in OP_FormattedMessage's generic string 6688 (`%1`) or an
+unnamed, unjournaled OP_SpecialMesg with speak mode and language zero. These also follow spell hit modes when the
+message type is a known combat type and the entire text matches a non-melee hit or healing report with a valid
+amount (`game::spell_text_hit_report`). An optional spell name in parentheses remains in Abbreviated display.
+Ordinary dialogue, unrelated message types, malformed amounts and unrecognised or translated sentences stay full.
+An explicit DoT message type selects Damage Over Time; generic healing has no direct/tick discriminator and
+follows Healing. No nearby casts, buffs or spell names are used to guess whether a report is periodic.
+
 An OP_Damage spell landing on the player with nonzero signed damage also follows Direct Spell Damage or Healing.
 Another target's landing text contains no amount, and zero-damage landings, casts, buffs, resists, unknown ids,
-malformed numeric arguments and raw text messages retain their full sentence. No extra damage or heal is inferred.
+malformed numeric arguments and unmatched raw text retain their full sentence. No extra damage or heal is inferred.
 Both `/log` and the diagnostic log receive the full line, once, before its display form is queued, including for
 the existing melee hit and miss modes. Incoming-chat hooks also receive full text so parsers keep working; a hook
 that rewrites a line supplies its replacement for the display and log as before. Unit tests cover decoded packets,
