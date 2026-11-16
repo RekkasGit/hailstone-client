@@ -153,6 +153,7 @@ add_library(hailstone_engine STATIC
   src/render/atmosphere.cpp
   src/render/clouds.cpp
   src/render/horizon.cpp
+  src/render/tree_impostor.cpp
   src/render/ambient_probe.cpp
   src/render/shadows.cpp
   src/render/light_grid.cpp
@@ -1172,6 +1173,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/sky_colours_test.cpp
     tests/scene_light_test.cpp
     tests/horizon_test.cpp
+    tests/tree_impostor_test.cpp
     tests/collision_test.cpp
     tests/nav_test.cpp
     tests/map_data_test.cpp
