@@ -764,10 +764,10 @@ and say so in the chat window.
 - `get_target_buff_data_bulk`: the current target's buffs, the ones the target window shows (what `OP_TargetBuffs`
   last gave for that spawn), one record per buff the server sent, in the order the client keeps them, each with its
   slot. EQEmu sends only the slots that hold a spell, in slot order, and resends the whole list when one fades, so
-  against it the records are packed (no empty ones) and the slot numbers can skip. 0 bytes with no target, or while
-  the buffs the client holds are still another
-  spawn's (the server has not yet sent the new target's; EQEmu sends them only where the target window shows buffs,
-  so an NPC target on a server without that shows none). Each record is a fixed part
+  against it the records are packed (no empty ones) and the slot numbers can skip; an entry with no spell is left
+  out in any case. 0 bytes with no target, or while the buffs the client holds are still another spawn's (the server
+  has not yet sent the new target's; EQEmu sends them only where the target window shows buffs, so an NPC target on
+  a server without that shows none). Each record is a fixed part
   (`HS_Bulk_TargetBuffFixedRecord`, `HAILSTONE_TARGET_BUFF_RECORD_SIZE` = 20 bytes) followed at once by the caster's
   name, `casterNameLength` bytes with no terminating NUL; the next record starts after the name, so walk them one by
   one rather than by a fixed stride. Records are written as many as fit in `out_size`, each whole with its name; the
@@ -776,10 +776,10 @@ and say so in the chat window.
 
   | Offset | Type | Field |
   |---|---|---|
-  | 0 | i32 | spell id; 0 an entry with no spell, whose other fields are all 0 (and no name follows) |
+  | 0 | i32 | spell id (never 0: entries with no spell are left out) |
   | 4 | i32 | tics left: the server's count less the 6 s ticks since it came; a permanent buff negative, as above |
   | 8 | i32 | the spell's type: 0 detrimental, 1 beneficial, 2 beneficial group-only (0 for a spell not in spells_us.txt) |
-  | 12 | i32 | the target's buff slot, as the server sent it (EQEmu: the mob's own slot index, not mapped to RoF2's); 0 in an empty entry, so test the spell id first |
+  | 12 | i32 | the target's buff slot, as the server sent it (EQEmu: the mob's own slot index, not mapped to RoF2's) |
   | 16 | i32 | `casterNameLength`: the bytes of the caster's name that follow; 0 when the server sent none |
   | 20 | bytes | the caster's name, `casterNameLength` bytes |
 

@@ -1486,9 +1486,9 @@ int32_t h_get_pet_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
 /// <summary>
 /// The current target's buffs in one call, as OP_TargetBuffs last gave them (the target window's), in the order the
 /// client keeps them, each with the slot the server sent: an HS_Bulk_TargetBuffFixedRecord followed by its caster's
-/// name, casterNameLength bytes with
-/// no NUL. Only whole records go out; as many as fit. Nothing without a target, or when the buffs the client holds
-/// are another spawn's (the server has not sent the new target's yet).
+/// name, casterNameLength bytes with no NUL. An entry with no spell is left out. Only whole records go out; as many
+/// as fit. Nothing without a target, or when the buffs the client holds are another spawn's (the server has not sent
+/// the new target's yet).
 /// </summary>
 /// <param name="h">host</param>
 /// <param name="data">buffer to put data in</param>
@@ -1511,14 +1511,9 @@ int32_t h_get_target_buff_data_bulk(void* h, unsigned char* data, int32_t datama
     const game::SpellTable& spells = c->spell_table();
     const std::int64_t now = net::GameConnection::now_ms(); // for the ticks left
     for (const auto& [slot, b] : st.target_buffs) {
-        if (b.empty()) {
-            // An empty entry: the fixed part all zeros (its slot and name length too), and no name after it.
-            if (fixedBytes > static_cast<std::size_t>(datamax) - bufferSize) break; // buffer is full
-            *reinterpret_cast<HS_BulkTargetBuffFixedRecord*>(pBuffer) = HS_BulkTargetBuffFixedRecord{};
-            pBuffer += fixedBytes;
-            bufferSize += fixedBytes;
-            continue;
-        }
+        // The decoder drops removed entries (0xffffffff) and EQEmu sends only valid spells, so an entry with no
+        // spell is not expected; skip it, as spawn_buffs (tlo_game.cpp) and the target window do.
+        if (b.empty()) continue;
         const std::size_t nameBytes = b.caster_name.size();
         // Buffer is full: only whole records go out (the name is part of the record).
         if (fixedBytes + nameBytes > static_cast<std::size_t>(datamax) - bufferSize) break;
