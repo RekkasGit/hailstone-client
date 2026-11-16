@@ -12,7 +12,9 @@
 //   /probetargetbuffs [n]  get_target_buff_data_bulk the same way, through HS_Bulk_TargetBuffFixedRecord and the
 //   caster's name after each
 //   /probeaas [n], /probediscs [n]  get_avail_aa_data_bulk / get_avail_disc_data_bulk the same way, through
-//   the int32_t count and HS_Bulk_Id_Str_Pair_Record
+//   the int32_t count and HAILSTONE_ID_NAME_RECORD
+//   /probebuffnames [n]  get_buff_name_data_bulk the same way, through HS_Bulk_BuffNameFixedRecord and the caster's
+//   name after each
 //   /probecursor   cursor_origin, when the host table has it
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
@@ -105,11 +107,41 @@ void probe_buffs(void*, const char* args) {
             ++empty;
             continue;
         }
-        WriteChatf("[Probe] buff slot %d: %d %d %d %d %d %d %d %u", static_cast<int>(slot), rec->ID, rec->casterID,
-            rec->duration, rec->hitcount, rec->spelltype, rec->counterType, rec->counterTotal,
-            static_cast<unsigned>(rec->slotType)); // HAILSTONE_BUFF_SLOT_*
+        WriteChatf("[Probe] buff slot %d: spell %d, caster %d, tics %d, hits %d, spell type %d, counter type %d, "
+                   "counters %d, slot type %u",
+            static_cast<int>(slot), rec->ID, rec->casterID, rec->duration, rec->hitcount, rec->spelltype,
+            rec->counterType, rec->counterTotal, static_cast<unsigned>(rec->slotType)); // HAILSTONE_BUFF_SLOT_*
     }
     WriteChatf("[Probe] buffs %d bytes, %d empty", r, empty);
+}
+
+static_assert(sizeof(HS_Bulk_BuffNameFixedRecord) == HAILSTONE_BUFF_NAME_RECORD_SIZE);
+
+// get_buff_name_data_bulk: the occupied slots one line each, as /probebuffs but with the caster's name; the empty
+// ones only counted. Each record is followed by its caster's name, so they are walked one by one.
+void probe_buff_names(void*, const char* args) {
+    unsigned char buf[8192]; // at least every buff and song slot (62 * HAILSTONE_BUFF_NAME_RECORD_SIZE plus the names)
+    const std::int32_t r = host->get_buff_name_data_bulk(host->host, buf, size_arg(args, sizeof buf));
+    const std::size_t size = r > 0 ? static_cast<std::size_t>(r) : 0;
+    std::size_t at = 0;
+    int empty = 0;
+    for (int slot = 0; size - at >= sizeof(HS_Bulk_BuffNameFixedRecord); ++slot) {
+        const auto* rec = reinterpret_cast<const HS_Bulk_BuffNameFixedRecord*>(buf + at);
+        at += sizeof(HS_Bulk_BuffNameFixedRecord);
+        const auto len = rec->casterNameLength > 0 ? static_cast<std::size_t>(rec->casterNameLength) : 0;
+        if (len > size - at) break; // a name running past the end: the "left" count shows it
+        const std::string caster(reinterpret_cast<const char*>(buf + at), len);
+        at += len;
+        if (rec->ID == 0) { // an empty slot: every field 0, including the counter type and the name length
+            ++empty;
+            continue;
+        }
+        WriteChatf("[Probe] buff name slot %d: spell %d, caster %s, tics %d, hits %d, spell type %d, counter type %d, "
+                   "counters %d, slot type %u",
+            slot, rec->ID, caster.empty() ? "-" : caster.c_str(), rec->duration, rec->hitcount, rec->spelltype,
+            rec->counterType, rec->counterTotal, static_cast<unsigned>(rec->slotType)); // HAILSTONE_BUFF_SLOT_*
+    }
+    WriteChatf("[Probe] buff names %d bytes, %d empty, %zu bytes left", r, empty, size - at);
 }
 
 void probe_pet_buffs(void*, const char* args) {
@@ -119,7 +151,7 @@ void probe_pet_buffs(void*, const char* args) {
     const auto* recs = reinterpret_cast<const HS_Bulk_PetBuffData*>(buf);
     for (std::size_t i = 0; i < count; ++i) {
         const HS_Bulk_PetBuffData* rec = recs + i;
-        WriteChatf("[Probe] pet buff: %d %d %d", rec->id, rec->duration, rec->spellType);
+        WriteChatf("[Probe] pet buff: spell %d, tics %d, spell type %d", rec->id, rec->duration, rec->spellType);
     }
     WriteChatf("[Probe] pet buffs %d bytes", r);
 }
@@ -165,8 +197,8 @@ void probe_spawns(void*, const char* args) {
         }
         at += rd.position();
 
-        WriteChatf("[Probe] spawn %d: %d %d %d %d %d %s", rec->id, rec->level, rec->classID, rec->raceID, rec->pctHPs,
-            rec->conColorID, name.c_str());
+        WriteChatf("[Probe] spawn %d: level %d, class %d, race %d, hp %d%%, con %d, name %s", rec->id, rec->level,
+            rec->classID, rec->raceID, rec->pctHPs, rec->conColorID, name.c_str());
     }
     WriteChatf("[Probe] spawns %u, player %.2f %.2f %.2f, %zu bytes left", header->spawnCount,
         header->playerX, header->playerY, header->playerZ, size - at);
@@ -181,8 +213,8 @@ void probe_xtargets(void*, const char* args) {
     const auto* recs = reinterpret_cast<const HS_Bulk_XTargetData*>(buf);
     for (std::size_t slot = 0; slot < count; ++slot) {
         const HS_Bulk_XTargetData* rec = recs + slot;
-        WriteChatf("[Probe] xtarget %d: %d %d %d %d", static_cast<int>(slot), rec->targetType, rec->id,
-            rec->aggroPct, rec->pctHPs);
+        WriteChatf("[Probe] xtarget %d: type %d, spawn %d, aggro %d%%, hp %d%%", static_cast<int>(slot),
+            rec->targetType, rec->id, rec->aggroPct, rec->pctHPs);
     }
     WriteChatf("[Probe] xtargets %d bytes", static_cast<int>(r));
 }
@@ -221,14 +253,14 @@ void probe_target_buffs(void*, const char* args) {
         if (len > size - at) break; // a name running past the end: the "left" count shows it
         const std::string caster(reinterpret_cast<const char*>(buf + at), len);
         at += len;
-        WriteChatf("[Probe] target buff slot %d: %d %d %d %s", rec->slot, rec->spellID, rec->duration, rec->spellType,
-            caster.empty() ? "-" : caster.c_str());
+        WriteChatf("[Probe] target buff slot %d: spell %d, tics %d, spell type %d, caster %s", rec->slot, rec->spellID,
+            rec->duration, rec->spellType, caster.empty() ? "-" : caster.c_str());
     }
     WriteChatf("[Probe] target buffs %d bytes, %d records, %d empty, %zu bytes left", static_cast<int>(r), count,
         empty, size - at);
 }
 
-static_assert(sizeof(HS_Bulk_Id_Str_Pair_Record) == HAILSTONE_ID_RECORD_SIZE);
+static_assert(sizeof(HAILSTONE_ID_NAME_RECORD) == HAILSTONE_ID_NAME_RECORD_SIZE);
 
 // get_avail_aa_data_bulk, the owned alternate abilities: each record one line by its position (id, name), then the
 // count, the bytes and the bytes left over after the records it counts (0 when the count and every name are framed
@@ -253,14 +285,15 @@ void probe_aa(void*, const char* args) {
     std::memcpy(&count, buf, sizeof count); // a plain int32_t, unaligned in general
     std::size_t at = sizeof count;
     for (std::int32_t i = 0; i < count; ++i) {
-        if (size - at < sizeof(HS_Bulk_Id_Str_Pair_Record)) break; // a count past the bytes: the "left" count shows it
-        const auto* rec = reinterpret_cast<const HS_Bulk_Id_Str_Pair_Record*>(buf + at);
+        if (size - at < sizeof(HAILSTONE_ID_NAME_RECORD)) break; // a count past the bytes: the "left" count shows it
+        const auto* rec = reinterpret_cast<const HAILSTONE_ID_NAME_RECORD*>(buf + at);
         const std::size_t len = rec->nameSize > 0 ? static_cast<std::size_t>(rec->nameSize) : 0;
-        if (len > size - at - sizeof(HS_Bulk_Id_Str_Pair_Record)) break; // a name running past the end
-        at += sizeof(HS_Bulk_Id_Str_Pair_Record);
+        if (len > size - at - sizeof(HAILSTONE_ID_NAME_RECORD)) break; // a name running past the end
+        at += sizeof(HAILSTONE_ID_NAME_RECORD);
         const std::string name(reinterpret_cast<const char*>(buf + at), len);
         at += len;
-        WriteChatf("[Probe] aas %d: %d %s", static_cast<int>(i), rec->id, name.empty() ? "-" : name.c_str());
+        WriteChatf("[Probe] aas %d: ability %d, name %s", static_cast<int>(i), rec->id,
+            name.empty() ? "-" : name.c_str());
     }
     WriteChatf("[Probe] aas count %d, %d bytes, %zu bytes left", static_cast<int>(count), static_cast<int>(r),
         size - at);
@@ -289,14 +322,15 @@ void probe_disc(void*, const char* args) {
     std::memcpy(&count, buf, sizeof count); // a plain int32_t, unaligned in general
     std::size_t at = sizeof count;
     for (std::int32_t i = 0; i < count; ++i) {
-        if (size - at < sizeof(HS_Bulk_Id_Str_Pair_Record)) break; // a count past the bytes: the "left" count shows it
-        const auto* rec = reinterpret_cast<const HS_Bulk_Id_Str_Pair_Record*>(buf + at);
+        if (size - at < sizeof(HAILSTONE_ID_NAME_RECORD)) break; // a count past the bytes: the "left" count shows it
+        const auto* rec = reinterpret_cast<const HAILSTONE_ID_NAME_RECORD*>(buf + at);
         const std::size_t len = rec->nameSize > 0 ? static_cast<std::size_t>(rec->nameSize) : 0;
-        if (len > size - at - sizeof(HS_Bulk_Id_Str_Pair_Record)) break; // a name running past the end
-        at += sizeof(HS_Bulk_Id_Str_Pair_Record);
+        if (len > size - at - sizeof(HAILSTONE_ID_NAME_RECORD)) break; // a name running past the end
+        at += sizeof(HAILSTONE_ID_NAME_RECORD);
         const std::string name(reinterpret_cast<const char*>(buf + at), len);
         at += len;
-        WriteChatf("[Probe] discs %d: %d %s", static_cast<int>(i), rec->id, name.empty() ? "-" : name.c_str());
+        WriteChatf("[Probe] discs %d: spell %d, name %s", static_cast<int>(i), rec->id,
+            name.empty() ? "-" : name.c_str());
     }
     WriteChatf("[Probe] discs count %d, %d bytes, %zu bytes left", static_cast<int>(count), static_cast<int>(r),
         size - at);
@@ -327,6 +361,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probetcp", probe_tcp, nullptr);
     AddCommand("/probetcpsend", probe_tcp_send, nullptr);
     AddCommand("/probebuffs", probe_buffs, nullptr);
+    AddCommand("/probebuffnames", probe_buff_names, nullptr);
     AddCommand("/probepetbuffs", probe_pet_buffs, nullptr);
     AddCommand("/probespawns", probe_spawns, nullptr);
     AddCommand("/probextargets", probe_xtargets, nullptr);
@@ -347,6 +382,7 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probetcp");
     RemoveCommand("/probetcpsend");
     RemoveCommand("/probebuffs");
+    RemoveCommand("/probebuffnames");
     RemoveCommand("/probepetbuffs");
     RemoveCommand("/probespawns");
     RemoveCommand("/probextargets");

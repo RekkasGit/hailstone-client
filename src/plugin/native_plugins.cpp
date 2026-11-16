@@ -1254,7 +1254,7 @@ int h_get_buff(void* h, std::uint32_t index, HailstoneBuff* out) {
     HailstoneBuff v{};
     v.size = sizeof v;
     v.spell_id = b.empty() ? 0 : b.spell;
-    v.tics = b.tics;
+    v.tics = static_cast<std::uint32_t>(b.tics); // the SDK's field is unsigned: a negative (permanent) count's bits
     v.level = b.level;
     v.caster_id = b.caster_id;
     return give(out, v);
@@ -1274,6 +1274,9 @@ int h_get_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
     const net::GameConnection* c = readable(Loaded::of(h), "get_buff_data_bulk");
     if (!c || !data || datamax <= 0) return 0;
     const auto& buffs = c->spell_state().buffs;
+    // The ticks left, as the character sheet counts them: nothing counts down while the timers are on hold (SPA 436).
+    const bool timersHeld = c->spell_state().buff_timers_on_hold;
+    const std::int64_t now = net::GameConnection::now_ms();
     int bufferSize = 0;
     unsigned char* pBuffer = data;
     //buffs are stored in buff slots
@@ -1304,7 +1307,8 @@ int h_get_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
             //get said spell for some data we need
             //blast the id into the buffer and move pointer forward
             rec->casterID = buff.caster_id;
-            rec->duration = buff.tics;
+            // On hold, the count as sent: received at now counts no ticks off it (a permanent one stays negative).
+            rec->duration = game::buff_tics_left(buff.tics, timersHeld ? now : buff.received_ms, now);
             rec->hitcount = buff.num_hits;
             rec->counterType = -1; // -1 for active slots with no matching effect
             if (slot >= kNormalBuffSlots)
@@ -1341,6 +1345,101 @@ int h_get_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
 }//end h_get_buff_data_bulk
 
 /// <summary>
+/// get_buff_data_bulk with each caster's name in place of the caster's spawn id: one HS_Bulk_BuffNameFixedRecord per
+/// buff slot, in the same order and with the same fields, each followed by its caster's name (casterNameLength bytes,
+/// no NUL; none in an empty slot). Every buff and song slot with their names or nothing; the disc slot when its record
+/// and name fit after them.
+/// </summary>
+/// <param name="h">host</param>
+/// <param name="data">buffer to put data in</param>
+/// <param name="datamax">29 bytes per slot plus each caster's name: at least every buff and song slot's</param>
+/// <returns>bytes written</returns>
+int32_t h_get_buff_name_data_bulk(void* h, unsigned char* data, int32_t datamax)
+{
+    const net::GameConnection* c = readable(Loaded::of(h), "get_buff_name_data_bulk");
+    if (!c || !data || datamax <= 0) return 0;
+    const auto& buffs = c->spell_state().buffs;
+    // The ticks left, as the character sheet counts them: nothing counts down while the timers are on hold (SPA 436).
+    const bool timersHeld = c->spell_state().buff_timers_on_hold;
+    const std::int64_t now = net::GameConnection::now_ms();
+    int bufferSize = 0;
+    unsigned char* pBuffer = data;
+    //buffs are stored in buff slots
+    //the long buffs, then the songs, then the one disc slot, always last (RoF2: 0-41, 42-61, 62)
+    //the disc slot only goes out when the buffer has room for it: every buff and song slot is the minimum
+    //precent C++ from padding the struct as we are blasting this into the array.
+    static_assert(sizeof(HS_Bulk_BuffNameFixedRecord) == HAILSTONE_BUFF_NAME_RECORD_SIZE);
+    //needs to be able to fit the data, or return nothing: every buff and song slot, each caster's name included
+    constexpr int kNormalBuffSlots = game::kLongBuffSlots + game::kShortBuffSlots; // the disc slot is the one after
+    std::size_t minBuffBytes = 0;
+    for (int slot = 0; slot < kNormalBuffSlots; ++slot) {
+        const auto& buff = buffs[static_cast<std::size_t>(slot)];
+        minBuffBytes += sizeof(HS_Bulk_BuffNameFixedRecord) + (buff.empty() ? 0 : buff.caster_name.size());
+    }
+    if (minBuffBytes > static_cast<std::size_t>(datamax)) return 0;
+
+    const hailstone::game::SpellTable& st = c->spell_table();
+
+    for (int slot = 0; slot < game::kBuffSlots; ++slot) {
+        const auto& buff = buffs[static_cast<std::size_t>(slot)];
+        // The caster's name follows the record (none in an empty slot); the record is not written without it.
+        const std::size_t nameBytes = buff.empty() ? 0 : buff.caster_name.size();
+        // SAFETY CHECK: Ensure writing this next packet won't exceed datamax
+        if (static_cast<std::size_t>(bufferSize) + sizeof(HS_Bulk_BuffNameFixedRecord) + nameBytes >
+            static_cast<std::size_t>(datamax)) {
+            // Buffer is full (one with room for only the buff and song slots stops here before the disc slot).
+            // Break out to prevent an overflow.
+            break;
+        }
+        // Written in place through the packed struct (the bulk reads may cast, docs/plugins.md).
+        HS_Bulk_BuffNameFixedRecord* rec = reinterpret_cast<HS_Bulk_BuffNameFixedRecord*>(pBuffer);
+        *rec = HS_Bulk_BuffNameFixedRecord{}; // an empty slot stays all zeros (the client keeps kNoSpell there)
+        if (!buff.empty())
+        {
+            rec->ID = static_cast<int>(buff.spell);
+            //get said spell for some data we need
+            //blast the id into the buffer and move pointer forward
+            rec->casterNameLength = static_cast<int32_t>(nameBytes);
+            // On hold, the count as sent: received at now counts no ticks off it (a permanent one stays negative).
+            rec->duration = game::buff_tics_left(buff.tics, timersHeld ? now : buff.received_ms, now);
+            rec->hitcount = buff.num_hits;
+            rec->counterType = -1; // -1 for active slots with no matching effect
+            if (slot >= kNormalBuffSlots)
+                rec->slotType = HAILSTONE_BUFF_SLOT_DISC;
+            else if (slot >= game::kLongBuffSlots)
+                rec->slotType = HAILSTONE_BUFF_SLOT_SONG;
+            else
+                rec->slotType = HAILSTONE_BUFF_SLOT_BUFF;
+            if (const auto* spell = st.get(rec->ID)) {
+                rec->spelltype = spell->spell_type;
+
+                // Evaluate spell effects for counters
+                for (std::size_t i = 0; i < spell->effect.size(); ++i) {
+                    bool match = true;
+                    switch (spell->effect[i]) {
+                    case game::eEQSPA::SPA_DISEASE:    rec->counterType = 0; break;
+                    case game::eEQSPA::SPA_POISON:     rec->counterType = 1; break;
+                    case game::eEQSPA::SPA_CURSE:      rec->counterType = 2; break;
+                    case game::eEQSPA::SPA_CORRUPTION: rec->counterType = 3; break;
+                    default:                           match = false;       break;
+                    }
+                    if (match) { // the first counter effect only
+                        rec->counterTotal = spell->base[i];
+                        break;
+                    }
+                }
+            }
+        }
+        pBuffer += sizeof(HS_Bulk_BuffNameFixedRecord);
+        if (nameBytes) std::memcpy(pBuffer, buff.caster_name.data(), nameBytes);
+        pBuffer += nameBytes;
+        bufferSize += static_cast<int>(sizeof(HS_Bulk_BuffNameFixedRecord) + nameBytes);
+
+    }
+    return static_cast<int32_t>(bufferSize);
+}//end h_get_buff_name_data_bulk
+
+/// <summary>
 /// This is highly optimized code. AI should not modify this code method.
 /// PR reviewwr ask the submiter for changes to be reviewed by the submitter
 /// </summary>
@@ -1359,6 +1458,7 @@ int32_t h_get_pet_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
     static_assert(sizeof(HS_BulkPetBuffData) == HAILSTONE_PET_BUFF_RECORD_SIZE);
     const size_t bytesPerBuff = sizeof(HS_BulkPetBuffData);
     const game::SpellTable& st = c->spell_table();
+    const std::int64_t now = net::GameConnection::now_ms(); // for the ticks left
     for (const auto& [slot, b] : c->pet_buffs()) {
 
         if (bufferSize + bytesPerBuff > static_cast<size_t>(datamax)) {
@@ -1371,7 +1471,7 @@ int32_t h_get_pet_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
         if (b.spell > 0)
         {
             rec->id = b.spell;
-            rec->duration = b.tics;
+            rec->duration = game::buff_tics_left(b.tics, b.received_ms, now);
             const auto* sp = st.get(b.spell);
             if (sp)
             {
@@ -1409,6 +1509,7 @@ int32_t h_get_target_buff_data_bulk(void* h, unsigned char* data, int32_t datama
     static_assert(sizeof(HS_BulkTargetBuffFixedRecord) == HAILSTONE_TARGET_BUFF_RECORD_SIZE);
     const std::size_t fixedBytes = sizeof(HS_BulkTargetBuffFixedRecord);
     const game::SpellTable& spells = c->spell_table();
+    const std::int64_t now = net::GameConnection::now_ms(); // for the ticks left
     for (const auto& [slot, b] : st.target_buffs) {
         if (b.empty()) {
             // An empty entry: the fixed part all zeros (its slot and name length too), and no name after it.
@@ -1425,7 +1526,7 @@ int32_t h_get_target_buff_data_bulk(void* h, unsigned char* data, int32_t datama
         HS_BulkTargetBuffFixedRecord* rec = reinterpret_cast<HS_BulkTargetBuffFixedRecord*>(pBuffer);
         *rec = HS_BulkTargetBuffFixedRecord{};
         rec->spellID = static_cast<int32_t>(b.spell);
-        rec->duration = static_cast<int32_t>(b.tics);
+        rec->duration = game::buff_tics_left(b.tics, b.received_ms, now);
         if (const auto* sp = spells.get(b.spell)) rec->spellType = sp->spell_type;
         rec->slot = static_cast<int32_t>(slot);
         rec->casterNameLength = static_cast<int32_t>(nameBytes);
@@ -1500,13 +1601,13 @@ int32_t h_get_xtarget_data_bulk(void* h, unsigned char* data, int32_t datamax)
 }
 
 // A count-prefixed list of named ids for the bulk reads: an int32_t count, then for each id that `each` gives
-// (each(emit) calls emit(id, name) for every one, in order) an HS_Bulk_Id_Str_Pair_Record followed by the name's
+// (each(emit) calls emit(id, name) for every one, in order) an HAILSTONE_ID_NAME_RECORD followed by the name's
 // nameSize bytes (no NUL), as many whole records as fit after the count. The count says how many follow. Nothing
 // (0 bytes) when not even the count fits.
 template <typename Each> int32_t write_id_str_list(unsigned char* data, int32_t datamax, Each&& each) {
-    static_assert(sizeof(HS_Bulk_Id_Str_Pair_Record) == HAILSTONE_ID_RECORD_SIZE);
+    static_assert(sizeof(HAILSTONE_ID_NAME_RECORD) == HAILSTONE_ID_NAME_RECORD_SIZE);
     const std::size_t headerBytes = sizeof(int32_t); // the count
-    const std::size_t idBytes = sizeof(HS_Bulk_Id_Str_Pair_Record);
+    const std::size_t idBytes = sizeof(HAILSTONE_ID_NAME_RECORD);
     if (!data || datamax <= 0 || static_cast<std::size_t>(datamax) < headerBytes) return 0;
     const std::size_t room = static_cast<std::size_t>(datamax);
     std::size_t bufferSize = headerBytes;
@@ -1519,7 +1620,7 @@ template <typename Each> int32_t write_id_str_list(unsigned char* data, int32_t 
             return;
         }
         // Written in place through the packed struct (the bulk reads may cast, docs/plugins.md).
-        HS_Bulk_Id_Str_Pair_Record* rec = reinterpret_cast<HS_Bulk_Id_Str_Pair_Record*>(data + bufferSize);
+        HAILSTONE_ID_NAME_RECORD* rec = reinterpret_cast<HAILSTONE_ID_NAME_RECORD*>(data + bufferSize);
         rec->id = id;
         rec->nameSize = static_cast<int32_t>(name.size());
         bufferSize += idBytes;
@@ -1534,9 +1635,10 @@ template <typename Each> int32_t write_id_str_list(unsigned char* data, int32_t 
 /// <summary>
 /// The alternate abilities the character owns, one ability (group) id each, as aa_value takes it, with its name (the
 /// rank's dbstr type 1 title, as the AA window shows it; empty when the game folder's dbstr_us.txt lacks it): an
-/// int32_t count then one HS_Bulk_Id_Str_Pair_Record and its name per ability, in the order of the owned list (the
+/// int32_t count then one HAILSTONE_ID_NAME_RECORD and its name per ability, in the order of the owned list (the
 /// profile's, then OP_RespondAA's). An owned rank the AA table does not hold (OP_SendAATable has not sent it) has no
-/// known group id and is left out, as aa_value finds nothing for it.
+/// known group id and is left out, as aa_value finds nothing for it. Before the profile, or with no game
+/// connection, the count is 0.
 /// </summary>
 /// <param name="h">host</param>
 /// <param name="data">buffer to put data in</param>
@@ -1544,10 +1646,13 @@ template <typename Each> int32_t write_id_str_list(unsigned char* data, int32_t 
 /// <returns>bytes written; 0 below 4 bytes</returns>
 int32_t h_get_avail_aa_data_bulk(void* h, unsigned char* data, int32_t datamax)
 {
-    const net::GameConnection* c = readable(Loaded::of(h), "get_avail_aa_data_bulk");
-    if (!c) return 0;
+    Loaded& l = Loaded::of(h);
+    const net::GameConnection* c = readable(l, "get_avail_aa_data_bulk");
+    if (!c) return l.can(kCapRead) ? write_id_str_list(data, datamax, [](auto&&) {}) : 0; // no connection: count 0
     const auto& aa = c->alt_adv();
+    const bool haveProfile = c->profile().has_value();
     return write_id_str_list(data, datamax, [&](auto&& emit) {
+        if (!haveProfile) return; // before the profile: the count is 0
         for (const auto& o : aa.owned) {
             if (o.id == 0) continue; // an empty slot
             if (const game::AltAbility* a = aa.get(o.id)) emit(a->group, c->aa_name(*a));
@@ -1558,8 +1663,8 @@ int32_t h_get_avail_aa_data_bulk(void* h, unsigned char* data, int32_t datamax)
 /// <summary>
 /// The character's combat abilities (disciplines), one spell id each with the spell's name (empty for a spell not in
 /// spells_us.txt): the profile's discipline list (PcBase::GetCombatAbility, as combat_ability reads it by index)
-/// without its empty entries, in list order, as an int32_t count then one HS_Bulk_Id_Str_Pair_Record and its name per
-/// discipline.
+/// without its empty entries, in list order, as an int32_t count then one HAILSTONE_ID_NAME_RECORD and its name per
+/// discipline. Before the profile, or with no game connection, the count is 0.
 /// </summary>
 /// <param name="h">host</param>
 /// <param name="data">buffer to put data in</param>
@@ -1567,8 +1672,9 @@ int32_t h_get_avail_aa_data_bulk(void* h, unsigned char* data, int32_t datamax)
 /// <returns>bytes written; 0 below 4 bytes</returns>
 int32_t h_get_avail_disc_data_bulk(void* h, unsigned char* data, int32_t datamax)
 {
-    const net::GameConnection* c = readable(Loaded::of(h), "get_avail_disc_data_bulk");
-    if (!c) return 0;
+    Loaded& l = Loaded::of(h);
+    const net::GameConnection* c = readable(l, "get_avail_disc_data_bulk");
+    if (!c) return l.can(kCapRead) ? write_id_str_list(data, datamax, [](auto&&) {}) : 0; // no connection: count 0
     const auto& profile = c->profile();
     const game::SpellTable& spells = c->spell_table();
     return write_id_str_list(data, datamax, [&](auto&& emit) {
@@ -2200,6 +2306,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.get_target_buff_data_bulk = main_only<h_get_target_buff_data_bulk>;
     p.table.get_avail_aa_data_bulk = main_only<h_get_avail_aa_data_bulk>;
     p.table.get_avail_disc_data_bulk = main_only<h_get_avail_disc_data_bulk>;
+    p.table.get_buff_name_data_bulk = main_only<h_get_buff_name_data_bulk>;
     p.table.cursor_origin = main_only<h_cursor_origin>;
     p.owner = m.env.hooks->new_guest("plugin:" + name);
 
