@@ -631,9 +631,11 @@ void NeighbourZones::finish(Job& job) {
         l.renderer->set_distant(true); // its part of the land round the zone
         l.renderer->set_debug_tint(debug_tint_);
         l.bytes = job.bytes;
-        log::info("neighbour zone {}: open sky {:.0f}%, prepared in {:.0f} ms on the loader, uploaded in {:.1f} ms: "
+        log::info("neighbour zone {}: open sky {:.0f}%, prepared in {:.0f} ms on the loader, uploaded in {:.1f} ms "
+                  "(uploads {:.1f}, descriptors {:.1f}, pipelines {:.1f}): "
                   "{} triangles, {} textures, {:.1f} MB, {} squares of the land round the zone",
-                  job.name, job.open_there * 100.0f, job.ms, ms_since(t0), l.renderer->stats().triangles,
+                  job.name, job.open_there * 100.0f, job.ms, ms_since(t0), l.renderer->stats().upload_ms,
+                  l.renderer->stats().descriptors_ms, l.renderer->stats().pipelines_ms, l.renderer->stats().triangles,
                   l.renderer->stats().textures, static_cast<double>(job.bytes) / (1024.0 * 1024.0), job.land_squares);
     } catch (const std::exception& e) {
         log::warn("neighbour zone {}: upload failed: {}", job.name, e.what());
