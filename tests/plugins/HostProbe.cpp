@@ -221,9 +221,10 @@ void probe_xtargets(void*, const char* args) {
 
 static_assert(sizeof(HS_Bulk_TargetBuffFixedRecord) == HAILSTONE_TARGET_BUFF_RECORD_SIZE);
 
-// Each occupied entry one line, by the buff slot the server sent (spell id, tics, spell type, caster's name); a
-// slot number skipped is one the server sent nothing for. The empty ones only counted, and only when laid out as empty (all zeros, no name). Then the bytes left over after
-// the last whole record (0 when every name is framed right). With n, also how many bytes past the first n the host
+// Each entry one line, by the buff slot the server sent (spell id, tics, spell type, caster's name); a slot number
+// skipped is one the server sent nothing for. An all-zero record (no spell, no name) is only counted as empty; the
+// host sends none, so the count shows one sent again. Then the bytes left over after the last whole record (0 when
+// every name is framed right). With n, also how many bytes past the first n the host
 // changed (guard bytes; 0 unless it wrote past the end).
 void probe_target_buffs(void*, const char* args) {
     unsigned char buf[2048];

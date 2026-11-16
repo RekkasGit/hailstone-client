@@ -938,8 +938,8 @@ TEST_CASE("native plugins: get_target_buff_data_bulk, laid out as docs/plugins.m
         return b;
     };
     sp.target_buffs_entity = 10;
-    // An entry with no spell (index 2) still holds a caster's name: it goes out as all zeros, without the name. The
-    // duration is the ticks left: the first came three ticks ago, 8 sent, 5 left.
+    // An entry with no spell (index 2), with a caster's name, is left out. The duration is the ticks left: the
+    // first came three ticks ago, 8 sent, 5 left.
     sp.target_buffs = {{3, target_buff(3002, 8, "Tester", 3)}, {0, target_buff(11, 1, "Groupie")},
                        {5, target_buff(0, 6, "Nobody")}, {7, target_buff(99999, 4, "")}};
     // In the order the client keeps them (the slots are not sent); a spell not known has type 0, no caster no name.
@@ -947,8 +947,8 @@ TEST_CASE("native plugins: get_target_buff_data_bulk, laid out as docs/plugins.m
     CHECK(h.printed_line("[Probe] target buff slot 3: spell 3002, tics 5, spell type 0, caster Tester"));
     CHECK(h.printed_line("[Probe] target buff slot 0: spell 11, tics 1, spell type 1, caster Groupie"));
     CHECK(h.printed_line("[Probe] target buff slot 7: spell 99999, tics 4, spell type 0, caster -"));
-    // 20+6, 20+7, 20 (the empty one: no slot, no name), 20+0
-    CHECK(h.printed_line("[Probe] target buffs 93 bytes, 4 records, 1 empty, 0 bytes left"));
+    // 20+6, 20+7, 20+0: the entry with no spell is not sent
+    CHECK(h.printed_line("[Probe] target buffs 73 bytes, 3 records, 0 empty, 0 bytes left"));
     // Only whole records, names included, go into a buffer too small for all, and nothing past its end.
     h.printed.clear();
     h.run("/probetargetbuffs 52");
@@ -960,11 +960,11 @@ TEST_CASE("native plugins: get_target_buff_data_bulk, laid out as docs/plugins.m
     h.run("/probetargetbuffs 53");
     CHECK(h.printed_line("[Probe] target buffs 53 bytes, 2 records, 0 empty, 0 bytes left"));
     CHECK(h.printed_line("[Probe] target buffs past the end 0"));
-    // The empty entry needs only its 20 bytes.
+    // The last record needs its 20 bytes: one byte short, it is left out.
     h.printed.clear();
-    h.run("/probetargetbuffs 73");
+    h.run("/probetargetbuffs 72");
     CHECK_FALSE(h.printed_line("[Probe] target buff slot 7: spell 99999, tics 4, spell type 0, caster -"));
-    CHECK(h.printed_line("[Probe] target buffs 73 bytes, 3 records, 1 empty, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] target buffs 53 bytes, 2 records, 0 empty, 0 bytes left"));
     CHECK(h.printed_line("[Probe] target buffs past the end 0"));
     h.printed.clear();
     h.run("/probetargetbuffs 19"); // not even one fixed part

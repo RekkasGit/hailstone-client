@@ -201,7 +201,7 @@ typedef struct HS_Bulk_PetBuffData {
  * each, immediately followed by casterNameLength bytes of the caster's name (no NUL); the next record starts after
  * them. */
 typedef struct HS_Bulk_TargetBuffFixedRecord {
-    int32_t spellID;          /* 0 for an entry with no spell, whose other fields are all 0 */
+    int32_t spellID;          /* the buff's spell; entries with no spell are not sent */
     int32_t duration;         /* tics left (the server's count less the 6 s ticks since); negative: permanent */
     int32_t spellType;        /* 0 detrimental, 1 beneficial, 2 beneficial group-only (0 for an unknown spell) */
     int32_t slot;             /* the target's buff slot, as the server sent it (EQEmu: the mob's own slot index) */
