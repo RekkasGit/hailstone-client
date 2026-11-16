@@ -513,8 +513,8 @@ ActorRenderer::MeshPlan ActorRenderer::plan_mesh(const assets::CharacterMesh& mo
         if (!m.tint_layer.empty()) pp.texture2 = TextureRef{m.tint_layer, false, TextureUse::Color, std::nullopt};
         pp.normal = {m.frames.front(), false, TextureUse::Data, assets::TextureMap::Normal};
         pp.rough = {m.frames.front(), false, TextureUse::Data, assets::TextureMap::Roughness};
-        part.native_surface = has_actor_surface(m.effect) || m.eqg_shader == assets::EqgShader::WaterFall ||
-                              m.eqg_shader == assets::EqgShader::Lava;
+        const bool lava = actor_lava_surface(m.eqg_shader); // Lava2 too, as material_state keeps its layers' alpha
+        part.native_surface = has_actor_surface(m.effect) || m.eqg_shader == assets::EqgShader::WaterFall || lava;
         if (part.native_surface) {
             part.surface = actor_surface(m.effect, 0, 0);
             pp.packed_normal = m.effect.packed_normal;
@@ -523,10 +523,10 @@ ActorRenderer::MeshPlan ActorRenderer::plan_mesh(const assets::CharacterMesh& mo
                 pp.native_normal = TextureRef{m.effect.normal_map, false, TextureUse::Data, std::nullopt};
             if (m.effect.reflective && !m.effect.textures.empty() && !m.effect.textures[0].empty())
                 pp.environment = TextureRef{m.effect.textures[0], false, TextureUse::Color, std::nullopt, true};
-            if (!m.effect.coverage_map.empty())
+            if (actor_takes_coverage(m))
                 pp.coverage = TextureRef{m.effect.coverage_map, false, TextureUse::OpaqueColor, std::nullopt};
             if (m.eqg_shader == assets::EqgShader::WaterFall) part.surface.slots.z |= kActorSurfaceWaterFall;
-            if (m.eqg_shader == assets::EqgShader::Lava) {
+            if (lava) {
                 part.surface.slots.z |= kActorSurfaceLava;
                 if (!m.effect.textures.empty() && !m.effect.textures[0].empty())
                     pp.secondary = TextureRef{m.effect.textures[0], false, TextureUse::OpaqueColor, std::nullopt};

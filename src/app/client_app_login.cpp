@@ -440,6 +440,7 @@ void ClientApp::reload_server_files(bool at_login) {
     });
     spell_bolts_ = std::make_unique<SpellBolts>(vk_, shader_dir_);
     actor_emitters_ = std::make_unique<ActorEmitters>(vk_, game_, shader_dir_);
+    emitter_reader_library_.reset(); // the new emitters have no reader yet
 }
 
 void ClientApp::back_to_login(std::string message, bool is_error) {

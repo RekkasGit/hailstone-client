@@ -1232,7 +1232,10 @@ pearl map is a 2D sphere map. A malformed cubemap is rejected without treating i
 Held MPL materials retain their separately scaled coverage texture and modulate diffuse RGB component by component
 (`saturate(2 * diffuse * coverage)`), while their material's alpha remains separate. WaterFall materials scroll
 colour and alpha independently. Lava materials retain both scrolling diffuse layers and the shared normal map
-sampled at both coordinates; the primary alpha blends its lit colour against the bump-lit secondary. These actor
+sampled at both coordinates; the primary alpha blends its lit colour against the bump-lit secondary. Lava2 is drawn
+as Lava, as the zone draws it (its own formula is not settled, docs/unknowns.md), and a lava material keeps its
+second layer over an MPL coverage map, the two sharing one slot (`render::actor_lava_surface`,
+`actor_takes_coverage`). In the classic lighting the native surface map is read only for a glowing part. These actor
 effects use the display clock, wrapped at 100 seconds as the native preshader does. Hailstone's world light,
 shadows and colour space still determine the final lighting. A missing optional coverage texture keeps the
 material's diffuse colour.

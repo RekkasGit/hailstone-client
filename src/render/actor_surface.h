@@ -30,6 +30,17 @@ constexpr std::uint32_t kActorSurfaceGlow = 8;
 constexpr std::uint32_t kActorSurfaceCoverage = 16;
 constexpr std::uint32_t kActorSurfaceWaterFall = 32;
 constexpr std::uint32_t kActorSurfaceLava = 64;
+
+// A part drawn with the lava surface: Lava, and Lava2 as the zone draws it (zone_renderer.cpp: RegionLava2's own
+// formula is not settled). Both read e_TextureDiffuse1 and e_TextureNormal0 as their second layer and normal.
+inline bool actor_lava_surface(assets::EqgShader shader) {
+    return shader == assets::EqgShader::Lava || shader == assets::EqgShader::Lava2;
+}
+// Whether a part takes its material's MPL coverage map: the coverage map and lava's second layer share slots.w, and
+// lava keeps its layer.
+inline bool actor_takes_coverage(const assets::Material& m) {
+    return !m.effect.coverage_map.empty() && !actor_lava_surface(m.eqg_shader);
+}
 // Table entries per frame in flight (48 bytes each, host-visible: 192 KiB). A drawn look with any surface takes one
 // entry per part, so this holds dozens of distinct armored looks a frame; past it a look keeps plain lighting.
 constexpr std::uint32_t kMaxActorSurfaces = 4096;

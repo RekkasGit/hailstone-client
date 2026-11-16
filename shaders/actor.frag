@@ -148,9 +148,12 @@ void main() {
     } else {
         base = tex.rgb * tint; // SkinMeshOld: lit * Tint.rgb
     }
-    vec4 native_surface = surface.slots.x != 0u ? texture(textures[surface.slots.x], v_uv) : vec4(0.0);
     bool packed_channels = (surface.slots.z & 4u) != 0u;
     bool glowing = (surface.slots.z & 8u) != 0u;
+    // The classic lighting reads the native map only for its glow (lava takes its own samples below), so a part that
+    // does not glow skips the fetch there. Both conditions are uniform across the draw.
+    vec4 native_surface = surface.slots.x != 0u && (lighting.params.x > 0.5 || glowing)
+                              ? texture(textures[surface.slots.x], v_uv) : vec4(0.0);
     vec3 lava_secondary = lava && surface.slots.w != 0u ? texture(textures[surface.slots.w], secondary_uv).rgb * tint : base;
     vec3 lava_normal = vec3(0.0);
     if (lava && surface.slots.x != 0u)
