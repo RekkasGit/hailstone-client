@@ -162,7 +162,9 @@ int ClientApp::run() {
                 };
                 conn_->set_remote_probe_range(game::actor_clip_distance(actor_clip_plane_, view_.far_plane));
             }
-            conn_->smooth(dt, floor, actor_model, region, vehicle_under, ground_floor, remote_collision);
+            // ground_floor is grounding_floor: it probes the same zone mesh the landing check uses, so a landed
+            // spawn's drop is known to be 0 and WorldState::smooth can skip its second collision query.
+            conn_->smooth(dt, floor, actor_model, region, vehicle_under, ground_floor, remote_collision, true);
             trace_spawn(dt);
         }
         update_lap.mark("spawn smoothing");

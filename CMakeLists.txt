@@ -1126,6 +1126,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mounts_test.cpp
     tests/spawn_is_named_test.cpp
     tests/world_state_smooth_test.cpp
+    tests/floor_grounding_test.cpp
     tests/attack_check_test.cpp
     tests/attack_rules_vectors_test.cpp
     tests/ui_rules_vectors_test.cpp

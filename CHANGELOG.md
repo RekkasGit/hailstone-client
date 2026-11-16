@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Performance: grounding floating NPCs no longer searches the zone's collision a second time when a physics step has just landed the spawn on its floor
 - Zones: placed objects that animate in the original now do here too: Ssraeshza Temple's rings turn, and the branches of the trees in Emerald Jungle, Trakanon's Teeth, the Wakening Land and some 70 other zones sway. They are solid where they are, so in Ssraeshza Temple the turning rings again let a player into the water shaft and out at the top once their gaps come round; before, the rings stood still with their gaps facing away and nobody could get in
 - Modern lighting: every zone's haze is now as thick as the zone's own fog (its distances and density), as in the original. Foggy zones such as Nektulos Forest, Innothule Swamp and Misty Thicket are murky again instead of clear and bright; the longer modern view only lets distant scenery fade into the fog instead of being cut off, and clear-sky zones such as Qeynos Hills are as hazy as the original
 - Leadership window: both interfaces show the original green for ranks supplied by the current leader, gold for personal purchases, and white or grey for unpurchased abilities. These colours describe ranks and training availability; group size and leadership permissions still determine whether an ability can be used.
