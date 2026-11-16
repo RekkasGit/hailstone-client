@@ -144,9 +144,9 @@ TEST_CASE("MQ Lua: hailstone.raid is a columnar roster") {
     raid.looters = {"Tester"};
     raid.target = "Tester";
     raid.members = {
-        {"Groupie", 0, 2, 48, true, true, false, false, ""},
-        {"Tester", 0, 2, 50, false, false, false, false, ""},
-        {"Third", 1, 1, 45, false, false, true, false, ""},
+        mq_test::raid_member("Groupie", 0, 2, 48, true, true),
+        mq_test::raid_member("Tester", 0, 2, 50),
+        mq_test::raid_member("Third", 1, 1, 45, false, false, true),
     };
     auto& leadership = A::leadership(*h.world.conn);
     leadership.raid_assist_names[0] = "Groupie";
@@ -158,6 +158,7 @@ print('raid', r.active, r.count, r.leader, r.target, r.locked, r.loot_type)
 print('m1', r.name[1], r.spawn_id[1], r.group[1], r.flags[1], r.pct_hp[1])
 print('m2', r.name[2], r.spawn_id[2], r.flags[2], r.pct_hp[2], r.pct_mana[2], r.pct_endurance[2])
 print('m3', r.name[3], r.spawn_id[3], r.group[3], r.flags[3], r.pct_hp[3])
+print('flags', hs.RAID_LEADER, hs.RAID_MAIN_ASSIST, hs.RAID_LOOTER, hs.RAID_ME, r.slot == nil)
 )");
     REQUIRE(h.scripts->run("raid", {}));
     h.pulses(1);
@@ -165,6 +166,25 @@ print('m3', r.name[3], r.spawn_id[3], r.group[3], r.flags[3], r.pct_hp[3])
     CHECK(h.printed_line("m1 Groupie 12 0 167 100"));
     CHECK(h.printed_line("m2 Tester 1 416 75 25 50"));
     CHECK(h.printed_line("m3 Third 0 1 12 -1"));
+    CHECK(h.printed_line("flags 1 4 32 256 true"));
+}
+
+TEST_CASE("MQ Lua: hailstone.raid outside the game and without read") {
+    Host h;
+    h.ctx.conn = nullptr;
+    h.write("raid_nil.lua", "print('nil', require('hailstone').raid() == nil)\n");
+    REQUIRE(h.scripts->run("raid_nil", {}));
+    h.pulses(1);
+    CHECK(h.printed_line("nil true"));
+
+    Host r(plugin::kCapCommands);
+    r.write("raid_denied.lua", "print(pcall(require('hailstone').raid))\n");
+    REQUIRE(r.scripts->run("raid_denied", {}));
+    r.pulses(1);
+    bool denied = false;
+    for (const auto& line : r.printed)
+        denied |= line.find("hailstone.raid needs the server's 'read' permission") != std::string::npos;
+    CHECK(denied);
 }
 
 TEST_CASE("MQ Lua: mq.TLO, print, mq.cmd, mq.parse and the script's arguments") {

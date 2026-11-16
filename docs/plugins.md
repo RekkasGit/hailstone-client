@@ -341,7 +341,7 @@ A script can extend the client as a compiled plugin does, with no native code: t
 | `send_packet(stream, opcode, data)` | a packet to the server (`packets`) |
 | `ui_function(name, fn)`, `option{name, label, min, max, get, set}`, `menu(label, command)` | for its windows, as a compiled plugin's (`ui`); `eq.Plugin("<script name>")`. A Lua social cannot call them (an error): its state goes whenever the social is edited, and its name is only its title |
 | `player()`, `spawn(id)`, `spawns()`, `spell(id)`, `item(slot [, sub])`, `buff(i)`, `xtarget(i)`, `raid()`, `eqstr(id, ...)`, `zone_name(id)`, `server()` | the game state as tables (`read`); `server()` is the server this login is on (`{name, host, port, world, world_host}`, nil before the world login); `player()`'s `cur_hp` and `max_hp`, like a compiled plugin's `HailstonePlayer` and `Me.CurrentHPs`, include the items' HP that EQEmu's own HP update leaves out, as the windows show them |
-| `raid()` | the raid roster as columnar tables: `active, locked, loot_type, count, leader, target, slot[], spawn_id[], name[], group[], flags[], level[], class[], pct_hp[], pct_mana[], pct_endurance[], pet_spawn_id[], pet_pct_hp[], x[], y[], z[], distance[]` (members 1-based; `leader`/`target` 1-based, 0 none; `-1` an unknown percentage; `flags` are `HS_BULK_RAID_*`, as `get_raid_data_bulk` gives them) |
+| `raid()` | the raid roster as columnar tables: `active, locked, loot_type, count, leader, target, spawn_id[], name[], group[], flags[], level[], class[], pct_hp[], pct_mana[], pct_endurance[], pet_spawn_id[], pet_pct_hp[], x[], y[], z[], distance[]` (members 1-based; `leader`/`target` 1-based, 0 none; `-1` an unknown percentage). The `hailstone` module also has the flag bits as `RAID_LEADER`, `RAID_GROUP_LEADER`, `RAID_MAIN_ASSIST`, `RAID_MARKER`, `RAID_WAYPOINTER`, `RAID_LOOTER`, `RAID_PRESENT` and `RAID_ME`, with the SDK's `HS_BULK_RAID_*` values |
 | `spell(id)` display fields | raw spell data: `range`, `ae_range`, `push_back`, `duration_formula`, `duration_cap` (ticks), `spell_type`, `resist`, `resist_adj`, `spell_icon`, `category`, `subcategory`, `cast_on_you`, `cast_on_other`, `wear_off`, and `effects` (12 1-based entries with `effect`, `base`, `base2`, `max`, `formula`). These are the loaded record values, not computed duration or effect descriptions; a script decides how to present them. |
 | `eq.DisplaySpellId(n)`, `eq.DisplayItemData(n)` | in a Lua UI window, read the actual spell ID or item in display instance 1..6, or nil when absent. Item data gives `id`, `name`, `icon`, `lore`, `value` (copper), `stackCount`, `damage`, `delay`, `itemType` and `favor` (`stack_count` and `item_type`, the names before, are kept); this is the inspected item, not necessarily one in inventory. |
 | `right_click_item(slot [, class])`, `close_spell_book()`, `clear_spell_recovery()`, `set_window_pet(id)`, `inspect_item(id [, augments])`, `set_max_camera_distance(d)` | the client's own actions (`actions`) |
@@ -826,20 +826,26 @@ and say so in the chat window.
   are 0-based (`slot` 0 is the first member), while MacroQuest's `Raid.Member[1]` is the first; `leaderIndex` and
   `targetIndex` are 0-based too, `HS_BULK_RAID_NO_INDEX` (0xffffffff) for none.
 
+  A reader starts the records at the header's `size` and steps by its `recordSize`, for `count` records. A later
+  client may append a field to the record: read `recordSize`, never a fixed stride, and read only the fields the
+  record's size covers. `version` changes only when an older reader can no longer read the header or a record at
+  all. `reserved` is the roster's total member count, so `count < reserved` means the buffer cut the roster short
+  and the caller can retry with a larger one.
+
   Header (`HS_Bulk_RaidHeader`, `HS_BULK_RAID_HEADER_SIZE` = 40 bytes):
 
   | Offset | Type | Field |
   |---|---|---|
   | 0 | u32 | `sizeof(HS_BulkRaidHeader)` |
   | 4 | u32 | version, 1 |
-  | 8 | u32 | member records that follow |
-  | 12 | u32 | `sizeof(HS_BulkRaidData)` |
+  | 8 | u32 | member records that follow (what fit in `out_size`) |
+  | 12 | u32 | bytes between records; a later client may grow it |
   | 16 | u32 | leader's 0-based member index, or `HS_BULK_RAID_NO_INDEX` |
   | 20 | u32 | the raid window's selected member, same encoding |
   | 24 | i32 | in a raid (1) or not (0) |
   | 28 | i32 | locked (1) or not (0) |
   | 32 | i32 | loot type, as the raid window names it: 1 Leader Only, 2 Leader and Group Leader, 3 Leader Selected, 4 Entire Raid |
-  | 36 | u32 | 0 |
+  | 36 | u32 | the roster's total member count, not only those written |
 
   Each record (`HS_Bulk_RaidData`, `HS_BULK_RAID_RECORD_SIZE` = 124 bytes):
 
@@ -847,7 +853,7 @@ and say so in the chat window.
   |---|---|---|
   | 0 | i32 | roster slot, 0-based |
   | 4 | u32 | spawn id; 0 when the member is not in this zone |
-  | 8 | i32 | raid group 0..11; -1 ungrouped |
+  | 8 | i32 | the server's raid group 0..11; -1 ungrouped or any other value |
   | 12 | u32 | flags (below) |
   | 16 | i32 | level; 0 when unknown |
   | 20 | i32 | class id; 0 when unknown |
@@ -862,11 +868,14 @@ and say so in the chat window.
   | 56 | f32 | 3D distance from the player; 0 when the member is not here |
   | 60 | char[64] | member name, NUL-terminated |
 
-  Flags (bit: meaning): 0 leader, 1 group leader, 2 main assist, 3 marked NPC, 4 waypointer, 5 looter under the
-  current loot type (4 Entire Raid makes everyone one), 6 offline (kept for a later client; this client does not know),
-  7 present in this zone, 8 the player. A main assist's own member flag is used first, then the raid's assigned
-  assist names. A member who is not in the zone has no spawn id, position or percentages; the roster's level and
-  class still answer.
+  Flags (bit: meaning): 0 leader, 1 group leader, 2 main assist, 3 raid marker (the member holds the Marker role),
+  4 waypointer, 5 looter, 6 reserved (this client keeps no offline flag), 7 present in this zone, 8 the player. A
+  main assist's own member flag is used first, then the raid's assigned assist names. A member who is not in the
+  zone has no spawn id, position or percentages; the roster's level and class still answer.
+
+  The `LOOTER` flag follows the loot type: 1 Leader Only, 2 Leader and Group Leader, 3 Leader Selected, 4 Entire
+  Raid. That differs from the raid window's own `looter()` check for the member menu, which only tests the leader
+  and the listed looters; the flag here answers "may this member loot under the current type".
 
 ### Connections (ABI 2)
 

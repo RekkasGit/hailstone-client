@@ -917,7 +917,7 @@ int l_raid(lua_State* L) {
     const net::GameConnection* c = readable(Script::of(L));
     if (!c) return 0;
     const plugin::RaidSnapshot raid = plugin::build_raid_snapshot(*c);
-    lua_createtable(L, 0, 18);
+    lua_createtable(L, 0, 21);
     set_bool(L, "active", raid.active);
     set_bool(L, "locked", raid.locked);
     set_int(L, "loot_type", raid.loot_type);
@@ -951,13 +951,6 @@ int l_raid(lua_State* L) {
         }
         lua_setfield(L, -2, key);
     };
-    // `slot` is the roster position, 1-based like the other arrays.
-    lua_createtable(L, static_cast<int>(n), 0);
-    for (lua_Integer i = 0; i < n; ++i) {
-        lua_pushinteger(L, i + 1);
-        lua_rawseti(L, -2, i + 1);
-    }
-    lua_setfield(L, -2, "slot");
     column_int("spawn_id", [](const plugin::RaidMemberSnapshot& m) { return m.spawn_id; });
     column_str("name", [](const plugin::RaidMemberSnapshot& m) -> const std::string& { return m.name; });
     column_int("group", [](const plugin::RaidMemberSnapshot& m) { return m.group; });
@@ -1457,6 +1450,15 @@ void register_hailstone(lua_State* L) {
         lua_pushcfunction(L, fn);
         lua_setfield(L, -2, n);
     }
+    // The raid flag bits, so a script does not have to copy HS_BULK_RAID_* by hand.
+    set_int(L, "RAID_LEADER", HS_BULK_RAID_LEADER);
+    set_int(L, "RAID_GROUP_LEADER", HS_BULK_RAID_GROUP_LEADER);
+    set_int(L, "RAID_MAIN_ASSIST", HS_BULK_RAID_MAIN_ASSIST);
+    set_int(L, "RAID_MARKER", HS_BULK_RAID_MARKER);
+    set_int(L, "RAID_WAYPOINTER", HS_BULK_RAID_WAYPOINTER);
+    set_int(L, "RAID_LOOTER", HS_BULK_RAID_LOOTER);
+    set_int(L, "RAID_PRESENT", HS_BULK_RAID_PRESENT);
+    set_int(L, "RAID_ME", HS_BULK_RAID_ME);
     lua_setglobal(L, "hailstone");
     // A plugin script in its own folder (lua/<name>/init.lua) with a ui/ there: its windows for each UI pack.
     Script& s = Script::of(L);

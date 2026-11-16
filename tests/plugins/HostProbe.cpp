@@ -355,15 +355,24 @@ void probe_raid(void*, const char* args) {
         return;
     }
     const auto* header = reinterpret_cast<const HS_Bulk_RaidHeader*>(buf);
-    WriteChatf("[Probe] raid active %d, count %u, leader %u, target %u, locked %d, loot %d, %d bytes",
-        header->active, header->count, header->leaderIndex, header->targetIndex, header->locked,
+    WriteChatf("[Probe] raid active %d, count %u, total %u, leader %u, target %u, locked %d, loot %d, %d bytes",
+        header->active, header->count, header->reserved, header->leaderIndex, header->targetIndex, header->locked,
         header->lootType, r);
-    const auto* recs = reinterpret_cast<const HS_Bulk_RaidData*>(buf + sizeof *header);
-    for (std::uint32_t i = 0; i < header->count; ++i) {
-        const HS_Bulk_RaidData* rec = recs + i;
+    // The reference reader: records start at header.size and step by header.recordSize, so a later client that
+    // appends a record field is still read correctly.
+    std::size_t at = header->size >= sizeof(HS_Bulk_RaidHeader) ? header->size : sizeof(HS_Bulk_RaidHeader);
+    if (header->recordSize < sizeof(HS_Bulk_RaidData)) {
+        WriteChatf("[Probe] raid record size %u, smaller than this reader's %zu", header->recordSize,
+            sizeof(HS_Bulk_RaidData));
+        return;
+    }
+    for (std::uint32_t i = 0; i < header->count && at + header->recordSize <= static_cast<std::size_t>(r); ++i) {
+        const auto* rec = reinterpret_cast<const HS_Bulk_RaidData*>(buf + at);
         WriteChatf("[Probe] raid %u: %s %u g%d f%u l%d c%d hp%d mp%d ep%d pet%u ph%d", i, rec->name, rec->spawnID,
             rec->group, rec->flags, rec->level, rec->classID, rec->pctHPs, rec->pctMana, rec->pctEndurance,
             rec->petSpawnID, rec->petPctHPs);
+        WriteChatf("[Probe] raid pos %u: %.2f %.2f %.2f %.2f", i, rec->x, rec->y, rec->z, rec->distance);
+        at += header->recordSize;
     }
 }
 

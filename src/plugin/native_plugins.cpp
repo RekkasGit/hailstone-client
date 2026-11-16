@@ -1700,6 +1700,7 @@ int32_t h_get_raid_data_bulk(void* h, unsigned char* data, int32_t datamax) {
     header.active = raid.active ? 1 : 0;
     header.locked = raid.locked ? 1 : 0;
     header.lootType = static_cast<int32_t>(raid.loot_type);
+    header.reserved = static_cast<std::uint32_t>(raid.members.size());
     header.count = 0;
 
     int32_t written = static_cast<int32_t>(sizeof header);

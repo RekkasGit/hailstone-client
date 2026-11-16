@@ -1,7 +1,8 @@
 #pragma once
 
-// The raid roster in the shape get_raid_data_bulk and the hailstone Lua module give it. One pass over the roster,
-// resolving each member's spawn once, so a plugin or script does not run a TLO expression per member.
+// The raid roster in the shape get_raid_data_bulk and the hailstone Lua module give it. One pass over the zone's
+// spawns indexes the players, mercenaries and pets; then one pass over the roster resolves each member, so a plugin
+// or script does not run a TLO expression per member and does not scan the zone per member.
 //
 // The data is the client's own: game::RaidState for the roster and roles, game::GroupState for the mana and
 // endurance percentages it receives for group members, and the world's spawns for HP, position and the pet. A
@@ -14,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -51,19 +53,50 @@ struct RaidSnapshot {
 
 namespace detail {
 
-// A player or a virtual player's spawn by its roster name: the raw name first (a player's), then the clean name
-// (a mercenary's). Corpses are left out.
-inline const game::Spawn* raid_spawn(const net::GameConnection& c, std::string_view name) {
+struct NameHash {
+    std::size_t operator()(std::string_view name) const noexcept {
+        std::size_t h = 1469598103934665603ull;
+        for (char c : name) {
+            h ^= static_cast<unsigned char>(ascii_lower(c));
+            h *= 1099511628211ull;
+        }
+        return h;
+    }
+};
+
+struct NameEqual {
+    bool operator()(std::string_view a, std::string_view b) const noexcept { return iequals(a, b); }
+};
+
+// A raid member is a player or a mercenary, never an ordinary NPC: the name index leaves NPCs (and pets) out, so a
+// roster name cannot pick up a guard or a pet with the same name. The pet index is every live spawn with an owner.
+struct SpawnIndex {
+    std::unordered_map<std::string_view, const game::Spawn*, NameHash, NameEqual> by_name;
+    std::unordered_map<std::uint32_t, const game::Spawn*> pet_of;
+    std::vector<const game::Spawn*> mercenaries;
+};
+
+inline SpawnIndex index_spawns(const net::GameConnection& c) {
+    SpawnIndex index;
+    index.by_name.reserve(c.world().spawns.size());
+    index.pet_of.reserve(c.world().spawns.size());
     for (const auto& entry : c.world().spawns) {
         const game::Spawn& s = entry.second;
         if (s.is_corpse) continue;
-        if (!s.is_npc && iequals(s.name, name)) return &s;
+        if (s.pet_owner_id) index.pet_of.try_emplace(s.pet_owner_id, &s);
+        if (s.is_npc && !s.mercenary) continue;
+        index.by_name.try_emplace(s.name, &s);
+        if (s.mercenary) index.mercenaries.push_back(&s);
     }
-    for (const auto& entry : c.world().spawns) {
-        const game::Spawn& s = entry.second;
-        if (s.is_corpse) continue;
-        if (iequals(game::display_name(s.name), name)) return &s;
-    }
+    return index;
+}
+
+inline const game::Spawn* find_raid_spawn(const SpawnIndex& index, std::string_view name) {
+    const auto it = index.by_name.find(name);
+    if (it != index.by_name.end()) return it->second;
+    // A mercenary's roster name is its clean name; only mercenaries get this fallback.
+    for (const game::Spawn* m : index.mercenaries)
+        if (game::display_name_iequals(m->name, name)) return m;
     return nullptr;
 }
 
@@ -82,21 +115,18 @@ inline RaidSnapshot build_raid_snapshot(const net::GameConnection& c) {
     out.locked = raid.locked;
     out.loot_type = raid.loot_type;
     const game::Spawn* self = c.world().player();
+    const detail::SpawnIndex index = detail::index_spawns(c);
     out.members.reserve(raid.members.size());
     for (std::size_t i = 0; i < raid.members.size(); ++i) {
         const game::RaidMember& m = raid.members[i];
         RaidMemberSnapshot s;
         s.name = m.name;
-        const game::Spawn* spawn = detail::raid_spawn(c, m.name);
-        const bool is_me = iequals(m.name, c.character_name());
+        const game::Spawn* spawn = detail::find_raid_spawn(index, m.name);
+        // The player's own spawn, or their roster name when the spawn is not in the world yet. world.player_id is
+        // the same id the extended target read uses.
+        const bool is_me = spawn ? spawn->id == c.world().player_id : iequals(m.name, c.character_name());
         if (spawn) {
             s.spawn_id = spawn->id;
-            if (is_me) {
-                const auto hp = c.own_hp();
-                s.pct_hp = hp.max > 0 ? static_cast<std::int32_t>(std::max<std::int64_t>(0, hp.cur * 100 / hp.max)) : 0;
-            } else {
-                s.pct_hp = static_cast<std::int32_t>(spawn->hp_percent);
-            }
             s.x = spawn->position.x;
             s.y = spawn->position.y;
             s.z = spawn->position.z;
@@ -106,8 +136,28 @@ inline RaidSnapshot build_raid_snapshot(const net::GameConnection& c) {
                 const float dz = spawn->position.z - self->position.z;
                 s.distance = std::sqrt(dx * dx + dy * dy + dz * dz);
             }
+            // The pet: the pet window's for the player, else the first spawn it owns (one pass built the index).
+            if (is_me && c.pets().focused) {
+                s.pet_spawn_id = c.pets().focused;
+            } else {
+                const auto pet = index.pet_of.find(spawn->id);
+                if (pet != index.pet_of.end()) s.pet_spawn_id = pet->second->id;
+            }
+            if (s.pet_spawn_id) {
+                const auto pet = c.world().spawns.find(s.pet_spawn_id);
+                if (pet != c.world().spawns.end()) s.pet_pct_hp = static_cast<std::int32_t>(pet->second.hp_percent);
+            }
         }
-        s.group = m.group == 0xffffffffu ? -1 : static_cast<std::int32_t>(m.group);
+        // The player's own HP includes the items' HP (GameConnection::own_hp); others have only the percent the
+        // server sent. -1 when even that is unknown.
+        if (is_me) {
+            const auto hp = c.own_hp();
+            s.pct_hp = hp.max > 0 ? static_cast<std::int32_t>(std::max<std::int64_t>(0, hp.cur * 100 / hp.max)) : -1;
+        } else if (spawn) {
+            s.pct_hp = static_cast<std::int32_t>(spawn->hp_percent);
+        }
+        // The wire's group number is the server's; 0..11 are the raid groups, anything else is not one.
+        s.group = m.group < 12 ? static_cast<std::int32_t>(m.group) : -1;
         s.level = m.level ? static_cast<std::int32_t>(m.level) : (spawn ? static_cast<std::int32_t>(spawn->level) : 0);
         s.class_id = m.class_ ? static_cast<std::int32_t>(m.class_) : (spawn ? static_cast<std::int32_t>(spawn->class_id) : 0);
 
@@ -126,25 +176,6 @@ inline RaidSnapshot build_raid_snapshot(const net::GameConnection& c) {
             if (endurance != c.group().endurance_percent.end()) s.pct_endurance = endurance->second;
         }
 
-        // The pet: the pet window's for the player, else the first spawn it owns.
-        if (spawn) {
-            if (is_me && c.pets().focused) {
-                s.pet_spawn_id = c.pets().focused;
-            } else {
-                for (const auto& entry : c.world().spawns) {
-                    const game::Spawn& o = entry.second;
-                    if (o.pet_owner_id == spawn->id && !o.is_corpse) {
-                        s.pet_spawn_id = o.id;
-                        break;
-                    }
-                }
-            }
-            if (s.pet_spawn_id) {
-                const auto pet = c.world().spawns.find(s.pet_spawn_id);
-                if (pet != c.world().spawns.end()) s.pet_pct_hp = static_cast<std::int32_t>(pet->second.hp_percent);
-            }
-        }
-
         const bool leader = iequals(m.name, raid.leader);
         bool main_assist = m.main_assist;
         if (!main_assist)
@@ -153,9 +184,10 @@ inline RaidSnapshot build_raid_snapshot(const net::GameConnection& c) {
                     main_assist = true;
                     break;
                 }
+        // The raid window's loot types: 1 Leader Only, 2 Leader and Group Leader, 3 Leader Selected, 4 Entire Raid.
         bool looter = leader || (raid.loot_type == 2 && m.group_leader);
         if (!looter && raid.loot_type == 3) looter = detail::listed_looter(raid, m.name);
-        if (raid.loot_type == 4) looter = true; // Entire Raid: everyone may loot
+        if (raid.loot_type == 4) looter = true;
         if (leader) s.flags |= HS_BULK_RAID_LEADER;
         if (m.group_leader) s.flags |= HS_BULK_RAID_GROUP_LEADER;
         if (main_assist) s.flags |= HS_BULK_RAID_MAIN_ASSIST;
