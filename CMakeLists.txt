@@ -151,6 +151,7 @@ add_library(hailstone_engine STATIC
   src/game/light_list.cpp
   src/render/scene_lighting.cpp
   src/render/atmosphere.cpp
+  src/render/clouds.cpp
   src/render/horizon.cpp
   src/render/ambient_probe.cpp
   src/render/shadows.cpp
@@ -394,6 +395,7 @@ add_library(hailstone_engine STATIC
   src/render/gpu.cpp
   src/render/zone_renderer.cpp
   src/render/sky_renderer.cpp
+  src/render/cloud_renderer.cpp
   src/render/temporal.cpp
   src/render/upscaler_provider.cpp
   src/render/frame_gen.cpp
@@ -799,6 +801,8 @@ hailstone_add_shaders(hailstone_shaders
   shaders/taa_resolve.frag
   shaders/fg_scatter.comp
   shaders/fg_fill.comp
+  shaders/cloud_noise.comp
+  shaders/clouds.comp
   shaders/fg_synth.frag
   shaders/fg_composite.frag
 )
@@ -1282,6 +1286,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/placement_test.cpp
     tests/mock_placement_test.cpp
     tests/sky_test.cpp
+    tests/clouds_test.cpp
     tests/particles_test.cpp
     tests/spell_effect_timers_test.cpp
     tests/wld_particles_test.cpp

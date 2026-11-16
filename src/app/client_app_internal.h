@@ -1270,6 +1270,8 @@ private:
     // neighbours (NeighbourZones::drawn_key) it was last hidden for.
     bool horizon_hills_ = true;
     std::uint64_t distant_hidden_key_ = 0;
+    // The modern sky's volumetric clouds (render/cloud_renderer.h); display.volumetric_clouds.
+    bool volumetric_clouds_ = true;
     // display.neighbour_tint: the neighbour zones' debugging view (render::ZoneRenderer::set_debug_tint).
     bool neighbour_tint_ = false;
     // How far the replacement models' (a texture pack's generated trees') levels of detail reach, in percent of their

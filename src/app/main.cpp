@@ -111,6 +111,7 @@ struct Options {
     bool no_grass = false;                        // --no-grass: the viewer without the zone's flora
     bool no_smooth_ground = false;                // --no-smooth-ground: the viewer draws the file's flat ground
     bool no_horizon = false;                      // --no-horizon: no land round the zone (render/horizon.h)
+    bool no_clouds = false; // --no-clouds: the painted cloud layer, not the volumetric clouds (render/cloud_renderer.h)
     bool neighbour_tint = false;                  // --neighbour-tint: render::ZoneRenderer::set_debug_tint
     float tree_detail = 1.0f;                     // --tree-detail PCT: display.tree_detail, as a scale
     float flora_distance = 400.0f;                // --flora-distance: how far the viewer draws the flora
@@ -158,6 +159,7 @@ struct Options {
     bool no_vsync = false; // present as fast as the GPU draws (frame-time measurements)
     float frame_dt = 0.0f; // > 0: the clock moves this many seconds a frame, not with the wall clock
     glm::vec3 fly{0.0f};   // viewer: the camera moves this many units a second (--fly)
+    float pan = 0.0f;      // viewer: the camera turns this many degrees a second to its left (--pan)
     hailstone::app::ModelViewerOptions model; // --model viewer; active when model.codes is not empty
 };
 
@@ -292,6 +294,8 @@ void usage() {
         "  --weather-stopped S  viewer: --weather stopped S seconds ago (the clearing)\n"
         "  --no-grade         viewer: no colour grade (--lighting modern; display.color_grade)\n"
         "  --no-horizon       viewer: no land round the zone (--lighting modern; display.horizon_hills)\n"
+        "  --no-clouds        viewer: the painted clouds, not the volumetric ones (--lighting modern;\n"
+        "                     display.volumetric_clouds)\n"
         "  --neighbour-tint   viewer, with --neighbours: the neighbours' own geometry magenta, their own ground in\n"
         "                     their part of the land green (display.neighbour_tint)\n"
         "  --tree-detail PCT  viewer: replacement models' levels of detail reach PCT %% as far (display.tree_detail)\n"
@@ -326,6 +330,8 @@ void usage() {
         "                     that match from run to run: the wind, water and sky at the same moment)\n"
         "  --fly X Y Z        viewer: the camera flies X Y Z units a second (with --frame-dt, frame N of one run\n"
         "                     and N+1 of another are two frames of the flight: flicker in motion)\n"
+        "  --pan D            viewer: the camera turns D degrees a second (positive to the left; with --frame-dt,\n"
+        "                     the sky's clouds carried over from frame to frame as the view turns)\n"
         "  --verbose          debug logging\n"
         "viewer controls: hold right mouse to look, WASD move, Space/Ctrl up/down, Shift faster, Esc quit\n");
 }
@@ -486,6 +492,8 @@ Options parse_args(int argc, char** argv) {
             o.scene.color_grade = false;
         } else if (arg("--no-horizon")) {
             o.no_horizon = true;
+        } else if (arg("--no-clouds")) {
+            o.no_clouds = true;
         } else if (arg("--neighbour-tint")) {
             o.neighbour_tint = true;
         } else if (arg("--tree-detail")) {
@@ -637,6 +645,9 @@ Options parse_args(int argc, char** argv) {
             const float x = std::strtof(argv[++i], nullptr);
             const float y = std::strtof(argv[++i], nullptr);
             o.fly = glm::vec3(x, y, std::strtof(argv[++i], nullptr));
+        } else if (arg("--pan")) {
+            need(1);
+            o.pan = std::strtof(argv[++i], nullptr);
         } else if (arg("--auto-accept")) {
             o.auto_accept_invite = true;
         } else if (arg("--max-fps")) {
@@ -1212,6 +1223,7 @@ int main(int argc, char** argv) {
             // moves while the window has the focus would move the camera.
             if (!opts.frames) update_camera(camera, window, dt, !ui_mouse || window.input().right_button, !ui_keys);
             camera.position += opts.fly * dt;
+            camera.yaw += glm::radians(opts.pan) * dt;
 
             if (ui_layer) {
                 ui_layer->new_frame();
@@ -1437,6 +1449,26 @@ int main(int argc, char** argv) {
                     }
                 }
             }
+            // The sky this frame; its volumetric clouds are marched before the scene begins (as the client).
+            render::SkyFrame sky_frame{sky_hour, t, horizon_haze};
+            if (zone_renderer && opts.modern) {
+                render::Daylight day = render::daylight(sky_hour, true, moon_phase, blood_moon);
+                render::apply_storm(day, weather_look.storm);
+                sky_frame.atmosphere = true;
+                sky_frame.to_sun = day.to_sun;
+                sky_frame.to_moon = day.to_moon;
+                sky_frame.blood_moon = day.blood_moon;
+                sky_frame.aurora = std::max(opts.aurora, 0.0f);
+                sky_frame.cloud_light = render::cloud_light(day);
+                sky_frame.storm = weather_look.storm;
+                sky_frame.volumetric_clouds = !opts.no_clouds;
+                sky_frame.to_light = day.to_light;
+                sky_frame.light = day.light;
+                sky_frame.sky_light = day.sky;
+                if (sky_renderer && fog_frame.sky)
+                    sky_renderer->prepare(*f, camera.projection(width, height, draw_view.far_plane), camera.view(),
+                                          sky_frame);
+            }
             // The plain camera first: begin_scene hands it to the scene's shaders for their own motion.
             if (zone_renderer) vk.set_temporal_view(camera.view(), camera.projection(width, height, draw_view.far_plane));
             vk.begin_scene(*f, glm::vec4(water_color ? *water_color : view.fog_color, 1.0f));
@@ -1459,18 +1491,6 @@ int main(int argc, char** argv) {
                 const glm::mat4 plain_proj = camera.projection(width, height, draw_view.far_plane);
                 glm::mat4 proj = hailstone::render::jittered(plain_proj, vk.projection_jitter());
                 glm::mat4 vp = proj * camera.view();
-                render::SkyFrame sky_frame{sky_hour, t, horizon_haze};
-                render::Daylight day = render::daylight(sky_hour, true, moon_phase, blood_moon);
-                render::apply_storm(day, weather_look.storm);
-                if (opts.modern) {
-                    sky_frame.atmosphere = true;
-                    sky_frame.to_sun = day.to_sun;
-                    sky_frame.to_moon = day.to_moon;
-                    sky_frame.blood_moon = day.blood_moon;
-                    sky_frame.aurora = std::max(opts.aurora, 0.0f);
-                    sky_frame.cloud_light = render::cloud_light(day);
-                    sky_frame.storm = weather_look.storm;
-                }
                 const bool sky_drawn = sky_renderer && fog_frame.sky;
                 const bool backdrop_drawn = water_color || (opts.modern && !sky_drawn);
                 const auto draw_background = [&] {

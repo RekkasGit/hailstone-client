@@ -740,6 +740,8 @@ local function graphicsTab()
       "Draws the next zone past an outdoor zone line in the distance (modern lighting; scenery only).")
     check("horizon_hills", "Horizon Hills",
       "Land, hills and mountains past the edges of outdoor zones, in the zone's own ground, so the world does not end in haze (modern lighting; scenery only).")
+    check("volumetric_clouds", "Volumetric Clouds",
+      "Clouds with depth that drift with the wind, light with the sun and close over in a storm, in place of the painted cloud layer (modern lighting, open skies). Turn off if the frame rate drops outdoors.")
     slider("tree_detail", "Tree Detail Distance", 50, 200, pct,
       "How far a texture pack's generated trees keep their full and middle detail. Lower is faster; further trees turn to simpler ones sooner.")
     check("ground_npcs", "Ground Floating NPCs",

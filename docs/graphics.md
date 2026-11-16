@@ -917,6 +917,53 @@ The cloud layer is drawn over it blended. Its clouds are keyed out of its painte
 procedural cloud patches take the same light, and the sun and moon sprites stay. The other skies (the planes',
 Luclin's, red, grey) keep their painted layers.
 
+### Volumetric clouds
+
+Over the atmosphere (the plain skies in the modern lighting) the clouds are a layer of air 1.5 to 4 km up over a
+round planet, marched along each view ray (`render/cloud_renderer.h`, `shaders/clouds.comp`), in place of the painted
+cloud layer and the `weather.ini` cloud patches. This is Hailstone's own look; the original has only the painted
+clouds. `display.volumetric_clouds` (Options, Volumetric Clouds; off on the Low tier) turns it off, and the viewer
+takes `--no-clouds`. The patches keep moving while they are hidden, so turning the option off shows them in place.
+
+- **Shape** (after Schneider, "The Real-time Volumetric Cloudscapes of Horizon: Zero Dawn", SIGGRAPH 2015): a weather
+  map (30 km across) says where cloud grows and of what type. A height profile keeps flat clouds to the layer's
+  bottom third and lets towering ones fill it. Perlin-Worley noise (7 km across) gives the billows, and finer Worley
+  noise (0.9 km) wears the edges, wispy at the bottom and billowing higher up. The noise is drawn on the GPU when
+  the clouds are first shown (`shaders/cloud_noise.comp`: a 128³ shape, a 32³ detail and a 512² weather map, every
+  one tiling). No noise file ships.
+- **Cover** (`render::cloud_cover`): fair-weather cumulus over the normal sky (0.36 of the map), a few over the desert
+  (0.18), heaped ones over the cottony sky (0.55). A storm (`WeatherLook::storm`) eases every sky to overcast, thicker
+  (2.2 times), flatter and dark at its base, as it gathers and clears (about 36 s in, 75 s out).
+- **Wind** (`render::cloud_wind_step`): the field drifts from the west-south-west at 12 m/s, twice that in a full
+  storm, added up frame by frame (so a storm speeds the clouds up without a jump) and wrapped every 600 km, a whole
+  number of every texture's tiles (a wrap throws the history away once).
+- **Light** (after Hillaire, "Physically Based Sky, Atmosphere and Cloud Rendering in Frostbite", SIGGRAPH 2016):
+  the sun by day and the moon by night (`Daylight::to_light`, `light`, after `apply_storm`), marched six steps
+  towards the light from each sample. The light scattered more than once is approximated by three octaves of a
+  dimmer, deeper-reaching and wider lobe (Wrenninge et al. 2013), so a cloud's shadowed side is not black and its
+  edge towards the sun glows. Ambient comes from the open sky (`Daylight::sky`), less at the cloud's base. Each step
+  adds its light in Hillaire's energy-conserving form, and the march stops once less than 1 % of the sky shows.
+- **Cost:** the clouds are marched at half the scene's size on each side (`render::cloud_extent`). Each frame marches
+  one pixel of every 2x2 block (`render::cloud_update_slot`, in a Bayer order) at 40 steps overhead to 64 near the
+  horizon, each start jittered (interleaved gradient noise). The other three are carried over from the last frame
+  turned to this one's view: the clouds are far enough away that the camera's turn alone moves them on the screen.
+  A freshly marched pixel is blended in at a fifth over what was there, so the jitter averages out over about a
+  second. A pixel whose last place was off the screen is marched at once. The atmosphere reads the image through a
+  3x3 tent filter (four bilinear taps), so the 2x2 blocks do not show at the clouds' edges as the view turns. The history is thrown away (`render::cloud_history_stale`) when
+  the sun or moon jumps more than 0.02 radians, the storm by more than 0.1, or the wind by more than 0.5 km.
+- **Into the sky:** the compute pass runs before the scene begins (`SkyRenderer::prepare`). `shaders/atmosphere.frag`
+  reads its image (binding 2: rgb the clouds' light, a the sky still showing) and puts the clouds in front of the sky,
+  the stars, the sun and the moon. This happens after the storm greys the sky and before the haze at the horizon.
+  Far clouds thin out (exp(-distance / 45 km)), so the atmosphere's own horizon shows under them. The lightning lights
+  the clouds twice as much as the clear air. Without the clouds the atmosphere reads a clear 1x1 image, and the sky is
+  as it was.
+- Measured on an RX 9060 XT (RADV) at 1280x720, in the viewer over Qeynos Hills: about 0.5 ms a frame over the
+  painted clouds (10.6 against 10.1 ms). The viewer's `--pan D` turns the camera D degrees a second, to watch the
+  history carried over as the view turns.
+- Not yet: the clouds cast no shadows on the ground, and the god rays do not see them (a storm already turns the god
+  rays off). With the isometric camera's orthographic view there is no history to carry over, so every pixel is
+  marched each frame.
+
 ## Weather
 
 `OP_Weather` {kind: 0 rain, 1 snow, 0xff stop; intensity} plays out as in the classic client (`game::Weather` over
@@ -1956,6 +2003,7 @@ those four (kept), and Options > Graphics notes on a Low computer that FSR 3.1 a
 | `display.render_scale` | (default) | (default) |
 | `display.neighbour_zones` | 0 | (default) |
 | `display.horizon_hills` | 0 | (default) |
+| `display.volumetric_clouds` | 0 | (default) |
 | `display.grass_density` | 50 | 75 |
 | `display.tree_detail` | 50 | (default) |
 | `display.upscaler` | off | (kept) |
@@ -2000,6 +2048,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.distance_blur` | 0, 1 | 1 | the far distance's slight blur; modern only |
 | `display.neighbour_zones` | 0, 1 | 1 | the zone past an outdoor zone line drawn in the distance (Neighbour zones); modern only; `/neighbourzones [on \| off]` |
 | `display.horizon_hills` | 0, 1 | 1 | land round an outdoor zone past its edges (Horizon hills); modern only; viewer `--no-horizon` |
+| `display.volumetric_clouds` | 0, 1 | 1 | clouds marched through the air over the plain skies, in place of the painted cloud layer and patches (Volumetric Clouds); modern only; viewer `--no-clouds` |
 | `display.smooth_ground` | 0, 1 | 1 | a classic zone's ground drawn smooth and curved (Smoothed ground); read as each zone loads; viewer `--no-smooth-ground` |
 | `display.tree_detail` | 50 to 200 | 100 | how far a texture pack's replacement models (generated trees) keep their nearer levels of detail, in percent of their own distances (Tree Detail Distance); viewer `--tree-detail` |
 | `display.target_ring_cues` | 0, 1 | 1 | the target ring's sweep on a new target and pulse while attacking (Target Ring Cues; The target ring) |
