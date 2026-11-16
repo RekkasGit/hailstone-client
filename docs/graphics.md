@@ -1597,8 +1597,12 @@ current zone's filler out to the neighbour.
 - **Cost** (ecommons by the Freeport line, two neighbours loaded, before the land stood in for their ground):
   freportw 81,244 triangles and 28 MB, nektulos 40,043 and 9 MB; about 300 ms on the loader, 20 to 45 ms of upload on
   the frame's thread; 72k triangles in 241 calls a frame, 0.09 ms of CPU, about 0.5 ms a frame on the GPU (7.0 -> 7.5
-  ms). With the land (qeytoqrg, its two drawn neighbours, no texture pack, the viewer at 1280 x 720): qey2hh1 33 -> 38
-  MB (its part of the land, 13,237 squares drawn twice, 52,948 triangles), qeynos2 unchanged at 24 MB; on the loader
+  ms). The upload's time on the frame's thread is in each neighbour's log line, by step (uploads, descriptors,
+  pipelines). Every zone's texture set layout has one size (`render::zone_texture_layout_count`), so the pipeline cache
+  serves a neighbour's pipelines; sized by each zone's own texture count, the pipelines were compiled afresh for every
+  neighbour, and its upload was about 370 ms instead (qeytoqrg's: qeynos2 378 -> 7 ms, qey2hh1 372 -> 12 ms, on a
+  Radeon RX 9060 XT). With the land (qeytoqrg, its two drawn neighbours, no texture pack, the viewer at 1280 x 720):
+  qey2hh1 33 -> 38 MB (its part of the land, 13,237 squares drawn twice, 52,948 triangles), qeynos2 unchanged at 24 MB; on the loader
   about 300 and 200 ms as before from the cache, and measuring a neighbour's ground the first time adds about as much
   again; the frame time 5.19 -> 5.30 ms looking out over Western Karana. The cache files are 23 KB (qeynos2) and 136 KB
   (qey2hh1).

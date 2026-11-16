@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <system_error>
 #include <unordered_map>
+#include <utility>
 
 #include "assets/texture.h"
 #include "assets/texture_overrides.h"
@@ -471,6 +472,10 @@ void ZoneRenderer::upload(Prepared& p) {
     stats_.missing_textures = p.missing_textures;
 }
 
+std::uint32_t zone_texture_layout_count(std::uint32_t textures, std::uint32_t max_sampled_images) {
+    return std::max(textures, std::max(1u, std::min(kZoneTextureBound, max_sampled_images)));
+}
+
 ZoneRenderer::ZoneRenderer(VkContext& vk, const assets::Zone& zone, const std::filesystem::path& shader_dir,
                            const ZoneRenderOptions& options)
     : ZoneRenderer(vk, prepare(zone, options, vk.caps().max_sampled_images), shader_dir) {}
@@ -488,8 +493,15 @@ ZoneRenderer::ZoneRenderer(VkContext& vk, PreparedPtr prepared, const std::files
     // A neighbour zone (behind_) keeps its single pass: its ties go by the draw order (GREATER, first drawn wins),
     // which an equal test over the pre-pass's written depth would turn around.
     depth_prepass_ = vk.scene_options().depth_prepass && !behind_;
+    using Ms = std::chrono::duration<float, std::milli>;
+    auto step = std::chrono::steady_clock::now();
+    const auto lap = [&step] {
+        const auto now = std::chrono::steady_clock::now();
+        return Ms(now - std::exchange(step, now)).count();
+    };
     upload(*prepared);
     prepared.reset();
+    stats_.upload_ms = lap();
     create_descriptors();
     // Shared textures moved into this client's own images when sharing stopped: the set takes the new views.
     shared_listener_ = vk_.on_shared_textures_moved([this] {
@@ -498,9 +510,11 @@ ZoneRenderer::ZoneRenderer(VkContext& vk, PreparedPtr prepared, const std::files
             if (refresh_shared_texture(t)) changed = true;
         if (changed) write_texture_set();
     });
+    stats_.descriptors_ms = lap();
     create_pipelines(shader_dir);
     create_shadow_pipeline(shader_dir);
     create_underwater_pipeline(shader_dir);
+    stats_.pipelines_ms = lap();
 }
 
 ZoneRenderer::~ZoneRenderer() {
@@ -1756,7 +1770,8 @@ void ZoneRenderer::create_descriptors() {
     VkDescriptorSetLayoutBinding binding{};
     binding.binding = 0;
     binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    binding.descriptorCount = count;
+    // The variable-count binding's upper bound (the set is allocated with the zone's own count below).
+    binding.descriptorCount = zone_texture_layout_count(count, vk_.caps().max_sampled_images);
     binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     VkDescriptorBindingFlags flags =
         VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
