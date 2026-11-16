@@ -890,6 +890,68 @@ TEST_CASE("native plugins: get_target_buff_data_bulk, laid out as docs/plugins.m
     h.run("/probetargetbuffs");
     CHECK(h.printed_line("[Probe] target buffs 0 bytes, 0 records, 0 empty, 0 bytes left"));
 }
+TEST_CASE("native plugins: get_avail_aa_data_bulk and get_avail_disc_data_bulk, laid out as docs/plugins.md says") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+    using A = net::GameConnectionTestAccess;
+    // Nothing owned, no disciplines: the header alone, its count 0.
+    h.run("/probeaas");
+    CHECK(h.printed_line("[Probe] aas count 0, 4 bytes, 0 bytes left"));
+    h.run("/probediscs");
+    CHECK(h.printed_line("[Probe] discs count 0, 4 bytes, 0 bytes left"));
+
+    // Owned ranks by their ability (group) id with the rank's name (dbstr type 1), in the owned list's order: an empty
+    // slot and a rank the AA table does not hold (no group id known) are left out. A title the game folder's
+    // dbstr_us.txt lacks gives an empty name.
+    auto& aa = A::alt_adv(*h.world.conn);
+    auto rank = [](std::uint32_t id, std::int32_t group, std::int32_t number, std::int32_t title) {
+        game::AltAbility a;
+        a.id = id;
+        a.group = group;
+        a.rank = number;
+        a.title_sid = title;
+        return a;
+    };
+    aa.add(rank(1003, 5, 3, 9001)); // the third rank of ability 5, Innate Strength
+    aa.add(rank(2001, 77, 1, -1));  // no title
+    aa.owned = {{1003, 3, 0}, {0, 0, 0}, {9999, 1, 0}, {2001, 1, 0}};
+    h.run("/probeaas");
+    CHECK(h.printed_line("[Probe] aas 0: 5 Innate Strength"));
+    CHECK(h.printed_line("[Probe] aas 1: 77 -"));
+    CHECK(h.printed_line("[Probe] aas count 2, 35 bytes, 0 bytes left")); // 4, 8+15, 8+0
+    // As many whole records, names included, as fit after the count; below the count's 4 bytes nothing, and nothing
+    // past the end.
+    h.printed.clear();
+    h.run("/probeaas 34");
+    CHECK(h.printed_line("[Probe] aas 0: 5 Innate Strength"));
+    CHECK_FALSE(h.printed_line("[Probe] aas 1: 77 -"));
+    CHECK(h.printed_line("[Probe] aas count 1, 27 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] aas past the end 0"));
+    h.printed.clear();
+    h.run("/probeaas 3");
+    CHECK(h.printed_line("[Probe] aas 0 bytes"));
+    CHECK(h.printed_line("[Probe] aas past the end 0"));
+
+    // The profile's discipline list without its empty entries, in list order, each with its spell's name (none for
+    // a spell not in spells_us.txt).
+    A::profile(*h.world.conn)->disciplines = {4498, 0, 99999, 0, 0};
+    h.run("/probediscs");
+    CHECK(h.printed_line("[Probe] discs 0: 4498 Test Discipline"));
+    CHECK(h.printed_line("[Probe] discs 1: 99999 -"));
+    CHECK(h.printed_line("[Probe] discs count 2, 35 bytes, 0 bytes left")); // 4, 8+15, 8+0
+    h.printed.clear();
+    h.run("/probediscs 34");
+    CHECK(h.printed_line("[Probe] discs 0: 4498 Test Discipline"));
+    CHECK_FALSE(h.printed_line("[Probe] discs 1: 99999 -"));
+    CHECK(h.printed_line("[Probe] discs count 1, 27 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] discs past the end 0"));
+    // Before the profile: the header, count 0.
+    h.printed.clear();
+    A::profile(*h.world.conn).reset();
+    h.run("/probediscs");
+    CHECK(h.printed_line("[Probe] discs count 0, 4 bytes, 0 bytes left"));
+}
 TEST_CASE("native plugins: cursor_origin gives the cursor item's origin, and needs 'read'") {
     using A = net::GameConnectionTestAccess;
     auto server_item = [](std::uint32_t id) {
@@ -935,4 +997,8 @@ TEST_CASE("native plugins: the buff bulk reads need 'read'") {
     CHECK(h.printed_line("[Probe] xtargets 0 bytes"));
     h.run("/probetargetbuffs 2048");
     CHECK(h.printed_line("[Probe] target buffs 0 bytes, 0 records, 0 empty, 0 bytes left"));
+    h.run("/probeaas 2048");
+    CHECK(h.printed_line("[Probe] aas 0 bytes"));
+    h.run("/probediscs 2048");
+    CHECK(h.printed_line("[Probe] discs 0 bytes"));
 }

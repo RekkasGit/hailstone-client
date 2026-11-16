@@ -1499,6 +1499,88 @@ int32_t h_get_xtarget_data_bulk(void* h, unsigned char* data, int32_t datamax)
     return bufferSize;
 }
 
+// A count-prefixed list of named ids for the bulk reads: an int32_t count, then for each id that `each` gives
+// (each(emit) calls emit(id, name) for every one, in order) an HS_Bulk_Id_Str_Pair_Record followed by the name's
+// nameSize bytes (no NUL), as many whole records as fit after the count. The count says how many follow. Nothing
+// (0 bytes) when not even the count fits.
+template <typename Each> int32_t write_id_str_list(unsigned char* data, int32_t datamax, Each&& each) {
+    static_assert(sizeof(HS_Bulk_Id_Str_Pair_Record) == HAILSTONE_ID_RECORD_SIZE);
+    const std::size_t headerBytes = sizeof(int32_t); // the count
+    const std::size_t idBytes = sizeof(HS_Bulk_Id_Str_Pair_Record);
+    if (!data || datamax <= 0 || static_cast<std::size_t>(datamax) < headerBytes) return 0;
+    const std::size_t room = static_cast<std::size_t>(datamax);
+    std::size_t bufferSize = headerBytes;
+    int32_t count = 0;
+    bool full = false;
+    each([&](int32_t id, std::string_view name) {
+        if (full) return;
+        if (idBytes + name.size() > room - bufferSize) { // buffer is full: only whole records, the rest left out
+            full = true;
+            return;
+        }
+        // Written in place through the packed struct (the bulk reads may cast, docs/plugins.md).
+        HS_Bulk_Id_Str_Pair_Record* rec = reinterpret_cast<HS_Bulk_Id_Str_Pair_Record*>(data + bufferSize);
+        rec->id = id;
+        rec->nameSize = static_cast<int32_t>(name.size());
+        bufferSize += idBytes;
+        if (!name.empty()) std::memcpy(data + bufferSize, name.data(), name.size());
+        bufferSize += name.size();
+        ++count;
+    });
+    std::memcpy(data, &count, sizeof count); // in the machine's byte order, unaligned, as the records
+    return static_cast<int32_t>(bufferSize);
+}
+
+/// <summary>
+/// The alternate abilities the character owns, one ability (group) id each, as aa_value takes it, with its name (the
+/// rank's dbstr type 1 title, as the AA window shows it; empty when the game folder's dbstr_us.txt lacks it): an
+/// int32_t count then one HS_Bulk_Id_Str_Pair_Record and its name per ability, in the order of the owned list (the
+/// profile's, then OP_RespondAA's). An owned rank the AA table does not hold (OP_SendAATable has not sent it) has no
+/// known group id and is left out, as aa_value finds nothing for it.
+/// </summary>
+/// <param name="h">host</param>
+/// <param name="data">buffer to put data in</param>
+/// <param name="datamax">4 bytes for the count plus 8 per ability and its name; 16384 holds RoF2's 300 owned</param>
+/// <returns>bytes written; 0 below 4 bytes</returns>
+int32_t h_get_avail_aa_data_bulk(void* h, unsigned char* data, int32_t datamax)
+{
+    const net::GameConnection* c = readable(Loaded::of(h), "get_avail_aa_data_bulk");
+    if (!c) return 0;
+    const auto& aa = c->alt_adv();
+    return write_id_str_list(data, datamax, [&](auto&& emit) {
+        for (const auto& o : aa.owned) {
+            if (o.id == 0) continue; // an empty slot
+            if (const game::AltAbility* a = aa.get(o.id)) emit(a->group, c->aa_name(*a));
+        }
+    });
+}
+
+/// <summary>
+/// The character's combat abilities (disciplines), one spell id each with the spell's name (empty for a spell not in
+/// spells_us.txt): the profile's discipline list (PcBase::GetCombatAbility, as combat_ability reads it by index)
+/// without its empty entries, in list order, as an int32_t count then one HS_Bulk_Id_Str_Pair_Record and its name per
+/// discipline.
+/// </summary>
+/// <param name="h">host</param>
+/// <param name="data">buffer to put data in</param>
+/// <param name="datamax">4 bytes for the count plus 8 per discipline and its name; 16384 holds RoF2's 300</param>
+/// <returns>bytes written; 0 below 4 bytes</returns>
+int32_t h_get_avail_disc_data_bulk(void* h, unsigned char* data, int32_t datamax)
+{
+    const net::GameConnection* c = readable(Loaded::of(h), "get_avail_disc_data_bulk");
+    if (!c) return 0;
+    const auto& profile = c->profile();
+    const game::SpellTable& spells = c->spell_table();
+    return write_id_str_list(data, datamax, [&](auto&& emit) {
+        if (!profile) return; // before the profile: the count is 0
+        for (std::uint32_t spell : profile->disciplines) {
+            if (spell == 0) continue; // an empty entry
+            const game::SpellData* sp = spells.get(spell);
+            emit(static_cast<int32_t>(spell), sp ? std::string_view(sp->name) : std::string_view());
+        }
+    });
+}
+
 int h_get_xtarget(void* h, std::uint32_t index, HailstoneXTarget* out) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_xtarget");
     if (!c) return 0;
@@ -2116,6 +2198,8 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.get_spawns_data_bulk = main_only<h_get_spawns_data_bulk>;
     p.table.get_xtarget_data_bulk = main_only<h_get_xtarget_data_bulk>;
     p.table.get_target_buff_data_bulk = main_only<h_get_target_buff_data_bulk>;
+    p.table.get_avail_aa_data_bulk = main_only<h_get_avail_aa_data_bulk>;
+    p.table.get_avail_disc_data_bulk = main_only<h_get_avail_disc_data_bulk>;
     p.table.cursor_origin = main_only<h_cursor_origin>;
     p.owner = m.env.hooks->new_guest("plugin:" + name);
 

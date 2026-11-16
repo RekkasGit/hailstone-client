@@ -11,6 +11,8 @@
 //   /probextargets [n]  get_xtarget_data_bulk the same way, through HS_Bulk_XTargetData
 //   /probetargetbuffs [n]  get_target_buff_data_bulk the same way, through HS_Bulk_TargetBuffFixedRecord and the
 //   caster's name after each
+//   /probeaas [n], /probediscs [n]  get_avail_aa_data_bulk / get_avail_disc_data_bulk the same way, through
+//   the int32_t count and HS_Bulk_Id_Str_Pair_Record
 //   /probecursor   cursor_origin, when the host table has it
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
@@ -226,6 +228,80 @@ void probe_target_buffs(void*, const char* args) {
         empty, size - at);
 }
 
+static_assert(sizeof(HS_Bulk_Id_Str_Pair_Record) == HAILSTONE_ID_RECORD_SIZE);
+
+// get_avail_aa_data_bulk, the owned alternate abilities: each record one line by its position (id, name), then the
+// count, the bytes and the bytes left over after the records it counts (0 when the count and every name are framed
+// right). With n, also how many bytes past the first n the host changed (guard bytes; 0 unless it wrote past the end).
+void probe_aa(void*, const char* args) {
+    unsigned char buf[8192];
+    constexpr unsigned char guard = 0xA5;
+    std::memset(buf, guard, sizeof buf);
+    const std::int32_t n = size_arg(args, sizeof buf);
+    const std::int32_t r = host->get_avail_aa_data_bulk(host->host, buf, n);
+    if (n < static_cast<std::int32_t>(sizeof buf)) {
+        std::size_t changed = 0;
+        for (std::size_t i = static_cast<std::size_t>(n); i < sizeof buf; ++i) changed += buf[i] != guard;
+        WriteChatf("[Probe] aas past the end %zu", changed);
+    }
+    const std::size_t size = r > 0 ? static_cast<std::size_t>(r) : 0;
+    std::int32_t count = 0;
+    if (size < sizeof count) {
+        WriteChatf("[Probe] aas %d bytes", static_cast<int>(r));
+        return;
+    }
+    std::memcpy(&count, buf, sizeof count); // a plain int32_t, unaligned in general
+    std::size_t at = sizeof count;
+    for (std::int32_t i = 0; i < count; ++i) {
+        if (size - at < sizeof(HS_Bulk_Id_Str_Pair_Record)) break; // a count past the bytes: the "left" count shows it
+        const auto* rec = reinterpret_cast<const HS_Bulk_Id_Str_Pair_Record*>(buf + at);
+        const std::size_t len = rec->nameSize > 0 ? static_cast<std::size_t>(rec->nameSize) : 0;
+        if (len > size - at - sizeof(HS_Bulk_Id_Str_Pair_Record)) break; // a name running past the end
+        at += sizeof(HS_Bulk_Id_Str_Pair_Record);
+        const std::string name(reinterpret_cast<const char*>(buf + at), len);
+        at += len;
+        WriteChatf("[Probe] aas %d: %d %s", static_cast<int>(i), rec->id, name.empty() ? "-" : name.c_str());
+    }
+    WriteChatf("[Probe] aas count %d, %d bytes, %zu bytes left", static_cast<int>(count), static_cast<int>(r),
+        size - at);
+}
+
+// get_avail_disc_data_bulk, the combat abilities: each record one line by its position (id, name), then the
+// count, the bytes and the bytes left over after the records it counts (0 when the count and every name are framed
+// right). With n, also how many bytes past the first n the host changed (guard bytes; 0 unless it wrote past the end).
+void probe_disc(void*, const char* args) {
+    unsigned char buf[8192];
+    constexpr unsigned char guard = 0xA5;
+    std::memset(buf, guard, sizeof buf);
+    const std::int32_t n = size_arg(args, sizeof buf);
+    const std::int32_t r = host->get_avail_disc_data_bulk(host->host, buf, n);
+    if (n < static_cast<std::int32_t>(sizeof buf)) {
+        std::size_t changed = 0;
+        for (std::size_t i = static_cast<std::size_t>(n); i < sizeof buf; ++i) changed += buf[i] != guard;
+        WriteChatf("[Probe] discs past the end %zu", changed);
+    }
+    const std::size_t size = r > 0 ? static_cast<std::size_t>(r) : 0;
+    std::int32_t count = 0;
+    if (size < sizeof count) {
+        WriteChatf("[Probe] discs %d bytes", static_cast<int>(r));
+        return;
+    }
+    std::memcpy(&count, buf, sizeof count); // a plain int32_t, unaligned in general
+    std::size_t at = sizeof count;
+    for (std::int32_t i = 0; i < count; ++i) {
+        if (size - at < sizeof(HS_Bulk_Id_Str_Pair_Record)) break; // a count past the bytes: the "left" count shows it
+        const auto* rec = reinterpret_cast<const HS_Bulk_Id_Str_Pair_Record*>(buf + at);
+        const std::size_t len = rec->nameSize > 0 ? static_cast<std::size_t>(rec->nameSize) : 0;
+        if (len > size - at - sizeof(HS_Bulk_Id_Str_Pair_Record)) break; // a name running past the end
+        at += sizeof(HS_Bulk_Id_Str_Pair_Record);
+        const std::string name(reinterpret_cast<const char*>(buf + at), len);
+        at += len;
+        WriteChatf("[Probe] discs %d: %d %s", static_cast<int>(i), rec->id, name.empty() ? "-" : name.c_str());
+    }
+    WriteChatf("[Probe] discs count %d, %d bytes, %zu bytes left", static_cast<int>(count), static_cast<int>(r),
+        size - at);
+}
+
 void probe_cursor(void*, const char*) {
     if (!HAILSTONE_HOST_HAS(host, cursor_origin)) {
         WriteChatf("[Probe] cursor origin: not in this client");
@@ -255,6 +331,8 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probespawns", probe_spawns, nullptr);
     AddCommand("/probextargets", probe_xtargets, nullptr);
     AddCommand("/probetargetbuffs", probe_target_buffs, nullptr);
+    AddCommand("/probeaas", probe_aa, nullptr);
+    AddCommand("/probediscs", probe_disc, nullptr);
     AddCommand("/probecursor", probe_cursor, nullptr);
     AddTopLevelObject("Probe", probe_tlo, nullptr);
 #ifdef HAILSTONE_PROBE_THROW_INIT
@@ -273,6 +351,8 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probespawns");
     RemoveCommand("/probextargets");
     RemoveCommand("/probetargetbuffs");
+    RemoveCommand("/probeaas");
+    RemoveCommand("/probediscs");
     RemoveCommand("/probecursor");
     RemoveTopLevelObject("Probe");
 }

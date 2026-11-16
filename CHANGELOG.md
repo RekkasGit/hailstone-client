@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- For plugin authors: two new host functions, `get_avail_aa_data_bulk` and `get_avail_disc_data_bulk`, list the character's owned alternate abilities (by ability id) and combat abilities (by spell id) in one call, each with its name, as a count followed by that many records of a 32-bit id, a 32-bit name size and the name (`HS_Bulk_Id_Str_Pair_Record`; docs/plugins.md "Buff and spawn records")
 - For plugin authors: a new host function, `get_target_buff_data_bulk`, reads the current target's buffs in one call: spell id, tics, spell type, buff slot and the caster's name for each, as a 20-byte `HS_Bulk_TargetBuffFixedRecord` followed by the name (docs/plugins.md "Buff and spawn records")
 - Luclin player models: combat swings, casting, socials (wave, cheer) and every other animation of more than 15 frames play at the original's speed; before, they ran at about half speed. The classic models are unchanged
 - Graphics: the upscaler is off by default on every computer, so the 3D world is drawn at full size. A player who never chose an upscaler, and was on AMD FSR 1, is now at Off; Options > Graphics > Upscaler turns FSR 1, Temporal or FSR 3.1 back on

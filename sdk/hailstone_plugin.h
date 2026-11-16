@@ -194,6 +194,13 @@ typedef struct HS_Bulk_TargetBuffFixedRecord {
     int32_t slot;             /* the target's buff slot, as the server sent it (EQEmu: the mob's own slot index) */
     int32_t casterNameLength; /* bytes of the caster's name that follow; 0 for none */
 } HS_BulkTargetBuffFixedRecord;
+/* get_avail_aa_data_bulk and get_avail_disc_data_bulk: an int32_t count, then `count` records, each an
+ * HS_Bulk_Id_Str_Pair_Record (HAILSTONE_ID_RECORD_SIZE bytes) immediately followed by nameSize bytes of the name (no
+ * NUL); the next record starts after them. */
+typedef struct HS_Bulk_Id_Str_Pair_Record {
+    int32_t id;       /* an AA's ability (group) id, or a discipline's spell id */
+    int32_t nameSize; /* bytes of the AA's or the discipline's name that follow; 0 when the client has none */
+} HS_Bulk_Id_Str_Pair_Record;
 #pragma pack(pop)
 
 /* An extended target slot's type: HailstoneXTarget.type and HS_BulkXTargetData.targetType. The values are the
@@ -729,6 +736,8 @@ typedef struct PluginHostApi {
     uint32_t (*cursor_origin)(void* host);
     int32_t (*get_xtarget_data_bulk)(void* host, unsigned char* out, int32_t out_size);
     int32_t (*get_target_buff_data_bulk)(void* host, unsigned char* out, int32_t out_size);
+    int32_t (*get_avail_aa_data_bulk)(void* host, unsigned char* out, int32_t out_size);
+    int32_t (*get_avail_disc_data_bulk)(void* host, unsigned char* out, int32_t out_size);
 } PluginHostApi;
 /* Not known: it was on the cursor at zone-in, replaced a cursor item, or came by a path the client does not mark.
  * Treat it as the player's; never destroy it unattended. */
@@ -749,6 +758,7 @@ typedef struct PluginHostApi {
 #define HAILSTONE_PET_BUFF_RECORD_SIZE 12
 #define HS_BULK_XTARGET_RECORD_SIZE 16
 #define HAILSTONE_TARGET_BUFF_RECORD_SIZE 20
+#define HAILSTONE_ID_RECORD_SIZE 8
 /* Whether this client's host table has `field` (one added after the plugin's ABI) and it is set. */
 #define HAILSTONE_HOST_HAS(h, field)                                                                                   \
     ((h) && (h)->size >= offsetof(PluginHostApi, field) + sizeof((h)->field) && (h)->field)
