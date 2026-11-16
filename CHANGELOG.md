@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Performance: grounding floating NPCs no longer searches the zone's collision a second time when a physics step has just landed the spawn on its floor
+- Performance: keeping moving NPCs on the ground no longer searches the zone's collision a second time when a physics step has just landed the spawn on its floor
 - Frame rate: the login, server select, character select/creation and loading screens (including the last stretch of a zone-in) no longer run as fast as they can when `display.max_fps` is unlimited; they are capped at 240 fps; any other `display.max_fps` value is still followed exactly
 - Modern lighting: the distant land past a zone's edge has trees: the zone's own trees stand in groves and here and there across the far hills, and over the zones you have visited they stand where those zones' own trees do. They go with Horizon Hills
 - Modern lighting: the land beyond a zone's neighbours now takes the shape of the zones you have been to on that server, instead of made-up hills and mountains. From Qeynos Hills, South Qeynos and the open sea past its harbour now show behind North Qeynos. It fills in as you travel; a server admin with a GM character can fill it ahead of time with playprobe's `--atlas-crawl`. Those zones take on the colours of their own ground (South Qeynos's cobbles and brick rather than more grass). The sea now goes on to the horizon past a zone's shore, its own or a neighbour's, instead of rising into made-up mountains, and the distant sea is drawn as water: before, it showed as a flat green plain
