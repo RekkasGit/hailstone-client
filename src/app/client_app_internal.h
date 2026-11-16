@@ -9,6 +9,7 @@
 #include "app/updater.h"
 #include "platform/process.h"
 #include "core/step_clock.h"
+#include "core/worker_pool.h"
 #include "app/addon_manager.h"
 #include "app/addon_suggest.h"
 #include "app/window_icon.h"
@@ -1040,6 +1041,12 @@ private:
     std::filesystem::path shader_dir_;
     platform::Window window_;
     std::string window_title_; // what update_window_title() set last
+    // The frame's worker threads (core/worker_pool.h; display.worker_threads), made in run(). Declared before every
+    // renderer and actor_emitters_, so it outlives the work they hand it.
+    std::unique_ptr<core::WorkerPool> workers_;
+    // This frame's actor-effect step, set in the Prepare phase and started once the frame is recorded
+    // (ActorEmitters::simulate_async), or at once for a frame not drawn.
+    std::function<void()> emitter_step_;
     render::VkContext vk_;
     // Declared after vk_, so it is destroyed before the Vulkan device it holds objects of: draw_nameplates makes it at its
     // first use.

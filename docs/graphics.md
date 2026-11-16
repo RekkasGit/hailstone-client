@@ -83,6 +83,27 @@ brings it up to the view's size; `shaders/fsr_rcas.frag` (RCAS) sharpens that by
 swapchain and adds the dither. The UI is drawn after, at the window's own size. Textures keep their LOD bias (none
 yet). With `display.upscaler = taa` the temporal upscaler takes FSR 1's place (Temporal upscaling, below).
 
+### Worker threads
+
+The frame hands some of its own loops to a small pool of worker threads (`core/worker_pool.h`): one fewer than the
+machine's hardware threads, at most 6 (`core::default_worker_count`), or `display.worker_threads` (0: none, every loop
+on the main thread). `core::parallel_for` splits a loop into chunks that the workers and the main thread take in turn;
+without a pool (the tests, the tools) or from inside a worker it runs the loop inline. What runs there:
+
+- The characters' posing and skinning (`render::ActorRenderer::prepare`): each drawn instance's slice of the frame's
+  bones is given out on the main thread (the culling and the bone budget, in order), the instances are posed and
+  skinned on the workers, each into its own slice, and the motion history is kept on the main thread after.
+- The particle quads (`render::ParticleRenderer::draw`). Modern: after the sort, each particle has its own six
+  vertices in the buffer. Classic: the particles each emitter shows are counted on the workers, the emitters' places
+  are given out in order up to the buffer's size, then their quads are built on the workers. A particle that turns
+  out to show nothing after its place was given out (a quad past its depth offset) is written as six vertices at one
+  point, which draw no pixel.
+- The actor effects' step (`app::ActorEmitters::simulate_async`): once the frame is recorded, each attached emitter's
+  place is read from the poses as drawn (on the main thread), then both particle systems step on a worker while the
+  frame is submitted and the next one begins; every other call on them waits for the step. The next frame draws the
+  result, from the same poses the step used before (those drawn the frame before), the particles' own time one frame
+  behind. The item previews' and the tests' emitters still step inline.
+
 ### Temporal upscaling
 
 `display.upscaler = taa` (read at start-up, as `display.msaa`; the viewer's `--upscaler taa`) draws the scene jittered
@@ -2074,6 +2095,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.neighbour_zones` | 0, 1 | 1 | the zone past an outdoor zone line drawn in the distance (Neighbour zones); modern only; `/neighbourzones [on \| off]` |
 | `display.horizon_hills` | 0, 1 | 1 | land round an outdoor zone past its edges (Horizon hills); modern only; viewer `--no-horizon` |
 | `display.volumetric_clouds` | 0, 1 | 1 | clouds marched through the air over the plain skies, in place of the painted cloud layer and patches (Volumetric Clouds); modern only; viewer `--no-clouds` |
+| `display.worker_threads` | -1, 0 .. 16 | -1 | the frame's worker threads (Worker threads); -1 one fewer than the hardware threads, at most 6; 0 none; read at start-up |
 | `display.smooth_ground` | 0, 1 | 1 | a classic zone's ground drawn smooth and curved (Smoothed ground); read as each zone loads; viewer `--no-smooth-ground` |
 | `display.tree_detail` | 50 to 200 | 100 | how far a texture pack's replacement models (generated trees) keep their nearer levels of detail, in percent of their own distances (Tree Detail Distance); viewer `--tree-detail` |
 | `display.target_ring_cues` | 0, 1 | 1 | the target ring's sweep on a new target and pulse while attacking (Target Ring Cues; The target ring) |

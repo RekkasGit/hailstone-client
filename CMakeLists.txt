@@ -124,6 +124,7 @@ add_library(hailstone_engine STATIC
   src/core/sha1.cpp
   src/core/sha256.cpp
   src/core/shared_file_cache.cpp
+  src/core/worker_pool.cpp
   src/plugin/hooks.cpp
   src/plugin/consent.cpp
   src/plugin/policy.cpp
@@ -1099,6 +1100,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/zone_settle_test.cpp
     tests/work_budget_test.cpp
     tests/latest_jobs_test.cpp
+    tests/worker_pool_test.cpp
     tests/animation_track_test.cpp
     tests/character_memory_test.cpp
     tests/character_share_test.cpp

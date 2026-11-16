@@ -22,6 +22,15 @@ int ClientApp::run() {
     // The game clock (core/step_clock.h): the rules run at 60 steps a second; game.fixed_step false steps once a
     // drawn frame instead, as the original's code is written (docs/mechanics.md "Frame rate").
     step_clock_.set_fixed(config_.get_bool("game.fixed_step", true));
+    {
+        // The frame's worker threads: display.worker_threads, -1 (the default) for core::default_worker_count, 0 for
+        // none (every loop on the main thread, as before they came).
+        const int wanted = config_.get_int("display.worker_threads", -1);
+        const unsigned count = wanted < 0 ? core::default_worker_count() : static_cast<unsigned>(std::min(wanted, 16));
+        workers_ = std::make_unique<core::WorkerPool>(count);
+        core::set_workers(workers_.get());
+        log::info("worker threads: {}", count);
+    }
     for (int frame = 0; !quit_ && window_.poll_events(); ++frame) {
         if (opts_.frames && frame >= opts_.frames) break;
         retired_ui_textures_.reset(); // the last frame, which may have drawn it, is submitted (waits for the GPU)
@@ -309,18 +318,17 @@ int ClientApp::run() {
                 for (const auto& o : objects->object_actors()) actor_emitter_list_.push_back({o.id, o.emitters});
             }
             const render::ActorRenderer* actors = actor_renderer_.get();
-            actor_emitters_->update(dt, actor_emitter_list_,
-                                    [actors, objects](std::uint32_t id, int bone, glm::mat4& w) {
-                                        if (id & WorldObjects::kMissileActorBit)
-                                            return objects && bone == 0 && objects->missile_transform(id, w);
-                                        if (id & WorldObjects::kObjectActorBit)
-                                            return objects && bone == 0 && objects->object_transform(id, w);
-                                        return actors->drawn_bone(id, bone, w);
-                                    },
-                                    camera_.position,
+            ActorEmitters::BoneWorld bones = [actors, objects](std::uint32_t id, int bone, glm::mat4& w) {
+                if (id & WorldObjects::kMissileActorBit) return objects && bone == 0 && objects->missile_transform(id, w);
+                if (id & WorldObjects::kObjectActorBit) return objects && bone == 0 && objects->object_transform(id, w);
+                return actors->drawn_bone(id, bone, w);
+            };
+            actor_emitters_->update(dt, actor_emitter_list_, bones, camera_.position,
                                     [actors](std::uint32_t id, std::string_view code, float& time) {
                                         return actors->drawn_playing(id, code, time);
                                     });
+            // The step itself, on the poses as drawn this frame, once the frame is recorded (below).
+            emitter_step_ = [this, dt, bones = std::move(bones)] { actor_emitters_->simulate_async(dt, bones); };
         }
         float brightness = (in_world || pre_game) && outdoor_light_ ? render::outdoor_brightness(sky_hour) : 1.0f;
         std::optional<game::SceneFogFrame> fog_frame;
@@ -361,6 +369,7 @@ int ClientApp::run() {
         if (f) last_drawn = now;
         if (!f) {
             ui_.end_frame_without_render();
+            if (emitter_step_) std::exchange(emitter_step_, nullptr)();
             continue;
         }
         lap = core::frame_sections::Lap();
@@ -824,6 +833,9 @@ int ClientApp::run() {
         lap.mark("scene other");
         ui_.render(*f);
         lap.mark("ImGui render");
+        // The actor effects' next step, on a worker while this frame is submitted and the next one begins.
+        if (emitter_step_) std::exchange(emitter_step_, nullptr)();
+        lap.mark("actor effects step start");
         perf_ui_.mark(FramePhase::Record);
         vk_.end_frame(*f);
         perf_ui_.set_presented(vk_.frames_presented(), vk_.frame_generated());

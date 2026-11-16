@@ -249,6 +249,8 @@ public:
     const assets::CharacterModel* spawn_model(std::uint32_t id) const;
     // The dressed mesh it was drawn with (nullptr: none, or the model's default geometry).
     const assets::CharacterMesh* drawn_mesh(std::uint32_t id) const;
+    // A bone's world matrix as last drawn. The skeleton is posed once per spawn per frame and kept (bone_cache_):
+    // an actor's effects, its nameplate and spells on it each ask for bones of the same pose. Main thread only.
     bool drawn_bone(std::uint32_t id, int bone, glm::mat4& world) const;
     // The actor's own world matrix as last drawn (its place, turn and scale; the actor's vtable +0x2c4 matrix that
     // spell emitters on it take their axes from); false when it was not drawn.
@@ -488,6 +490,15 @@ private:
     std::unordered_map<std::uint32_t, SpawnState> spawns_;
     std::unordered_set<std::uint32_t> drawn_;
     std::unordered_map<std::uint32_t, ActorDraw> last_draws_; // the spawns drawn last frame, for spawn_pose
+    // drawn_bone's poses of last_draws_, by spawn: model-space bones and the instance matrix. An entry is marked
+    // stale when its spawn's last_draws_ entry is written, and keeps its storage for the next pose.
+    struct BonePoseCache {
+        std::vector<glm::mat4> bones;
+        glm::mat4 instance{1.0f};
+        bool valid = false;
+    };
+    mutable std::unordered_map<std::uint32_t, BonePoseCache> bone_cache_;
+    mutable std::vector<assets::BonePose> bone_local_, bone_previous_; // pose_bones' scratch for drawn_bone
     std::unordered_map<std::uint32_t, std::pair<glm::vec3, float>> last_spawn_poses_; // their spawns' place, heading
     PlayerMotion player_motion_;
     std::uint32_t now_ms_ = 0; // the display clock
@@ -518,6 +529,15 @@ private:
     // built on the CPU before they are copied in (kept from frame to frame, so they are not reallocated).
     BoneHistory bone_history_;
     std::vector<glm::mat4> staged_bones_, staged_bones_before_;
+    // prepare's instances to pose, each with its slice of staged_bones_ (posed on the workers, kept for its memory).
+    struct PoseJob {
+        std::size_t actor = 0;
+        const assets::CharacterMesh* mesh = nullptr;
+        std::uint32_t first = 0, count = 0;
+        bool posed = false;
+    };
+    std::vector<PoseJob> pose_jobs_;
+    static constexpr std::size_t kPoseGrain = 4; // instances a worker takes at a time
     bool scene_ = true;
     std::array<void*, VkContext::kFramesInFlight> bones_mapped_{};
 
