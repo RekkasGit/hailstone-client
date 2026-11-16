@@ -490,6 +490,7 @@ code. A script that registers any of these stays loaded after its main chunk ret
 | `item(slot [, sub])` or `item{type, slot, sub, aug}` | `{id, name, type, item_class, classes, races, icon, stack, charges, req_level, bag_slots, click_spell, scroll_spell}`. An item with a click effect adds `click_type, click_level, click_cast_time (ms), click_recast (s), click_recast_type, click_max_charges (-1 unlimited), click_ready_in (s, 0 ready)`. `sub` is the place in a bag, from 0 |
 | `buff(i)` | `{spell_id, tics, level, caster_id}` for buff slot i (1-based), or nil when the slot is empty; `tics` is as the server last sent it, negative for a permanent buff |
 | `xtarget(i)` | `{type, status, spawn_id, name}` for extended target slot i (1-based) |
+| `raid()` | the raid roster as columnar tables: `active, locked, loot_type, count, leader, target, slot[], spawn_id[], name[], group[], flags[], level[], class[], pct_hp[], pct_mana[], pct_endurance[], pet_spawn_id[], pet_pct_hp[], x[], y[], z[], distance[]` (members 1-based; `leader`/`target` 1-based, 0 none). `-1` is an unknown percentage; `flags` are `HS_BULK_RAID_*`. One table, no table per member |
 | `eqstr(id, ...)` | a game string (eqstr_us.txt) with `%1`, `%2`, ... filled; nil when there is none |
 | `zone_name(id)` | a zone's short name |
 | `server()` | `{name, host, port, world, world_host}`, the server this login is on; nil before the world login |
@@ -1406,6 +1407,7 @@ or -1 and say so in the chat window. Only call these on the client's thread, fro
 | `get_buff_name_data_bulk(out, size)` | `read` | every buff slot of the player as `get_buff_data_bulk` gives them, with each caster's name in place of its spawn id: each 29-byte record followed by the name (`size` must hold every buff and song slot with their names, or 0 comes back; the discipline slot comes when its record and name fit too; layout in docs/plugins.md "Buff and spawn records"); returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_buff_name_data_bulk)` first |
 | `get_avail_aa_data_bulk(out, size)`, `get_avail_disc_data_bulk(out, size)` | `read` | the owned alternate abilities by ability (group) id, or the combat abilities by spell id, each with its name: an i32 count, then that many records (i32 id, i32 name size, the name's bytes), as many whole records as fit (layout in docs/plugins.md "Buff and spawn records"); returns the bytes written, 0 below 4. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, <field>)` first |
 | `get_xtarget_data_bulk(out, size)` | `read` | every extended target slot: type, spawn id, aggro meter percent and HP percent, 16 bytes a slot, as many whole records as fit (layout in docs/plugins.md "Buff and spawn records"); returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_xtarget_data_bulk)` first |
+| `get_raid_data_bulk(out, size)` | `read` | the raid roster: a 40-byte `HS_Bulk_RaidHeader`, then one 124-byte `HS_Bulk_RaidData` per member, as many whole records as fit; the header says `active` 0 and `count` 0 outside a raid. Returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_raid_data_bulk)` first |
 | `cursor_origin()` | `read` | how the item on the cursor got there: `HAILSTONE_CURSOR_ORIGIN_UNKNOWN` (0, also empty), `_INVENTORY` (1, the player's pickup) or `_SERVER` (2, the server put it on the empty cursor); docs/plugins.md "The cursor item's origin". Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, cursor_origin)` first |
 | `add_ui_function(name, fn, user)`, `remove_ui_function` | `ui` | a function the plugin's windows call as `eq.Plugin("<name>").<name>(...)` |
 | `arg_count`, `arg(i, out)`, `arg_field(i, key, out)` | | a UI function's arguments |
@@ -1468,6 +1470,8 @@ so a plugin built against an older SDK keeps working. Names are copied in, cut t
 | `HailstoneItemSlot` | `type` (0 the player's possessions), `slot`, `sub` (-1 the slot itself), `aug` (-1 none); no `size` |
 | `HailstoneBuff` | `spell_id` (0 empty), `tics` (unsigned: a permanent buff's negative count as its bits, 0xffffffff for -1), `level, caster_id` |
 | `HailstoneXTarget` | `type, status, spawn_id, name[64]` |
+| `HS_Bulk_RaidHeader` | `size, version, count, recordSize, leaderIndex, targetIndex, active, locked, lootType, reserved` |
+| `HS_Bulk_RaidData` | `slot, spawnID, group, flags, level, classID, pctHPs, pctMana, pctEndurance, petSpawnID, petPctHPs, x, y, z, distance, name[64]` |
 | `HailstoneServer` | `name[128], host[128], port, world[128], world_host[128]` |
 | `HailstoneMapSpawn` | `color` (0xRRGGBB), `layer` (0..3), `label[64]` |
 | `HailstoneWho`, `HailstoneWhoEntry` | a `/who` reply (see the header) |
@@ -1489,6 +1493,7 @@ so a plugin built against an older SDK keeps working. Names are copied in, cut t
 | `HAILSTONE_VITAL_*` | `MAX_HP` 0x01, `CUR_HP` 0x02, `MAX_MANA` 0x04, `CUR_MANA` 0x08, `MAX_ENDURANCE` 0x10, `CUR_ENDURANCE` 0x20 |
 | `HAILSTONE_SLOT_CURSOR` | 33 |
 | `HAILSTONE_TCP_MAX` | 8 |
+| `HS_BULK_RAID_*` | `LEADER` 0x001, `GROUP_LEADER` 0x002, `MAIN_ASSIST` 0x004, `MARKER` 0x008, `WAYPOINTER` 0x010, `LOOTER` 0x020, `OFFLINE` 0x040, `PRESENT` 0x080, `ME` 0x100 |
 
 docs/plugins.md "Server extensions (ABI 2)" explains what each flag does. "The names up to 0.6" there covers the old
 `nmsc_*` names, which still build and load.

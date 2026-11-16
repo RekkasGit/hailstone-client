@@ -1053,6 +1053,58 @@ TEST_CASE("native plugins: get_avail_aa_data_bulk and get_avail_disc_data_bulk, 
     CHECK(h.printed_line("[Probe] discs count 0, 4 bytes, 0 bytes left"));
     h.world.conn = std::move(conn);
 }
+TEST_CASE("native plugins: get_raid_data_bulk, laid out as docs/plugins.md says") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+    using A = net::GameConnectionTestAccess;
+    auto& raid = A::raid(*h.world.conn);
+    raid.active = true;
+    raid.leader = "Groupie";
+    raid.locked = true;
+    raid.loot_type = 3;
+    raid.looters = {"Tester"};
+    raid.target = "Tester";
+    raid.members = {
+        {"Groupie", 0, 2, 48, true, true, false, false, ""},
+        {"Tester", 0, 2, 50, false, false, false, false, ""},
+        {"Third", 1, 1, 45, false, false, true, false, ""},
+    };
+    auto& leadership = A::leadership(*h.world.conn);
+    leadership.raid_assist_names[0] = "Groupie";
+    leadership.raid_assist_names[1] = "Third";
+
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid active 1, count 3, leader 0, target 1, locked 1, loot 3, 412 bytes"));
+    // Leader, group leader, main assist, looter (the leader) and present; 100% HP from the test spawn.
+    CHECK(h.printed_line("[Probe] raid 0: Groupie 12 g0 f167 l48 c2 hp100 mp-1 ep-1 pet0 ph-1"));
+    // The listed looter, in the zone and the player: own HP 75%, mana 25%, endurance 50%.
+    CHECK(h.printed_line("[Probe] raid 1: Tester 1 g0 f416 l50 c2 hp75 mp25 ep50 pet0 ph-1"));
+    // No spawn in this zone: the roster's level and class, the marker flag, and no percentages.
+    CHECK(h.printed_line("[Probe] raid 2: Third 0 g1 f12 l45 c1 hp-1 mp-1 ep-1 pet0 ph-1"));
+
+    h.printed.clear();
+    h.run("/proberaid 40"); // the header alone
+    CHECK(h.printed_line("[Probe] raid active 1, count 0, leader 0, target 1, locked 1, loot 3, 40 bytes"));
+    h.run("/proberaid 164"); // header + one whole record
+    CHECK(h.printed_line("[Probe] raid active 1, count 1, leader 0, target 1, locked 1, loot 3, 164 bytes"));
+    CHECK(h.printed_line("[Probe] raid 0: Groupie 12 g0 f167 l48 c2 hp100 mp-1 ep-1 pet0 ph-1"));
+    CHECK_FALSE(h.printed_line("[Probe] raid 1: Tester 1 g0 f416 l50 c2 hp75 mp25 ep50 pet0 ph-1"));
+
+    // 4 Entire Raid: every member may loot, so the unlisted third member gains the looter flag too.
+    h.printed.clear();
+    raid.loot_type = 4;
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid active 1, count 3, leader 0, target 1, locked 1, loot 4, 412 bytes"));
+    CHECK(h.printed_line("[Probe] raid 0: Groupie 12 g0 f167 l48 c2 hp100 mp-1 ep-1 pet0 ph-1"));
+    CHECK(h.printed_line("[Probe] raid 1: Tester 1 g0 f416 l50 c2 hp75 mp25 ep50 pet0 ph-1"));
+    CHECK(h.printed_line("[Probe] raid 2: Third 0 g1 f44 l45 c1 hp-1 mp-1 ep-1 pet0 ph-1"));
+
+    raid.clear();
+    h.printed.clear();
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid active 0, count 0, leader 4294967295, target 4294967295, locked 0, loot 1, 40 bytes"));
+}
 TEST_CASE("native plugins: cursor_origin gives the cursor item's origin, and needs 'read'") {
     using A = net::GameConnectionTestAccess;
     auto server_item = [](std::uint32_t id) {
@@ -1098,6 +1150,8 @@ TEST_CASE("native plugins: the buff bulk reads need 'read'") {
     CHECK(h.printed_line("[Probe] spawns 0 bytes")); // the denial is said once per plugin, above
     h.run("/probextargets 512");
     CHECK(h.printed_line("[Probe] xtargets 0 bytes"));
+    h.run("/proberaid 512");
+    CHECK(h.printed_line("[Probe] raid 0 bytes"));
     h.run("/probetargetbuffs 2048");
     CHECK(h.printed_line("[Probe] target buffs 0 bytes, 0 records, 0 empty, 0 bytes left"));
     h.run("/probeaas 2048");

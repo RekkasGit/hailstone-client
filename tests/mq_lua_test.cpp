@@ -133,6 +133,40 @@ print('spell fields ok')
     CHECK(h.printed_line("spell fields ok"));
 }
 
+TEST_CASE("MQ Lua: hailstone.raid is a columnar roster") {
+    Host h;
+    using A = net::GameConnectionTestAccess;
+    auto& raid = A::raid(*h.world.conn);
+    raid.active = true;
+    raid.leader = "Groupie";
+    raid.locked = true;
+    raid.loot_type = 3;
+    raid.looters = {"Tester"};
+    raid.target = "Tester";
+    raid.members = {
+        {"Groupie", 0, 2, 48, true, true, false, false, ""},
+        {"Tester", 0, 2, 50, false, false, false, false, ""},
+        {"Third", 1, 1, 45, false, false, true, false, ""},
+    };
+    auto& leadership = A::leadership(*h.world.conn);
+    leadership.raid_assist_names[0] = "Groupie";
+    leadership.raid_assist_names[1] = "Third";
+    h.write("raid.lua", R"(
+local hs = require('hailstone')
+local r = assert(hs.raid())
+print('raid', r.active, r.count, r.leader, r.target, r.locked, r.loot_type)
+print('m1', r.name[1], r.spawn_id[1], r.group[1], r.flags[1], r.pct_hp[1])
+print('m2', r.name[2], r.spawn_id[2], r.flags[2], r.pct_hp[2], r.pct_mana[2], r.pct_endurance[2])
+print('m3', r.name[3], r.spawn_id[3], r.group[3], r.flags[3], r.pct_hp[3])
+)");
+    REQUIRE(h.scripts->run("raid", {}));
+    h.pulses(1);
+    CHECK(h.printed_line("raid true 3 1 2 true 3"));
+    CHECK(h.printed_line("m1 Groupie 12 0 167 100"));
+    CHECK(h.printed_line("m2 Tester 1 416 75 25 50"));
+    CHECK(h.printed_line("m3 Third 0 1 12 -1"));
+}
+
 TEST_CASE("MQ Lua: mq.TLO, print, mq.cmd, mq.parse and the script's arguments") {
     Host h;
     h.write("hello.lua", R"(

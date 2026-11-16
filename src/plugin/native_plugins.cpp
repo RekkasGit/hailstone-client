@@ -1,4 +1,5 @@
 #include "plugin/native_plugins.h"
+#include "plugin/raid_snapshot.h"
 
 #include <algorithm>
 #include <atomic>
@@ -1682,6 +1683,55 @@ int32_t h_get_avail_disc_data_bulk(void* h, unsigned char* data, int32_t datamax
     });
 }
 
+int32_t h_get_raid_data_bulk(void* h, unsigned char* data, int32_t datamax) {
+    const net::GameConnection* c = readable(Loaded::of(h), "get_raid_data_bulk");
+    if (!c || !data || datamax < static_cast<int32_t>(sizeof(HS_BulkRaidHeader))) return 0;
+
+    static_assert(sizeof(HS_BulkRaidHeader) == HS_BULK_RAID_HEADER_SIZE);
+    static_assert(sizeof(HS_BulkRaidData) == HS_BULK_RAID_RECORD_SIZE);
+    const plugin::RaidSnapshot raid = plugin::build_raid_snapshot(*c);
+
+    HS_BulkRaidHeader header{};
+    header.size = static_cast<std::uint32_t>(sizeof header);
+    header.version = 1;
+    header.recordSize = static_cast<std::uint32_t>(sizeof(HS_BulkRaidData));
+    header.leaderIndex = raid.leader ? static_cast<std::uint32_t>(*raid.leader) : HS_BULK_RAID_NO_INDEX;
+    header.targetIndex = raid.target ? static_cast<std::uint32_t>(*raid.target) : HS_BULK_RAID_NO_INDEX;
+    header.active = raid.active ? 1 : 0;
+    header.locked = raid.locked ? 1 : 0;
+    header.lootType = static_cast<int32_t>(raid.loot_type);
+    header.count = 0;
+
+    int32_t written = static_cast<int32_t>(sizeof header);
+    unsigned char* pBuffer = data + sizeof header;
+    for (const plugin::RaidMemberSnapshot& m : raid.members) {
+        if (static_cast<int32_t>(sizeof(HS_BulkRaidData)) > datamax - written) break; // whole records only
+        HS_BulkRaidData* rec = reinterpret_cast<HS_BulkRaidData*>(pBuffer);
+        *rec = HS_BulkRaidData{};
+        rec->slot = static_cast<int32_t>(header.count);
+        rec->spawnID = m.spawn_id;
+        rec->group = m.group;
+        rec->flags = m.flags;
+        rec->level = m.level;
+        rec->classID = m.class_id;
+        rec->pctHPs = m.pct_hp;
+        rec->pctMana = m.pct_mana;
+        rec->pctEndurance = m.pct_endurance;
+        rec->petSpawnID = m.pet_spawn_id;
+        rec->petPctHPs = m.pet_pct_hp;
+        rec->x = m.x;
+        rec->y = m.y;
+        rec->z = m.z;
+        rec->distance = m.distance;
+        copy_name(rec->name, m.name);
+        pBuffer += sizeof(HS_BulkRaidData);
+        written += static_cast<int32_t>(sizeof(HS_BulkRaidData));
+        ++header.count;
+    }
+    std::memcpy(data, &header, sizeof header);
+    return written;
+}
+
 int h_get_xtarget(void* h, std::uint32_t index, HailstoneXTarget* out) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_xtarget");
     if (!c) return 0;
@@ -2302,6 +2352,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.get_avail_aa_data_bulk = main_only<h_get_avail_aa_data_bulk>;
     p.table.get_avail_disc_data_bulk = main_only<h_get_avail_disc_data_bulk>;
     p.table.get_buff_name_data_bulk = main_only<h_get_buff_name_data_bulk>;
+    p.table.get_raid_data_bulk = main_only<h_get_raid_data_bulk>;
     p.table.cursor_origin = main_only<h_cursor_origin>;
     p.owner = m.env.hooks->new_guest("plugin:" + name);
 

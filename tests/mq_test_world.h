@@ -25,6 +25,8 @@ struct GameConnectionTestAccess {
     static game::SpellState& spells(GameConnection& c) { return c.spells_; }
     static std::int32_t& drunkenness(GameConnection& c) { return c.drunkenness_; }
     static game::GroupState& group(GameConnection& c) { return c.group_; }
+    static game::RaidState& raid(GameConnection& c) { return c.raid_; }
+    static GameConnection::Leadership& leadership(GameConnection& c) { return c.leadership_; }
     static std::vector<std::pair<std::uint32_t, game::BuffSlot>>& pet_buffs(GameConnection& c) { return c.pet_buffs_; }
     static game::Inventory& inventory(GameConnection& c) { return c.inventory_; }
     // How often the evolving transfer's item list was built, and its pair compared with the snapshots.
