@@ -670,6 +670,8 @@ int ClientApp::run() {
         if (scene) vk_.set_temporal_view(camera_.view(), camera_.projection(width, height, lit.far_plane));
         // The scene's draws go into secondary command buffers recorded on the workers (SceneRecorder), or inline.
         render::SceneRecorder& rec = *scene_recorder_;
+        // While it records in parallel, the laps below (frame_sections) time only the queuing ("... queued"); the
+        // recording itself is in "scene record (opaque)" and "scene record".
         rec.begin_frame(*f, scene && parallel_record_);
         // The loading screen's backdrop is black (ui::loading_overlay's too, while the zone settles behind it).
         vk_.begin_scene(*f, screen_ == Screen::Loading ? glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
@@ -710,7 +712,7 @@ int ClientApp::run() {
                 // Where no sky is drawn, the modern haze; under water, the water.
                 if (zone_renderer_ && (under_water || (modern && !sky_drawn)))
                     rec.add(*f, zone_renderer_.get(), [&](const render::FrameInfo& fr) { zone_renderer_->draw_backdrop(fr, vp); });
-                lap.mark("sky");
+                lap.mark(rec.active() ? "sky queued" : "sky");
             };
             // Classic draws all zone parts together; WLD details can blend over uncovered samples.
             const bool background_first = !modern ||
@@ -737,13 +739,13 @@ int ClientApp::run() {
                     zone_renderer_->draw_depth(fr, vp, camera_.position, lit, t);
                     zone_renderer_->draw(fr, vp, camera_.position, lit, t, first);
                 });
-            lap.mark("zone draw");
+            lap.mark(rec.active() ? "zone queued" : "zone draw");
             const bool neighbours = neighbours_ && modern && neighbour_zones_ && in_game;
             if (neighbours)
                 rec.add(*f, neighbours_.get(), [&](const render::FrameInfo& fr) {
                     neighbours_->draw(fr, vp, camera_.position, lit, t, first);
                 });
-            lap.mark("neighbour zones draw");
+            lap.mark(rec.active() ? "neighbour zones queued" : "neighbour zones draw");
             // Objects still draw their blended parts in the same call as their opaque parts.
             // Keep their background first, and the existing object/actor/silhouette order intact.
             // The water colour copy must also already contain the sky (flora follows that copy).
@@ -754,7 +756,7 @@ int ClientApp::run() {
                     world_objects_->draw(fr, vp, camera_.position, lit);
                 });
             }
-            lap.mark("objects draw");
+            lap.mark(rec.active() ? "objects queued" : "objects draw");
             if (flora_renderer_ && grass_) {
                 flora_renderer_->set_reach(flora_reach_);
                 flora_renderer_->set_density(static_cast<float>(grass_density_) / 100.0f);
@@ -799,14 +801,14 @@ int ClientApp::run() {
                 rec.add(*f, actors_lane, [&](const render::FrameInfo& fr) {
                     modelled = &actor_renderer_->draw_prepared(fr, vp, camera_.position, lit, render::ActorPhase::Opaque);
                 });
-            lap.mark("actors draw");
+            lap.mark(rec.active() ? "actors queued" : "actors draw");
             if (in_game) {
                 const auto hidden = hidden_spawn();
                 rec.add(*f, actors_lane, [&, hidden](const render::FrameInfo& fr) {
                     spawn_renderer_->draw(fr, vp, camera_.position, lit, conn_->world(), hidden, modelled);
                 });
             }
-            lap.mark("spawns draw");
+            lap.mark(rec.active() ? "spawns queued" : "spawns draw");
             // The depth copy is taken before the grass: the target ring lies on the ground under it, not on the
             // blades (a ring traced over them twists into a coil). The water, drawn after the grass, still meets it
             // in the depth buffer.
@@ -819,7 +821,7 @@ int ClientApp::run() {
                 rec.add(*f, flora_renderer_.get(), [&](const render::FrameInfo& fr) {
                     flora_renderer_->draw(fr, vp, camera_.position, t, frame_lighting_, modern);
                 });
-            lap.mark("flora draw");
+            lap.mark(rec.active() ? "flora queued" : "flora draw");
             if (actor_renderer_)
                 rec.add(*f, actors_lane, [&](const render::FrameInfo& fr) {
                     actor_renderer_->draw_prepared(fr, vp, camera_.position, lit, render::ActorPhase::Translucent);
@@ -879,7 +881,7 @@ int ClientApp::run() {
                     spell_particles_->draw(fr, vp, camera_.view(), modern ? render::kParticleGlow : 1.0f,
                                            particle_lighting);
                 });
-            lap.mark("translucent, weather, particles");
+            lap.mark(rec.active() ? "translucent, weather, particles queued" : "translucent, weather, particles");
             rec.flush(*f); // before the name plates read the characters' poses, and before the scene ends
             lap.mark("scene record");
             if (in_game) { // character select draws no target, names or picking

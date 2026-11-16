@@ -1731,6 +1731,8 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         if (auto cached = bone_cache_.find(id); cached != bone_cache_.end()) cached->second.valid = false;
         last_spawn_poses_[id] = {pos, heading};
     }
+    // drawn_bone's poses go with their spawns: one not drawn this frame has no last_draws_ entry to pose from.
+    std::erase_if(bone_cache_, [this](const auto& kv) { return !last_draws_.contains(kv.first); });
     std::erase_if(spawns_, [this](const auto& kv) {
         if (kv.second.seen) return false;
         // Gone (or past the actor clip, hidden): its appearance, if it comes back, is asked for again.
