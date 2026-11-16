@@ -3,10 +3,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <limits>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "core/byte_io.h"
 #include "game/world_atlas.h"
 #include "game/zone_names.h"
 
@@ -47,6 +51,7 @@ AtlasZone zone(const std::string& name, float ground, float water_from = 1e9f) {
     z.ground.assign(n, ground);
     z.top.assign(n, ground + 5.0f);
     z.water.assign(n, std::nanf(""));
+    z.color.assign(n, 0xff336699u);
     for (int y = 0; y < z.ny; ++y)
         for (int x = 0; x < z.nx; ++x)
             if ((static_cast<float>(x) + 0.5f) * z.cell >= water_from)
@@ -144,6 +149,7 @@ TEST_CASE("world atlas: a zone's record is written and read back; a damaged one 
     CHECK(back->nx == 32);
     CHECK(back->open_sky == 0.75f);
     CHECK(back->ground == c.ground);
+    CHECK(back->color == c.color);
     for (std::size_t i = 0; i < c.water.size(); ++i) CHECK(std::isnan(back->water[i]) == std::isnan(c.water[i]));
     REQUIRE(back->lines.size() == 1);
     CHECK(back->lines[0].zone_id == c.lines[0].zone_id);
@@ -345,6 +351,107 @@ TEST_CASE("world atlas: lines scattered round a city are placed one by one, and 
     door(310.0f, 1800.0f, 1500.0f, 200.0f, 5);
     lines.erase(lines.begin());
     CHECK_FALSE(game::atlas_line_offset(lines, {}, game::zone_id_by_short_name(kB)));
+}
+
+// ---- Measuring a zone ----
+
+#include "app/world_atlas.h"
+#include "assets/zone.h"
+
+TEST_CASE("world atlas: an EQG zone's water surfaces are measured; one draped over a fall is not") {
+    assets::Zone zone;
+    assets::Mesh m;
+    auto quad = [&](glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 d, std::uint32_t material) {
+        const auto first = static_cast<std::uint32_t>(m.indices.size());
+        const auto base = static_cast<std::uint32_t>(m.vertices.size());
+        for (const glm::vec3& p : {a, b, c, d}) {
+            assets::Vertex v;
+            v.position = p;
+            m.vertices.push_back(v);
+        }
+        for (std::uint32_t i : {0u, 1u, 2u, 0u, 2u, 3u}) m.indices.push_back(base + i);
+        m.parts.push_back({first, 6, material});
+    };
+    m.materials.resize(2);
+    m.materials[0].frames = {"ground.dds"};
+    m.materials[1].frames = {"water.dds"};
+    m.materials[1].eqg_shader = assets::EqgShader::Water;
+    quad({0, 0, 0}, {256, 0, 0}, {256, 256, 0}, {0, 256, 0}, 0);
+    quad({0, 0, 10}, {96, 0, 10}, {96, 256, 10}, {0, 256, 10}, 1);     // a pond over the west
+    quad({200, 0, 0}, {200, 256, 0}, {200, 256, 90}, {200, 0, 90}, 1); // a fall down the east side
+    zone.terrain.push_back(m);
+    const std::vector<float> ground(16, 0.0f);
+    const auto water = app::measure_water(zone, {0.0f, 0.0f}, 64.0f, 4, 4, ground, glm::vec3(0.0f));
+    for (int y = 0; y < 4; ++y)
+        for (int x = 0; x < 4; ++x) {
+            const float w = water[static_cast<std::size_t>(y * 4 + x)];
+            if (x < 2) {
+                CHECK(w == doctest::Approx(10.0f));
+            } else {
+                CHECK(std::isnan(w)); // dry, and the fall at 200
+            }
+        }
+}
+
+namespace {
+// A 2x1 24-bit BMP, both texels the one colour.
+std::vector<std::byte> bmp_of(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+    ByteWriter w;
+    w.le<std::uint8_t>('B');
+    w.le<std::uint8_t>('M');
+    w.le<std::uint32_t>(14 + 40 + 8);
+    w.le<std::uint32_t>(0);
+    w.le<std::uint32_t>(14 + 40);
+    w.le<std::uint32_t>(40);
+    w.le<std::int32_t>(2);
+    w.le<std::int32_t>(1);
+    w.le<std::uint16_t>(1);
+    w.le<std::uint16_t>(24);
+    w.le<std::uint32_t>(0);
+    w.le<std::uint32_t>(8);
+    w.zeros(16);
+    for (int k = 0; k < 2; ++k)
+        for (std::uint8_t v : {b, g, r}) w.le(v);
+    w.zeros(2);
+    return w.take();
+}
+} // namespace
+
+TEST_CASE("world atlas: each square's ground takes the colour of the texture on it, not a roof's or the water's") {
+    assets::Zone zone;
+    zone.generated_files["red.bmp"] = bmp_of(255, 0, 0);
+    zone.generated_files["green.bmp"] = bmp_of(0, 255, 0);
+    zone.generated_files["white.bmp"] = bmp_of(255, 255, 255);
+    assets::Mesh m;
+    auto quad = [&](float x0, float x1, float z, std::uint32_t material) {
+        const auto first = static_cast<std::uint32_t>(m.indices.size());
+        const auto base = static_cast<std::uint32_t>(m.vertices.size());
+        for (auto [x, y] : {std::pair{x0, 0.0f}, {x1, 0.0f}, {x1, 256.0f}, {x0, 256.0f}}) {
+            assets::Vertex v;
+            v.position = {x, y, z};
+            m.vertices.push_back(v);
+        }
+        for (std::uint32_t i : {0u, 1u, 2u, 0u, 2u, 3u}) m.indices.push_back(base + i);
+        m.parts.push_back({first, 6, material});
+    };
+    m.materials.resize(4);
+    m.materials[0].frames = {"red.bmp"};
+    m.materials[1].frames = {"green.bmp"};
+    m.materials[2].frames = {"white.bmp"};
+    m.materials[2].eqg_shader = assets::EqgShader::Water;
+    m.materials[3].frames = {"missing.bmp"};
+    quad(0.0f, 256.0f, 0.0f, 0);    // the ground
+    quad(0.0f, 96.0f, 50.0f, 1);    // a roof over the west
+    quad(160.0f, 256.0f, 1.0f, 2);  // water over the east
+    quad(0.0f, 256.0f, 2.0f, 3);    // a texture the zone does not have
+    zone.terrain.push_back(m);
+    // Measured at 1: the water's surface lies there exactly, the ground 1 under it.
+    std::vector<float> ground(16, 1.0f);
+    ground[15] = std::numeric_limits<float>::quiet_NaN(); // no ground there
+    const auto color = app::measure_ground_color(zone, {0.0f, 0.0f}, 64.0f, 4, 4, ground);
+    REQUIRE(color.size() == 16);
+    for (std::size_t i = 0; i < 15; ++i) CHECK(color[i] == 0xff0000ffu);
+    CHECK(color[15] == 0u);
 }
 
 // ---- Real files (EQ_GAME_DIR) ----

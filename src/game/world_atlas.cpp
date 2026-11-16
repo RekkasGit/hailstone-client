@@ -17,7 +17,8 @@ namespace {
 constexpr std::uint32_t kVisitMagic = 0x31565441u; // "ATV1"
 constexpr std::uint32_t kVisitVersion = 1;
 constexpr std::uint32_t kZoneMagic = 0x315a5441u;  // "ATZ1"
-constexpr std::uint32_t kZoneVersion = 1;
+// 2: with its ground's colour.
+constexpr std::uint32_t kZoneVersion = 2;
 constexpr std::size_t kMaxName = 64;
 constexpr std::size_t kMaxTag = 256;
 constexpr std::uint32_t kMaxPoints = 4096;
@@ -137,9 +138,11 @@ std::vector<std::byte> write_atlas_zone(const AtlasZone& z) {
     const bool ok = z.valid();
     w.le(static_cast<std::uint32_t>(ok ? z.nx : 0));
     w.le(static_cast<std::uint32_t>(ok ? z.ny : 0));
-    if (ok)
+    if (ok) {
         for (const auto* layer : {&z.ground, &z.top, &z.water})
             for (float h : *layer) w.f32(h);
+        for (std::uint32_t c : z.color) w.le(c);
+    }
     const auto n = static_cast<std::uint32_t>(std::min<std::size_t>(z.lines.size(), kMaxLineCells));
     w.le(n);
     for (std::uint32_t i = 0; i < n; ++i) {
@@ -177,7 +180,7 @@ std::optional<AtlasZone> read_atlas_zone(std::span<const std::byte> data) {
             ny > static_cast<std::uint32_t>(kAtlasMaxSide) || (nx == 0) != (ny == 0))
             return std::nullopt;
         const std::size_t n = static_cast<std::size_t>(nx) * static_cast<std::size_t>(ny);
-        if (r.remaining() < n * 12 + 4) return std::nullopt;
+        if (r.remaining() < n * 16 + 4) return std::nullopt;
         z.nx = static_cast<int>(nx);
         z.ny = static_cast<int>(ny);
         for (auto* layer : {&z.ground, &z.top, &z.water}) {
@@ -187,6 +190,8 @@ std::optional<AtlasZone> read_atlas_zone(std::span<const std::byte> data) {
                 if (std::isinf(h)) h = std::numeric_limits<float>::quiet_NaN();
             }
         }
+        z.color.resize(n);
+        for (std::uint32_t& c : z.color) c = r.le<std::uint32_t>();
         const auto cells = r.le<std::uint32_t>();
         if (cells > kMaxLineCells) return std::nullopt;
         for (std::uint32_t i = 0; i < cells; ++i) {

@@ -204,6 +204,9 @@ public:
         std::shared_ptr<const HorizonBuild> build;
         std::size_t footprint = 0;
         std::array<std::size_t, 3> triangles{};
+        std::size_t water_triangles = 0;  // the land's sea
+        bool water_two_sided = true;      // all of it drawn from both faces
+        std::size_t tinted_triangles = 0; // the land's ground carried to an atlas zone's colour (kLandTint)
     };
     static PreparedLand prepared_land(const Prepared& prepared);
 

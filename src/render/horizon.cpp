@@ -65,6 +65,8 @@ float fbm(glm::vec2 p, int octaves, std::uint32_t seed, bool ridged) {
 
 bool finite(const glm::vec3& v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
 
+float srgb_to_linear(float c) { return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f); }
+
 // The mesh's lines along one axis: `step` apart over lo..hi, then wider by kHorizonGrowth a step out to `reach` past
 // it.
 std::vector<float> axis_lines(float lo, float hi, float step, float reach) {
@@ -105,6 +107,56 @@ void mark(HorizonField& g, const glm::vec3& p, bool liquid) {
     }
 }
 
+// Past the ground (the squares `off` it), how much of the nearest stretch of its edge is water, 0..1. A square takes
+// its nearest ground square's (`nearest`) as water when there is water (`water`) straight in from it within
+// kHorizonShoreWall: a harbour's wall or quay along the edge (South Qeynos's) does not close the sea off, and straight
+// in only, so a river's mouth stays as narrow as it is. Then averaged over the squares off the ground within half
+// kHorizonShoreWidth, one axis then the other: a river's mouth is no shore.
+std::vector<float> shore_share(int nx, int ny, float cell, const std::vector<int>& nearest,
+                               const std::vector<std::uint8_t>& off, const std::vector<std::uint8_t>& water) {
+    const std::size_t n = static_cast<std::size_t>(nx) * static_cast<std::size_t>(ny);
+    std::vector<float> edge(n, 0.0f);
+    const auto unx = static_cast<std::size_t>(nx);
+    const float wall = kHorizonShoreWall / cell;
+    for (std::size_t i = 0; i < n; ++i) {
+        if (!off[i] || nearest[i] < 0) continue;
+        const auto e = static_cast<std::size_t>(nearest[i]);
+        const glm::vec2 at(static_cast<float>(i % unx), static_cast<float>(i / unx));
+        const glm::vec2 from(static_cast<float>(e % unx), static_cast<float>(e / unx));
+        const glm::vec2 in = glm::length(from - at) > 0.0f ? glm::normalize(from - at) : glm::vec2(0.0f);
+        const int steps = static_cast<int>(2.0f * wall);
+        for (int k = 0; k <= steps; ++k) {
+            const glm::vec2 q = glm::floor(from + in * (0.5f * static_cast<float>(k)) + 0.5f);
+            if (q.x < 0.0f || q.y < 0.0f || q.x >= static_cast<float>(nx) || q.y >= static_cast<float>(ny)) break;
+            if (water[static_cast<std::size_t>(q.y) * unx + static_cast<std::size_t>(q.x)]) {
+                edge[i] = 1.0f;
+                break;
+            }
+        }
+    }
+    const int r = std::max(1, static_cast<int>(std::lround(0.5f * kHorizonShoreWidth / cell)));
+    for (int axis = 0; axis < 2; ++axis) {
+        std::vector<float> out(n, 0.0f);
+        for (int y = 0; y < ny; ++y)
+            for (int x = 0; x < nx; ++x) {
+                const auto i = static_cast<std::size_t>(y) * unx + static_cast<std::size_t>(x);
+                if (!off[i]) continue;
+                float sum = 0.0f, count = 0.0f;
+                for (int k = -r; k <= r; ++k) {
+                    const int px = axis == 0 ? x + k : x, py = axis == 0 ? y : y + k;
+                    if (px < 0 || py < 0 || px >= nx || py >= ny) continue;
+                    const auto j = static_cast<std::size_t>(py) * unx + static_cast<std::size_t>(px);
+                    if (!off[j]) continue;
+                    sum += edge[j];
+                    count += 1.0f;
+                }
+                out[i] = sum / count;
+            }
+        edge.swap(out);
+    }
+    return edge;
+}
+
 // The land's shape away from the zone: its hills' seed and heights.
 struct Shape {
     std::uint32_t seed = 0;
@@ -132,6 +184,7 @@ struct Point {
     float weight = 0.0f; // the `only` source's cover times the band's (its own ground's share)
     float settled = 0.0f; // sunk under the `only` source's own terrain (horizon_point)
     float level = 0.0f;   // the sea's surface here (the zone's water, or a neighbour's past its shore)
+    glm::vec4 tint{0.0f}; // HorizonMesh::tint
 };
 
 Point land_point(const HorizonField& g, const HorizonSources& sources, const Shape& k, glm::vec2 p, int only) {
@@ -141,6 +194,9 @@ Point land_point(const HorizonField& g, const HorizonSources& sources, const Sha
     if (extra <= 0.0f && std::isfinite(g.under[i])) {
         out.tucked = true;
         out.h = g.under[i];
+        // On the zone's water or beside it, the sea's surface reaches it (horizon_mesh draws it past the zone's own).
+        out.sea = g.covered(i) ? (g.wet[i] && (!g.dry[i] || g.water[i] >= g.zmax[i] - 2.0f) ? 1.0f : 0.0f) : g.sea[i];
+        out.level = g.water_level;
         return out;
     }
     if (extra <= 0.0f && !g.open[i]) {
@@ -155,10 +211,10 @@ Point land_point(const HorizonField& g, const HorizonSources& sources, const Sha
     const float rise = k.near_amp * roll * smooth(0.0f, 800.0f, d) + k.far_amp * mtn * smooth(800.0f, 5000.0f, d);
     const float start = g.edge[i] - 20.0f;
     float h = glm::mix(start, g.land.ground + rise, smooth(0.0f, kHorizonBlend, d));
+    // Past a shore the sea goes on to the land's reach: nothing says where the next coast is (docs/unknowns.md).
     if (g.sea[i] > 0.0f) {
         const float floor = glm::mix(g.water_level - 20.0f, g.water_level - kHorizonSeaDepth, smooth(0.0f, 800.0f, d));
-        const float coast = floor + 1.3f * rise * smooth(2500.0f, 8000.0f, d);
-        h = glm::mix(h, coast, g.sea[i]);
+        h = glm::mix(h, floor, g.sea[i]);
     }
     out.sea = g.sea[i];
     out.level = g.water_level;
@@ -167,6 +223,8 @@ Point land_point(const HorizonField& g, const HorizonSources& sources, const Sha
     // neighbour's water); on the ground of one whose water the land draws, its water stands over its ground.
     float sum = 0.0f, weighed = 0.0f, cover = 0.0f, only_cover = 0.0f, only_inner = 0.0f;
     float open_sea = 0.0f, sea_level = 0.0f, wet = 0.0f, wet_level = 0.0f;
+    glm::vec3 tint_sum(0.0f);
+    float tint_weight = 0.0f;
     for (std::size_t s = 0; s < sources.size(); ++s) {
         const HorizonSourceSample smp = sample_source(*sources[s], p);
         // Its sea goes on only where its shore is nearer than the zone's own edge, so a neighbour's shore round a
@@ -183,6 +241,8 @@ Point land_point(const HorizonField& g, const HorizonSources& sources, const Sha
         if (!(smp.cover > 0.0f)) continue;
         sum += smp.cover;
         weighed += smp.cover * smp.height;
+        tint_sum += glm::vec3(smp.color) * (smp.cover * smp.color.a);
+        tint_weight += smp.cover * smp.color.a;
         if (smp.cover > cover) {
             cover = smp.cover;
             out.owner = static_cast<int>(s);
@@ -202,6 +262,8 @@ Point land_point(const HorizonField& g, const HorizonSources& sources, const Sha
         out.sea *= 1.0f - cover;
         out.cover = cover;
         out.weight = only_cover * across;
+        // The colour of the sources that have one, as much as they make up of the cover here.
+        if (tint_weight > 0.0f) out.tint = glm::vec4(tint_sum / tint_weight, cover * tint_weight / sum);
         // Past the band, on the drawn neighbour's own ground, under its terrain.
         out.settled = smooth(0.85f, 1.0f, only_cover) * smooth(0.8f, 1.0f, across) *
                       smooth(kHorizonInnerFrom, kHorizonInnerTo, only_inner);
@@ -321,6 +383,7 @@ HorizonField horizon_field(std::span<const HorizonTriangle> triangles, const Hor
     g.water.assign(cells, -inf);
     g.dry.assign(cells, 0);
     g.wet.assign(cells, 0);
+    g.wet_middle.assign(cells, 0);
 
     // Each triangle onto the squares: along its edges (a wall's top and foot), and at the squares' centres inside it.
     std::vector<float> water_levels;
@@ -351,6 +414,7 @@ HorizonField horizon_field(std::span<const HorizonTriangle> triangles, const Hor
                 const float w0 = 1.0f - w1 - w2;
                 if (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f) continue;
                 mark(g, glm::vec3(p, w0 * t.a.z + w1 * t.b.z + w2 * t.c.z), t.liquid);
+                if (t.liquid) g.wet_middle[g.at(x, y)] = 1;
             }
         if (t.liquid) water_levels.push_back((t.a.z + t.b.z + t.c.z) / 3.0f);
     }
@@ -429,39 +493,43 @@ HorizonField horizon_field(std::span<const HorizonTriangle> triangles, const Hor
             relax(x, y, x - 1, y + 1);
         }
 
-    // The zone's edge's height and whether it is water, carried out from the nearest covered square and smoothed.
+    // The zone's edge's height, carried out from the nearest covered square and smoothed (its water's surface where
+    // that is water).
     g.edge.assign(cells, land.ground);
-    g.sea.assign(cells, 0.0f);
+    std::vector<std::uint8_t> water(cells, 0), off(cells, 0);
+    for (std::size_t i = 0; i < cells; ++i) {
+        water[i] = g.has_water && g.wet[i] && (!g.dry[i] || g.water[i] >= g.zmax[i] - 2.0f) ? 1 : 0;
+        off[i] = outside[i];
+    }
     for (std::size_t i = 0; i < cells; ++i) {
         const int s = source[i];
         if (s < 0) continue;
         const auto si = static_cast<std::size_t>(s);
-        const bool water_edge = g.has_water && g.wet[si] && (!g.dry[si] || g.water[si] >= g.zmax[si] - 2.0f);
-        g.edge[i] = water_edge ? g.water[si] : g.zmax[si];
-        g.sea[i] = water_edge ? 1.0f : 0.0f;
+        g.edge[i] = water[si] ? g.water[si] : g.zmax[si];
     }
     for (int pass = 0; pass < 2; ++pass)
         for (int axis = 0; axis < 2; ++axis) {
-            const std::vector<float> edge = g.edge, sea = g.sea;
+            const std::vector<float> edge = g.edge;
             constexpr int kRadius = 2;
             for (int y = 0; y < g.ny; ++y)
                 for (int x = 0; x < g.nx; ++x) {
                     const std::size_t i = g.at(x, y);
                     if (!outside[i]) continue;
-                    float se = 0.0f, ss = 0.0f, n = 0.0f;
+                    float se = 0.0f, n = 0.0f;
                     for (int k = -kRadius; k <= kRadius; ++k) {
                         const int px = axis == 0 ? x + k : x, py = axis == 0 ? y : y + k;
                         if (px < 0 || py < 0 || px >= g.nx || py >= g.ny) continue;
                         const std::size_t j = g.at(px, py);
                         if (source[j] < 0) continue;
                         se += edge[j];
-                        ss += sea[j];
                         n += 1.0f;
                     }
                     g.edge[i] = se / n;
-                    g.sea[i] = ss / n;
                 }
         }
+    // Whether the zone's edge is a shore there: as a neighbour's is (shore_share), so the sea goes on past a quay
+    // along the edge and not past a river's mouth.
+    g.sea = shore_share(g.nx, g.ny, g.cell, source, off, water);
 
     // How low the land is tucked: under a covered square's terrain; beside one, just under the lowest of them (a
     // wall's foot, the open ground at a zone line).
@@ -481,7 +549,8 @@ HorizonField horizon_field(std::span<const HorizonTriangle> triangles, const Hor
                     if (px < 0 || py < 0 || px >= g.nx || py >= g.ny) continue;
                     const std::size_t j = g.at(px, py);
                     if (!g.covered(j)) continue;
-                    g.under[i] = std::min(g.under[i], (g.dry[j] ? g.zmin[j] : g.water[j]) - 5.0f);
+                    // Beside the zone's water alone, as deep as under it: the sea goes on over it.
+                    g.under[i] = std::min(g.under[i], g.dry[j] ? g.zmin[j] - 5.0f : g.water[j] - kHorizonTuck);
                 }
         }
 
@@ -507,7 +576,7 @@ void sort_sources(HorizonSources& sources) {
 }
 
 HorizonSource horizon_source(std::string name, glm::vec2 lo, float cell, int nx, int ny, std::vector<float> ground,
-                             std::vector<float> top, std::vector<float> water) {
+                             std::vector<float> top, std::vector<float> water, std::vector<std::uint32_t> color) {
     HorizonSource s;
     s.name = std::move(name);
     s.cell = cell;
@@ -529,13 +598,53 @@ HorizonSource horizon_source(std::string name, glm::vec2 lo, float cell, int nx,
     if (tops) s.top.assign(raw.size(), nan);
     const bool waters = water.size() == ground.size();
     if (waters) s.water.assign(raw.size(), nan);
+    const bool colors = color.size() == ground.size();
+    if (colors) s.color.assign(raw.size(), 0u);
     for (int y = 0; y < ny; ++y)
         for (int x = 0; x < nx; ++x) {
             const auto i = static_cast<std::size_t>(y) * static_cast<std::size_t>(nx) + static_cast<std::size_t>(x);
             raw[at(x + pad, y + pad)] = std::isfinite(ground[i]) ? ground[i] : nan;
             if (tops) s.top[at(x + pad, y + pad)] = std::isfinite(top[i]) ? top[i] : nan;
             if (waters) s.water[at(x + pad, y + pad)] = std::isfinite(water[i]) ? water[i] : nan;
+            if (colors) s.color[at(x + pad, y + pad)] = color[i];
         }
+    // A wall or quay along its edge with its water straight in behind it within kHorizonShoreWall is no ground of the
+    // land's (South Qeynos's harbour is ringed by one a square wide, which stood as a strip of land across the sea):
+    // the sea goes on over it, as the shore already looks past it (finish_horizon_source). A layer a pass, so a wall
+    // up to that thick goes and wider land stays.
+    if (waters) {
+        auto wet = [&](int x, int y) {
+            const std::size_t i = at(x, y);
+            return std::isfinite(s.water[i]) && (!std::isfinite(raw[i]) || s.water[i] >= raw[i] - 2.0f);
+        };
+        auto off = [&](int x, int y) { return x < 0 || y < 0 || x >= s.nx || y >= s.ny || !std::isfinite(raw[at(x, y)]); };
+        const int reach = std::max(1, static_cast<int>(std::lround(kHorizonShoreWall / cell)));
+        constexpr int kSteps[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (int pass = 0; pass < reach; ++pass) {
+            std::vector<std::size_t> quay;
+            for (int y = 0; y < s.ny; ++y)
+                for (int x = 0; x < s.nx; ++x) {
+                    if (off(x, y) || wet(x, y)) continue;
+                    bool behind = false;
+                    for (const auto& d : kSteps) {
+                        if (!off(x - d[0], y - d[1])) continue; // not its edge this way
+                        for (int k = 1; k <= reach && !behind; ++k) {
+                            const int px = x + k * d[0], py = y + k * d[1];
+                            if (px < 0 || py < 0 || px >= s.nx || py >= s.ny) break;
+                            if (wet(px, py)) behind = true;
+                            else if (off(px, py)) break;
+                        }
+                        if (behind) break;
+                    }
+                    if (behind) quay.push_back(at(x, y));
+                }
+            if (quay.empty()) break;
+            for (std::size_t i : quay) {
+                raw[i] = nan;
+                if (tops) s.top[i] = nan;
+            }
+        }
+    }
     // Opened: the lowest ground within kHorizonOpening squares, then the highest of those lows. Something standing
     // above the ground narrower than the window goes; the ground's own shape stays.
     constexpr int r = kHorizonOpening;
@@ -612,6 +721,41 @@ void finish_horizon_source(HorizonSource& s) {
         }
     for (std::size_t i = 0; i < n; ++i)
         if (nearest[i] >= 0) s.fill[i] = s.height[static_cast<std::size_t>(nearest[i])];
+    s.fill_color.clear();
+    if (s.color.size() == n) {
+        s.fill_color.assign(n, glm::vec4(0.0f));
+        for (std::size_t i = 0; i < n; ++i) {
+            if (nearest[i] < 0) continue;
+            const std::uint32_t c = s.color[static_cast<std::size_t>(nearest[i])];
+            if (c == 0) continue;
+            glm::vec4 out(0.0f, 0.0f, 0.0f, 1.0f);
+            for (int k = 0; k < 3; ++k) out[k] = srgb_to_linear(static_cast<float>((c >> (8 * k)) & 0xffu) / 255.0f);
+            s.fill_color[i] = out;
+        }
+        // Softened over kHorizonColorBlur squares either way, one axis then the other, among the squares with a colour:
+        // a square's colour alone changes from one vertex of the land to the next (a checkerboard from afar).
+        for (int axis = 0; axis < 2; ++axis) {
+            std::vector<glm::vec4> blurred = s.fill_color;
+            for (int y = 0; y < s.ny; ++y)
+                for (int x = 0; x < s.nx; ++x) {
+                    const auto i = static_cast<std::size_t>(y) * static_cast<std::size_t>(s.nx) + static_cast<std::size_t>(x);
+                    if (!(s.fill_color[i].a > 0.0f)) continue;
+                    glm::vec3 sum(0.0f);
+                    float count = 0.0f;
+                    for (int k = -kHorizonColorBlur; k <= kHorizonColorBlur; ++k) {
+                        const int px = axis == 0 ? x + k : x, py = axis == 0 ? y : y + k;
+                        if (px < 0 || py < 0 || px >= s.nx || py >= s.ny) continue;
+                        const glm::vec4 c =
+                            s.fill_color[static_cast<std::size_t>(py) * static_cast<std::size_t>(s.nx) + static_cast<std::size_t>(px)];
+                        if (!(c.a > 0.0f)) continue;
+                        sum += glm::vec3(c);
+                        count += 1.0f;
+                    }
+                    blurred[i] = glm::vec4(sum / count, 1.0f);
+                }
+            s.fill_color.swap(blurred);
+        }
+    }
     // Its water: where it stands over the ground (or is the ground: a surface the measuring found first), and past
     // the ground the share of the nearest stretch of its edge that is water.
     if (s.water.size() == n) {
@@ -624,57 +768,12 @@ void finish_horizon_source(HorizonSource& s) {
         if (!levels.empty()) {
             std::nth_element(levels.begin(), levels.begin() + static_cast<std::ptrdiff_t>(levels.size() / 2), levels.end());
             s.water_level = levels[levels.size() / 2];
-            std::vector<float> edge(n, 0.0f);
-            std::vector<std::uint8_t> off(n, 0);
-            for (std::size_t i = 0; i < n; ++i)
-                if (!std::isfinite(s.height[i]) && nearest[i] >= 0) off[i] = 1;
-            // Averaged over the squares off the ground within half the shore's width, one axis then the other.
-            const int r = std::max(1, static_cast<int>(std::lround(0.5f * kHorizonShoreWidth / s.cell)));
-            // A square off the ground takes its nearest edge as water when there is water straight in from it within
-            // kHorizonShoreWall: a harbour's wall or quay along the zone's edge (South Qeynos's) does not close the
-            // sea off. Straight in only, so a river's mouth stays as narrow as it is.
-            const float wall = kHorizonShoreWall / s.cell;
+            std::vector<std::uint8_t> off(n, 0), water(n, 0);
             for (std::size_t i = 0; i < n; ++i) {
-                if (!off[i]) continue;
-                const auto e = static_cast<std::size_t>(nearest[i]);
-                const glm::vec2 at(static_cast<float>(i % static_cast<std::size_t>(s.nx)),
-                                   static_cast<float>(i / static_cast<std::size_t>(s.nx)));
-                const glm::vec2 from(static_cast<float>(e % static_cast<std::size_t>(s.nx)),
-                                     static_cast<float>(e / static_cast<std::size_t>(s.nx)));
-                const glm::vec2 in = glm::length(from - at) > 0.0f ? glm::normalize(from - at) : glm::vec2(0.0f);
-                const int steps = static_cast<int>(2.0f * wall);
-                for (int k = 0; k <= steps; ++k) {
-                    const glm::vec2 q = glm::floor(from + in * (0.5f * static_cast<float>(k)) + 0.5f);
-                    if (q.x < 0.0f || q.y < 0.0f || q.x >= static_cast<float>(s.nx) || q.y >= static_cast<float>(s.ny))
-                        break;
-                    const std::size_t j = static_cast<std::size_t>(q.y) * static_cast<std::size_t>(s.nx) +
-                                          static_cast<std::size_t>(q.x);
-                    if (s.wet[j] > 0.0f) {
-                        edge[i] = 1.0f;
-                        break;
-                    }
-                }
+                off[i] = !std::isfinite(s.height[i]) && nearest[i] >= 0 ? 1 : 0;
+                water[i] = s.wet[i] > 0.0f ? 1 : 0;
             }
-            for (int axis = 0; axis < 2; ++axis) {
-                std::vector<float> out(n, 0.0f);
-                for (int y = 0; y < s.ny; ++y)
-                    for (int x = 0; x < s.nx; ++x) {
-                        const auto i = static_cast<std::size_t>(y) * static_cast<std::size_t>(s.nx) + static_cast<std::size_t>(x);
-                        if (!off[i]) continue;
-                        float sum = 0.0f, count = 0.0f;
-                        for (int k = -r; k <= r; ++k) {
-                            const int px = axis == 0 ? x + k : x, py = axis == 0 ? y : y + k;
-                            if (px < 0 || py < 0 || px >= s.nx || py >= s.ny) continue;
-                            const auto j = static_cast<std::size_t>(py) * static_cast<std::size_t>(s.nx) + static_cast<std::size_t>(px);
-                            if (!off[j]) continue;
-                            sum += edge[j];
-                            count += 1.0f;
-                        }
-                        out[i] = sum / count;
-                    }
-                edge.swap(out);
-            }
-            s.sea = std::move(edge);
+            s.sea = shore_share(s.nx, s.ny, s.cell, nearest, off, water);
         }
     }
     // On the ground, the distance to the nearest square without it (the grid's own border counts as without: the
@@ -741,6 +840,15 @@ HorizonSourceSample sample_source(const HorizonSource& s, glm::vec2 p) {
     out.cover = 1.0f - smooth(0.0f, kHorizonSourceFade, dist);
     out.inner = extra > 0.0f ? 0.0f : lerp2(s.inner);
     out.level = s.water_level;
+    if (s.fill_color.size() == s.fill.size()) {
+        const glm::vec4 c00 = s.fill_color[at(x0, y0)], c10 = s.fill_color[at(x1, y0)];
+        const glm::vec4 c01 = s.fill_color[at(x0, y1)], c11 = s.fill_color[at(x1, y1)];
+        const float w00 = (1.0f - tx) * (1.0f - ty) * c00.a, w10 = tx * (1.0f - ty) * c10.a;
+        const float w01 = (1.0f - tx) * ty * c01.a, w11 = tx * ty * c11.a;
+        const float w = w00 + w10 + w01 + w11;
+        if (w > 0.0f)
+            out.color = glm::vec4((glm::vec3(c00) * w00 + glm::vec3(c10) * w10 + glm::vec3(c01) * w01 + glm::vec3(c11) * w11) / w, w);
+    }
     if (!s.wet.empty()) {
         out.wet = extra > 0.0f ? 0.0f : lerp2(s.wet);
         out.sea = lerp2(s.sea);
@@ -768,6 +876,7 @@ HorizonSource cut_horizon_source(const HorizonSource& source, std::span<const gl
             s.height[i] = nan;
             if (i < s.top.size()) s.top[i] = nan;
             if (i < s.water.size()) s.water[i] = nan;
+            if (i < s.color.size()) s.color[i] = 0;
         }
     finish_horizon_source(s);
     return s;
@@ -844,11 +953,13 @@ HorizonMesh horizon_mesh(const HorizonField& g, const HorizonSources& sources, i
     mesh.shade.resize(mesh.positions.size(), 1.0f);
     mesh.weight.resize(mesh.positions.size(), 0.0f);
     mesh.settled.resize(mesh.positions.size(), 0.0f);
+    mesh.tint.resize(mesh.positions.size(), glm::vec4(0.0f));
     for (std::size_t r = 0; r < rows; ++r)
         for (std::size_t c = 0; c < cols; ++c) {
             const std::size_t v = r * cols + c;
             mesh.weight[v] = points[v].weight;
             mesh.settled[v] = points[v].settled;
+            mesh.tint[v] = points[v].tint;
             const std::size_t c0 = c > 0 ? c - 1 : c, c1 = c + 1 < cols ? c + 1 : c;
             const std::size_t r0 = r > 0 ? r - 1 : r, r1 = r + 1 < rows ? r + 1 : r;
             const glm::vec3 dx = mesh.positions[r * cols + c1] - mesh.positions[r * cols + c0];
@@ -884,6 +995,7 @@ HorizonMesh horizon_mesh(const HorizonField& g, const HorizonSources& sources, i
             mesh.shade.push_back(1.0f);
             mesh.weight.push_back(0.0f);
             mesh.settled.push_back(0.0f);
+            mesh.tint.emplace_back(0.0f);
         }
         return water_vertex[v];
     };
@@ -925,10 +1037,17 @@ HorizonMesh horizon_mesh(const HorizonField& g, const HorizonSources& sources, i
             if (!any_sea || only >= 0) continue;
             bool open_sea = true, below = false;
             for (std::size_t corner : q) {
-                open_sea &= !points[corner].tucked && points[corner].sea >= 0.5f;
+                open_sea &= points[corner].sea >= 0.5f;
                 below |= mesh.positions[corner].z < points[corner].level;
             }
             if (!open_sea || !below) continue;
+            // Not over the zone's own terrain or water (which draws its own), up to the square beside it, and over a
+            // square its water only touches along a side.
+            float extra = 0.0f;
+            const std::size_t middle = g.square(0.25f * (glm::vec2(mesh.positions[q[0]]) + glm::vec2(mesh.positions[q[1]]) +
+                                                         glm::vec2(mesh.positions[q[2]]) + glm::vec2(mesh.positions[q[3]])),
+                                                extra);
+            if (extra <= 0.0f && (g.dry[middle] || g.wet_middle[middle])) continue;
             const std::uint32_t wa = surface(q[0]), wb = surface(q[1]), wc = surface(q[2]), wd = surface(q[3]);
             mesh.water.insert(mesh.water.end(), {wa, wb, wc, wa, wc, wd});
         }

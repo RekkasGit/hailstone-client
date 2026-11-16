@@ -1583,7 +1583,10 @@ current zone's filler out to the neighbour.
   level and the land's water surface is drawn there (`HorizonSource::sea`). Only where that shore is nearer than this
   zone's own edge, so a neighbour's shore round a corner does not flood the land past this zone's other sides. On the
   neighbour's own ground its water is its own to draw; the land draws a zone's water there only for a zone of the
-  world atlas (below), which nothing else draws (`HorizonSource::draws_water`).
+  world atlas (below), which nothing else draws (`HorizonSource::draws_water`). The quay or wall itself (up to 192
+  units thick, along the edge, its water straight in behind it) is left out of the neighbour's ground, so the sea
+  goes over it: South Qeynos's harbour is ringed by a wall a square wide, which stood as a strip of land across the
+  sea.
 - **The cache**: its ground is written to `cache/horizon/<server>/<zone>/<neighbour>.bin` (docs/layout.md) with the
   offset and both zones' file sizes (version 3 keeps its water; an older file is measured again); a zone's land is built with the cached ground of all its neighbours that still
   match the asset folder, and a neighbour's load uses its cached ground when the offset found now is within a unit of
@@ -1642,25 +1645,32 @@ puts it behind anything nearer. Scenery only: nothing collides with it.
   64 units across. Terrain anywhere in a square covers it, with its lowest and highest point; a water surface marks it
   wet. Each empty square takes, from the nearest covered square, its distance and the zone's edge there: the highest
   terrain (a wall's top, the open ground at a zone line) or, where the water reaches the edge, the water's surface;
-  smoothed over a few squares.
+  smoothed over a few squares. Whether the edge is a shore there is decided as for a neighbour's (below, "Neighbour
+  zones": water straight in from the edge within 192 units, behind a quay, averaged over 1024 units of edge, so a
+  river's mouth is no shore).
 - **The land**: a grid of vertices over the zone's squares and 2500 units past them (64 units apart, more for a zone
   wider than 256 squares with that), then wider by 12 % a step out to 10000 units past the zone's squares. Vertices in a covered square are tucked 40 units under its lowest terrain, and in
-  the empty square beside one 5 units under the lowest beside it (a wall's foot), so the land meets the zone's edge
+  the empty square beside one 5 units under the lowest terrain beside it (a wall's foot; 40 under the zone's water
+  where only water is beside it), so the land meets the zone's edge
   without a gap and stays under its ground; the squares under the zone are drawn too (they show only through the back
   of its walls, which have only their inner faces). Past the edge the land starts at the edge's height and turns over
   1200 units into rolling hills (value noise, 200 to 650 units high with the relief) and, from 800 to 5000 units out,
   ridged mountains (900 to 2250 units), all seeded by the zone's short name (`render::horizon_seed`), so it is the same
   every visit. A pocket the zone's terrain closes round (a gap between its walls, a hole in it) is a flat lid just under
-  its rim. Where the edge is water, the sea: its floor falls to 250 units under the zone's water level (the median of
-  its water surfaces) within 800 units, with coasts and islands rising from 2500 units out, and its surface is drawn
-  at the water level with the zone's own water material. A neighbour's shore carries the sea on as well (above,
-  "Neighbour zones"), as open sea with no coast rising from it. Under the sea the land is darker with the depth, to
-  0.3 of its light 150 units down: the water map that darkens a zone's own sea floor leaves the land out, and a sunlit
-  floor under clear water read as dry land.
+  its rim. Where the edge is a shore, the sea: its floor falls to 250 units under the zone's water level (the median
+  of its water surfaces) within 800 units and stays there out to the land's reach, open sea with no coast (nothing
+  says where the next coast is: docs/unknowns.md; up to 0.7 coasts and islands rose from it 2500 units out). Its
+  surface is drawn at the water level with the zone's own water material, from the zone's own water's edge: over the
+  empty squares beside it and over a square the zone's water only touches along its side (`HorizonField::wet_middle`),
+  not over the zone's own terrain or water. A neighbour's shore carries the sea on as well (above, "Neighbour zones").
+  Under the sea the land is darker with the depth, to 0.3 of its light 150 units down (the water map that darkens a
+  zone's own sea floor leaves the land out).
 - **The look**: the zone's plain material (no shader effect of its own, no scrolling) that covers the most level
   ground draws the land, the one on the most slopes (at most 0.8 up, and the mountains' upper half) its rock, and the
   most used water material the sea, each mapped flat with its own texture scale (the zone's UV area over area) and
-  wound as the zone winds its own. Its vertex colour is the level ground's median baked light, darker in woods-like
+  wound as the zone winds its own; the sea is drawn from both faces, since a classic water surface is two sheets, one
+  facing each way, and says nothing of which is up (up to 0.7 the facing taken from it culled the whole sea from
+  above, so the land's sea showed as bare floor: Butcherblock's and Lake Rathetear's). Its vertex colour is the level ground's median baked light, darker in woods-like
   patches on the level land, in the valleys and in broad patches that keep the texture's repeat from showing. The
   log says what it used: qeytoqrg 36892 triangles, ground `XGRASSDIRT2.BMP`, rock `HHDROCKGRASS.BMP`; butcher with
   10108 water triangles.
@@ -1695,7 +1705,10 @@ zone's own geometry. `game/world_atlas.h` holds the records and the walk, `app/w
 - **A zone's record** (`game::AtlasZone`, any server, `cache/atlas/zones/<zone>.bin`, measured from the asset folder
   and measured again when the zone's file changes size): its box; on 64-unit squares over it, its terrain's ground as
   seen from above (a collision mesh without its placed objects, the median of 2 x 2 samples, and the highest of them)
-  and its water (`app::measure_water`, as a neighbour's above); the share of its ground under open sky (no surface
+  and its water (`app::measure_water`, as a neighbour's above, an EQG zone's level RegionWater surfaces too); its
+  ground's colour (`app::measure_ground_color`: the average, in linear light, of the texture on the terrain whose
+  height at the square's middle is nearest the ground there, within 24 units; not the water, what is not drawn, cut
+  out or glowing); the share of its ground under open sky (no surface
   within 400 units over it); and its zone lines' cells with their targets (`game::ZoneLineCell`), so they are grouped
   again without its files. The neighbour zones' loader measures the records the atlas asks for, one at a time once
   nothing else is loading (15 to 60 ms a zone past loading it, in the modern lighting with display.neighbour_zones
@@ -1712,7 +1725,7 @@ zone's own geometry. `game/world_atlas.h` holds the records and the walk, `app/w
   the more than half that agree within 150 units): North Qeynos to South Qeynos, 10 of 10 lines agreeing to 10 units.
   A zone reached twice keeps its first placement; where the two disagree by more than 200 units, the log says so.
 - **The land's sources**: each placed zone not already measured by the neighbour zones gives the land its record's
-  ground and water (`render::horizon_source`, cropped to the land's reach, the land drawing its water on it). A zone
+  ground, water and colour (`render::horizon_source`, cropped to the land's reach, the land drawing its water on it). A zone
   keeps what lies past the line it was reached across, and the zone it was reached from what lies short of it
   (`game::atlas_cuts`, `render::cut_horizon_source`; a neighbour's own measured ground is cut there too, also when
   measured this visit), so the two do not stand in the same place; a zone placed by its lines one by one has no seam
@@ -1725,11 +1738,18 @@ zone's own geometry. `game/world_atlas.h` holds the records and the walk, `app/w
   visit): North Qeynos and West Karana at the same offsets the neighbour zones measure, to 0.1 unit; South Qeynos
   placed from North Qeynos's lines one by one; past North Qeynos the land falls to South Qeynos's ground and the open
   sea past its harbour where it rose into hills and mountains before (12,400 water triangles of the land's).
-- **Not yet**: the land draws the current zone's ground, rock and water textures over every zone of the atlas, not
-  their own; their placed objects (South Qeynos's buildings) are not drawn; the zones reached only by boat (Erudin
-  past Erud's Crossing) have no zone line to place them by and are not in it; a zone not visited on the server is not
-  either (a server's zone list and zone points come from it alone); EQG zones' water is not measured (classic liquids
-  and regions only); whether a zone's line past a tunnel should place it on the horizon is not settled (it does).
+- **Its colour**: over an atlas zone's ground the land's ground and rock keep the current zone's textures, their detail,
+  carried to that zone's own colour: each vertex takes the colour of the sources under it as much as they make up of
+  its cover (`HorizonMesh::tint`; a record's colours softened over 5 x 5 squares, so its squares do not show as a
+  checkerboard), and `zone.frag` (`kLandTint`) multiplies the texture by that colour over the texture's own average
+  (its last mip). From Qeynos Hills, South Qeynos's cobbles and brick past North Qeynos instead of more grass.
+- **Not yet**: their buildings: a classic city's houses are its terrain, which the 64-unit record flattens (South
+  Qeynos: 471 of its 562 squares with ground have their highest point under 10 units over the ground); drawing them
+  means drawing those zones' geometry as the neighbour zones are (tens of megabytes each). The zones reached only by
+  boat are not in it: the stock PEQ test server gives South Qeynos no zone point to Erud's Crossing (its boats are
+  translocator NPCs, whose destination says nothing of where the zones lie), and the open sea past the harbour fills
+  that view. A zone not visited on the server is not either (a server's zone list and zone points come from it
+  alone); whether a zone's line past a tunnel should place it on the horizon is not settled (it does).
 
 ## Smoothed ground
 

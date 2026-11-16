@@ -48,10 +48,20 @@ game::AtlasZone measure_atlas_zone(assets::Zone& zone, std::uint64_t key, const 
 // A zone's water's surface over a grid of `nx` x `ny` squares `cell` across from `lo`, in the coordinates the zone is
 // moved into by `offset` (its own: 0), NaN where none: the classic regions' liquid triangles over each square (along
 // their edges too: a canal narrower than a square), and the top of a water region standing over the square's
-// `ground` (a harbour whose surface the liquid triangles leave out). Stops early when `cancelled` is set.
+// `ground` (a harbour whose surface the liquid triangles leave out), and an EQG zone's level RegionWater surfaces.
+// Stops early when `cancelled` is set.
 std::vector<float> measure_water(const assets::Zone& zone, glm::vec2 lo, float cell, int nx, int ny,
                                  const std::vector<float>& ground, const glm::vec3& offset,
                                  const std::atomic<bool>* cancelled = nullptr);
+
+// The colour of each square's ground over a grid as measure_water's, 0 where none: the average of the texture (its
+// first frame) on the terrain whose height at the square's middle is nearest the square's `ground` (within
+// kAtlasColorReach), leaving out the water, what is not drawn, cut out (leaves) or glows. The far land takes it on
+// where an atlas zone's ground is (render::HorizonSource::color).
+inline constexpr float kAtlasColorReach = 24.0f;
+std::vector<std::uint32_t> measure_ground_color(const assets::Zone& zone, glm::vec2 lo, float cell, int nx, int ny,
+                                                const std::vector<float>& ground,
+                                                const std::atomic<bool>* cancelled = nullptr);
 
 // How far from the current zone's box a zone may lie and join, and how far the walk goes.
 inline constexpr float kAtlasReach = 12000.0f;

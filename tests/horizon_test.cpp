@@ -217,6 +217,51 @@ TEST_CASE("horizon: where the zone's edge is water, the sea, its floor under the
     CHECK(floor > 0);
 }
 
+TEST_CASE("horizon: past the zone's own shore the sea goes on to the land's reach, with no coast rising from it") {
+    std::vector<HorizonTriangle> tris;
+    add_grid(tris, 0.0f, 0.0f, 2000.0f, 2000.0f, 100.0f, [](float, float) { return 20.0f; });
+    add_grid(tris, -1000.0f, 0.0f, 0.0f, 2000.0f, 100.0f, [](float, float) { return 0.0f; }, true);
+    const auto land = render::horizon_land(tris, 0.0f);
+    const auto field = render::horizon_field(tris, land);
+    for (float x : {-3000.0f, -6000.0f, -9000.0f})
+        CHECK(near(render::horizon_height(field, {}, {x, 1000.0f}), -render::kHorizonSeaDepth, 1.0f));
+    const auto mesh = render::horizon_mesh(field, {});
+    bool far_sea = false;
+    for (std::uint32_t i : mesh.water) far_sea |= mesh.positions[i].x < -8000.0f;
+    CHECK(far_sea);
+}
+
+TEST_CASE("horizon: a river's mouth at the zone's own edge is no shore") {
+    std::vector<HorizonTriangle> tris;
+    // A river 100 wide across the zone, out of its west edge; its bed under the surface.
+    auto river = [](float y) { return y >= 900.0f && y < 1000.0f; };
+    add_grid(tris, 0.0f, 0.0f, 2000.0f, 2000.0f, 100.0f, [&](float, float y) { return river(y) ? 0.0f : 20.0f; });
+    for (float x = 0.0f; x < 2000.0f; x += 100.0f) add_square(tris, x, 900.0f, x + 100.0f, 1000.0f, 10.0f, false, true);
+    const auto land = render::horizon_land(tris, 0.0f);
+    const auto field = render::horizon_field(tris, land);
+    CHECK(render::horizon_height(field, {}, {-3000.0f, 950.0f}) > 0.0f);
+    const auto mesh = render::horizon_mesh(field, {});
+    for (std::uint32_t i : mesh.water) CHECK(mesh.positions[i].x > -1000.0f);
+}
+
+TEST_CASE("horizon: the land's sea covers a square the zone's water only touches along its side") {
+    std::vector<HorizonTriangle> tris;
+    add_grid(tris, 0.0f, 0.0f, 2000.0f, 2048.0f, 64.0f, [](float, float) { return 20.0f; });
+    // The sea's north edge lies on a square's side (y 2048): the square past it is marked, but holds none of it.
+    add_grid(tris, -1024.0f, 0.0f, 0.0f, 2048.0f, 64.0f, [](float, float) { return 0.0f; }, true);
+    const auto field = render::horizon_field(tris, render::horizon_land(tris, 0.0f));
+    const auto mesh = render::horizon_mesh(field, {});
+    bool sliver = false, overlap = false;
+    for (std::size_t i = 0; i + 2 < mesh.water.size(); i += 3) {
+        const glm::vec3 c =
+            (mesh.positions[mesh.water[i]] + mesh.positions[mesh.water[i + 1]] + mesh.positions[mesh.water[i + 2]]) / 3.0f;
+        sliver |= c.x > -900.0f && c.x < -100.0f && c.y > 2048.0f && c.y < 2112.0f;
+        overlap |= c.x > -900.0f && c.x < -100.0f && c.y > 100.0f && c.y < 1900.0f; // the zone's own water
+    }
+    CHECK(sliver);
+    CHECK_FALSE(overlap);
+}
+
 TEST_CASE("horizon: a pocket the zone closes round is filled at its rim's height") {
     std::vector<HorizonTriangle> tris;
     // A ring of ground at z 100 round an empty 1000-unit square.
@@ -583,6 +628,14 @@ TEST_CASE("horizon: a neighbour's water is cached with its ground") {
 TEST_CASE("horizon: a harbour's wall along a neighbour's edge does not close the sea off") {
     const Neighbour n = make_shore(false, false, true);
     CHECK(render::sample_source(*n.source, {7000.0f, 700.0f}).sea > 0.9f);
+    // The wall itself (the last column, x 6000 .. 6032) is no ground of the land's: the sea goes over it, where it
+    // stood as a strip of land across the sea; the dry ground short of the water stays.
+    const float wall_x = 2000.0f + 62.5f * render::kHorizonCell;
+    CHECK_FALSE(render::source_ground(*n.source, {wall_x, 700.0f}));
+    CHECK(render::source_ground(*n.source, {4000.0f, 700.0f}));
+    const Neighbour drawn = make_shore(false, true, true);
+    CHECK(water_near(render::horizon_mesh(drawn.field, {drawn.source}), wall_x, 700.0f, 20.0f));
+    CHECK(render::horizon_height(drawn.field, {drawn.source}, {wall_x, 700.0f}) < 20.0f);
     CHECK(near(render::horizon_height(n.field, {n.source}, {9000.0f, 700.0f}), 20.0f - render::kHorizonSeaDepth, 1.0f));
 }
 
@@ -597,4 +650,36 @@ TEST_CASE("horizon: the land under the sea is darker with the depth") {
     }
     CHECK(deep <= render::kHorizonSeaFloorShade + 0.01f);
     CHECK(dry > 0.5f);
+}
+
+TEST_CASE("horizon: an atlas zone's ground colour tints the land over it, softened, and fades out past it") {
+    Neighbour n = make_neighbour();
+    const glm::vec2 lo(2000.0f, -512.0f);
+    const int nx = 63, ny = 40;
+    std::vector<float> ground(static_cast<std::size_t>(nx * ny), 150.0f);
+    // Red ground (sRGB 255, 0, 0), but one square of blue.
+    std::vector<std::uint32_t> color(ground.size(), 0xff0000ffu);
+    color[static_cast<std::size_t>(20 * nx + 30)] = 0xffff0000u;
+    const auto s = std::make_shared<const render::HorizonSource>(
+        render::horizon_source("atlas", lo, render::kHorizonCell, nx, ny, ground, {}, {}, color));
+    REQUIRE(s->valid());
+    const auto on = render::sample_source(*s, {4500.0f, 800.0f});
+    CHECK(on.color.a == doctest::Approx(1.0f));
+    CHECK(on.color.r == doctest::Approx(1.0f));
+    CHECK(on.color.b == doctest::Approx(0.0f));
+    // The blue square is softened over the 5 x 5 squares round it: a 25th of it there.
+    const auto blue = render::sample_source(*s, lo + (glm::vec2(30.0f, 20.0f) + 0.5f) * render::kHorizonCell);
+    CHECK(blue.color.b == doctest::Approx(1.0f / 25.0f));
+    const auto mesh = render::horizon_mesh(n.field, {s});
+    REQUIRE(mesh.tint.size() == mesh.positions.size());
+    bool tinted = false;
+    for (std::size_t v = 0; v < mesh.positions.size(); ++v) {
+        const glm::vec3& p = mesh.positions[v];
+        if (inside(p, 3500.0f, 0.0f, 5500.0f, 1500.0f) && mesh.tint[v].a > 0.99f) tinted |= mesh.tint[v].r > 0.9f;
+        // Over the zone and far past the source, none.
+        if (inside(p, 200.0f, 200.0f, 1800.0f, 1300.0f) || p.x > 12000.0f) CHECK(mesh.tint[v].a == 0.0f);
+    }
+    CHECK(tinted);
+    // A neighbour's ground with no colour known tints nothing.
+    for (const glm::vec4& t : render::horizon_mesh(n.field, {n.source}).tint) CHECK(t.a == 0.0f);
 }
