@@ -750,6 +750,10 @@ private:
     mutable std::unordered_map<std::string, Cached<std::shared_ptr<const CharacterModel>>> cache_;
     mutable std::unordered_map<std::string, Cached<std::shared_ptr<const CharacterMesh>>> dress_cache_;
     mutable std::unordered_map<std::uint32_t, Cached<std::optional<ItemMesh>>> item_cache_;
+    // The 0x34 clouds' definitions by their WLD and name: a model built again (after its cache entry went) hands out
+    // the same definition, so app::ActorEmitters, which registers each definition once by its address, does not
+    // gather a new copy at every rebuild. Weak: a definition lives as long as a model, mesh or emitter holds it.
+    mutable std::unordered_map<std::string, std::weak_ptr<const EmitterDefinition>> cloud_definitions_;
     std::shared_ptr<SharedCharacterCache> shared_;
     void build_item_mesh(std::uint32_t number, std::optional<ItemMesh>& out) const;
     std::shared_ptr<EqgCharacterStore> eqg_;

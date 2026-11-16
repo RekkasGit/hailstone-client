@@ -1049,3 +1049,22 @@ TEST_CASE("ao visibility: open, shaded and closed stay within [0, 1]") {
     CHECK(part == doctest::Approx(0.5f));
     CHECK(ao_kernel_test::ao_visibility(12.0f, 4.0f, 12.0f) == 0.0f);
 }
+
+TEST_CASE("actor surfaces: Lava2 draws as Lava, and lava keeps its second layer over a coverage map") {
+    using assets::EqgShader;
+    CHECK(render::actor_lava_surface(EqgShader::Lava));
+    CHECK(render::actor_lava_surface(EqgShader::Lava2));
+    CHECK_FALSE(render::actor_lava_surface(EqgShader::WaterFall));
+    CHECK_FALSE(render::actor_lava_surface(EqgShader::None));
+    assets::Material m;
+    m.effect.coverage_map = "coverage.dds";
+    m.eqg_shader = EqgShader::None;
+    CHECK(render::actor_takes_coverage(m));
+    for (const auto lava : {EqgShader::Lava, EqgShader::Lava2}) {
+        m.eqg_shader = lava; // an MPL lava material: slots.w holds the second layer
+        CHECK_FALSE(render::actor_takes_coverage(m));
+    }
+    m.eqg_shader = EqgShader::None;
+    m.effect.coverage_map.clear();
+    CHECK_FALSE(render::actor_takes_coverage(m));
+}

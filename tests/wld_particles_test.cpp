@@ -138,6 +138,8 @@ TEST_CASE("WLD actor and held-item clouds survive model building, dressing and r
     REQUIRE(model.clouds[0].cloud);
     CHECK(model.clouds[0].cloud == model.clouds[1].cloud);
     CHECK(model.clouds[0].cloud->texture == "GENG00.DDS");
+    // Built again, the model hands out the same definition (app::ActorEmitters registers each one once).
+    CHECK(lib.build("TST").clouds[0].cloud == model.clouds[0].cloud);
     CHECK(model.default_mesh().emitters.size() == 2);
     auto item = lib.item_mesh(1);
     REQUIRE(item);

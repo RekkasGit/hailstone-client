@@ -288,10 +288,14 @@ int ClientApp::run() {
         }
         if (actor_emitters_ && actor_renderer_ && ((in_world && conn_) || pre_game)) {
             // The drawn spawns' own emitters, on the pose drawn last frame.
-            auto library = actor_library_;
-            actor_emitters_->set_texture_reader([library](const std::string& name) {
-                return library ? library->read_file(name) : std::nullopt;
-            });
+            // The reader is set when the zone's library changes, not every frame; it reads in the texture loader's job.
+            if (emitter_reader_library_ != actor_library_) {
+                emitter_reader_library_ = actor_library_;
+                auto library = actor_library_;
+                actor_emitters_->set_texture_reader([library](const std::string& name) {
+                    return library ? library->read_file(name) : std::nullopt;
+                }, true);
+            }
             actor_emitter_list_.clear();
             const auto& world = pre_game ? *pre_game_world_ : conn_->world();
             for (const auto& [id, spawn] : world.spawns)

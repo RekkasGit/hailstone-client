@@ -53,9 +53,10 @@ ActorEmitters::ActorEmitters(render::VkContext& vk, const GameDir& game, const s
     if (!particles_.empty() && scene) renderer_ = std::make_unique<render::ParticleRenderer>(vk, game, shader_dir, scene);
 }
 
-void ActorEmitters::set_texture_reader(render::ParticleRenderer::TextureReader reader) {
+void ActorEmitters::set_texture_reader(render::ParticleRenderer::TextureReader reader, bool any_thread) {
     texture_reader_ = std::move(reader);
-    if (cloud_renderer_) cloud_renderer_->set_texture_reader(texture_reader_);
+    texture_reader_any_thread_ = any_thread;
+    if (cloud_renderer_) cloud_renderer_->set_texture_reader(texture_reader_, texture_reader_any_thread_);
 }
 
 glm::vec3 ActorEmitters::texture_color(const std::string& name, bool cloud) const {
@@ -238,7 +239,7 @@ void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWo
     if (!clouds_.emitters().empty() && !cloud_renderer_ && vk_ && game_) {
         cloud_renderer_ = std::make_unique<render::ParticleRenderer>(*vk_, *game_, shader_dir_, scene_);
         cloud_renderer_->set_rows_bottom_up(true);
-        cloud_renderer_->set_texture_reader(texture_reader_);
+        cloud_renderer_->set_texture_reader(texture_reader_, texture_reader_any_thread_);
     }
     if (cloud_renderer_) cloud_renderer_->prepare(clouds_);
 }

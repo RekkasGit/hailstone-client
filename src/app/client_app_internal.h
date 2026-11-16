@@ -1257,6 +1257,8 @@ private:
     // (render::ActorRenderer::release_kept): a zone change does not build and upload them again.
     std::unique_ptr<render::ActorRenderer::Kept> actor_kept_;
     std::shared_ptr<const assets::CharacterLibrary> actor_library_; // the zone's, for the item preview
+    // The library actor_emitters_'s texture reader holds (it is set again when actor_library_ changes).
+    std::shared_ptr<const assets::CharacterLibrary> emitter_reader_library_;
     std::array<PreviewSlot, 2> previews_; // 0 the object preview window, 1 the marketplace's (EqHost's view index)
     bool browser_tried_ = false;
     bool web_text_input_ = false;                    // a page has the keyboard this frame

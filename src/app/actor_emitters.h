@@ -49,7 +49,8 @@ public:
     const game::ParticleSystem& simulation() const { return particles_; }
     const game::ParticleSystem& cloud_simulation() const { return clouds_; }
     // The loaded character/equipment archives supply WLD cloud sprites (outside the EDD effect folders).
-    void set_texture_reader(render::ParticleRenderer::TextureReader reader);
+    // `any_thread`: render::ParticleRenderer::set_texture_reader.
+    void set_texture_reader(render::ParticleRenderer::TextureReader reader, bool any_thread = false);
     glm::vec3 texture_color(const std::string& name, bool cloud = false) const;
 
     // An actor drawn this frame and the mesh it was drawn with.
@@ -116,6 +117,7 @@ private:
     std::unique_ptr<render::ParticleRenderer> renderer_;
     std::unique_ptr<render::ParticleRenderer> cloud_renderer_;
     render::ParticleRenderer::TextureReader texture_reader_;
+    bool texture_reader_any_thread_ = false;
     render::VkContext* vk_ = nullptr;
     const GameDir* game_ = nullptr;
     std::filesystem::path shader_dir_;
