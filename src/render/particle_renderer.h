@@ -111,8 +111,14 @@ public:
     // A source tried before the game directory's effect folders: the zone's
     // archives for the WLD particle clouds' textures (GENG00.DDS, CSMOKE.DDS
     // live in <zone>_obj.s3d).
+    // With `any_thread` (a reader safe on any thread, such as assets::CharacterLibrary::read_file) it runs in the
+    // loader job, so a read waiting on its source (the library's lock, held by the background dresser) never holds
+    // up a frame; otherwise it runs in prepare, on the calling thread.
     using TextureReader = std::function<std::optional<std::vector<std::byte>>(const std::string&)>;
-    void set_texture_reader(TextureReader reader) { reader_ = std::move(reader); }
+    void set_texture_reader(TextureReader reader, bool any_thread = false) {
+        reader_ = std::move(reader);
+        reader_any_thread_ = any_thread;
+    }
     // The texture's last row at the quad's top: the DLL's quad builder swaps top and bottom when its fourth argument
     // is set (0x10075614), which FUN_100759a0 passes only for the WLD clouds' list (a flame texture's tail then
     // points up). The EDD emitters (spells, actors, environment) keep the first row at the top.
@@ -139,6 +145,7 @@ private:
     std::uint32_t max_textures_ = 0; // kMaxTextures, within DeviceCaps::max_sampled_images
     const GameDir& game_;
     TextureReader reader_;
+    bool reader_any_thread_ = false;
     bool rows_bottom_up_ = false;
     std::vector<Texture> textures_;               // slot 0: white
     std::unordered_map<std::string, std::uint32_t> slots_; // lower-case name -> slot (0 = missing)

@@ -1050,10 +1050,19 @@ CharacterModel CharacterLibrary::build_actor(const std::string& code, const wld:
         if (const auto* first = w.find(f->name); first && first->holds<wld::ParticleCloud>()) f = first;
         auto& definition = clouds[f];
         if (!definition) {
-            const auto& cloud = f->as<wld::ParticleCloud>();
-            auto texture = particle_texture(w, cloud.sprite);
-            if (!texture) continue;
-            definition = std::make_shared<const EmitterDefinition>(particle_cloud_definition(cloud, *texture, f->name));
+            Lock lock(*mutex_);
+            // The WLD by its object (which stays put while its archive is open) and its label: two WLDs open at once
+            // are told apart even unlabelled, and one made later at a freed one's address under its label is the same file.
+            auto& known = cloud_definitions_[std::to_string(reinterpret_cast<std::uintptr_t>(&w)) + '\n' + w.label() +
+                                             '\n' + f->name];
+            definition = known.lock();
+            if (!definition) {
+                const auto& cloud = f->as<wld::ParticleCloud>();
+                auto texture = particle_texture(w, cloud.sprite);
+                if (!texture) continue;
+                definition = std::make_shared<const EmitterDefinition>(particle_cloud_definition(cloud, *texture, f->name));
+                known = definition;
+            }
         }
         m.clouds.push_back({static_cast<int>(i), glm::mat4(1.0f), {}, code, definition});
     }

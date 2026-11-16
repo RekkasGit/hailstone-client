@@ -1257,6 +1257,8 @@ private:
     // (render::ActorRenderer::release_kept): a zone change does not build and upload them again.
     std::unique_ptr<render::ActorRenderer::Kept> actor_kept_;
     std::shared_ptr<const assets::CharacterLibrary> actor_library_; // the zone's, for the item preview
+    // The library actor_emitters_'s texture reader holds (it is set again when actor_library_ changes).
+    std::shared_ptr<const assets::CharacterLibrary> emitter_reader_library_;
     std::array<PreviewSlot, 2> previews_; // 0 the object preview window, 1 the marketplace's (EqHost's view index)
     bool browser_tried_ = false;
     bool web_text_input_ = false;                    // a page has the keyboard this frame
@@ -1270,6 +1272,8 @@ private:
     // neighbours (NeighbourZones::drawn_key) it was last hidden for.
     bool horizon_hills_ = true;
     std::uint64_t distant_hidden_key_ = 0;
+    // The modern sky's volumetric clouds (render/cloud_renderer.h); display.volumetric_clouds.
+    bool volumetric_clouds_ = true;
     // display.neighbour_tint: the neighbour zones' debugging view (render::ZoneRenderer::set_debug_tint).
     bool neighbour_tint_ = false;
     // How far the replacement models' (a texture pack's generated trees') levels of detail reach, in percent of their

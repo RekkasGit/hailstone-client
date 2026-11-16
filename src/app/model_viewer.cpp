@@ -303,7 +303,7 @@ int run_model_viewer(const ModelViewerOptions& opts) {
     double next_effect = 0.0;
     // The models' and held items' own emitters (app/actor_emitters.h).
     ActorEmitters actor_emitters(vk, game, shader_dir);
-    actor_emitters.set_texture_reader([library](const std::string& name) { return library->read_file(name); });
+    actor_emitters.set_texture_reader([library](const std::string& name) { return library->read_file(name); }, true);
     std::vector<ActorEmitters::Actor> emitter_actors;
 
     auto start = std::chrono::steady_clock::now();

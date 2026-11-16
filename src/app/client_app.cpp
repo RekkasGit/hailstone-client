@@ -288,10 +288,14 @@ int ClientApp::run() {
         }
         if (actor_emitters_ && actor_renderer_ && ((in_world && conn_) || pre_game)) {
             // The drawn spawns' own emitters, on the pose drawn last frame.
-            auto library = actor_library_;
-            actor_emitters_->set_texture_reader([library](const std::string& name) {
-                return library ? library->read_file(name) : std::nullopt;
-            });
+            // The reader is set when the zone's library changes, not every frame; it reads in the texture loader's job.
+            if (emitter_reader_library_ != actor_library_) {
+                emitter_reader_library_ = actor_library_;
+                auto library = actor_library_;
+                actor_emitters_->set_texture_reader([library](const std::string& name) {
+                    return library ? library->read_file(name) : std::nullopt;
+                }, true);
+            }
             actor_emitter_list_.clear();
             const auto& world = pre_game ? *pre_game_world_ : conn_->world();
             for (const auto& [id, spawn] : world.spawns)
@@ -616,6 +620,29 @@ int ClientApp::run() {
             else web_textures_->collect();
         }
         lap.mark("item preview record");
+        // The sky this frame. The sky is drawn while SetFog leaves CDisplay +0x2d38 set (cleared under water, in lava
+        // and with fog ending before 101).
+        render::SkyFrame sky_frame{sky_hour, t, horizon_haze};
+        const bool sky_drawn = scene && sky_renderer_ && (!fog_frame || fog_frame->sky);
+        if (sky_drawn && modern) {
+            // The open sky's daylight under this weather, for the sky and its clouds.
+            render::Daylight sky_day = render::daylight(sky_hour, true, moon_phase_, blood_moon_);
+            render::apply_storm(sky_day, weather_look_.storm);
+            sky_frame.atmosphere = true;
+            sky_frame.to_sun = sky_day.to_sun;
+            sky_frame.to_moon = sky_day.to_moon;
+            sky_frame.blood_moon = sky_day.blood_moon;
+            sky_frame.aurora = opts_.aurora >= 0.0f ? opts_.aurora : sky_clock_.aurora(t);
+            sky_frame.cloud_light = render::cloud_light(sky_day) + glm::vec3(weather_look_.flash);
+            sky_frame.storm = weather_look_.storm;
+            sky_frame.flash = weather_look_.flash;
+            sky_frame.volumetric_clouds = volumetric_clouds_;
+            sky_frame.to_light = sky_day.to_light;
+            sky_frame.light = sky_day.light;
+            sky_frame.sky_light = sky_day.sky;
+            // Its volumetric clouds are marched before the scene begins (a compute pass), through the plain view.
+            sky_renderer_->prepare(*f, camera_.projection(width, height, lit.far_plane), camera_.view(), sky_frame);
+        }
         // The temporal upscaler follows the plain camera (render/temporal.h); begin_scene hands it to the scene's
         // shaders for their own motion, so it is given first.
         if (scene) vk_.set_temporal_view(camera_.view(), camera_.projection(width, height, lit.far_plane));
@@ -645,23 +672,6 @@ int ClientApp::run() {
             const glm::mat4 plain_vp = plain_proj * camera_.view();
             glm::mat4 proj = render::jittered(plain_proj, vk_.projection_jitter());
             glm::mat4 vp = proj * camera_.view();
-            // The sky is drawn while SetFog leaves CDisplay +0x2d38 set (cleared under water, in lava and with
-            // fog ending before 101).
-            render::SkyFrame sky_frame{sky_hour, t, horizon_haze};
-            // The open sky's daylight under this weather, for the sky, its clouds and the rain.
-            render::Daylight day = render::daylight(sky_hour, true, moon_phase_, blood_moon_);
-            render::apply_storm(day, weather_look_.storm);
-            if (modern) {
-                sky_frame.atmosphere = true;
-                sky_frame.to_sun = day.to_sun;
-                sky_frame.to_moon = day.to_moon;
-                sky_frame.blood_moon = day.blood_moon;
-                sky_frame.aurora = opts_.aurora >= 0.0f ? opts_.aurora : sky_clock_.aurora(t);
-                sky_frame.cloud_light = render::cloud_light(day) + glm::vec3(weather_look_.flash);
-                sky_frame.storm = weather_look_.storm;
-                sky_frame.flash = weather_look_.flash;
-            }
-            const bool sky_drawn = sky_renderer_ && (!fog_frame || fog_frame->sky);
             const auto draw_background = [&] {
                 if (sky_drawn) sky_renderer_->draw(*f, proj, camera_.view(), sky_frame);
                 // Where no sky is drawn, the modern haze; under water, the water.

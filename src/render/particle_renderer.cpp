@@ -283,13 +283,16 @@ void ParticleRenderer::prepare(const game::ParticleSystem& particles) {
     if (!wanted.empty() && !loader_) loader_ = std::make_unique<core::LatestJobs<std::string, LoadedParticleTexture>>();
     for (auto& name : wanted) {
         std::optional<std::vector<std::byte>> zone_bytes;
-        if (reader_) zone_bytes = reader_(name);
+        TextureReader late; // read in the job (reader_any_thread_)
+        if (reader_ && reader_any_thread_) late = reader_;
+        else if (reader_) zone_bytes = reader_(name);
         loading_.insert(name);
         const GameDir* game = &game_;
         // A job that throws would hand back no result, and the name would stay in loading_ for the session, its
         // emitters never drawn; failing here, it comes back empty and is drawn with slot 0 like a missing texture.
-        loader_->submit(name, [name, bytes = std::move(zone_bytes), game]() mutable {
+        loader_->submit(name, [name, bytes = std::move(zone_bytes), late = std::move(late), game]() mutable {
             try {
+                if (late) bytes = late(name);
                 return load_particle_texture(name, std::move(bytes), *game);
             } catch (...) {
                 return LoadedParticleTexture{};
