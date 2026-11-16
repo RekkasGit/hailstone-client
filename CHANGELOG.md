@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Frame cap: `display.max_fps` (and `--max-fps`) is now held to the frame on every system. On Windows a cap of 144 ran at about 128, because each frame's wait woke up to a millisecond late and the next frame was timed from that late start
+- Frame cap: Options > Display > Frame Rate Limit has Auto (`display.max_fps = -1`, `--max-fps auto`), a little under the display's refresh rate (138 at 144 Hz, 116 at 120 Hz). With FreeSync or G-Sync it keeps every frame inside the display's range, so play is as smooth as with vsync without vsync's delay
 - Graphics: the frame now shares its work with the processor's other cores: characters are posed, particles are built, the characters' and held items' effects are moved and the 3D scene's drawing commands are recorded on worker threads, and a character's skeleton is posed once a frame however many effects, spells and name plates ask for it. `display.worker_threads` sets how many (0 for none), and `display.parallel_record` 0 keeps the scene's recording on the main thread
 - For plugin authors: two new host functions, `get_avail_aa_data_bulk` and `get_avail_disc_data_bulk`, list the character's owned alternate abilities (by ability id) and combat abilities (by spell id) in one call, each with its name, as a count followed by that many records of a 32-bit id, a 32-bit name size and the name (`HS_Bulk_Id_Str_Pair_Record`; docs/plugins.md "Buff and spawn records")
 - For plugin authors: a new host function, `get_target_buff_data_bulk`, reads the current target's buffs in one call: spell id, tics, spell type, buff slot and the caster's name for each, as a 20-byte `HS_Bulk_TargetBuffFixedRecord` followed by the name (docs/plugins.md "Buff and spawn records")

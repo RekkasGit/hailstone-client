@@ -2,6 +2,7 @@
 
 #include "app/client_app_internal.h"
 #include "app/frame_pace.h"
+#include "platform/precise_sleep.h"
 #include "core/build_info.h"
 #include "core/frame_sections.h"
 #include "core/wipe.h"
@@ -18,6 +19,7 @@ int ClientApp::run() {
     auto last = Clock::now();
     auto start = last;
     auto last_drawn = last;
+    auto frame_deadline = last; // the frame cap's schedule (next_frame_deadline)
     float fps = 0.0f;
     // The game clock (core/step_clock.h): the rules run at 60 steps a second; game.fixed_step false steps once a
     // drawn frame instead, as the original's code is written (docs/mechanics.md "Frame rate").
@@ -40,9 +42,17 @@ int ClientApp::run() {
         perf_ui_.begin_frame();
         // The frame cap (display.max_fps, --max-fps), and display.background_fps while another window has the focus:
         // below 10 there, the loop runs on at 10 a second and draws only some frames, or none (app/frame_pace.h).
-        const FramePace pace = frame_pace(opts_.max_fps, background_fps_, window_.focused(),
+        // Auto: just under the refresh rate of the display the window is on now (auto_frame_cap).
+        const int max_fps =
+            effective_max_fps(opts_.max_fps, opts_.max_fps == kMaxFpsAuto ? window_.refresh_rate() : 0.0f);
+        const FramePace pace = frame_pace(max_fps, background_fps_, window_.focused(),
             std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - last_drawn));
-        if (pace.cap > 0) std::this_thread::sleep_until(last + std::chrono::microseconds(1000000 / pace.cap));
+        // To the microsecond on every system (platform/precise_sleep.h), timed from the last deadline (next_frame_deadline).
+        if (pace.cap > 0) {
+            frame_deadline = next_frame_deadline(frame_deadline, Clock::now(),
+                                                 std::chrono::microseconds(1000000 / pace.cap));
+            platform::precise_sleep_until(frame_deadline);
+        }
         perf_ui_.mark(FramePhase::Sleep);
         if (!opts_.screenshot.empty() && opts_.frames && frame == opts_.frames - 1) vk_.request_screenshot(opts_.screenshot);
         screenshot_this_frame_ = false;

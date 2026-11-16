@@ -4,6 +4,7 @@
 #include <doctest/doctest.h>
 
 #include <chrono>
+#include <limits>
 
 #include "app/frame_pace.h"
 
@@ -48,4 +49,53 @@ TEST_CASE("Frame pace: display.background_fps as it is kept") {
     CHECK(app::background_fps_setting(1) == 1);
     CHECK(app::background_fps_setting(5) == 5);
     CHECK(app::background_fps_setting(5000) == 1000);
+}
+
+TEST_CASE("Frame pace: the auto cap sits just under the display's refresh rate") {
+    CHECK(app::auto_frame_cap(60.0f) == 59);
+    CHECK(app::auto_frame_cap(59.94f) == 58);
+    CHECK(app::auto_frame_cap(120.0f) == 116);
+    CHECK(app::auto_frame_cap(144.0f) == 138);
+    CHECK(app::auto_frame_cap(165.0f) == 157);
+    CHECK(app::auto_frame_cap(240.0f) == 224);
+    CHECK(app::auto_frame_cap(360.0f) == 324);
+    // A refresh the system does not give (0) or nonsense: no cap.
+    CHECK(app::auto_frame_cap(0.0f) == 0);
+    CHECK(app::auto_frame_cap(-60.0f) == 0);
+    CHECK(app::auto_frame_cap(5000.0f) == 0);
+    CHECK(app::auto_frame_cap(std::numeric_limits<float>::quiet_NaN()) == 0);
+
+    // display.max_fps as kept, and the cap a frame takes from it.
+    CHECK(app::max_fps_setting(app::kMaxFpsAuto) == app::kMaxFpsAuto);
+    CHECK(app::max_fps_setting(0) == 0);
+    CHECK(app::max_fps_setting(-7) == 0);
+    CHECK(app::max_fps_setting(5) == 10);
+    CHECK(app::max_fps_setting(144) == 144);
+    CHECK(app::max_fps_setting(5000) == 1000);
+    CHECK(app::effective_max_fps(app::kMaxFpsAuto, 144.0f) == 138);
+    CHECK(app::effective_max_fps(app::kMaxFpsAuto, 0.0f) == 0);
+    CHECK(app::effective_max_fps(144, 60.0f) == 144); // a number is taken as it is, whatever the display
+    CHECK(app::effective_max_fps(0, 144.0f) == 0);
+}
+
+TEST_CASE("Frame pace: the cap's schedule runs from the last deadline, and from now after a long frame") {
+    using std::chrono::microseconds;
+    using T = std::chrono::steady_clock::time_point;
+    const T start{};
+    const microseconds period(6944); // 144 a second
+    // On time: one period after the last deadline, not after the moment the frame began its work.
+    CHECK(app::next_frame_deadline(start, start + microseconds(100), period) == start + period);
+    // A frame that ran past its deadline starts at once, and the schedule goes on from then: no catch-up burst.
+    const T late = start + period + microseconds(10);
+    CHECK(app::next_frame_deadline(start, late, period) == late);
+    const T hitch = start + 5 * period;
+    CHECK(app::next_frame_deadline(start, hitch, period) == hitch);
+    CHECK(app::next_frame_deadline(hitch, hitch + microseconds(500), period) == hitch + period);
+    // A wait that ends a little late is not carried into the next frame: the deadlines stay on the period's grid
+    // as long as each frame's work fits in its period.
+    T deadline = start;
+    for (int i = 1; i <= 1000; ++i) {
+        deadline = app::next_frame_deadline(deadline, deadline + microseconds(300), period);
+        REQUIRE(deadline == start + i * period);
+    }
 }

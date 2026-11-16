@@ -299,6 +299,7 @@ add_library(hailstone_engine STATIC
   src/platform/message_box.cpp
   src/platform/crash_log.cpp
   src/platform/local_time.cpp
+  src/platform/precise_sleep.cpp
   src/platform/private_file.cpp
   src/platform/durable_file.cpp
   src/platform/shared_file.cpp
@@ -1102,6 +1103,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/work_budget_test.cpp
     tests/latest_jobs_test.cpp
     tests/worker_pool_test.cpp
+    tests/precise_sleep_test.cpp
     tests/animation_track_test.cpp
     tests/character_memory_test.cpp
     tests/character_share_test.cpp

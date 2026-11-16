@@ -7,6 +7,7 @@
 #include <exception>
 
 #include "app/updater.h"
+#include "app/frame_pace.h"
 #include "platform/process.h"
 #include "core/step_clock.h"
 #include "core/worker_pool.h"
@@ -271,7 +272,7 @@ public:
         config_path_ = default_config_path();
         config_.load(config_path_);
         if (opts_.clip_plane != 15) clip_plane_arg_ = opts_.clip_plane;
-        if (opts_.max_fps > 0) max_fps_arg_ = opts_.max_fps;
+        if (opts_.max_fps > 0 || opts_.max_fps == kMaxFpsAuto) max_fps_arg_ = opts_.max_fps;
         // The asset folder: --game-dir or EQ_GAME_DIR, else hailstone.ini assets.path, else the picker asks.
         if (!choose_asset_folder()) {
             quit_ = true;
