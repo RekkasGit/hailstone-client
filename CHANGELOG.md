@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Modern lighting: volumetric clouds over the open skies, with real depth, drifting with the wind, lit by the sun (glowing at their edges, warm at sunrise and sunset, silver under the moon) and closing over into a dark overcast as a storm comes in, lit up by its lightning. They replace the painted cloud layer; Options > Graphics > Volumetric Clouds turns them off, and the Low graphics setting leaves them off
 - Luclin player models: combat swings, casting, socials (wave, cheer) and every other animation of more than 15 frames play at the original's speed; before, they ran at about half speed. The classic models are unchanged
 - Graphics: the upscaler is off by default on every computer, so the 3D world is drawn at full size. A player who never chose an upscaler, and was on AMD FSR 1, is now at Off; Options > Graphics > Upscaler turns FSR 1, Temporal or FSR 3.1 back on
 - AMD FSR 3.1: about 30 % faster on integrated graphics (on an Intel Iris Xe, 5.6 ms a frame down to 3.9 ms at 1280x720), by reprojecting the history with FSR's Lanczos table, as AMD's own runtime does on its graphics cards
