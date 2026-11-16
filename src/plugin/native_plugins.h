@@ -12,6 +12,7 @@
 // then it does not load, and consent() holds the question for the UI; answer_consent() takes the answer.
 
 #include <cstdint>
+#include "plugin/world_geometry.h"
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -21,6 +22,7 @@
 #include <vector>
 
 #include "net/packet.h"
+#include "core/sha256.h"
 #include "plugin/consent.h"
 #include "plugin/hooks.h"
 #include "plugin/policy.h"
@@ -63,6 +65,9 @@ struct NativeEnv {
     std::vector<std::filesystem::path> dirs; // where plugins are looked for, and one level down (plugins/<name>/)
     std::filesystem::path cache_dir;         // the approved copies
     std::filesystem::path config_dir;        // each plugin's own directory is config_dir / name
+    // Temporary, explicit compatibility selection for these exact admitted bytes. Empty is canonical;
+    // "ui-preview-1" selects the earlier unmarked ABI 3 preview. Unknown values fail closed before initialization.
+    std::function<std::string(const Sha256Digest&)> sdk_layout;
     // The per-server and per-character folders (server_config_dir, character_config_dir) are under the connection's:
     // the server's rules' folder (servers/<profile>/) and its character's files.
 };
@@ -71,6 +76,11 @@ class NativePlugins {
 public:
     explicit NativePlugins(NativeEnv env);
     ~NativePlugins(); // unloads everything (ShutdownPlugin)
+    void world_frame(HailstoneWorldFrame frame, WorldQueries queries);
+    const std::vector<OwnedWorldBatch>& world_batches() const;
+    void world_recorded(std::size_t batch, std::uint32_t vertices);
+    void world_finish(bool submitted, bool presented);
+    void world_unavailable();
     NativePlugins(const NativePlugins&) = delete;
     NativePlugins& operator=(const NativePlugins&) = delete;
 

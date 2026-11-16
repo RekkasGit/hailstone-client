@@ -1,9 +1,11 @@
 #include "app/addon_requirements.h"
 
 #include <algorithm>
+#include <set>
 #include <utility>
 
 #include "ui/dev_screens.h"
+#include "ui/ui_packs.h"
 
 namespace hailstone::app {
 
@@ -13,6 +15,44 @@ bool required_script_found(const std::filesystem::path& data_dir, std::string_vi
         if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
     std::error_code ec;
     return std::filesystem::is_regular_file(addon_folder(data_dir, AddonKind::Script, key) / "init.lua", ec);
+}
+
+void apply_ui_addon_policy(std::vector<ui::UiPack>& packs, const plugin::Rules* rules,
+                           const std::vector<InstalledAddon>& installed) {
+    if (!rules || rules->provisional || !rules->addons.enabled) return;
+    auto folded = [](std::string name) {
+        for (auto& c : name) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+        return name;
+    };
+    std::set<std::string> denied;
+    for (auto& pack : packs) {
+        if (pack.source != "addon") continue;
+        const auto owner = std::find_if(installed.begin(), installed.end(), [&](const InstalledAddon& addon) {
+            return addon.kind == AddonKind::Ui && folded(addon.name) == folded(pack.addon);
+        });
+        if (owner == installed.end() || plugin::addon_allowed(rules->addons, owner->source)) continue;
+        denied.insert(pack.id);
+        if (!pack.available) continue;
+        pack.available = false;
+        pack.unavailable_reason = "This server blocks UI add-on " + owner->source + ".";
+    }
+    // Derived interfaces cannot retain a blocked base's code through inheritance. Policy is independent of the
+    // requested UI name; the normal registry fallback selects a built-in without rewriting the user's setting.
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (auto& pack : packs) {
+            if (denied.contains(pack.id)) continue;
+            if (std::none_of(pack.base_ids.begin(), pack.base_ids.end(), [&](const auto& id) { return denied.contains(id); }))
+                continue;
+            denied.insert(pack.id);
+            if (pack.available) {
+                pack.available = false;
+                pack.unavailable_reason = "This interface inherits a UI add-on blocked by this server.";
+            }
+            changed = true;
+        }
+    }
 }
 
 std::vector<AddonRequirementProblem> addon_requirement_problems(
