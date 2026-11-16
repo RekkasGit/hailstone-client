@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Modern lighting: the land beyond a zone's neighbours now takes the shape of the zones you have been to on that server, instead of made-up hills and mountains. From Qeynos Hills, South Qeynos and the open sea past its harbour now show behind North Qeynos. It fills in as you travel; a server admin with a GM character can fill it ahead of time with playprobe's `--atlas-crawl`. The sea now also goes on past a neighbouring zone's shore, and the sea floor in the distance is darker, so it no longer looks like dry land
 - Modern lighting: the zones beyond a zone line no longer freeze the game for about a third of a second as each one comes into view while you play; it now takes a few milliseconds
 - Modern lighting: volumetric clouds over the open skies, with real depth, drifting with the wind, lit by the sun (glowing at their edges, warm at sunrise and sunset, silver under the moon) and closing over into a dark overcast as a storm comes in, lit up by its lightning. They replace the painted cloud layer; Options > Graphics > Volumetric Clouds turns them off, and the Low graphics setting leaves them off
 - Luclin player models: combat swings, casting, socials (wave, cheer) and every other animation of more than 15 frames play at the original's speed; before, they ran at about half speed. The classic models are unchanged

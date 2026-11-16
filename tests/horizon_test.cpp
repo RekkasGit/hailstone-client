@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <span>
 #include <vector>
@@ -466,4 +467,134 @@ TEST_CASE("horizon: a neighbour's ground is cached and read back; a damaged file
     other[4] = std::byte{9};
     CHECK_FALSE(render::read_horizon_cache(other));
     CHECK_FALSE(render::read_horizon_cache({}));
+}
+
+namespace {
+
+// make_neighbour's zone, with a neighbour to the east whose ground (150) ends at x 6032 in water (its surface at 20,
+// its bed at 0) from x 5504: across its whole width (a shore), or one square of it (a river's mouth, `river`).
+Neighbour make_shore(bool river, bool draws_water, bool wall = false) {
+    Neighbour n;
+    add_grid(n.tris, 0.0f, 0.0f, 2000.0f, 1500.0f, 100.0f, [](float, float) { return 50.0f; });
+    n.land = render::horizon_land(n.tris, 3.0f);
+    n.field = render::horizon_field(n.tris, n.land);
+    const glm::vec2 lo(2000.0f, -512.0f);
+    const float cell = render::kHorizonCell;
+    const int nx = 63, ny = 40;
+    std::vector<float> ground, water;
+    for (int y = 0; y < ny; ++y)
+        for (int x = 0; x < nx; ++x) {
+            const float px = lo.x + (static_cast<float>(x) + 0.5f) * cell;
+            const float py = lo.y + (static_cast<float>(y) + 0.5f) * cell;
+            const bool walled = wall && x == nx - 1; // a quay along its edge, one square wide
+            const bool wet = !walled && px >= 5504.0f && (!river || (py >= 640.0f && py < 704.0f));
+            ground.push_back(wet ? 0.0f : walled ? 30.0f : 150.0f);
+            water.push_back(wet ? 20.0f : std::numeric_limits<float>::quiet_NaN());
+        }
+    auto s = render::horizon_source("east", lo, cell, nx, ny, ground, {}, water);
+    s.draws_water = draws_water;
+    n.source = std::make_shared<const render::HorizonSource>(std::move(s));
+    return n;
+}
+
+// Whether the mesh has a water surface near (x, y), at height z.
+bool water_near(const render::HorizonMesh& m, float x, float y, float z) {
+    for (std::size_t i = 0; i < m.water.size(); i += 3) {
+        const glm::vec3 c = (m.positions[m.water[i]] + m.positions[m.water[i + 1]] + m.positions[m.water[i + 2]]) / 3.0f;
+        if (std::abs(c.x - x) < 300.0f && std::abs(c.y - y) < 300.0f && near(c.z, z, 0.5f)) return true;
+    }
+    return false;
+}
+
+} // namespace
+
+TEST_CASE("horizon: a neighbour's water: its level, and the sea past its shore") {
+    const Neighbour n = make_shore(false, false);
+    const auto& s = *n.source;
+    REQUIRE(s.valid());
+    CHECK(s.water_level == doctest::Approx(20.0f));
+    const auto on = render::sample_source(s, {5800.0f, 700.0f});
+    CHECK(on.wet == doctest::Approx(1.0f));
+    CHECK(on.level == doctest::Approx(20.0f));
+    CHECK(render::sample_source(s, {4000.0f, 700.0f}).wet == 0.0f);
+    // Past its shore, open sea, on and on; not past its dry edges.
+    CHECK(render::sample_source(s, {7000.0f, 700.0f}).sea > 0.9f);
+    CHECK(render::sample_source(s, {30000.0f, 700.0f}).sea > 0.9f);
+    CHECK(render::sample_source(s, {4000.0f, 3000.0f}).sea < 0.1f);
+    // The land sinks to the sea's floor there, under the neighbour's water, and the sea's surface is drawn.
+    CHECK(near(render::horizon_height(n.field, {n.source}, {9000.0f, 700.0f}), 20.0f - render::kHorizonSeaDepth, 1.0f));
+    const auto mesh = render::horizon_mesh(n.field, {n.source});
+    CHECK(water_near(mesh, 9000.0f, 700.0f, 20.0f));
+    // The neighbour draws its own water on its ground: the land does not.
+    CHECK_FALSE(water_near(mesh, 5800.0f, 700.0f, 20.0f));
+    // On the zone's other sides, the zone's own hills as before (its edge is nearer than the neighbour's shore).
+    for (glm::vec2 p : {glm::vec2(-1500.0f, 700.0f), glm::vec2(1000.0f, -2500.0f)})
+        CHECK(render::horizon_height(n.field, {n.source}, p) == render::horizon_height(n.field, {}, p));
+}
+
+TEST_CASE("horizon: a river's mouth at a neighbour's edge is no shore") {
+    const Neighbour n = make_shore(true, false);
+    CHECK(render::sample_source(*n.source, {7000.0f, 672.0f}).sea < 0.2f);
+    const auto mesh = render::horizon_mesh(n.field, {n.source});
+    CHECK_FALSE(water_near(mesh, 9000.0f, 672.0f, 20.0f));
+}
+
+TEST_CASE("horizon: the land draws the water of a zone that does not draw its own") {
+    const Neighbour n = make_shore(false, true);
+    const auto mesh = render::horizon_mesh(n.field, {n.source});
+    CHECK(water_near(mesh, 5800.0f, 700.0f, 20.0f));
+    // Its bed under it.
+    CHECK(render::horizon_height(n.field, {n.source}, {5800.0f, 700.0f}) < 20.0f);
+}
+
+TEST_CASE("horizon: a source cut to the far side of a plane keeps only that side") {
+    const Neighbour n = make_shore(false, false);
+    const glm::vec4 keep(1.0f, 0.0f, 0.0f, -4000.0f); // x >= 4000
+    const auto cut = render::cut_horizon_source(*n.source, std::span(&keep, 1));
+    REQUIRE(cut.valid());
+    CHECK_FALSE(render::source_ground(cut, {3000.0f, 700.0f}));
+    REQUIRE(render::source_ground(cut, {4500.0f, 700.0f}));
+    CHECK(*render::source_ground(cut, {4500.0f, 700.0f}) == doctest::Approx(150.0f));
+    // Its water and its sea past the shore stay.
+    CHECK(cut.water_level == doctest::Approx(20.0f));
+    CHECK(render::sample_source(cut, {7000.0f, 700.0f}).sea > 0.9f);
+    // Short of the plane it fades as past any other edge of its ground.
+    CHECK(render::sample_source(cut, {3000.0f, 700.0f}).cover < 1.0f);
+}
+
+TEST_CASE("horizon: a neighbour's water is cached with its ground") {
+    const Neighbour n = make_shore(false, false);
+    render::HorizonCacheEntry e;
+    e.zone = "here";
+    e.neighbour = "east";
+    e.key = 7;
+    e.source = *n.source;
+    const auto back = render::read_horizon_cache(render::write_horizon_cache(e));
+    REQUIRE(back);
+    REQUIRE(back->source.water.size() == n.source->water.size());
+    for (std::size_t i = 0; i < n.source->water.size(); ++i) {
+        CHECK(std::isnan(back->source.water[i]) == std::isnan(n.source->water[i]));
+        if (!std::isnan(n.source->water[i])) CHECK(back->source.water[i] == n.source->water[i]);
+    }
+    CHECK(back->source.sea == n.source->sea);
+    CHECK(back->source.water_level == n.source->water_level);
+}
+
+TEST_CASE("horizon: a harbour's wall along a neighbour's edge does not close the sea off") {
+    const Neighbour n = make_shore(false, false, true);
+    CHECK(render::sample_source(*n.source, {7000.0f, 700.0f}).sea > 0.9f);
+    CHECK(near(render::horizon_height(n.field, {n.source}, {9000.0f, 700.0f}), 20.0f - render::kHorizonSeaDepth, 1.0f));
+}
+
+TEST_CASE("horizon: the land under the sea is darker with the depth") {
+    const Neighbour n = make_shore(false, false);
+    const auto mesh = render::horizon_mesh(n.field, {n.source});
+    float deep = 1.0f, dry = 0.0f;
+    for (std::size_t v = 0; v < mesh.positions.size() && v < mesh.shade.size(); ++v) {
+        const glm::vec3& p = mesh.positions[v];
+        if (p.x > 8500.0f && p.x < 9500.0f && std::abs(p.y - 700.0f) < 300.0f && p.z < 0.0f) deep = std::min(deep, mesh.shade[v]);
+        if (p.x > 3000.0f && p.x < 4000.0f && std::abs(p.y - 700.0f) < 300.0f) dry = std::max(dry, mesh.shade[v]);
+    }
+    CHECK(deep <= render::kHorizonSeaFloorShade + 0.01f);
+    CHECK(dry > 0.5f);
 }

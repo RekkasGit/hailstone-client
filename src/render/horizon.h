@@ -124,9 +124,18 @@ struct HorizonSource {
     int nx = 0, ny = 0;
     std::vector<float> height; // the opened ground, NaN where none; padded by the fade on every side
     std::vector<float> top;    // its terrain's highest point in each square, unopened, NaN where none (or empty)
+    std::vector<float> water;  // its water's surface in each square, NaN where none (or empty: none known)
+    // Whether the land draws its water on its ground (a zone of the world atlas, which nothing else draws); a
+    // neighbour zone draws its own, and the land's sea starts past its ground.
+    bool draws_water = false;
     // finish_horizon_source: each square's nearest ground, and how far it lies (0 on it); on its ground, how far the
     // nearest square without ground lies (its edge: before the seam, its void past its own boundary walls).
     std::vector<float> fill, dist, inner;
+    // finish_horizon_source: on its ground, 1 where its water stands over it; past it, how much of its edge there
+    // is water (the nearest ground's, averaged over kHorizonShoreWidth: a river's mouth is not a shore), which the
+    // land carries on as open sea; and the median of its water's surfaces.
+    std::vector<float> wet, sea;
+    float water_level = 0.0f;
     bool valid() const {
         const auto n = static_cast<std::size_t>(nx) * static_cast<std::size_t>(ny);
         return nx > 0 && ny > 0 && height.size() == n && fill.size() == n && dist.size() == n && inner.size() == n;
@@ -138,15 +147,34 @@ void sort_sources(HorizonSources& sources);
 
 // A source from the neighbour's ground sampled on `nx` x `ny` squares from `lo` (NaN: none): padded, opened, finished.
 // `top` (the same squares, or empty): its terrain's highest point in each, kept as it is (horizon_source_top).
+// `water` (the same squares, or empty): its water's surface in each, NaN where none.
 HorizonSource horizon_source(std::string name, glm::vec2 lo, float cell, int nx, int ny, std::vector<float> ground,
-                             std::vector<float> top = {});
-// Fills in `fill` and `dist` from `height` (a source read back from the cache).
+                             std::vector<float> top = {}, std::vector<float> water = {});
+// Fills in the layers finish_horizon_source makes from `height` and `water` (a source read back from the cache).
 void finish_horizon_source(HorizonSource& source);
+// The source with its ground (and water) left out where a square's middle lies on the far side of any of `keep`
+// (xyz . p + w < 0; game::seam_clip_plane), finished again: a zone of the world atlas past the zone line it is
+// reached by, and the zone before it short of that line, so the two do not both stand in the same place.
+HorizonSource cut_horizon_source(const HorizonSource& source, std::span<const glm::vec4> keep);
+// How wide a stretch of a source's edge must be water to be a shore the sea goes on from (finish_horizon_source),
+// and how far in from the edge its water may lie behind a wall or a quay.
+inline constexpr float kHorizonShoreWidth = 1024.0f;
+inline constexpr float kHorizonShoreWall = 192.0f;
+// The land under the sea is darker with the depth, down to this share of its light this far under the surface.
+inline constexpr float kHorizonSeaFloorShade = 0.3f;
+inline constexpr float kHorizonSeaFloorDark = 150.0f;
 struct HorizonSourceSample {
     float height = 0.0f; // the ground, or past it the nearest ground's height
     float cover = 0.0f;  // 1 on its ground, fading to 0 over kHorizonSourceFade past it
     float inner = 0.0f;  // on its ground, how far in from its edge
+    float wet = 0.0f;    // on its ground, how much its water stands over it (0..1)
+    float sea = 0.0f;    // past its ground, the open sea past its shore (0..1; HorizonSource::sea)
+    float level = 0.0f;  // its water's surface there (on its ground, its own; past it, the median)
+    float distance = 0.0f; // to its ground (0 on it)
 };
+// A neighbour's sea goes on over the land where its shore is nearer than the zone's own edge, eased over this either
+// way.
+inline constexpr float kHorizonSeaClaim = 400.0f;
 HorizonSourceSample sample_source(const HorizonSource& source, glm::vec2 p);
 // The opened ground under `p` (bilinear between the squares' centres), nullopt where the source has none.
 std::optional<float> source_ground(const HorizonSource& source, glm::vec2 p);
