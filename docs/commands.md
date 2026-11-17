@@ -233,7 +233,7 @@ These are not in the original client.
 | `/web [address]` | The in-game browser, on a new tab (docs/browser.md). |
 | `/luasocial [1..120 \| new]` | The Lua social editor. |
 | `/lighting [modern \| classic]` | Switch the lighting (docs/graphics.md). |
-| `/neighbourzones [on \| off]` | Draw the zones past outdoor zone lines (docs/graphics.md). |
+| `/neighbourzones [on \| off]` | Draw the zones past outdoor zone lines live, whole, in place of their distant copies (docs/graphics.md). |
 | `/screenshot` | Take a screenshot. |
 | `/perf` | The performance window. |
 

@@ -33,6 +33,22 @@ std::optional<std::string> read_whole(const std::filesystem::path& path) {
 
 } // namespace
 
+std::vector<DistantCopies::Placed> copy_placements(const AtlasLand& atlas,
+                                                   const std::vector<NeighbourZones::CopyTarget>& neighbours) {
+    std::vector<DistantCopies::Placed> out;
+    for (const auto& p : atlas.placed_zones) {
+        DistantCopies::Placed c{p.zone, p.offset, {}};
+        if (auto it = atlas.cuts.find(p.zone); it != atlas.cuts.end()) c.keep = it->second;
+        out.push_back(std::move(c));
+    }
+    for (const auto& n : neighbours) {
+        if (std::any_of(out.begin(), out.end(), [&](const DistantCopies::Placed& c) { return c.zone == n.name; }))
+            continue;
+        out.push_back({n.name, n.offset, {n.keep}});
+    }
+    return out;
+}
+
 std::filesystem::path zone_proxy_path(std::string_view zone) {
     return platform::cache_dir() / "proxies" / (std::string(zone) + ".bin");
 }

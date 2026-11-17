@@ -570,17 +570,12 @@ int ClientApp::run() {
                         neighbours_->enter(in);
                         // The atlas's zones as distant copies (app/distant_copies.h), over the land just built.
                         if (distant_copies_) {
-                            std::vector<DistantCopies::Placed> placed;
-                            for (const auto& p : atlas_land_.placed_zones) {
-                                DistantCopies::Placed c{p.zone, p.offset, {}};
-                                if (auto it = atlas_land_.cuts.find(p.zone); it != atlas_land_.cuts.end())
-                                    c.keep = it->second;
-                                placed.push_back(std::move(c));
-                            }
-                            distant_copies_->enter(std::move(placed), in.horizon);
+                            distant_copies_->enter(copy_placements(atlas_land_, neighbours_->copy_targets()), in.horizon);
                         }
                     }
-                    neighbours_->update(camera_.position, lit.far_plane, modern && neighbour_zones_ && in_game);
+                    // Measured whenever in the world (the land and the atlas take their shape from it); drawn live only
+                    // with display.live_neighbour_zones, their copies otherwise.
+                    neighbours_->update(camera_.position, lit.far_plane, modern && in_game, neighbour_zones_);
                     lap.mark("neighbour zones update");
                     neighbours_->set_scene_light(scene_light);
                     neighbours_->set_lighting(lighting);

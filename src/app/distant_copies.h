@@ -3,8 +3,9 @@
 // The distant copies (docs/graphics.md "Distant copies", render/zone_proxy.h): each zone the world atlas places past the
 // current one, drawn far out as a low-detail copy baked from its own files, in place of the land round the zone there.
 // Each is baked once (cached under cache/proxies/, keyed by the zone's files) and drawn as a render::ZoneRenderer of its
-// own, loaded one at a time on a background thread at low priority once the zone is entered. A neighbour zone drawn
-// live wins over its copy: the copy is not drawn while it is.
+// own, loaded one at a time on a background thread at low priority once the zone is entered. They are drawn from the
+// zone's edge out, the neighbour zones' too (copy_placements), in place of the neighbour zones drawn live; a neighbour
+// zone drawn live (display.live_neighbour_zones) wins over its copy: the copy is not drawn while it is.
 
 #include <atomic>
 #include <cstdint>
@@ -17,6 +18,8 @@
 
 #include <glm/glm.hpp>
 
+#include "app/neighbour_zones.h"
+#include "app/world_atlas.h"
 #include "render/zone_renderer.h"
 
 namespace hailstone { class GameDir; }
@@ -92,6 +95,12 @@ private:
     };
     std::vector<Abandoned> abandoned_;
 };
+
+// The zones to copy: the world atlas's (`atlas`: its placements, each kept by its cuts), then each neighbour zone past
+// a qualifying line the atlas did not place (one not visited on this server yet, or not outdoor there), at its own
+// offset and kept past its seam.
+std::vector<DistantCopies::Placed> copy_placements(const AtlasLand& atlas,
+                                                   const std::vector<NeighbourZones::CopyTarget>& neighbours);
 
 // Where `zone`'s copy is cached (cache/proxies/<zone>.bin, docs/layout.md).
 std::filesystem::path zone_proxy_path(std::string_view zone);

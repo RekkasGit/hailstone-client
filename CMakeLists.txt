@@ -1187,6 +1187,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/horizon_terrain_test.cpp
     tests/tree_impostor_test.cpp
     tests/zone_proxy_test.cpp
+    tests/distant_copies_test.cpp
     tests/collision_test.cpp
     tests/nav_test.cpp
     tests/map_data_test.cpp

@@ -347,6 +347,16 @@ std::uint64_t NeighbourZones::drawn_key() const {
     return key;
 }
 
+std::vector<NeighbourZones::CopyTarget> NeighbourZones::copy_targets() const {
+    std::vector<CopyTarget> out;
+    for (const Line& l : lines_) {
+        if (l.verdict != game::NeighbourVerdict::Draw) continue;
+        if (std::any_of(out.begin(), out.end(), [&](const CopyTarget& t) { return t.name == l.name; })) continue;
+        out.push_back({l.name, l.source ? l.source_offset : l.first.offset, game::seam_clip_plane(l.seam, 0.0f)});
+    }
+    return out;
+}
+
 void NeighbourZones::drawn_names(std::vector<std::string>& out) const {
     for (const Line& l : lines_)
         if (l.renderer && !l.idle) out.push_back(l.name);
@@ -692,7 +702,7 @@ void NeighbourZones::finish(Job& job) {
     }
 }
 
-void NeighbourZones::update(const glm::vec3& camera, float far_plane, bool enabled) {
+void NeighbourZones::update(const glm::vec3& camera, float far_plane, bool enabled, bool live) {
     // Loads zoning cut off: joined once they end.
     std::erase_if(abandoned_, [](Abandoned& a) {
         if (!a.job->done) return false;
@@ -709,7 +719,7 @@ void NeighbourZones::update(const glm::vec3& camera, float far_plane, bool enabl
     // (below) or on zoning, as freeing one waits for the GPU (~ZoneRenderer) and would hitch the frame.
     for (auto& l : lines_) {
         if (!l.renderer) continue;
-        if (!enabled) {
+        if (!enabled || !live) {
             log::info("neighbour zone {}: freed ({:.1f} MB)", l.name, static_cast<double>(l.bytes) / (1024.0 * 1024.0));
             l.renderer.reset();
             continue;
@@ -719,7 +729,7 @@ void NeighbourZones::update(const glm::vec3& camera, float far_plane, bool enabl
             log::info("neighbour zone {}: {}", l.name, idle ? "out of reach, not drawn" : "in reach again");
         l.idle = idle;
     }
-    if (!enabled) pending_.reset();
+    if (!enabled || !live) pending_.reset();
     // The ground of a load about to start, a few rows a frame.
     if (pending_) {
         core::WorkBudget budget(kGroundBudgetMs);
@@ -749,7 +759,7 @@ void NeighbourZones::update(const glm::vec3& camera, float far_plane, bool enabl
     Line* next = nullptr;
     float best = far_plane + kLoadReach;
     for (auto& l : lines_) {
-        if (l.renderer || l.failed || l.verdict != game::NeighbourVerdict::Draw) continue;
+        if (!live || l.renderer || l.failed || l.verdict != game::NeighbourVerdict::Draw) continue;
         const float d = game::distance_xy(camera, l.seam.lo, l.seam.hi);
         if (d < best) {
             best = d;
