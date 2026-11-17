@@ -27,9 +27,13 @@ What the client does not implement yet, or implements with an approximation it c
 ## Server map ownership
 
 - Optional ownership and NPC Find suppression have synthetic host/presentation coverage; live tracking-class/GM
-  changes, zoning, retirement and real server replies still require acceptance in both UI packs. Find replies have
-  no request nonce: ambiguous overlapping NPC batches are discarded, and an unresolved expired batch quarantines
-  server-path replies until zoning. Local mesh navigation stays available (`docs/navigation.md`, Find).
+  changes, zoning, retirement and real server replies still require acceptance in both UI packs. Find replies are
+  matched to requests in order, as without a map policy (the Navigation row below).
+- Tracking on the player's own death: the client empties the tracking list and closes the window when the player
+  dies (the interaction context changes with the dead flag, as it does for Find paths and walks), and Tracking can be
+  opened again once alive. What RoF2's CTrackingWnd does on death is not checked; a death before respawn usually
+  zones the player anyway, which empties the list in either case. A capture of a death with the window open, then a
+  same-zone respawn, would settle it.
 
 ## Modular interfaces
 

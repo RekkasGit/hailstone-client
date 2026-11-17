@@ -27,23 +27,27 @@ struct FindPolicy final : game::ServerExtension {
 };
 }
 
-TEST_CASE("server path leases: all overlapping routes are discarded instead of guessing reply order") {
-    for (const bool reverse : {false, true}) {
-        test::Rig rig;
-        REQUIRE(rig.to_zone());
-        const auto first = rig.conn.request_quiet_path(101, {11, 1});
-        const auto second = rig.conn.request_quiet_path(102, {11, 2});
-        REQUIRE(first); REQUIRE(second);
-        rig.conn.receive_zone_packet_for_test(route(reverse ? 200.0f : 100.0f));
-        rig.conn.receive_zone_packet_for_test(route(reverse ? 100.0f : 200.0f));
-        CHECK_FALSE(rig.conn.take_quiet_path(first)); CHECK_FALSE(rig.conn.take_quiet_path(second));
-        const auto fresh = rig.conn.request_quiet_path(102, {11, 3}); REQUIRE(fresh);
-        rig.conn.receive_zone_packet_for_test(route(300));
-        CHECK_FALSE(rig.conn.take_quiet_path(second)); // an old handle must not consume the new result
-        const auto result = rig.conn.take_quiet_path(fresh); REQUIRE(result); REQUIRE_FALSE(result->empty());
-        CHECK(result->front().x == doctest::Approx(300));
-        CHECK_FALSE(rig.conn.take_quiet_path(fresh));
-    }
+// The server answers in the order asked (docs/unknowns.md, Navigation): two quiet routes in flight together each take
+// their own reply, the first the first. Only the newest quiet route is kept until taken, as before leases.
+TEST_CASE("server path leases: overlapping routes each take their own reply, in the order asked") {
+    test::Rig rig;
+    REQUIRE(rig.to_zone());
+    const auto first = rig.conn.request_quiet_path(101, {11, 1});
+    REQUIRE(first);
+    rig.conn.receive_zone_packet_for_test(route(100));
+    const auto second = rig.conn.request_quiet_path(102, {11, 2});
+    const auto third = rig.conn.request_quiet_path(102, {11, 3});
+    REQUIRE(second); REQUIRE(third);
+    rig.conn.receive_zone_packet_for_test(route(200));
+    auto result = rig.conn.take_quiet_path(second); REQUIRE(result); REQUIRE_FALSE(result->empty());
+    CHECK(result->front().x == doctest::Approx(200));
+    rig.conn.receive_zone_packet_for_test(route(300));
+    CHECK_FALSE(rig.conn.take_quiet_path(second)); // an old handle must not consume the new result
+    result = rig.conn.take_quiet_path(third); REQUIRE(result); REQUIRE_FALSE(result->empty());
+    CHECK(result->front().x == doctest::Approx(300));
+    CHECK_FALSE(rig.conn.take_quiet_path(third));
+    const auto old = rig.conn.take_quiet_path(first); // the first reply was replaced by the next request's
+    CHECK_FALSE(old);
 }
 
 TEST_CASE("server path leases: a guarded Find fallback cannot become a replacement manual route") {
@@ -53,13 +57,16 @@ TEST_CASE("server path leases: a guarded Find fallback cannot become a replaceme
     const auto owned = rig.conn.request_quiet_path(101, {21, 1, game::ServerPathOrigin::Purpose::NpcFind}); REQUIRE(owned);
     policy->flags = game::MapPolicyDisableNpcFind; ++policy->revision;
     const auto manual = rig.conn.request_quiet_path(102, {21, 2}); REQUIRE(manual);
-    rig.conn.receive_zone_packet_for_test(route(111)); rig.conn.receive_zone_packet_for_test(route(222));
-    CHECK_FALSE(rig.conn.take_quiet_path(owned)); CHECK_FALSE(rig.conn.take_quiet_path(manual));
+    // The owned route's reply is dropped (the policy now forbids it); the manual route keeps its own.
+    rig.conn.receive_zone_packet_for_test(route(111)); CHECK_FALSE(rig.conn.take_quiet_path(owned));
+    rig.conn.receive_zone_packet_for_test(route(222));
+    const auto kept = rig.conn.take_quiet_path(manual); REQUIRE(kept); REQUIRE_FALSE(kept->empty());
+    CHECK(kept->front().x == doctest::Approx(222));
     const auto fresh = rig.conn.request_quiet_path(101, {21, 3}); REQUIRE(fresh); // ordinary navigation remains available
     rig.conn.receive_zone_packet_for_test(route(333)); CHECK(rig.conn.take_quiet_path(fresh).has_value());
 }
 
-TEST_CASE("server path leases: stops orphans and ordinary timeout cannot resurrect a shown or quiet path") {
+TEST_CASE("server path leases: stops, orphans and an unanswered request; later requests still get their replies") {
     test::Rig rig; REQUIRE(rig.to_zone());
     const auto replies = rig.conn.find_replies();
     rig.conn.receive_zone_packet_for_test(route(123));
@@ -68,12 +75,14 @@ TEST_CASE("server path leases: stops orphans and ordinary timeout cannot resurre
     rig.conn.receive_zone_packet_for_test(route(100));
     CHECK(rig.conn.find_replies() == replies); CHECK_FALSE(rig.conn.player_path().active());
     const auto request = rig.conn.request_quiet_path(101, {31, 1}); REQUIRE(request);
+    // Never answered (EQEmu sends no reply to a /find of a Bazaar trader: it warps the player): after the wait it is
+    // dropped, as before, and every later request is answered. A reply that comes late anyway has no owner.
     net::GameConnectionTestAccess::expire_find_batch(rig.conn);
-    CHECK(net::GameConnectionTestAccess::find_reply_quarantined(rig.conn));
     rig.conn.receive_zone_packet_for_test(route(200)); CHECK_FALSE(rig.conn.take_quiet_path(request));
-    CHECK_FALSE(rig.conn.request_quiet_path(102, {31, 2}));
+    const auto later = rig.conn.request_quiet_path(102, {31, 2}); REQUIRE(later);
+    rig.conn.receive_zone_packet_for_test(route(250)); CHECK(rig.conn.take_quiet_path(later));
     rig.conn.find_map_location({300, 0, 0}); rig.conn.receive_zone_packet_for_test(route(300));
-    CHECK(rig.conn.find_replies() == replies); CHECK_FALSE(rig.conn.player_path().active());
+    CHECK(rig.conn.find_replies() == replies + 1); CHECK(rig.conn.player_path().active());
 }
 
 TEST_CASE("server path leases: context actor replacement and source epochs retire outstanding results") {
@@ -136,7 +145,6 @@ TEST_CASE("server path leases: unsent rejected requests preserve an earlier vali
         rig.conn.receive_zone_packet_for_test(route(100));
         const auto reply = rig.conn.take_quiet_path(first); REQUIRE(reply); REQUIRE_FALSE(reply->empty());
         CHECK(reply->front().x == doctest::Approx(100));
-        CHECK_FALSE(net::GameConnectionTestAccess::find_reply_quarantined(rig.conn));
     }
 }
 
@@ -177,7 +185,6 @@ TEST_CASE("server path leases: unsent reservations neither time out nor consume 
             return plugin::Flow::Continue;
         });
     const auto request = rig.conn.request_quiet_path(101, {83, 1}); REQUIRE(request);
-    CHECK_FALSE(net::GameConnectionTestAccess::find_reply_quarantined(rig.conn));
     rig.conn.receive_zone_packet_for_test(route(100));
     const auto reply = rig.conn.take_quiet_path(request); REQUIRE(reply); REQUIRE_FALSE(reply->empty());
     CHECK(reply->front().x == doctest::Approx(100));

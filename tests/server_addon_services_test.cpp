@@ -232,8 +232,10 @@ TEST_CASE("server addon maps: NPC-origin paths and guide identities cannot rebin
     CHECK(c.player_path().target_id() == 12); // original PC Find retains its existing server-owned target semantics
 }
 
-TEST_CASE("server addon maps: ambiguous retired NPC replies never become a replacement PC or coordinate path") {
-    for (const bool coordinate : {false, true}) for (const bool old_first : {false, true}) {
+// Replies are matched in the order asked (docs/navigation.md): a retired NPC Find's reply takes its place and is dropped,
+// and the replacement PC or coordinate Find keeps its own.
+TEST_CASE("server addon maps: a retired NPC Find's reply is dropped and its replacement keeps its own") {
+    for (const bool coordinate : {false, true}) {
         auto policy = std::make_shared<MapExtension>(); policy->find_visible = true;
         auto options = test::quick_options(); options.plugins = policy;
         test::Rig w(test::MockConfig::standard(), options); REQUIRE(w.to_zone());
@@ -245,30 +247,31 @@ TEST_CASE("server addon maps: ambiguous retired NPC replies never become a repla
         const auto before = c.find_replies();
         const auto old = net::encode_find_person_reply({{100, 0, 0}, {0, 0, 0}, {100, 0, 0}});
         const auto replacement = net::encode_find_person_reply({{500, 500, 0}, {0, 0, 0}, {500, 500, 0}});
-        c.receive_zone_packet_for_test(old_first ? old : replacement);
-        c.receive_zone_packet_for_test(old_first ? replacement : old);
+        c.receive_zone_packet_for_test(old);
         CHECK(c.find_replies() == before); CHECK_FALSE(c.player_path().active()); CHECK(c.find_path().empty());
-        REQUIRE(c.find_spawn(12));
         c.receive_zone_packet_for_test(replacement);
         CHECK(c.find_replies() == before + 1); CHECK(c.player_path().active());
+        REQUIRE(c.find_spawn(12));
+        c.receive_zone_packet_for_test(replacement);
+        CHECK(c.find_replies() == before + 2); CHECK(c.player_path().active());
     }
 }
 
-TEST_CASE("server addon maps: an expired ambiguous NPC reply keeps server paths quarantined until zoning") {
+// Main's rule kept with a map provider present: an unanswered NPC Find is dropped after the wait and the next Find is
+// answered; nothing stays locked until the next zone.
+TEST_CASE("server addon maps: an unanswered NPC Find expires and the next Find gets its reply") {
     auto policy = std::make_shared<MapExtension>(); policy->find_visible = true;
     auto options = test::quick_options(); options.plugins = policy;
     test::Rig w(test::MockConfig::standard(), options); REQUIRE(w.to_zone());
     auto& c = w.conn; path_actors(c);
     REQUIRE(c.find_spawn(10));
-    policy->policy.flags = game::MapPolicyDisableNpcFind;
-    c.find_map_location({500, 500, 0});
     net::GameConnectionTestAccess::expire_find_batch(c);
-    REQUIRE(net::GameConnectionTestAccess::find_reply_quarantined(c));
     const auto before = c.find_replies();
     const auto reply = net::encode_find_person_reply({{100, 0, 0}, {0, 0, 0}, {100, 0, 0}});
-    c.receive_zone_packet_for_test(reply); // orphaned old request
+    c.receive_zone_packet_for_test(reply); // the old request's, late: no request owns it
+    CHECK(c.find_replies() == before);
     REQUIRE(c.find_spawn(12)); c.receive_zone_packet_for_test(reply);
-    CHECK(c.find_replies() == before); CHECK_FALSE(c.player_path().active());
+    CHECK(c.find_replies() == before + 1); CHECK(c.player_path().active());
 }
 
 TEST_CASE("server addon maps: a retired NPC request cannot revive when eligibility returns before its reply") {

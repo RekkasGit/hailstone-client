@@ -2,7 +2,6 @@
 // auto update and from UseSkill(53); the reply parsed, sorted, filtered and shown; Track sends OP_TrackTarget.
 
 #include <algorithm>
-#include <stdexcept>
 
 #include "core/log.h"
 #include "game/combat.h"
@@ -17,20 +16,6 @@ namespace hailstone::net {
 namespace {
 
 std::string trim_name(const std::string& name) { return game::display_name(name); }
-
-bool complete_track_reply(const AppPacket& packet) {
-    if (decode_track_reply_header(packet) == game::kTrackReplyTimer) return true;
-    try {
-        ByteReader reader(packet.data);
-        const auto count = reader.le<std::uint16_t>();
-        for (std::uint32_t row = 0; row < count; ++row) {
-            reader.skip(10); // spawn id, distance, level and NPC flag
-            while (reader.le<std::uint8_t>() != 0) {} // the server's terminated name
-            reader.skip(2); // pet and mercenary flags
-        }
-        return true;
-    } catch (const std::out_of_range&) { return false; }
-}
 
 bool in_group_fn(const void* ctx, std::int32_t id) {
     const auto* c = static_cast<const GameConnection*>(ctx);
@@ -79,10 +64,9 @@ void GameConnection::retire_tracking() {
 }
 
 void GameConnection::maintain_tracking() {
-    if (tracking_request_ && now_ms() - tracking_request_at_ > 10000) {
-        tracking_request_.reset(); tracking_reply_quarantine_ = true;
-        retire_tracking();
-    }
+    // An OP_Track unanswered for 10 s (our own number) is taken as never answered, so the next refresh goes out; the
+    // list shown stays. A reply that comes after it is the next request's (the replies carry no request id).
+    if (tracking_request_ && now_ms() - tracking_request_at_ > 10000) tracking_request_.reset();
     if ((tracking_data_ && !tracking_admission_current(*tracking_data_)) ||
         (tracking_request_ && !tracking_admission_current(*tracking_request_)) ||
         (tracking_.open && !tracking_admitted())) retire_tracking();
@@ -127,7 +111,7 @@ void GameConnection::set_track_auto_update(bool on) {
 
 void GameConnection::send_track() {
     maintain_tracking();
-    if (tracking_request_ || tracking_reply_quarantine_) return; // serialize an unkeyed reply stream
+    if (tracking_request_) return; // one in flight at a time: the replies carry no request id
     const auto admitted = tracking_admission();
     if (!admitted) { retire_tracking(); return; }
     const auto serial = ++tracking_request_serial_;
@@ -208,11 +192,10 @@ void GameConnection::track_filter_all() {
 }
 
 void GameConnection::handle_track_reply(const AppPacket& p) {
-    // A truncated/unterminated packet is not a reply receipt. Consuming its request would let a delayed real
-    // reply impersonate the next refresh in this untagged protocol. Keep the lenient presentation parser intact.
-    if (!complete_track_reply(p)) return;
+    // Any reply answers the request in flight, a short one too: set_tracking_list reads it as RoF2 does (zero past
+    // its end, game/tracking.cpp).
     maintain_tracking();
-    if (!tracking_request_ || tracking_reply_quarantine_) return;
+    if (!tracking_request_) return;
     const auto request = *tracking_request_;
     const bool retired = tracking_request_retired_;
     tracking_request_.reset(); tracking_request_retired_ = false;

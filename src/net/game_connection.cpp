@@ -730,14 +730,13 @@ void GameConnection::handle_world(const AppPacket& p) {
         path_.stop();
         // Finds asked in the old zone and never answered there: the new zone's first /find reply is not theirs.
         find_requests_.clear();
-        find_reply_quarantine_ = false;
         npc_find_identity_.reset();
         quiet_path_.reset();
         shown_find_lease_ = {};
         ++shown_find_generation_;
         retire_tracking();
         tracking_request_.reset(); tracking_data_.reset(); tracking_actors_.clear();
-        tracking_request_retired_ = false; tracking_reply_quarantine_ = false;
+        tracking_request_retired_ = false;
         expedition_.compass.clear();
         // NPC windows close with the zone (a guild bank deposit outside the guild hall would lose the item).
         reset_real_estate_for_zone();

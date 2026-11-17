@@ -52,8 +52,7 @@ bool GameConnection::matches(const ActorRef& actor) const {
 void GameConnection::expire_find_requests(std::int64_t now) {
     std::erase_if(find_requests_, [&](const auto& pending) {
         if (!pending.sent || now - pending.sent_at <= kFindReplyWaitMs) return false;
-        // There is no wire request id. Any unanswered request can still arrive later and impersonate a retry.
-        find_reply_quarantine_ = true;
+        // Taken as never answered (path_reply): later requests take later replies, as before the wait.
         if (pending.live) *pending.live = false;
         return true;
     });
@@ -68,11 +67,11 @@ game::ServerPathLease GameConnection::queue_find_request(bool quiet, bool npc_or
         return !origin.has_lifetime || (lifetime && *lifetime);
     };
     if (!owner_current()) return {};
-    if (find_reply_quarantine_ || find_requests_.size() >= 64) return {};
+    if (find_requests_.size() >= 64) return {};
     if (!origin.owner) origin.owner = core::next_process_identity();
     if (!origin.generation) origin.generation = 1;
     const auto policy = npc_origin ? server_ext().map_policy(*this).revision : 0;
-    if (!owner_current() || find_reply_quarantine_ || find_requests_.size() >= 64) return {};
+    if (!owner_current() || find_requests_.size() >= 64) return {};
     if (!quiet && origin.generation != shown_find_generation_) return {};
     game::ServerPathLease lease{interaction_context(), origin.owner, origin.generation, core::next_process_identity()};
     find_requests_.push_back({quiet, now, npc_origin, false, lease, actor, policy, std::make_shared<bool>(true),
@@ -83,12 +82,8 @@ game::ServerPathLease GameConnection::queue_find_request(bool quiet, bool npc_or
 void GameConnection::commit_find_request(const game::ServerPathLease& lease) {
     const auto current = std::find_if(find_requests_.begin(), find_requests_.end(), [&](const auto& p) { return p.lease == lease; });
     if (current == find_requests_.end()) return;
-    // Reserving or rejecting an unsent request cannot make another reply ambiguous. Outgoing callbacks may
-    // consume an older reply or send a nested request before this packet reaches the transport.
-    for (auto& pending : find_requests_) if (pending.sent) {
-        pending.discard = true;
-        current->discard = true;
-    }
+    // Only now can it own a reply: outgoing callbacks may consume an older reply or send a nested request before this
+    // packet reaches the transport. Requests in flight together each take their own reply, in the order sent.
     current->sent = true;
     current->sent_at = now_ms();
     if (current->quiet) quiet_path_.reset();
@@ -379,7 +374,6 @@ void GameConnection::path_reply(const AppPacket& p) {
     // kFindReplyWaitMs, our own number, is taken as never answered.
     const std::int64_t now = now_ms();
     expire_find_requests(now);
-    if (find_reply_quarantine_) return;
     const auto pending = std::find_if(find_requests_.begin(), find_requests_.end(), [](const auto& request) { return request.sent; });
     if (pending == find_requests_.end()) return; // no reply can belong to an unsent reservation
     const auto request = *pending; find_requests_.erase(pending);

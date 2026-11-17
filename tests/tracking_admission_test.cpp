@@ -116,21 +116,23 @@ TEST_CASE("Tracking admission: old source replies never reopen or lend a list to
     CHECK(connection.tracking().tracked == 0); CHECK(connection.tracking_lines().empty());
 }
 
-TEST_CASE("Tracking admission: malformed packets retain the request while empty lists and timers complete it") {
+// A short reply answers its request and is read as RoF2 reads it, zero past its end (game/tracking.cpp), as before
+// requests were tracked: the last row's missing mercenary flag reads 0.
+TEST_CASE("Tracking admission: short replies answer the request and are read leniently; empty lists and timers too") {
     TrackingRig test;
     auto& connection = test.rig.conn;
     connection.open_tracking();
     REQUIRE(net::GameConnectionTestAccess::has_tracking_request(connection));
-    for (const auto& packet : {net::make_empty(net::Op::Track), list_reply()}) {
-        auto broken = packet;
-        if (!broken.data.empty()) broken.data.pop_back();
-        connection.receive_zone_packet_for_test(broken);
-        CHECK(net::GameConnectionTestAccess::has_tracking_request(connection));
-        CHECK(connection.tracking_lines().empty());
-        connection.send_track(); // it cannot overlap the still-pending real reply
-    }
-    test.publish();
+    auto broken = list_reply();
+    broken.data.pop_back();
+    connection.receive_zone_packet_for_test(broken);
     CHECK_FALSE(net::GameConnectionTestAccess::has_tracking_request(connection));
+    REQUIRE(connection.tracking_lines().size() == 1);
+    connection.send_track();
+    connection.receive_zone_packet_for_test(net::make_empty(net::Op::Track));
+    CHECK_FALSE(net::GameConnectionTestAccess::has_tracking_request(connection));
+    CHECK(connection.tracking_lines().empty());
+    connection.send_track(); test.publish();
     REQUIRE(connection.tracking_lines().size() == 1);
     connection.send_track();
     ByteWriter empty; empty.le<std::uint16_t>(0);
@@ -155,9 +157,13 @@ TEST_CASE("Tracking admission: closes orphans timeout and actor reuse cannot dis
     const auto revision = connection.tracking().revision;
     ++net::GameConnectionTestAccess::world(connection).spawns.at(101).incarnation;
     connection.track_spawn(101, revision); CHECK(connection.tracking().tracked == 0);
+    // An OP_Track never answered: dropped after the wait, the window and its list kept, and the next refresh goes out
+    // (no lockout until the next zone). A reply after the wait with nothing asked has no owner.
     connection.send_track(); net::GameConnectionTestAccess::expire_tracking_request(connection);
-    test.publish(); CHECK(connection.tracking_lines().empty()); CHECK_FALSE(connection.tracking().open);
-    connection.open_tracking(); test.publish(); CHECK(connection.tracking_lines().empty());
+    CHECK_FALSE(net::GameConnectionTestAccess::has_tracking_request(connection)); CHECK(connection.tracking().open);
+    test.publish();
+    connection.send_track(); REQUIRE(net::GameConnectionTestAccess::has_tracking_request(connection));
+    test.publish(); CHECK(connection.tracking_lines().size() == 1);
 }
 
 TEST_CASE("Tracking admission: throwing providers fail closed locally and recover without phantom requests") {

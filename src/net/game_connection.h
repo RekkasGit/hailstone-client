@@ -3364,7 +3364,8 @@ private:
     // Doors and ground objects.
     std::vector<game::Door> doors_;
     // OP_FindPersonRequest reservations and transmitted requests. Unsent reservations cannot own a reply or a
-    // timeout; overlapping transmitted requests all discard their ambiguous replies (see path_reply).
+    // timeout; transmitted requests take the replies in the order sent (see path_reply). A discarded one (its owner
+    // stopped or replaced it) still takes its reply, so the later ones keep theirs.
     struct PendingFindRequest {
         bool quiet = false;
         std::int64_t sent_at = 0;
@@ -3379,7 +3380,6 @@ private:
         bool sent = false; // a reservation becomes reply-bearing only after transport accepts the packet
     };
     std::deque<PendingFindRequest> find_requests_;
-    bool find_reply_quarantine_ = false;
     void expire_find_requests(std::int64_t now);
     game::ServerPathLease queue_find_request(bool quiet, bool npc_origin, game::ServerPathOrigin origin,
                                             std::optional<ActorRef> actor);
@@ -3501,7 +3501,6 @@ private:
     bool tracking_request_retired_ = false;
     mutable bool tracking_admission_running_ = false;
     std::unordered_map<std::int32_t, ActorRef> tracking_actors_;
-    bool tracking_reply_quarantine_ = false;
     std::optional<TrackingAdmission> tracking_admission() const;
     bool tracking_admission_current(TrackingAdmission admission) const;
     void retire_tracking();

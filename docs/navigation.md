@@ -327,19 +327,21 @@ pin the original connection, player and NPC incarnations: denial, replacement or
 destination read or movement. Replacing the walk with ordinary navigation removes that ownership; PC group/raid Find
 and coordinate navigation retain their normal behavior.
 
-Find replies contain no request identity and the server can reorder them. Shown Find paths and quiet navigation
-requests share an ownership ledger: each records its origin, connection/player context, actor incarnation and goal
-generation. Unsolicited replies and replies belonging to cancelled or replaced goals cannot start a route. Overlapping
-transmitted requests discard the whole ambiguous reply batch; retry after it drains. Reserving a request for admission
-does not consume replies or start its timeout; a request rejected before transport leaves an earlier valid request
-intact. Outgoing callbacks may receive an earlier reply or issue a nested request before this reservation is sent.
-An unanswered request reaching the existing
-ten-second timeout quarantines server-path replies until a new zone/session instead of admitting a possibly late route.
-Local mesh navigation remains available. This is a conservative protocol limit, not exact reply correlation.
+Find replies carry no request identity, so each is given to the oldest request in flight, as above. Shown Find
+paths and quiet navigation requests share an ownership ledger: each records its origin, connection/player context,
+actor incarnation and goal generation. A reply with no request waiting, or one whose request was cancelled or
+replaced (a new `/find`, a stopped walk, a lost actor), takes its place in the order and is dropped, so later
+requests keep their own replies. Reserving a request for admission does not consume replies or start its timeout; a
+request rejected before transport leaves an earlier valid request intact. Outgoing callbacks may receive an earlier
+reply or issue a nested request before this reservation is sent. A request unanswered after 10 s is dropped, as
+above, and later requests carry on.
 
-Tracking has its own serialized reply stream. A truncated list does not acknowledge its pending refresh; complete
-lists, including an empty list, and the stock timer reply do. This prevents a malformed packet from freeing a slot
-for a later refresh before the original reply arrives.
+Tracking keeps one `OP_Track` in flight at a time, since its replies carry no request id either. Any reply answers
+it: a list (a short one is read as RoF2 reads it, zero past its end), an empty list or the stock timer reply. One
+unanswered after 10 s (our own number) is dropped and the next refresh goes out; the list shown stays. A reply with
+nothing asked, or to a request whose window was closed or whose server policy changed since, is not shown. Only a
+server extension's tracking rule or map policy keeps Tracking closed (docs/plugins.md); the player's own death empties
+the list, as it ends every Find and walk (docs/unknowns.md).
 
 A Hailstone addition, in place of the original's Find window (FindLocationWnd, whose code is gone): a list of the
 NPCs a new player looks for in the zone, from what every stock EQEmu server sends (`game/useful_npcs.h`,

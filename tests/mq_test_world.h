@@ -36,7 +36,6 @@ struct GameConnectionTestAccess {
     static void enable_quest_discovery(GameConnection& c) { c.zone_ready_ = true; c.hailstone_script_ = true; }
     static bool quest_discovery_requested(const GameConnection& c) { return c.quest_npcs_asked_; }
     static void expire_find_batch(GameConnection& c) { c.expire_find_requests(GameConnection::now_ms() + 10001); }
-    static bool find_reply_quarantined(const GameConnection& c) { return c.find_reply_quarantine_; }
     static std::size_t find_request_count(const GameConnection& c) { return c.find_requests_.size(); }
     static void expire_tracking_request(GameConnection& c) {
         c.tracking_request_at_ = GameConnection::now_ms() - 10001; c.maintain_tracking();
