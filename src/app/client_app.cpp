@@ -394,7 +394,8 @@ int ClientApp::run() {
             const render::Daylight sun = render::daylight(sky_hour, true, moon_phase_, blood_moon_);
             haze = haze_blend_.update(render::haze_target(view_, view_distance_, extend, outdoor,
                                                           sky_renderer_ != nullptr && extend, sun.to_sun,
-                                                          weather_look_.storm, weather_look_.snowing),
+                                                          weather_look_.storm, weather_look_.snowing,
+                                                          zone_ && render::horizon_open_below(zone_->name)),
                                       dt);
             modern_view = render::modern_view(view_, view_distance_, haze.extend);
         }
@@ -533,7 +534,9 @@ int ClientApp::run() {
                     render::set_screen(lighting, camera_.ao_view(width, height, lit.far_plane).near_plane, lit.far_plane,
                                        f->extent.width, f->extent.height, t);
                     render::set_weather(lighting, weather_look_);
-                    horizon_haze = glm::vec4(glm::vec3(lighting.haze_color), 1.0f);
+                    // A zone floating in the sky keeps its painted sky below the horizon (render::horizon_open_below).
+                    if (!(zone_ && render::horizon_open_below(zone_->name)))
+                        horizon_haze = glm::vec4(glm::vec3(lighting.haze_color), 1.0f);
                     // The fog past the zone's edge: outdoors, in the open air, in the haze's colour and sun glow.
                     if (edge_fog_ && outdoor && !under_water) {
                         const glm::mat4 v = camera_.view();
@@ -725,7 +728,9 @@ int ClientApp::run() {
             // The open sky's daylight under this weather, for the sky and its clouds.
             render::Daylight sky_day = render::daylight(sky_hour, true, moon_phase_, blood_moon_);
             render::apply_storm(sky_day, weather_look_.storm);
-            sky_frame.atmosphere = true;
+            // Not over a zone floating in the sky: its painted dome has its clouds below (render::horizon_open_below).
+            sky_frame.atmosphere = !(zone_ && render::horizon_open_below(zone_->name));
+            sky_frame.mirror_below = !sky_frame.atmosphere;
             sky_frame.to_sun = sky_day.to_sun;
             sky_frame.to_moon = sky_day.to_moon;
             sky_frame.blood_moon = sky_day.blood_moon;
@@ -750,7 +755,13 @@ int ClientApp::run() {
         rec.begin_frame(*f, scene && parallel_record_);
         // The loading screen's backdrop is black (ui::loading_overlay's too, while the zone settles behind it).
         vk_.begin_scene(*f, screen_ == Screen::Loading ? glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
-                                                       : glm::vec4(under_water ? water_color : lit.fog_color, 1.0f));
+                                                       : glm::vec4(under_water ? water_color
+                                                                   // Under a zone floating in the sky, past its
+                                                                   // painted dome: open sky, not its fog.
+                                                                   : modern && zone_ && render::horizon_open_below(zone_->name)
+                                                                       ? render::open_sky_below(render::daylight(sky_hour, true, moon_phase_, blood_moon_).to_sun)
+                                                                       : lit.fog_color,
+                                                                   1.0f));
         if (scene && modern) {
             vk_.set_ao_view(camera_.ao_view(width, height, lit.far_plane));
             // The zone's fog field, made again when the land was built anew (a new zone) or went.
