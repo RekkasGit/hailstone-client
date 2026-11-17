@@ -471,6 +471,14 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
             warn(std::format("[{}] player_caps: has no effect without player = on", scripts ? "scripts" : "plugins"));
         (scripts ? r.player_script_caps : r.player_plugin_caps) = player_on[scripts] ? player_caps[scripts].value_or(kCapAll) : 0;
     }
+    // A repository the server suggests is one it permits: under default = deny it does not have to be named again
+    // in allow. It stays optional (never required or started for it), an explicit block still wins, and like allow
+    // it grants no capability beyond [scripts]/[plugins] player_caps.
+    for (const auto& source : r.suggest_addons) {
+        auto identity = addon_identity(source);
+        if (!identity.empty() && std::find(r.addons.allow.begin(), r.addons.allow.end(), identity) == r.addons.allow.end())
+            r.addons.allow.push_back(std::move(identity));
+    }
     for (const auto& identity : r.addons.required)
         if (std::find(r.addons.block.begin(), r.addons.block.end(), identity) != r.addons.block.end())
             invalid_addons("[addons] " + identity + " is both required and blocked");

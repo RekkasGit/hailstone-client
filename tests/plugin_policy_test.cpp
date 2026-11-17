@@ -398,6 +398,40 @@ TEST_CASE("add-on rules: identities are GitHub repositories, without a release o
     CHECK(addon_allowed(open.addons, ""));
 }
 
+TEST_CASE("add-on rules: a suggested repository is allowed under default deny, optional, blockable, no caps") {
+    using namespace plugin;
+    const auto r = parse_server_cfg("[scripts]\nplayer = on\nplayer_caps = read,ui\n"
+                                    "[addons]\nenforce = on\ndefault = deny\nallow = owner/manual\n"
+                                    "suggest = Owner/Optional@v2, https://github.com/Owner/Branches/tree/next, "
+                                    "owner/blocked, owner/manual\nblock = owner/blocked\n");
+    REQUIRE(r.addons.error.empty());
+    CHECK(r.addons.allow == std::vector<std::string>{"owner/manual", "owner/optional", "owner/branches", "owner/blocked"});
+    CHECK(addon_allowed(r.addons, "owner/optional@v9"));
+    CHECK(addon_allowed(r.addons, "OWNER/BRANCHES"));
+    CHECK_FALSE(addon_allowed(r.addons, "owner/blocked")); // block wins over a suggestion
+    CHECK_FALSE(addon_allowed(r.addons, "owner/unlisted"));
+    CHECK_FALSE(addon_required(r.addons, "owner/optional")); // a suggestion is never a requirement
+
+    const auto optional = sha256(std::string_view("optional script"));
+    const auto blocked = sha256(std::string_view("blocked script"));
+    Policy p;
+    p.set_ceilings({{FileKind::Script, optional, kCapRead | kCapUi | kCapMove, "optional", "owner/optional"},
+                    {FileKind::Script, blocked, kCapRead, "blocked", "owner/blocked"}});
+    p.set(r);
+    // Allowed by identity, but no more than player_caps: a suggestion grants no capability.
+    CHECK(p.caps(FileKind::Script, optional) == (kCapRead | kCapUi));
+    CHECK(p.caps(FileKind::Script, blocked) == 0);
+    CHECK(p.required_entries(FileKind::Script).empty());
+
+    // With the player's scripts off, a suggested one does not run either.
+    p.set(parse_server_cfg("[addons]\nenforce = on\ndefault = deny\nsuggest = owner/optional\n"));
+    CHECK(p.caps(FileKind::Script, optional) == 0);
+
+    // Not enforced: the suggestion changes nothing.
+    const auto off = parse_server_cfg("[scripts]\nplayer = on\n[addons]\ndefault = deny\nsuggest = owner/optional\n");
+    CHECK(addon_allowed(off.addons, "owner/unlisted"));
+}
+
 TEST_CASE("add-on rules: required minimum versions keep repository identity separate and preserve SemVer case") {
     using namespace plugin;
     std::vector<std::string> warnings;

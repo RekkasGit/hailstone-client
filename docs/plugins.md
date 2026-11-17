@@ -1383,7 +1383,8 @@ default = allow
   install links name the plain repository. **Older clients refuse such a server:** a Hailstone before this
   release reads `owner/repo:version` as a malformed entry, so its invalid policy keeps every player on it out of the
   world. Use the versioned form only once your players run a client that has it.
-- **`allow`, `block` and `default`.** `default = deny` refuses every add-on not named by `allow` or `required`,
+- **`allow`, `block` and `default`.** `default = deny` refuses every add-on not named by `allow`, `required` or
+  `suggest` (a repository the server suggests is one it permits, so it need not be named in `allow` too),
   so a closed list can shut out every add-on, visual ones included; `default = allow` (the default) admits the rest.
   `block` wins over everything; an identity both required and blocked makes the policy invalid. An add-on put in by
   hand (not by the manager) has no repository: no list names it, so it runs under `default = allow` (unless it uses
@@ -1401,8 +1402,8 @@ default = allow
   requirement; the client neither starts it nor can tell whether it runs.
 - **Permission is not capability.** Naming an add-on in `allow` or `required` does not turn on `[scripts] player` or
   `[plugins] player`, nor grant more than `player_caps` and the add-on's manifest. A required script or plugin that
-  needs capabilities the server does not give is a requirement not met. A `suggest` stays optional and grants nothing;
-  under `default = deny`, also name it in `allow` if it should run.
+  needs capabilities the server does not give is a requirement not met. A `suggest` stays optional: it allows the
+  add-on as `allow` does, but never requires or starts it and grants no capability.
 - **The server's own files** (its `scripts/` and `plugins/`, listed by hash at the zone-in) are not add-ons: no
   list names them and the policy never refuses them. The server decides by sending them or not.
 
