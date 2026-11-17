@@ -45,6 +45,42 @@ client with the same variables (and `HAILSTONE_GPU_IPC_SERVER_PID` set to the br
 private, as before. `HAILSTONE_GPU_BENCHMARK=1` logs the client's presented frames and the time spent waiting for
 the lease and for shared frames' fences.
 
+## Transient plugin geometry
+
+The generic world geometry service (`sdk/hailstone_world_geometry.h`) accepts complete, transient batches of
+colored triangles or one-pixel lines. A producer supplies the final world positions and compositing order;
+`render/WorldGeometryRenderer` never invents terrain heights. It depth-tests against the current scene with
+reverse Z, blends premultiplied linear-light color without writing depth, and writes the temporal reactive mask
+through the same scene attachments as the target ring. Thick lines, outlines and glyphs are authored triangles.
+The per-frame budget admits at most 256 batches and 98,304 vertices; invalid inputs and repeated owner/tag pairs
+cannot consume unbounded validation work. Buffers belong to fenced frame slots.
+
+The app offers a current scene frame only when its connection, zone, instance and scene epoch match the loaded
+collision scene. Effect floor queries choose the highest upward-facing drawn opaque/masked surface at or below
+the caller's ceiling: terrain, static props (passable parts included), current animated scenery, doors and placed
+scenery. A separate visual mesh uses the same selected smoothed terrain and replacement objects as the renderer;
+movement keeps its original mesh. It is rebuilt with the scene and unavailable during a scene rebuild or failed
+upload. Invisible collision, transparent materials, undersides and movement-only ladder slabs are excluded. These
+are visual surfaces, separate from movement floor policy; NPC/player/pet meshes, dropped items, missiles and
+placement ghosts are excluded. The producer bounds the ceiling to the desired layer; missing surfaces remain
+missing. Actor anchors use the model transform prepared for this render attempt, including the displayed position,
+model origin and mount seat, with a separate plausibility-checked floor sample when available. A hidden or clipped
+actor can have a prepared model pose: this is not evidence of visibility. Connection retirement, zoning, skipped
+render attempts and renderer failure withdraw the service, and changed scenery transforms or animation time
+advance its collision revision. Masked surfaces use their mesh footprint; this CPU query does not sample texture alpha.
+Animated visual surfaces use the renderer's exact clock, independently of the fixed-step movement pose. The
+optional surface-patch query clips current upward scene faces against a producer triangle, proves coplanar union
+coverage by polygon subtraction, and returns an interior witness and its highest source face for a mismatch.
+Off-grid or thin props cannot be certified flat just because point samples missed them. Coverage holes, incomplete
+enumeration, numeric uncertainty and exhausted shared work never produce a planar certificate.
+
+A recorded receipt means all admitted vertices reached `vkCmdDraw` for the exact batch identity. A submitted
+receipt additionally means the real frame reached a successful queue submission. A presented receipt means
+`vkQueuePresentKHR` accepted that real frame (`VK_SUCCESS` or `VK_SUBOPTIMAL_KHR`); an optional generated frame
+cannot confer a receipt on it. None of these receipts proves visible pixels, lack of occlusion or physical display.
+`world_geometry_probe` checks actual recording, frame submission/presentation and PNG readback for winding,
+alpha blending, depth occlusion, foreground geometry and lines without game assets.
+
 ## The frame
 
 `render::VkContext` (`src/render/vk_context.h`):
@@ -82,6 +118,59 @@ tonemapped and sRGB-encoded as FSR 1 wants it and without the dither; `shaders/f
 brings it up to the view's size; `shaders/fsr_rcas.frag` (RCAS) sharpens that by `display.sharpness` into the
 swapchain and adds the dither. The UI is drawn after, at the window's own size. Textures keep their LOD bias (none
 yet). With `display.upscaler = taa` the temporal upscaler takes FSR 1's place (Temporal upscaling, below).
+
+### Worker threads
+
+The frame hands some of its own loops to a small pool of worker threads (`core/worker_pool.h`): one fewer than the
+machine's hardware threads, at most 6 (`core::default_worker_count`), or `display.worker_threads` (0: none, every loop
+on the main thread). `core::parallel_for` splits a loop into chunks that the workers and the main thread take in turn;
+without a pool (the tests, the tools) or from inside a worker it runs the loop inline. What runs there:
+
+- The characters' posing and skinning (`render::ActorRenderer::prepare`): each drawn instance's slice of the frame's
+  bones is given out on the main thread (the culling and the bone budget, in order), the instances are posed and
+  skinned on the workers, each into its own slice (`ActorRenderer::pose_instances`), and the motion history is kept on
+  the main thread after. An actor's bones as drawn (`drawn_bone`: its effects, its name plate, spells on it) are posed
+  once a frame and kept until the spawn is drawn again (`ActorRenderer::cached_bone_world`).
+- The particle quads (`render::ParticleRenderer::draw`). Modern: after the sort, each particle has its own six
+  vertices in the buffer. Classic: the particles each emitter shows are counted on the workers, the emitters' places
+  are given out in order up to the buffer's size, then their quads are built on the workers. A particle that turns
+  out to show nothing after its place was given out (a quad past its depth offset) is written as six vertices at one
+  point, which draw no pixel.
+- The actor effects' step (`app::ActorEmitters::simulate_async`): once the frame is recorded, each attached emitter's
+  place is read from the poses as drawn (on the main thread), then both particle systems step on a worker while the
+  frame is submitted and the next one begins; every other call on them waits for the step. The next frame draws the
+  result, from the same poses the step used before (those drawn the frame before), the particles' own time one frame
+  behind. The item previews' emitters still step inline; the tests take both ways (the constructor's `async`).
+- The scene's command recording (`render::SceneRecorder`, `display.parallel_record`). Each draw between `begin_scene`
+  and the scene's end is a job in a lane: a renderer's own draws share its lane, and the characters, the spawn boxes,
+  the target ring and the isometric markers share one (the markers ask the character renderer's caches, and the
+  spawn boxes take the set the characters drew). At `begin_translucent` and before the name plates, the lanes are
+  recorded at once, a lane's jobs in order on one thread (`render::SceneLanes`), each job into a secondary command buffer of its own
+  (`VkCommandBufferInheritanceRenderingInfo` from `VkContext::scene_inheritance`, the viewport and scissor from
+  `set_scene_state`), and the buffers are executed in the order the jobs came, so the draws and their order are as
+  they were. The scene's renderings then begin with `VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT`
+  (`VkContext::set_scene_secondary`). Each frame slot keeps a command pool per lane, reset when the slot comes round.
+  Off (or without workers), the jobs run at once into the frame's own command buffer. A queued draw runs at the
+  flush, so what it reads must not change between its `add` and the flush: the frame sets the zone renderer's distant
+  land (`set_distant`, `set_distant_hidden`) before it queues the first draw.
+- The shadow layers' command recording (a second `render::SceneRecorder`, made without `scene`, under the same
+  `display.parallel_record`): the sun's cascades, then the cover and water maps when they are drawn. Each layer is a
+  target of its own (`VkContext::shadow_inheritance`, its viewport, scissor and depth bias from `set_shadow_state`),
+  and each renderer (the zone, the characters, the doors and objects) a lane, so a renderer's layers are recorded in
+  order on one thread while the others record theirs (`render::SceneLanes` keeps each job's lane and target). Every
+  layer's rendering then begins with secondary contents (`begin_shadow_cascade`'s `secondary`) and executes its
+  buffers in the inline order. The point-light cubes are still
+  drawn inline.
+- The other spawns' movement (`game::WorldState::smooth`): the vehicles' riders are stepped first on the main thread
+  (each reads its vehicle), then every other spawn on the workers, each wholly on one thread, so the result does not
+  depend on which. Its floor, region and contact probes only read the zone and its doors; the contact probe sweeps
+  doors into a buffer of each thread's own (`ZoneMoveWorld::set_contact_probe_per_thread`).
+- A zone's load (`ClientApp::load_zone`): once the zone's data is final, its collision mesh, moving parts, ladders
+  and ambient probe are built as background tasks while the main thread makes the zone's GPU objects, and each is
+  waited for where it was built before.
+
+A character's skeleton is posed at most once a frame for the bones its effects, spells and name plate ask for
+(`ActorRenderer::drawn_bone`); the poses of spawns no longer drawn are dropped once a second, not each frame.
 
 ### Temporal upscaling
 
@@ -359,15 +448,16 @@ so the target ring lies on the ground under it), then the characters' blended an
 every lighting), then `ZonePhase::Translucent`: the water first, then the blended and additive draws. Being after the
 copies, a character's blended parts are missing from what the water shows through it.
 
-With `display.depth_prepass` (off by default; the viewer's `--depth-prepass`) the zone's opaque and alpha-tested
+With `display.depth_prepass` (off by default; the Options window's Depth Pre-pass, in either UI pack, switches it
+from the next frame, to compare; the viewer's `--depth-prepass`) the zone's opaque and alpha-tested
 geometry is drawn depth-only first (`ZoneRenderer::draw_depth`, `shaders/zone_depth.frag`), then coloured with the
 depth test equal and no depth write: a pixel covered by several surfaces is shaded once. The alpha test is the colour
 pass's, so an alpha-tested edge covers the same samples in both passes, and `zone.vert`'s position is `invariant`, so
 both passes give a surface the same depth. The pre-pass discards every pixel `zone.frag` discards, the isometric
 camera's cut-away included, or the cut walls would keep their depth and hide what stands behind them. The water stays
 out of the pre-pass (it is drawn blended after `begin_translucent`). The pre-pass covers the zone's geometry only: the objects, the flora and the characters keep their single pass.
-The setting is read when a zone loads. The pre-pass's shader is optional: without it the zone draws the single pass,
-with a warning in the log.
+A zone builds the pre-pass's two pipelines whether it is on or not, so the switch needs no reload. The pre-pass's
+shader is optional: without it the zone draws the single pass, with a warning in the log.
 
 The scene target holds linear colour. The classic lighting computes in display (sRGB) values as the classic renderer does
 and converts at the end of each shader; the modern lighting computes in linear HDR.
@@ -2074,11 +2164,13 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.light_shadow_size` | 128 .. 1024 | 512 | texels per side of each face of a light's shadow cube |
 | `display.view_distance` | multiplier | 2.5 | the modern mode draws this many times further than the classic client (at most 12000 units), into haze; picking keeps the classic distance |
 | `display.ao` | 0, 1 | 1 | screen-space ambient occlusion; modern only; viewer `--no-ao` |
-| `display.depth_prepass` | 0, 1 | 0 | draw the zone's opaque geometry depth-only first, then colour it with the depth test equal; the current zone only, read when a zone loads; modern only; viewer `--depth-prepass` |
+| `display.depth_prepass` | 0, 1 | 0 | draw the zone's opaque geometry depth-only first, then colour it with the depth test equal (Depth Pre-pass); switched from the next frame (`ZoneRenderer::set_depth_prepass`; a zone builds its two pipelines either way, a neighbour zone none); modern only; viewer `--depth-prepass` |
 | `display.distance_blur` | 0, 1 | 1 | the far distance's slight blur; modern only |
 | `display.horizon_hills` | 0, 1 | 1 | land round an outdoor zone past its edges (Horizon hills); modern only; viewer `--no-horizon` |
 | `display.zone_fog` | 0, 1 | 1 | the fog bank on the ground past an outdoor zone's edge (Zone edge fog, Zone Edge Fog); modern only; viewer `--no-zone-fog` |
 | `display.volumetric_clouds` | 0, 1 | 1 | clouds marched through the air over the plain skies, in place of the painted cloud layer and patches (Volumetric Clouds); modern only; viewer `--no-clouds` |
+| `display.worker_threads` | -1, 0 .. 16 | -1 | the frame's worker threads (Worker threads); -1 one fewer than the hardware threads, at most 6; 0 none; read at start-up |
+| `display.parallel_record` | 0, 1 | 1 | the scene's and the shadow layers' draws recorded on the worker threads into secondary command buffers (Worker threads); 0 records them on the main thread; read at start-up |
 | `display.smooth_ground` | 0, 1 | 1 | a classic zone's ground drawn smooth and curved (Smoothed ground); read as each zone loads; viewer `--no-smooth-ground` |
 | `display.tree_detail` | 50 to 200 | 100 | how far a texture pack's replacement models (generated trees) keep their nearer levels of detail, in percent of their own distances (Tree Detail Distance); viewer `--tree-detail` |
 | `display.target_ring_cues` | 0, 1 | 1 | the target ring's sweep on a new target and pulse while attacking (Target Ring Cues; The target ring) |
@@ -2097,7 +2189,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.window_mode` | windowed, borderless, fullscreen | windowed | borderless: a window over the whole display at the desktop's mode; fullscreen: exclusive at `display.resolution` |
 | `display.resolution` | WxH | the desktop's | the fullscreen mode (the closest the display has); in a window, the Options window's Resolution sets the window's size |
 | `display.vsync` | off, on, adaptive | on | the present mode: immediate (else mailbox), FIFO, FIFO relaxed; FIFO when the surface lacks one |
-| `display.max_fps` | 0, 10 .. 1000 | 0 | frame cap (0 none); `--max-fps` takes precedence; on the login, server select, character select/creation and loading screens (including the last stretch of a zone-in) an unlimited cap counts as 240 fps (a set cap is followed exactly) |
+| `display.max_fps` | -1, 0, 10 .. 1000 | 0 | frame cap (0 none; on the login, server select, character select/creation and loading screens, including the last stretch of a zone-in, an unlimited cap, or Auto with no refresh rate, counts as 240; a set cap is followed exactly); `--max-fps` takes precedence (`--max-fps auto` for -1). -1 (Hailstone's own, the Options window's Auto) caps just under the refresh rate of the display the window is on now (`platform::Window::refresh_rate`, read each frame so it follows the window): refresh - refresh² / 3600, rounded down (`app::auto_frame_cap`: 59 at 60 Hz, 116 at 120, 138 at 144, 224 at 240), which keeps a variable-refresh display's frames inside its range so vsync's queue never fills; no cap when the system gives no refresh rate. Each frame starts one period after the last one's deadline, or at once when a long frame has passed it (`app::next_frame_deadline`; a late frame is not made up by running the next ones back to back, which made a later frame wait on the GPU), and the wait is `platform::precise_sleep_until`: the system's sleep (on Windows a high-resolution waitable timer) to 1 ms before the deadline (0.5 ms on POSIX; 16 ms on Windows without such timers, before 10 1803), then a spin that yields between looks at the clock |
 | `display.background_fps` | -1, 0, 1 .. 1000 | 0 | frame cap while another window has the focus (0: as `display.max_fps`; -1: nothing drawn, the Options window's "0"). Below 10 the loop runs on at 10 a second (the game clock catches up at most 250 ms a frame) and draws only that many frames, or none (`app/frame_pace.h`); a frame not drawn is run as a minimised window's is |
 | `display.flora_distance` | units, 400 .. 1200 | 400 | how far the flora is drawn (Radial flora) |
 | `display.grass_density` | percent, 25 .. 200 | 100 | how thick Hailstone's lawn grows (`render::lawn_lod_blades`) |

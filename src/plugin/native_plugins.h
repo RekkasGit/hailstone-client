@@ -11,7 +11,9 @@
 // A library from the server's plugins/ folder also needs the player's word for its bytes (plugin/consent.h): until
 // then it does not load, and consent() holds the question for the UI; answer_consent() takes the answer.
 
+#include <cstddef>
 #include <cstdint>
+#include "plugin/world_geometry.h"
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -22,6 +24,7 @@
 
 #include "mq/tlo.h"
 #include "net/packet.h"
+#include "core/sha256.h"
 #include "plugin/ability_bulk.h"
 #include "plugin/consent.h"
 #include "plugin/hooks.h"
@@ -63,7 +66,7 @@ struct NativeEnv {
     std::function<int(int bar)> hot_bar_page;
     std::function<void(int bar, int page)> set_hot_bar_page;
     // ABI 3: the player's abilities by name (use_ability, ability_state), as the Ability Book's rows use and check
-    // them (app/lua_eq_abilitybook.cpp, shared with the scripts and the TLOs). Empty: none known.
+    // them (app/lua_ui_abilitybook.cpp, shared with the scripts and the TLOs). Empty: none known.
     std::function<bool(mq::AbilityKind, std::string_view)> use_ability;
     std::function<std::optional<mq::AbilityState>(mq::AbilityKind, std::string_view)> ability;
     // ABI 3: the Ability Book's usable entries for get_ability_data_bulk (app/ability_bulk.h), in its list order.
@@ -80,6 +83,14 @@ class NativePlugins {
 public:
     explicit NativePlugins(NativeEnv env);
     ~NativePlugins(); // unloads everything (ShutdownPlugin)
+    // Whether a loaded plugin may take a world frame (it has the world_frame hook and its permissions): without one,
+    // the client builds no frame (a stock server's case).
+    bool world_wanted() const;
+    void world_frame(HailstoneWorldFrame frame, WorldQueries queries);
+    const std::vector<OwnedWorldBatch>& world_batches() const;
+    void world_recorded(std::size_t batch, std::uint32_t vertices);
+    void world_finish(bool submitted, bool presented);
+    void world_unavailable();
     NativePlugins(const NativePlugins&) = delete;
     NativePlugins& operator=(const NativePlugins&) = delete;
 
@@ -118,6 +129,11 @@ public:
     // Required add-ons are active, and no loaded plugin is forbidden by the current add-on rules. False with an
     // empty problem waits for native-code consent; a nonempty problem is a refusal or a load failure.
     bool required_addons_ready(std::string* problem = nullptr) const;
+    // The player's Retry (the Server add-ons warning): each required plugin that let an exception out is unloaded and
+    // loaded again, once, and one that did not load is tried again, under the usual checks (policy, consent). One
+    // that is running fine is left alone. A plugin inside its own callback is only marked for unloading (the next
+    // pulse does it; a later Retry loads it). The number tried.
+    std::size_t retry_required_addons();
     // The server's plugins/ folder (servers/<profile>/plugins), looked in before env.dirs; empty for none.
     void set_server_dir(const std::filesystem::path& dir);
     // Inside the ImGui frame: OnUpdateImGui.

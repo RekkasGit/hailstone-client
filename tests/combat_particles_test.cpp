@@ -19,6 +19,8 @@
 #include "assets/character.h"
 #include "assets/object_animation.h"
 #include "core/byte_io.h"
+#include "core/process_serial.h"
+#include "core/worker_pool.h"
 #include "game/collision.h"
 #include "game/missiles.h"
 #include "game/path_trail.h"
@@ -206,6 +208,10 @@ TEST_CASE("Find's continuous rainbow strands retain terrain clearance and motion
 
 TEST_CASE("Server Find and guide trails each use rainbow particles and stop independently") {
     test::Rig rig;
+    REQUIRE(rig.to_zone());
+    rig.conn.set_path_floor([](const glm::vec3& p, float step_up) -> std::optional<float> {
+        return p.z + step_up >= 2.0f ? std::optional(2.0f) : std::nullopt;
+    });
     app::SpellParticles particles({assets::EmitterDefinition{}}, {});
     particles.set_find_trail_style(game::FindTrailStyle::Rainbow);
     particles.set_trail_floor([](const glm::vec3& p) -> std::optional<float> {
@@ -216,8 +222,11 @@ TEST_CASE("Server Find and guide trails each use rainbow particles and stop inde
     REQUIRE(particles.simulation().emitters().size() == 1);
     const auto guide_key = particles.simulation().emitters().front().key;
 
+    rig.conn.find_map_location({0, 60, 2});
     rig.conn.receive_zone_packet_for_test(net::encode_find_person_reply({{0, 60, 2}, {0, 0, 2}, {0, 60, 2}}));
     REQUIRE(rig.conn.player_path().active());
+    REQUIRE_FALSE(rig.conn.player_path().points().empty());
+    CHECK(rig.conn.player_path().points().front().z - rig.conn.player_path().floor_offset() == doctest::Approx(2.0f));
     particles.update(rig.conn, {}, {}, nullptr, 0.01f);
     REQUIRE(particles.simulation().emitters().size() == 2);
     for (const auto& emitter : particles.simulation().emitters()) {
@@ -237,6 +246,53 @@ TEST_CASE("Server Find and guide trails each use rainbow particles and stop inde
     particles.set_guide_line({});
     particles.update(rig.conn, {}, {}, nullptr, 0.01f);
     CHECK(particles.simulation().emitters().empty());
+}
+
+TEST_CASE("Find trail visibility retains both routes and keeps ordinary spell effects running") {
+    test::Rig rig;
+    REQUIRE(rig.to_zone());
+    rig.conn.set_path_floor([](const glm::vec3& p, float step_up) -> std::optional<float> {
+        return p.z + step_up >= 2.0f ? std::optional(2.0f) : std::nullopt;
+    });
+    auto table = std::make_shared<game::SpellTable>();
+    REQUIRE(table->parse(spell_line(600)) == 1);
+    rig.conn.set_spell_table_for_test(table);
+    assets::SpellEffect effect;
+    effect.stages[0].slots[0] = {1, 0, 1, 8}; // ordinary cast effect attached to the player
+    app::SpellParticles particles({assets::EmitterDefinition{}, dot()}, {assets::SpellEffect{}, effect});
+    particles.set_trail_floor([](const glm::vec3& p) -> std::optional<float> {
+        return p.z >= 2.0f ? std::optional(2.0f) : std::nullopt;
+    });
+    particles.set_guide_line({{0, 0, 2}, {60, 0, 2}});
+    rig.conn.find_map_location({0, 60, 2});
+    rig.conn.receive_zone_packet_for_test(net::encode_find_person_reply({{0, 60, 2}, {0, 0, 2}, {0, 60, 2}}));
+    REQUIRE(rig.conn.player_path().active());
+    const auto points = rig.conn.player_path().points();
+    net::SpellEffectCue cast;
+    cast.caster = rig.conn.world().player_id; cast.spell = 600; cast.duration_ms = 1000;
+    particles.update(rig.conn, std::span(&cast, 1), {}, nullptr, 0.01f);
+    const auto& emitters = particles.simulation().emitters();
+    REQUIRE(emitters.size() == 3);
+    CHECK(std::count_if(emitters.begin(), emitters.end(), [](const auto& emitter) { return emitter.still; }) == 2);
+    const auto spell_key = (cast.caster << 16) | cast.spell;
+    particles.set_paths_visible(false);
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    REQUIRE(emitters.size() == 1);
+    CHECK(emitters.front().key == spell_key);
+    CHECK_FALSE(emitters.front().still);
+    REQUIRE_FALSE(emitters.front().particles.empty());
+    const auto age = emitters.front().age;
+    particles.update(rig.conn, {}, {}, nullptr, 0.02f);
+    REQUIRE(emitters.size() == 1);
+    CHECK(emitters.front().age > age);
+    CHECK(rig.conn.player_path().active());
+    CHECK(rig.conn.player_path().points() == points);
+    particles.set_paths_visible(true);
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    REQUIRE(emitters.size() == 3); // guide input and server route both reappear without being replaced
+    CHECK(std::count_if(emitters.begin(), emitters.end(), [](const auto& emitter) { return emitter.still; }) == 2);
+    CHECK(std::any_of(emitters.begin(), emitters.end(), [&](const auto& emitter) { return emitter.key == spell_key; }));
+    CHECK(rig.conn.player_path().points() == points);
 }
 
 TEST_CASE("Find's rainbow replaces elevated travelling clouds and grounds large avatars and finish effects") {
@@ -259,10 +315,12 @@ TEST_CASE("Find's rainbow replaces elevated travelling clouds and grounds large 
     rig.conn.set_player_motion(me.position, 0, {}, false);
     game::Spawn target;
     target.id = 333;
+    target.incarnation = core::next_process_identity();
     target.name = "FixtureGuide";
     target.is_npc = true;
     target.position = {60, 0, 14};
     world.spawns.emplace(target.id, target);
+    ++world.spawn_set_serial;
     auto ground = [](const glm::vec3& p, float step_up) -> std::optional<float> {
         return p.z + step_up >= 2.0f ? std::optional(2.0f) : std::nullopt;
     };
@@ -300,19 +358,33 @@ TEST_CASE("Find's rainbow replaces elevated travelling clouds and grounds large 
         CHECK(p.height > p.width * 2.0f);
     }
 
+    bool visible = true;
     SUBCASE("completion effects start on supported ground") { supported = true; }
     SUBCASE("unsupported completion effects are omitted") { supported = false; }
+    SUBCASE("hidden completion effects are consumed without replay on reveal") {
+        visible = false; particles.set_paths_visible(false);
+    }
     rig.conn.set_player_motion({60, 0, 14}, 0, {}, false);
     rig.conn.update();
     REQUIRE_FALSE(path.active());
     REQUIRE(path.finished());
     particles.update(rig.conn, {}, {}, nullptr, 0.01f);
-    if (supported) {
+    if (supported && visible) {
         REQUIRE(emitters.size() == 1);
         CHECK_FALSE(emitters.front().still);
         CHECK(near(emitters.front().origin, {60, 0, 2.35f}));
+        particles.set_paths_visible(false);
+        particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+        CHECK(emitters.empty()); // hide an already-playing completion emitter too
     } else {
         CHECK(emitters.empty());
+    }
+    if (!visible) {
+        CHECK_FALSE(rig.conn.take_path_finish());
+        particles.set_paths_visible(true);
+        particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+        CHECK(emitters.empty());
+        CHECK(path.finished());
     }
 }
 
@@ -620,6 +692,91 @@ TEST_CASE("An actor can carry independent EQG and WLD held-item effects") {
     CHECK(particles.simulation().emitters().size() == 1);
     CHECK(particles.cloud_simulation().emitters().size() == 1);
     CHECK(particles.cloud_simulation().definitions().size() == 2);
+}
+
+TEST_CASE("Actor emitters stepped on a worker match the inline step, drawn a frame later") {
+    // The scene's emitters step in simulate_async, on a worker, after the frame; the others step inside update. Both
+    // read the same poses, so after each step the particles are the same; between update and the step (when the
+    // scene draws) the worker's are the frame before's.
+    core::WorkerPool pool(2);
+    core::set_workers(&pool);
+    struct Unset {
+        ~Unset() { core::set_workers(nullptr); }
+    } unset;
+    auto d = dot();
+    d.duration = -9999.0f;
+    d.follow_attachment = 1;
+    d.bone_orientation = 1;
+    d.per_tick = 1;
+    d.ticks_per_second = 30.0f;
+    auto definition = std::make_shared<assets::EmitterDefinition>(d);
+    assets::CharacterMesh mesh;
+    assets::MeshEmitter eqg;
+    eqg.bone = 0;
+    eqg.emitter.emitter = 1;
+    mesh.emitters.push_back(eqg);
+    auto cloud = eqg;
+    cloud.bone = 1;
+    cloud.local = glm::translate(glm::mat4(1), glm::vec3(3, 0, 0));
+    cloud.cloud = definition;
+    mesh.emitters.push_back(cloud);
+    app::ActorEmitters inline_step({assets::EmitterDefinition{}, d});
+    app::ActorEmitters worker_step({assets::EmitterDefinition{}, d}, {}, true);
+    std::array<app::ActorEmitters::Actor, 2> actors{{{7, &mesh}, {8, &mesh, false, 0.5f}}};
+    glm::mat4 world(1.0f);
+    auto pose = [&](std::uint32_t id, int bone, glm::mat4& out) {
+        out = world;
+        out[3].y += static_cast<float>(id) * 10.0f + static_cast<float>(bone);
+        return true;
+    };
+    auto same = [](const game::ParticleSystem& a, const game::ParticleSystem& b) {
+        REQUIRE(a.emitters().size() == b.emitters().size());
+        for (std::size_t e = 0; e < a.emitters().size(); ++e) {
+            const auto& ea = a.emitters()[e];
+            const auto& eb = b.emitters()[e];
+            CHECK(ea.actor == eb.actor);
+            CHECK(near(ea.origin, eb.origin));
+            REQUIRE(ea.particles.size() == eb.particles.size());
+            for (std::size_t p = 0; p < ea.particles.size(); ++p) {
+                CHECK(near(ea.particles[p].position, eb.particles[p].position));
+                CHECK(ea.particles[p].color.a == doctest::Approx(eb.particles[p].color.a));
+                CHECK(ea.particles[p].age == doctest::Approx(eb.particles[p].age));
+            }
+        }
+    };
+    std::vector<game::Emitter> before, before_clouds; // the inline step's particles as of the last frame
+    for (int frame = 0; frame < 40; ++frame) {
+        world = glm::rotate(glm::mat4(1.0f), 0.05f * static_cast<float>(frame), glm::vec3(0, 0, 1));
+        world[3] = glm::vec4(2.0f * static_cast<float>(frame), 0, 0, 1);
+        const float dt = frame % 3 == 0 ? 0.016f : 0.033f;
+        inline_step.update(dt, actors, pose, {});
+        worker_step.update(dt, actors, pose, {});
+        if (frame > 0) {
+            // As the scene draws it: the emitters this frame started, last frame's particles.
+            const auto& drawn = worker_step.simulation().emitters();
+            REQUIRE(drawn.size() == before.size());
+            for (std::size_t e = 0; e < drawn.size(); ++e) {
+                REQUIRE(drawn[e].particles.size() == before[e].particles.size());
+                for (std::size_t p = 0; p < drawn[e].particles.size(); ++p)
+                    CHECK(near(drawn[e].particles[p].position, before[e].particles[p].position));
+            }
+            CHECK(worker_step.cloud_simulation().emitters().size() == before_clouds.size());
+        }
+        worker_step.simulate_async(dt, pose);
+        same(inline_step.simulation(), worker_step.simulation());
+        same(inline_step.cloud_simulation(), worker_step.cloud_simulation());
+        before = inline_step.simulation().emitters();
+        before_clouds = inline_step.cloud_simulation().emitters();
+    }
+    CHECK(inline_step.emitters() == 4);
+    CHECK_FALSE(inline_step.simulation().emitters().front().particles.empty());
+    // An actor gone: both stop its emitters at the next update.
+    inline_step.update(0.016f, std::span(actors.data(), 1), pose, {});
+    worker_step.update(0.016f, std::span(actors.data(), 1), pose, {});
+    worker_step.simulate_async(0.016f, pose);
+    same(inline_step.simulation(), worker_step.simulation());
+    same(inline_step.cloud_simulation(), worker_step.cloud_simulation());
+    CHECK(worker_step.emitters() == 2);
 }
 
 TEST_CASE("Instanced item clouds keep independent spawn, object and missile attachment lifetimes") {

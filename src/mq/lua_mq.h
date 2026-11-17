@@ -17,6 +17,7 @@
 // The scripts get no io or os.execute: files only through mq.pickle (writes under the config directory) and
 // loadfile / dofile of data files there (run with an empty environment).
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -33,11 +34,20 @@
 #include "plugin/hooks.h"
 #include "plugin/policy.h"
 
-namespace hailstone::game { class ExtensionChain; }
+namespace hailstone::game { class ExtensionChain; class NameplateCanvasRegistry; }
 namespace hailstone::net { struct AppPacket; class GameConnection; }
 namespace hailstone::plugin { class UiBridge; class WebAccess; }
 
 namespace hailstone::mq {
+
+// An installed, explicitly managed Lua add-on. The installer supplies its exact entry and recorded bytes;
+// a disabled or unverified record remains present so an ordinary autorun cannot bypass activation.
+struct ManagedScript {
+    std::string name;
+    std::filesystem::path entry;
+    Sha256Digest hash{}, revision{};
+    bool enabled = false, verified = false;
+};
 
 struct ScriptEnv {
     plugin::Hooks* hooks = nullptr;
@@ -53,6 +63,7 @@ struct ScriptEnv {
     // script's server extension joins, where its windows, functions, options and menu entries go, and packets to the
     // server. Any may be null.
     game::ExtensionChain* extensions = nullptr;
+    game::NameplateCanvasRegistry* nameplates = nullptr;
     plugin::UiBridge* ui = nullptr;
     std::function<void(plugin::Stream stream, const net::AppPacket& p)> send;
     std::function<net::GameConnection*()> connection; // what the setters change (class masks, pets)
@@ -172,6 +183,10 @@ public:
     void policy_changed(const std::vector<std::string>& autoload = {});
     // Required scripts are running, and no running script is forbidden by the current add-on policy.
     bool required_addons_ready(std::string* problem = nullptr) const;
+    // The player's Retry (the Server add-ons warning): each required script that is not running (it failed or
+    // ended) is started again, once, under the usual checks. The number started.
+    std::size_t retry_required_addons();
+    void set_managed_addons(std::vector<ManagedScript> addons);
     // The server's scripts/ folder (servers/<profile>/scripts), looked in before env.dirs; empty for none.
     void set_server_dir(const std::filesystem::path& dir);
 
@@ -198,6 +213,11 @@ private:
 
 // The hex SHA-256 of a script file (for the developer window).
 std::optional<std::string> script_file_hash(const std::filesystem::path& file);
+// `relative` (a path inside `root`) as it is spelled on disk: the exact spelling if it exists, otherwise each part's one
+// match that differs only in case (two such matches: nullopt). Rooted paths, ".", "..", ':' and NUL are refused. The
+// caller checks the file's kind, and that it stays inside its folder once links are followed.
+std::optional<std::filesystem::path> script_spelled_path(const std::filesystem::path& root,
+                                                         const std::filesystem::path& relative);
 // A script's name as one folder name (its mq.configDir under config/, its hailstone.server_dir and character_dir under
 // plugin-config/), the same for no two names: bytes no system keeps as written are %XX (lua_mq.cpp).
 std::string script_folder_name(std::string_view name);

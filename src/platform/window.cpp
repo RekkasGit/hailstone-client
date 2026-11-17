@@ -149,6 +149,7 @@ Window::Window(const WindowDesc& desc) {
 
     SDL_WindowFlags flags = SDL_WINDOW_VULKAN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
     if (desc.resizable) flags |= SDL_WINDOW_RESIZABLE;
+    if (desc.hidden) flags |= SDL_WINDOW_HIDDEN;
     if (desc.maximized) flags |= SDL_WINDOW_MAXIMIZED;
     SDL_PropertiesID props = SDL_CreateProperties();
     SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, desc.title.c_str());
@@ -686,6 +687,11 @@ bool Window::minimized() const { return (SDL_GetWindowFlags(window_) & SDL_WINDO
 float Window::content_scale() const {
     float s = SDL_GetDisplayContentScale(SDL_GetDisplayForWindow(window_));
     return s > 0.0f ? s : 1.0f;
+}
+
+float Window::refresh_rate() const {
+    const SDL_DisplayMode* m = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(window_));
+    return m && m->refresh_rate > 0.0f ? m->refresh_rate : 0.0f;
 }
 
 float Window::pixel_density() const {

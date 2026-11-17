@@ -1,10 +1,13 @@
 // ClientApp: the main loop, and run_client.
 
 #include "app/client_app_internal.h"
+#include "app/ui_visibility.h"
 #include "app/frame_pace.h"
+#include "platform/precise_sleep.h"
 #include "core/build_info.h"
 #include "core/frame_sections.h"
 #include "core/wipe.h"
+#include "game/visual_surface_patch.h"
 #include "game/zone_exits.h"
 
 namespace hailstone::app {
@@ -19,22 +22,44 @@ int ClientApp::run() {
     auto last = Clock::now();
     auto start = last;
     auto last_drawn = last;
+    auto frame_deadline = last; // the frame cap's schedule (next_frame_deadline)
     float fps = 0.0f;
     // The game clock (core/step_clock.h): the rules run at 60 steps a second; game.fixed_step false steps once a
     // drawn frame instead, as the original's code is written (docs/mechanics.md "Frame rate").
     step_clock_.set_fixed(config_.get_bool("game.fixed_step", true));
+    {
+        // The frame's worker threads: display.worker_threads, -1 (the default) for core::default_worker_count, 0 for
+        // none (every loop on the main thread, as before they came).
+        const int wanted = config_.get_int("display.worker_threads", -1);
+        const unsigned count = wanted < 0 ? core::default_worker_count() : static_cast<unsigned>(std::min(wanted, 16));
+        workers_ = std::make_unique<core::WorkerPool>(count);
+        core::set_workers(workers_.get());
+        log::info("worker threads: {}", count);
+        // The scene's draws recorded on them (render/scene_recorder.h): display.parallel_record, 0 for inline.
+        parallel_record_ = config_.get_bool("display.parallel_record", true);
+        scene_recorder_ = std::make_unique<render::SceneRecorder>(vk_);
+        shadow_recorder_ = std::make_unique<render::SceneRecorder>(vk_, false);
+    }
     for (int frame = 0; !quit_ && window_.poll_events(); ++frame) {
         if (opts_.frames && frame >= opts_.frames) break;
         retired_ui_textures_.reset(); // the last frame, which may have drawn it, is submitted (waits for the GPU)
         perf_ui_.begin_frame();
         // The frame cap (display.max_fps, --max-fps), and display.background_fps while another window has the focus:
         // below 10 there, the loop runs on at 10 a second and draws only some frames, or none (app/frame_pace.h).
+        // Auto: just under the refresh rate of the display the window is on now (auto_frame_cap).
+        const int max_fps =
+            effective_max_fps(opts_.max_fps, opts_.max_fps == kMaxFpsAuto ? window_.refresh_rate() : 0.0f);
         // A login/loading screen keeps an unlimited cap at kLightScreenCap so it does not spin; that includes the
         // settle after zone-in, where screen_ is already InGame but the loading overlay is still drawn.
         const bool light_screen = is_light_screen(screen_ == Screen::InGame, zone_settling());
-        const FramePace pace = frame_pace(opts_.max_fps, background_fps_, window_.focused(),
+        const FramePace pace = frame_pace(max_fps, background_fps_, window_.focused(),
             std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - last_drawn), light_screen);
-        if (pace.cap > 0) std::this_thread::sleep_until(last + std::chrono::microseconds(1000000 / pace.cap));
+        // To the microsecond on every system (platform/precise_sleep.h), timed from the last deadline (next_frame_deadline).
+        if (pace.cap > 0) {
+            frame_deadline = next_frame_deadline(frame_deadline, Clock::now(),
+                                                 std::chrono::microseconds(1000000 / pace.cap));
+            platform::precise_sleep_until(frame_deadline);
+        }
         perf_ui_.mark(FramePhase::Sleep);
         if (!opts_.screenshot.empty() && opts_.frames && frame == opts_.frames - 1) vk_.request_screenshot(opts_.screenshot);
         screenshot_this_frame_ = false;
@@ -73,7 +98,15 @@ int ClientApp::run() {
         box_clients_.poll();
         update_updater();
         update_addons();
+        refresh_ui_packs();
+        // Without a connection, a deferred selection can be applied now. Connected clients wait until
+        // update_connection has applied the zone-in's asset rules, before the required-addon gate can hold it.
+        if (!conn_ && pending_ui_pack_) {
+            const auto next = std::exchange(pending_ui_pack_, std::nullopt);
+            use_ui_pack(*next, std::exchange(ui_reload_pending_, false));
+        }
         update_login();
+        follow_ui_pack_screen();
         update_lap.mark("update login, updater, add-ons");
         update_connection();
         update_lap.mark("update connection");
@@ -98,6 +131,11 @@ int ClientApp::run() {
             update_missiles();
         }
         update_lap.mark("world objects update");
+        // Presentation hiding is local to play. Loading and pregame screens remain usable, and returning to
+        // character selection/login starts with the interface visible again.
+        if (screen_ != Screen::InGame && screen_ != Screen::Loading) ui_hidden_ = false;
+        ui_.set_visible(ui_shown(ui_hidden_, screen_ == Screen::InGame, zone_settling(),
+                                 ui_hidden_ && automation_ && automation_->plugin_consent().has_value()));
         // The gamepad before the UI frame: its mode decides what ImGui gets from it (docs/gamepad.md).
         update_gamepad(dt);
         // /safelock: the windows get no mouse while the interface is locked (__ProcessMouseEvents).
@@ -152,14 +190,15 @@ int ClientApp::run() {
             game::WorldState::FloorFn ground_floor;
             if (collision_) ground_floor = [this](const glm::vec3& p) { return grounding_floor(p); };
             // The other spawns' ladder contact (remote_collision_type), built with the player's passable-ladder rule
-            // (ZoneMoveWorld::apply_remote_rules; not the doors the player's /nav passes) and in the contact-probe mode, which reuses one door buffer. Only spawns
-            // within the actor clip are probed (WorldState::remote_probe_range): farther ones are not drawn.
+            // (ZoneMoveWorld::apply_remote_rules; not the doors the player's /nav passes) and in the contact-probe mode, with a
+            // door buffer of each thread's own: smooth steps the spawns on the worker threads. Only spawns within the actor
+            // clip are probed (WorldState::remote_probe_range): farther ones are not drawn.
             game::WorldState::RemoteCollisionFn remote_collision;
             std::optional<ZoneMoveWorld> remote_world;
             if (collision_ && screen_ == Screen::InGame) {
                 remote_world.emplace(&*collision_, world_objects_.get(), zone_ ? &zone_->regions : nullptr);
                 remote_world->apply_remote_rules(conn_->server_rules());
-                remote_world->set_contact_probe(&remote_door_hits_);
+                remote_world->set_contact_probe_per_thread();
                 remote_collision = [&remote_world](const game::Spawn& spawn, const glm::vec3& from,
                                                    const glm::vec3& to) {
                     return remote_collision_type(spawn, from, to, *remote_world);
@@ -181,25 +220,26 @@ int ClientApp::run() {
         core::frame_sections::Lap lap;
         sync_item_preview();
         lap.mark("item preview sync");
-        draw_ui(fps);
+        if (ui_.visible()) draw_ui(fps);
         lap.mark("draw_ui");
         if (lua_ui_) {
-            update_eq_host();
+            update_ui_host();
             sync_plugin_windows();
-            lap.mark("eq host update");
-            eq_api_->begin_frame();
-            lap.mark("eq api begin_frame");
+            lap.mark("hs host update");
+            ui_api_->begin_frame();
+            lap.mark("hs api begin_frame");
             const std::size_t lua_bytes = lua_ui_->allocated_bytes();
-            lua_ui_->frame();
-            eq_host_.close_top_window = false; // (a press no window took this frame)
+            lua_ui_->frame(ui_.visible());
+            ui_host_.close_top_window = false; // (a press no window took this frame)
             static constexpr const char* kLuaFrame = "Lua UI frame"; // one address for both (names match by it)
             lap.mark(kLuaFrame);
             core::frame_sections::add_bytes(kLuaFrame, lua_ui_->allocated_bytes() - lua_bytes);
         }
-        window_.set_text_input(std::exchange(web_text_input_, false)); // a page that has the keys (app/lua_eq_web.cpp)
-        settle_frame_.ui = true; // the UI pack's in-game frame ran (or there is none)
+        window_.set_text_input(std::exchange(web_text_input_, false) && ui_.visible()); // a page that has the keys (app/lua_ui_web.cpp)
+        settle_frame_.ui = true; // UI maintenance ran; loading/settling presentations are always visible
         if (screen_ == Screen::InGame && zone_settling()) ui::loading_overlay(loading_view_);
-        if (automation_) automation_->imgui(game_view_.dev_windows);
+        if (automation_ && ui_.visible()) automation_->imgui(game_view_.dev_windows);
+        if (ui_.visible()) addon_policy_window();
         // The select clock runs on through character creation (input scripts drive both screens).
         if (screen_ != Screen::Characters && screen_ != Screen::Create) select_shown_.reset();
         else if (!select_shown_) select_shown_ = Clock::now();
@@ -226,7 +266,7 @@ int ClientApp::run() {
             }
             perf.camera = camera_.position;
             perf.display = glm::vec2(ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y);
-            perf_ui_.draw(perf);
+            if (ui_.visible()) perf_ui_.draw(perf);
             lap.mark("perf window");
         }
         perf_ui_.mark(FramePhase::Ui);
@@ -285,6 +325,7 @@ int ClientApp::run() {
                 spell_bolts_->take_cues(*conn_, cues, bolt_now);
             update_guide();
             spell_particles_->set_guide_line(guide_.line());
+            spell_particles_->set_paths_visible(ui_.visible());
             spell_particles_->set_find_trail_style(game::normalize_find_trail_style(
                 config_.get_int("display.find_trail_style", 0)));
             spell_particles_->update(*conn_, cues, effect_packets, actor_renderer_.get(), dt);
@@ -319,18 +360,17 @@ int ClientApp::run() {
                 for (const auto& o : objects->object_actors()) actor_emitter_list_.push_back({o.id, o.emitters});
             }
             const render::ActorRenderer* actors = actor_renderer_.get();
-            actor_emitters_->update(dt, actor_emitter_list_,
-                                    [actors, objects](std::uint32_t id, int bone, glm::mat4& w) {
-                                        if (id & WorldObjects::kMissileActorBit)
-                                            return objects && bone == 0 && objects->missile_transform(id, w);
-                                        if (id & WorldObjects::kObjectActorBit)
-                                            return objects && bone == 0 && objects->object_transform(id, w);
-                                        return actors->drawn_bone(id, bone, w);
-                                    },
-                                    camera_.position,
+            ActorEmitters::BoneWorld bones = [actors, objects](std::uint32_t id, int bone, glm::mat4& w) {
+                if (id & WorldObjects::kMissileActorBit) return objects && bone == 0 && objects->missile_transform(id, w);
+                if (id & WorldObjects::kObjectActorBit) return objects && bone == 0 && objects->object_transform(id, w);
+                return actors->drawn_bone(id, bone, w);
+            };
+            actor_emitters_->update(dt, actor_emitter_list_, bones, camera_.position,
                                     [actors](std::uint32_t id, std::string_view code, float& time) {
                                         return actors->drawn_playing(id, code, time);
                                     });
+            // The step itself, on the poses as drawn this frame, once the frame is recorded (below).
+            emitter_step_ = [this, dt, bones = std::move(bones)] { actor_emitters_->simulate_async(dt, bones); };
         }
         float brightness = (in_world || pre_game) && outdoor_light_ ? render::outdoor_brightness(sky_hour) : 1.0f;
         std::optional<game::SceneFogFrame> fog_frame;
@@ -372,11 +412,14 @@ int ClientApp::run() {
         perf_ui_.mark(FramePhase::Wait);
         if (f) last_drawn = now;
         if (!f) {
+            if (automation_) automation_->world_unavailable();
             ui_.end_frame_without_render();
+            if (emitter_step_) std::exchange(emitter_step_, nullptr)();
             continue;
         }
         lap = core::frame_sections::Lap();
         const bool in_game = screen_ == Screen::InGame && player_ready_;
+        if (!in_game && automation_) automation_->world_unavailable();
         const bool scene = in_game || pre_game; // the world drawn: the zone, or character select's clz
         if (conn_)
             for (const auto& w : conn_->take_weather()) weather_.handle_message(w.kind, w.intensity);
@@ -426,9 +469,12 @@ int ClientApp::run() {
                     zone_renderer_->set_classic_smooth(lighting_mode_ == render::LightingMode::SmoothClassic);
                 }
                 // The zone objects that play their own animation, drawn where the zone's animation clock has them now.
-                if (zone_renderer_)
-                    zone_renderer_->set_animation_time(zone_animation_ms(static_cast<std::uint64_t>(
-                        std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time_).count())));
+                if (zone_renderer_) {
+                    const auto animation_time=zone_animation_ms(static_cast<std::uint64_t>(
+                        std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time_).count()));
+                    zone_renderer_->set_animation_time(animation_time);
+                    if(animated_objects_)animated_objects_->set_visual_time(animation_time);
+                }
                 // modern or classic (/lighting, display.lighting): the same scene light for every renderer.
                 render::DynamicShadowLights moving_lights;
                 render::SceneLighting lighting = scene_lighting(scene_light, sky_hour, &moving_lights);
@@ -540,27 +586,28 @@ int ClientApp::run() {
                 settle_frame_.shadow_builds = point_builds.size();
                 if (zone_renderer_) {
                     zone_renderer_->set_lighting(lighting);
+                    zone_renderer_->set_depth_prepass(vk_.scene_options().depth_prepass);
                     zone_renderer_->set_lod_scale(static_cast<float>(tree_detail_) / 100.0f);
                 }
-                // The zone's exits for the map and its zone finder (EqHost::zone_exits), once its zone points are in.
-                if (in_game && zone_ && conn_ && eq_host_.zone_exits_zone == 0 && conn_->zone_id() != 0 &&
+                // The zone's exits for the map and its zone finder (UiHost::zone_exits), once its zone points are in.
+                if (in_game && zone_ && conn_ && ui_host_.zone_exits_zone == 0 && conn_->zone_id() != 0 &&
                     !conn_->zone_points().empty()) {
                     std::vector<game::ZonePointTarget> points;
                     for (const auto& p : conn_->zone_points()) points.push_back({p.number, p.zone_id, p.x, p.y, p.z});
                     const auto zid = static_cast<std::uint32_t>(conn_->zone_id());
-                    eq_host_.zone_exits.clear();
+                    ui_host_.zone_exits.clear();
                     for (const auto& g :
                          game::collect_zone_exits(zone_->regions, zone_->bounds_min, zone_->bounds_max, points, zid)) {
-                        EqHost::ZoneExit e;
+                        UiHost::ZoneExit e;
                         e.zone_id = g.zone_id;
                         for (int i = 0; i < 3; ++i) {
                             e.lo[i] = g.lo[i];
                             e.hi[i] = g.hi[i];
                         }
                         for (const auto& c : g.cells) e.cells.push_back({c.lo.x, c.lo.y, c.lo.z, c.hi.x, c.hi.y, c.hi.z});
-                        eq_host_.zone_exits.push_back(std::move(e));
+                        ui_host_.zone_exits.push_back(std::move(e));
                     }
-                    eq_host_.zone_exits_zone = zid;
+                    ui_host_.zone_exits_zone = zid;
                 }
                 frame_lighting_ = lighting;
                 if (actor_renderer_) {
@@ -586,16 +633,6 @@ int ClientApp::run() {
                                                     pre_game ? pre_game_hidden_id() : hidden_spawn(), dt);
                     lap.mark("actors prepare_spawns");
                 }
-                if (shadows)
-                    for (std::uint32_t c = 0; c < render::kShadowCascades; ++c) {
-                        vk_.begin_shadow_cascade(*f, c);
-                        zone_renderer_->draw_shadow(*f, c);
-                        if (actor_renderer_) actor_renderer_->draw_shadow(*f, c);
-                        if (world_objects_) world_objects_->draw_shadow(*f, c);
-                        vk_.end_shadow_cascade(*f);
-                    }
-                lap.mark("sun shadows");
-                vk_.gpu_mark(*f, "sun shadows");
                 // Each map only when what it shows has changed: its view, the zone, the doors and objects in it, the
                 // plants swaying in it (render/cover_map.h). Its layer keeps its depths meanwhile.
                 const bool draw_cover = render::cover_map_stale(
@@ -607,16 +644,64 @@ int ClientApp::run() {
                     water_state_, watering, cover_,
                     render::cover_contents(watering ? zone_renderer_->id() : 0, vk_.shadow_generation(), 0),
                     watering && zone_renderer_->map_moves(render::kWaterLayer));
-                for (std::uint32_t layer : {render::kCoverLayer, render::kWaterLayer}) {
-                    if (!(layer == render::kCoverLayer ? draw_cover : draw_water)) continue;
-                    vk_.begin_shadow_cascade(*f, layer);
-                    zone_renderer_->draw_shadow(*f, layer);
-                    if (world_objects_) world_objects_->draw_shadow(*f, layer);
-                    vk_.end_shadow_cascade(*f);
+                // The shadow layers: the sun's cascades, then the cover and water maps when they are drawn. With the worker
+                // threads, every layer's draws are recorded at once, a renderer's in a lane of its own (its layers in order,
+                // on one thread: render/scene_recorder.h), then each layer's rendering executes its buffers in the inline
+                // order. Without them, or with display.parallel_record off, they are drawn inline as before.
+                shadow_layers_.clear();
+                if (shadows)
+                    for (std::uint32_t c = 0; c < render::kShadowCascades; ++c) shadow_layers_.push_back(c);
+                if (draw_cover) shadow_layers_.push_back(render::kCoverLayer);
+                if (draw_water) shadow_layers_.push_back(render::kWaterLayer);
+                render::SceneRecorder& shadow_rec = *shadow_recorder_;
+                if (!shadow_layers_.empty() && shadow_rec.begin_frame(*f, parallel_record_)) {
+                    for (std::uint32_t layer : shadow_layers_) {
+                        shadow_rec.add_target({[this] { return vk_.shadow_inheritance(); },
+                                               [this, layer](VkCommandBuffer c) { vk_.set_shadow_state(c, layer); }});
+                        shadow_rec.add(*f, zone_renderer_.get(),
+                                       [this, layer](const render::FrameInfo& fr) { zone_renderer_->draw_shadow(fr, layer); });
+                        if (layer < render::kShadowCascades && actor_renderer_)
+                            shadow_rec.add(*f, actor_renderer_.get(), [this, layer](const render::FrameInfo& fr) {
+                                actor_renderer_->draw_shadow(fr, layer);
+                            });
+                        if (world_objects_)
+                            shadow_rec.add(*f, world_objects_.get(), [this, layer](const render::FrameInfo& fr) {
+                                world_objects_->draw_shadow(fr, layer);
+                            });
+                    }
+                    shadow_rec.record(*f);
+                    for (std::size_t i = 0; i < shadow_layers_.size(); ++i) {
+                        vk_.begin_shadow_cascade(*f, shadow_layers_[i], true);
+                        shadow_rec.execute(*f, i);
+                        vk_.end_shadow_cascade(*f);
+                        // Timed between the renderings (the cascades come first in shadow_layers_).
+                        if (shadows && i + 1 == render::kShadowCascades) vk_.gpu_mark(*f, "sun shadows");
+                    }
+                    shadow_rec.reset();
+                    lap.mark("shadow layers recorded");
+                    vk_.gpu_mark(*f, "cover and water maps");
+                } else {
+                    if (shadows)
+                        for (std::uint32_t c = 0; c < render::kShadowCascades; ++c) {
+                            vk_.begin_shadow_cascade(*f, c);
+                            zone_renderer_->draw_shadow(*f, c);
+                            if (actor_renderer_) actor_renderer_->draw_shadow(*f, c);
+                            if (world_objects_) world_objects_->draw_shadow(*f, c);
+                            vk_.end_shadow_cascade(*f);
+                        }
+                    lap.mark("sun shadows");
+                    vk_.gpu_mark(*f, "sun shadows");
+                    for (std::uint32_t layer : {render::kCoverLayer, render::kWaterLayer}) {
+                        if (!(layer == render::kCoverLayer ? draw_cover : draw_water)) continue;
+                        vk_.begin_shadow_cascade(*f, layer);
+                        zone_renderer_->draw_shadow(*f, layer);
+                        if (world_objects_) world_objects_->draw_shadow(*f, layer);
+                        vk_.end_shadow_cascade(*f);
+                    }
+                    lap.mark("cover and water maps");
+                    vk_.gpu_mark(*f, "cover and water maps");
                 }
                 cover_drawn_ = covering;
-                lap.mark("cover and water maps");
-                vk_.gpu_mark(*f, "cover and water maps");
                 if (light_shadows)
                     render::draw_point_shadows(vk_, *f, point_shadows_, zone_->lights, point_builds, *zone_renderer_,
                                                actor_renderer_.get(), objects);
@@ -658,6 +743,11 @@ int ClientApp::run() {
         // The temporal upscaler follows the plain camera (render/temporal.h); begin_scene hands it to the scene's
         // shaders for their own motion, so it is given first.
         if (scene) vk_.set_temporal_view(camera_.view(), camera_.projection(width, height, lit.far_plane));
+        // The scene's draws go into secondary command buffers recorded on the workers (SceneRecorder), or inline.
+        render::SceneRecorder& rec = *scene_recorder_;
+        // While it records in parallel, the laps below (frame_sections) time only the queuing ("... queued"); the
+        // recording itself is in "scene record (opaque)" and "scene record".
+        rec.begin_frame(*f, scene && parallel_record_);
         // The loading screen's backdrop is black (ui::loading_overlay's too, while the zone settles behind it).
         vk_.begin_scene(*f, screen_ == Screen::Loading ? glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
                                                        : glm::vec4(under_water ? water_color : lit.fog_color, 1.0f));
@@ -692,38 +782,59 @@ int ClientApp::run() {
             const glm::mat4 plain_vp = plain_proj * camera_.view();
             glm::mat4 proj = render::jittered(plain_proj, vk_.projection_jitter());
             glm::mat4 vp = proj * camera_.view();
+            // Each draw is a job of the scene recorder, in a lane by what it touches (render/scene_recorder.h): a
+            // renderer's own draws in its lane; the characters, the spawn boxes and the markers, which ask the
+            // character renderer's caches, in one. Nothing they read changes before rec.flush.
+            static const char kActorsLane = 0;
+            const void* const actors_lane = &kActorsLane;
+            // The GPU passes' marks (VkContext::gpu_mark) in the scene: only while it is drawn inline. Recorded on the
+            // workers, the scene's rendering holds nothing but the secondary buffers' execution, so no timestamp can
+            // go between them; VkContext then times the scene as a whole (begin_translucent, begin_overlay).
+            const auto scene_mark = [&](const render::FrameInfo& fr, const char* name) {
+                if (!rec.active()) vk_.gpu_mark(fr, name);
+            };
+            // The land round an outdoor zone (render/horizon.h), under an open sky or none (not the planes' and
+            // Luclin's painted skies). Set before the first draw is queued: a queued draw runs at rec.flush and reads
+            // the zone renderer's state then.
+            if (zone_renderer_)
+                zone_renderer_->set_distant(in_game && modern && outdoor && horizon_hills_ &&
+                                            (!sky_renderer_ || sky_renderer_->has_atmosphere()));
             const auto draw_background = [&] {
-                if (sky_drawn) sky_renderer_->draw(*f, proj, camera_.view(), sky_frame);
+                if (sky_drawn)
+                    rec.add(*f, sky_renderer_.get(), [&](const render::FrameInfo& fr) {
+                        sky_renderer_->draw(fr, proj, camera_.view(), sky_frame);
+                    });
                 // Where no sky is drawn, the modern haze; under water, the water.
-                if (zone_renderer_ && (under_water || (modern && !sky_drawn))) zone_renderer_->draw_backdrop(*f, vp);
-                lap.mark("sky");
-                vk_.gpu_mark(*f, "sky");
+                if (zone_renderer_ && (under_water || (modern && !sky_drawn)))
+                    rec.add(*f, zone_renderer_.get(), [&](const render::FrameInfo& fr) { zone_renderer_->draw_backdrop(fr, vp); });
+                lap.mark(rec.active() ? "sky queued" : "sky");
+                scene_mark(*f, "sky");
             };
             // Classic draws all zone parts together; WLD details can blend over uncovered samples.
             const bool background_first = !modern || (zone_renderer_ && zone_renderer_->opaque_blends_background());
             if (background_first) draw_background();
-            // The land round an outdoor zone (render/horizon.h), under an open sky or none (not the planes' and
-            // Luclin's painted skies).
-            if (zone_renderer_)
-                zone_renderer_->set_distant(in_game && modern && outdoor && horizon_hills_ &&
-                                            (!sky_renderer_ || sky_renderer_->has_atmosphere()));
             // The modern water reads the opaque world: the zone's other draws wait for VkContext::begin_translucent.
             const render::ZonePhase first = modern ? render::ZonePhase::Opaque : render::ZonePhase::All;
-            if (zone_renderer_) zone_renderer_->draw_depth(*f, vp, camera_.position, lit, t);
-            vk_.gpu_mark(*f, "zone depth prepass");
-            if (zone_renderer_) zone_renderer_->draw(*f, vp, camera_.position, lit, t, first);
-            lap.mark("zone draw");
-            vk_.gpu_mark(*f, "zone");
+            if (zone_renderer_)
+                rec.add(*f, zone_renderer_.get(), [&](const render::FrameInfo& fr) {
+                    zone_renderer_->draw_depth(fr, vp, camera_.position, lit, t);
+                    scene_mark(fr, "zone depth prepass");
+                    zone_renderer_->draw(fr, vp, camera_.position, lit, t, first);
+                });
+            lap.mark(rec.active() ? "zone queued" : "zone draw");
+            scene_mark(*f, "zone");
             // Objects still draw their blended parts in the same call as their opaque parts.
             // Keep their background first, and the existing object/actor/silhouette order intact.
             // The water colour copy must also already contain the sky (flora follows that copy).
             if (!background_first) draw_background();
             if (world_objects_) {
                 world_objects_->set_brightness(brightness);
-                world_objects_->draw(*f, vp, camera_.position, lit);
+                rec.add(*f, world_objects_.get(), [&](const render::FrameInfo& fr) {
+                    world_objects_->draw(fr, vp, camera_.position, lit);
+                });
             }
-            lap.mark("objects draw");
-            vk_.gpu_mark(*f, "objects");
+            lap.mark(rec.active() ? "objects queued" : "objects draw");
+            scene_mark(*f, "objects");
             if (flora_renderer_ && grass_) {
                 flora_renderer_->set_reach(flora_reach_);
                 flora_renderer_->set_density(static_cast<float>(grass_density_) / 100.0f);
@@ -754,74 +865,123 @@ int ClientApp::run() {
             // hides them: before the characters, which cover it where the player is in sight.
             if (actor_renderer_ && in_game && iso() && iso_silhouette_)
                 if (const game::Spawn* me = conn_->world().player()) {
-                    const std::uint32_t ids[2] = {me->id, me->mount_id};
-                    actor_renderer_->draw_silhouette(*f, vp, camera_.position,
-                                                     std::span<const std::uint32_t>(ids, me->mount_id ? 2u : 1u),
-                                                     glm::vec4(0.55f, 0.75f, 1.0f, 0.55f));
+                    const std::array<std::uint32_t, 2> ids{me->id, me->mount_id};
+                    const std::size_t count = me->mount_id ? 2u : 1u;
+                    rec.add(*f, actors_lane, [&, ids, count](const render::FrameInfo& fr) {
+                        actor_renderer_->draw_silhouette(fr, vp, camera_.position,
+                                                         std::span<const std::uint32_t>(ids.data(), count),
+                                                         glm::vec4(0.55f, 0.75f, 1.0f, 0.55f));
+                    });
                 }
             // The characters' blended and additive parts wait for the grass (below): they write no depth, so grass
-            // drawn after them would cover them.
+            // drawn after them would cover them. The spawn boxes take the set the characters drew (same lane, after).
             if (actor_renderer_)
-                modelled = &actor_renderer_->draw_prepared(*f, vp, camera_.position, lit,
-                                                           render::ActorPhase::Opaque);
-            lap.mark("actors draw");
-            vk_.gpu_mark(*f, "actors");
-            if (in_game) spawn_renderer_->draw(*f, vp, camera_.position, lit, conn_->world(), hidden_spawn(), modelled);
-            lap.mark("spawns draw");
-            vk_.gpu_mark(*f, "spawns");
+                rec.add(*f, actors_lane, [&](const render::FrameInfo& fr) {
+                    modelled = &actor_renderer_->draw_prepared(fr, vp, camera_.position, lit, render::ActorPhase::Opaque);
+                });
+            lap.mark(rec.active() ? "actors queued" : "actors draw");
+            scene_mark(*f, "actors");
+            if (in_game) {
+                const auto hidden = hidden_spawn();
+                rec.add(*f, actors_lane, [&, hidden](const render::FrameInfo& fr) {
+                    spawn_renderer_->draw(fr, vp, camera_.position, lit, conn_->world(), hidden, modelled);
+                });
+            }
+            lap.mark(rec.active() ? "spawns queued" : "spawns draw");
+            scene_mark(*f, "spawns");
             // The depth copy is taken before the grass: the target ring lies on the ground under it, not on the
             // blades (a ring traced over them twists into a coil). The water, drawn after the grass, still meets it
             // in the depth buffer.
-            if (modern || (in_game && (target_ring_shown() || iso_marker_shown() || (iso() && iso_hover_.shown))))
+            if (modern || (in_game && (target_ring_shown() || iso_marker_shown() || (iso() && iso_hover_.shown)))) {
+                rec.flush(*f); // the opaque world, before its copies are taken
+                lap.mark("scene record (opaque)");
                 vk_.begin_translucent(*f);
-            if (flora_renderer_ && grass_) flora_renderer_->draw(*f, vp, camera_.position, t, frame_lighting_, modern);
-            lap.mark("flora draw");
-            vk_.gpu_mark(*f, "depth copy, flora");
+            }
+            if (flora_renderer_ && grass_)
+                rec.add(*f, flora_renderer_.get(), [&](const render::FrameInfo& fr) {
+                    flora_renderer_->draw(fr, vp, camera_.position, t, frame_lighting_, modern);
+                });
+            lap.mark(rec.active() ? "flora queued" : "flora draw");
+            scene_mark(*f, "depth copy, flora");
             if (actor_renderer_)
-                actor_renderer_->draw_prepared(*f, vp, camera_.position, lit, render::ActorPhase::Translucent);
+                rec.add(*f, actors_lane, [&](const render::FrameInfo& fr) {
+                    actor_renderer_->draw_prepared(fr, vp, camera_.position, lit, render::ActorPhase::Translucent);
+                });
             if (modern && zone_renderer_)
-                zone_renderer_->draw(*f, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
+                rec.add(*f, zone_renderer_.get(), [&](const render::FrameInfo& fr) {
+                    zone_renderer_->draw(fr, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
+                });
             // The target ring lies on the depth copy (taken above, or by it in the classic lighting), under the
-            // weather and particles. Character select draws no target.
-            if (in_game) draw_target_ring(*f, vp, lit.far_plane, modern, t);
-            if (in_game) draw_iso_marker(*f, vp, lit.far_plane, modern, t);
-            if (in_game) draw_iso_hover(*f, vp, lit.far_plane, modern, t);
+            // weather and particles. Character select draws no target, nor does F10's hidden interface. The markers
+            // ask the character renderer (model_for): the characters' lane.
+            if (in_game && ui_.visible())
+                rec.add(*f, actors_lane, [&](const render::FrameInfo& fr) {
+                    draw_target_ring(fr, vp, lit.far_plane, modern, t);
+                    draw_iso_marker(fr, vp, lit.far_plane, modern, t);
+                    draw_iso_hover(fr, vp, lit.far_plane, modern, t);
+                });
+            // A plugin's world geometry: its hooks here, on the client's thread; its batches in a lane of their own,
+            // their outcome reported after rec.flush (record_world_geometry, report_world_geometry).
+            if (in_game && record_world_geometry(vp))
+                rec.add(*f, world_geometry_renderer_.get(), [&](const render::FrameInfo& fr) {
+                    record_world_geometry_batches(fr, vp);
+                });
             // Rain or snow: the precipitation manager's particles. The original draws them in every zone type,
             // with or without a sky (CRender's scene, 0x10097420).
             if (weather_renderer_ && in_game) {
                 const float pixel = 2.0f / (static_cast<float>(std::max(1, width)) * proj[0][0]);
-                weather_renderer_->draw(*f, vp, camera_.position, camera_.forward(), pixel, weather_.particles(),
-                                        1.0f + weather_look_.flash,
-                                        modern ? render::kModernPrecipitation : render::kClassicPrecipitation);
+                rec.add(*f, weather_renderer_.get(), [&, pixel](const render::FrameInfo& fr) {
+                    weather_renderer_->draw(fr, vp, camera_.position, camera_.forward(), pixel, weather_.particles(),
+                                            1.0f + weather_look_.flash,
+                                            modern ? render::kModernPrecipitation : render::kClassicPrecipitation);
+                });
             }
             // The modern particles read the depth copy (after begin_translucent above) and the frame's lighting.
             const render::SceneLighting* particle_lighting = modern ? &frame_lighting_ : nullptr;
             if (zone_particles_)
-                zone_particles_->draw(*f, vp, camera_.view(), modern ? render::kParticleGlow : 1.0f, !modern,
-                                      particle_lighting);
+                rec.add(*f, zone_particles_.get(), [&](const render::FrameInfo& fr) {
+                    zone_particles_->draw(fr, vp, camera_.view(), modern ? render::kParticleGlow : 1.0f, !modern,
+                                          particle_lighting);
+                });
             if (switch_particles_ && in_game)
-                switch_particles_->draw(*f, vp, camera_.view(), modern ? render::kParticleGlow : 1.0f,
-                                        particle_lighting);
+                rec.add(*f, switch_particles_.get(), [&](const render::FrameInfo& fr) {
+                    switch_particles_->draw(fr, vp, camera_.view(), modern ? render::kParticleGlow : 1.0f,
+                                            particle_lighting);
+                });
             if (modern && fire_renderer_)
-                fire_renderer_->draw(*f, vp, camera_.position, t, frame_fire_list_, frame_lighting_,
-                                     std::min(lit.far_plane, 1500.0f), render::kParticleGlow);
+                rec.add(*f, fire_renderer_.get(), [&](const render::FrameInfo& fr) {
+                    fire_renderer_->draw(fr, vp, camera_.position, t, frame_fire_list_, frame_lighting_,
+                                         std::min(lit.far_plane, 1500.0f), render::kParticleGlow);
+                });
             if (modern && spell_bolts_ && in_game)
-                spell_bolts_->draw(*f, vp, camera_.position, t, frame_lighting_, render::kParticleGlow);
+                rec.add(*f, spell_bolts_.get(), [&](const render::FrameInfo& fr) {
+                    spell_bolts_->draw(fr, vp, camera_.position, t, frame_lighting_, render::kParticleGlow);
+                });
             if (actor_emitters_ && scene)
-                actor_emitters_->draw(*f, vp, camera_.view(), modern ? render::kParticleGlow : 1.0f, particle_lighting);
+                rec.add(*f, actor_emitters_.get(), [&](const render::FrameInfo& fr) {
+                    actor_emitters_->draw(fr, vp, camera_.view(), modern ? render::kParticleGlow : 1.0f,
+                                          particle_lighting);
+                });
             if (spell_particles_ && in_game)
-                spell_particles_->draw(*f, vp, camera_.view(), lighting_mode_ == render::LightingMode::Modern ? render::kParticleGlow : 1.0f,
-                                       particle_lighting);
-            lap.mark("translucent, weather, particles");
-            vk_.gpu_mark(*f, "translucent, weather, particles");
+                rec.add(*f, spell_particles_.get(), [&](const render::FrameInfo& fr) {
+                    spell_particles_->draw(fr, vp, camera_.view(), modern ? render::kParticleGlow : 1.0f,
+                                           particle_lighting);
+                });
+            lap.mark(rec.active() ? "translucent, weather, particles queued" : "translucent, weather, particles");
+            scene_mark(*f, "translucent, weather, particles");
+            rec.flush(*f); // before the name plates read the characters' poses, and before the scene ends
+            report_world_geometry();
+            lap.mark("scene record");
             if (in_game) { // character select draws no target, names or picking
-                if (nav_ && nav_->overlay())
-                    nav_->draw_overlay(ImGui::GetBackgroundDrawList(), plain_vp,
-                                       glm::vec4(view_area_.x, view_area_.y, view_area_.w, view_area_.h));
-                draw_nameplates(*f, plain_vp, f->extent, lit.far_plane);
-                lap.mark("nameplates");
-                draw_text_overlay();
-                lap.mark("text overlay");
+                if (ui_.visible()) {
+                    if (nav_ && nav_->overlay())
+                        nav_->draw_overlay(ImGui::GetBackgroundDrawList(), plain_vp,
+                                           glm::vec4(view_area_.x, view_area_.y, view_area_.w, view_area_.h));
+                    draw_nameplates(*f, plain_vp, vp, f->extent, lit.far_plane);
+                    lap.mark("nameplates");
+                    draw_text_overlay();
+                    lap.mark("text overlay");
+                }
                 // The camera as CCamera::GetScreenRay reads it, in the 3D view's window (mouse) coordinates.
                 auto fov = game::camera_fov(camera_.view_fov_units(), static_cast<int>(f->extent.width), static_cast<int>(f->extent.height));
                 pick_camera_.position = camera_.position;
@@ -839,14 +999,23 @@ int ClientApp::run() {
         lap.mark("scene other");
         ui_.render(*f);
         lap.mark("ImGui render");
+        // The actor effects' next step, on a worker while this frame is submitted and the next one begins.
+        if (emitter_step_) std::exchange(emitter_step_, nullptr)();
+        lap.mark("actor effects step start");
         perf_ui_.mark(FramePhase::Record);
-        vk_.end_frame(*f);
+        try {
+            const auto outcome = vk_.end_frame(*f);
+            if (in_game && automation_) automation_->world_finish(outcome.submitted, outcome.presented);
+        } catch (...) {
+            retire_world_geometry();
+            throw;
+        }
         perf_ui_.set_presented(vk_.frames_presented(), vk_.frame_generated());
         perf_ui_.mark(FramePhase::Present);
         settle_frame_.scene = in_game;
         update_zone_settle();
     }
-    if (eq_api_) eq_api_->save_layout();
+    if (ui_api_) ui_api_->save_layout();
     save_chat_history(true);
     if (opts_.window_width == 1280 && opts_.window_height == 720) {
         // The game window's place for the next start (window_desc); not a --window-size run's.
@@ -860,11 +1029,184 @@ int ClientApp::run() {
         config_.set_bool("ui.perf_log_hitches", perf_ui_.log_hitches());
         config_.save(config_path_);
     }
+    retire_world_geometry();
     if (automation_) automation_->shutdown();
     if (conn_) conn_->disconnect();
     vk_.wait_idle();
     audio_.reset();
     return 0;
+}
+
+void ClientApp::retire_world_geometry() {
+    if (automation_) automation_->world_unavailable();
+    world_anchors_.clear();
+    world_scene_ = {};
+    if (++world_epoch_ == 0) ++world_epoch_;
+    if (++world_collision_revision_ == 0) ++world_collision_revision_;
+    world_floor_generation_ = world_objects_ ? world_objects_->visual_generation() : 0;
+    world_animation_time_ = animated_objects_ ? animated_objects_->visual_time() : 0;
+}
+
+bool ClientApp::world_geometry_scene_current() const {
+    if (!conn_ || !zone_ || !collision_ || !world_visual_collision_ || !world_objects_ ||
+        (conn_->state() != net::ConnectionState::InZone && conn_->state() != net::ConnectionState::Camping))
+        return false;
+    return world_scene_.matches(conn_.get(), world_epoch_, conn_->zone_id(), conn_->zone_instance(),
+                                conn_->world().zone_short_name);
+}
+
+int ClientApp::world_geometry_floor(float x, float y, float z, float& height) const {
+    if (!world_geometry_scene_current()) return HAILSTONE_WORLD_DEFERRED;
+    const glm::vec3 at{x, y, z};
+    const auto floor = world_geometry_surface_floor(*world_visual_collision_, animated_objects_ ? &*animated_objects_ : nullptr,
+        [this](const glm::vec3& query) { return world_objects_->visual_surface_below(query); }, at);
+    if (!floor) return HAILSTONE_WORLD_MISSING;
+    height = *floor;
+    return HAILSTONE_WORLD_RESOLVED;
+}
+
+int ClientApp::world_geometry_anchor(std::uint32_t id, HailstoneWorldAnchor& anchor) {
+    if (!world_geometry_scene_current() || !actor_renderer_) return HAILSTONE_WORLD_DEFERRED;
+    if (const auto cached = world_anchors_.find(id); cached != world_anchors_.end()) {
+        anchor = cached->second;
+        return HAILSTONE_WORLD_RESOLVED;
+    }
+    glm::mat4 transform;
+    if (!actor_renderer_->current_render_transform(id, vk_.frames_begun(), transform)) return HAILSTONE_WORLD_MISSING;
+    const glm::vec3 origin(transform[3]);
+    const auto heading = drawn_world_heading(transform);
+    if (!std::isfinite(origin.x) || !std::isfinite(origin.y) || !std::isfinite(origin.z) ||
+        !heading)
+        return HAILSTONE_WORLD_DEFERRED;
+    HailstoneWorldAnchor value{};
+    value.size = sizeof(value);
+    value.spawn_id = id;
+    value.flags = HAILSTONE_WORLD_DRAWN_POSE;
+    value.position[0] = origin.x;
+    value.position[1] = origin.y;
+    value.position[2] = origin.z;
+    value.heading = *heading;
+    float floor = 0.0f;
+    if (world_geometry_floor(origin.x, origin.y, origin.z, floor) == HAILSTONE_WORLD_RESOLVED) {
+        float height = 0.0f;
+        if (conn_)
+            if (const auto spawn = conn_->world().spawns.find(id); spawn != conn_->world().spawns.end())
+                height = spawn->second.heights.avatar_height;
+        if (const auto cached = cached_world_anchor_floor(origin.z, floor, height)) {
+            value.floor_z = *cached;
+            value.flags |= HAILSTONE_WORLD_CACHED_FLOOR;
+        }
+    }
+    world_anchors_.emplace(id, value);
+    anchor = value;
+    return HAILSTONE_WORLD_RESOLVED;
+}
+
+bool ClientApp::record_world_geometry(const glm::mat4& view_projection) {
+    world_anchors_.clear();
+    world_recorded_.clear();
+    if (!automation_ || !automation_->world_wanted()) return false; // no plugin draws in the world: no frame is built
+    if (!world_geometry_scene_current() || !world_geometry_renderer_ || !vk_.frames_begun()) {
+        automation_->world_unavailable();
+        return false;
+    }
+    const auto generation = world_objects_ ? world_objects_->visual_generation() : 0;
+    const auto animation_time = animated_objects_ && !animated_objects_->empty() ? animated_objects_->visual_time() : 0;
+    if (generation != world_floor_generation_ || animation_time != world_animation_time_) {
+        world_floor_generation_ = generation;
+        world_animation_time_ = animation_time;
+        if (++world_collision_revision_ == 0) ++world_collision_revision_;
+    }
+    HailstoneWorldFrame context{};
+    context.size = sizeof(context);
+    context.capabilities = HAILSTONE_WORLD_GEOMETRY | HAILSTONE_WORLD_PRESENT_RECEIPTS;
+    context.frame = vk_.frames_begun();
+    context.epoch = world_epoch_;
+    context.collision_revision = world_collision_revision_;
+    context.now_ms = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count());
+    context.maximum_batches = game::kWorldGeometryMaxBatches;
+    context.maximum_vertices = game::kWorldGeometryMaxVertices;
+    context.remaining_queries = plugin::WorldGeometryHost::kMaximumQueries;
+    context.camera_position[0] = camera_.position.x;
+    context.camera_position[1] = camera_.position.y;
+    context.camera_position[2] = camera_.position.z;
+    context.viewport[0] = view_area_.x;
+    context.viewport[1] = view_area_.y;
+    context.viewport[2] = view_area_.w;
+    context.viewport[3] = view_area_.h;
+    std::copy_n(&view_projection[0][0], 16, context.view_projection);
+    plugin::WorldQueries queries;
+    if (world_visual_collision_ && world_objects_) {
+        context.capabilities |= HAILSTONE_WORLD_TERRAIN | HAILSTONE_WORLD_SURFACE_PATCH;
+        queries.floor = [this](float x, float y, float z, float& floor) {
+            return world_geometry_floor(x, y, z, floor);
+        };
+        queries.surface_patch = [this](const HailstoneWorldSurfacePatch& input,HailstoneWorldSurfacePatchResult& output,
+                                       std::uint32_t& work) {
+            if(!world_geometry_scene_current())return HAILSTONE_WORLD_PATCH_DEFERRED;
+            game::VisualSurfacePatch query;
+            for(std::size_t n=0;n<3;++n)query.vertices[n]={input.vertices[n*3],input.vertices[n*3+1],input.vertices[n*3+2]};
+            query.maximum_rise=input.maximum_rise;query.tolerance=input.tolerance;
+            const auto result=game::certify_visual_surface_patch(query,
+                [this](const glm::vec2& low,const glm::vec2& high,const game::VisualTriangleVisitor& visit,std::uint32_t& budget) {
+                    if(!world_visual_collision_->visual_surfaces(low,high,visit,budget))return false;
+                    if(!world_objects_->visual_surfaces(low,high,visit,budget))return false;
+                    return !animated_objects_||animated_objects_->visual_surfaces(low,high,visit,budget);
+                },[this](const glm::vec3& at)->std::optional<float> {
+                    float height=0;
+                    return world_geometry_floor(at.x,at.y,at.z,height)==HAILSTONE_WORLD_RESOLVED?
+                        std::optional<float>(height):std::nullopt;
+                },work);
+            if(result.status==game::VisualSurfacePatchStatus::Deferred)return HAILSTONE_WORLD_PATCH_DEFERRED;
+            output.flags=result.height_known?HAILSTONE_WORLD_PATCH_HEIGHT_KNOWN:0;
+            if(result.source_face_known){
+                output.flags|=HAILSTONE_WORLD_PATCH_SOURCE_FACE;
+                for(std::size_t n=0;n<3;++n){
+                    output.source_face[n*3]=result.source_face[n].x;
+                    output.source_face[n*3+1]=result.source_face[n].y;
+                    output.source_face[n*3+2]=result.source_face[n].z;
+                }
+            }
+            if(result.region_count){
+                output.flags|=HAILSTONE_WORLD_PATCH_REGION;
+                output.region_count=result.region_count;
+                for(std::size_t n=0;n<result.region_count;++n){
+                    output.region_xy[n*2]=result.region[n].x;output.region_xy[n*2+1]=result.region[n].y;
+                }
+            }
+            output.witness[0]=result.witness.x;output.witness[1]=result.witness.y;output.witness[2]=result.witness.z;
+            if(result.status==game::VisualSurfacePatchStatus::Planar)return HAILSTONE_WORLD_PATCH_PLANAR;
+            return result.status==game::VisualSurfacePatchStatus::Mismatch?HAILSTONE_WORLD_PATCH_MISMATCH:HAILSTONE_WORLD_PATCH_MISSING;
+        };
+    }
+    if (actor_renderer_) {
+        context.capabilities |= HAILSTONE_WORLD_DRAWN_ANCHORS;
+        queries.anchor = [this](std::uint32_t id, HailstoneWorldAnchor& anchor) {
+            return world_geometry_anchor(id, anchor);
+        };
+    }
+    automation_->world_frame(context, std::move(queries));
+    world_record_frame_ = context.frame;
+    return !automation_->world_batches().empty();
+}
+
+void ClientApp::record_world_geometry_batches(const render::FrameInfo& frame, const glm::mat4& view_projection) {
+    // In a recording lane: only the renderer and the batches the plugins left (they run no code until rec.flush ends).
+    const auto& batches = automation_->world_batches();
+    for (std::size_t index = 0; index < batches.size(); ++index) {
+        const auto result = world_geometry_renderer_->record(frame, view_projection, batches[index].view());
+        if (result.id == batches[index].id && result.frame == world_record_frame_ &&
+            result.status == render::WorldGeometryRecordStatus::Recorded)
+            world_recorded_.emplace_back(index, result.recorded_vertices);
+    }
+}
+
+void ClientApp::report_world_geometry() {
+    // Back on the client's thread after rec.flush: what each batch recorded, to its plugin.
+    if (automation_)
+        for (const auto& [index, vertices] : world_recorded_) automation_->world_recorded(index, vertices);
+    world_recorded_.clear();
 }
 
 void ClientApp::update_guide() {
@@ -874,10 +1216,9 @@ void ClientApp::update_guide() {
         guide_.stop();
         return;
     }
-    std::optional<glm::vec3> goal;
-    const auto& spawns = conn_->world().spawns;
-    if (auto it = spawns.find(guide_.spawn()); it != spawns.end() && !it->second.is_corpse)
-        goal = it->second.display_valid ? it->second.display_position : it->second.position;
+    const auto revision = guide_.revision();
+    const auto goal = guide_.eligible() ? guide_spawn_position(*conn_, guide_.spawn()) : std::nullopt;
+    if (revision != guide_.revision()) return; // an eligibility hook replaced the guide
     const double now = std::chrono::duration<double>(Clock::now() - start_time_).count();
     const std::string name = guide_.name();
     auto u = guide_.update(feet_, goal, now, [this](const glm::vec3& from, const glm::vec3& to) {

@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <chrono>
+
 #include "app/perf_ui.h"
 #include "core/frame_sections.h"
 #include "render/gpu_timer.h"
@@ -178,4 +180,16 @@ TEST_CASE("perf: the GPU passes are the time between their timestamps, a wrapped
     CHECK(out.empty());
     hailstone::render::gpu_sections(names, wrapped, 1.0f, 64, out);
     CHECK(out.empty());
+}
+
+TEST_CASE("perf: the frame sections table is worked out again twice a second") {
+    using T = std::chrono::steady_clock::time_point;
+    using std::chrono::milliseconds;
+    const T never{};
+    const T at = never + milliseconds(10000);
+    CHECK(refresh_due(never, at, kSectionsRefresh)); // never worked out: at once
+    CHECK_FALSE(refresh_due(at, at, kSectionsRefresh));
+    CHECK_FALSE(refresh_due(at, at + milliseconds(499), kSectionsRefresh));
+    CHECK(refresh_due(at, at + milliseconds(500), kSectionsRefresh));
+    CHECK(refresh_due(at, at + milliseconds(5000), kSectionsRefresh)); // the header was closed a while
 }
