@@ -130,6 +130,7 @@
 #include "app/stats_ui.h"
 #include "app/actions_ui.h"
 #include "app/neighbour_zones.h"
+#include "app/distant_copies.h"
 #include "app/world_atlas.h"
 #include "app/world_objects.h"
 #include "app/zone_move_world.h"
@@ -339,6 +340,7 @@ public:
         spawn_renderer_ = std::make_unique<render::SpawnRenderer>(vk_, shader_dir_);
         world_objects_ = std::make_unique<WorldObjects>(vk_, game_, shader_dir_);
         neighbours_ = std::make_unique<NeighbourZones>(vk_, game_, shader_dir_);
+        distant_copies_ = std::make_unique<DistantCopies>(vk_, game_, shader_dir_);
         log_memory("startup: world objects");
         spell_ui_ = std::make_unique<SpellUi>(vk_, game_);
         item_ui_ = std::make_unique<ItemUi>(vk_, game_);
@@ -498,13 +500,13 @@ public:
         perf_ui_.set_open(config_.get_bool("ui.perf_window", false));
         perf_ui_.set_log_hitches(config_.get_bool("ui.perf_log_hitches", false));
         automation_->hooks().add_command(plugin::Hooks::kClient, "/perf", [this](std::string_view) { perf_ui_.toggle(); });
-        // /neighbourzones [on | off]: the zones past the outdoor zone lines (display.neighbour_zones).
+        // /neighbourzones [on | off]: the zones past the outdoor zone lines drawn live (display.live_neighbour_zones).
         automation_->hooks().add_command(plugin::Hooks::kClient, "/neighbourzones", [this](std::string_view args) {
             while (!args.empty() && args.front() == ' ') args.remove_prefix(1);
             bool on = args.empty() ? !neighbour_zones_ : !(args.starts_with("off") || args.starts_with("0"));
             set_display_option("neighbour_zones", on ? 1 : 0);
             if (conn_)
-                conn_->ui_message(std::format("Neighbour zones: {} ({} loaded).", on ? "on" : "off",
+                conn_->ui_message(std::format("Live neighbour zones: {} ({} loaded).", on ? "on" : "off",
                                               neighbours_ ? neighbours_->loaded() : 0));
         });
         automation_->hooks().add_command(plugin::Hooks::kClient, "/screenshot", [this](std::string_view) { take_screenshot(); });
@@ -974,9 +976,7 @@ private:
         // upscaler, which VkContext checks.
         scene.frame_gen = config_.get_bool("display.frame_gen", false);
         std::string tonemap = config_.get_string("display.tonemap", "auto");
-        scene.tonemap = tonemap != "auto" ? render::parse_tonemap(tonemap)
-                        : lighting_mode_ == render::LightingMode::Modern ? render::Tonemap::AgX
-                                                                         : render::Tonemap::None;
+        scene.tonemap = tonemap != "auto" ? render::parse_tonemap(tonemap) : render::automatic_tonemap(lighting_mode_);
         scene.exposure = std::strtof(config_.get_string("display.exposure", "0").c_str(), nullptr);
         scene.shadow_size = static_cast<std::uint32_t>(std::clamp(config_.get_int("display.shadows", 2048), 0, 8192));
         scene.light_shadows = static_cast<std::uint32_t>(
@@ -1378,6 +1378,9 @@ private:
     // display.neighbour_zones.
     std::unique_ptr<NeighbourZones> neighbours_;
     bool neighbour_zones_ = true;
+    // The zones the world atlas places past it, drawn far out as low-detail copies (app/distant_copies.h); with the
+    // land, display.horizon_hills.
+    std::unique_ptr<DistantCopies> distant_copies_;
     // The world atlas's part in the land round the zone (app/world_atlas.h), as the zone was loaded: the cuts for the
     // neighbours' ground measured this visit, and the zones whose record the neighbour zones' loader measures.
     AtlasLand atlas_land_;

@@ -85,6 +85,10 @@ struct ZoneRenderOptions {
     // multi-pass (MPL) triple. Off draws the single-pass path, where the
     // region shaders' point lights are zero.
     bool multipass_lighting = false;
+    // The current zone, whose lights the point shadows (render/point_shadows.h) are made for: each light carries its
+    // shadow key (render::point_shadow_keys), so the shaders find its shadow without searching. Off (a neighbour, a
+    // distant copy), its lights take no shadow, as before: their numbers are not the current zone's.
+    bool light_shadow_keys = false;
 
     // A neighbouring zone drawn past a zone line (app/neighbour_zones.h): its geometry moved by `offset` into the
     // current zone's coordinates (after its own regions sorted out its water), then cut to the half-spaces in `keep`
@@ -113,6 +117,9 @@ struct ZoneRenderOptions {
     HorizonSources horizon_sources;
     // The current zone: trees on its land's woods (render::horizon_trees), the zone's own drawn far.
     bool land_trees = true;
+    // The current zone: where its land's worn terrain is cached (render::horizon_terrain; cache/terrain/<server>/
+    // <zone>.bin, app::terrain_cache_path); empty: worn on every load, not kept.
+    std::filesystem::path terrain_cache;
     // A neighbour: its part of the land, drawn after its own geometry is moved and cut (not moved or cut itself).
     std::shared_ptr<const LandPatch> land;
 };
@@ -289,6 +296,9 @@ public:
     void set_scene_light(const game::SceneLight& light);
     // The modern mode's switch, daylight and dynamic lights (render/scene_lighting.h); classic: params.x 0.
     void set_lighting(const SceneLighting& lighting);
+    // The smooth classic lighting (LightingMode::SmoothClassic, Hailstone's own): the classic region light per pixel
+    // instead of per vertex (shaders/zone.frag; SceneLighting::ambient.w). No effect on the modern lighting.
+    void set_classic_smooth(bool on) { scene_.lighting.ambient.w = on ? 1.0f : 0.0f; }
     // Turns the depth pre-pass on or off from the next frame (SceneOptions::depth_prepass: display.depth_prepass, the
     // Options window's Depth Pre-pass). On the main thread, before the frame is recorded. A neighbour zone has none.
     void set_depth_prepass(bool on) { depth_prepass_on_ = on; }
@@ -332,6 +342,9 @@ private:
         // The land's trees (render::horizon_trees, render/tree_impostor.h): an instanced model drawn as the land is,
         // with no shadows and shown by set_distant, but from the shared index buffer.
         bool land_trees = false;
+        // The current zone's land splatted with rock and sand by its vertices' weights (uv2; zone.frag kLandSplat):
+        // extra_slots[0] the rock's texture, [1] the sand's.
+        bool land_splat = false;
         // A neighbour's part of the land (ZoneRenderOptions::land): 1 its own material, 2 the current zone's, each
         // showing where the other does not (zone.frag's land blend); 0 neither.
         std::uint8_t land_fade = 0;

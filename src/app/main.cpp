@@ -67,6 +67,7 @@
 #include "app/plate_test.h"
 #include "game/collision.h"
 #include "app/neighbour_zones.h"
+#include "app/distant_copies.h"
 #include "app/world_atlas.h"
 #include "game/zone_names.h"
 #include "game/sky_colours.h"
@@ -118,6 +119,10 @@ struct Options {
     bool no_smooth_ground = false;                // --no-smooth-ground: the viewer draws the file's flat ground
     bool no_horizon = false;                      // --no-horizon: no land round the zone (render/horizon.h)
     bool no_land_trees = false;                   // --no-land-trees: the land round the zone without its trees
+    bool no_distant_copies = false;               // --no-distant-copies: the atlas's zones not drawn as copies
+    bool live_neighbours = false; // --live-neighbours: the neighbour zones drawn live (display.live_neighbour_zones)
+    bool gpu_timing = false; // --gpu-timing: each pass's mean GPU time over the timed frames (VkContext::gpu_mark)
+    bool stand = false;           // --stand: the camera at eye height on the highest floor under --pos
     bool no_clouds = false; // --no-clouds: the painted cloud layer, not the volumetric clouds (render/cloud_renderer.h)
     bool neighbour_tint = false;                  // --neighbour-tint: render::ZoneRenderer::set_debug_tint
     float tree_detail = 1.0f;                     // --tree-detail PCT: display.tree_detail, as a scale
@@ -133,6 +138,7 @@ struct Options {
     std::string upscaler_name;             // --upscaler as given: an upscaler provider's name loads it
     bool modern = false;              // --lighting modern (render/scene_lighting.h)
     bool tonemap_given = false;
+    bool classic_smooth = false;      // --lighting smooth (render::LightingMode::SmoothClassic)
     float view_distance = 2.5f;       // --view-distance (render::modern_view)
     std::optional<hailstone::app::DemoScreen> ui_demo; // show the developer UI demo
     float ui_scale = 0.0f;                        // > 0 overrides the display scale
@@ -169,6 +175,12 @@ struct Options {
     float pan = 0.0f;      // viewer: the camera turns this many degrees a second to its left (--pan)
     hailstone::app::ModelViewerOptions model; // --model viewer; active when model.codes is not empty
 };
+
+// The viewer's --lighting as the client's lighting mode (none, full-bright, counts as classic).
+hailstone::render::LightingMode lighting_mode(const Options& o) {
+    using hailstone::render::LightingMode;
+    return o.modern ? LightingMode::Modern : o.classic_smooth ? LightingMode::SmoothClassic : LightingMode::Classic;
+}
 
 void usage() {
     std::printf(
@@ -266,15 +278,17 @@ void usage() {
         "  --sky-timescale S  viewer: the procedural sky's TimeScale property (cloud motion; default 1)\n"
         "  --time-type N      viewer zone time type: 1, 2, 5 outdoor, 4 half lit, else dark (default 1 with a\n"
         "                     sky, 0 without)\n"
-        "  --lighting MODE    classic (the original's vertex lighting, default), modern (docs/graphics.md) or\n"
-        "                     none (full-bright)\n"
+        "  --lighting MODE    classic (the original's vertex lighting, default), smooth (the classic, per pixel),\n"
+        "                     modern (docs/graphics.md) or none (full-bright)\n"
         "  --msaa N           samples per pixel (1, 2, 4, 8; default 4)\n"
-        "  --tonemap NAME     none, agx or aces (default: agx with --lighting modern, else none)\n"
+        "  --tonemap NAME     none, agx, aces or soft (default: agx with --lighting modern, soft with smooth,\n"
+        "                     else none)\n"
         "  --exposure EV      scene exposure in stops (default 0)\n"
         "  --shadows N        shadow map size per cascade (0 off; default 2048), with --lighting modern\n"
         "  --light-shadows N  how many lights cast shadows (0 off; default 8, at most 8), modern\n"
         "  --no-ao            no screen-space ambient occlusion (--lighting modern)\n"
         "  --depth-prepass    draw the opaque geometry depth-only first, then colour it (--lighting modern)\n"
+        "  --gpu-timing       with --frames, log each pass's mean GPU time over the timed frames\n"
         "  --bloom N          bloom strength 0..1 (--lighting modern; default 0.5)\n"
         "  --render-scale P   draw the 3D view at P percent of its size (33..100) and upscale it (--upscaler)\n"
         "  --sharpness N      FSR 1's sharpening below a render scale of 100, 0..1 (default 0.5)\n"
@@ -305,6 +319,11 @@ void usage() {
         "  --no-grade         viewer: no colour grade (--lighting modern; display.color_grade)\n"
         "  --no-horizon       viewer: no land round the zone (--lighting modern; display.horizon_hills)\n"
         "  --no-land-trees    viewer: the land round the zone without its trees\n"
+        "  --no-distant-copies viewer, with --atlas: the atlas's zones not drawn as distant copies\n"
+        "  --live-neighbours  viewer: the neighbour zones drawn live, whole, in place of their copies\n"
+        "  --stand            viewer: the camera at eye height on the highest floor under --pos's x y\n"
+        "                     (no higher than its z)\n"
+        "                     (display.live_neighbour_zones)\n"
         "  --no-clouds        viewer: the painted clouds, not the volumetric ones (--lighting modern;\n"
         "                     display.volumetric_clouds)\n"
         "  --neighbour-tint   viewer, with --neighbours: the neighbours' own geometry magenta, their own ground in\n"
@@ -467,6 +486,7 @@ Options parse_args(int argc, char** argv) {
             using hailstone::render::VertexLighting;
             o.lighting = m == "none" ? VertexLighting::None : VertexLighting::Classic;
             o.modern = m == "modern";
+            o.classic_smooth = m == "smooth";
         } else if (arg("--msaa")) {
             need(1);
             o.scene.msaa = static_cast<std::uint32_t>(std::clamp(std::atoi(argv[++i]), 1, static_cast<int>(hailstone::render::kMaxMsaa)));
@@ -494,6 +514,8 @@ Options parse_args(int argc, char** argv) {
             o.grass_density = std::strtof(argv[++i], nullptr);
         } else if (arg("--no-ao")) {
             o.scene.ambient_occlusion = false;
+        } else if (arg("--gpu-timing")) {
+            o.gpu_timing = true;
         } else if (arg("--depth-prepass")) {
             o.scene.depth_prepass = true;
         } else if (arg("--weather-age")) {
@@ -508,6 +530,12 @@ Options parse_args(int argc, char** argv) {
             o.no_horizon = true;
         } else if (arg("--no-land-trees")) {
             o.no_land_trees = true;
+        } else if (arg("--no-distant-copies")) {
+            o.no_distant_copies = true;
+        } else if (arg("--live-neighbours")) {
+            o.live_neighbours = true;
+        } else if (arg("--stand")) {
+            o.stand = true;
         } else if (arg("--no-clouds")) {
             o.no_clouds = true;
         } else if (arg("--neighbour-tint")) {
@@ -834,7 +862,7 @@ int main(int argc, char** argv) {
             m.screenshot_generated = opts.screenshot_generated;
             m.modern = opts.modern;
             m.hour = opts.time_hour;
-            if (opts.modern && !opts.tonemap_given) m.scene.tonemap = render::Tonemap::AgX;
+            if (!opts.tonemap_given) m.scene.tonemap = render::automatic_tonemap(lighting_mode(opts));
             m.zone = opts.zone;
             m.camera_pos = opts.position;
             m.yaw_deg = opts.yaw_deg;
@@ -934,7 +962,7 @@ int main(int argc, char** argv) {
         render::VkContext vk(window, opts.validation, render::load_upscaler_setting(opts.upscaler_name, platform::upscalers_dir(),
                                                                                  platform::cache_dir() / "upscalers"));
         std::filesystem::path shader_dir = platform::shaders_dir();
-        if (opts.modern && !opts.tonemap_given) opts.scene.tonemap = render::Tonemap::AgX;
+        if (!opts.tonemap_given) opts.scene.tonemap = render::automatic_tonemap(lighting_mode(opts));
         vk.set_scene_options(opts.scene, shader_dir);
         if (opts.no_vsync) vk.set_vsync(render::VkContext::Vsync::Off);
 
@@ -983,12 +1011,16 @@ int main(int argc, char** argv) {
                         viewer_atlas.missing.end() &&
                     !app::load_atlas_zone(game, zone->name))
                     viewer_atlas.missing.insert(viewer_atlas.missing.begin(), zone->name);
-                options.horizon_sources = viewer_atlas.sources;
+                options.horizon_sources = opts.no_distant_copies || opts.no_horizon
+                                              ? viewer_atlas.sources
+                                              : app::without_copied_trees(game, viewer_atlas.sources);
             } else if (opts.neighbours && opts.modern) {
                 options.horizon_sources =
                     app::cached_horizon_sources(game, app::horizon_cache_dir("viewer", zone->name), zone->name);
             }
             options.land_trees = !opts.no_land_trees;
+            options.terrain_cache = app::terrain_cache_path(opts.atlas.empty() ? std::string("viewer") : opts.atlas, zone->name);
+            options.light_shadow_keys = true; // render::plan_point_shadows shadows this zone's lights
             zone_renderer = std::make_unique<render::ZoneRenderer>(vk, *zone, shader_dir, options);
             zone_renderer->set_hide_flames(opts.modern);
             zone_renderer->set_lod_scale(opts.tree_detail);
@@ -996,6 +1028,12 @@ int main(int argc, char** argv) {
             log::info("zone renderer: {} triangles, {} draws in {} chunks, {} textures ({} missing)", s.triangles,
                       s.draws, s.chunks, s.textures, s.missing_textures);
             camera.position = opts.position.value_or((zone->bounds_min + zone->bounds_max) * 0.5f);
+            if (opts.stand && opts.position) {
+                // As a player stands there: eye height over the floor (the comparison surveys).
+                const auto collision = game::CollisionMesh::build(*zone);
+                if (auto floor = collision.floor_below(camera.position, 0.0f)) camera.position.z = *floor + 6.0f;
+                else log::warn("--stand: no floor under ({:.0f} {:.0f})", camera.position.x, camera.position.y);
+            }
         }
         // --neighbours: the zones past the zone lines, loaded before the first frame (the screenshot waits for them).
         std::unique_ptr<GameDir> neighbour_game;
@@ -1019,6 +1057,18 @@ int main(int argc, char** argv) {
             in.atlas_missing = viewer_atlas.missing;
             neighbours->enter(in);
         }
+        // --atlas: the atlas's zones as distant copies (app/distant_copies.h), loaded before the first frame.
+        std::unique_ptr<GameDir> copies_game;
+        std::unique_ptr<app::DistantCopies> distant_copies;
+        if (zone && opts.modern && !opts.atlas.empty() && !opts.no_distant_copies && !opts.no_horizon) {
+            copies_game = std::make_unique<GameDir>(open_game_dir(opts.game_dir, opts.classic_dir));
+            distant_copies = std::make_unique<app::DistantCopies>(vk, *copies_game, shader_dir);
+            distant_copies->enter(app::copy_placements(viewer_atlas, neighbours ? neighbours->copy_targets()
+                                                                                 : std::vector<app::NeighbourZones::CopyTarget>{}),
+                                  zone_renderer->horizon_build());
+            distant_copies->update(true, {});
+            distant_copies->finish_loading();
+        }
         if (opts.yaw_deg) camera.yaw = glm::radians(*opts.yaw_deg);
         if (opts.pitch_deg) camera.pitch = glm::radians(*opts.pitch_deg);
 
@@ -1034,7 +1084,10 @@ int main(int argc, char** argv) {
         scene_fog.set_zone(viewer_fog, opts.sky > 0);
         game::ViewDistance view = game::compute_view_distance(viewer_fog, opts.clip_plane);
         std::uint8_t camera_region = 0;
-        if (zone_renderer) zone_renderer->set_vertex_lighting(opts.lighting);
+        if (zone_renderer) {
+            zone_renderer->set_vertex_lighting(opts.lighting);
+            zone_renderer->set_classic_smooth(opts.classic_smooth);
+        }
 
         // Sky and time of day (viewer: --sky, --time; sky 0 is an indoor zone).
         std::unique_ptr<render::SkyRenderer> sky_renderer;
@@ -1210,6 +1263,9 @@ int main(int argc, char** argv) {
         auto timed_start = start;
         render::ZoneDrawn drawn; // the last frame's
         int generated_frames = 0; // frame generation's in-between frames presented in the timed frames
+        // --gpu-timing: each pass's GPU time summed over the timed frames read back, in the order first seen.
+        std::vector<std::pair<const char*, double>> gpu_totals;
+        std::uint64_t gpu_serial = vk.gpu_sections_serial(), gpu_frames = 0;
         for (int frame = 0; window.poll_events(); ++frame) {
             if (opts.frames && frame == timed_from) timed_start = std::chrono::steady_clock::now();
             if (opts.frames && frame >= opts.frames) {
@@ -1220,6 +1276,17 @@ int main(int argc, char** argv) {
                               ms / (frame - timed_from), timed_from, frame - 1, 1000.0 * (frame - timed_from) / ms,
                               drawn.triangles, drawn.calls, drawn.shadow_triangles, drawn.shadow_calls);
                 if (const std::string fsr3 = vk.fsr3_timing(); !fsr3.empty()) log::info("FSR 3.1 GPU time: {}", fsr3);
+                if (gpu_frames > 0) {
+                    double total = 0.0;
+                    for (const auto& [name, sum] : gpu_totals) {
+                        log::info("gpu pass: {:.3f} ms {}", sum / static_cast<double>(gpu_frames), name);
+                        total += sum;
+                    }
+                    log::info("gpu pass: {:.3f} ms in all, mean over {} frames", total / static_cast<double>(gpu_frames),
+                              gpu_frames);
+                } else if (opts.gpu_timing) {
+                    log::info("gpu pass: no frames timed (the GPU cannot time, or too few frames)");
+                }
                 if (vk.frame_gen_active())
                     log::info("frame generation: {} in-between frames presented in frames {}..{}", generated_frames,
                               timed_from, frame - 1);
@@ -1349,6 +1416,7 @@ int main(int argc, char** argv) {
                 fog_frame = scene_fog.frame(in);
                 view = fog_frame.view;
             }
+            vk.set_gpu_timing(opts.gpu_timing);
             auto f = vk.begin_frame_commands();
             if (!f) {
                 if (ui_layer) ui_layer->end_frame_without_render();
@@ -1440,32 +1508,50 @@ int main(int argc, char** argv) {
                     zone_renderer->set_lighting(lighting);
                     frame_lighting = lighting;
                     if (neighbours) {
-                        neighbours->update(camera.position, draw_view.far_plane, true);
+                        neighbours->update(camera.position, draw_view.far_plane, true, opts.live_neighbours);
                         // The first frame waits for the loads the camera's place starts (a screenshot shows them).
                         while (frame == 0 && neighbours->busy()) {
                             std::this_thread::sleep_for(std::chrono::milliseconds(20));
-                            neighbours->update(camera.position, draw_view.far_plane, true);
+                            neighbours->update(camera.position, draw_view.far_plane, true, opts.live_neighbours);
                         }
                         neighbours->set_scene_light(scene_light);
                         neighbours->set_lighting(lighting);
                         neighbours->set_debug_tint(opts.neighbour_tint);
-                        // As the client: no land round the zone where a neighbour is drawn.
-                        if (neighbours->drawn_key() != distant_hidden_key) {
-                            distant_hidden_key = neighbours->drawn_key();
+                    }
+                    if (distant_copies) {
+                        std::vector<std::string> live;
+                        if (neighbours) neighbours->drawn_names(live);
+                        distant_copies->update(outdoor && (!sky_renderer || sky_renderer->has_atmosphere()), live);
+                        distant_copies->set_scene_light(scene_light);
+                        distant_copies->set_lighting(lighting);
+                    }
+                    // As the client: no land round the zone where a neighbour or a copy is drawn.
+                    {
+                        const std::uint64_t live = neighbours ? neighbours->drawn_key() : 0;
+                        const std::uint64_t copied = distant_copies ? distant_copies->drawn_key() : 0;
+                        const std::uint64_t key = live * 1000003u + copied;
+                        if (key != distant_hidden_key) {
+                            distant_hidden_key = key;
                             std::vector<std::int64_t> cells;
-                            neighbours->footprint(cells);
+                            if (neighbours) neighbours->footprint(cells);
+                            if (distant_copies) distant_copies->footprint(cells);
+                            std::sort(cells.begin(), cells.end());
+                            cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
                             zone_renderer->set_distant_hidden(std::move(cells));
                         }
                     }
+                    vk.gpu_mark(*f, "frame start, uploads");
                     if (vk.point_shadow_slots() > 0)
                         render::draw_point_shadows(vk, *f, point_shadows, zone->lights, point_builds, *zone_renderer,
                                                    nullptr);
+                    vk.gpu_mark(*f, "light shadows");
                     if (shadows)
                         for (std::uint32_t c = 0; c < render::kShadowCascades; ++c) {
                             vk.begin_shadow_cascade(*f, c);
                             zone_renderer->draw_shadow(*f, c);
                             vk.end_shadow_cascade(*f);
                         }
+                    vk.gpu_mark(*f, "sun shadows");
                     // Each map only when what it shows has changed (render/cover_map.h).
                     const std::uint64_t contents =
                         render::cover_contents(zone_renderer->id(), vk.shadow_generation(), 0);
@@ -1481,6 +1567,7 @@ int main(int argc, char** argv) {
                         zone_renderer->draw_shadow(*f, layer);
                         vk.end_shadow_cascade(*f);
                     }
+                    vk.gpu_mark(*f, "cover and water maps");
                 }
             }
             // The sky this frame; its volumetric clouds are marched before the scene begins (as the client).
@@ -1503,6 +1590,7 @@ int main(int argc, char** argv) {
                     sky_renderer->prepare(*f, camera.projection(width, height, draw_view.far_plane), camera.view(),
                                           sky_frame);
             }
+            vk.gpu_mark(*f, "sky prepare (clouds)");
             // The plain camera first: begin_scene hands it to the scene's shaders for their own motion.
             if (zone_renderer) vk.set_temporal_view(camera.view(), camera.projection(width, height, draw_view.far_plane));
             vk.begin_scene(*f, glm::vec4(water_color ? *water_color : view.fog_color, 1.0f));
@@ -1541,15 +1629,26 @@ int main(int argc, char** argv) {
                                            (!sky_renderer || sky_renderer->has_atmosphere()));
                 if (opts.modern) {
                     // The water reads the opaque world (VkContext::begin_translucent).
+                    vk.gpu_mark(*f, "sky");
                     zone_renderer->draw_depth(*f, vp, camera.position, draw_view, t);
+                    vk.gpu_mark(*f, "zone depth prepass");
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
+                    vk.gpu_mark(*f, "zone");
                     if (neighbours) neighbours->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
+                    if (distant_copies)
+                        distant_copies->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
+                    vk.gpu_mark(*f, "neighbour zones, distant copies");
                     if (flora_renderer) flora_drawn = flora_renderer->draw(*f, vp, camera.position, t, frame_lighting, true);
+                    vk.gpu_mark(*f, "flora");
                     // Before the colour copy (water reflects the sky) and every translucent draw.
                     if (!background_first) draw_background();
+                    vk.gpu_mark(*f, "sky");
                     vk.begin_translucent(*f);
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);
                     if (neighbours) neighbours->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);
+                    if (distant_copies)
+                        distant_copies->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);
+                    vk.gpu_mark(*f, "depth copy, translucent");
                 } else {
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t);
                 }
@@ -1569,6 +1668,7 @@ int main(int argc, char** argv) {
                                            2.0f / (static_cast<float>(std::max(1, width)) * proj[0][0]),
                                            weather.particles(), 1.0f,
                                            opts.modern ? render::kModernPrecipitation : render::kClassicPrecipitation);
+                vk.gpu_mark(*f, "particles, fire, weather");
             }
             if (plate_ui && frame >= 3) {
                 plate_ui->new_frame();
@@ -1612,6 +1712,19 @@ int main(int argc, char** argv) {
             if (ui_layer) ui_layer->render(*f);
             vk.end_frame(*f);
             if (opts.frames && frame >= timed_from && vk.frame_generated()) ++generated_frames;
+            // The frames read back since (a frame or two behind), from the timed ones on.
+            if (vk.gpu_sections_serial() != gpu_serial) {
+                gpu_serial = vk.gpu_sections_serial();
+                if (opts.frames && frame >= timed_from + 2) {
+                    ++gpu_frames;
+                    for (const auto& s : vk.gpu_sections()) {
+                        auto it = std::find_if(gpu_totals.begin(), gpu_totals.end(),
+                                               [&](const auto& e) { return e.first == s.name; });
+                        if (it == gpu_totals.end()) gpu_totals.emplace_back(s.name, s.ms);
+                        else it->second += s.ms;
+                    }
+                }
+            }
             if (zone_renderer) drawn = zone_renderer->take_drawn();
         }
         return 0;

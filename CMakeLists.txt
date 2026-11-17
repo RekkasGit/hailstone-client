@@ -158,6 +158,7 @@ add_library(hailstone_engine STATIC
   src/render/clouds.cpp
   src/render/horizon.cpp
   src/render/tree_impostor.cpp
+  src/render/zone_proxy.cpp
   src/render/ambient_probe.cpp
   src/render/shadows.cpp
   src/render/light_grid.cpp
@@ -409,6 +410,7 @@ add_library(hailstone_engine STATIC
   src/render/gpu_shared_cache.cpp
   src/render/pipeline_cache.cpp
   src/render/gpu.cpp
+  src/render/gpu_timer.cpp
   src/render/zone_renderer.cpp
   src/render/sky_renderer.cpp
   src/render/cloud_renderer.cpp
@@ -640,6 +642,7 @@ add_library(hailstone_engine STATIC
   src/render/object_renderer.cpp
   src/app/world_objects.cpp
   src/app/neighbour_zones.cpp
+  src/app/distant_copies.cpp
   src/app/world_atlas.cpp
   src/app/world_objects_ladder.cpp
   src/render/vma_impl.cpp
@@ -1224,7 +1227,10 @@ if(HAILSTONE_BUILD_TESTS)
     tests/sky_colours_test.cpp
     tests/scene_light_test.cpp
     tests/horizon_test.cpp
+    tests/horizon_terrain_test.cpp
     tests/tree_impostor_test.cpp
+    tests/zone_proxy_test.cpp
+    tests/distant_copies_test.cpp
     tests/collision_test.cpp
     tests/nav_test.cpp
     tests/map_data_test.cpp

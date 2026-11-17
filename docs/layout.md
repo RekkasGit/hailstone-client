@@ -100,7 +100,11 @@ hailstone/
                              "Neighbour zones"; the viewer's under cache/horizon/viewer/), cache/atlas/<server>/
                              <zone>.visit the world atlas's visits (each zone's id, sky and zone points as that server
                              sent them) and cache/atlas/zones/<zone>.bin its zones' records, measured from the asset
-                             folder for every server (docs/graphics.md "World atlas")
+                             folder for every server (docs/graphics.md "World atlas"), cache/terrain/<server>/
+                             <zone>.bin the land's worn terrain round a zone (docs/graphics.md "Horizon hills"; the
+                             viewer's under cache/terrain/viewer/ or its --atlas server's), cache/proxies/<zone>.bin
+                             the distant copies of its zones, baked from the asset folder (docs/graphics.md "Distant
+                             copies")
     assets/v1/pfs/           the shared asset cache, when on ("Shared archive memory" below)
 ```
 

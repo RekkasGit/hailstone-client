@@ -405,6 +405,7 @@ int ClientApp::run() {
             if (slot.view) slot.view->prepare(dt);
         // A frame not drawn (the background frame rate, or a minimised window) runs as one the GPU had no image for.
         const bool screenshot_frame = !opts_.screenshot.empty() && opts_.frames && frame == opts_.frames - 1;
+        vk_.set_gpu_timing(perf_ui_.open()); // the performance window's GPU passes
         auto f = pace.draw || screenshot_frame ? vk_.begin_frame_commands() : std::nullopt;
         perf_ui_.mark(FramePhase::Wait);
         if (f) last_drawn = now;
@@ -461,7 +462,10 @@ int ClientApp::run() {
                     light.vision_lift = fog_frame->vision_lift;
                 }
                 game::SceneLight scene_light = game::compute_scene_light(light);
-                if (zone_renderer_) zone_renderer_->set_scene_light(scene_light);
+                if (zone_renderer_) {
+                    zone_renderer_->set_scene_light(scene_light);
+                    zone_renderer_->set_classic_smooth(lighting_mode_ == render::LightingMode::SmoothClassic);
+                }
                 // The zone objects that play their own animation, drawn where the zone's animation clock has them now.
                 if (zone_renderer_) {
                     const auto animation_time=zone_animation_ms(static_cast<std::uint64_t>(
@@ -615,13 +619,28 @@ int ClientApp::run() {
                             !load_atlas_zone(game_, zone_->name))
                             in.atlas_missing.insert(in.atlas_missing.begin(), zone_->name);
                         neighbours_->enter(in);
+                        // The atlas's zones as distant copies (app/distant_copies.h), over the land just built.
+                        if (distant_copies_) {
+                            distant_copies_->enter(copy_placements(atlas_land_, neighbours_->copy_targets()), in.horizon);
+                        }
                     }
-                    neighbours_->update(camera_.position, lit.far_plane, modern && neighbour_zones_ && in_game);
+                    // Measured whenever in the world (the land and the atlas take their shape from it); drawn live only
+                    // with display.live_neighbour_zones, their copies otherwise.
+                    neighbours_->update(camera_.position, lit.far_plane, modern && in_game, neighbour_zones_);
                     lap.mark("neighbour zones update");
                     neighbours_->set_scene_light(scene_light);
                     neighbours_->set_lighting(lighting);
                     neighbours_->set_lod_scale(static_cast<float>(tree_detail_) / 100.0f);
                     neighbours_->set_debug_tint(neighbour_tint_);
+                }
+                if (distant_copies_) {
+                    std::vector<std::string> live;
+                    if (neighbours_ && modern && neighbour_zones_ && in_game) neighbours_->drawn_names(live);
+                    distant_copies_->update(in_game && modern && outdoor && horizon_hills_ &&
+                                                (!sky_renderer_ || sky_renderer_->has_atmosphere()),
+                                            live);
+                    distant_copies_->set_scene_light(scene_light);
+                    distant_copies_->set_lighting(lighting);
                 }
                 frame_lighting_ = lighting;
                 if (actor_renderer_) {
@@ -688,9 +707,12 @@ int ClientApp::run() {
                         vk_.begin_shadow_cascade(*f, shadow_layers_[i], true);
                         shadow_rec.execute(*f, i);
                         vk_.end_shadow_cascade(*f);
+                        // Timed between the renderings (the cascades come first in shadow_layers_).
+                        if (shadows && i + 1 == render::kShadowCascades) vk_.gpu_mark(*f, "sun shadows");
                     }
                     shadow_rec.reset();
                     lap.mark("shadow layers recorded");
+                    vk_.gpu_mark(*f, "cover and water maps");
                 } else {
                     if (shadows)
                         for (std::uint32_t c = 0; c < render::kShadowCascades; ++c) {
@@ -701,6 +723,7 @@ int ClientApp::run() {
                             vk_.end_shadow_cascade(*f);
                         }
                     lap.mark("sun shadows");
+                    vk_.gpu_mark(*f, "sun shadows");
                     for (std::uint32_t layer : {render::kCoverLayer, render::kWaterLayer}) {
                         if (!(layer == render::kCoverLayer ? draw_cover : draw_water)) continue;
                         vk_.begin_shadow_cascade(*f, layer);
@@ -709,12 +732,14 @@ int ClientApp::run() {
                         vk_.end_shadow_cascade(*f);
                     }
                     lap.mark("cover and water maps");
+                    vk_.gpu_mark(*f, "cover and water maps");
                 }
                 cover_drawn_ = covering;
                 if (light_shadows)
                     render::draw_point_shadows(vk_, *f, point_shadows_, zone_->lights, point_builds, *zone_renderer_,
                                                actor_renderer_.get(), objects);
                 lap.mark("draw point shadows");
+                vk_.gpu_mark(*f, "light shadows");
             }
         }
         for (auto& slot : previews_)
@@ -724,6 +749,7 @@ int ClientApp::run() {
             else web_textures_->collect();
         }
         lap.mark("item preview record");
+        vk_.gpu_mark(*f, "item previews, browser");
         // The sky this frame. The sky is drawn while SetFog leaves CDisplay +0x2d38 set (cleared under water, in lava
         // and with fog ending before 101).
         render::SkyFrame sky_frame{sky_hour, t, horizon_haze};
@@ -786,17 +812,28 @@ int ClientApp::run() {
             // character renderer's caches, in one. Nothing they read changes before rec.flush.
             static const char kActorsLane = 0;
             const void* const actors_lane = &kActorsLane;
+            // The GPU passes' marks (VkContext::gpu_mark) in the scene: only while it is drawn inline. Recorded on the
+            // workers, the scene's rendering holds nothing but the secondary buffers' execution, so no timestamp can
+            // go between them; VkContext then times the scene as a whole (begin_translucent, begin_overlay).
+            const auto scene_mark = [&](const render::FrameInfo& fr, const char* name) {
+                if (!rec.active()) vk_.gpu_mark(fr, name);
+            };
             // The land round an outdoor zone (render/horizon.h), under an open sky or none (not the planes' and
             // Luclin's painted skies); not where a neighbour zone is drawn. Set before the first draw is queued: a
             // queued draw runs at rec.flush and reads the zone renderer's state then.
             if (zone_renderer_) {
                 zone_renderer_->set_distant(in_game && modern && outdoor && horizon_hills_ &&
                                             (!sky_renderer_ || sky_renderer_->has_atmosphere()));
-                const std::uint64_t drawn = neighbours_ && modern && neighbour_zones_ && in_game ? neighbours_->drawn_key() : 0;
+                const std::uint64_t live = neighbours_ && modern && neighbour_zones_ && in_game ? neighbours_->drawn_key() : 0;
+                const std::uint64_t copied = distant_copies_ ? distant_copies_->drawn_key() : 0;
+                const std::uint64_t drawn = live * 1000003u + copied;
                 if (drawn != distant_hidden_key_) {
                     distant_hidden_key_ = drawn;
                     std::vector<std::int64_t> cells;
-                    if (drawn) neighbours_->footprint(cells);
+                    if (live) neighbours_->footprint(cells);
+                    if (copied) distant_copies_->footprint(cells);
+                    std::sort(cells.begin(), cells.end());
+                    cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
                     zone_renderer_->set_distant_hidden(std::move(cells));
                 }
             }
@@ -809,6 +846,7 @@ int ClientApp::run() {
                 if (zone_renderer_ && (under_water || (modern && !sky_drawn)))
                     rec.add(*f, zone_renderer_.get(), [&](const render::FrameInfo& fr) { zone_renderer_->draw_backdrop(fr, vp); });
                 lap.mark(rec.active() ? "sky queued" : "sky");
+                scene_mark(*f, "sky");
             };
             // Classic draws all zone parts together; WLD details can blend over uncovered samples.
             const bool background_first = !modern ||
@@ -820,15 +858,23 @@ int ClientApp::run() {
             if (zone_renderer_)
                 rec.add(*f, zone_renderer_.get(), [&](const render::FrameInfo& fr) {
                     zone_renderer_->draw_depth(fr, vp, camera_.position, lit, t);
+                    scene_mark(fr, "zone depth prepass");
                     zone_renderer_->draw(fr, vp, camera_.position, lit, t, first);
                 });
             lap.mark(rec.active() ? "zone queued" : "zone draw");
+            scene_mark(*f, "zone");
             const bool neighbours = neighbours_ && modern && neighbour_zones_ && in_game;
             if (neighbours)
                 rec.add(*f, neighbours_.get(), [&](const render::FrameInfo& fr) {
                     neighbours_->draw(fr, vp, camera_.position, lit, t, first);
                 });
+            // The distant copies: ZoneRenderers of their own, nothing shared with the zone's or the neighbours'.
+            if (distant_copies_)
+                rec.add(*f, distant_copies_.get(), [&](const render::FrameInfo& fr) {
+                    distant_copies_->draw(fr, vp, camera_.position, lit, t, first);
+                });
             lap.mark(rec.active() ? "neighbour zones queued" : "neighbour zones draw");
+            scene_mark(*f, "neighbour zones, distant copies");
             // Objects still draw their blended parts in the same call as their opaque parts.
             // Keep their background first, and the existing object/actor/silhouette order intact.
             // The water colour copy must also already contain the sky (flora follows that copy).
@@ -840,6 +886,7 @@ int ClientApp::run() {
                 });
             }
             lap.mark(rec.active() ? "objects queued" : "objects draw");
+            scene_mark(*f, "objects");
             if (flora_renderer_ && grass_) {
                 flora_renderer_->set_reach(flora_reach_);
                 flora_renderer_->set_density(static_cast<float>(grass_density_) / 100.0f);
@@ -885,6 +932,7 @@ int ClientApp::run() {
                     modelled = &actor_renderer_->draw_prepared(fr, vp, camera_.position, lit, render::ActorPhase::Opaque);
                 });
             lap.mark(rec.active() ? "actors queued" : "actors draw");
+            scene_mark(*f, "actors");
             if (in_game) {
                 const auto hidden = hidden_spawn();
                 rec.add(*f, actors_lane, [&, hidden](const render::FrameInfo& fr) {
@@ -892,6 +940,7 @@ int ClientApp::run() {
                 });
             }
             lap.mark(rec.active() ? "spawns queued" : "spawns draw");
+            scene_mark(*f, "spawns");
             // The depth copy is taken before the grass: the target ring lies on the ground under it, not on the
             // blades (a ring traced over them twists into a coil). The water, drawn after the grass, still meets it
             // in the depth buffer.
@@ -905,6 +954,7 @@ int ClientApp::run() {
                     flora_renderer_->draw(fr, vp, camera_.position, t, frame_lighting_, modern);
                 });
             lap.mark(rec.active() ? "flora queued" : "flora draw");
+            scene_mark(*f, "depth copy, flora");
             if (actor_renderer_)
                 rec.add(*f, actors_lane, [&](const render::FrameInfo& fr) {
                     actor_renderer_->draw_prepared(fr, vp, camera_.position, lit, render::ActorPhase::Translucent);
@@ -917,6 +967,10 @@ int ClientApp::run() {
                 if (neighbours)
                     rec.add(*f, neighbours_.get(), [&](const render::FrameInfo& fr) {
                         neighbours_->draw(fr, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
+                    });
+                if (distant_copies_)
+                    rec.add(*f, distant_copies_.get(), [&](const render::FrameInfo& fr) {
+                        distant_copies_->draw(fr, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
                     });
             }
             // The target ring lies on the depth copy (taken above, or by it in the classic lighting), under the
@@ -976,6 +1030,7 @@ int ClientApp::run() {
                                            particle_lighting);
                 });
             lap.mark(rec.active() ? "translucent, weather, particles queued" : "translucent, weather, particles");
+            scene_mark(*f, "translucent, weather, particles");
             rec.flush(*f); // before the name plates read the characters' poses, and before the scene ends
             report_world_geometry();
             lap.mark("scene record");

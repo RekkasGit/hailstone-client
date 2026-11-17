@@ -24,6 +24,7 @@
 #include "assets/wld_detail.h"
 #include "assets/zone.h"
 #include "assets/zone_fires.h"
+#include "core/atomic_file.h"
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/log.h"
@@ -40,6 +41,25 @@
 #include "platform/process.h"
 
 namespace hailstone::render {
+
+namespace {
+// The land's ground and rock come from the zone's terrain within this band of its box's edge (HorizonUse::edge_level):
+// at least kLandEdgeBand units, or kLandEdgeShare of the box across.
+constexpr float kLandEdgeBand = 400.0f;
+constexpr float kLandEdgeShare = 0.12f;
+// The grid the land's materials are measured on, and how far over the lowest surface of its square a slope may stand
+// and still be rock (a roof or an overhang stands over a floor).
+constexpr float kLandUseCell = 16.0f;
+constexpr float kLandOverhang = 40.0f;
+// A texture named as building material is not the land's rock or sand, whatever its triangles' shape (a second guard
+// after the measures above: a city's roofs and a maze's walls stand by its edge).
+bool built_texture(std::string name) {
+    for (char& c : name) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (const char* word : {"roof", "brick", "wall", "tile", "floor", "plank", "wood", "shingle"})
+        if (name.find(word) != std::string::npos) return true;
+    return false;
+}
+}
 
 namespace {
 // What a step of the zone's build leaves in memory, so a build that holds much more than its geometry can be read
@@ -231,6 +251,9 @@ constexpr std::uint32_t kTintLand = 65536;
 // The current zone's land (Draw::distant, no land_fade): its ground texture moved toward the colour in color2 (sRGB),
 // by color2's alpha, where a zone of the world atlas gives the land its ground (render::HorizonMesh::tint).
 constexpr std::uint32_t kLandTint = 1048576;
+// The current zone's land splatted with rock (slot 1) and sand (slot 2) by uv2 (render::HorizonMesh::splat).
+constexpr std::uint32_t kLandSplat = 2097152;
+constexpr float kLandRockScale = 0.5f;
 // A land vertex's tint (linear rgb, a its amount) as color2: the colour in sRGB, the amount in alpha.
 std::uint32_t pack_tint(const glm::vec4& tint) {
     std::uint32_t out = static_cast<std::uint32_t>(std::lround(std::clamp(tint.a, 0.0f, 1.0f) * 255.0f)) << 24;
@@ -312,11 +335,12 @@ struct MaterialKey {
     std::uint32_t instanced = 0; // an instanced model's number + 1 (ZoneRenderer::Draw::instanced)
     bool distant = false;        // the land round the zone (render/horizon.h)
     std::uint8_t land_fade = 0;  // ZoneRenderer::Draw::land_fade
+    bool land_splat = false;     // ZoneRenderer::Draw::land_splat
     bool operator<(const MaterialKey& o) const {
         return std::tie(blend, eqg, two_sided, front_ccw, frames, delay, multipass, effect, liquid, flame, lod,
-                        instanced, distant, land_fade) < std::tie(o.blend, o.eqg, o.two_sided, o.front_ccw, o.frames,
-                                                                  o.delay, o.multipass, o.effect, o.liquid, o.flame,
-                                                                  o.lod, o.instanced, o.distant, o.land_fade);
+                        instanced, distant, land_fade, land_splat) <
+               std::tie(o.blend, o.eqg, o.two_sided, o.front_ccw, o.frames, o.delay, o.multipass, o.effect, o.liquid,
+                        o.flame, o.lod, o.instanced, o.distant, o.land_fade, o.land_splat);
     }
 };
 
@@ -792,13 +816,27 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
     const bool measure_uses = measure_horizon || options.land != nullptr;
     std::vector<HorizonTriangle> horizon_triangles;
     // Per material: its level ground's and its slopes' area, its texture's scale (UV area over area), which way up
-    // its level triangles face, and how many liquid triangles; the level ground's vertex colours.
+    // its level triangles face, and how many liquid triangles; the level ground's vertex colours. edge_level and
+    // edge_slope count only what lies by the edge of the zone's box (kLandEdgeBand), where the land meets it: the
+    // land takes its ground and rock from there when there are any, since over a whole city or maze the most level
+    // ground and slopes are its floors, roofs and walls (Qeynos's roofs drew the land's peaks pink, Freeport's
+    // harbour floor its ground teal).
     struct HorizonUse {
         float level = 0.0f, slope = 0.0f, uv_area = 0.0f, area = 0.0f, up = 0.0f;
+        float edge_level = 0.0f, edge_slope = 0.0f;
         std::size_t liquid = 0;
         std::vector<std::uint32_t> colors;
     };
     std::map<MaterialKey, HorizonUse> horizon_uses;
+    // Each level or sloped opaque triangle measured, counted into its HorizonUse after the loop, once the water and the
+    // lowest surface under each spot are known (count_land_uses).
+    struct LandTri {
+        HorizonUse* use;
+        float area;
+        glm::vec3 mid;
+        bool level, by_edge;
+    };
+    std::vector<LandTri> land_tris;
     std::size_t plants = 0;
     // The replacement models (assets/model_overrides.h), drawn instanced: each mesh once, in its own space, with a
     // transform for each of its placements (GpuInstance). Kept apart from `vertices` and `by_material` until the
@@ -926,6 +964,11 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
                     HorizonUse& use = horizon_uses[tri_key];
                     const glm::vec3 n = glm::cross(vb.position - va.position, vc.position - va.position);
                     const float twice = glm::length(n);
+                    const glm::vec2 mid = (glm::vec2(va.position) + glm::vec2(vb.position) + glm::vec2(vc.position)) / 3.0f;
+                    const glm::vec2 band = glm::max(glm::vec2(kLandEdgeBand),
+                                                    kLandEdgeShare * (glm::vec2(zone.bounds_max) - glm::vec2(zone.bounds_min)));
+                    const bool by_edge = mid.x < zone.bounds_min.x + band.x || mid.x > zone.bounds_max.x - band.x ||
+                                         mid.y < zone.bounds_min.y + band.y || mid.y > zone.bounds_max.y - band.y;
                     if (twice > 1e-4f && std::isfinite(twice)) {
                         const float up = std::abs(n.z) / twice;
                         const glm::vec2 du = vb.uv - va.uv, dv = vc.uv - va.uv;
@@ -937,11 +980,13 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
                             if (use.colors.size() < 4096)
                                 use.colors.insert(use.colors.end(), {va.color, vb.color, vc.color});
                         } else if (up >= kHorizonLevel) {
-                            use.level += 0.5f * twice;
                             use.up += n.z > 0.0f ? 0.5f * twice : -0.5f * twice;
                             if (use.colors.size() < 4096) use.colors.insert(use.colors.end(), {va.color, vb.color, vc.color});
+                            land_tris.push_back({&use, 0.5f * twice, (va.position + vb.position + vc.position) / 3.0f,
+                                                 true, by_edge});
                         } else if (up >= 0.3f) {
-                            use.slope += 0.5f * twice;
+                            land_tris.push_back({&use, 0.5f * twice, (va.position + vb.position + vc.position) / 3.0f,
+                                                 false, by_edge});
                         }
                     }
                 }
@@ -1140,6 +1185,93 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
     if (detail_triangles) log::info("zone renderer: {} detail texture triangles", detail_triangles);
     mark("mesh loop done", prep.started);
 
+    // The land's uses counted (HorizonUse::level, slope): level ground under water (a harbour's floor, the sea bed) is
+    // not the land's ground, and a slope with another surface under it (a roof, an overhang) is not its rock. Each
+    // spot's water and lowest surface on a grid of kLandUseCell squares.
+    if (!land_tris.empty()) {
+        glm::vec2 lo(std::numeric_limits<float>::max()), hi(-std::numeric_limits<float>::max());
+        for (const auto& t : horizon_triangles)
+            for (const glm::vec3& p : {t.a, t.b, t.c}) {
+                lo = glm::min(lo, glm::vec2(p));
+                hi = glm::max(hi, glm::vec2(p));
+            }
+        for (const auto& t : land_tris) {
+            lo = glm::min(lo, glm::vec2(t.mid));
+            hi = glm::max(hi, glm::vec2(t.mid));
+        }
+        const auto cells = [&](float a, float b) {
+            return static_cast<int>(std::clamp(std::ceil((b - a) / kLandUseCell) + 1.0f, 1.0f, 4096.0f));
+        };
+        const int gx = cells(lo.x, hi.x), gy = cells(lo.y, hi.y);
+        const float nan = std::numeric_limits<float>::quiet_NaN();
+        std::vector<float> water(static_cast<std::size_t>(gx) * static_cast<std::size_t>(gy), nan);
+        std::vector<float> lowest(water.size(), nan);
+        auto cell_of = [&](glm::vec2 p) {
+            const int x = std::clamp(static_cast<int>((p.x - lo.x) / kLandUseCell), 0, gx - 1);
+            const int y = std::clamp(static_cast<int>((p.y - lo.y) / kLandUseCell), 0, gy - 1);
+            return static_cast<std::size_t>(y) * static_cast<std::size_t>(gx) + static_cast<std::size_t>(x);
+        };
+        // Each triangle's height at the middle of each square it covers (seen from above): the water's highest, the
+        // solid surfaces' lowest. A wall (no area from above) marks nothing.
+        for (const auto& t : horizon_triangles) {
+            const glm::vec2 pa(t.a), pb(t.b), pc(t.c);
+            const float det = (pb.x - pa.x) * (pc.y - pa.y) - (pb.y - pa.y) * (pc.x - pa.x);
+            if (!(std::abs(det) > 1e-3f)) continue;
+            const glm::vec2 a = glm::min(glm::min(pa, pb), pc), b = glm::max(glm::max(pa, pb), pc);
+            const int x0 = static_cast<int>(std::floor((a.x - lo.x) / kLandUseCell));
+            const int x1 = static_cast<int>(std::floor((b.x - lo.x) / kLandUseCell));
+            const int y0 = static_cast<int>(std::floor((a.y - lo.y) / kLandUseCell));
+            const int y1 = static_cast<int>(std::floor((b.y - lo.y) / kLandUseCell));
+            for (int y = std::max(y0, 0); y <= std::min(y1, gy - 1); ++y)
+                for (int x = std::max(x0, 0); x <= std::min(x1, gx - 1); ++x) {
+                    const glm::vec2 p = lo + (glm::vec2(static_cast<float>(x), static_cast<float>(y)) + 0.5f) * kLandUseCell;
+                    const float w1 = ((p.x - pa.x) * (pc.y - pa.y) - (p.y - pa.y) * (pc.x - pa.x)) / det;
+                    const float w2 = ((pb.x - pa.x) * (p.y - pa.y) - (pb.y - pa.y) * (p.x - pa.x)) / det;
+                    if (w1 < 0.0f || w2 < 0.0f || w1 + w2 > 1.0f) continue;
+                    const float z = t.a.z + w1 * (t.b.z - t.a.z) + w2 * (t.c.z - t.a.z);
+                    const std::size_t c = static_cast<std::size_t>(y) * static_cast<std::size_t>(gx) + static_cast<std::size_t>(x);
+                    if (t.liquid) water[c] = std::isnan(water[c]) ? z : std::max(water[c], z);
+                    else lowest[c] = std::isnan(lowest[c]) ? z : std::min(lowest[c], z);
+                }
+        }
+        // A classic zone's water is a region more than a surface (Freeport's sea floor has none drawn over most of it):
+        // the point just over a level triangle in a water region is under water too.
+        std::vector<std::uint8_t> water_region(zone.regions.region_count() + 1, 0);
+        for (std::uint32_t r = 1; r < water_region.size(); ++r) {
+            using T = assets::RegionType;
+            const auto type = static_cast<T>(zone.regions.info(r).flags & 0xffu);
+            water_region[r] = type == T::Water || type == T::Slime || type == T::FreezingWater || type == T::Water2 ||
+                              type == T::Water3 || type == T::Lava;
+        }
+        auto in_water = [&](const glm::vec3& p) {
+            if (zone.regions.empty()) return false;
+            const std::uint32_t r = zone.regions.region_at(p + glm::vec3(0.0f, 0.0f, 4.0f));
+            return r < water_region.size() && water_region[r] != 0;
+        };
+        std::size_t under_water = 0, over_something = 0;
+        for (const auto& t : land_tris) {
+            const std::size_t c = cell_of(glm::vec2(t.mid));
+            if (t.level) {
+                if ((!std::isnan(water[c]) && t.mid.z < water[c] - 1.0f) || in_water(t.mid)) {
+                    ++under_water;
+                    continue;
+                }
+                t.use->level += t.area;
+                if (t.by_edge) t.use->edge_level += t.area;
+            } else {
+                if (!std::isnan(lowest[c]) && t.mid.z > lowest[c] + kLandOverhang) {
+                    ++over_something;
+                    continue;
+                }
+                t.use->slope += t.area;
+                if (t.by_edge) t.use->edge_slope += t.area;
+            }
+        }
+        log::info("zone renderer: the land's materials measured over {} triangles ({} level ones under water, {} slopes "
+                  "over something, left out)",
+                  land_tris.size(), under_water, over_something);
+    }
+
     // The land's materials (render/horizon.h): the zone's plain materials (no shader effect of their own, no
     // scrolling) that cover the most level ground and slopes, and its most used water.
     struct LandPick {
@@ -1147,20 +1279,31 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
     };
     auto pick_land = [&] {
         LandPick p;
+        // By the zone's edge when anything plain lies there (HorizonUse::edge_level), else over the whole zone.
+        bool edge_ground = false, edge_rock = false;
+        for (const auto& [key, use] : horizon_uses)
+            if (key.liquid == 0 && key.eqg == assets::EqgShader::None && !key.frames.empty() &&
+                looks.at(key).effect.slide == glm::vec4(0.0f) && use.uv_area > 0.0f && use.area > 0.0f) {
+                edge_ground |= use.edge_level > 0.0f;
+                edge_rock |= use.edge_slope > 0.0f;
+            }
+        auto level_of = [&](const HorizonUse& u) { return edge_ground ? u.edge_level : u.level; };
+        auto slope_of = [&](const HorizonUse& u) { return edge_rock ? u.edge_slope : u.slope; };
         for (const auto& [key, use] : horizon_uses) {
             if (!(use.uv_area > 0.0f) || !(use.area > 0.0f)) continue;
             const bool plain = key.eqg == assets::EqgShader::None && !key.frames.empty() &&
                                looks.at(key).effect.slide == glm::vec4(0.0f);
             if (plain && key.liquid == 0) {
-                if (!p.ground || use.level > horizon_uses.at(*p.ground).level) p.ground = &key;
-                if (!p.rock || use.slope > horizon_uses.at(*p.rock).slope) p.rock = &key;
+                if (!p.ground || level_of(use) > level_of(horizon_uses.at(*p.ground))) p.ground = &key;
+                if ((!p.rock || slope_of(use) > slope_of(horizon_uses.at(*p.rock))) && !built_texture(key.frames.front()))
+                    p.rock = &key;
             }
             if (key.liquid == static_cast<std::uint8_t>(Liquid::Water) &&
                 (!p.water || use.liquid > horizon_uses.at(*p.water).liquid))
                 p.water = &key;
         }
         if (p.ground && !(horizon_uses.at(*p.ground).level > 0.0f)) p.ground = nullptr;
-        if (p.ground && !(horizon_uses.at(*p.rock).slope > 0.0f)) p.rock = p.ground;
+        if (p.ground && (!p.rock || !(horizon_uses.at(*p.rock).slope > 0.0f))) p.rock = p.ground;
         if (!p.ground) p.rock = nullptr;
         return p;
     };
@@ -1193,11 +1336,13 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
     // flat with `look`'s texture scale, wound its way, its colour times the vertices' shade; with `fade`
     // (Draw::land_fade) the vertices' weight in color2's alpha. Returns the triangles added.
     auto add_land = [&](MaterialKey key, const assets::Material& material, const HorizonLook& look,
-                        const HorizonMesh& mesh, const std::vector<std::uint32_t>& tris, std::uint8_t fade) {
+                        const HorizonMesh& mesh, const std::vector<std::uint32_t>& tris, std::uint8_t fade,
+                        bool splat = false) {
         if (tris.empty()) return std::size_t{0};
         key.distant = true;
         key.multipass = false;
         key.land_fade = fade;
+        key.land_splat = splat;
         looks.try_emplace(key, material);
         auto& out = by_material[key];
         std::unordered_map<std::uint32_t, std::uint32_t> made;
@@ -1221,6 +1366,7 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
                                    << 24;
                     else if (fade == 0 && v < mesh.tint.size() && mesh.tint[v].a > 0.0f)
                         g.color2 = pack_tint(mesh.tint[v]);
+                    if (splat && v < mesh.splat.size()) g.uv2 = mesh.splat[v];
                     vertices.push_back(g);
                 }
                 out.push_back(it->second);
@@ -1229,6 +1375,8 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
         return tris.size() / 3;
     };
 
+    std::string splat_rock, splat_sand; // the generated terrain's splat textures (Draw::land_splat)
+    float splat_rock_density = 0.0f;
     // Pictures made here rather than read from the zone's files (the land's trees'), by texture name.
     std::unordered_map<std::string, assets::Image> generated_textures;
     // The land's trees (render::horizon_trees): the zone's own commonest trees (placed plants at least
@@ -1385,6 +1533,29 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
         HorizonField field = horizon_field(horizon_triangles, prep.horizon);
         HorizonSources sources = options.horizon_sources;
         sort_sources(sources);
+        // Its hills worn (render::horizon_terrain): read back from the cache when worn from the same ground before.
+        if (field.valid()) {
+            const auto started = std::chrono::steady_clock::now();
+            const std::uint64_t key = horizon_terrain_key(field, sources);
+            std::optional<HorizonTerrain> terrain;
+            if (!options.terrain_cache.empty())
+                if (auto bytes = read_file(options.terrain_cache)) terrain = read_horizon_terrain(*bytes, key);
+            const bool cached = terrain.has_value();
+            if (!terrain) {
+                terrain = horizon_terrain(field, sources);
+                if (terrain->valid() && !options.terrain_cache.empty()) {
+                    const auto bytes = write_horizon_terrain(*terrain, key);
+                    write_file_atomic(options.terrain_cache,
+                                      std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+                }
+            }
+            log::info("zone renderer: the land's terrain, {}x{} nodes of {:.0f} units, worn {:.0f} to {:.0f} units, {} "
+                      "in {:.0f} ms",
+                      terrain->nx, terrain->ny, terrain->cell, terrain->worn_lo, terrain->worn_hi,
+                      cached ? "from the cache" : "worn",
+                      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count());
+            if (terrain->valid()) field.terrain = std::make_shared<const HorizonTerrain>(std::move(*terrain));
+        }
         const HorizonMesh land = horizon_mesh(field, sources);
         const LandPick pick = pick_land();
         std::size_t land_triangles = 0;
@@ -1393,7 +1564,27 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
             auto build = std::make_shared<HorizonBuild>();
             build->ground = look_of(*pick.ground, land_color);
             build->rock = look_of(*pick.rock, land_color);
-            land_triangles += add_land(*pick.ground, looks.at(*pick.ground), build->ground, land, land.ground, 0);
+            land_triangles += add_land(*pick.ground, looks.at(*pick.ground), build->ground, land, land.ground, 0,
+                                       !land.splat.empty());
+            if (!land.splat.empty()) {
+                splat_rock = pick.rock->frames.front();
+                splat_rock_density = build->rock.density;
+                // Sand: the zone's plain level texture that says so by its name, else the ground's own, made sandy.
+                float best = 0.0f;
+                for (const auto& [key, use] : horizon_uses) {
+                    if (key.liquid != 0 || key.frames.empty() || key.eqg != assets::EqgShader::None) continue;
+                    std::string name = key.frames.front();
+                    for (char& c : name) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                    if (name.find("sand") == std::string::npos && name.find("beach") == std::string::npos) continue;
+                    if (built_texture(name)) continue;
+                    if (use.level > best) {
+                        best = use.level;
+                        splat_sand = key.frames.front();
+                    }
+                }
+                if (splat_sand.empty()) splat_sand = pick.ground->frames.front();
+                log::info("zone renderer: the land splatted: rock '{}', sand '{}'", splat_rock, splat_sand);
+            }
             land_triangles += add_land(*pick.rock, looks.at(*pick.rock), build->rock, land, land.rock, 0);
             if (pick.water) {
                 const HorizonLook water = look_of(*pick.water, median_color(horizon_uses.at(*pick.water).colors));
@@ -1683,6 +1874,7 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
         d.lod = key.lod;
         d.instanced = key.instanced;
         d.land_trees = key.instanced != 0 && models[key.instanced - 1].land_trees;
+        d.land_splat = key.land_splat;
         MaterialState st = material_state(look);
         for (const auto& name : key.frames) d.frame_slots.push_back(slot_for(name, st.masked_texture, TextureUse::Color, !st.alpha_unused()));
         const auto& e = look.effect;
@@ -1733,6 +1925,13 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
         d.flame = key.flame;
         d.distant = key.distant;
         d.land_fade = key.land_fade;
+        if (d.land_splat) {
+            d.extra_slots[0] = slot_for(splat_rock, false);
+            d.extra_slots[1] = slot_for(splat_sand, false);
+            // zone.frag: the rock's texture scale (its repeats a unit), half the zone's own: at the zone's scale its
+            // pattern repeated every square or two down the land's long slopes, as stripes.
+            d.param_z = splat_rock_density * kLandRockScale;
+        }
         d.pass = static_cast<Pass>(st.pass);
         d.alpha_ref = st.alpha_ref;
         d.opacity = st.opacity;
@@ -1916,14 +2115,17 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
     // their light numbers. Each buffer holds at least one element, for a zone without lights.
     {
         LightGrid grid = build_light_grid(zone.lights);
+        const std::vector<float> keys =
+            options.light_shadow_keys ? point_shadow_keys(zone.lights) : std::vector<float>(zone.lights.size(), 0.0f);
         struct Header { glm::vec4 grid; glm::uvec4 dims; };
         std::vector<std::byte>& lights = prep.lights;
         lights.resize(sizeof(Header));
         Header h{glm::vec4(grid.origin, 1.0f / grid.cell, 0.0f),
                  glm::uvec4(grid.width, grid.height, static_cast<std::uint32_t>(zone.lights.size()), 0u)};
         std::memcpy(lights.data(), &h, sizeof(h));
-        for (const auto& l : zone.lights) {
-            GpuPointLight g{glm::vec4(l.position, l.radius), glm::vec4(l.color, 0.0f)};
+        for (std::size_t i = 0; i < zone.lights.size(); ++i) {
+            const auto& l = zone.lights[i];
+            GpuPointLight g{glm::vec4(l.position, l.radius), glm::vec4(l.color, keys[i])};
             const auto* b = reinterpret_cast<const std::byte*>(&g);
             lights.insert(lights.end(), b, b + sizeof(g));
         }
@@ -2072,7 +2274,7 @@ void ZoneRenderer::create_descriptors() {
 }
 
 void ZoneRenderer::set_scene_light(const game::SceneLight& light) {
-    scene_.lighting.ambient = glm::vec4(light.ambient, 0.0f);
+    scene_.lighting.ambient = glm::vec4(light.ambient, scene_.lighting.ambient.w); // w: set_classic_smooth
     scene_.lighting.special_ambient = glm::vec4(light.special_ambient, 0.0f);
     scene_.lighting.directional = glm::vec4(light.directional, 0.0f);
     scene_.lighting.direction = glm::vec4(light.direction, 0.0f);
@@ -2441,6 +2643,7 @@ void ZoneRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, cons
                                   (d.liquid == Liquid::Water ? kWaterSurface | copies : 0u) |
                                   (d.liquid == Liquid::Lava ? kLavaSurface : 0u) |
                                   (d.distant && d.land_fade == 0 && d.liquid == Liquid::None ? kLandTint : 0u) |
+                                  (d.land_splat ? kLandSplat : 0u) |
                                   zone_surface::view_surface_flags(d.surface, lighting_ == VertexLighting::None);
             bind_draw(cmd, d, flags, time_ms);
         }, kSceneLod);
