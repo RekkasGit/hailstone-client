@@ -1,6 +1,11 @@
 #include <doctest/doctest.h>
 
 #include "app/addon_requirements.h"
+
+#include <filesystem>
+#include <fstream>
+
+#include "app/addon_install.h"
 #include "addon_test_util.h"
 #include "scratch_dir.h"
 #include "ui/dev_screens.h"
@@ -516,4 +521,48 @@ TEST_CASE("addon requirements: candidate versions cannot substitute for their re
     newer.intact = true;
     CHECK(addon_requirement_problems(r, {old, newer}).empty());
     CHECK(addon_requirement_problems(r, {newer, old}).empty());
+}
+
+TEST_CASE("addon requirements: naming a repository never lifts caps, so a forged installed.txt gains nothing") {
+    // installed.txt is the player's to edit, and nothing on disk lets the client check its records against a
+    // signature at load time (the signed manifest names package archives, and is not kept). A record claiming a
+    // named repository for the player's own script must not get more than the server's player_caps.
+    namespace fs = std::filesystem;
+    test::ScratchDir scratch("forged_registry");
+    const fs::path data = scratch.path();
+    const std::string own = "-- the player's own script\nmq.cmd('/say hi')\n";
+    fs::create_directories(data / "scripts" / "mine");
+    std::ofstream(data / "scripts" / "mine" / "init.lua", std::ios::binary) << own;
+    fs::create_directories(addons_dir(data));
+    std::vector<InstalledAddon> forged;
+    for (const char* source : {"owner/needed", "owner/allowed", "owner/suggested"}) {
+        InstalledAddon a;
+        a.name = std::string("mine_") + (source + 6);
+        a.kind = AddonKind::Script;
+        a.source = source;
+        a.version = "9.9.9";
+        a.caps = plugin::kCapAll;
+        a.files = {{"init.lua", own.size(), sha256(own)}};
+        forged.push_back(std::move(a));
+    }
+    REQUIRE(write_installed_addons(data, forged));
+    const auto ceilings = addon_ceilings(data, true);
+    REQUIRE_FALSE(ceilings.empty());
+
+    const std::string lists = "[addons]\nenforce = on\ndefault = deny\nrequired = owner/needed:1.0.0\n"
+                              "allow = owner/allowed\nsuggest = owner/suggested\n";
+    plugin::Policy p;
+    p.set_ceilings(ceilings);
+    p.set(plugin::parse_server_cfg("[scripts]\nplayer = off\n" + lists));
+    CHECK(p.caps(plugin::FileKind::Script, sha256(own), "mine") == 0);
+    p.set(plugin::parse_server_cfg("[scripts]\nplayer = on\nplayer_caps = read\n" + lists));
+    CHECK(p.caps(plugin::FileKind::Script, sha256(own), "mine") == plugin::kCapRead);
+
+    // And the requirement itself is not met: the forged record asks for more than the server allows.
+    auto rules = plugin::parse_server_cfg("[scripts]\nplayer = on\nplayer_caps = read\n" + lists);
+    RequiredAddonCandidate c{"mine_needed", "owner/needed", AddonKind::Script, plugin::kCapAll, true};
+    c.version = "9.9.9";
+    const auto problems = addon_requirement_problems(rules, {c});
+    REQUIRE(problems.size() == 1);
+    CHECK(problems[0].message.find("capabilities this server does not allow") != std::string::npos);
 }

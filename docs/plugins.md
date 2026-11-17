@@ -1404,6 +1404,10 @@ default = allow
   `[plugins] player`, nor grant more than `player_caps` and the add-on's manifest. A required script or plugin that
   needs capabilities the server does not give is a requirement not met. A `suggest` stays optional: it allows the
   add-on as `allow` does, but never requires or starts it and grants no capability.
+  This holds for `required` too, on purpose: `addons/installed.txt` is the player's file, and nothing kept on disk
+  lets the client check at load time that a record's files are the ones a signed manifest named (the manifest is not
+  kept, and its signature covers package archives, not the files unpacked from them). Letting a named repository lift
+  capabilities would let an edited record give the player's own code everything `player = off` refuses.
 - **The server's own files** (its `scripts/` and `plugins/`, listed by hash at the zone-in) are not add-ons: no
   list names them and the policy never refuses them. The server decides by sending them or not.
 
