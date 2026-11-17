@@ -1,6 +1,7 @@
 #include "app/addon_requirements.h"
 
 #include <algorithm>
+#include <utility>
 
 #include "ui/dev_screens.h"
 
@@ -76,6 +77,58 @@ void present_addon_requirement(ui::LoginView& view, const std::vector<AddonRequi
     view.addons.status = {std::move(message), true};
     const auto offers = required_addon_suggestions(problems, index);
     if (!offers.empty()) view.addons.link = offers.front().source;
+}
+
+AddonAdmission::Result AddonAdmission::warn(std::string problem) {
+    Result out;
+    if (problem == warned_) return out;
+    warned_ = problem;
+    out.warning = std::move(problem);
+    return out;
+}
+
+void AddonAdmission::reset() {
+    serial_.reset();
+    admitted_ = wait_frame_ = false;
+    zone_problem_.clear();
+    warned_.clear();
+}
+
+AddonAdmission::Result AddonAdmission::update(const plugin::Rules* rules, std::uint32_t serial, bool in_world,
+                                              const std::function<std::string()>& zone_problem,
+                                              const std::function<std::optional<std::string>()>& ready) {
+    if (!rules || rules->provisional) {
+        // Out of the world (character select, a login): the next zone-in decides again, with its own rules.
+        reset();
+        return {};
+    }
+    if (serial_ != serial) {
+        serial_ = serial;
+        zone_problem_ = rules->addons.enabled ? zone_problem() : std::string();
+        if (!admitted_ && !zone_problem_.empty()) return {Step::Refuse, zone_problem_, {}};
+        // Automation applies new rules after the connection's frame: let required autostart and the consent prompt
+        // run before asking whether the add-ons are ready.
+        wait_frame_ = rules->addons.enabled;
+    }
+    if (admitted_) {
+        std::string problem = zone_problem_;
+        if (problem.empty()) {
+            if (std::exchange(wait_frame_, false)) return {};
+            if (rules->addons.enabled) problem = ready().value_or(std::string());
+        }
+        return warn(std::move(problem));
+    }
+    if (!in_world) return {};
+    if (!rules->addons.enabled) {
+        admitted_ = true;
+        return {};
+    }
+    if (std::exchange(wait_frame_, false)) return {Step::Start, {}, {}};
+    const auto state = ready();
+    if (!state) return {Step::Consent, {}, {}};
+    if (!state->empty()) return {Step::Refuse, *state, {}};
+    admitted_ = true;
+    return {};
 }
 
 } // namespace hailstone::app

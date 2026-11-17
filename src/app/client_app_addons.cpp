@@ -115,53 +115,49 @@ void ClientApp::show_addon_requirement(const std::vector<AddonRequirementProblem
     present_addon_requirement(login_view_, problems, st.index ? &*st.index : nullptr, std::move(message));
 }
 
-bool ClientApp::addon_login_allowed(const ServerProfile& profile) {
-    if (profile.id.empty()) return true;
-    const auto rules = net::cached_server_rules(login_view_.servers_dir / profile.id);
-    if (!rules.addons.enabled) return true;
-    const auto problems = addon_requirement_problems(rules, addon_requirement_candidates(rules));
-    std::string message = problems.empty() ? upscaler_addon_problem(rules) : problems.front().message;
-    if (message.empty()) return true;
-    show_addon_requirement(problems, std::move(message));
-    return false;
-}
-
 bool ClientApp::addon_world_allowed() {
-    if (!conn_ || !conn_->server_rules() || conn_->server_rules()->provisional ||
-        !conn_->server_rules()->addons.enabled) return true;
-    const auto& rules = *conn_->server_rules();
-    if (addon_rules_checked_serial_ != conn_->server_rules_serial()) {
-        addon_rules_checked_serial_ = conn_->server_rules_serial();
-        const auto problems = addon_requirement_problems(rules, addon_requirement_candidates(rules));
-        std::string message = problems.empty() ? upscaler_addon_problem(rules) : problems.front().message;
-        if (!message.empty()) {
-            back_to_login(message, true);
-            show_addon_requirement(problems, std::move(message));
-            return false;
-        }
-        // Automation applies new rules after update_connection. Let its consent prompt and required autostart run
-        // before showing the world, including the first visit when no policy was cached at login.
-        addon_rules_wait_frame_ = true;
+    const auto& current = conn_->server_rules();
+    const plugin::Rules* rules = current ? &*current : nullptr;
+    const bool in_world = conn_->state() == net::ConnectionState::InZone ||
+                          conn_->state() == net::ConnectionState::Camping;
+    const auto r = addon_admission_.update(
+        rules, conn_->server_rules_serial(), in_world,
+        [&] {
+            addon_problems_ = addon_requirement_problems(*rules, addon_requirement_candidates(*rules));
+            return addon_problems_.empty() ? upscaler_addon_problem(*rules) : addon_problems_.front().message;
+        },
+        [&]() -> std::optional<std::string> {
+            std::string problem;
+            if (!automation_ || automation_->required_addons_ready(&problem)) return std::string();
+            if (problem.empty()) return std::nullopt;
+            return problem;
+        });
+    if (!r.warning.empty()) {
+        // A failure once the player is in the world never disconnects: a link-dead character in a fight is worse
+        // than playing on without the add-on, and the server's rules are the client's to follow, not proof for it.
+        log::warn("Add-ons: {} (the server's add-on policy; playing on)", r.warning);
+        std::string text = r.warning;
+        if (text.back() != '.') text += '.';
+        game_view_.chat.add(ui::ChatChannel::Error, "[Add-ons] " + text + " You can keep playing on this server.");
     }
-    if (conn_->state() != net::ConnectionState::InZone && conn_->state() != net::ConnectionState::Camping)
-        return true;
-    if (std::exchange(addon_rules_wait_frame_, false)) {
+    using Step = AddonAdmission::Step;
+    switch (r.step) {
+    case Step::Play: return true;
+    case Step::Start:
+    case Step::Consent:
         screen_ = Screen::Loading;
         loading_view_.title = "Checking required add-ons";
-        loading_view_.detail = "Starting the add-ons required by this server...";
+        loading_view_.detail = r.step == Step::Start ? "Starting the add-ons required by this server..."
+                                                     : "Review the required plugin's permission request to continue.";
+        return false;
+    case Step::Refuse: {
+        // Before the world was shown: the zone-in's own rules refuse entry, and the install card says what is missing.
+        auto problems = std::exchange(addon_problems_, {});
+        std::string message = r.message;
+        back_to_login(message, true);
+        show_addon_requirement(problems, std::move(message));
         return false;
     }
-    std::string problem;
-    if (automation_ && !automation_->required_addons_ready(&problem)) {
-        if (!problem.empty()) {
-            back_to_login(problem, true);
-            show_addon_requirement({}, std::move(problem));
-        } else {
-            screen_ = Screen::Loading;
-            loading_view_.title = "Checking required add-ons";
-            loading_view_.detail = "Review the required plugin's permission request to continue.";
-        }
-        return false;
     }
     return true;
 }

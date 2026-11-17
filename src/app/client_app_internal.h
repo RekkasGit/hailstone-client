@@ -317,7 +317,7 @@ public:
         } token_login_worker;
         if (opts_.login_launch.token_requested) {
             start_token_login(named_server, eqhost);
-            if (login_) token_login_worker.thread = std::thread([pending = login_.get(), &token_login_worker] {
+            token_login_worker.thread = std::thread([pending = login_.get(), &token_login_worker] {
                 try {
                     while (!token_login_worker.stop.load(std::memory_order_relaxed)) {
                         pending->update();
@@ -634,8 +634,8 @@ private:
     void addons_login_action(ui::LoginAction action);
     std::vector<RequiredAddonCandidate> addon_requirement_candidates(const plugin::Rules& rules,
                                                                      bool verify_files = true) const;
-    // Cached policy before every login route; fresh policy before the world is shown. No code is installed here.
-    bool addon_login_allowed(const ServerProfile& profile);
+    // The opted-in add-on policy (docs/plugins.md "Opt-in add-on policies"), each frame of a connection
+    // (AddonAdmission): the cached rules only inform the login screen. No code is installed here.
     bool addon_world_allowed();
     void show_addon_requirement(const std::vector<AddonRequirementProblem>& problems, std::string message);
     // The upscaler loaded at startup must be allowed, and a required provider must be selected and loaded.
@@ -1126,8 +1126,8 @@ private:
     std::vector<ServerAddon> server_addons_;
     std::vector<ManualAddon> manual_addons_;
     plugin::Rules addons_rules_;
-    std::uint32_t addon_rules_checked_serial_ = ~0u;
-    bool addon_rules_wait_frame_ = false;
+    AddonAdmission addon_admission_;
+    std::vector<AddonRequirementProblem> addon_problems_; // the zone-in's, for the install card
     // Suggested add-ons (app/addon_suggest.h): the picked server's, as the login screen shows them, and those put
     // away for this run (by profile and addon_repo_key).
     std::vector<AddonSuggestion> suggestions_;

@@ -152,3 +152,119 @@ TEST_CASE("addon requirements: presenting a required review fetches nothing befo
     CHECK(manager.status().offer.has_value());
     CHECK(read_installed_addons(scratch.path()).empty());
 }
+
+namespace {
+
+// Drives AddonAdmission as ClientApp does, counting the calls the gate makes.
+struct Gate {
+    AddonAdmission admission;
+    std::string zone_problem;
+    std::optional<std::string> ready = std::string();
+    int zone_checks = 0, ready_checks = 0;
+    AddonAdmission::Result frame(const plugin::Rules* rules, std::uint32_t serial, bool in_world) {
+        return admission.update(rules, serial, in_world, [&] { ++zone_checks; return zone_problem; },
+                                [&] { ++ready_checks; return ready; });
+    }
+};
+
+using Step = AddonAdmission::Step;
+
+} // namespace
+
+TEST_CASE("addon admission: decided at the zone-in by its rules, never before or by the cached ones") {
+    Gate g;
+    auto rules = required_rules();
+    // Out of the world, and on the provisional (cached) rules of the world login and character select: no check.
+    CHECK(g.frame(nullptr, 1, false).step == Step::Play);
+    rules.provisional = true;
+    g.zone_problem = "Required add-on maker/helper is not installed.";
+    CHECK(g.frame(&rules, 2, false).step == Step::Play);
+    CHECK(g.zone_checks == 0);
+    // The zone-in's rules: a missing requirement refuses entry before the world is shown.
+    rules.provisional = false;
+    const auto refused = g.frame(&rules, 3, false);
+    CHECK(refused.step == Step::Refuse);
+    CHECK(refused.message == g.zone_problem);
+    CHECK(refused.warning.empty());
+    CHECK_FALSE(g.admission.admitted());
+    // The server fixed its rules: the next zone-in's are decided afresh.
+    g.admission.reset();
+    g.zone_problem.clear();
+    CHECK(g.frame(&rules, 4, false).step == Step::Play); // still loading
+    CHECK(g.frame(&rules, 4, true).step == Step::Start); // autostart and the consent prompt run first
+    g.ready = std::nullopt;
+    CHECK(g.frame(&rules, 4, true).step == Step::Consent);
+    CHECK(g.frame(&rules, 4, true).step == Step::Consent);
+    g.ready = std::string();
+    CHECK(g.frame(&rules, 4, true).step == Step::Play);
+    CHECK(g.admission.admitted());
+    CHECK(g.zone_checks == 2);
+}
+
+TEST_CASE("addon admission: a failure before the world shows refuses; after, it warns once and play goes on") {
+    Gate g;
+    const auto rules = required_rules();
+    g.frame(&rules, 1, true);
+    g.ready = "Required add-on helper did not load";
+    const auto refused = g.frame(&rules, 1, true);
+    CHECK(refused.step == Step::Refuse);
+    CHECK(refused.message == *g.ready);
+
+    g.admission.reset();
+    g.ready = std::string();
+    g.frame(&rules, 1, true);
+    REQUIRE(g.frame(&rules, 1, true).step == Step::Play);
+    REQUIRE(g.admission.admitted());
+    // Mid-session: never refused, never held; each failure is said once.
+    g.ready = "Required add-on helper did not remain running";
+    auto r = g.frame(&rules, 1, true);
+    CHECK(r.step == Step::Play);
+    CHECK(r.warning == *g.ready);
+    for (int i = 0; i < 3; ++i) {
+        r = g.frame(&rules, 1, true);
+        CHECK(r.step == Step::Play);
+        CHECK(r.warning.empty());
+    }
+    g.ready = std::nullopt; // a consent question in the world does not hold the screen
+    CHECK(g.frame(&rules, 1, true).step == Step::Play);
+    g.ready = std::string();
+    CHECK(g.frame(&rules, 1, true).warning.empty());
+    g.ready = "Required add-on helper did not remain running";
+    CHECK(g.frame(&rules, 1, true).warning == *g.ready); // failed again: said again
+    g.ready = "Required add-on other did not load";
+    CHECK(g.frame(&rules, 1, true).warning == *g.ready);
+}
+
+TEST_CASE("addon admission: a later zone's rules only warn once the session is admitted") {
+    Gate g;
+    auto rules = required_rules();
+    g.frame(&rules, 1, true);
+    REQUIRE(g.frame(&rules, 1, true).step == Step::Play);
+    REQUIRE(g.admission.admitted());
+    // Zoning: the next zone-in brings rules the installed add-ons do not meet.
+    g.zone_problem = "Required add-on maker/other is not installed. Open Add-ons to install it.";
+    rules.addons.required.push_back("maker/other");
+    auto r = g.frame(&rules, 2, false);
+    CHECK(r.step == Step::Play);
+    CHECK(r.warning == g.zone_problem);
+    CHECK(g.frame(&rules, 2, true).warning.empty());
+    // Back at character select, admission starts over: the next entry is refused.
+    plugin::Rules cached = rules;
+    cached.provisional = true;
+    CHECK(g.frame(&cached, 3, false).step == Step::Play);
+    CHECK_FALSE(g.admission.admitted());
+    CHECK(g.frame(&rules, 4, false).step == Step::Refuse);
+}
+
+TEST_CASE("addon admission: a server that does not enforce never asks the add-ons") {
+    Gate g;
+    plugin::Rules rules;
+    rules.configured = true;
+    g.zone_problem = "not consulted";
+    CHECK(g.frame(&rules, 1, false).step == Step::Play);
+    CHECK(g.frame(&rules, 1, true).step == Step::Play);
+    CHECK(g.admission.admitted());
+    CHECK(g.frame(&rules, 1, true).step == Step::Play);
+    CHECK(g.zone_checks == 0);
+    CHECK(g.ready_checks == 0);
+}

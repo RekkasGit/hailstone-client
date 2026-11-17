@@ -48,13 +48,6 @@ void ClientApp::start_token_login(bool named_server, const std::filesystem::path
     pre_launch_profile_id_ = ui::selected_profile_id(login_view_);
     ui::begin_launcher_login_view(login_view_, profile);
     launcher_view_ = true;
-    if (!addon_login_allowed(profile)) {
-        ui::end_launcher_login_view(login_view_, profile.id, profile.id.empty() ? &profile : nullptr);
-        launcher_view_ = false;
-        opts_.login_launch.token_requested = false;
-        core::wipe(opts_.login_launch.ticket);
-        return;
-    }
     login_view_.busy = true;
     login_view_.status = {"Signing in with launcher ticket...", false};
     server_profile_ = std::move(profile);
@@ -69,7 +62,6 @@ void ClientApp::start_token_login(bool named_server, const std::filesystem::path
 void ClientApp::start_session_login() {
     ServerProfile profile = ui::profile_from_view(login_view_);
     if (login_view_.selected < 0) profile.id.clear(); // a ticket's unsaved server (end_launcher_login_view): no id yet
-    if (!addon_login_allowed(profile)) return;
     LoginLaunch renewed;
     if (!login_token_session_.take(profile.host, profile.port, renewed.ticket)) {
         login_view_.status = {"This server has no session token. Sign in again.", true};
@@ -104,7 +96,6 @@ void ClientApp::start_login() {
         config_.save(config_path_);
         profile = std::move(*saved);
     }
-    if (!addon_login_allowed(profile)) return;
     login_view_.busy = true;
     apply_server_profile(profile);
     use_ui_pack(profile.ui);
@@ -139,7 +130,6 @@ void ClientApp::start_box_login() {
     auto saved = ui::store_login_settings(login_view_, config_);
     if (!saved) return; // the status says why
     config_.save(config_path_);
-    if (!addon_login_allowed(*saved)) return;
     std::vector<SavedAccount> set = ui::box_accounts(login_view_);
     if (set.empty()) return;
     // Every password first: a set that cannot all log in starts none.
@@ -699,12 +689,8 @@ void ClientApp::draw_kick_question() {
 }
 
 void ClientApp::start_game(const net::WorldTicket& ticket) {
-    if (!addon_login_allowed(server_profile_)) {
-        const std::string message = login_view_.status.text;
-        back_to_login(message, true);
-        return;
-    }
-    addon_rules_checked_serial_ = ~0u;
+    // The add-on policy is decided against the rules this world session's zone-in brings, never the cached ones.
+    addon_admission_.reset();
     net::ConnectionOptions copts;
     if (automation_) {
         copts.hooks = &automation_->hooks();
