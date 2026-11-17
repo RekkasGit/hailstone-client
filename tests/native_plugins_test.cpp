@@ -505,6 +505,37 @@ TEST_CASE("native plugins: required managed plugins autoload with consent and st
     CHECK(h.plugins->required_addons_ready());
 }
 
+TEST_CASE("native plugins: required readiness is worked out again only when the rules, answers or plugins change") {
+    Host h;
+    const fs::path profile = h.world.dir / "servers" / "required";
+    fs::create_directories(profile / "plugins");
+    h.plugins->set_server_dir(profile / "plugins");
+    auto rules = plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\nrequired = owner/example\n");
+    rules.dir = profile;
+    h.policy.set_ceilings({{plugin::FileKind::Plugin, h.hash(), plugin::kCapAll, "MQ2Example", "owner/example"}});
+    h.policy.set(rules);
+    h.plugins->policy_changed({});
+    REQUIRE(h.plugins->consent());
+    h.plugins->answer_consent(true);
+    REQUIRE(h.plugins->loaded("MQ2Example"));
+    CHECK(h.plugins->required_addons_ready());
+    // The answers file is not read each frame: an edit from outside the client shows with the next rules.
+    std::ofstream(profile / plugin::kApprovalsName, std::ios::binary | std::ios::trunc)
+        << "hailstone-plugin-approvals 1\ndeny " << to_hex(h.hash()) << " MQ2Example\n";
+    CHECK(h.plugins->required_addons_ready());
+    h.policy.set(rules); // the next zone-in's rules
+    std::string problem;
+    CHECK_FALSE(h.plugins->required_addons_ready(&problem));
+    CHECK(problem.find("not approved") != std::string::npos);
+    // An answer the client writes shows at once.
+    REQUIRE(plugin::set_plugin_consent(profile, "MQ2Example", h.hash(), true));
+    CHECK(h.plugins->required_addons_ready());
+    // So does a plugin that goes.
+    h.plugins->unload_all();
+    CHECK_FALSE(h.plugins->required_addons_ready(&problem));
+    CHECK(problem.find("did not load") != std::string::npos);
+}
+
 TEST_CASE("native plugins: blocks name an installed plugin by its repository, not a hand-installed one") {
     Host h;
     h.policy.set(plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\ndefault = allow\n"

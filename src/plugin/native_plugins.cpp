@@ -7,10 +7,12 @@
 #include <cstring>
 #include <format>
 #include <fstream>
+#include <optional>
 #include <span>
 #include <sstream>
 #include <system_error>
 #include <type_traits>
+#include <tuple>
 #include <utility>
 
 #include <SDL3/SDL_loadso.h>
@@ -126,6 +128,20 @@ struct NativePlugins::Impl {
     std::vector<std::unique_ptr<Loaded>> loaded;
     std::vector<Info> failures; // the last load error by name
     std::vector<std::pair<std::string, Sha256Digest>> required; // files found at the last policy check
+    // What required_addons_ready answered, and what it answered from: it is asked each frame, and works it out again
+    // only when the rules, the answers or what is loaded change.
+    struct ReadyInputs {
+        std::uint32_t policy_serial = 0, approvals_generation = 0;
+        std::vector<std::pair<std::string, Sha256Digest>> required;
+        std::vector<std::tuple<std::string, Sha256Digest, std::uint32_t>> loaded;
+        std::vector<std::pair<std::string, std::string>> failures;
+        std::vector<Sha256Digest> pending;
+        std::vector<std::pair<Sha256Digest, bool>> session_answers;
+        bool operator==(const ReadyInputs&) const = default;
+    };
+    mutable std::optional<ReadyInputs> ready_inputs;
+    mutable bool ready_answer = true;
+    mutable std::string ready_problem;
 
     Loaded* find(std::string_view name) const;
     std::optional<fs::path> file_of(std::string_view name) const;
@@ -163,8 +179,22 @@ struct NativePlugins::Impl {
         if (!server_dir.empty()) return server_dir.parent_path();
         return env.policy && env.policy->current() ? env.policy->current()->dir : fs::path();
     }
+    // plugin_approvals.txt as last read: consent_for is asked each frame (required_addons_ready), and reads the file
+    // again only when this process wrote one, the rules changed or the server is another.
+    struct ApprovalsRead {
+        fs::path dir;
+        std::uint32_t generation = 0, policy_serial = 0;
+        std::vector<PluginApproval> answers;
+    };
+    mutable std::optional<ApprovalsRead> approvals;
     Consent consent_for(const Sha256Digest& hash) const {
-        Consent c = plugin_consent(profile_dir(), hash);
+        const fs::path dir = profile_dir();
+        const std::uint32_t generation = plugin_approvals_generation();
+        const std::uint32_t serial = env.policy ? env.policy->serial() : 0;
+        if (!approvals || approvals->dir != dir || approvals->generation != generation ||
+            approvals->policy_serial != serial)
+            approvals = ApprovalsRead{dir, generation, serial, read_plugin_approvals(dir)};
+        Consent c = consent_in(approvals->answers, hash);
         if (c == Consent::Unasked)
             for (const auto& a : session_answers)
                 if (a.sha256 == hash) c = a.allowed ? Consent::Allowed : Consent::Denied;
@@ -2600,6 +2630,22 @@ bool NativePlugins::required_addons_ready(std::string* problem) const {
     if (!m.env.policy || !m.env.policy->current()) return true;
     const auto& rules = *m.env.policy->current();
     if (!rules.addons.enabled || rules.provisional) return true;
+    Impl::ReadyInputs inputs{m.env.policy->serial(), plugin_approvals_generation(), m.required, {}, {}, {}, {}};
+    for (const auto& l : m.loaded) inputs.loaded.emplace_back(l->name, l->hash, l->caps);
+    for (const auto& f : m.failures) inputs.failures.emplace_back(f.name, f.error);
+    for (const auto& p : m.pending) inputs.pending.push_back(p.sha256);
+    for (const auto& a : m.session_answers) inputs.session_answers.emplace_back(a.sha256, a.allowed);
+    if (m.ready_inputs != inputs) {
+        m.ready_inputs = std::move(inputs);
+        m.ready_problem.clear();
+        m.ready_answer = check_required_addons(&m.ready_problem);
+    }
+    if (problem) *problem = m.ready_problem;
+    return m.ready_answer;
+}
+
+bool NativePlugins::check_required_addons(std::string* problem) const {
+    const Impl& m = *impl_;
     auto fail = [&](std::string text) {
         if (problem) *problem = std::move(text);
         return false;

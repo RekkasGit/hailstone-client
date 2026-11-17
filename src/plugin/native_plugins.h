@@ -134,6 +134,7 @@ private:
     enum class Asker : std::uint8_t { Player, Rules, Script };
     bool load_file(std::string_view name, std::string* why, Asker asker);
     bool unload_file(std::string_view name);
+    bool check_required_addons(std::string* problem) const; // required_addons_ready's work, uncached
 
     std::unique_ptr<Impl> impl_;
 };

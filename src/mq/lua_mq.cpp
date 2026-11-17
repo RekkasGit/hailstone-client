@@ -1914,10 +1914,25 @@ void ScriptHost::policy_changed(const std::vector<std::string>& autoload) {
 
 bool ScriptHost::required_addons_ready(std::string* problem) const {
     if (problem) problem->clear();
-    const Impl& m = *impl_;
+    Impl& m = *impl_;
     if (!m.env.policy || !m.env.policy->current()) return true;
     const auto& rules = *m.env.policy->current();
     if (!rules.addons.enabled || rules.provisional) return true;
+    Impl::ReadyInputs inputs{m.env.policy->serial(), m.required, {}};
+    for (const auto& s : m.scripts)
+        inputs.scripts.push_back({s->name, s->error, s->hash, static_cast<int>(s->status), s->started,
+                                  s->stop_requested, s->modules});
+    if (m.ready_inputs != inputs) {
+        m.ready_inputs = std::move(inputs);
+        m.ready_problem.clear();
+        m.ready_answer = m.check_required_addons(&m.ready_problem);
+    }
+    if (problem) *problem = m.ready_problem;
+    return m.ready_answer;
+}
+
+bool ScriptHost::Impl::check_required_addons(std::string* problem) const {
+    const Impl& m = *this;
     auto fail = [&](std::string text) {
         if (problem) *problem = std::move(text);
         return false;
