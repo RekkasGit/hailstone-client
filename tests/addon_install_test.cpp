@@ -4,6 +4,8 @@
 
 #include <doctest/doctest.h>
 
+#include <chrono>
+
 #include "addon_test_util.h"
 #include "app/addon_install.h"
 #include "app/update_install.h"
@@ -679,4 +681,34 @@ TEST_CASE("addon_manager: the server's own and the hand-installed, listed beside
         REQUIRE(plugin::set_plugin_consent(profile, "MQ2Srv", sha256(std::string_view("other bytes")), true));
         CHECK(server_addons(profile).back().consent == plugin::Consent::Unasked); // a yes for other bytes
     }
+}
+
+TEST_CASE("addon_install: file hashes are remembered by size and time, and read again when either changes") {
+    test::ScratchDir dir("addon_file_hash");
+    const fs::path file = dir.path() / "provider.bin";
+    const auto old_time = fs::file_time_type::clock::now() - std::chrono::hours(1);
+    put_file(file, "first bytes");
+    fs::last_write_time(file, old_time);
+    REQUIRE(addon_file_sha256(file) == sha256("first bytes"));
+    CHECK(addon_file_matches(file, 11, sha256("first bytes")));
+    CHECK_FALSE(addon_file_matches(file, 12, sha256("first bytes")));
+
+    // Same size and the same time put back: the remembered hash answers, so the file was not read again.
+    put_file(file, "other bytes");
+    fs::last_write_time(file, old_time);
+    CHECK(addon_file_sha256(file) == sha256("first bytes"));
+    // Another time, or another size: read again.
+    fs::last_write_time(file, old_time + std::chrono::minutes(1));
+    CHECK(addon_file_sha256(file) == sha256("other bytes"));
+    put_file(file, "longer other bytes");
+    fs::last_write_time(file, old_time + std::chrono::minutes(1));
+    CHECK(addon_file_sha256(file) == sha256("longer other bytes"));
+
+    // A file written just now is read each time: a rewrite of the same size within the clock's tick still shows.
+    const fs::path fresh = dir.path() / "fresh.bin";
+    put_file(fresh, "aaaa");
+    CHECK(addon_file_sha256(fresh) == sha256("aaaa"));
+    put_file(fresh, "bbbb");
+    CHECK(addon_file_sha256(fresh) == sha256("bbbb"));
+    CHECK_FALSE(addon_file_sha256(dir.path() / "missing.bin"));
 }

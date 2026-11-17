@@ -1,9 +1,7 @@
 #include "app/addon_upscaler_policy.h"
 
 #include <algorithm>
-#include <array>
 #include <format>
-#include <fstream>
 
 #include "core/ascii_case.h"
 
@@ -20,21 +18,8 @@ bool loaded_files_match(const InstalledAddon& addon, const std::filesystem::path
         if (relative.empty() || relative.is_absolute() || relative.has_root_name()) return false;
         for (const auto& part : relative)
             if (part == "..") return false;
-        std::ifstream in(folder / relative, std::ios::binary);
-        if (!in) return false;
-        Sha256 hash;
-        std::array<char, 65536> bytes{};
-        std::uint64_t size = 0;
-        while (in) {
-            in.read(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-            const auto count = in.gcount();
-            if (count > 0) {
-                size += static_cast<std::uint64_t>(count);
-                if (size > file.size) return false;
-                hash.update(std::string_view(bytes.data(), static_cast<std::size_t>(count)));
-            }
-        }
-        if (in.bad() || size != file.size || hash.finish() != file.sha256) return false;
+        // Remembered by size and time: a provider's vendor libraries can be tens of MB, checked at each zone-in.
+        if (!addon_file_matches(folder / relative, file.size, file.sha256)) return false;
     }
     return true;
 }

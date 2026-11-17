@@ -93,6 +93,12 @@ const InstalledAddon* find_pinned_addon(const std::vector<InstalledAddon>& addon
 
 // The files of an installed add-on that are gone or no longer what it shipped (the player changed them).
 std::vector<std::string> modified_addon_files(const std::filesystem::path& data_dir, const InstalledAddon& addon);
+// A file's SHA-256, remembered by its path, size and modification time so that an unchanged file is not read again
+// (the opted-in add-on policy checks the required packages and the running upscaler at each zone-in, on the client's
+// thread). nullopt when it cannot be read. Any thread.
+std::optional<Sha256Digest> addon_file_sha256(const std::filesystem::path& file);
+// The file is there with this size and SHA-256 (by addon_file_sha256).
+bool addon_file_matches(const std::filesystem::path& file, std::uint64_t size, const Sha256Digest& sha256);
 
 // Why `name` cannot be installed as a new add-on of this kind ("" it can): a reserved name, another add-on's, or a
 // folder already there that is not an add-on's (installed by hand, or by Hailstone's own updates).

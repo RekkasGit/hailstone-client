@@ -5,8 +5,11 @@
 #include <chrono>
 #include <fstream>
 #include <map>
+#include <mutex>
+#include <span>
 #include <sstream>
 #include <system_error>
+#include <vector>
 
 #include <lua.hpp>
 
@@ -480,11 +483,68 @@ const InstalledAddon* find_pinned_addon(const std::vector<InstalledAddon>& addon
     return a;
 }
 
+namespace {
+// addon_file_sha256's: by the file's path, its size and modification time then, and its SHA-256.
+struct KnownHash {
+    std::uint64_t size = 0;
+    fs::file_time_type::rep stamp{};
+    Sha256Digest sha256{};
+};
+std::mutex g_known_hashes_mutex;
+std::map<std::u8string, KnownHash> g_known_hashes;
+constexpr std::size_t kKnownHashesMax = 16384; // a whole add-on library many times over; emptied when reached
+} // namespace
+
+std::optional<Sha256Digest> addon_file_sha256(const fs::path& file) {
+    std::error_code ec;
+    const std::uint64_t size = fs::file_size(file, ec);
+    if (ec) return std::nullopt;
+    const auto time = fs::last_write_time(file, ec);
+    if (ec) return std::nullopt;
+    const auto stamp = time.time_since_epoch().count();
+    const std::u8string key = file.lexically_normal().generic_u8string();
+    // A file written in the last moments may be written again within the same tick of the file system's clock
+    // (coarse on some): it is read each time until its time is safely past.
+    const bool settled = fs::file_time_type::clock::now() - time > std::chrono::seconds(3);
+    if (settled) {
+        std::lock_guard lock(g_known_hashes_mutex);
+        if (auto it = g_known_hashes.find(key); it != g_known_hashes.end() && it->second.size == size &&
+                                                it->second.stamp == stamp)
+            return it->second.sha256;
+    }
+    // Read outside the lock (the add-on manager's worker asks too). Stamped with the size and time taken before the
+    // read: a file that changes while it is read has another time at the next look, and is read again.
+    std::ifstream in(file, std::ios::binary);
+    if (!in) return std::nullopt;
+    Sha256 h;
+    std::vector<char> buf(1 << 16);
+    std::uint64_t read = 0;
+    while (in) {
+        in.read(buf.data(), static_cast<std::streamsize>(buf.size()));
+        const auto n = static_cast<std::size_t>(in.gcount());
+        read += n;
+        if (n) h.update(std::as_bytes(std::span(buf.data(), n)));
+    }
+    if (in.bad() || read != size) return std::nullopt;
+    const Sha256Digest digest = h.finish();
+    std::lock_guard lock(g_known_hashes_mutex);
+    if (g_known_hashes.size() >= kKnownHashesMax) g_known_hashes.clear();
+    g_known_hashes[key] = {size, stamp, digest};
+    return digest;
+}
+
+bool addon_file_matches(const fs::path& file, std::uint64_t size, const Sha256Digest& sha256) {
+    std::error_code ec;
+    if (fs::file_size(file, ec) != size || ec) return false;
+    const auto digest = addon_file_sha256(file);
+    return digest && *digest == sha256;
+}
+
 std::vector<std::string> modified_addon_files(const fs::path& data_dir, const InstalledAddon& addon) {
     std::vector<std::string> out;
     const fs::path folder = addon_folder(data_dir, addon.kind, addon.name);
     for (const auto& f : addon.files)
-        if (!package_file_matches(folder / rel(f.path), f.size, f.sha256)) out.push_back(f.path);
+        if (!addon_file_matches(folder / rel(f.path), f.size, f.sha256)) out.push_back(f.path);
     return out;
 }
 
@@ -1005,9 +1065,9 @@ std::vector<plugin::Ceiling> addon_ceilings(const fs::path& data_dir, bool scan_
             std::error_code ec;
             if (!fs::is_directory(folder, ec)) continue;
             auto take = [&](const fs::path& file, plugin::FileKind kind) {
-                const auto bytes = read_text_file(file);
-                if (!bytes) return;
-                const auto hash = sha256(*bytes);
+                const auto digest = addon_file_sha256(file);
+                if (!digest) return;
+                const auto hash = *digest;
                 const auto relative = file.lexically_relative(folder).generic_string();
                 if (std::any_of(a.files.begin(), a.files.end(), [&](const AddonFile& f) {
                         return iequal(f.path, relative) && f.sha256 == hash;
