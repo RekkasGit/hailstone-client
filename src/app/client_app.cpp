@@ -46,11 +46,10 @@ int ClientApp::run() {
         // Auto: just under the refresh rate of the display the window is on now (auto_frame_cap).
         const int max_fps =
             effective_max_fps(opts_.max_fps, opts_.max_fps == kMaxFpsAuto ? window_.refresh_rate() : 0.0f);
-        const FramePace pace = frame_pace(max_fps, background_fps_, window_.focused(),
         // A login/loading screen keeps an unlimited cap at kLightScreenCap so it does not spin; that includes the
         // settle after zone-in, where screen_ is already InGame but the loading overlay is still drawn.
         const bool light_screen = is_light_screen(screen_ == Screen::InGame, zone_settling());
-        const FramePace pace = frame_pace(opts_.max_fps, background_fps_, window_.focused(),
+        const FramePace pace = frame_pace(max_fps, background_fps_, window_.focused(),
             std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - last_drawn), light_screen);
         // To the microsecond on every system (platform/precise_sleep.h), timed from the last deadline (next_frame_deadline).
         if (pace.cap > 0) {
