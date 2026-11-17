@@ -23,9 +23,6 @@ What the client does not implement yet, or implements with an approximation it c
 - Texture packs (Texture Studio's output in `textures/`) are not add-ons and have no repository, so no list names
   them; a server can block the Texture Studio tool, not the packs a player already built. A required tool is met by
   its installation: the client does not start it and cannot tell whether it runs.
-- A script add-on whose name has capitals is not found by the script loader on a case-sensitive file system
-  (`ScriptHost::run` looks scripts up by their lower-cased name). Admission holds such a requirement unmet rather
-  than letting it pass and fail to start; the loader itself is unchanged.
 
 ## Evolving items
 
