@@ -120,6 +120,7 @@ struct Options {
     bool no_distant_copies = false;               // --no-distant-copies: the atlas's zones not drawn as copies
     bool live_neighbours = false; // --live-neighbours: the neighbour zones drawn live (display.live_neighbour_zones)
     bool gpu_timing = false; // --gpu-timing: each pass's mean GPU time over the timed frames (VkContext::gpu_mark)
+    bool stand = false;           // --stand: the camera at eye height on the highest floor under --pos
     bool no_clouds = false; // --no-clouds: the painted cloud layer, not the volumetric clouds (render/cloud_renderer.h)
     bool neighbour_tint = false;                  // --neighbour-tint: render::ZoneRenderer::set_debug_tint
     float tree_detail = 1.0f;                     // --tree-detail PCT: display.tree_detail, as a scale
@@ -317,6 +318,8 @@ void usage() {
         "  --no-land-trees    viewer: the land round the zone without its trees\n"
         "  --no-distant-copies viewer, with --atlas: the atlas's zones not drawn as distant copies\n"
         "  --live-neighbours  viewer: the neighbour zones drawn live, whole, in place of their copies\n"
+        "  --stand            viewer: the camera at eye height on the highest floor under --pos's x y\n"
+        "                     (no higher than its z)\n"
         "                     (display.live_neighbour_zones)\n"
         "  --no-clouds        viewer: the painted clouds, not the volumetric ones (--lighting modern;\n"
         "                     display.volumetric_clouds)\n"
@@ -528,6 +531,8 @@ Options parse_args(int argc, char** argv) {
             o.no_distant_copies = true;
         } else if (arg("--live-neighbours")) {
             o.live_neighbours = true;
+        } else if (arg("--stand")) {
+            o.stand = true;
         } else if (arg("--no-clouds")) {
             o.no_clouds = true;
         } else if (arg("--neighbour-tint")) {
@@ -1019,6 +1024,12 @@ int main(int argc, char** argv) {
             log::info("zone renderer: {} triangles, {} draws in {} chunks, {} textures ({} missing)", s.triangles,
                       s.draws, s.chunks, s.textures, s.missing_textures);
             camera.position = opts.position.value_or((zone->bounds_min + zone->bounds_max) * 0.5f);
+            if (opts.stand && opts.position) {
+                // As a player stands there: eye height over the floor (the comparison surveys).
+                const auto collision = game::CollisionMesh::build(*zone);
+                if (auto floor = collision.floor_below(camera.position, 0.0f)) camera.position.z = *floor + 6.0f;
+                else log::warn("--stand: no floor under ({:.0f} {:.0f})", camera.position.x, camera.position.y);
+            }
         }
         // --neighbours: the zones past the zone lines, loaded before the first frame (the screenshot waits for them).
         std::unique_ptr<GameDir> neighbour_game;

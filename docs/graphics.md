@@ -1728,7 +1728,13 @@ puts it behind anything nearer. Scenery only: nothing collides with it.
   Under the sea the land is darker with the depth, to 0.3 of its light 150 units down (the water map that darkens a
   zone's own sea floor leaves the land out).
 - **The look**: the zone's plain material (no shader effect of its own, no scrolling) that covers the most level
-  ground draws the land, the one on the most slopes its rock, and the most used water material the sea, each mapped
+  ground draws the land, the one on the most slopes its rock, and the most used water material the sea. The ground
+  and the rock are counted by the edge of the zone's box (within 400 units, or 12% of the box across), where the land
+  meets the zone, when anything plain lies there, else over the whole zone; level ground under water (a water surface
+  over it, or the point just over it in a water region) is not counted, nor a slope standing more than 40 units over
+  the lowest surface of its 16-unit square (a roof, an overhang), nor for the rock or the sand a texture named as
+  building material (roof, brick, wall, tile, floor, plank, wood, shingle). Counted over the whole zone, Freeport
+  East's harbour floor drew its land teal, North Ro's its sea bed, and North Qeynos's roofs its peaks pink. Each is each mapped
   with its own texture scale (the zone's UV area over area) and wound as the zone winds its own. The current zone's
   land is one draw (`zone.frag` `kLandSplat`): each vertex says how much rock (slopes under 0.8 up and the mountains'
   upper half) and sand (a few units over the sea, not on a neighbour's or an atlas zone's ground) cover it
@@ -1847,10 +1853,10 @@ zone's own geometry. `game/world_atlas.h` holds the records and the walk, `app/w
 
 ## Distant copies
 
-From the current zone's edge out, each zone the world atlas places (above; its neighbours too), and each neighbour zone
-past a qualifying line the atlas did not place (not visited on this server yet), is drawn as a low-detail copy of
-itself, in place of the land there and in place of the neighbour zones drawn live (below, "Neighbour zones", now off by
-default): from Qeynos Hills, Qeynos's houses, quays and canals past North
+Far out past the current zone's edge, each zone the world atlas places (above; its neighbours too), and each neighbour
+zone past a qualifying line the atlas did not place (not visited on this server yet), is drawn as a low-detail copy of
+itself, in place of the land there; the neighbour zones are not drawn live by default (below, "Neighbour zones"), so
+near the zone line there is the land alone: from Qeynos Hills, the colour of Qeynos's houses, quays and canals past North
 Qeynos; from East Karana, the real ground, paths and trees of the Karanas round it. Hailstone's own; the original drew
 nothing past a zone's own geometry. `render/zone_proxy.h` bakes and builds a copy, `app/distant_copies.h` loads and
 draws them.
@@ -1875,13 +1881,18 @@ draws them.
   prototype's floating piece of West Karana's border ridge over Qeynos Hills is gone so.
 - **Drawn** (`render::proxy_zone`, built on the loader with the current zone's land): a zone of its own for the zone
   renderer, moved by the atlas's offset and cut by its planes (as a neighbour's geometry is), its pictures given to it
-  as generated files. From the current zone's edge (by the land's field: from the first square past it; none in the
-  zone's own squares or its pockets), rising out of the land over 128 units (30 under its own height at the start, 3
-  over it past the band, so it draws over the land where the two meet); its trees only past that band. It began 1200
-  units out, the live neighbours keeping the near band, until their boundary walls, filler and broken pictures there
-  were judged worse than a copy close up. Coarser with the distance: a cell every 1, 2 or 4 cells (within 3000 units of the zone's edge,
+  as generated files. From 1500 units past the current zone's edge (by the land's field: none in the zone's own squares
+  or its pockets), rising out of the land over 800 units (60 under its own height at the start, 3 over it past the
+  band, so it draws over the land where the two meet); its trees only past that band. Its heights are opened before
+  they are drawn (`render::proxy_open`: the lowest within 8 cells, then the highest of those within 8), so a house, a
+  wall, a tower or a jungle's giant tree (narrower than about 17 cells, 272 units) goes down to the ground round it and only its colour from above shows,
+  while a hill keeps its shape. Drawn from the zone's edge with its buildings standing, a city read as smeared blocks
+  right at the zone line, in game and at night worst; neither it nor the live neighbours (their boundary walls, filler
+  and broken pictures) held up close, and a survey of every visited zone from player height at each zone line is the
+  test of the near band now. Coarser with the distance: a cell every 1, 2 or 4 cells (within 3000 units of the zone's edge,
   6000, past), 32 cells to a chunk, a chunk next to one of another step skirted down under the seam so no crack shows.
-  A steep quad (its corners more than 1.2 times its width apart in height) is drawn in the walls' colour rather than
+  A steep quad left after the opening (its corners more than 1.2 times its width apart in height) is drawn in the
+  walls' colour rather than
   the picture from above stretched down it, each corner its own cell's, so the colour runs across a cliff (one colour
   a quad drew a checkerboard of blocks). Each copy is 3,000 to 113,000 triangles (the
   prototype drew 0.8 to 2.1 million for the zones round one zone).
@@ -1900,10 +1911,9 @@ draws them.
 
 They go with the land (`display.horizon_hills`, Options, Horizon Hills): the land they stand in for, and drawn under
 the same conditions. The viewer takes `--no-distant-copies`, and `--live-neighbours` for the neighbours drawn live.
-Open: a city's houses read as coloured blocks close up, now right at its zone line; a city's wall at the line (North
-Qeynos's, from Qeynos Hills) is mostly lost to the boundary test and the seam's cut; on a first visit a neighbour not in
-the atlas stands at the zone points' first estimate, whose height can be off until its ground is measured (the next
-visit); the copies' trees are their own zone's but drawn as flat pictures; the steep threshold and the boundary's
+Open: near the zone line nothing of the neighbour shows (no city past its gate, only the land); a city far out is its
+ground with its roofs' colour; on a first visit a neighbour not in the atlas stands at the zone points' first estimate,
+whose height can be off until its ground is measured (the next visit); the copies' trees are their own zone's but drawn as flat pictures; the steep threshold and the boundary's
 thresholds were set by eye on the classic zones round Qeynos and the Karanas.
 
 ## Smoothed ground
