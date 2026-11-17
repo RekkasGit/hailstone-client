@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Buffs: in a zone where the server suspends buffs (EQEmu's `suspendbuffs`, such as the Plane of Knowledge), a suspendable buff's time no longer counts down in the buff, pet and target windows and MacroQuest TLOs, and the client no longer drops a short buff when its local count runs out while the server still has it. The flag comes from OP_NewZone, which the client read but never used
 - Server add-on policies: when an add-on the server requires fails while you play (a plugin error, a script that stopped), a small Server add-ons window says so and offers Retry, which starts it again. You can close the window; it comes back only for a new failure, and you can keep playing on the server either way
 - Server add-on policies: an add-on the server suggests is also allowed under `default = deny`, without naming it again in `allow`. It stays optional, and a block still wins
 - Server add-on policies: a server can ask for a minimum version of a required add-on (`required = owner/repo:1.0.0`); that version or any newer one is accepted, and an older one is shown on the login screen with a link to update it. Clients before this release refuse a server that uses this form, so server owners should wait until their players have updated

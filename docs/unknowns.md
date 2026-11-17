@@ -200,6 +200,8 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 - `/targetgroupbuff` keeps TargetGroupBuff in the character's options.ini (the original: eqclient.ini [Defaults]) and sends it at each zone-in.
 - AllowedToAttack's newbie-zone rule reads the target's Zone (+0x210); the client fills it for every spawn with the current zone's id and instance (`AttackCheckInput::zone`), as a spawn is only known in the player's own zone. Where the original writes a spawn's +0x210 (the spawn packet or the zone-in) was not traced; tracing those writes would settle it.
 
+- Buffs in a zone that suspends them (OP_NewZone +876, 0xddfc5c): `game::buff_countdown_held` holds a suspendable spell's countdown whenever the zone flag is set, and lets a suspendable spell with SPA 0x1b4 off only the spawn's own hold (+0x22d). That branch order comes from the earlier reading of Spell_IsBuffCountdownHeld @0x4dcf20, which took 0xddfc5c for a global nothing writes; it was not read again once 0xddfc5c turned out to be OP_NewZone's field. The plugin bulk reads (`get_buff_data_bulk`, `get_buff_name_data_bulk`) take no zone flag: they stay right only because the held buff tick sets `received_ms` every 6 s, so without the game folder's BaseData.txt row for the character (the tick then waits) they count a held buff down by the time since it arrived. Re-reading @0x4dcf20 would settle the order; a live session in a suspendbuffs zone (EQEmu's PoK, by default rows) would confirm the displays stay still.
+
 ## Items, inventory and commerce
 
 - Mercenary liaison window (docs/mechanics.md "Leaving an NPC interaction"): its range check is the window's
