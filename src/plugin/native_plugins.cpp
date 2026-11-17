@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <format>
@@ -1953,6 +1954,51 @@ int h_ability_state(void* h, int kind, const char* name, std::int64_t* remaining
     return st->ready ? 1 : 0;
 }
 
+// HS_ABILITY_* for a row's mq::AbilityKind (the two enums order their values differently).
+int sdk_ability_kind(mq::AbilityKind kind) {
+    switch (kind) {
+    case mq::AbilityKind::Skill: return HS_ABILITY_SKILL;
+    case mq::AbilityKind::Discipline: return HS_ABILITY_DISCIPLINE;
+    case mq::AbilityKind::AltAbility: return HS_ABILITY_ALT;
+    }
+    return HS_ABILITY_SKILL;
+}
+
+int32_t h_get_ability_data_bulk(void* h, unsigned char* out, int32_t out_size) {
+    Loaded& l = Loaded::of(h);
+    if (!readable(l, "get_ability_data_bulk")) return 0;
+    static_assert(sizeof(HS_BulkListHeader) == HS_BULK_LIST_HEADER_SIZE);
+    static_assert(sizeof(HS_Bulk_AbilityRecord) == HAILSTONE_ABILITY_RECORD_SIZE);
+    static_assert(offsetof(HS_Bulk_AbilityRecord, kind) == 0);
+    static_assert(offsetof(HS_Bulk_AbilityRecord, id) == 4);
+    static_assert(offsetof(HS_Bulk_AbilityRecord, ready) == 8);
+    static_assert(offsetof(HS_Bulk_AbilityRecord, remainingMs) == 12);
+    static_assert(offsetof(HS_Bulk_AbilityRecord, reuseMs) == 20);
+    static_assert(offsetof(HS_Bulk_AbilityRecord, nameSize) == 28);
+    if (!out || out_size < static_cast<int32_t>(sizeof(HS_BulkListHeader)) || !l.host->env.ability_bulk) return 0;
+    const std::vector<AbilityBulkRow> rows = l.host->env.ability_bulk();
+    auto* header = reinterpret_cast<HS_BulkListHeader*>(out);
+    header->count = 0;
+    header->total = static_cast<int32_t>(rows.size());
+    int32_t at = static_cast<int32_t>(sizeof(HS_BulkListHeader));
+    for (const AbilityBulkRow& row : rows) {
+        const auto name_size = static_cast<int32_t>(row.name.size());
+        if (name_size > out_size - at - static_cast<int32_t>(sizeof(HS_Bulk_AbilityRecord))) break;
+        auto* rec = reinterpret_cast<HS_Bulk_AbilityRecord*>(out + at);
+        rec->kind = sdk_ability_kind(row.kind);
+        rec->id = row.id;
+        rec->ready = row.ready ? 1 : 0;
+        rec->remainingMs = row.remaining_ms;
+        rec->reuseMs = row.reuse_ms;
+        rec->nameSize = name_size;
+        at += static_cast<int32_t>(sizeof(HS_Bulk_AbilityRecord));
+        if (name_size > 0) std::memcpy(out + at, row.name.data(), static_cast<std::size_t>(name_size));
+        at += name_size;
+        ++header->count;
+    }
+    return at;
+}
+
 std::int32_t h_hot_bar_page(void* h, std::int32_t bar) {
     Loaded& l = Loaded::of(h);
     if (!readable(l, "hot_bar_page") || !l.host->env.hot_bar_page) return -1;
@@ -2440,6 +2486,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.get_raid_data_bulk = main_only<h_get_raid_data_bulk>;
     p.table.use_ability = main_only<h_use_ability>;
     p.table.ability_state = main_only<h_ability_state>;
+    p.table.get_ability_data_bulk = main_only<h_get_ability_data_bulk>;
     p.table.cursor_origin = main_only<h_cursor_origin>;
     p.owner = m.env.hooks->new_guest("plugin:" + name);
 

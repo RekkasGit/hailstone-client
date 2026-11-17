@@ -22,6 +22,7 @@
 #include <unordered_map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -2046,6 +2047,10 @@ public:
     std::vector<const game::AltAbility*> aa_list(std::int32_t type, const game::AAFilter& filter) const;
     // AltAdvManager::IsAbilityReady (SPA 264 reduces the reuse time).
     game::AAReadiness aa_readiness(std::uint32_t rank_id) const;
+    // AltAdvManager::IsAbilityReady for many owned ranks at once: aa_readiness builds the character the SPA 264
+    // reduction needs for every rank; this builds it once for the call. The answers are in rank_ids' order; an id the
+    // AA table does not hold reads as AAReadiness{} (its defaults).
+    std::vector<game::AAReadiness> aa_readiness_bulk(std::span<const std::uint32_t> rank_ids) const;
     // The item recast timers, in Util::FastTime seconds (time(0),
     // as the server's ItemSerializationHeader last_cast_time): the item's own (ItemBase +0x34, net::Item
     // last_cast_time) and the profile's 100 by recast type (PcBase +0x6a5c, PcBase_Get/SetItemRecastTimer).

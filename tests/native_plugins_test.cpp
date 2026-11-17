@@ -37,6 +37,7 @@ struct Host {
     std::vector<std::string> printed, sent;
     std::vector<std::pair<int, std::string>> used, checked; // use_ability, ability_state (kind and name)
     bool ability_ready = true;
+    std::vector<plugin::AbilityBulkRow> ability_rows; // get_ability_data_bulk's rows
     std::vector<std::pair<plugin::Stream, net::AppPacket>> packets;
     std::unique_ptr<mq::Commands> commands;
     std::unique_ptr<plugin::NativePlugins> plugins;
@@ -85,6 +86,7 @@ struct Host {
             st.reuse_ms = 6000;
             return st;
         };
+        ne.ability_bulk = [this] { return ability_rows; };
         plugins = std::make_unique<plugin::NativePlugins>(ne);
     }
     ~Host() {
@@ -1491,4 +1493,60 @@ TEST_CASE("native plugins: use_ability and ability_state, by kind and name, held
     CHECK(denied.printed_line("[Plugin] HostProbe: use_ability needs the server's 'actions' permission"));
     CHECK(denied.used.empty());
     CHECK(denied.checked.empty());
+}
+
+TEST_CASE("native plugins: get_ability_data_bulk, its layout, truncation and the read gate") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    h.ability_rows = {
+        {mq::AbilityKind::Skill, 30, true, 0, 6000, "Kick"},
+        {mq::AbilityKind::Discipline, 4498, false, 1500, 60000, "Test Discipline"},
+        {mq::AbilityKind::AltAbility, 5, true, 0, 6000, "Innate Strength"},
+    };
+    REQUIRE(h.plugins->load("HostProbe"));
+    h.run("/probeabilities");
+    CHECK(h.printed_line("[Probe] ability 0: kind 0, id 30, ready 1, 0 of 6000 ms, name Kick"));
+    CHECK(h.printed_line("[Probe] ability 1: kind 1, id 4498, ready 0, 1500 of 60000 ms, name Test Discipline"));
+    CHECK(h.printed_line("[Probe] ability 2: kind 2, id 5, ready 1, 0 of 6000 ms, name Innate Strength"));
+    CHECK(h.printed_line("[Probe] abilities count 3, total 3, 138 bytes, 3 records, 0 bytes left"));
+
+    // Whole records only: the third needs 47 bytes, 100 leaves 9 after the first two.
+    h.printed.clear();
+    h.run("/probeabilities 100");
+    CHECK(h.printed_line("[Probe] ability 0: kind 0, id 30, ready 1, 0 of 6000 ms, name Kick"));
+    CHECK(h.printed_line("[Probe] ability 1: kind 1, id 4498, ready 0, 1500 of 60000 ms, name Test Discipline"));
+    CHECK_FALSE(h.printed_line("[Probe] ability 2: kind 2, id 5, ready 1, 0 of 6000 ms, name Innate Strength"));
+    CHECK(h.printed_line("[Probe] abilities count 2, total 3, 91 bytes, 2 records, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] abilities past the end 0"));
+    h.printed.clear();
+    h.run("/probeabilities 8"); // the header alone
+    CHECK(h.printed_line("[Probe] abilities count 0, total 3, 8 bytes, 0 records, 0 bytes left"));
+    h.printed.clear();
+    h.run("/probeabilities 7"); // below the header
+    CHECK(h.printed_line("[Probe] abilities 0 bytes"));
+    CHECK(h.printed_line("[Probe] abilities past the end 0"));
+
+    // Nothing to list: the header alone, count 0 and total 0.
+    Host empty(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    empty.approve(plugin::kCapAll);
+    REQUIRE(empty.plugins->load("HostProbe"));
+    empty.run("/probeabilities");
+    CHECK(empty.printed_line("[Probe] abilities count 0, total 0, 8 bytes, 0 records, 0 bytes left"));
+
+    // Without read: 0 bytes, and the denial said once.
+    Host denied(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    denied.approve(plugin::kCapAll & ~plugin::kCapRead);
+    REQUIRE(denied.plugins->load("HostProbe"));
+    denied.run("/probeabilities");
+    CHECK(denied.printed_line("[Probe] abilities 0 bytes"));
+    CHECK(denied.printed_line("[Plugin] HostProbe: get_ability_data_bulk needs the server's 'read' permission"));
+
+    // No game connection at all (the login screen): 0 bytes, as the other bulk reads.
+    Host disconnected(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    disconnected.approve(plugin::kCapAll);
+    REQUIRE(disconnected.plugins->load("HostProbe"));
+    auto conn = std::move(disconnected.world.conn);
+    disconnected.run("/probeabilities");
+    CHECK(disconnected.printed_line("[Probe] abilities 0 bytes"));
+    disconnected.world.conn = std::move(conn);
 }

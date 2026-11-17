@@ -22,6 +22,7 @@
 
 #include "mq/tlo.h"
 #include "net/packet.h"
+#include "plugin/ability_bulk.h"
 #include "plugin/consent.h"
 #include "plugin/hooks.h"
 #include "plugin/policy.h"
@@ -65,6 +66,9 @@ struct NativeEnv {
     // them (app/lua_eq_abilitybook.cpp, shared with the scripts and the TLOs). Empty: none known.
     std::function<bool(mq::AbilityKind, std::string_view)> use_ability;
     std::function<std::optional<mq::AbilityState>(mq::AbilityKind, std::string_view)> ability;
+    // ABI 3: the Ability Book's usable entries for get_ability_data_bulk (app/ability_bulk.h), in its list order.
+    // Empty: none known.
+    std::function<std::vector<AbilityBulkRow>()> ability_bulk;
     std::vector<std::filesystem::path> dirs; // where plugins are looked for, and one level down (plugins/<name>/)
     std::filesystem::path cache_dir;         // the approved copies
     std::filesystem::path config_dir;        // each plugin's own directory is config_dir / name

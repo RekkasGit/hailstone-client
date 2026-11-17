@@ -12,6 +12,7 @@
 #include "app/addon_manager.h"
 #include "app/addon_requirements.h"
 #include "app/addon_suggest.h"
+#include "app/ability_bulk.h"
 #include "app/window_icon.h"
 #include "app/automation.h"
 #include "app/progress_ui.h"
@@ -461,6 +462,7 @@ public:
         };
         aenv.autoskill_list = [this] { return autoskill_list(eq_host_); };
         aenv.use_ability = [this](mq::AbilityKind kind, std::string_view name) { return use_ability(eq_host_, kind, name); };
+        aenv.ability_bulk = [this] { return ability_bulk_rows(eq_host_); };
         aenv.can_see = [this](std::uint32_t id) -> std::optional<bool> {
             return conn_ ? can_see_spawn(id) : std::nullopt;
         };

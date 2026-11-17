@@ -162,7 +162,7 @@ extension's `command_line`) from the moment it lost the bit, and its web tabs cl
 
 | Bit | Name | Lets a script or plugin |
 |---|---|---|
-| 1 | `read` | read game state: `mq.TLO`, `${...}`, `mq.parse`, `ParseMacroData`, spawn events, `ability_state` |
+| 1 | `read` | read game state: `mq.TLO`, `${...}`, `mq.parse`, `ParseMacroData`, spawn events, `ability_state`, `get_ability_data_bulk` |
 | 2 | `commands` | run commands outside the groups below: windows, options, `/who`, other plugins' commands, `/lua`; add commands of its own (`mq.bind`, `AddCommand`). The player is told "run other commands (windows, options, /who, other plugins' commands)" |
 | 4 | `target` | change the target: `/target`, `/assist`, `/xtarget`, ... |
 | 8 | `actions` | act: `/cast`, `/disc`, `/doability`, `/useitem`, `/attack`, `/memspellset`, `/pet`, `/loot`, `/autoinventory`, `/alternateadv` (`/alt`), `/split`, `/consent`, `/guilddelete`, non-movement `/keypress`; Hailstone's own item commands `/destroy`, `/destroycursor` and `/stowcursor`, and `use_ability` |
@@ -573,9 +573,10 @@ same changes as a plugin, with no change to Hailstone itself. With the `extend` 
   for an older client keeps working. `get_buff_data_bulk` gives every buff slot of the player in one call,
   `get_pet_buff_data_bulk` the pet window's buffs, `get_target_buff_data_bulk` the current target's buffs,
   `get_avail_aa_data_bulk` the owned alternate abilities, `get_avail_disc_data_bulk` the combat abilities,
+  `get_ability_data_bulk` the Ability Book's entries with their readiness (below),
   `get_buff_name_data_bulk` the player's buffs with their casters' names, `get_spawns_data_bulk` every spawn in the
-  zone and `get_raid_data_bulk` the raid roster, as packed records (Buff, spawn, extended target and raid records
-  below). `server_info` gives the
+  zone and `get_raid_data_bulk` the raid roster, as packed records (Buff, spawn, extended target, ability and raid
+  records below). `server_info` gives the
   server this login is on (the saved server's name, host and port, the world's name and address), so a plugin for
   one server can tell it from another that sends the same packets.
 - **take item clicks** (`item_right_click`, then the client's own with `right_click_item`, which needs `actions`)
@@ -615,8 +616,8 @@ Compatibility: the host table and the hook table carry their size and only grow 
 older ABI loads in a newer client; one built for a newer ABI does not load in an older client. ABI 3 added the web
 pages (`web_*`, "Web pages" below); a plugin built with this SDK reports ABI 3, so a client older than that does not
 load it. Calls added to the host table since then keep ABI 3: test `HAILSTONE_HOST_HAS(host, open_bank)` before such a
-call, since a client older than the call has a shorter table; `use_ability`, `ability_state` and the other calls
-under "added later in ABI 3" in `sdk/hailstone_plugin.h` are such calls. The structs a plugin passes to be filled (`HailstonePlayer`, `HailstoneSpawn`,
+call, since a client older than the call has a shorter table; `use_ability`, `ability_state`,
+`get_ability_data_bulk` and the other calls under "added later in ABI 3" in `sdk/hailstone_plugin.h` are such calls. The structs a plugin passes to be filled (`HailstonePlayer`, `HailstoneSpawn`,
 ..., `HailstoneWebState`) carry their size too and the client fills what both know; `HailstoneWebState`'s `size` is a `size_t`
 (as ABI 3 shipped it), the others' a `uint32_t`.
 
@@ -652,15 +653,16 @@ when the cursor no longer holds an item of that id, so an item the player put th
 
 Both need `actions`, as `/destroy` does. The id is a plain decimal number above 0; anything else does nothing.
 
-Buff, spawn, extended target and raid records: `get_buff_data_bulk(host, out, out_size)`, `get_pet_buff_data_bulk(host, out, out_size)`,
+Buff, spawn, extended target, ability and raid records: `get_buff_data_bulk(host, out, out_size)`, `get_pet_buff_data_bulk(host, out, out_size)`,
 `get_spawns_data_bulk(host, out, out_size)`, `get_xtarget_data_bulk(host, out, out_size)`,
 `get_target_buff_data_bulk(host, out, out_size)`, `get_avail_aa_data_bulk(host, out, out_size)`,
-`get_avail_disc_data_bulk(host, out, out_size)`, `get_buff_name_data_bulk(host, out, out_size)` and
+`get_avail_disc_data_bulk(host, out, out_size)`, `get_buff_name_data_bulk(host, out, out_size)`,
+`get_ability_data_bulk(host, out, out_size)` and
 `get_raid_data_bulk(host, out, out_size)` (with `read`; added later in ABI 3, so test `HAILSTONE_HOST_HAS(host, <field>)` first;
 `out` is an `unsigned char*` and `out_size` an `int32_t`) write records into `out` and return the bytes written.
 The records are the SDK's packed structs (`HS_Bulk_BuffData`, `HS_Bulk_PetBuffData`, `HS_Bulk_SpawnHeader`,
 `HS_Bulk_SpawnFixedRecord`, `HS_Bulk_XTargetData`, `HS_Bulk_TargetBuffFixedRecord`, `HS_Bulk_BuffNameFixedRecord`,
-`HAILSTONE_ID_NAME_RECORD`, `HS_Bulk_ListHeader`, `HS_Bulk_RaidHeader`, `HS_Bulk_RaidData`, all in `#pragma pack(push, 1)`), in the machine's byte order (little-endian on every
+`HAILSTONE_ID_NAME_RECORD`, `HS_Bulk_AbilityRecord`, `HS_Bulk_ListHeader`, `HS_Bulk_RaidHeader`, `HS_Bulk_RaidData`, all in `#pragma pack(push, 1)`), in the machine's byte order (little-endian on every
 platform Hailstone runs on) and unaligned. For speed, the bulk reads are the one place where a struct may be cast
 onto the buffer, by the client writing it and by a plugin reading it: read each field through the packed struct
 (`rec->level`), which the compiler reads unaligned, and never keep a plain pointer or reference to a field (`&rec->x`),
@@ -668,12 +670,12 @@ which may fault on a processor that needs aligned reads. `ByteReader` or `memcpy
 and say so in the chat window.
 
 The reads that give a list of any length (`get_target_buff_data_bulk`, `get_avail_aa_data_bulk`,
-`get_avail_disc_data_bulk` and `get_raid_data_bulk`) share one rule for a buffer too small: they write as many whole
-records as fit, in order, and their header states both `count`, the records in this buffer, and `total`, how many the
-client holds. `count < total` means `out_size` was too small; call again with a larger buffer. The first three lead
-with `HS_Bulk_ListHeader` (`HS_BULK_LIST_HEADER_SIZE` = 8 bytes: i32 `count`, then i32 `total`), the raid read with its
-own `HS_Bulk_RaidHeader`, whose `count` and `total` mean the same. Below the header's size nothing is written and 0
-comes back; with nothing to list the header alone goes out, `count` 0 and `total` 0.
+`get_avail_disc_data_bulk`, `get_ability_data_bulk` and `get_raid_data_bulk`) share one rule for a buffer too small:
+they write as many whole records as fit, in order, and their header states both `count`, the records in this buffer,
+and `total`, how many the client holds. `count < total` means `out_size` was too small; call again with a larger
+buffer. The first four lead with `HS_Bulk_ListHeader` (`HS_BULK_LIST_HEADER_SIZE` = 8 bytes: i32 `count`, then i32
+`total`), the raid read with its own `HS_Bulk_RaidHeader`, whose `count` and `total` mean the same. Below the header's
+size nothing is written and 0 comes back; with nothing to list the header alone goes out, `count` 0 and `total` 0.
 
 - `get_buff_data_bulk`: one record of `HAILSTONE_BUFF_RECORD_SIZE` (29) bytes per buff slot, slot 0 first, in the
   client's order: the long buff slots, then the song slots, then the one discipline slot, always last. RoF2 has 42
@@ -854,6 +856,33 @@ comes back; with nothing to list the header alone goes out, `count` 0 and `total
   - `get_avail_disc_data_bulk`: the character's combat abilities (disciplines), by spell id: the profile's
     discipline list, the one `combat_ability` reads by index, without its empty (0) entries, in list order. The name
     is the spell's, empty for a spell not in spells_us.txt. Before the profile count and total are 0.
+
+- `get_ability_data_bulk`: the Ability Book's usable entries in one call, with their readiness, so a plugin does not
+  run `ability_state` once per entry. An `HS_Bulk_ListHeader`, then `count` records, each an
+  `HS_Bulk_AbilityRecord` (`HAILSTONE_ABILITY_RECORD_SIZE` = 32 bytes) followed at once by the name, `nameSize`
+  bytes with no NUL; the next record starts after the name. Only whole records are written, in the book's order:
+  the owned activated AAs, then the listed disciplines, then the usable skills (the combat page's, then the abilities
+  page's). Passive entries are not listed, so every record is one the book can use; an owned AA rank the AA table
+  does not hold has no group id and is left out, as `get_avail_aa_data_bulk` leaves it out. Match an entry by `kind`
+  and `id`, not by its position.
+
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | `kind`: `HS_ABILITY_SKILL` (0), `HS_ABILITY_DISCIPLINE` (1) or `HS_ABILITY_ALT` (2) |
+  | 4 | i32 | `id`: a skill's id, a discipline's **spell id** (not its profile slot), or an AA's ability (group) id |
+  | 8 | i32 | `ready`: 1 its reuse has run out, 0 on reuse |
+  | 12 | i64 | `remainingMs`: until it is ready, 0 when ready |
+  | 20 | i64 | `reuseMs`: its reuse time |
+  | 28 | i32 | `nameSize`: the bytes of the name that follow; 0 when the client has no name for it |
+  | 32 | bytes | the name, `nameSize` bytes |
+
+  Readiness is what `ability_state` gives: an AA's own reuse (with the SPA 264 reduction applied), a discipline's
+  reuse timer, and a skill's timer rounded up to the whole second the book shows, all times in ms. Before the
+  character's profile the header alone goes out (count 0, total 0); a plugin without `read`, or with no game
+  connection, gets 0 bytes. The list is bounded by what the character has: at most 28 activated skill ids in the
+  client's table, 300 discipline slots, and the owned AAs the server sends (300 on a stock server). A 65536-byte
+  buffer holds every entry with ordinary names; `count < total` says the buffer was too small, so retry with a larger
+  one. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_ability_data_bulk)` first.
 
 - `get_raid_data_bulk`: the raid roster, a 40-byte header followed by one `HS_Bulk_RaidData` record
   (`HS_BULK_RAID_RECORD_SIZE` = 124 bytes) per member, in roster order, as many whole records as fit in `out_size`.

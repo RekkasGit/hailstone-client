@@ -224,6 +224,19 @@ typedef struct HAILSTONE_ID_NAME_RECORD {
     int32_t id;       /* an AA's ability (group) id, or a discipline's spell id */
     int32_t nameSize; /* bytes of the AA's or the discipline's name that follow; 0 when the client has none */
 } HAILSTONE_ID_NAME_RECORD;
+/* get_ability_data_bulk: an HS_Bulk_ListHeader, then `count` records, each an HS_Bulk_AbilityRecord
+ * (HAILSTONE_ABILITY_RECORD_SIZE bytes) immediately followed by nameSize bytes of the name (no NUL); the next record
+ * starts after them, in the Ability Book's order: the owned activated AAs, the listed disciplines, then the usable
+ * skills (the combat page's, then the abilities page's). Passive entries are not listed. Match an entry by (kind, id),
+ * not by its position. */
+typedef struct HS_Bulk_AbilityRecord {
+    int32_t kind;        /* HS_ABILITY_* */
+    int32_t id;          /* a skill's id, a discipline's spell id, or an AA's ability (group) id */
+    int32_t ready;       /* 1 its reuse has run out, 0 on reuse */
+    int64_t remainingMs; /* until it is ready, 0 when ready */
+    int64_t reuseMs;     /* its reuse time */
+    int32_t nameSize;    /* bytes of the name that follow, no NUL */
+} HS_BulkAbilityRecord;
 #pragma pack(pop)
 
 /* An extended target slot's type: HailstoneXTarget.type and HS_BulkXTargetData.targetType. The values are the
@@ -800,9 +813,9 @@ typedef struct PluginHostApi {
      * the mouse, and the keyboard once clicked. 1 while hovered. */
     int (*web_view)(void* host, uint32_t tab, float width, float height);
 
-    /* ---- added later in ABI 3: check HAILSTONE_HOST_HAS(field) before calling (an older client's table ends
-     * before; new entries go at the end, in order, never between these: a plugin built with an older header finds
-     * each by its position) ----
+    /* ---- added later in ABI 3: append only, in order, and check HAILSTONE_HOST_HAS(field) before calling (an older
+     * client's table ends before; new entries go at the end, never between these: a plugin built with an older header
+     * finds each by its position) ----
      * The bank window opens as a right click on a banker opens it (CBankWnd::Activate), here without that click's
      * class and range checks: `banker` a spawn id, 0 for the player itself (as the NMS patch's vault Bank button);
      * the window closes when that spawn is out of reach. 1 open (or already open), 0 not (HAILSTONE_CAP_ACTIONS). */
@@ -835,6 +848,14 @@ typedef struct PluginHostApi {
      * (either may be NULL). `kind` and `name` as use_ability's. Added later in ABI 3: test
      * HAILSTONE_HOST_HAS(host, ability_state) first. */
     int (*ability_state)(void* host, int kind, const char* name, int64_t* remaining_ms, int64_t* reuse_ms);
+    /* The Ability Book's entries in one call (HAILSTONE_CAP_READ): an HS_Bulk_ListHeader (count, total), then up to
+     * `count` HS_Bulk_AbilityRecord records, each followed by its name, as many whole records as fit. Every usable
+     * entry the book lists: the owned activated AAs, the disciplines and the skills, in its order. An entry's id is a
+     * skill's id, a discipline's spell id or an AA's ability (group) id; readiness is as ability_state's. Before the
+     * profile, count and total are 0; with no connection, or without `read`, 0 bytes. Below the header's size nothing
+     * is written; count < total means out_size was too small. Added later in ABI 3: test
+     * HAILSTONE_HOST_HAS(host, get_ability_data_bulk) first. */
+    int32_t (*get_ability_data_bulk)(void* host, unsigned char* out, int32_t out_size);
 } PluginHostApi;
 /* What use_ability and ability_state take: the kinds of ability the Ability Book lists. The values are stable. */
 enum HS_AbilityKinds {
@@ -863,6 +884,7 @@ enum HS_AbilityKinds {
 #define HS_BULK_XTARGET_RECORD_SIZE 16
 #define HAILSTONE_TARGET_BUFF_RECORD_SIZE 20
 #define HAILSTONE_ID_NAME_RECORD_SIZE 8
+#define HAILSTONE_ABILITY_RECORD_SIZE 32 /* get_ability_data_bulk's fixed part, before the name */
 #define HS_BULK_LIST_HEADER_SIZE 8 /* HS_Bulk_ListHeader */
 /* Whether this client's host table has `field` (one added after the plugin's ABI) and it is set. */
 #define HAILSTONE_HOST_HAS(h, field)                                                                                   \

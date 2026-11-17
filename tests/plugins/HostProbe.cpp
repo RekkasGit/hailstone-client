@@ -18,6 +18,7 @@
 //   /proberaid [n]  get_raid_data_bulk the same way, through HS_Bulk_RaidHeader / HS_Bulk_RaidData
 //   /probecursor   cursor_origin, when the host table has it
 //   /probeability <kind> <name>  ability_state then use_ability, when the host table has them
+//   /probeabilities [n]  get_ability_data_bulk the same way, through HS_Bulk_ListHeader and HS_Bulk_AbilityRecord
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
 #include <cstddef>
@@ -411,6 +412,50 @@ void probe_ability(void*, const char* args) {
                static_cast<long long>(remaining), static_cast<long long>(reuse), used);
 }
 
+static_assert(sizeof(HS_Bulk_AbilityRecord) == HAILSTONE_ABILITY_RECORD_SIZE);
+
+// get_ability_data_bulk: each entry one line (kind, id, ready, remaining and reuse ms, name), then the header's
+// count and total, the bytes, the records read and the bytes left over. With n, also how many bytes past the first n
+// the host changed (guard bytes).
+void probe_abilities(void*, const char* args) {
+    if (!HAILSTONE_HOST_HAS(host, get_ability_data_bulk)) {
+        WriteChatf("[Probe] abilities: not in this client");
+        return;
+    }
+    unsigned char buf[32768];
+    constexpr unsigned char guard = 0xA5;
+    std::memset(buf, guard, sizeof buf);
+    const std::int32_t n = size_arg(args, sizeof buf);
+    const std::int32_t r = host->get_ability_data_bulk(host->host, buf, n);
+    if (n < static_cast<std::int32_t>(sizeof buf)) {
+        std::size_t changed = 0;
+        for (std::size_t i = static_cast<std::size_t>(n); i < sizeof buf; ++i) changed += buf[i] != guard;
+        WriteChatf("[Probe] abilities past the end %zu", changed);
+    }
+    const std::size_t size = r > 0 ? static_cast<std::size_t>(r) : 0;
+    if (size < sizeof(HS_Bulk_ListHeader)) {
+        WriteChatf("[Probe] abilities %d bytes", static_cast<int>(r));
+        return;
+    }
+    const auto* header = reinterpret_cast<const HS_Bulk_ListHeader*>(buf);
+    std::size_t at = sizeof(HS_Bulk_ListHeader);
+    int count = 0;
+    while (count < header->count && size - at >= sizeof(HS_Bulk_AbilityRecord)) {
+        const auto* rec = reinterpret_cast<const HS_Bulk_AbilityRecord*>(buf + at);
+        at += sizeof(HS_Bulk_AbilityRecord);
+        const std::size_t len = rec->nameSize > 0 ? static_cast<std::size_t>(rec->nameSize) : 0;
+        if (len > size - at) break; // a name running past the end: "left" shows it
+        const std::string name(reinterpret_cast<const char*>(buf + at), len);
+        at += len;
+        ++count;
+        WriteChatf("[Probe] ability %d: kind %d, id %d, ready %d, %lld of %lld ms, name %s", count - 1, rec->kind,
+                   rec->id, rec->ready, static_cast<long long>(rec->remainingMs), static_cast<long long>(rec->reuseMs),
+                   name.empty() ? "-" : name.c_str());
+    }
+    WriteChatf("[Probe] abilities count %d, total %d, %d bytes, %d records, %zu bytes left", header->count,
+               header->total, static_cast<int>(r), count, size - at);
+}
+
 int probe_tlo(void*, const char*, const char* member, const char*, HailstoneValue* out) {
     if (member && std::strcmp(member, "Throw") == 0) throw std::runtime_error("the TLO threw");
     out->kind = HAILSTONE_STRING;
@@ -438,6 +483,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/proberaid", probe_raid, nullptr);
     AddCommand("/probecursor", probe_cursor, nullptr);
     AddCommand("/probeability", probe_ability, nullptr);
+    AddCommand("/probeabilities", probe_abilities, nullptr);
     AddTopLevelObject("Probe", probe_tlo, nullptr);
 #ifdef HAILSTONE_PROBE_THROW_INIT
     throw std::runtime_error("InitializePlugin threw");
@@ -461,6 +507,7 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/proberaid");
     RemoveCommand("/probecursor");
     RemoveCommand("/probeability");
+    RemoveCommand("/probeabilities");
     RemoveTopLevelObject("Probe");
 }
 HAILSTONE_API void OnUpdateImGui(void) { throw std::runtime_error("OnUpdateImGui threw"); }
