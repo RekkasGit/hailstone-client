@@ -45,12 +45,78 @@ ZoneFogField zone_fog_field(const HorizonField& field) {
     if (!field.valid() || field.dist.size() != static_cast<std::size_t>(field.nx) * static_cast<std::size_t>(field.ny))
         return out;
     const std::size_t cells = field.dist.size();
-    // The floor over the open squares (past the zone; a pocket keeps the fog out, so its floor does not count).
+    const int nx = field.nx, ny = field.ny;
+    // The fog's floor: the zone's lowest ground by its edge, carried out from the nearest covered square (its lowest
+    // terrain, or its water's surface over that), then smoothed. Not the edge's highest terrain (HorizonField::edge):
+    // a city wall or a cliff's top there lifted the bank hundreds of units over the open ground and into the sky.
+    std::vector<float> low(cells, std::numeric_limits<float>::quiet_NaN());
+    std::vector<int> source(cells, -1);
+    std::vector<float> reach(cells, std::numeric_limits<float>::infinity());
+    for (std::size_t i = 0; i < cells; ++i)
+        if (field.covered(i)) {
+            float z = std::isfinite(field.zmin[i]) ? field.zmin[i] : field.water[i];
+            if (field.wet[i] && std::isfinite(field.water[i])) z = std::isfinite(z) ? std::max(z, field.water[i]) : field.water[i];
+            if (!std::isfinite(z)) continue;
+            low[i] = z;
+            source[i] = static_cast<int>(i);
+            reach[i] = 0.0f;
+        }
+    auto at = [&](int x, int y) { return static_cast<std::size_t>(y) * static_cast<std::size_t>(nx) + static_cast<std::size_t>(x); };
+    auto relax = [&](int x, int y, int px, int py) {
+        if (px < 0 || py < 0 || px >= nx || py >= ny) return;
+        const std::size_t i = at(x, y);
+        const int src = source[at(px, py)];
+        if (src < 0 || field.covered(i)) return;
+        const float d = std::hypot(static_cast<float>(x - src % nx), static_cast<float>(y - src / nx));
+        if (d < reach[i]) {
+            reach[i] = d;
+            source[i] = src;
+        }
+    };
+    for (int y = 0; y < ny; ++y)
+        for (int x = 0; x < nx; ++x) {
+            relax(x, y, x - 1, y);
+            relax(x, y, x - 1, y - 1);
+            relax(x, y, x, y - 1);
+            relax(x, y, x + 1, y - 1);
+        }
+    for (int y = ny - 1; y >= 0; --y)
+        for (int x = nx - 1; x >= 0; --x) {
+            relax(x, y, x + 1, y);
+            relax(x, y, x + 1, y + 1);
+            relax(x, y, x, y + 1);
+            relax(x, y, x - 1, y + 1);
+        }
+    std::vector<float> floor(cells, std::numeric_limits<float>::quiet_NaN());
+    for (std::size_t i = 0; i < cells; ++i)
+        if (source[i] >= 0) floor[i] = low[static_cast<std::size_t>(source[i])];
+    for (int pass = 0; pass < 2; ++pass)
+        for (int axis = 0; axis < 2; ++axis) {
+            const std::vector<float> was = floor;
+            constexpr int kRadius = 2;
+            for (int y = 0; y < ny; ++y)
+                for (int x = 0; x < nx; ++x) {
+                    const std::size_t i = at(x, y);
+                    if (!field.open[i]) continue;
+                    float sum = 0.0f, n = 0.0f;
+                    for (int k = -kRadius; k <= kRadius; ++k) {
+                        const int px = axis == 0 ? x + k : x, py = axis == 0 ? y : y + k;
+                        if (px < 0 || py < 0 || px >= nx || py >= ny || !std::isfinite(was[at(px, py)])) continue;
+                        sum += was[at(px, py)];
+                        n += 1.0f;
+                    }
+                    if (n > 0.0f) floor[i] = sum / n;
+                }
+        }
+    // Never over the edge the land starts from.
+    for (std::size_t i = 0; i < cells; ++i)
+        if (field.open[i] && std::isfinite(field.edge[i]) && !(floor[i] <= field.edge[i])) floor[i] = field.edge[i];
+    // Its range over the open squares (a pocket keeps the fog out, so its floor does not count).
     float lo = std::numeric_limits<float>::infinity(), hi = -lo;
     for (std::size_t i = 0; i < cells; ++i)
-        if (field.open[i] && std::isfinite(field.edge[i])) {
-            lo = std::min(lo, field.edge[i]);
-            hi = std::max(hi, field.edge[i]);
+        if (field.open[i] && std::isfinite(floor[i])) {
+            lo = std::min(lo, floor[i]);
+            hi = std::max(hi, floor[i]);
         }
     if (!(lo <= hi)) return out; // no open square: the zone's terrain fills its grid
     out.lo = field.lo;
@@ -61,15 +127,9 @@ ZoneFogField zone_fog_field(const HorizonField& field) {
     out.floor_range = std::max(hi - lo, 1.0f);
     out.texels.resize(cells);
     for (std::size_t i = 0; i < cells; ++i) {
-        float d = 0.0f, h = lo;
-        if (field.open[i]) {
-            d = field.dist[i] * field.cell;
-            if (std::isfinite(field.edge[i])) h = field.edge[i];
-        } else if (field.covered(i)) {
-            // The fog's floor under the zone's own squares is their highest terrain (the edge as the open squares
-            // beside them carry it out), so it does not dip where it fades in.
-            h = std::isfinite(field.zmax[i]) ? field.zmax[i] : lo;
-        }
+        // The zone's own squares keep their lowest ground as the floor, as the open squares beside them carry it.
+        float d = 0.0f, h = std::isfinite(floor[i]) ? floor[i] : lo;
+        if (field.open[i]) d = field.dist[i] * field.cell;
         const auto r = static_cast<std::uint32_t>(std::lround(std::clamp(d / kZoneFogDistanceStep, 0.0f, 255.0f)));
         const auto g = static_cast<std::uint32_t>(std::lround(std::clamp((h - lo) / out.floor_range, 0.0f, 1.0f) * 255.0f));
         out.texels[i] = r | (g << 8) | 0xff000000u;

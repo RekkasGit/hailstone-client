@@ -99,3 +99,21 @@ TEST_CASE("zone fog: no field without the land's") {
     CHECK_FALSE(fog.valid());
     CHECK(render::zone_fog_transmittance(fog, {0.0f, 0.0f, 0.0f}, {10000.0f, 0.0f, 0.0f}) == 1.0f);
 }
+
+TEST_CASE("zone fog: a wall along the zone's edge does not lift the bank off the open ground") {
+    std::vector<HorizonTriangle> tris;
+    add_ground(tris, 0.0f, 0.0f, 2000.0f, 2000.0f, 20.0f, [](float, float) { return false; });
+    // A wall 600 high standing on the east edge.
+    for (float y = 0.0f; y < 2000.0f; y += 100.0f) {
+        const glm::vec3 a(1990.0f, y, 20.0f), b(1990.0f, y + 100.0f, 20.0f), c(1990.0f, y + 100.0f, 620.0f),
+            d(1990.0f, y, 620.0f);
+        tris.push_back({a, b, c, false});
+        tris.push_back({a, c, d, false});
+    }
+    const auto fog = fog_of(tris);
+    REQUIRE(fog.valid());
+    CHECK(fog.floor_at({3500.0f, 1000.0f}) < 60.0f);
+    // So at eye height out past the wall it is thick, and over the wall's top it is clear.
+    CHECK(render::zone_fog_density(fog, {3500.0f, 1000.0f, 26.0f}) == doctest::Approx(render::kZoneFogDensity));
+    CHECK(render::zone_fog_density(fog, {3500.0f, 1000.0f, 640.0f}) == 0.0f);
+}

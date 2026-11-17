@@ -1639,8 +1639,10 @@ past a zone's geometry and hid that in its fog wall. It replaces drawing the zon
 showed walls, filler and seams there.
 
 - **Where** (`render::zone_fog_field`, `render/zone_fog.h`): the land's field (`render::HorizonField`, its 64-unit
-  squares): each open square's distance to the zone's terrain, and the zone's edge's height there (the highest terrain
-  of the nearest covered square, smoothed; the water's surface where that is water) as the bank's floor. On the zone's
+  squares): each open square's distance to the zone's terrain, and as the bank's floor the zone's lowest ground by its
+  edge (the nearest covered square's lowest terrain, or its water's surface over that, smoothed; never over the edge's
+  height the land starts from). Not the edge's highest terrain: East Freeport's walls and cliffs lifted the bank
+  hundreds of units over the open ground and into the sky; walls and cliff tops stand out of it instead. On the zone's
   own squares and in a pocket its terrain closes round there is none. Packed into an RGBA8 texture (distance in steps
   of 16 units, floor over the zone's range of floors); past the grid the distance goes on growing.
 - **How thick**: density 0.006 a unit (1000 units of it leave 0.25 % of the light) times a ramp from 0 at the zone's
