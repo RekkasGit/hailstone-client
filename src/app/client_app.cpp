@@ -45,8 +45,11 @@ int ClientApp::run() {
         // Auto: just under the refresh rate of the display the window is on now (auto_frame_cap).
         const int max_fps =
             effective_max_fps(opts_.max_fps, opts_.max_fps == kMaxFpsAuto ? window_.refresh_rate() : 0.0f);
+        // A login/loading screen keeps an unlimited cap at kLightScreenCap so it does not spin; that includes the
+        // settle after zone-in, where screen_ is already InGame but the loading overlay is still drawn.
+        const bool light_screen = is_light_screen(screen_ == Screen::InGame, zone_settling());
         const FramePace pace = frame_pace(max_fps, background_fps_, window_.focused(),
-            std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - last_drawn));
+            std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - last_drawn), light_screen);
         // To the microsecond on every system (platform/precise_sleep.h), timed from the last deadline (next_frame_deadline).
         if (pace.cap > 0) {
             frame_deadline = next_frame_deadline(frame_deadline, Clock::now(),
@@ -184,7 +187,9 @@ int ClientApp::run() {
                 };
                 conn_->set_remote_probe_range(game::actor_clip_distance(actor_clip_plane_, view_.far_plane));
             }
-            conn_->smooth(dt, floor, actor_model, region, vehicle_under, ground_floor, remote_collision);
+            // ground_floor is grounding_floor: it probes the same zone mesh the landing check uses, so a landed
+            // spawn's drop is known to be 0 and WorldState::smooth can skip its second collision query.
+            conn_->smooth(dt, floor, actor_model, region, vehicle_under, ground_floor, remote_collision, true);
             trace_spawn(dt);
         }
         update_lap.mark("spawn smoothing");
