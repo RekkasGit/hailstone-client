@@ -925,9 +925,9 @@ TEST_CASE("native plugins: get_target_buff_data_bulk, laid out as docs/plugins.m
     auto& sp = A::spells(*h.world.conn);
     auto& w = A::world(*h.world.conn);
     REQUIRE(w.target_id == 10); // the test world targets a_rat01
-    // No OP_TargetBuffs yet: nothing.
+    // No OP_TargetBuffs yet: the count alone, 0.
     h.run("/probetargetbuffs");
-    CHECK(h.printed_line("[Probe] target buffs 0 bytes, 0 records, 0 empty, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] target buffs count 0, 4 bytes, 0 records, 0 empty, 0 bytes left"));
     const std::int64_t now = net::GameConnection::now_ms();
     auto target_buff = [now](std::uint32_t spell, std::int32_t tics, std::string caster, std::int64_t ticks_ago = 0) {
         game::BuffSlot b;
@@ -938,8 +938,8 @@ TEST_CASE("native plugins: get_target_buff_data_bulk, laid out as docs/plugins.m
         return b;
     };
     sp.target_buffs_entity = 10;
-    // An entry with no spell (index 2), with a caster's name, is left out. The duration is the ticks left: the
-    // first came three ticks ago, 8 sent, 5 left.
+    // An entry with no spell (index 2), with a caster's name, is left out and not counted. The duration is the ticks
+    // left: the first came three ticks ago, 8 sent, 5 left.
     sp.target_buffs = {{3, target_buff(3002, 8, "Tester", 3)}, {0, target_buff(11, 1, "Groupie")},
                        {5, target_buff(0, 6, "Nobody")}, {7, target_buff(99999, 4, "")}};
     // In the order the client keeps them (the slots are not sent); a spell not known has type 0, no caster no name.
@@ -947,39 +947,62 @@ TEST_CASE("native plugins: get_target_buff_data_bulk, laid out as docs/plugins.m
     CHECK(h.printed_line("[Probe] target buff slot 3: spell 3002, tics 5, spell type 0, caster Tester"));
     CHECK(h.printed_line("[Probe] target buff slot 0: spell 11, tics 1, spell type 1, caster Groupie"));
     CHECK(h.printed_line("[Probe] target buff slot 7: spell 99999, tics 4, spell type 0, caster -"));
-    // 20+6, 20+7, 20+0: the entry with no spell is not sent
-    CHECK(h.printed_line("[Probe] target buffs 73 bytes, 3 records, 0 empty, 0 bytes left"));
-    // Only whole records, names included, go into a buffer too small for all, and nothing past its end.
+    // 4 for the count, then 20+6, 20+7, 20+0: the entry with no spell is not sent
+    CHECK(h.printed_line("[Probe] target buffs count 3, 77 bytes, 3 records, 0 empty, 0 bytes left"));
+    // Only whole records, names included, go into a buffer too small for all, and nothing past its end; the count
+    // still says how many the client holds, so the plugin sees it was cut short. The third record (20 bytes) would
+    // fit where the second (27) does not, but nothing follows the first cut: the records stay in order.
     h.printed.clear();
-    h.run("/probetargetbuffs 52");
+    h.run("/probetargetbuffs 56");
     CHECK(h.printed_line("[Probe] target buff slot 3: spell 3002, tics 5, spell type 0, caster Tester"));
     CHECK_FALSE(h.printed_line("[Probe] target buff slot 0: spell 11, tics 1, spell type 1, caster Groupie"));
-    CHECK(h.printed_line("[Probe] target buffs 26 bytes, 1 records, 0 empty, 0 bytes left"));
+    CHECK_FALSE(h.printed_line("[Probe] target buff slot 7: spell 99999, tics 4, spell type 0, caster -"));
+    CHECK(h.printed_line("[Probe] target buffs count 3, 30 bytes, 1 records, 0 empty, 0 bytes left"));
     CHECK(h.printed_line("[Probe] target buffs past the end 0"));
     h.printed.clear();
-    h.run("/probetargetbuffs 53");
-    CHECK(h.printed_line("[Probe] target buffs 53 bytes, 2 records, 0 empty, 0 bytes left"));
+    h.run("/probetargetbuffs 57");
+    CHECK(h.printed_line("[Probe] target buffs count 3, 57 bytes, 2 records, 0 empty, 0 bytes left"));
     CHECK(h.printed_line("[Probe] target buffs past the end 0"));
     // The last record needs its 20 bytes: one byte short, it is left out.
     h.printed.clear();
-    h.run("/probetargetbuffs 72");
+    h.run("/probetargetbuffs 76");
     CHECK_FALSE(h.printed_line("[Probe] target buff slot 7: spell 99999, tics 4, spell type 0, caster -"));
-    CHECK(h.printed_line("[Probe] target buffs 53 bytes, 2 records, 0 empty, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] target buffs count 3, 57 bytes, 2 records, 0 empty, 0 bytes left"));
     CHECK(h.printed_line("[Probe] target buffs past the end 0"));
     h.printed.clear();
-    h.run("/probetargetbuffs 19"); // not even one fixed part
-    CHECK(h.printed_line("[Probe] target buffs 0 bytes, 0 records, 0 empty, 0 bytes left"));
+    h.run("/probetargetbuffs 23"); // the count and not even one fixed part
+    CHECK(h.printed_line("[Probe] target buffs count 3, 4 bytes, 0 records, 0 empty, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] target buffs past the end 0"));
+    h.printed.clear();
+    h.run("/probetargetbuffs 3"); // not even the count: nothing
+    CHECK(h.printed_line("[Probe] target buffs 0 bytes"));
     CHECK(h.printed_line("[Probe] target buffs past the end 0"));
     // A new target whose buffs have not come yet: the old target's are not given as its.
     h.printed.clear();
     w.target_id = 11;
     h.run("/probetargetbuffs");
-    CHECK(h.printed_line("[Probe] target buffs 0 bytes, 0 records, 0 empty, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] target buffs count 0, 4 bytes, 0 records, 0 empty, 0 bytes left"));
+    // The player itself targeted: the read does not hide the player's own list, though the client's target buff
+    // list draws nothing then (docs/plugins.md).
+    h.printed.clear();
+    w.target_id = w.player_id;
+    sp.target_buffs_entity = w.player_id;
+    sp.target_buffs = {{1, target_buff(11, 2, "Self")}};
+    h.run("/probetargetbuffs");
+    CHECK(h.printed_line("[Probe] target buff slot 1: spell 11, tics 2, spell type 1, caster Self"));
+    CHECK(h.printed_line("[Probe] target buffs count 1, 28 bytes, 1 records, 0 empty, 0 bytes left"));
     // No target at all.
+    h.printed.clear();
     w.target_id = 0;
     sp.target_buffs_entity = 0;
     h.run("/probetargetbuffs");
-    CHECK(h.printed_line("[Probe] target buffs 0 bytes, 0 records, 0 empty, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] target buffs count 0, 4 bytes, 0 records, 0 empty, 0 bytes left"));
+    // No game connection at all (the login screen): the count 0 too, as the other count-led reads.
+    h.printed.clear();
+    auto conn = std::move(h.world.conn);
+    h.run("/probetargetbuffs");
+    CHECK(h.printed_line("[Probe] target buffs count 0, 4 bytes, 0 records, 0 empty, 0 bytes left"));
+    h.world.conn = std::move(conn);
 }
 TEST_CASE("native plugins: get_avail_aa_data_bulk and get_avail_disc_data_bulk, laid out as docs/plugins.md says") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
@@ -1099,7 +1122,7 @@ TEST_CASE("native plugins: the buff bulk reads need 'read'") {
     h.run("/probextargets 512");
     CHECK(h.printed_line("[Probe] xtargets 0 bytes"));
     h.run("/probetargetbuffs 2048");
-    CHECK(h.printed_line("[Probe] target buffs 0 bytes, 0 records, 0 empty, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] target buffs 0 bytes"));
     h.run("/probeaas 2048");
     CHECK(h.printed_line("[Probe] aas 0 bytes"));
     h.run("/probediscs 2048");

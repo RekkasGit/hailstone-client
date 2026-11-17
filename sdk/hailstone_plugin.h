@@ -197,9 +197,10 @@ typedef struct HS_Bulk_PetBuffData {
     int32_t duration;
     int32_t spellType;
 } HS_BulkPetBuffData;
-/* get_target_buff_data_bulk: one record per buff of the current target, HAILSTONE_TARGET_BUFF_RECORD_SIZE fixed bytes
- * each, immediately followed by casterNameLength bytes of the caster's name (no NUL); the next record starts after
- * them. */
+/* get_target_buff_data_bulk: an int32_t count of the current target's buffs the client holds, then one record per
+ * buff, HAILSTONE_TARGET_BUFF_RECORD_SIZE fixed bytes each, immediately followed by casterNameLength bytes of the
+ * caster's name (no NUL); the next record starts after them. As many whole records as fit follow the count, so fewer
+ * records than the count means out_size cut the list short; below 4 bytes nothing is written (0 returned). */
 typedef struct HS_Bulk_TargetBuffFixedRecord {
     int32_t spellID;          /* the buff's spell; entries with no spell are not sent */
     int32_t duration;         /* tics left (the server's count less the 6 s ticks since); negative: permanent */
@@ -735,7 +736,8 @@ typedef struct PluginHostApi {
     int (*web_view)(void* host, uint32_t tab, float width, float height);
 
     /* ---- added later in ABI 3: check HAILSTONE_HOST_HAS(field) before calling (an older client's table ends
-     * before) ----
+     * before; new entries go at the end, in order, never between these: a plugin built with an older header finds
+     * each by its position) ----
      * The bank window opens as a right click on a banker opens it (CBankWnd::Activate), here without that click's
      * class and range checks: `banker` a spawn id, 0 for the player itself (as the NMS patch's vault Bank button);
      * the window closes when that spawn is out of reach. 1 open (or already open), 0 not (HAILSTONE_CAP_ACTIONS). */

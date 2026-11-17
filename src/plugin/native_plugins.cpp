@@ -1484,52 +1484,67 @@ int32_t h_get_pet_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
     return bufferSize;
 }
 /// <summary>
-/// The current target's buffs in one call, as OP_TargetBuffs last gave them (the target window's), in the order the
-/// client keeps them, each with the slot the server sent: an HS_Bulk_TargetBuffFixedRecord followed by its caster's
-/// name, casterNameLength bytes with no NUL. An entry with no spell is left out. Only whole records go out; as many
-/// as fit. Nothing without a target, or when the buffs the client holds are another spawn's (the server has not sent
-/// the new target's yet).
+/// The current target's buffs in one call, as OP_TargetBuffs last gave them, in the order the client keeps them, each
+/// with the slot the server sent: an int32_t count of the target's buffs the client holds, then one
+/// HS_Bulk_TargetBuffFixedRecord per buff followed by its caster's name, casterNameLength bytes with no NUL. An
+/// entry with no spell is neither counted nor written. Only whole records go out, as many as fit after the count; a
+/// plugin that reads fewer records than the count knows the buffer cut the list short. Nothing (0 bytes) when not
+/// even the count fits. The count alone (0) without a target, when the buffs the client holds are another spawn's
+/// (the server has not sent the new target's yet), or with no game connection.
 /// </summary>
 /// <param name="h">host</param>
 /// <param name="data">buffer to put data in</param>
-/// <param name="datamax">20 bytes per buff plus its caster's name; 2048 holds the target window's buffs</param>
-/// <returns>bytes written</returns>
+/// <param name="datamax">4 bytes for the count plus 20 per buff and its caster's name; the worst case (EQEmu: 60
+/// buff slots on an NPC by default, Spells:MaxTotalSlotsNPC; a caster's name up to 63 bytes, Buffs_Struct) is
+/// 4 + 60 * 83 = 4984, so 8192 holds any on a stock server</param>
+/// <returns>bytes written; 0 below 4 bytes</returns>
 int32_t h_get_target_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
 {
-    const net::GameConnection* c = readable(Loaded::of(h), "get_target_buff_data_bulk");
-    if (!c || !data || datamax <= 0) return 0;
-    const auto& st = c->spell_state();
-    const std::uint32_t target = c->world().target_id;
+    Loaded& l = Loaded::of(h);
+    const net::GameConnection* c = readable(l, "get_target_buff_data_bulk");
+    if (!c && !l.can(kCapRead)) return 0;
+    const std::size_t headerBytes = sizeof(int32_t); // the count
+    if (!data || datamax <= 0 || static_cast<std::size_t>(datamax) < headerBytes) return 0;
+    int32_t count = 0;
+    std::size_t bufferSize = headerBytes;
+    const std::uint32_t target = c ? c->world().target_id : 0;
     // The same check as the target window (lua_eq_hud.cpp, spell_ui.cpp): the list is only the target's while
     // target_buffs_entity says so.
-    if (target == 0 || st.target_buffs_entity != target) return 0;
-    unsigned char* pBuffer = data;
-    std::size_t bufferSize = 0;
-
-    static_assert(sizeof(HS_BulkTargetBuffFixedRecord) == HAILSTONE_TARGET_BUFF_RECORD_SIZE);
-    const std::size_t fixedBytes = sizeof(HS_BulkTargetBuffFixedRecord);
-    const game::SpellTable& spells = c->spell_table();
-    const std::int64_t now = net::GameConnection::now_ms(); // for the ticks left
-    for (const auto& [slot, b] : st.target_buffs) {
-        // The decoder drops removed entries (0xffffffff) and EQEmu sends only valid spells, so an entry with no
-        // spell is not expected; skip it, as spawn_buffs (tlo_game.cpp) and the target window do.
-        if (b.empty()) continue;
-        const std::size_t nameBytes = b.caster_name.size();
-        // Buffer is full: only whole records go out (the name is part of the record).
-        if (fixedBytes + nameBytes > static_cast<std::size_t>(datamax) - bufferSize) break;
-        // Written in place through the packed struct (the bulk reads may cast, docs/plugins.md).
-        HS_BulkTargetBuffFixedRecord* rec = reinterpret_cast<HS_BulkTargetBuffFixedRecord*>(pBuffer);
-        *rec = HS_BulkTargetBuffFixedRecord{};
-        rec->spellID = static_cast<int32_t>(b.spell);
-        rec->duration = game::buff_tics_left(b.tics, b.received_ms, now);
-        if (const auto* sp = spells.get(b.spell)) rec->spellType = sp->spell_type;
-        rec->slot = static_cast<int32_t>(slot);
-        rec->casterNameLength = static_cast<int32_t>(nameBytes);
-        pBuffer += fixedBytes;
-        if (nameBytes) std::memcpy(pBuffer, b.caster_name.data(), nameBytes);
-        pBuffer += nameBytes;
-        bufferSize += fixedBytes + nameBytes;
+    if (c && target != 0 && c->spell_state().target_buffs_entity == target) {
+        const auto& st = c->spell_state();
+        unsigned char* pBuffer = data + headerBytes;
+        static_assert(sizeof(HS_BulkTargetBuffFixedRecord) == HAILSTONE_TARGET_BUFF_RECORD_SIZE);
+        const std::size_t fixedBytes = sizeof(HS_BulkTargetBuffFixedRecord);
+        const game::SpellTable& spells = c->spell_table();
+        const std::int64_t now = net::GameConnection::now_ms(); // for the ticks left
+        bool full = false;
+        for (const auto& [slot, b] : st.target_buffs) {
+            // The decoder drops removed entries (0xffffffff) and EQEmu sends only valid spells, so an entry with no
+            // spell is not expected; skip it, as spawn_buffs (tlo_game.cpp) and the target window do.
+            if (b.empty()) continue;
+            ++count; // every buff held, written or not: fewer records than the count means the buffer was too small
+            if (full) continue;
+            const std::size_t nameBytes = b.caster_name.size();
+            // Buffer is full: only whole records go out (the name is part of the record), none after the first cut.
+            if (fixedBytes + nameBytes > static_cast<std::size_t>(datamax) - bufferSize) {
+                full = true;
+                continue;
+            }
+            // Written in place through the packed struct (the bulk reads may cast, docs/plugins.md).
+            HS_BulkTargetBuffFixedRecord* rec = reinterpret_cast<HS_BulkTargetBuffFixedRecord*>(pBuffer);
+            *rec = HS_BulkTargetBuffFixedRecord{};
+            rec->spellID = static_cast<int32_t>(b.spell);
+            rec->duration = game::buff_tics_left(b.tics, b.received_ms, now);
+            if (const auto* sp = spells.get(b.spell)) rec->spellType = sp->spell_type;
+            rec->slot = static_cast<int32_t>(slot);
+            rec->casterNameLength = static_cast<int32_t>(nameBytes);
+            pBuffer += fixedBytes;
+            if (nameBytes) std::memcpy(pBuffer, b.caster_name.data(), nameBytes);
+            pBuffer += nameBytes;
+            bufferSize += fixedBytes + nameBytes;
+        }
     }
+    std::memcpy(data, &count, sizeof count); // in the machine's byte order, unaligned, as the records
     return static_cast<int32_t>(bufferSize);
 }
 /// <summary>
