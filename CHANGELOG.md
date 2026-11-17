@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Modern lighting: Plane of Sky and Plane of Air show the sky under them again, its clouds going on below the islands, instead of grey or black, and their far islands fade into the sky's haze, not black. No distant land or edge fog is drawn round them
+- Modern lighting: the distant land past a zone's edge rises gently: it stays near the edge's height for a few hundred units, its hills grow over the next few thousand and the mountains stand far off, no longer climbing steeply right at the zone line
 - Modern lighting: shadows from the sun and from torches and other lights cost less GPU time and look the same. A light's shadow is now only read where the light reaches, and the soft shadow edge takes four texture reads instead of nine
 - Performance window: a new "GPU passes" table shows how long the GPU spends on each part of the frame (shadows, the zone, characters, ambient occlusion, bloom, the UI and so on). While the scene is recorded on the worker threads (`display.parallel_record`, the default) the scene shows as a whole (two rows in the modern lighting: its opaque part and the rest); `display.parallel_record = 0` splits them again
 - Lighting has a third level between Classic and Modern: Smooth Classic, the classic light worked out per pixel instead of at the corners of each triangle, so trees' leaves show their sunlit and shaded sides and brightly lit walls no longer dim between their corners, and torch and brazier flames keep colour in their cores instead of clipping to flat white. Options > Graphics > Lighting (gamepad: Display) now lists Classic (Low), Smooth Classic (Medium) and Modern (High); `/lighting smooth` picks it. Classic stays the original's exact look

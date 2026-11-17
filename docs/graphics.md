@@ -1610,7 +1610,7 @@ does not move) and a saturation after it. Subtle by design:
 ## Horizon hills
 
 In the modern lighting, outdoors, land stands round the zone past its edges, out to about the modern view's reach, so
-the world does not end in a blank haze (Hailstone's own; the classic client drew nothing past a zone's geometry). It is
+the world does not end in a blank haze (not round a zone floating in the sky: Sky zones, below) (Hailstone's own; the classic client drew nothing past a zone's geometry). It is
 real geometry: a mesh built while `ZoneRenderer::prepare` builds the zone (`render::horizon_mesh`, `render/horizon.h`)
 and drawn with the zone's own materials through `zone.frag`, so it takes the zone's textures (a texture pack's photo
 materials and normal maps too), its light, the sun and the haze exactly as the zone's ground does, and the depth test
@@ -1636,8 +1636,10 @@ general rule fixed across the game's zones, and they were removed).
   where only water is beside it), so the land meets the zone's edge
   without a gap and stays under its ground; the squares under the zone are drawn too (they show only through the back
   of its walls, which have only their inner faces). Past the edge the land starts at the edge's height and turns over
-  1200 units into rolling hills (200 to 650 units high with the relief) and, from 800 to 5000 units out, ridged
-  mountains (900 to 2250 units, up to half again where a broad mass lifts them), all seeded by the zone's short name
+  2500 units into rolling hills (200 to 650 units high with the relief, growing from 300 to 3000 units out) and, from
+  2500 to 8000 units out, ridged mountains (900 to 2250 units, up to half again where a broad mass lifts them), so it
+  rises gently by the zone and the steep ground stands far off, behind the fog past the edge (up to 0.7 the hills were
+  full height 800 units out and the mountains rose from there to 5000, steep right at the zone line), all seeded by the zone's short name
   (`render::horizon_seed`), so it is the same every visit. The hills are warped noise, their lines bending and
   branching (the coordinates pushed up to 900 units by a noise of their own before the hills and ridges are taken),
   not a value noise's grid of blobs, as up to 0.7. A pocket the zone's terrain closes round (a gap between its walls,
@@ -1719,6 +1721,24 @@ general rule fixed across the game's zones, and they were removed).
 
 `display.horizon_hills` (Options, Horizon Hills) turns it off, its trees with it; the viewer takes `--no-horizon`, and
 `--no-land-trees` for the land without its trees.
+
+## Sky zones
+
+A zone that floats in the sky, with open sky under its ground (`render::horizon_open_below`: Plane of Sky `airplane`,
+Plane of Air `poair`), gets in the modern lighting:
+
+- **No land round it and no fog past its edge**: they would be ground where there is none.
+- **Its own painted sky dome**, not the atmosphere, which goes into the haze below the horizon; and the dome and its
+  cloud layers drawn again mirrored under the horizon, behind themselves (`SkyFrame::mirror_below`), so the sky goes on
+  to the nadir past the dome's foot, and past that the background is the open sky's colour straight up
+  (`render::open_sky_below`), not the zone's fog.
+- **The haze in the sky's own colour** at the horizon (`render::haze_target`, `in_the_sky`), whatever the zone's fog:
+  PEQ's zone table gives Plane of Sky a black fog, which turned its far islands, and everything under them, black.
+
+Its sky is the plain one (sky 1 in PEQ's zone table), so nothing the server sends says so, and the zone's shape does
+not either: the share of open air between the zone's pieces of ground was 14 % in Plane of Sky but 3 % in Plane of
+Air, against up to 6 % in the ordinary outdoor zones measured (and 27 to 35 % in the box round East Karana's, North
+Ro's and Trakanon's level ground). So the zones are listed by name (docs/unknowns.md, World rendering).
 
 ## Zone edge fog
 

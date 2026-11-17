@@ -386,3 +386,32 @@ TEST_CASE("horizon: the land's trees stand on it past the zone's edge, off the s
     CHECK(render::horizon_trees(field, mesh, 160.0f, 800.0f).size() < trees.size());
     CHECK(render::horizon_trees(render::HorizonField{}, mesh, 80.0f, 400.0f).empty());
 }
+
+TEST_CASE("horizon: the zones floating in the sky, by name in any case") {
+    CHECK(render::horizon_open_below("airplane"));
+    CHECK(render::horizon_open_below("AirPlane"));
+    CHECK(render::horizon_open_below("poair"));
+    CHECK_FALSE(render::horizon_open_below("qeytoqrg"));
+    CHECK_FALSE(render::horizon_open_below("airplanes"));
+    CHECK_FALSE(render::horizon_open_below(""));
+}
+
+TEST_CASE("horizon: past the zone's edge the land rises gently; the mountains stand far off") {
+    std::vector<HorizonTriangle> tris;
+    add_grid(tris, 0.0f, 0.0f, 2000.0f, 2000.0f, 100.0f, [](float, float) { return 20.0f; });
+    const auto field = render::horizon_field(tris, render::horizon_land(tris, 0.0f));
+    REQUIRE(field.valid());
+    // Along the east edge, 300 and 1000 units out: near the edge's height (up to 0.7 the hills stood full height
+    // 800 units out).
+    float near300 = -1e9f, near1000 = -1e9f, far = -1e9f;
+    for (float y = 0.0f; y <= 2000.0f; y += 50.0f) {
+        near300 = std::max(near300, render::horizon_height(field, {2300.0f, y}));
+        near1000 = std::max(near1000, render::horizon_height(field, {3000.0f, y}));
+    }
+    // Far out, somewhere, mountains.
+    for (float a = 0.0f; a < 6.28f; a += 0.05f)
+        far = std::max(far, render::horizon_height(field, {1000.0f + 9000.0f * std::cos(a), 1000.0f + 9000.0f * std::sin(a)}));
+    CHECK(near300 < 20.0f + 30.0f);
+    CHECK(near1000 < 20.0f + 120.0f);
+    CHECK(far > 20.0f + 400.0f);
+}
