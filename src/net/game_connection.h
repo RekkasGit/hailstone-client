@@ -522,6 +522,7 @@ public:
     std::uint16_t zone_id() const { return new_zone_ ? new_zone_->zone_id : 0; }
     // The spawns ProcessSwitches checks for a moving floor switch's riders (the app's player); null: none.
     void set_door_riders(const game::DoorRiders* riders) { door_riders_ = riders; }
+    void set_door_particles(const game::DoorParticles* particles) { door_particles_ = particles; }
     // The instance the player is in: the player profile's when it is for this zone. Stock EQEmu fills only
     // OP_NewZone's zone id (zone.cpp: newzone_data.zone_instance is never set), so OP_NewZone's instance is 0 in an
     // instance, and a request for the player's own instanced zone (a summon, a #goto) would look like another zone
@@ -2822,6 +2823,7 @@ private:
     // Sends an OP_ZoneChange and waits for its answer (RequestZoneChangeStatus).
     void start_zone_change(const ZoneChange& request);
     const game::DoorRiders* door_riders_ = nullptr;
+    const game::DoorParticles* door_particles_ = nullptr;
     // Riding (net/game_connection_mounts.cpp).
     game::MountQueries* mount_queries_ = nullptr;
     game::MountQueries& mount_queries();
