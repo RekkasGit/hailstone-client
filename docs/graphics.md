@@ -92,7 +92,9 @@ without a pool (the tests, the tools) or from inside a worker it runs the loop i
 
 - The characters' posing and skinning (`render::ActorRenderer::prepare`): each drawn instance's slice of the frame's
   bones is given out on the main thread (the culling and the bone budget, in order), the instances are posed and
-  skinned on the workers, each into its own slice, and the motion history is kept on the main thread after.
+  skinned on the workers, each into its own slice (`ActorRenderer::pose_instances`), and the motion history is kept on
+  the main thread after. An actor's bones as drawn (`drawn_bone`: its effects, its name plate, spells on it) are posed
+  once a frame and kept until the spawn is drawn again (`ActorRenderer::cached_bone_world`).
 - The particle quads (`render::ParticleRenderer::draw`). Modern: after the sort, each particle has its own six
   vertices in the buffer. Classic: the particles each emitter shows are counted on the workers, the emitters' places
   are given out in order up to the buffer's size, then their quads are built on the workers. A particle that turns
