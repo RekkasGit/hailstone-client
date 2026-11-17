@@ -47,6 +47,9 @@ Then:
 | has no `hailstone.cfg` (plain EQEmu, or the script without one) | run, with every capability | run, with every capability |
 | has a `hailstone.cfg` | run only when it allows them, with the capabilities it grants | always run, with every capability; scripts start by themselves, and the player cannot stop them or unload its plugins. Its compiled plugins load only once the player allowed them (below) |
 
+A server can also require, allow or block the player's add-ons by their repository ("Opt-in add-on policies" below);
+without `[addons] enforce = on`, the table is all there is.
+
 A file is the server's when its SHA-256 is one the server listed for its `scripts/` or `plugins/` this login. Editing
 one makes it the player's.
 
@@ -69,6 +72,9 @@ its capabilities say (they limit only what it does through Hailstone). So a libr
 (`servers/<profile>/plugins/`) does not load until the player said yes to its bytes, on every server, with or without
 a `hailstone.cfg`. The server's Lua scripts and its plugins' Lua windows are not asked about: they run inside
 Hailstone's limits.
+
+A compiled plugin an opted-in policy requires ("Opt-in add-on policies") asks the same question, by the same
+per-server, per-hash approval.
 
 - **The question.** When such a plugin would load (the zone-in, the world login for a `login` one, `/plugin <name>
   load`) and the player has not answered for its SHA-256 on this server, it stays unloaded and a window asks: which
@@ -1117,7 +1123,8 @@ through the client, so their capabilities hold. All of this is enforced by the c
 
 An upscaler provider is a temporal upscaler from outside the client (Intel XeSS, AMD FSR 4 ...),
 built against `sdk/hailstone_upscaler.h`. It is not a game plugin: it has no host table, no capabilities and no
-callbacks, sees nothing of the game, and no server sends one or rules on one. The player installs it with the add-on
+callbacks and sees nothing of the game. Servers do not send providers; an opted-in add-on policy can require, allow
+or block one by its repository, checked as the character enters that server ("Opt-in add-on policies" below). The player installs it with the add-on
 manager (an add-on of the kind `upscaler`, docs/addons.md "Upscalers") and picks it under Options, Graphics,
 Upscaler (`display.upscaler = <name>`); it loads at the next start. docs/graphics.md "Upscaler providers" says what the
 client does around it.
@@ -1287,6 +1294,85 @@ unless the server's file says `[movement] passable_ladders = off`. Solid ladders
 meets a ladder as one slab instead of its rungs (docs/mechanics.md "Ladders") unless the file says
 `[movement] solid_ladders = off`.
 Players get a change at their next login, with the rest of the file.
+
+### Opt-in add-on policies
+
+A server can require, allow or block add-ons by name of their GitHub repository: any add-on the add-on manager
+installs (scripts, compiled plugins, tools such as Texture Studio, upscalers such as XeSS or FSR 4). It is off unless
+`[addons] enforce = on`; without it nothing here applies and the rest of this file is unchanged, optional suggestions
+included. `server/hailstone-addon-policy.cfg.example` is an example of its own; copy it to
+`client_files/hailstone.cfg` and edit it for the server.
+
+```ini
+[scripts]
+player = off
+;player_caps = read,ui
+[plugins]
+player = off
+;player_caps = read
+[addons]
+enforce = on
+;required = owner/repo, owner/other-repo
+;allow = owner/repo
+;block = owner/repo
+;suggest = owner/repo
+default = allow
+```
+
+- **Identities are GitHub repositories**, `owner/repo` (`projecthailstone/hailstone-dpsmeter`), compared without
+  case; a GitHub link to one works too, and a release tag or branch is ignored. They are matched against the source
+  the add-on manager recorded when it installed the package, not a folder or manifest name. A bare name
+  (`dpsmeter`) is refused: any package of that name, from anyone, would satisfy it. A refused or malformed entry
+  makes the policy invalid (below), and the client's log names it (`hailstone.cfg: [addons] required: "dpsmeter" is a
+  bare name; add-ons are named by their GitHub repository (owner/repo)`). These are not version pins: the manager's
+  usual update rules still apply.
+- **`allow`, `block` and `default`.** `default = deny` refuses every add-on not named by `allow` or `required`,
+  so a closed list can shut out every add-on, visual ones included; `default = allow` (the default) admits the rest.
+  `block` wins over everything; an identity both required and blocked makes the policy invalid. An add-on put in by
+  hand (not by the manager) has no repository: no list names it, so it runs under `default = allow` (unless it uses
+  a blocked add-on's name) and is refused under `default = deny`. Neither can renaming a script, plugin or edited
+  file admit unknown bytes: an installed add-on is known by its files' recorded hashes.
+- **`required`** add-ons must be installed with every file intact. Required scripts and compiled plugins start at the
+  zone-in even when they are not in the player's autorun, and the player cannot stop, pause or unload them on that
+  server. A required compiled plugin still asks for the player's approval of its bytes on this server ("The server's
+  compiled plugins ask first"). A required upscaler must be the one picked under Options, Graphics, Upscaler and
+  loaded (it loads only at start). A required tool is a program of its own: its intact installation meets the
+  requirement; the client neither starts it nor can tell whether it runs.
+- **Permission is not capability.** Naming an add-on in `allow` or `required` does not turn on `[scripts] player` or
+  `[plugins] player`, nor grant more than `player_caps` and the add-on's manifest. A required script or plugin that
+  needs capabilities the server does not give is a requirement not met. A `suggest` stays optional and grants nothing;
+  under `default = deny`, also name it in `allow` if it should run.
+- **The server's own files** (its `scripts/` and `plugins/`, listed by hash at the zone-in) are not add-ons: no
+  list names them and the policy never refuses them. The server decides by sending them or not.
+
+When it is decided:
+
+- **At the zone-in, by its rules.** The `hailstone.cfg` the zone-in brings decides, never the copy cached from the
+  last visit: so a server that fixed a mistake in its policy is never locked out by the old one. The cached copy only
+  informs the login screen (its add-on panel shows "Required to play on this server" and offers each missing one).
+- **Before the world is shown**, the loading screen reads "Checking required add-ons": required add-ons start, and a
+  required plugin's question waits for the player's answer. A requirement that is missing, changed, refused, needs
+  more than the server allows, or fails to start returns to the login screen with the add-on panel open on what is
+  missing. Reviewing it fetches its manifest and opens the usual install card; nothing is fetched before that click,
+  and installing keeps every usual check (signatures, pinned keys, platform, capabilities, approval of native code).
+  An invalid policy refuses entry the same way, with the reason.
+- **Once the character is in the world**, nothing disconnects: a required add-on that fails, or the next zone's rules
+  that the installed add-ons do not meet, is a warning in chat (`[Add-ons] Required add-on owner/repo did not remain
+  running. You can keep playing on this server.`), said once for each failure. Leaving to character select starts the
+  check over for the next entry.
+
+**When blocking upscalers.** An upscaler loads at start, before any server is known, and Vulkan cannot change it
+while the client runs. An active upscaler the policy refuses (or whose loaded files no longer match its installed
+add-on, as after an update while it ran) refuses entry, with instructions to pick an allowed or built-in one and
+restart. With `default = deny`, name in `allow` the upscalers to permit; the built-in choices need no entry. Requiring
+one excludes players whose hardware cannot run it.
+
+The policy is about playing on this server, not the player's whole library: other servers keep their own rules, and
+nothing installed is removed. The add-on panel's Start button follows it for tools; a program started outside
+Hailstone is outside it. A texture pack is not an add-on: Texture Studio builds it from the player's own game files
+into `textures/`, it has no repository, and no list names it (block the tool to keep it from being started from the
+client). This is the client's behaviour, not proof for the server: an older or changed client, or native code the
+player already approved, can ignore it.
 
 A server folder for every platform its players use:
 

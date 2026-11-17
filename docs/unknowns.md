@@ -2,6 +2,21 @@
 
 What the client does not implement yet, or implements with an approximation it cannot confirm. Entries are removed once settled.
 
+## Server add-on policy
+
+- The optional required/allow/block policy is covered by parser, package identity, admission, runtime and gate
+  regressions, not live. Live acceptance still needs a first visit and a return visit, a server fixing its policy,
+  installing missing requirements, native consent allowed/refused/closed, a required add-on failing in the world
+  (the chat warning), both UI packs and a physical controller, and an external upscaler allowed/blocked/updated
+  followed by restart. The server does not send its policy until the zone-in; it is a client extension, not a
+  server-side attestation or anti-cheat mechanism.
+- Texture packs (Texture Studio's output in `textures/`) are not add-ons and have no repository, so no list names
+  them; a server can block the Texture Studio tool, not the packs a player already built. A required tool is met by
+  its installation: the client does not start it and cannot tell whether it runs.
+- A script add-on whose name has capitals is not found by the script loader on a case-sensitive file system
+  (`ScriptHost::run` looks scripts up by their lower-cased name). Admission holds such a requirement unmet rather
+  than letting it pass and fail to start; the loader itself is unchanged.
+
 ## Evolving items
 
 - Final Result (action 4), progress updates (action 0) and the experience transfer's actions (1 open, 2 details,
