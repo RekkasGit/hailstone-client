@@ -109,7 +109,7 @@ without a pool (the tests, the tools) or from inside a worker it runs the loop i
   and the scene's end is a job in a lane: a renderer's own draws share its lane, and the characters, the spawn boxes,
   the target ring and the isometric markers share one (the markers ask the character renderer's caches, and the
   spawn boxes take the set the characters drew). At `begin_translucent` and before the name plates, the lanes are
-  recorded at once, a lane's jobs in order on one thread, each job into a secondary command buffer of its own
+  recorded at once, a lane's jobs in order on one thread (`render::SceneLanes`), each job into a secondary command buffer of its own
   (`VkCommandBufferInheritanceRenderingInfo` from `VkContext::scene_inheritance`, the viewport and scissor from
   `set_scene_state`), and the buffers are executed in the order the jobs came, so the draws and their order are as
   they were. The scene's renderings then begin with `VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT`

@@ -1,7 +1,5 @@
 #include "render/scene_recorder.h"
 
-#include <algorithm>
-
 #include "core/worker_pool.h"
 #include "render/vk_util.h"
 
@@ -20,7 +18,6 @@ SceneRecorder::~SceneRecorder() {
 bool SceneRecorder::begin_frame(const FrameInfo& frame, bool enabled) {
     jobs_.clear();
     lanes_.clear();
-    by_lane_.clear();
     slot_ = frame.frame_slot;
     core::WorkerPool* pool = core::workers();
     active_ = enabled && pool && pool->workers() > 0;
@@ -39,14 +36,8 @@ void SceneRecorder::add(const FrameInfo& frame, const void* lane, Job job) {
         job(frame);
         return;
     }
-    auto it = std::find(lanes_.begin(), lanes_.end(), lane);
-    std::size_t index = static_cast<std::size_t>(it - lanes_.begin());
-    if (it == lanes_.end()) {
-        lanes_.push_back(lane);
-        by_lane_.emplace_back();
-    }
-    by_lane_[index].push_back(jobs_.size());
-    jobs_.push_back({index, std::move(job), VK_NULL_HANDLE});
+    lanes_.add(lane);
+    jobs_.push_back({std::move(job), VK_NULL_HANDLE});
 }
 
 VkCommandBuffer SceneRecorder::take(Pool& pool) {
@@ -65,7 +56,7 @@ VkCommandBuffer SceneRecorder::take(Pool& pool) {
 void SceneRecorder::flush(const FrameInfo& frame) {
     if (!active_ || jobs_.empty()) return;
     auto& pools = pools_[slot_];
-    while (pools.size() < lanes_.size()) {
+    while (pools.size() < lanes_.lanes()) {
         VkCommandPoolCreateInfo ci{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
         ci.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
         ci.queueFamilyIndex = vk_.queue_family();
@@ -74,7 +65,7 @@ void SceneRecorder::flush(const FrameInfo& frame) {
         pools.push_back(std::move(p));
     }
     // The buffers are taken here, on this thread: a pool is touched by one thread at a time.
-    for (auto& q : jobs_) q.cmd = take(pools[q.lane]);
+    for (std::size_t j = 0; j < jobs_.size(); ++j) jobs_[j].cmd = take(pools[lanes_.lane_of(j)]);
 
     const VkCommandBufferInheritanceRenderingInfo rendering = vk_.scene_inheritance();
     VkCommandBufferInheritanceInfo inheritance{VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO};
@@ -86,20 +77,16 @@ void SceneRecorder::flush(const FrameInfo& frame) {
     auto clear = [this] {
         jobs_.clear();
         lanes_.clear();
-        by_lane_.clear();
     };
     try {
-        core::parallel_for(lanes_.size(), 1, [&](std::size_t begin, std::size_t end) {
-            for (std::size_t lane = begin; lane < end; ++lane)
-                for (std::size_t j : by_lane_[lane]) {
-                    Queued& q = jobs_[j];
-                    vk_check(vkBeginCommandBuffer(q.cmd, &bi), "vkBeginCommandBuffer (scene)");
-                    vk_.set_scene_state(q.cmd);
-                    FrameInfo own = frame;
-                    own.cmd = q.cmd;
-                    q.job(own);
-                    vk_check(vkEndCommandBuffer(q.cmd), "vkEndCommandBuffer (scene)");
-                }
+        lanes_.record([&](std::size_t j) {
+            Queued& q = jobs_[j];
+            vk_check(vkBeginCommandBuffer(q.cmd, &bi), "vkBeginCommandBuffer (scene)");
+            vk_.set_scene_state(q.cmd);
+            FrameInfo own = frame;
+            own.cmd = q.cmd;
+            q.job(own);
+            vk_check(vkEndCommandBuffer(q.cmd), "vkEndCommandBuffer (scene)");
         });
     } catch (...) {
         clear(); // the buffers left recording are reset with their pool, kFramesInFlight frames on
