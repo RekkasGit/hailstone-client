@@ -3265,6 +3265,28 @@ bool NativePlugins::required_addons_ready(std::string* problem) const {
     return m.ready_answer;
 }
 
+std::size_t NativePlugins::retry_required_addons() {
+    Impl& m = *impl_;
+    if (!m.env.policy || !m.env.policy->current() || m.env.policy->current()->provisional) return 0;
+    std::size_t tried = 0;
+    const auto required = m.required; // (load_file can reach policy_changed through a plugin's start)
+    for (const auto& [name, hash] : required) {
+        if (const Loaded* l = m.find(name)) {
+            if (l->hash != hash || l->threw_at.empty()) continue; // running as required, or another plugin's name
+            if (l->busy) {
+                unload_file(name);
+                continue;
+            }
+            unload_file(name);
+            if (m.find(name)) continue;
+        }
+        log::info("plugin {}: the player retries the required add-on", name);
+        load_file(name, nullptr, Asker::Rules);
+        ++tried;
+    }
+    return tried;
+}
+
 bool NativePlugins::check_required_addons(std::string* problem) const {
     const Impl& m = *impl_;
     auto fail = [&](std::string text) {

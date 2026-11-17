@@ -3219,6 +3219,103 @@ TEST_CASE("UI packs: the server plugins' question draws in each pack in the clie
     }
 }
 
+// A required add-on that failed in the world (docs/plugins.md "Opt-in add-on policies"): each pack draws the Server
+// add-ons warning in the client's place ("AddonPolicy" replaced) only while there is one, with a close box, and its
+// Retry calls the client's with that failure's serial; no Retry where the failure cannot be retried.
+TEST_CASE("UI packs: the Server add-ons warning shows only for a failure, can be closed, and Retry reaches the client") {
+    for (const char* pack : {"modern", "gamepad"}) {
+        CAPTURE(pack);
+        fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
+        hailstone::test::ScratchDir dir_scratch(std::string("ui_pack_addon_policy_") + pack);
+        fs::path dir = dir_scratch.path();
+        fs::create_directories(dir / "game");
+        fs::copy(src, dir / pack, fs::copy_options::recursive);
+        ImGuiContext* ctx = ImGui::CreateContext();
+        ImGui::GetIO().IniFilename = nullptr;
+        unsigned char* px = nullptr;
+        int w = 0, h = 0;
+        ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+        {
+            Session s(dir, pack);
+            ui::AddonPolicyView view;
+            int retries = 0;
+            s.host.addon_policy = &view;
+            s.host.retry_required_addons = [&] { ++retries; };
+            auto window = [&]() -> ImGuiWindow* {
+                for (ImGuiWindow* win : ImGui::GetCurrentContext()->Windows)
+                    if (win->WasActive && (std::string(win->Name).find("###modern.AddonPolicy") != std::string::npos ||
+                                           std::string(win->Name) == "Server add-ons"))
+                        return win;
+                return nullptr;
+            };
+            lua_State* L = s.lua.state();
+            REQUIRE(luaL_dostring(L, R"lua(
+local button, invisible = ui.Button, ui.InvisibleButton
+retryRect = nil
+ui.Button = function(label, ...)
+  local hit = button(label, ...)
+  if label == "Retry##addonpolicy" then retryRect = { ui.GetItemRect() } end
+  return hit
+end
+ui.InvisibleButton = function(id, ...)
+  local hit = invisible(id, ...)
+  if id == "##addonpolicyretry" then retryRect = { ui.GetItemRect() } end
+  if id == "##close" then closeSeen = true end -- (the gamepad pack's own close button)
+  return hit
+end
+)lua") == LUA_OK);
+            s.frames(2);
+            CHECK(s.api.replaces("AddonPolicy")); // the client's own window stays off
+            CHECK(window() == nullptr);           // nothing failed: nothing shown
+
+            view.failed = view.can_retry = true;
+            view.serial = 1;
+            view.message = "Required add-on owner/thing failed with an error in a command";
+            s.frames(3);
+            ImGuiWindow* shown = window();
+            REQUIRE(shown != nullptr);
+            lua_getglobal(L, "closeSeen");
+            CHECK((shown->HasCloseButton || lua_toboolean(L, -1))); // the player can put it away
+            lua_settop(L, 0);
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+            lua_getglobal(L, "retryRect");
+            REQUIRE(lua_istable(L, -1));
+            float rect[4]{};
+            for (int i = 0; i < 4; ++i) {
+                lua_rawgeti(L, -1, i + 1);
+                rect[i] = static_cast<float>(lua_tonumber(L, -1));
+                lua_pop(L, 1);
+            }
+            lua_settop(L, 0);
+            auto& io = ImGui::GetIO();
+            io.AddMousePosEvent((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2);
+            s.frames(1);
+            io.AddMouseButtonEvent(0, true);
+            s.frames(1);
+            io.AddMouseButtonEvent(0, false);
+            s.frames(1);
+            CHECK(retries == 1);
+
+            // A failure Retry cannot help with: shown, without Retry.
+            view.can_retry = false;
+            view.serial = 2;
+            luaL_dostring(L, "retryRect = nil");
+            s.frames(3);
+            CHECK(window() != nullptr);
+            lua_getglobal(L, "retryRect");
+            CHECK(lua_isnil(L, -1));
+            lua_settop(L, 0);
+
+            view.failed = false;
+            view.serial = 3;
+            s.frames(3);
+            CHECK(window() == nullptr);
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        }
+        ImGui::DestroyContext(ctx);
+    }
+}
+
 // A click meant for something else the instant the question pops up must not answer it: each pack's Allow waits a
 // second after the question shows (or a new one takes its place), and answers with the question's serial.
 TEST_CASE("UI packs: the server plugins' question takes no answer in its first second") {
