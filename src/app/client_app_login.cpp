@@ -883,18 +883,6 @@ void ClientApp::update_connection() {
     if (!conn_) return;
     if (window_.input().user_activity) conn_->note_user_activity();
     conn_->update();
-    if (!connection_frontend(*conn_, pending_ui_pack_,
-        [this](const std::string& skin) { use_ui_pack(skin); },
-        [this](net::GameConnection::QuitRequest request) {
-            log::info("{}: quitting", request == net::GameConnection::QuitRequest::Exit ? "/exit" : "/quit");
-            conn_->disconnect();
-            quit_ = true;
-        },
-        [this] {
-            if (auto kind = conn_->camped_out()) camp_finished(*kind);
-            else if (conn_->link_death()) update_link_death();
-            else back_to_login(conn_->error(), true);
-        })) return;
     // A new hailstone.cfg may change which of the server's assets folder counts ([assets] player).
     bool assets_ruled = false;
     if (conn_->server_rules_serial() != asset_rules_serial_) {
@@ -911,6 +899,20 @@ void ClientApp::update_connection() {
         reload_server_files(false);
         overlay_loaded_ = true;
     }
+    // /loadskin's user interface (loaded between frames: its Lua state may have run the command), /quit and /exit,
+    // and a dropped connection, after the new rules' assets and before the add-on gate can hold the frame.
+    if (!connection_frontend(*conn_, pending_ui_pack_,
+        [this](const std::string& skin) { use_ui_pack(skin); },
+        [this](net::GameConnection::QuitRequest request) {
+            log::info("{}: quitting", request == net::GameConnection::QuitRequest::Exit ? "/exit" : "/quit");
+            conn_->disconnect();
+            quit_ = true;
+        },
+        [this] {
+            if (auto kind = conn_->camped_out()) camp_finished(*kind);
+            else if (conn_->link_death()) update_link_death();
+            else back_to_login(conn_->error(), true);
+        })) return;
     if (!addon_world_allowed()) return;
     using S = net::ConnectionState;
     switch (conn_->state()) {
