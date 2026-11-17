@@ -1945,7 +1945,10 @@ void GameConnection::handle_zone(const AppPacket& p) {
             if (m->string_id == 1383) duel_decline_message(m->args); // EQEmu's DUEL_DECLINE
             auto full = strings_.format(m->string_id, m->args);
             std::optional<std::string> display;
-            if (auto line = game::spell_message_hit_report(m->string_id, m->args)) {
+            auto line = game::spell_message_hit_report(m->string_id, m->args);
+            if (!line && m->string_id == 6688 && m->args.size() == 1)
+                line = game::spell_text_hit_report(m->args[0], m->type);
+            if (line) {
                 auto mode = spell_hit_modes_[static_cast<std::size_t>(line->kind)];
                 display = game::report_spell_hit_line(*line, full, mode);
             }
