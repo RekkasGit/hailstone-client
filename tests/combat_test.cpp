@@ -830,3 +830,19 @@ TEST_CASE("gm_name_colour: a GM's name is green unless anonymous or roleplaying,
     world.spawns.at(world.player_id).anon = 1;
     CHECK_FALSE(game::gm_name_colour(world.spawns.at(world.player_id)).has_value());
 }
+
+TEST_CASE("mercenary_name_colour: the tint bytes 11 b5 e1 read blue first, an amber name") {
+    game::Spawn merc;
+    merc.id = 9;
+    merc.name = "Hireling";
+    merc.is_npc = true;
+    merc.mercenary = true;
+    // SetNameSpriteTint's bytes go to SetStringSpriteTint(const RGB*), eqlib's RGB being blue, green, red in memory.
+    CHECK(game::mercenary_name_colour(merc) == 0xe1b511u);
+    game::Spawn npc = merc;
+    npc.mercenary = false;
+    CHECK_FALSE(game::mercenary_name_colour(npc).has_value());
+    game::Spawn corpse = merc;
+    corpse.is_corpse = true;
+    CHECK_FALSE(game::mercenary_name_colour(corpse).has_value());
+}

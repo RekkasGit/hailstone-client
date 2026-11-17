@@ -141,6 +141,13 @@ std::optional<std::uint32_t> gm_name_colour(const Spawn& s) {
     return 0x1da64bu;
 }
 
+std::optional<std::uint32_t> mercenary_name_colour(const Spawn& s) {
+    // SetNameSpriteTint @0x58bf00: type != 0 with IsMercenary stores the bytes 11 b5 e1, read blue first like every
+    // tint of that function (docs/graphics.md "Name plates"). Corpses keep this client's grey.
+    if (!s.is_npc || s.is_corpse || !s.mercenary) return std::nullopt;
+    return 0xe1b511u;
+}
+
 std::uint32_t con_rgb(Con con) {
     switch (con) {
     case Con::Gray: return 0x9a9a9a;

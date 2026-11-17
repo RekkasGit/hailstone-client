@@ -1942,7 +1942,7 @@ Vectors in `tests/merc_vectors_test.cpp` (25 files, every handler and sender of 
 - Costs are gold: cost / 10 platinum and cost % 10 gold (signed). The upkeep reports print FormatDurationLong of the
   timer interval ("%d hours, %d minutes, and %d seconds" and shorter forms).
 - A mercenary spawn is an NPC with IsMercenary: it counts as a player for buff slots and the PC-only checks, its
-  nameplate is (0x11, 0xb5, 0xe1), and in the group window it goes after its owner (`game/group_rules.h`).
+  nameplate is amber (`#e1b511`; SetNameSpriteTint's bytes 11 b5 e1, blue first: docs/graphics.md "Name plates"), and in the group window it goes after its owner (`game/group_rules.h`).
 
 ## Inputs the client cannot provide yet
 

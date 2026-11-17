@@ -178,8 +178,9 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
         // its consider colour, as the target plate below does. Off: this client's yellow (neither is the original's tint).
         if (auto rgb = game::npc_name_colour(s, conn_->player_status().level, conn_->pvp_rules(), con_name_colour_))
             plate.color = IM_COL32((*rgb >> 16) & 0xff, (*rgb >> 8) & 0xff, *rgb & 0xff, 255);
-        // PlayerClient::SetNameSpriteTint: an NPC with IsMercenary (+0x208) gets (0x11, 0xb5, 0xe1).
-        if (s.is_npc && !s.is_corpse && s.mercenary) plate.color = IM_COL32(0x11, 0xb5, 0xe1, 255);
+        // PlayerClient::SetNameSpriteTint: an NPC with IsMercenary (+0x208) is amber (game::mercenary_name_colour).
+        if (auto rgb = game::mercenary_name_colour(s))
+            plate.color = IM_COL32((*rgb >> 16) & 0xff, (*rgb >> 8) & 0xff, *rgb & 0xff, 255);
         if (plate.target) {
             const std::uint32_t rgb = game::con_rgb(game::con_level(s, conn_->player_status().level, conn_->pvp_rules()));
             plate.color = IM_COL32((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff, 255);
