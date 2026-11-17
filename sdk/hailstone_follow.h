@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT (sdk/LICENSE) */
 #ifndef HAILSTONE_FOLLOW_H
 #define HAILSTONE_FOLLOW_H
 

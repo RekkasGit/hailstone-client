@@ -10,6 +10,12 @@ and on pull requests to `main`:
   `retired_release_files()` in `src/app/update_install.cpp`), let through by file and exact line shape.
 - `wiki`: `tools/sync_wiki.py --check`, every document of `docs/`, `CONTRIBUTING.md` and `server/README.md` has a
   wiki page and no link points at a missing file (docs/wiki.md).
+- `ui-api`: the shared UI contract's generated files are fresh: `tools/migrate_ui_api.py --check` (the shipped
+  packs call `hs.UI`), its `--mock-adapter --check` (`tests/lua_ui_api_mock.lua`) and `tools/gen_ui_api_docs.py
+  --check` (`docs/ui-api-reference.md`, which links each binding's file, not a line, so an edit elsewhere in it does
+  not make the page stale); then the Python tests of those tools and of `tools/make_addon.py`'s UI and autoload
+  packages (`tests/test_migrate_ui_api.py`, `test_gen_ui_api_docs.py`, `test_make_addon_ui.py`,
+  `test_make_addon_autoload.py`).
 
 One workflow builds: `.github/workflows/macos.yml` ("macOS arm64" below), the one platform the developer's Linux
 machine cannot build. It runs only when started by hand or on a push to a `macos/**` branch.

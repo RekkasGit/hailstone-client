@@ -11,7 +11,7 @@
 #include <lua.hpp>
 
 #include "game/nameplate_canvas.h"
-#include "plugin/lua_keep.h"
+#include "core/lua_keep.h"
 
 namespace hailstone::ui::lua {
 namespace {
@@ -365,7 +365,7 @@ int Invoke(lua_State *L) {
     if (lua_isnil(L, -1) || !call.binding->live())
         return 0;
     call.answered = true;
-    plugin::cxx_guard(L, [&] { call.valid = parse_models(L, *call.binding, *call.frame, call.models); });
+    core::cxx_guard(L, [&] { call.valid = parse_models(L, *call.binding, *call.frame, call.models); });
     return 0;
 }
 std::optional<std::vector<NameplateCanvasModel>> run(const std::shared_ptr<State> &b, NameplateCanvasOwner owner,
@@ -429,14 +429,14 @@ int Register(lua_State *L) {
         lua_pushliteral(L, "nameplate canvas is unavailable");
         return 2;
     }
-    auto &work = plugin::lua_keep<RegisterWork>(L);
-    plugin::cxx_guard(L, [&] {
+    auto &work = core::lua_keep<RegisterWork>(L);
+    core::cxx_guard(L, [&] {
         work.binding = *static_cast<Holder *>(lua_touserdata(L, lua_upvalueindex(1)));
         work.caller = b.env.owner ? b.env.owner(L) : NameplateCanvasLuaOwner{};
         work.name.assign(name, named ? name_length : 7);
     });
     bool permitted = false;
-    plugin::cxx_guard(L, [&] {
+    core::cxx_guard(L, [&] {
         permitted = b.live() && !work.caller.key.empty() && work.caller.valid && work.caller.valid() && b.live();
     });
     if (!permitted)
@@ -444,7 +444,7 @@ int Register(lua_State *L) {
     lua_pushvalue(L, function);
     const int ref = luaL_ref(L, LUA_REGISTRYINDEX);
     work.pending_ref = ref;
-    plugin::cxx_guard(L, [&] {
+    core::cxx_guard(L, [&] {
         const std::weak_ptr<State> weak = work.binding;
         for (auto it = b.registrations.begin(); it != b.registrations.end();) {
             if (it->second.caller.valid && !it->second.caller.valid()) {
@@ -501,7 +501,7 @@ int Unregister(lua_State *L) {
     NameplateCanvasOwner owner = 0;
     const std::string_view value(handle, length);
     bool known = false;
-    plugin::cxx_guard(L, [&] {
+    core::cxx_guard(L, [&] {
         if (value.starts_with("canvas:"))
             for (const auto &[id, r] : b.registrations) {
                 (void)r;
@@ -514,9 +514,9 @@ int Unregister(lua_State *L) {
     });
     bool allowed = false;
     if (known && b.live()) {
-        auto &work = plugin::lua_keep<NameplateCanvasLuaOwner>(L);
-        plugin::cxx_guard(L, [&] { work = b.env.owner ? b.env.owner(L) : NameplateCanvasLuaOwner{}; });
-        plugin::cxx_guard(L, [&] {
+        auto &work = core::lua_keep<NameplateCanvasLuaOwner>(L);
+        core::cxx_guard(L, [&] { work = b.env.owner ? b.env.owner(L) : NameplateCanvasLuaOwner{}; });
+        core::cxx_guard(L, [&] {
             if (!b.live() || !work.valid || !work.valid() || !b.live()) return;
             const auto found = b.registrations.find(owner);
             allowed = found != b.registrations.end() && work.key == found->second.caller.key;
@@ -536,10 +536,10 @@ int MeasureText(lua_State *L) {
         lua_pushnil(L);
         return 1;
     }
-    auto &caller = plugin::lua_keep<NameplateCanvasLuaOwner>(L);
-    plugin::cxx_guard(L, [&] { caller = b.env.owner ? b.env.owner(L) : NameplateCanvasLuaOwner{}; });
+    auto &caller = core::lua_keep<NameplateCanvasLuaOwner>(L);
+    core::cxx_guard(L, [&] { caller = b.env.owner ? b.env.owner(L) : NameplateCanvasLuaOwner{}; });
     bool permitted = false;
-    plugin::cxx_guard(L, [&] { permitted = caller.valid && caller.valid(); });
+    core::cxx_guard(L, [&] { permitted = caller.valid && caller.valid(); });
     if (!permitted)
         return luaL_error(L, "nameplate canvas metrics are not allowed for this owner");
     if (!b.live() || font < 0 || font > 6 || !std::isfinite(requested) || requested < 4 || requested > 256) {
@@ -568,10 +568,10 @@ int SpellIcon(lua_State *L) {
         lua_pushnil(L);
         return 1;
     }
-    auto &caller = plugin::lua_keep<NameplateCanvasLuaOwner>(L);
-    plugin::cxx_guard(L, [&] { caller = b.env.owner ? b.env.owner(L) : NameplateCanvasLuaOwner{}; });
+    auto &caller = core::lua_keep<NameplateCanvasLuaOwner>(L);
+    core::cxx_guard(L, [&] { caller = b.env.owner ? b.env.owner(L) : NameplateCanvasLuaOwner{}; });
     bool permitted = false;
-    plugin::cxx_guard(L, [&] { permitted = caller.valid && caller.valid(); });
+    core::cxx_guard(L, [&] { permitted = caller.valid && caller.valid(); });
     if (!permitted)
         return luaL_error(L, "nameplate canvas images are not allowed for this owner");
     if (!b.live() || id < 0 || id > 65535) {
@@ -606,8 +606,8 @@ void push_nameplate_canvas(lua_State *L, NameplateCanvasLuaEnv env) {
     }
     if (!lua_isuserdata(L, -1)) {
         lua_pop(L, 1);
-        auto &holder = plugin::lua_keep<Holder>(L);
-        plugin::cxx_guard(L, [&] {
+        auto &holder = core::lua_keep<Holder>(L);
+        core::cxx_guard(L, [&] {
             holder = std::make_shared<State>();
             holder->L = L;
             holder->env = std::move(env);

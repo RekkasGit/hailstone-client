@@ -1477,6 +1477,12 @@ a host function, the hook table's `size` (the client does), and the struct's ret
 appended field. A plugin built against an earlier header keeps its positions. Against a stock server none of these
 services does anything until a plugin uses it.
 
+- Record sizes, pinned in the client (a field is only ever added at a record's end): `HailstoneFollowProfile` 56
+  bytes, `HailstoneMountProfile` 8, `HailstoneFollowStatus` 24, `HailstoneBinaryMeasurement` 56,
+  `HailstoneMerchantSellContext` 32, `HailstoneMapPolicy` 88, `HailstoneWorldFrame` 136, `HailstoneWorldAnchor` 32,
+  `HailstoneWorldVertex` 28, `HailstoneWorldSurfacePatch` 64, `HailstoneWorldSurfacePatchResult` 576,
+  `HailstoneWorldReceipt` 48 and, in a 64-bit build, `HailstoneWorldSubmission` 56. Each begins with its `size`
+  (the vertex excepted), which the caller sets and the client respects.
 - `follow_profile` and `mount_profile` (`extend`) return bounded data for host-owned movement. A profile never
   starts a follow. `manual_follow(host, "start" | "stop" | "toggle")` requires `move` and `extend`, validates the
   current selected living player, and pins both actor incarnations. `get_follow_status` requires `read` and reports

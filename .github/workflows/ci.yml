@@ -53,3 +53,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p 'test_migrate_ui_api.py' -v
           python3 -m unittest discover -s tests -p 'test_gen_ui_api_docs.py' -v
+      - name: Check the add-on packer's UI and autoload packages
+        run: |
+          python3 -m unittest discover -s tests -p 'test_make_addon_ui.py' -v
+          python3 -m unittest discover -s tests -p 'test_make_addon_autoload.py' -v

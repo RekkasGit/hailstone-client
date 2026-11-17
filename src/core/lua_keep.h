@@ -25,7 +25,7 @@
 
 #include <lua.hpp>
 
-namespace hailstone::plugin {
+namespace hailstone::core {
 
 namespace detail {
 
@@ -87,4 +87,4 @@ template <class F> void cxx_guard(lua_State* L, F&& f) {
     if (failed) luaL_error(L, "%s", why);
 }
 
-} // namespace hailstone::plugin
+} // namespace hailstone::core

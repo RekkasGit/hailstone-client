@@ -140,7 +140,7 @@ def code(value):
 
 def binding_link(root, binding):
     relative = binding["path"].relative_to(root).as_posix()
-    return f"[source](../{relative}#L{binding['line']})"
+    return f"[source](../{relative})" # the file, not a line: an edit elsewhere in it must not make the page stale
 
 
 def render(root=ROOT, report=None):

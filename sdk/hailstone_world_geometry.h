@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT (sdk/LICENSE) */
 #ifndef HAILSTONE_WORLD_GEOMETRY_H
 #define HAILSTONE_WORLD_GEOMETRY_H
 

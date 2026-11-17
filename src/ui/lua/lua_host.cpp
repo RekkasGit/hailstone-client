@@ -24,7 +24,7 @@
 #include "core/asset_folder_choice.h"
 #include "core/frame_sections.h"
 #include "core/log.h"
-#include "plugin/lua_keep.h"
+#include "core/lua_keep.h"
 
 namespace hailstone::ui::lua {
 
@@ -237,7 +237,7 @@ struct LuaUi::Impl {
 
     static int maintenance_runner(lua_State* state) {
         const auto* callback = of(state).active_maintenance;
-        if (callback) plugin::cxx_guard(state,[&]{ (*callback)(state); });
+        if (callback) core::cxx_guard(state,[&]{ (*callback)(state); });
         return 0;
     }
     void maintain_callbacks() {
@@ -953,8 +953,8 @@ int lua_import_file(lua_State* L, ImportKind kind) {
     if (!managed) return luaL_error(L, "%s requires the client UI state", method);
     lua_settop(L, 1);
     auto& ui = LuaUi::Impl::of(L);
-    auto& load = plugin::lua_keep<FileImport>(L);
-    plugin::cxx_guard(L, [&] {
+    auto& load = core::lua_keep<FileImport>(L);
+    core::cxx_guard(L, [&] {
         load.tag = g_caller_tag;
         if (!load.tag.empty() && !ui.folder_dir(load.tag)) {
             load.error = "the caller's UI folder is no longer active";
@@ -1046,7 +1046,7 @@ int lua_import_file(lua_State* L, ImportKind kind) {
     if (!load.error.empty()) return luaL_error(L, "%s: %s", method, load.error.c_str());
     lua_pushvalue(L, 2); // keep the request alive as the protected loader's upvalue
     lua_pushcclosure(L, &call_import_file, 1);
-    plugin::cxx_guard(L, [&] { ui.active_import_files.push_back(load.file); });
+    core::cxx_guard(L, [&] { ui.active_import_files.push_back(load.file); });
     const int status = lua_pcall(L, 0, LUA_MULTRET, 0);
     ui.active_import_files.pop_back();
     if (status != LUA_OK) return lua_error(L);
@@ -1536,8 +1536,8 @@ int wrapping_index(lua_State* L) {
     }
     if(source_bound){
         lua_pushvalue(L,3);lua_pushvalue(L,lua_upvalueindex(3));lua_pushnil(L);
-        auto& owner=plugin::lua_keep<LuaUi::CallbackOwner>(L);
-        plugin::cxx_guard(L,[&]{if(auto current=LuaUi::callback_owner(L))owner=std::move(*current);});
+        auto& owner=core::lua_keep<LuaUi::CallbackOwner>(L);
+        core::cxx_guard(L,[&]{if(auto current=LuaUi::callback_owner(L))owner=std::move(*current);});
         lua_pushcclosure(L,&call_as,4);
         return 1;
     }

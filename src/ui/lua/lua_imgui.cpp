@@ -13,7 +13,7 @@
 #include "ui/imgui_layer.h"
 #include "ui/lua/lua_host.h"
 #include "ui/texture_ids.h"
-#include "plugin/lua_keep.h"
+#include "core/lua_keep.h"
 
 #include <lua.hpp>
 
@@ -428,7 +428,7 @@ std::string TextBuffer(const char *cur, size_t len, int cap) {
 	return buf;
 }
 // Pushes the edited buffer's text: moved first into a string that outlives a push that raises (the state's memory
-// limit), which would skip the caller's destructors (plugin/lua_keep.h push_made).
+// limit), which would skip the caller's destructors (core/lua_keep.h push_made).
 void PushBuffer(lua_State *L, std::string &&buf) {
 	thread_local std::string held;
 	held = std::move(buf);
@@ -1417,7 +1417,7 @@ void register_ui_api(lua_State *L) {
 			if (need == 2 && (!GImGui->WithinFrameScope || !GImGui->CurrentWindow))
 				return luaL_error(state, "ui.%s requires an active ImGui frame/window", lua_tostring(state, lua_upvalueindex(2)));
 			int result = 0;
-			plugin::cxx_guard(state, [&] { result = lua_tocfunction(state, lua_upvalueindex(1))(state); });
+			core::cxx_guard(state, [&] { result = lua_tocfunction(state, lua_upvalueindex(1))(state); });
 			return result;
 		}, 3);
 		lua_setfield(L, -2, entry->name);
