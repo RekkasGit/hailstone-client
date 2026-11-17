@@ -158,6 +158,9 @@ private:
 
 // Where the neighbours' ground of `zone` is cached for `server` (cache/horizon/<server>/<zone>/, docs/layout.md).
 std::filesystem::path horizon_cache_dir(std::string_view server, std::string_view zone);
+// Where `zone`'s land's worn terrain is cached for `server` (cache/terrain/<server>/<zone>.bin, docs/layout.md;
+// render::ZoneRenderOptions::terrain_cache).
+std::filesystem::path terrain_cache_path(std::string_view server, std::string_view zone);
 // What a cache file of `zone`'s neighbour `neighbour` must say it was measured from: the two zones' files' sizes (0
 // when either is missing, which no file matches).
 std::uint64_t horizon_cache_key(const GameDir& game, std::string_view zone, std::string_view neighbour);

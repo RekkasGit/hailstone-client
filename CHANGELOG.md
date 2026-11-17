@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Modern lighting: the distant land past a zone's edge is now generated terrain worn by water, so its hills read as ranges and valleys rather than blobs, and the woods gather in the valleys. Coasts follow the land, with headlands, bays and the odd island, instead of running in steps along a grid; the rock shows as weathered stone, without repeating stripes, and sand lines the shore. The first visit to a zone takes about 0.2 s longer to load while the terrain is made; later visits read it back
 - Performance: keeping moving NPCs on the ground no longer searches the zone's collision a second time when a physics step has just landed the spawn on its floor
 - Frame rate: the login, server select, character select/creation and loading screens (including the last stretch of a zone-in) no longer run as fast as they can when `display.max_fps` is unlimited; they are capped at 240 fps; any other `display.max_fps` value is still followed exactly
 - Modern lighting: the distant land past a zone's edge has trees: the zone's own trees stand in groves and here and there across the far hills, and over the zones you have visited they stand where those zones' own trees do. They go with Horizon Hills

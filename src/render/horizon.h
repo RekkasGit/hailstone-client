@@ -74,10 +74,10 @@ inline constexpr float kHorizonRock = 0.8f;
 // How far under the water's surface the sea's floor lies, past the shore.
 inline constexpr float kHorizonSeaDepth = 250.0f;
 
-// A generated world terrain (prototype; the viewer's `--distant terrain`): the land's own hills shaped by warped
-// ridged noise, then worn by water and slumping (horizon_terrain), the known ground (the zone's edge, its
-// neighbours', the atlas zones', the sea) held where it is. A grid over the land: how far the wear moved the ground
-// (`delta`, added to the land's height) and how much water ran over it (`wet`, 0..1: valleys and runnels).
+// The land's own hills are a generated terrain: warped ridged noise (land_point), worn by water and slumping
+// (horizon_terrain), the known ground (the zone's edge, its neighbours', the atlas zones', the sea) held where it is. A
+// grid over the land: how far the wear moved the ground (`delta`, units, added to the land's height) and how much water
+// ran over it (`wet`, 0..1: the valleys and runnels, where the woods gather).
 struct HorizonTerrain {
     glm::vec2 lo{0.0f};
     float cell = 64.0f;
@@ -109,9 +109,7 @@ struct HorizonField {
     float water_level = 0.0f;           // the median of the zone's water surfaces
     bool has_water = false;
     std::vector<float> xs, ys;          // the mesh's lines
-    // The prototype's generated terrain: `generated` shapes the land's hills with it (warped ridged noise, natural
-    // coasts, splatted materials); `terrain` is their wear once horizon_terrain has run (null before).
-    bool generated = false;
+    // The wear of the land's hills once horizon_terrain has run (null before: the hills unworn).
     std::shared_ptr<const HorizonTerrain> terrain;
 
     bool valid() const { return land.valid && nx > 0 && xs.size() > 1 && ys.size() > 1; }
@@ -223,15 +221,26 @@ inline constexpr float kHorizonBandSlope = 3.0f;
 inline constexpr float kHorizonBandMin = 200.0f;
 inline constexpr float kHorizonBandMax = 800.0f;
 
-// Wears the land of a `generated` field: its heights on a grid (at least kHorizonCell, at most kHorizonTerrainMax
-// squares a side) worn by kHorizonDroplets droplets a square of water running downhill (Beyer's particle erosion)
-// and a few passes of slumping where it is steeper than the rock holds, each square only as much as it is free:
-// none on the zone, on a neighbour's or an atlas zone's ground or under the sea, all of it kHorizonTerrainFree past
-// the zone's edge. Deterministic: the same field and sources give the same terrain.
+// Wears the land: its heights on a grid (at least kHorizonCell, at most kHorizonTerrainMax squares a side) worn by
+// kHorizonDroplets droplets a square of water running downhill (Beyer's particle erosion), each at most
+// kHorizonDropletSteps squares, and a few passes of slumping where it is steeper than the rock holds, each square only
+// as much as it is free: none on the zone, on a neighbour's or an atlas zone's ground or under the sea, all of it
+// kHorizonTerrainFree past the zone's edge; at most kHorizonTerrainMaxCut down and kHorizonTerrainMaxFill up.
+// Deterministic: the same field and sources give the same terrain (its layers on the cache's steps, so a terrain read
+// back from the cache is the one generated).
 inline constexpr int kHorizonTerrainMax = 512;
-inline constexpr float kHorizonDroplets = 1.5f;
+inline constexpr float kHorizonDroplets = 1.0f;
+inline constexpr int kHorizonDropletSteps = 48;
 inline constexpr float kHorizonTerrainFree = 1500.0f;
+inline constexpr float kHorizonTerrainMaxCut = 384.0f;
+inline constexpr float kHorizonTerrainMaxFill = 192.0f;
 HorizonTerrain horizon_terrain(const HorizonField& field, const HorizonSources& sources);
+// The terrain's cache (cache/terrain/<server>/<zone>.bin, ZoneRenderOptions::terrain_cache): `key` is what it was worn
+// from (horizon_terrain_key: the field's grid and heights, the sources' ground and water, the generator's version), so
+// a file worn from other ground, of another version or damaged is refused and the terrain worn again.
+std::uint64_t horizon_terrain_key(const HorizonField& field, const HorizonSources& sources);
+std::vector<std::byte> write_horizon_terrain(const HorizonTerrain& terrain, std::uint64_t key);
+std::optional<HorizonTerrain> read_horizon_terrain(std::span<const std::byte> data, std::uint64_t key);
 
 // The land's height at `p` (as the mesh's vertices have it).
 float horizon_height(const HorizonField& field, const HorizonSources& sources, glm::vec2 p);
@@ -258,11 +267,11 @@ struct HorizonMesh {
     // Per vertex: the colour the ground takes on there (linear rgb: an atlas zone's own, HorizonSource::color), and in
     // a how much (its cover); 0 where none. The renderer moves the zone's ground texture toward it.
     std::vector<glm::vec4> tint;
-    // Per vertex, a `generated` field's: how much rock (x: slopes, peaks) and sand (y: by the water) cover the ground
-    // (zone.frag kLandSplat); empty otherwise.
+    // Per vertex: how much rock (x: slopes, peaks) and sand (y: by the water) cover the ground (zone.frag kLandSplat).
     std::vector<glm::vec2> splat;
-    // Triangles (index triples into positions), counter-clockwise seen from above: the zone's ground material, its
-    // rock (slopes and peaks), and its water (a flat surface at water_level).
+    // Triangles (index triples into positions), counter-clockwise seen from above: the zone's ground material (the
+    // current zone's land all of it, its rock splatted in), its rock (slopes and peaks: only a neighbour's part, which
+    // has no splat), and its water (a flat surface at water_level).
     std::vector<std::uint32_t> ground, rock, water;
     float water_level = 0.0f;
     std::vector<std::int64_t> squares; // a neighbour's part: its squares (HorizonField::mesh_square), sorted

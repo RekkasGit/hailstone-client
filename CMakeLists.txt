@@ -1174,6 +1174,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/sky_colours_test.cpp
     tests/scene_light_test.cpp
     tests/horizon_test.cpp
+    tests/horizon_terrain_test.cpp
     tests/tree_impostor_test.cpp
     tests/collision_test.cpp
     tests/nav_test.cpp

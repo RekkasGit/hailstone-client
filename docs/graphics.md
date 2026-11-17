@@ -1654,21 +1654,50 @@ puts it behind anything nearer. Scenery only: nothing collides with it.
   where only water is beside it), so the land meets the zone's edge
   without a gap and stays under its ground; the squares under the zone are drawn too (they show only through the back
   of its walls, which have only their inner faces). Past the edge the land starts at the edge's height and turns over
-  1200 units into rolling hills (value noise, 200 to 650 units high with the relief) and, from 800 to 5000 units out,
-  ridged mountains (900 to 2250 units), all seeded by the zone's short name (`render::horizon_seed`), so it is the same
-  every visit. A pocket the zone's terrain closes round (a gap between its walls, a hole in it) is a flat lid just under
-  its rim. Where the edge is a shore, the sea: its floor falls to 250 units under the zone's water level (the median
-  of its water surfaces) within 800 units and stays there out to the land's reach, open sea with no coast (nothing
-  says where the next coast is: docs/unknowns.md; up to 0.7 coasts and islands rose from it 2500 units out). Its
-  surface is drawn at the water level with the zone's own water material, from the zone's own water's edge: over the
-  empty squares beside it and over a square the zone's water only touches along its side (`HorizonField::wet_middle`),
-  not over the zone's own terrain or water. A neighbour's shore carries the sea on as well (above, "Neighbour zones").
+  1200 units into rolling hills (200 to 650 units high with the relief) and, from 800 to 5000 units out, ridged
+  mountains (900 to 2250 units, up to half again where a broad mass lifts them), all seeded by the zone's short name
+  (`render::horizon_seed`), so it is the same every visit. The hills are warped noise, their lines bending and
+  branching (the coordinates pushed up to 900 units by a noise of their own before the hills and ridges are taken),
+  not a value noise's grid of blobs, as up to 0.7. A pocket the zone's terrain closes round (a gap between its walls,
+  a hole in it) is a flat lid just under its rim. Where the edge is a shore, the sea: its floor falls to 250 units
+  under the zone's water level (the median of its water surfaces) within 800 units and stays there out to the land's
+  reach, open sea with no coast (nothing says where the next coast is: docs/unknowns.md; up to 0.7 coasts and islands
+  rose from it 2500 units out); where a shore ends the coast wanders in headlands, bays and the odd island (the shore's
+  share pushed by a noise 700 units across) rather than following the edge's blur. Its surface is drawn at the water
+  level with the zone's own water material, from the zone's own water's edge, over every square of the land the sea
+  reaches at a corner, so the coast runs where the land rises through the water and not along the 64-unit squares (up
+  to 0.7 a square was water only when all four corners were sea, which drew the coast as steps); not over the zone's
+  own terrain or water, nor a square whose corners' seas stand at different levels. A neighbour's shore carries the
+  sea on as well (above, "Neighbour zones").
+- **Its wear** (`render::horizon_terrain`, Hailstone's own): the hills are worn by water and slumping, so they read as
+  ranges with valleys from afar. A grid over the land (64-unit nodes, at most 512 a side) takes the land's heights;
+  as many drops of water as it has nodes run downhill on it (Hans Theobald Beyer's particle erosion, "Implementation
+  of a method for hydraulic erosion", 2015: inertia 0.08, at most 48 nodes each, taking ground up where they speed
+  and dropping it where they slow), then six passes of slumping move ground off slopes steeper than it holds. Each
+  node is worn only as far as it is free: not at all on the zone's squares or by its edge, on a neighbour's or an
+  atlas zone's ground or under the sea, all of it 1500 units past the zone's edge; and at most 384 units down and 192
+  up. What is worn is added to the land's heights (`HorizonTerrain::delta`), and where the most water ran (`wet`) the
+  woods gather and the ground is darker. It is the same for the same ground: the drops come from a generator seeded by
+  the zone, the rows of its first pass are shared out among up to eight threads, and its layers are kept to an eighth
+  of a unit and a 255th. **Cached** per zone and server (`cache/terrain/<server>/<zone>.bin`,
+  `render::write_horizon_terrain`, docs/layout.md), keyed by what it was worn from (`horizon_terrain_key`: the
+  zone's grid and heights, the neighbours' and atlas zones' ground and water, the generator's version), so a change
+  to any of them wears it again. Wearing takes 182 to 236 ms of the zone's build (Qeynos Hills, Butcherblock, North and
+  South Karana, 400 to 513 nodes a side), read from the cache 1 to 2 ms; a file is 0.5 to 0.7 MB.
   Under the sea the land is darker with the depth, to 0.3 of its light 150 units down (the water map that darkens a
   zone's own sea floor leaves the land out).
 - **The look**: the zone's plain material (no shader effect of its own, no scrolling) that covers the most level
-  ground draws the land, the one on the most slopes (at most 0.8 up, and the mountains' upper half) its rock, and the
-  most used water material the sea, each mapped flat with its own texture scale (the zone's UV area over area) and
-  wound as the zone winds its own; the sea is drawn from both faces, since a classic water surface is two sheets, one
+  ground draws the land, the one on the most slopes its rock, and the most used water material the sea, each mapped
+  with its own texture scale (the zone's UV area over area) and wound as the zone winds its own. The current zone's
+  land is one draw (`zone.frag` `kLandSplat`): each vertex says how much rock (slopes under 0.8 up and the mountains'
+  upper half) and sand (a few units over the sea, not on a neighbour's or an atlas zone's ground) cover it
+  (`HorizonMesh::splat`), the edges between broken up by the textures' own light and dark. The rock is mapped from all
+  three axes and blended by how the surface faces each, at half the zone's own scale, twice (the second turned and at
+  another scale, the two blended by a slow pattern over the world) and pulled half way to its own average colour: a
+  rock texture with bands in it (Qeynos Hills' `HHDROCKGRASS.BMP`) drew the same bands down every slope, as stripes.
+  The sand is the zone's level texture that says so by its name (`sand`, `beach`), else its ground made sandy (grey,
+  then warmed). The ground's own repeat is broken up by itself at a fifteenth of its scale. A neighbour's part of the
+  land keeps its ground and rock apart; the sea is drawn from both faces, since a classic water surface is two sheets, one
   facing each way, and says nothing of which is up (up to 0.7 the facing taken from it culled the whole sea from
   above, so the land's sea showed as bare floor: Butcherblock's and Lake Rathetear's). Its vertex colour is the level ground's median baked light, darker in woods-like
   patches on the level land, in the valleys and in broad patches that keep the texture's repeat from showing. The
@@ -1687,7 +1716,10 @@ puts it behind anything nearer. Scenery only: nothing collides with it.
 - **Cost**: in Qeynos Hills about 99,000 triangles in 256-unit chunks (44,000 before its squares were kept fine out to
   2500 units past the zone, which the neighbours' ground needs), culled with the zone's; no shadows (neither cast nor
   drawn into the sun's cascades or the cover and water maps). Looking out over it, 9,000 more triangles and 70 more
-  draw calls; the frame time did not move.
+  draw calls; the frame time did not move. The splatted look costs a little: at 1600 x 900 with the vsync off, looking
+  west over Qeynos Hills' coast 1.00 ms a frame against 0.96 with the plain land, and north over Butcherblock's woods
+  1.26 to 1.30 against 1.17 (the rock and the sand are sampled only where a vertex has some: sampled everywhere, 1.19
+  and 1.43).
 - **Its trees** (`render::horizon_trees`, `render/tree_impostor.h`): the zone's own trees stand on the land's woods.
   The zone's commonest placed plants at least 20 units tall (`render::kLandTreeMinHeight`) are its trees, at most
   three kinds, each placed at least a quarter as often as the commonest and at most twice its height (North Karana

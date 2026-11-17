@@ -24,6 +24,7 @@
 #include "assets/wld_detail.h"
 #include "assets/zone.h"
 #include "assets/zone_fires.h"
+#include "core/atomic_file.h"
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/log.h"
@@ -231,8 +232,9 @@ constexpr std::uint32_t kTintLand = 65536;
 // The current zone's land (Draw::distant, no land_fade): its ground texture moved toward the colour in color2 (sRGB),
 // by color2's alpha, where a zone of the world atlas gives the land its ground (render::HorizonMesh::tint).
 constexpr std::uint32_t kLandTint = 1048576;
-// The current zone's land splatted with rock (slot 1) and sand (slot 2) by uv2 (the prototype's generated terrain).
+// The current zone's land splatted with rock (slot 1) and sand (slot 2) by uv2 (render::HorizonMesh::splat).
 constexpr std::uint32_t kLandSplat = 2097152;
+constexpr float kLandRockScale = 0.5f;
 // A land vertex's tint (linear rgb, a its amount) as color2: the colour in sRGB, the amount in alpha.
 std::uint32_t pack_tint(const glm::vec4& tint) {
     std::uint32_t out = static_cast<std::uint32_t>(std::lround(std::clamp(tint.a, 0.0f, 1.0f) * 255.0f)) << 24;
@@ -1390,15 +1392,28 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
         HorizonField field = horizon_field(horizon_triangles, prep.horizon);
         HorizonSources sources = options.horizon_sources;
         sort_sources(sources);
-        if (options.generated_terrain && field.valid()) {
+        // Its hills worn (render::horizon_terrain): read back from the cache when worn from the same ground before.
+        if (field.valid()) {
             const auto started = std::chrono::steady_clock::now();
-            field.generated = true;
-            auto terrain = std::make_shared<HorizonTerrain>(horizon_terrain(field, sources));
-            log::info("zone renderer: the land's generated terrain, {}x{} nodes of {:.0f} units, worn {:.0f} to {:.0f} "
-                      "units in {:.0f} ms",
+            const std::uint64_t key = horizon_terrain_key(field, sources);
+            std::optional<HorizonTerrain> terrain;
+            if (!options.terrain_cache.empty())
+                if (auto bytes = read_file(options.terrain_cache)) terrain = read_horizon_terrain(*bytes, key);
+            const bool cached = terrain.has_value();
+            if (!terrain) {
+                terrain = horizon_terrain(field, sources);
+                if (terrain->valid() && !options.terrain_cache.empty()) {
+                    const auto bytes = write_horizon_terrain(*terrain, key);
+                    write_file_atomic(options.terrain_cache,
+                                      std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+                }
+            }
+            log::info("zone renderer: the land's terrain, {}x{} nodes of {:.0f} units, worn {:.0f} to {:.0f} units, {} "
+                      "in {:.0f} ms",
                       terrain->nx, terrain->ny, terrain->cell, terrain->worn_lo, terrain->worn_hi,
+                      cached ? "from the cache" : "worn",
                       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count());
-            if (terrain->valid()) field.terrain = std::move(terrain);
+            if (terrain->valid()) field.terrain = std::make_shared<const HorizonTerrain>(std::move(*terrain));
         }
         const HorizonMesh land = horizon_mesh(field, sources);
         const LandPick pick = pick_land();
@@ -1771,7 +1786,9 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
         if (d.land_splat) {
             d.extra_slots[0] = slot_for(splat_rock, false);
             d.extra_slots[1] = slot_for(splat_sand, false);
-            d.param_z = splat_rock_density; // zone.frag: the rock's texture scale (its repeats a unit)
+            // zone.frag: the rock's texture scale (its repeats a unit), half the zone's own: at the zone's scale its
+            // pattern repeated every square or two down the land's long slopes, as stripes.
+            d.param_z = splat_rock_density * kLandRockScale;
         }
         d.pass = static_cast<Pass>(st.pass);
         d.alpha_ref = st.alpha_ref;

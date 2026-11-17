@@ -113,8 +113,9 @@ struct ZoneRenderOptions {
     HorizonSources horizon_sources;
     // The current zone: trees on its land's woods (render::horizon_trees), the zone's own drawn far.
     bool land_trees = true;
-    // The prototype's generated world terrain (render::horizon_terrain; the viewer's `--distant terrain`).
-    bool generated_terrain = false;
+    // The current zone: where its land's worn terrain is cached (render::horizon_terrain; cache/terrain/<server>/
+    // <zone>.bin, app::terrain_cache_path); empty: worn on every load, not kept.
+    std::filesystem::path terrain_cache;
     // A neighbour: its part of the land, drawn after its own geometry is moved and cut (not moved or cut itself).
     std::shared_ptr<const LandPatch> land;
 };

@@ -811,6 +811,33 @@ TEST_CASE("fuzz: the neighbours' ground cache") {
     });
 }
 
+// ---- The land's worn terrain cache (render/horizon.h) --------------------------------------------------------------
+// read_horizon_terrain, then the terrain it gives sampled: a broken file must be refused or give a terrain that samples
+// without reading past its grid.
+
+TEST_CASE("fuzz: the land's terrain cache") {
+    fuzz::QuietLog quiet;
+    render::HorizonTerrain t;
+    t.lo = {-640.0f, 128.0f};
+    t.cell = 64.0f;
+    t.nx = 11;
+    t.ny = 7;
+    for (int i = 0; i < t.nx * t.ny; ++i) {
+        t.delta.push_back(static_cast<float>(i % 13) - 6.0f);
+        t.wet.push_back(static_cast<float>(i % 5) / 4.0f);
+    }
+    const std::uint64_t key = 0x1234abcdull;
+    const Bytes seed = render::write_horizon_terrain(t, key);
+    sweep("read_horizon_terrain", {seed}, 64, 1500, [&](std::span<const std::byte> d) {
+        auto got = render::read_horizon_terrain(d, key);
+        if (!got) return;
+        for (glm::vec2 p : {glm::vec2(0.0f), glm::vec2(-640.0f, 128.0f), glm::vec2(-1e6f, 1e6f), glm::vec2(1e9f, -1e9f)}) {
+            (void)got->sample(got->delta, p);
+            (void)got->sample(got->wet, p);
+        }
+    });
+}
+
 // ---- The world atlas's records (game/world_atlas.h) -----------------------------------------------------------------
 // read_atlas_visit and read_atlas_zone, then the zone's ground read and its lines grouped: a broken file must be
 // refused or give a record that reads without going past its grid.

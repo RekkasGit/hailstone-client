@@ -95,6 +95,7 @@ void ClientApp::load_zone(const std::string& short_name) {
                                      horizon_cache_entries(game_, horizon_cache_dir(server_profile_.id, zone_->name),
                                                            zone_->name));
             options.horizon_sources = atlas_land_.sources;
+            options.terrain_cache = terrain_cache_path(server_profile_.id, zone_->name);
             zone_renderer_ = std::make_unique<render::ZoneRenderer>(vk_, *zone_, shader_dir_, options);
         }
         distant_hidden_key_ = 0;
