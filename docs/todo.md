@@ -4,6 +4,12 @@ What is left before the client is feature complete, in the order to work on it. 
 
 Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 
+## Server add-on policy
+
+- [x] Optional required/allow/block lists by GitHub repository (owner/repo; bare names refused) for every kind the add-on manager installs, intact package identities, required autostart that the player cannot stop, consent gates, and active upscaler checks; disabled unless `[addons] enforce = on`.
+- [x] Decided at the zone-in by its own rules (the cached copy only informs the login screen); before the world shows a problem refuses entry, once in it a failure warns once in chat and never disconnects; readiness and approvals cached by the rules, approvals and running set; package hashes remembered by size and time.
+- [ ] Live acceptance of a first visit and a return visit, a policy fixed by the server, missing/refused/failed requirements at the zone-in and mid-session, both UI packs and controller input, and an upscaler allowed/blocked/updated followed by restart.
+
 ## Launcher login
 
 - [x] Explicit one-use token authentication, native-style `patchme /ticket:`, environment/argument transports, endpoint selection, optional world/character entry and memory-only returned-token session sign-in, with packet/launcher/mock-server and UI regression coverage.
@@ -29,7 +35,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 
 ### Combat and spells (do first)
 - [ ] Shadow step (SPA 379) does nothing live: `land_spell` has no zone collision (point_in_world, collide_sphere, collide_line, floor_height and is_valid_teleport are stubbed in src/game/hit_landing.cpp) and the result has no position for the connection to apply. Needs collision in HitLandingContext, a port of IsValidTeleport and a teleport result applied with a position update.
-- [x] Spell Hit Modes: Normal, Abbreviated and Number Only for direct damage, DoTs, heals and HoTs, preserving full spell and melee log lines and incoming-chat hooks. Structured message and UI tests; live gameplay remains unverified (docs/mechanics.md "Spell hit modes").
+- [x] Spell Hit Modes: Normal, Abbreviated and Number Only for direct damage, DoTs, heals and HoTs, preserving full spell and melee log lines and incoming-chat hooks. Structured, generic and plain-text combat messages and UI tests; live gameplay remains unverified (docs/mechanics.md "Spell hit modes").
 - [x] Personal and guild tribute: received bonus items feed local stats/effects and retire on received deactivation, selection changes, opt-out and context changes; guild benefit controls enforce received permissions, and guild platinum donations wait for matching replies. Packet, mechanics and mock/UI regressions; full live tribute workflow acceptance remains open.
 - [x] Raid leadership controls and leadership hotkey creation in both UI packs, correct trainable ability identities, delegate/mark synchronization and lifecycle cleanup, active leadership bonuses in local stats, and raid invitations from expedition/shared-task rosters (unit, mock-server and UI coverage).
 - [x] Leadership window colours in both packs: native green for a supplied leader rank, gold for personal purchases, and white/grey training availability; native analysis, server-source comparison and rendered-text regressions distinguish these from population and permission checks.
