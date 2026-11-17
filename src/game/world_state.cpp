@@ -9,6 +9,7 @@
 #include <span>
 
 #include "core/log.h"
+#include "core/worker_pool.h"
 #include "game/boats.h"
 #include "game/coords.h"
 #include "game/race_models.h"
@@ -57,6 +58,8 @@ std::optional<ElementalSwap> luclin_elemental_swap(std::uint16_t race, std::uint
 }
 
 namespace {
+// Spawns a worker steps at a time in WorldState::smooth: a few hundred probes each.
+constexpr std::size_t kSmoothGrain = 16;
 // How far a spawn at rest may settle onto the floor (see WorldState::smooth).
 constexpr float kRestSettleReach = 5.0f;
 // Hailstone (WorldState::ground_npcs): how far over its floor an NPC may stand and still be drawn on it. Higher
@@ -108,6 +111,11 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
     std::optional<glm::vec3> probe_from;
     if (auto me = spawns.find(controlled_id ? controlled_id : player_id); me != spawns.end())
         probe_from = me->second.position;
+    // The vehicles' riders here, first: each reads the vehicle it rides, another spawn. Every other spawn reads and
+    // writes only its own entry, and the probes only read the zone and its doors, which nothing changes meanwhile:
+    // those are stepped on the worker threads (core::parallel_for; inline without a pool), each spawn wholly on one,
+    // so the result is the same whichever thread steps it. The callbacks are told so (world_state.h).
+    smooth_scratch.clear();
     for (auto& [id, s] : spawns) {
         if (id != player_id && id != controlled_id && is_vehicle_race(s.race, s.gender)) continue;
         // A spawn an update put on a vehicle's deck rides it (game/boats.h) until an update puts it elsewhere.
@@ -130,6 +138,9 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
                 s.on_vehicle = 0;
             }
         }
+        smooth_scratch.push_back({id, &s});
+    }
+    auto step = [&](std::uint32_t id, Spawn& s) {
         // The original steps other spawns while their last update is at most 12 s old (AdvanceSpawn), but not the
         // local or the controlled player (the local player's mount, which the player's controls move).
         if (id != player_id && id != controlled_id && now - s.update_time <= mechanics::kSpawnStaleMs / 1000.0) {
@@ -194,7 +205,7 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
             s.ground_probe_at = glm::vec3(std::numeric_limits<float>::quiet_NaN());
         }
         // A position that is not a number (a bad update) is not followed: the spawn stays drawn where it last was.
-        if (!std::isfinite(target.x) || !std::isfinite(target.y) || !std::isfinite(target.z)) continue;
+        if (!std::isfinite(target.x) || !std::isfinite(target.y) || !std::isfinite(target.z)) return;
         // The local player and its mount are drawn where the camera puts them (set_local_drawn), else where they are.
         if (id != 0 && (id == player_id || id == controlled_id)) {
             if (!local_drawn || !s.display_valid || (eye_id && id == player_id)) {
@@ -202,7 +213,7 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
                 s.display_heading = s.heading;
                 s.display_valid = true;
             }
-            continue;
+            return;
         }
         // Teleports and new spawns snap, as does a drawn place or heading that is not a number (the test is written so
         // NaN fails it), so it recovers at the next good update.
@@ -211,12 +222,15 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
             s.display_position = target;
             s.display_heading = s.heading;
             s.display_valid = true;
-            continue;
+            return;
         }
         s.display_position += (target - s.display_position) * k;
         float dh = std::fmod(s.heading - s.display_heading + 768.0f, 512.0f) - 256.0f; // shortest way round
         s.display_heading = std::fmod(s.display_heading + dh * k + 512.0f, 512.0f);
-    }
+    };
+    core::parallel_for(smooth_scratch.size(), kSmoothGrain, [&](std::size_t begin, std::size_t end) {
+        for (std::size_t i = begin; i < end; ++i) step(smooth_scratch[i].first, *smooth_scratch[i].second);
+    });
     // PhysicsObject::vf8 @0x59e170 with each step of a rider: it takes its mount's position and heading, SpeedRun 0
     // and (unless +0x163) no velocity. The rider is drawn where its mount is.
     for (auto& [id, s] : spawns) {

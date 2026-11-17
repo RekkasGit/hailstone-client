@@ -223,7 +223,13 @@ public:
     // Depth-only rendering into one layer of the shadow map (shadow_format(), one sample, no colour attachment,
     // a slope-scaled depth bias set): a cascade, or kCoverLayer. Every cascade is drawn in a frame that uses shadows;
     // the cover map when it is used.
-    void begin_shadow_cascade(const FrameInfo& frame, std::uint32_t cascade);
+    // `secondary`: its draws come from secondary command buffers (render/scene_recorder.h), which set the layer's
+    // dynamic state themselves (set_shadow_state); the rendering then holds nothing but vkCmdExecuteCommands.
+    void begin_shadow_cascade(const FrameInfo& frame, std::uint32_t cascade, bool secondary = false);
+    // A secondary command buffer's inheritance for a shadow layer's rendering, and the dynamic state
+    // begin_shadow_cascade sets for `cascade` (the viewport, the scissor, the depth bias), into `cmd`.
+    VkCommandBufferInheritanceRenderingInfo shadow_inheritance() const;
+    void set_shadow_state(VkCommandBuffer cmd, std::uint32_t cascade) const;
     void end_shadow_cascade(const FrameInfo& frame);
     bool shadows_enabled() const { return scene_options_.shadow_size > 0; }
     // Turns on the AO and the distance blur for this frame (the modern lighting's 3D view); call before begin_overlay.

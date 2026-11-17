@@ -498,6 +498,9 @@ private:
         bool valid = false;
     };
     mutable std::unordered_map<std::uint32_t, BonePoseCache> bone_cache_;
+    // When prepare_spawns last dropped the entries of spawns not drawn (the display clock), and how often it does.
+    std::uint32_t last_bone_sweep_ms_ = 0;
+    static constexpr std::uint32_t kBoneCacheSweepMs = 1000;
     mutable std::vector<assets::BonePose> bone_local_, bone_previous_; // pose_bones' scratch for drawn_bone
     std::unordered_map<std::uint32_t, std::pair<glm::vec3, float>> last_spawn_poses_; // their spawns' place, heading
     PlayerMotion player_motion_;

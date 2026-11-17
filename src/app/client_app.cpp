@@ -35,6 +35,7 @@ int ClientApp::run() {
         // The scene's draws recorded on them (render/scene_recorder.h): display.parallel_record, 0 for inline.
         parallel_record_ = config_.get_bool("display.parallel_record", true);
         scene_recorder_ = std::make_unique<render::SceneRecorder>(vk_);
+        shadow_recorder_ = std::make_unique<render::SceneRecorder>(vk_, false);
     }
     for (int frame = 0; !quit_ && window_.poll_events(); ++frame) {
         if (opts_.frames && frame >= opts_.frames) break;
@@ -170,14 +171,15 @@ int ClientApp::run() {
             game::WorldState::FloorFn ground_floor;
             if (collision_) ground_floor = [this](const glm::vec3& p) { return grounding_floor(p); };
             // The other spawns' ladder contact (remote_collision_type), built with the player's passable-ladder rule
-            // (ZoneMoveWorld::apply_remote_rules; not the doors the player's /nav passes) and in the contact-probe mode, which reuses one door buffer. Only spawns
-            // within the actor clip are probed (WorldState::remote_probe_range): farther ones are not drawn.
+            // (ZoneMoveWorld::apply_remote_rules; not the doors the player's /nav passes) and in the contact-probe mode, with a
+            // door buffer of each thread's own: smooth steps the spawns on the worker threads. Only spawns within the actor
+            // clip are probed (WorldState::remote_probe_range): farther ones are not drawn.
             game::WorldState::RemoteCollisionFn remote_collision;
             std::optional<ZoneMoveWorld> remote_world;
             if (collision_ && screen_ == Screen::InGame) {
                 remote_world.emplace(&*collision_, world_objects_.get(), zone_ ? &zone_->regions : nullptr);
                 remote_world->apply_remote_rules(conn_->server_rules());
-                remote_world->set_contact_probe(&remote_door_hits_);
+                remote_world->set_contact_probe_per_thread();
                 remote_collision = [&remote_world](const game::Spawn& spawn, const glm::vec3& from,
                                                    const glm::vec3& to) {
                     return remote_collision_type(spawn, from, to, *remote_world);
@@ -613,15 +615,6 @@ int ClientApp::run() {
                                                     pre_game ? pre_game_hidden_id() : hidden_spawn(), dt);
                     lap.mark("actors prepare_spawns");
                 }
-                if (shadows)
-                    for (std::uint32_t c = 0; c < render::kShadowCascades; ++c) {
-                        vk_.begin_shadow_cascade(*f, c);
-                        zone_renderer_->draw_shadow(*f, c);
-                        if (actor_renderer_) actor_renderer_->draw_shadow(*f, c);
-                        if (world_objects_) world_objects_->draw_shadow(*f, c);
-                        vk_.end_shadow_cascade(*f);
-                    }
-                lap.mark("sun shadows");
                 // Each map only when what it shows has changed: its view, the zone, the doors and objects in it, the
                 // plants swaying in it (render/cover_map.h). Its layer keeps its depths meanwhile.
                 const bool draw_cover = render::cover_map_stale(
@@ -633,15 +626,59 @@ int ClientApp::run() {
                     water_state_, watering, cover_,
                     render::cover_contents(watering ? zone_renderer_->id() : 0, vk_.shadow_generation(), 0),
                     watering && zone_renderer_->map_moves(render::kWaterLayer));
-                for (std::uint32_t layer : {render::kCoverLayer, render::kWaterLayer}) {
-                    if (!(layer == render::kCoverLayer ? draw_cover : draw_water)) continue;
-                    vk_.begin_shadow_cascade(*f, layer);
-                    zone_renderer_->draw_shadow(*f, layer);
-                    if (world_objects_) world_objects_->draw_shadow(*f, layer);
-                    vk_.end_shadow_cascade(*f);
+                // The shadow layers: the sun's cascades, then the cover and water maps when they are drawn. With the worker
+                // threads, every layer's draws are recorded at once, a renderer's in a lane of its own (its layers in order,
+                // on one thread: render/scene_recorder.h), then each layer's rendering executes its buffers in the inline
+                // order. Without them, or with display.parallel_record off, they are drawn inline as before.
+                shadow_layers_.clear();
+                if (shadows)
+                    for (std::uint32_t c = 0; c < render::kShadowCascades; ++c) shadow_layers_.push_back(c);
+                if (draw_cover) shadow_layers_.push_back(render::kCoverLayer);
+                if (draw_water) shadow_layers_.push_back(render::kWaterLayer);
+                render::SceneRecorder& shadow_rec = *shadow_recorder_;
+                if (!shadow_layers_.empty() && shadow_rec.begin_frame(*f, parallel_record_)) {
+                    for (std::uint32_t layer : shadow_layers_) {
+                        shadow_rec.add_target({[this] { return vk_.shadow_inheritance(); },
+                                               [this, layer](VkCommandBuffer c) { vk_.set_shadow_state(c, layer); }});
+                        shadow_rec.add(*f, zone_renderer_.get(),
+                                       [this, layer](const render::FrameInfo& fr) { zone_renderer_->draw_shadow(fr, layer); });
+                        if (layer < render::kShadowCascades && actor_renderer_)
+                            shadow_rec.add(*f, actor_renderer_.get(), [this, layer](const render::FrameInfo& fr) {
+                                actor_renderer_->draw_shadow(fr, layer);
+                            });
+                        if (world_objects_)
+                            shadow_rec.add(*f, world_objects_.get(), [this, layer](const render::FrameInfo& fr) {
+                                world_objects_->draw_shadow(fr, layer);
+                            });
+                    }
+                    shadow_rec.record(*f);
+                    for (std::size_t i = 0; i < shadow_layers_.size(); ++i) {
+                        vk_.begin_shadow_cascade(*f, shadow_layers_[i], true);
+                        shadow_rec.execute(*f, i);
+                        vk_.end_shadow_cascade(*f);
+                    }
+                    shadow_rec.reset();
+                    lap.mark("shadow layers recorded");
+                } else {
+                    if (shadows)
+                        for (std::uint32_t c = 0; c < render::kShadowCascades; ++c) {
+                            vk_.begin_shadow_cascade(*f, c);
+                            zone_renderer_->draw_shadow(*f, c);
+                            if (actor_renderer_) actor_renderer_->draw_shadow(*f, c);
+                            if (world_objects_) world_objects_->draw_shadow(*f, c);
+                            vk_.end_shadow_cascade(*f);
+                        }
+                    lap.mark("sun shadows");
+                    for (std::uint32_t layer : {render::kCoverLayer, render::kWaterLayer}) {
+                        if (!(layer == render::kCoverLayer ? draw_cover : draw_water)) continue;
+                        vk_.begin_shadow_cascade(*f, layer);
+                        zone_renderer_->draw_shadow(*f, layer);
+                        if (world_objects_) world_objects_->draw_shadow(*f, layer);
+                        vk_.end_shadow_cascade(*f);
+                    }
+                    lap.mark("cover and water maps");
                 }
                 cover_drawn_ = covering;
-                lap.mark("cover and water maps");
                 if (light_shadows)
                     render::draw_point_shadows(vk_, *f, point_shadows_, zone_->lights, point_builds, *zone_renderer_,
                                                actor_renderer_.get(), objects);

@@ -113,6 +113,23 @@ without a pool (the tests, the tools) or from inside a worker it runs the loop i
   they were. The scene's renderings then begin with `VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT`
   (`VkContext::set_scene_secondary`). Each frame slot keeps a command pool per lane, reset when the slot comes round.
   Off (or without workers), the jobs run at once into the frame's own command buffer.
+- The shadow layers' command recording (a second `render::SceneRecorder`, made without `scene`, under the same
+  `display.parallel_record`): the sun's cascades, then the cover and water maps when they are drawn. Each layer is a
+  target of its own (`VkContext::shadow_inheritance`, its viewport, scissor and depth bias from `set_shadow_state`),
+  and each renderer (the zone, the characters, the doors and objects) a lane, so a renderer's layers are recorded in
+  order on one thread while the others record theirs. Every layer's rendering then begins with secondary contents
+  (`begin_shadow_cascade`'s `secondary`) and executes its buffers in the inline order. The point-light cubes are still
+  drawn inline.
+- The other spawns' movement (`game::WorldState::smooth`): the vehicles' riders are stepped first on the main thread
+  (each reads its vehicle), then every other spawn on the workers, each wholly on one thread, so the result does not
+  depend on which. Its floor, region and contact probes only read the zone and its doors; the contact probe sweeps
+  doors into a buffer of each thread's own (`ZoneMoveWorld::set_contact_probe_per_thread`).
+- A zone's load (`ClientApp::load_zone`): once the zone's data is final, its collision mesh, moving parts, ladders
+  and ambient probe are built as background tasks while the main thread makes the zone's GPU objects, and each is
+  waited for where it was built before.
+
+A character's skeleton is posed at most once a frame for the bones its effects, spells and name plate ask for
+(`ActorRenderer::drawn_bone`); the poses of spawns no longer drawn are dropped once a second, not each frame.
 
 ### Temporal upscaling
 
@@ -2192,7 +2209,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.horizon_hills` | 0, 1 | 1 | land round an outdoor zone past its edges (Horizon hills); modern only; viewer `--no-horizon` |
 | `display.volumetric_clouds` | 0, 1 | 1 | clouds marched through the air over the plain skies, in place of the painted cloud layer and patches (Volumetric Clouds); modern only; viewer `--no-clouds` |
 | `display.worker_threads` | -1, 0 .. 16 | -1 | the frame's worker threads (Worker threads); -1 one fewer than the hardware threads, at most 6; 0 none; read at start-up |
-| `display.parallel_record` | 0, 1 | 1 | the scene's draws recorded on the worker threads into secondary command buffers (Worker threads); 0 records them on the main thread; read at start-up |
+| `display.parallel_record` | 0, 1 | 1 | the scene's and the shadow layers' draws recorded on the worker threads into secondary command buffers (Worker threads); 0 records them on the main thread; read at start-up |
 | `display.smooth_ground` | 0, 1 | 1 | a classic zone's ground drawn smooth and curved (Smoothed ground); read as each zone loads; viewer `--no-smooth-ground` |
 | `display.tree_detail` | 50 to 200 | 100 | how far a texture pack's replacement models (generated trees) keep their nearer levels of detail, in percent of their own distances (Tree Detail Distance); viewer `--tree-detail` |
 | `display.target_ring_cues` | 0, 1 | 1 | the target ring's sweep on a new target and pulse while attacking (Target Ring Cues; The target ring) |
