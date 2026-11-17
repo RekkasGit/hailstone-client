@@ -49,7 +49,7 @@ TEST_CASE("addon requirements: a repository must match even when another package
     CHECK(addon_requirement_problems(r, {a}).empty());
 }
 
-TEST_CASE("addon requirements: missing modified and non-game packages cannot satisfy a requirement") {
+TEST_CASE("addon requirements: missing or modified packages cannot satisfy a requirement; a tool's install does") {
     const auto r = required_rules();
     CHECK(addon_requirement_problems(r, {}).size() == 1);
     auto a = helper();
@@ -57,11 +57,15 @@ TEST_CASE("addon requirements: missing modified and non-game packages cannot sat
     auto problems = addon_requirement_problems(r, {a});
     REQUIRE(problems.size() == 1);
     CHECK(problems[0].message.find("missing or changed") != std::string::npos);
-    a.intact = true;
+    // A tool (Texture Studio, say) is a program of its own: installed and intact is all the client can check.
     a.kind = AddonKind::Tool;
-    problems = addon_requirement_problems(r, {a});
-    REQUIRE(problems.size() == 1);
-    CHECK(problems[0].message.find("separate tool") != std::string::npos);
+    a.caps = 0;
+    CHECK(addon_requirement_problems(r, {a}).size() == 1);
+    a.intact = true;
+    CHECK(addon_requirement_problems(r, {a}).empty());
+    auto blocked = r;
+    blocked.addons.block = {"maker/helper"};
+    CHECK(addon_requirement_problems(blocked, {a}).size() == 1);
 }
 
 TEST_CASE("addon requirements: blocked identities and incompatible capabilities refuse login") {

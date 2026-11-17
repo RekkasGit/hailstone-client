@@ -31,8 +31,6 @@ std::vector<AddonRequirementProblem> addon_requirement_problems(
             const auto allowed_caps = a.kind == AddonKind::Script ? rules.player_script_caps : rules.player_plugin_caps;
             if (!plugin::addon_allowed(rules.addons, a.source)) {
                 problem = "Required add-on " + required + " is blocked by this server's add-on policy.";
-            } else if (a.kind == AddonKind::Tool) {
-                problem = "Required add-on " + required + " is a separate tool and cannot run as a game add-on.";
             } else if (!a.intact) {
                 problem = "Required add-on " + required + " has missing or changed files. Reinstall it in Add-ons.";
             } else if (a.kind == AddonKind::Script && !a.startable) {
