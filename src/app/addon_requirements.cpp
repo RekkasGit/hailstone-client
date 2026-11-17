@@ -154,8 +154,13 @@ void present_addon_requirement(ui::LoginView& view, const std::vector<AddonRequi
     if (!offers.empty()) view.addons.link = offers.front().source;
 }
 
-AddonAdmission::Result AddonAdmission::warn(std::string problem) {
+AddonAdmission::Result AddonAdmission::warn(std::string problem, bool retriable) {
     Result out;
+    if (problem != failure_ || (!problem.empty() && retriable != failure_retriable_)) {
+        failure_ = problem;
+        failure_retriable_ = !problem.empty() && retriable;
+        ++failure_serial_;
+    }
     if (problem == warned_) return out;
     warned_ = problem;
     out.warning = std::move(problem);
@@ -167,6 +172,9 @@ void AddonAdmission::reset() {
     admitted_ = wait_frame_ = false;
     zone_problem_.clear();
     warned_.clear();
+    if (!failure_.empty()) ++failure_serial_;
+    failure_.clear();
+    failure_retriable_ = false;
 }
 
 AddonAdmission::Result AddonAdmission::update(const plugin::Rules* rules, std::uint32_t serial, bool in_world,
@@ -187,11 +195,13 @@ AddonAdmission::Result AddonAdmission::update(const plugin::Rules* rules, std::u
     }
     if (admitted_) {
         std::string problem = zone_problem_;
+        bool retriable = false;
         if (problem.empty()) {
             if (std::exchange(wait_frame_, false)) return {};
             if (rules->addons.enabled) problem = ready().value_or(std::string());
+            retriable = true;
         }
-        return warn(std::move(problem));
+        return warn(std::move(problem), retriable);
     }
     if (!in_world) return {};
     if (!rules->addons.enabled) {

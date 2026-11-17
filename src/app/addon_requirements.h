@@ -86,12 +86,21 @@ public:
                   const std::function<std::optional<std::string>()>& ready);
     void reset(); // a new world session
     bool admitted() const { return admitted_; }
+    // Once admitted: the failure in force now ("" none), whether the running add-ons reported it (a required plugin
+    // or script that failed: Retry may help) rather than the zone's rules, and a serial that changes with it. The
+    // Server add-ons warning shows only while there is one (ClientApp::addon_policy_view).
+    const std::string& failure() const { return failure_; }
+    bool failure_retriable() const { return failure_retriable_; }
+    std::uint64_t failure_serial() const { return failure_serial_; }
 
 private:
-    Result warn(std::string problem);
+    Result warn(std::string problem, bool retriable);
     std::optional<std::uint32_t> serial_;
     bool admitted_ = false, wait_frame_ = false;
     std::string zone_problem_, warned_;
+    std::string failure_;
+    bool failure_retriable_ = false;
+    std::uint64_t failure_serial_ = 0;
 };
 
 } // namespace hailstone::app

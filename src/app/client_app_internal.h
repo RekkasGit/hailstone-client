@@ -659,6 +659,12 @@ private:
     // The opted-in add-on policy (docs/plugins.md "Opt-in add-on policies"), each frame of a connection
     // (AddonAdmission): the cached rules only inform the login screen. No code is installed here.
     bool addon_world_allowed();
+    // The Server add-ons warning (ui::AddonPolicyView, hs.AddonPolicy): a required add-on that failed in the world,
+    // from AddonAdmission's failure; the player's Retry; the client's own window, drawn when the interface does not
+    // replace it ("AddonPolicy") and until the player closes it (back for the next failure).
+    void update_addon_policy_view();
+    void retry_required_addons();
+    void addon_policy_window();
     void show_addon_requirement(const std::vector<AddonRequirementProblem>& problems, std::string message);
     // The upscaler loaded at startup must be allowed, and a required provider must be selected and loaded.
     std::string upscaler_addon_problem(const plugin::Rules& rules) const;
@@ -1190,6 +1196,8 @@ private:
     plugin::Rules addons_rules_;
     AddonAdmission addon_admission_;
     std::vector<AddonRequirementProblem> addon_problems_; // the zone-in's, for the install card
+    ui::AddonPolicyView addon_policy_view_;
+    std::uint64_t addon_policy_failure_serial_ = 0, addon_policy_closed_ = 0;
     // Suggested add-ons (app/addon_suggest.h): the picked server's, as the login screen shows them, and those put
     // away for this run (by profile and addon_repo_key).
     std::vector<AddonSuggestion> suggestions_;

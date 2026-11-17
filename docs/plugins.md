@@ -1427,6 +1427,14 @@ When it is decided:
   installed add-ons do not meet, is a warning in chat (`[Add-ons] Required add-on owner/repo did not remain
   running. You can keep playing on this server.`), said once for each failure. Leaving to character select starts the
   check over for the next entry.
+- **Server add-ons warning and Retry.** While such a failure lasts, a small Server add-ons window (Modern, Gamepad,
+  and the client's own when the interface has none) says what failed and that the player can keep playing. When the
+  running add-ons reported it (a required plugin that let an exception out or did not load, a required script that
+  failed or ended), it offers **Retry**: each such plugin is unloaded and loaded again once, and each such script
+  started again, under every usual check (rules, approval of native code). Required add-ons still cannot be
+  stopped. The window shows nothing while all is well, takes no action by itself, and its close box puts it away
+  until the next failure. Only the client's own interfaces show it or press Retry (`hs.AddonPolicy`,
+  `hs.AddonPolicyAction`, docs/ui-api.md); an add-on interface gets the client's window instead.
 
 **When blocking upscalers.** An upscaler loads at start, before any server is known, and Vulkan cannot change it
 while the client runs. An active upscaler the policy refuses (or whose loaded files no longer match its installed

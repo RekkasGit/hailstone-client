@@ -39,6 +39,16 @@ struct StatusLine {
     bool is_error = false;
 };
 
+// A required add-on that failed once the character is in the world (docs/plugins.md "Opt-in add-on policies"): the
+// Server add-ons warning, shown only while there is one. `serial` changes with the failure (a closed warning comes
+// back for a new one); `can_retry`: the running add-ons reported it, so Retry may help.
+struct AddonPolicyView {
+    bool failed = false;
+    bool can_retry = false;
+    std::uint64_t serial = 0;
+    std::string message;
+};
+
 // ---- Login ----------------------------------------------------------------
 
 // A game folder the login screen offers (hailstone.ini assets.path and assets.recent), with what its check found.

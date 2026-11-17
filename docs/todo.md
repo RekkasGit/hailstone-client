@@ -7,6 +7,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 ## Server add-on policy
 
 - [x] Optional required/allow/block lists by GitHub repository (owner/repo; bare names refused) for every kind the add-on manager installs, intact package identities, required autostart that the player cannot stop, consent gates, and active upscaler checks; disabled unless `[addons] enforce = on`.
+- [x] Server add-ons warning with Retry for a required plugin or script that failed in the world (Modern, Gamepad, the client's own window; closable, no emergency stop). From fryguy503's PR #93.
 - [ ] Letting a required add-on run above `player_caps` (PR #93 asked for it) needs a load-time check that its files are the ones a signed manifest named; the client keeps neither the signed manifest nor per-file signed hashes, so naming a repository grants no capabilities for now.
 - [x] Minimum versions on required add-ons (`required = owner/repo:1.0.0-preview.4`, SemVer order, highest minimum wins, malformed = invalid policy). From fryguy503's PR #93.
 - [x] Decided at the zone-in by its own rules (the cached copy only informs the login screen); before the world shows a problem refuses entry, once in it a failure warns once in chat and never disconnects; readiness and approvals cached by the rules, approvals and running set; package hashes remembered by size and time.

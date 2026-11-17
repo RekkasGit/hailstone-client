@@ -919,6 +919,85 @@ TEST_CASE("native plugins: a required plugin that throws in the world is a warni
     CHECK(admission.admitted());
 }
 
+// Retry (the Server add-ons warning): the required plugin that threw is unloaded and loaded again once; the warning
+// clears, and a later throw is warned about again.
+TEST_CASE("native plugins: Retry reloads a required plugin that threw, once, and the warning clears") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    const fs::path profile = h.world.dir / "servers" / "required";
+    fs::create_directories(profile / "plugins");
+    h.plugins->set_server_dir(profile / "plugins");
+    auto rules = plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\nrequired = owner/probe\n");
+    h.policy.set_ceilings({{plugin::FileKind::Plugin, h.hash(), plugin::kCapAll, "HostProbe", "owner/probe"}});
+    h.policy.set(rules);
+    h.plugins->policy_changed({});
+    REQUIRE(h.plugins->consent());
+    h.plugins->answer_consent(true);
+    REQUIRE(h.plugins->loaded("HostProbe"));
+    CHECK(h.plugins->retry_required_addons() == 0); // running fine: left alone
+
+    app::AddonAdmission admission;
+    auto frame = [&] {
+        return admission.update(&rules, 1, true, [] { return std::string(); }, [&]() -> std::optional<std::string> {
+            std::string problem;
+            if (h.plugins->required_addons_ready(&problem)) return std::string();
+            if (problem.empty()) return std::nullopt;
+            return problem;
+        });
+    };
+    frame();
+    REQUIRE(frame().step == app::AddonAdmission::Step::Play);
+    REQUIRE(admission.admitted());
+    CHECK(admission.failure().empty());
+    const auto quiet = admission.failure_serial();
+
+    h.run("/probethrow");
+    CHECK_FALSE(frame().warning.empty());
+    CHECK(admission.failure() == "Required add-on hostprobe failed with an error in a command");
+    CHECK(admission.failure_retriable()); // the running add-ons said so: Retry may help
+    CHECK(admission.failure_serial() != quiet);
+    const auto failed = admission.failure_serial();
+    frame();
+    CHECK(admission.failure_serial() == failed); // the same failure keeps its serial
+
+    CHECK(h.plugins->retry_required_addons() == 1);
+    CHECK(h.plugins->loaded("HostProbe")); // loaded again (approved bytes: no new question)
+    CHECK_FALSE(h.plugins->consent());
+    std::string problem;
+    CHECK(h.plugins->required_addons_ready(&problem));
+    CHECK(frame().warning.empty());
+    CHECK(admission.failure().empty());
+    CHECK(admission.failure_serial() != failed);
+    CHECK(h.plugins->retry_required_addons() == 0); // once: nothing failed now
+
+    h.run("/probethrow"); // a new failure after the retry is warned about again
+    CHECK(frame().warning == "Required add-on hostprobe failed with an error in a command");
+    CHECK(admission.admitted());
+}
+
+// A failure the zone's rules give (an add-on missing for this zone's policy), not the running add-ons, is not one
+// Retry can help with.
+TEST_CASE("addon admission: a failure from the zone's rules is not retriable, and leaving clears it") {
+    auto rules = plugin::parse_server_cfg("[addons]\nenforce = on\nrequired = owner/probe\n");
+    app::AddonAdmission admission;
+    std::string zone;
+    auto frame = [&](std::uint32_t serial) {
+        return admission.update(&rules, serial, true, [&] { return zone; },
+                                [] { return std::optional<std::string>(std::string()); });
+    };
+    frame(1);
+    frame(1);
+    REQUIRE(admission.admitted());
+    zone = "Required add-on owner/probe is not installed. Open Add-ons to install it.";
+    CHECK(frame(2).warning == zone);
+    CHECK(admission.failure() == zone);
+    CHECK_FALSE(admission.failure_retriable());
+    const auto serial = admission.failure_serial();
+    admission.update(nullptr, 0, false, [] { return std::string(); },
+                     [] { return std::optional<std::string>(std::string()); }); // character select
+    CHECK(admission.failure().empty());
+    CHECK(admission.failure_serial() != serial);
+}
+
 TEST_CASE("native plugins: a binary in the plugin's own folder under plugins/") {
     Host h(true);
     auto all = h.plugins->list();

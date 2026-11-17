@@ -20,6 +20,9 @@ What the client does not implement yet, or implements with an approximation it c
   (the chat warning), both UI packs and a physical controller, and an external upscaler allowed/blocked/updated
   followed by restart. The server does not send its policy until the zone-in; it is a client extension, not a
   server-side attestation or anti-cheat mechanism.
+- The Server add-ons warning and its Retry are covered by readiness, Lua binding and pack window tests, not live:
+  a required plugin that throws and is retried on a live server, a required script that fails and is retried, both
+  packs with a physical controller, and the client's own window (no test drives it).
 - Minimum versions on required add-ons are covered by parser and requirement tests, not live: an exact, older and
   newer installed version at the zone-in, and an older client refused by a server using the versioned form.
 - Texture packs (Texture Studio's output in `textures/`) are not add-ons and have no repository, so no list names
