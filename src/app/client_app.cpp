@@ -81,6 +81,7 @@ int ClientApp::run() {
             use_ui_pack(*next, std::exchange(ui_reload_pending_, false));
         }
         update_login();
+        follow_ui_pack_screen();
         update_lap.mark("update login, updater, add-ons");
         update_connection();
         update_lap.mark("update connection");

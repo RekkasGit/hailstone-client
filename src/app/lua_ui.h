@@ -60,6 +60,11 @@ struct UiHost {
     std::function<std::int64_t()> unix_time;
     bool in_game = false;                  // a character is in the world
     bool ui_ready = false;                 // in game or at character select
+    // The interface loaded is one Hailstone ships (ui::trusted_ui_pack). Only then may its code read the login
+    // password, act in the add-on manager or answer the compiled-plugin consent question, and the client's own
+    // questions (PluginConsent, confirmations, trades ...) give way to its windows. An add-on or hand-placed
+    // interface gets the rest of the UI: it draws the game and acts in it as the player does.
+    bool trusted_ui = true;
     int game_state = 0;                    // CEverQuest::GameState: 1 character select, 2 creation, 5 in game
     const game::mechanics::Character* character = nullptr; // the player as the original computes it
     ui::UiTextures* textures = nullptr;

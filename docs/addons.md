@@ -306,11 +306,16 @@ Script Autorun or a script entrypoint. Each interface has the stable ID
 `addon.<addon>.<pack>`. Built-in IDs remain unchanged. Each addon and pack name
 uses letters, digits, underscores or hyphens, beginning with a letter or digit.
 
-**Full client interface access:** installing a UI pack explicitly trusts its
-presentation code as a complete client interface, like manually installed UI
-code. It can call host interface, account and game actions. This is not a
-script/plugin capability sandbox. The install card discloses this trust;
-same-kind updates retain it, and an addon cannot change its kind in place.
+**What an interface may do:** an add-on interface draws the game's windows and
+acts in the game as the player does (casting, moving items, speaking,
+targeting), as the built-in ones do. It does not get what only the client's own
+interfaces (`ui/modern`, `ui/gamepad`) get: the login and server select screens
+are drawn by the built-in interface under it (its base, else Modern), so it never
+sees the typed or saved password nor the add-on manager's installs, removals
+and approvals; it cannot answer the server's compiled-plugin question, which
+the client draws itself under it. An interface put in `ui/` by hand is treated
+the same way. The install card says so; same-kind updates keep it, and an addon
+cannot change its kind in place.
 
 A UI manifest uses `package any`; `caps` may be absent or `caps none`, and does
 not limit the full-interface trust grant. Archives contain one or more

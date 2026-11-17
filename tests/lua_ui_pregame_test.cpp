@@ -135,6 +135,27 @@ TEST_CASE("hs.LoginScreen: nil off the login screen; the view's servers, fields,
     CHECK_FALSE(ui.api.replaces("LoginScreen"));
 }
 
+// An interface Hailstone does not ship (an add-on's, or one put in ui/ by hand: UiHost::trusted_ui false) never sees
+// the login screen: not the typed or saved password, nor the add-on manager's installs and approvals. The client
+// draws that screen with the built-in pack instead (ClientApp::ui_pack_for_screen).
+TEST_CASE("hs.LoginScreen, LoginSet and LoginDo: nothing for an interface Hailstone does not ship") {
+    test::ScratchDir dir("lua_ui_pregame_untrusted");
+    Ui ui;
+    ui::LoginView v = login_view(dir.path());
+    v.password = "secret";
+    ui.host.login = &v;
+    ui.host.trusted_ui = false;
+    CHECK(ui("return hs.LoginScreen()") == "nil");
+    CHECK_FALSE(ui.api.replaces("LoginScreen"));
+    ui("hs.LoginSet('password', 'other') hs.LoginSet('addonLink', 'https://github.com/x/y')");
+    CHECK(v.password == "secret");
+    CHECK(v.addons.link.empty());
+    CHECK(ui("return hs.LoginDo('addonInspect')") == "false");
+    CHECK(ui("return hs.LoginDo('login')") == "false");
+    ui.host.trusted_ui = true;
+    CHECK(ui("return hs.LoginScreen().password") == "secret");
+}
+
 TEST_CASE("hs.LoginSet and hs.LoginDo: the fields change, and the buttons ask the client for their actions") {
     test::ScratchDir dir("lua_ui_pregame_test");
     Ui ui;

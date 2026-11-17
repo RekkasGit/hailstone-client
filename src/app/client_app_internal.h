@@ -345,8 +345,11 @@ public:
         // folder of <client>/ui; its scripts' settings in ui/settings/<name>.txt of the data folder (the first-start
         // migration brings the old ones).
         refresh_ui_packs(true);
-        const ui::UiPack* pack = ui::find_ui_pack(ui_packs_, login_view_.ui);
+        const ui::UiPack* selected = ui::find_ui_pack(ui_packs_, login_view_.ui);
+        ui_selected_ = selected ? selected->id : std::string();
+        const ui::UiPack* pack = ui_pack_for_screen(selected);
         ui_name_ = pack ? pack->id : "modern";
+        ui_host_.trusted_ui = !pack || ui::trusted_ui_pack(*pack);
         ui_selection_context_ = ui::selected_profile_id(login_view_) + '\n' +
             (login_view_.ui.empty() ? config_.get_string("ui.name", "modern") : login_view_.ui);
         if (pack) loaded_ui_pack_ = *pack;
@@ -690,6 +693,12 @@ private:
     // Makes the user interface `id` (a folder of ui/; empty: hailstone.ini ui.name) the running one, when it is not
     // already: a new Lua state with its scripts and settings. Only before character select, where no Lua window is up.
     void use_ui_pack(std::string_view id, bool force = false);
+    // The pack to load for `selected` on this screen: the login and server select screens (the password, the add-on
+    // manager) are always a pack Hailstone ships (ui::trusted_ui_pack), the selected one's built-in base or Modern;
+    // from the character select on, the selected pack itself.
+    const ui::UiPack* ui_pack_for_screen(const ui::UiPack* selected) const;
+    // Loads the selected pack once the screen allows it (after the login), the built-in one when it no longer does.
+    void follow_ui_pack_screen();
     ui::lua::LuaUi::DataRoots ui_data_roots(const ui::UiPack* pack) const;
     bool select_ui_pack(std::string_view id); // persist an exact installed choice, then queue its safe-frame load
     void refresh_ui_packs(bool force = false);
@@ -1220,6 +1229,7 @@ private:
     std::vector<std::pair<std::string, std::filesystem::path>> plugin_ui_sources_;
     std::chrono::steady_clock::time_point plugin_ui_rescan_{};
     std::string ui_name_;                    // the one running
+    std::string ui_selected_;                // the one picked (ui_name_ unless ui_pack_for_screen stands in)
     AssetFolderSource asset_source_ = AssetFolderSource::Picker; // where game_'s base folder came from
     std::string layout_for_;                 // the character's UI.ini the windows are placed from
     std::filesystem::path ui_character_dir_; // the character in the world: its folder (its UI layout, ui-<pack>.txt)

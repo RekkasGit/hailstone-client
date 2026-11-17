@@ -449,7 +449,10 @@ void emit_login(Out& o, const ui::LoginView& v) {
 //     canRemove, canStart (an installed tool: hs.LoginDo "addonStart"), folder, consent (the server's compiled plugins: "allowed", "denied", "unasked"; else "")}.
 int LoginScreen(lua_State* L) {
     UiHost& h = host_of(L);
-    if (!h.login || plugin_window()) {
+    // An interface Hailstone does not ship never sees the login screen (UiHost::trusted_ui): the password and the
+    // add-on manager's installs, removals and approvals are the built-in pack's, which draws this screen under it
+    // (ClientApp::use_ui_pack).
+    if (!h.login || plugin_window() || !h.trusted_ui) {
         lua_pushnil(L);
         return 1;
     }
@@ -464,7 +467,7 @@ int LoginScreen(lua_State* L) {
 // the add-on link field; "addonsOpen", the add-ons panel shown.
 int LoginSet(lua_State* L) {
     UiHost& h = host_of(L);
-    if (!h.login || h.login->busy || plugin_window()) return 0;
+    if (!h.login || h.login->busy || plugin_window() || !h.trusted_ui) return 0; // (LoginScreen)
     ui::LoginView& v = *h.login;
     const std::string_view field = luaL_checkstring(L, 1);
     auto text = [&] { return std::string(luaL_checkstring(L, 2)); };
@@ -558,7 +561,7 @@ SavedAccount* account_named(ui::LoginView& v, std::string_view username) {
 // false when the action cannot go now (busy, not ready, no such row).
 int LoginDo(lua_State* L) {
     UiHost& h = host_of(L);
-    if (!h.login || plugin_window()) {
+    if (!h.login || plugin_window() || !h.trusted_ui) { // (LoginScreen)
         lua_pushboolean(L, 0);
         return 1;
     }

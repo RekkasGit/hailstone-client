@@ -27,7 +27,14 @@ namespace client_internal {
 namespace {
 
 std::vector<std::string> addon_access(AddonKind kind, std::uint32_t caps) {
-    return kind == AddonKind::Ui ? std::vector<std::string>{"Full client interface access"} : plugin::caps_described(caps);
+    // An interface acts in the game as the player does; the login password, add-on installs and the compiled-plugin
+    // question stay with the built-in interfaces (UiHost::trusted_ui).
+    return kind == AddonKind::Ui
+               ? std::vector<std::string>{"Draw the game's windows and act in the game as you do (cast, move items, "
+                                          "speak, target)",
+                                          "Not your login password, your add-ons or the server's compiled-plugin "
+                                          "question: the built-in interface handles those"}
+               : plugin::caps_described(caps);
 }
 
 std::string state_text(const AddonStatus& s) {

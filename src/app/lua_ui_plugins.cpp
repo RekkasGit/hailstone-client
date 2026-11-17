@@ -302,7 +302,9 @@ int PluginConsent(lua_State* L) {
         std::string hex, file;
     };
     Consent& c = plugin::lua_keep<Consent>(L);
-    plugin::cxx_guard(L, [&] { c.q = h.plugin_consent && !plugin_code() ? h.plugin_consent() : std::nullopt; });
+    plugin::cxx_guard(L, [&] {
+        c.q = h.plugin_consent && !plugin_code() && h.trusted_ui ? h.plugin_consent() : std::nullopt;
+    });
     const auto& q = c.q;
     if (!q) {
         lua_pushnil(L);
@@ -354,7 +356,8 @@ int AnswerPluginConsent(lua_State* L) {
     const lua_Integer serial = luaL_checkinteger(L, 2);
     bool asked = false;
     plugin::cxx_guard(L, [&] {
-        if (plugin_code() || !h.answer_plugin_consent || !h.plugin_consent) return;
+        // Only the client's own interfaces answer it (UiHost::trusted_ui); under another one the client draws it.
+        if (plugin_code() || !h.trusted_ui || !h.answer_plugin_consent || !h.plugin_consent) return;
         const auto q = h.plugin_consent();
         asked = q && static_cast<lua_Integer>(q->serial) == serial;
     });

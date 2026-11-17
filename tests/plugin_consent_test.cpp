@@ -186,6 +186,29 @@ TEST_CASE("hs.PluginConsent and hs.AnswerPluginConsent: the question for the pac
     lua_close(L);
 }
 
+// Under an interface Hailstone does not ship (UiHost::trusted_ui false) the pack's own code neither sees the question
+// nor answers it, and cannot put the client's own question window away: the client draws it.
+TEST_CASE("hs.PluginConsent under an add-on interface: nil, its answer refused, the client's window stays") {
+    app::UiHost host;
+    host.trusted_ui = false;
+    app::UiApi api(host);
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+    lua_newtable(L);
+    api.register_functions(L);
+    lua_setglobal(L, "hs");
+    Asking a;
+    a.wire(host);
+    CHECK(run(L, "return hs.PluginConsent()") == "nil");
+    CHECK(run(L, "return hs.AnswerPluginConsent(true, 7)") == "false");
+    CHECK(a.answers.empty());
+    api.begin_frame();
+    run(L, "hs.ReplaceWindow('PluginConsent') hs.ReplaceWindow('TradeWnd')");
+    CHECK_FALSE(api.replaces("PluginConsent"));
+    CHECK(api.replaces("TradeWnd")); // the rest of the game's windows are its to draw
+    lua_close(L);
+}
+
 // A server's own plugin windows run in the UI as that plugin: they must not see the question nor say yes to it.
 TEST_CASE("hs.PluginConsent in a plugin's code: nil, and its answer is refused") {
     test::ScratchDir dir("plugin_consent_confined");

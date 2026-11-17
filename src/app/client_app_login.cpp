@@ -392,11 +392,27 @@ void ClientApp::refresh_ui_packs(bool force) {
     const auto requested = screen_ == Screen::Login && !login_view_.ui.empty() ? login_view_.ui : wanted_ui_pack();
     const auto* current = ui::find_ui_pack_exact(ui_packs_, ui_name_);
     const auto* target = ui::find_ui_pack(ui_packs_, requested);
+    const auto* effective = ui_pack_for_screen(target);
     if (lua_ui_ && (!current || !current->available || !loaded_ui_pack_ || *current != *loaded_ui_pack_ ||
-                    (target && target->id != ui_name_))) {
+                    (effective && effective->id != ui_name_))) {
         pending_ui_pack_ = requested;
         ui_reload_pending_ = true;
     }
+}
+
+const ui::UiPack* ClientApp::ui_pack_for_screen(const ui::UiPack* selected) const {
+    if (!selected || ui::trusted_ui_pack(*selected) || (screen_ != Screen::Login && screen_ != Screen::Servers))
+        return selected;
+    for (const auto& id : selected->base_ids)
+        if (const auto* base = ui::find_ui_pack_exact(ui_packs_, id); base && base->available && ui::trusted_ui_pack(*base))
+            return base;
+    return ui::find_ui_pack(ui_packs_, "modern");
+}
+
+void ClientApp::follow_ui_pack_screen() {
+    if (!lua_ui_ || pending_ui_pack_ || ui_selected_.empty()) return;
+    const auto* pack = ui_pack_for_screen(ui::find_ui_pack_exact(ui_packs_, ui_selected_));
+    if (pack && pack->available && pack->id != ui_name_) use_ui_pack(ui_selected_);
 }
 
 ui::InterfaceStatus ClientApp::interface_status() const {
@@ -424,7 +440,12 @@ ui::InterfaceStatus ClientApp::interface_status() const {
         if (loaded.scanned) status.state = "ready";
     }
     if (!status.selected.available) status.state = "fallback";
-    else if (status.selected.id != status.loaded.id || pending_ui_pack_) status.state = "pending";
+    else {
+        // On the login screen an add-on interface waits under the built-in one (ui_pack_for_screen): not pending.
+        const auto* effective = ui_pack_for_screen(ui::find_ui_pack_exact(ui_packs_, status.selected.id));
+        if ((effective ? effective->id : status.selected.id) != status.loaded.id || pending_ui_pack_)
+            status.state = "pending";
+    }
     if (status.error_count || !ui_selection_error_.empty()) status.state = "error";
     return status;
 }
@@ -449,9 +470,12 @@ void ClientApp::use_ui_pack(std::string_view id, bool force) {
         ui_selection_error_.clear();
         ui_selection_context_ = context;
     }
-    const ui::UiPack* pack = ui::find_ui_pack(ui_packs_, requested);
+    const ui::UiPack* selected = ui::find_ui_pack(ui_packs_, requested);
+    if (selected) ui_selected_ = selected->id;
+    const ui::UiPack* pack = ui_pack_for_screen(selected);
     if (!pack || (!force && pack->id == ui_name_)) return;
     ui_name_ = pack->id;
+    ui_host_.trusted_ui = ui::trusted_ui_pack(*pack);
     loaded_ui_pack_ = *pack;
     const bool options_open = ui_api_ && ui_api_->shown("OptionsWindow");
     const std::string options_section = lua_ui_ ? lua_ui_->setting("options.section") : std::string();

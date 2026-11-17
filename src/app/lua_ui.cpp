@@ -779,10 +779,13 @@ int UiAnimation(lua_State* L) {
 // confirmation, among them a destroy's; a trade, a give, a quantity, a bazaar purchase's, a group invitation, a
 // respawn choice, a large dialog, a task offer) give way only to the pack's own windows: a plugin's code could
 // otherwise put the client's away and draw a question of its own in its place.
-bool may_replace(std::string_view name) {
+// The consent question is the client's own interfaces' alone (UiHost::trusted_ui): under an add-on or hand-placed
+// interface the client draws it, as that interface cannot answer it (hs.AnswerPluginConsent).
+bool may_replace(std::string_view name, const UiHost& host) {
     static constexpr std::string_view kPackOnly[] = {
         "PluginConsent", "ConfirmationDialogBox", "TradeWnd",    "GiveWnd",          "QuantityWnd",
         "BazaarConfirmationWnd", "GroupInvite", "RespawnWnd", "LargeDialogWindow", "TaskSelectWnd"};
+    if (!host.trusted_ui && name == "PluginConsent") return false;
     if (ui::lua::LuaUi::caller_tag().empty()) return true;
     return std::find(std::begin(kPackOnly), std::end(kPackOnly), name) == std::end(kPackOnly);
 }
@@ -790,7 +793,7 @@ bool may_replace(std::string_view name) {
 int ReplaceWindow(lua_State* L) {
     auto& m = Impl::of(L);
     std::string name = luaL_checkstring(L, 1);
-    if (may_replace(name)) m.replaced_at[name] = m.frame;
+    if (may_replace(name, m.host)) m.replaced_at[name] = m.frame;
     StockWindow* w = m.window(name);
     bool shown = w && (m.host.ui_ready || w->pre_game()) && w->shown(m.host);
     lua_pushboolean(L, shown);
@@ -861,7 +864,7 @@ int ReplaceWindow(lua_State* L) {
 int WindowShown(lua_State* L) {
     auto& m = Impl::of(L);
     const char* name = luaL_checkstring(L, 1);
-    if (may_replace(name)) {
+    if (may_replace(name, m.host)) {
         if (auto it = m.replaced_at.find(std::string_view(name)); it != m.replaced_at.end()) it->second = m.frame;
         else m.replaced_at.emplace(name, m.frame);
     }
