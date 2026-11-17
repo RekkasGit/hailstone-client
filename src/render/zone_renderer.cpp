@@ -2132,7 +2132,7 @@ void ZoneRenderer::create_descriptors() {
 }
 
 void ZoneRenderer::set_scene_light(const game::SceneLight& light) {
-    scene_.lighting.ambient = glm::vec4(light.ambient, 0.0f);
+    scene_.lighting.ambient = glm::vec4(light.ambient, scene_.lighting.ambient.w); // w: set_classic_smooth
     scene_.lighting.special_ambient = glm::vec4(light.special_ambient, 0.0f);
     scene_.lighting.directional = glm::vec4(light.directional, 0.0f);
     scene_.lighting.direction = glm::vec4(light.direction, 0.0f);

@@ -814,7 +814,8 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
             return std::clamp(config_.get_int(std::format("display.{}", name), 3), 0, 3);
     if (const auto* r = slider_range(name))
         return std::clamp(static_cast<int>(std::lround((config_float(r->key, r->fallback) - r->at_zero) / r->per_tick)), 0, 20);
-    if (name == "lighting") return lighting_mode_ == render::LightingMode::Modern ? 0 : 1;
+    // 0 Classic, 1 Smooth Classic, 2 Modern (render::LightingMode, low to high).
+    if (name == "lighting") return static_cast<int>(lighting_mode_);
     if (name == "ao") return config_.get_bool("display.ao", true) ? 1 : 0;
     if (name == "render_scale")
         return std::clamp(config_.get_int("display.render_scale", 100), render::kMinRenderScalePercent, 100);
@@ -973,7 +974,8 @@ bool ClientApp::set_display_option(std::string_view name, int value) {
         config_.set(std::string(r->key), std::format("{:.2f}", v));
         if (name == "view_distance") view_distance_ = v;
     } else if (name == "lighting") {
-        lighting_command(value == 0 ? "modern" : "classic"); // saves and applies
+        lighting_command(render::lighting_mode_name(static_cast<render::LightingMode>(std::clamp(value, 0, 2))));
+        // (saves and applies)
         return true;
     } else if (name == "ao" || name == "distance_blur" || name == "color_grade") {
         config_.set_bool("display." + std::string(name), value != 0);
@@ -1012,21 +1014,24 @@ void ClientApp::lighting_command(std::string_view args) {
     std::string a(args);
     for (char& c : a) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     if (a.empty()) {
-        lighting_mode_ = lighting_mode_ == render::LightingMode::Classic ? render::LightingMode::Modern
-                                                                         : render::LightingMode::Classic;
+        // Without a mode: modern and a classic one in turn, as before the smooth classic.
+        lighting_mode_ = lighting_mode_ == render::LightingMode::Modern ? render::LightingMode::Classic
+                                                                        : render::LightingMode::Modern;
     } else if (auto mode = render::parse_lighting_mode(a)) {
         lighting_mode_ = *mode;
     } else {
-        if (conn_) conn_->ui_message("Usage: /lighting [modern | classic]");
+        if (conn_) conn_->ui_message("Usage: /lighting [modern | smooth | classic]");
         return;
     }
-    bool modern = lighting_mode_ == render::LightingMode::Modern;
-    config_.set("display.lighting", modern ? "modern" : "classic");
+    config_.set("display.lighting", std::string(render::lighting_mode_name(lighting_mode_)));
     config_.save(config_path_);
     apply_scene_options(); // the automatic tonemap follows the mode
     if (conn_)
-        conn_->ui_message(modern ? "Lighting: modern (per-pixel sun, sky and point lights)."
-                                 : "Lighting: classic (the original's look).");
+        conn_->ui_message(lighting_mode_ == render::LightingMode::Modern
+                              ? "Lighting: modern (per-pixel sun, sky and point lights)."
+                          : lighting_mode_ == render::LightingMode::SmoothClassic
+                              ? "Lighting: smooth classic (the original's light, worked out per pixel)."
+                              : "Lighting: classic (the original's look).");
 }
 
 void ClientApp::update_missiles() {

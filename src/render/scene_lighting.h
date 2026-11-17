@@ -28,10 +28,19 @@ namespace hailstone::game { struct SceneLight; struct LightSource; }
 
 namespace hailstone::render {
 
-enum class LightingMode : std::uint8_t { Classic, Modern };
+// The lighting, low to high (the Options window's Lighting choices, in this order). SmoothClassic is the classic
+// lighting with its region light per pixel and its highlights rolled off (Hailstone's own; docs/graphics.md "Smooth
+// classic lighting"); everything else treats it as Classic, which is the original's look.
+enum class LightingMode : std::uint8_t { Classic, SmoothClassic, Modern };
 
-// display.lighting / `/lighting` values: classic, modern ("enhanced", the old name, is modern); nullopt otherwise.
+// display.lighting / `/lighting` values: classic, smooth, modern ("enhanced", the old name, is modern); nullopt
+// otherwise.
 std::optional<LightingMode> parse_lighting_mode(std::string_view name);
+// The value display.lighting saves for `mode`.
+std::string_view lighting_mode_name(LightingMode mode);
+// display.tonemap's "auto": AgX with the modern lighting, Soft with the smooth classic, none (the original's
+// clipping) with the classic.
+Tonemap automatic_tonemap(LightingMode mode);
 
 // The modern mode's light from the sky, in linear HDR units (1 = the white a surface shows at exposure 0). Not the
 // original's: the direction follows its sun path (assets::sky_sweep_heading, overhead at noon, the horizon at 6:00
@@ -100,7 +109,7 @@ void tag_shadowed_lights(SceneLighting& lighting);
 
 // std140 and std430 lay this out the same (vec4s and mat4s only); shaders/lighting.glsl SCENE_LIGHTING_FIELDS.
 struct SceneLighting {
-    glm::vec4 ambient{0.0f};
+    glm::vec4 ambient{0.0f}; // w: 1 the smooth classic lighting (ZoneRenderer::set_classic_smooth; the zone only)
     glm::vec4 special_ambient{0.0f};
     glm::vec4 directional{0.0f};
     glm::vec4 direction{0.0f};

@@ -60,7 +60,9 @@ struct DeviceCaps {
 
 // How the scene is drawn and shown. The scene renders in linear colour into a floating-point target (multisampled
 // when msaa > 1), which a full-screen pass tonemaps into the swapchain before the UI is drawn on top.
-enum class Tonemap : std::uint8_t { None, AgX, Aces };
+// The tone curve (shaders/post.frag). Soft keeps display values to 0.8 as they are and rolls the rest off towards
+// white (shaders/classic_light.glsl soft_highlights): the smooth classic lighting's (LightingMode::SmoothClassic).
+enum class Tonemap : std::uint8_t { None, AgX, Aces, Soft };
 
 // The most MSAA samples the scene is drawn with: a request for more (display.msaa 8, --msaa 8) is drawn at this.
 inline constexpr std::uint32_t kMaxMsaa = 4;
@@ -139,7 +141,7 @@ struct AoView {
     float intensity = 12.0f;
 };
 
-// Parses display.tonemap's values (none, agx, aces); unknown names give None.
+// Parses display.tonemap's values (none, agx, aces, soft); unknown names give None.
 Tonemap parse_tonemap(std::string_view name);
 
 // One frame being recorded. Rendering into the scene target (colour + depth) is already begun.

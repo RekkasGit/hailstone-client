@@ -700,7 +700,8 @@ void ClientApp::detect_graphics_at_first_start() {
 }
 
 void ClientApp::apply_settings() {
-    // display.lighting = modern (docs/graphics.md) | classic (the original's look); /lighting switches.
+    // display.lighting = modern (docs/graphics.md) | smooth (the classic, per pixel) | classic (the original's look);
+    // /lighting switches.
     lighting_mode_ = render::parse_lighting_mode(config_.get_string("display.lighting", "modern"))
                          .value_or(render::LightingMode::Modern);
     apply_scene_options();

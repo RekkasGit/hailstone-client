@@ -14,7 +14,7 @@ struct PointLightGpu {
 // render/scene_lighting.h SceneLighting, as a block's members (the zone's Scene uniform block, the actor and object
 // Lighting buffers).
 #define SCENE_LIGHTING_FIELDS                                                                                          \
-    vec4 ambient;                                                                                                      \
+    vec4 ambient; /* w: 1 the smooth classic lighting (ZoneRenderer::set_classic_smooth) */                            \
     vec4 special_ambient;                                                                                              \
     vec4 directional;                                                                                                  \
     vec4 direction;                                                                                                    \
@@ -106,6 +106,8 @@ vec3 point_light(PointLightGpu l, vec3 p, vec3 n, float wrap) {
     float lambert = clamp((ndl + wrap) / (1.0 + wrap), 0.0, 1.0);
     return l.color.rgb * lambert * atten;
 }
+
+#include "classic_light.glsl"
 
 // Display (sRGB) values to linear: textures, vertex colours, the fog colour and the classic results are stored that
 // way; the scene target is linear (render/vk_context.h).
