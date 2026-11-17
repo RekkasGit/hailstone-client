@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Name plates: GM players' names are green (`#1da64b`) whether targeted or not, with a pale mint alpha highlight sweeping across each name and back
+- Name plates: GM names show green as the original client does, your own GM character's too, and stay green when targeted; an anonymous or roleplaying GM's name keeps the ordinary colour
 - Performance: keeping moving NPCs on the ground no longer searches the zone's collision a second time when a physics step has just landed the spawn on its floor
 - Frame rate: the login, server select, character select/creation and loading screens (including the last stretch of a zone-in) no longer run as fast as they can when `display.max_fps` is unlimited; they are capped at 240 fps; any other `display.max_fps` value is still followed exactly
 - Modern lighting: the distant land past a zone's edge has trees: the zone's own trees stand in groves and here and there across the far hills, and over the zones you have visited they stand where those zones' own trees do. They go with Horizon Hills

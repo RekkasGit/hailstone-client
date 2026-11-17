@@ -1288,7 +1288,10 @@ and `npc_owner_line`
   takes the title's place (`game::name_sprite_market_words`). An offline trader reads "Offline Trader Name". Only a
   player's (spawn type 0): an NPC the server marks as a trader keeps its plain name, as in the original. Stock EQEmu
   sets neither offline flag, so its traders and buyers show only "Trader " / "Buyer ".
-- Their colours are this client's, not the original's; NPC names in their consider colour are a Hailstone option
+- A GM's name is green (`#1da64b`) as in the original (PlayerClient::SetNameSpriteTint @0x58bf00,
+  `game::gm_name_colour`): the gm flag, not a live NPC (type 1), and Anon 0, so an anonymous or roleplaying GM shows
+  the ordinary colour. A targeted GM keeps the green, where the original fades the target's tint toward white. The
+  other colours are this client's, not the original's; NPC names in their consider colour are a Hailstone option
   (`display.con_name_colour`, on by default): docs/graphics.md "Name plates".
 - Hailstone's own, not the original's: a plate's text is hidden wherever the scene (geometry, doors, characters) is
   nearer, pixel by pixel (not by a line of sight to one point above the head), and a name behind the scene is not drawn; of names that overlap on the screen

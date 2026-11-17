@@ -74,9 +74,3 @@ TEST_CASE("plate style: names shrink evenly to the far size at the range") {
     CHECK(plate_distance_factor(100.0f, 0.0f, 50) == 1.0f);
     CHECK(plate_distance_factor(250.0f, 250.0f, 10) == doctest::Approx(0.25f)); // clamped to the minimum
 }
-
-TEST_CASE("plate style: GM nameplate highlight sweeps left to right and back") {
-    CHECK(gm_plate_sweep_position(0.0f) == doctest::Approx(0.0f));
-    CHECK(gm_plate_sweep_position(1.570796327f) == doctest::Approx(1.0f));
-    CHECK(gm_plate_sweep_position(3.141592654f) == doctest::Approx(0.0f));
-}

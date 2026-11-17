@@ -1,7 +1,6 @@
 #include "game/nameplate_style.h"
 
 #include <algorithm>
-#include <cmath>
 
 #include "core/config.h"
 
@@ -63,10 +62,6 @@ float plate_distance_factor(float distance, float range, int far_scale) {
     if (far >= 1.0f || range <= 0.0f) return 1.0f;
     const float t = std::clamp(distance / range, 0.0f, 1.0f);
     return 1.0f + (far - 1.0f) * t;
-}
-
-float gm_plate_sweep_position(float time_seconds) {
-    return 0.5f - 0.5f * std::cos(time_seconds * 2.0f);
 }
 
 } // namespace hailstone::game
