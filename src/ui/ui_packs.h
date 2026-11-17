@@ -47,6 +47,9 @@ std::vector<UiPack> list_ui_packs(const std::filesystem::path& root,
 std::vector<UiPack> list_ui_packs(const std::filesystem::path& root, const std::filesystem::path& managed_root,
                                 const std::vector<std::string>& installed_ui_addons,
                                 std::vector<std::string>* diagnostics = nullptr);
+// The interfaces Hailstone ships (ui/modern, ui/gamepad): the only ones trusted with the login password, add-on
+// installs and the compiled-plugin consent question. Add-on interfaces and packs put in ui/ by hand are not.
+bool trusted_ui_pack(const UiPack& pack);
 // The available UI `id`, else available "modern", else the first available entry; null when none is available.
 const UiPack* find_ui_pack(const std::vector<UiPack>& packs, std::string_view id);
 // Exact installed record, including an unavailable backend; never substitutes another interface.

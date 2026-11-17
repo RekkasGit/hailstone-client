@@ -161,6 +161,10 @@ std::vector<UiPack> list_ui_packs(const fs::path& root, const fs::path& managed_
     return out;
 }
 
+bool trusted_ui_pack(const UiPack& pack) {
+    return pack.source == "builtin" && (pack.id == "modern" || pack.id == "gamepad");
+}
+
 const UiPack* find_ui_pack(const std::vector<UiPack>& packs, std::string_view id) {
     for (std::string_view want : {id, std::string_view("modern")})
         for (const auto& p : packs)

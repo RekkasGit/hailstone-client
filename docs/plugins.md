@@ -1380,6 +1380,10 @@ default = allow
   hand (not by the manager) has no repository: no list names it, so it runs under `default = allow` (unless it uses
   a blocked add-on's name) and is refused under `default = deny`. Neither can renaming a script, plugin or edited
   file admit unknown bytes: an installed add-on is known by its files' recorded hashes.
+- **Interfaces** (`kind ui` add-ons) are add-ons too: a blocked one, or an unlisted one under `default = deny`, is
+  not offered on that server, nor is an interface built on it, and the client falls back to the built-in interface
+  (its base, else Modern) without changing the player's choice. A pack put in `ui/` by hand is refused under
+  `default = deny` as any hand-placed add-on is; the built-in `ui/modern` and `ui/gamepad` never are.
 - **`required`** add-ons must be installed with every file intact. Required scripts and compiled plugins start at the
   zone-in even when they are not in the player's autorun, and the player cannot stop, pause or unload them on that
   server. A required compiled plugin still asks for the player's approval of its bytes on this server ("The server's

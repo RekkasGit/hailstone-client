@@ -156,6 +156,40 @@ TEST_CASE("addon requirements: UI repository policy blocks owners and inherited 
     CHECK(packs == fresh);
 }
 
+// A pack put in ui/ by hand (source builtin, but not one Hailstone ships) has no repository: under a server's
+// default = deny it is refused as any unlisted add-on is, and so is an interface built on it; modern and gamepad stay.
+TEST_CASE("addon requirements: a hand-placed ui/ pack is refused under default deny, built-in packs never") {
+    ui::UiPack modern; modern.id = "modern";
+    ui::UiPack gamepad; gamepad.id = "gamepad";
+    ui::UiPack hand; hand.id = "myskin"; hand.base_ids = {"modern"};
+    ui::UiPack derived; derived.id = "addon.maker.skin"; derived.source = "addon"; derived.addon = "maker";
+    derived.base_ids = {"myskin", "modern"};
+    InstalledAddon installed; installed.name = "maker"; installed.kind = AddonKind::Ui; installed.source = "maker/skin";
+    auto rules = required_rules(); rules.addons.required.clear();
+    rules.addons.allow = {"maker/skin"};
+    const std::vector<ui::UiPack> fresh{modern, gamepad, hand, derived};
+    auto packs = fresh;
+    rules.addons.default_allow = true;
+    apply_ui_addon_policy(packs, &rules, {installed});
+    CHECK(packs == fresh);
+    rules.addons.default_allow = false;
+    apply_ui_addon_policy(packs, &rules, {installed});
+    CHECK(ui::find_ui_pack_exact(packs, "modern")->available);
+    CHECK(ui::find_ui_pack_exact(packs, "gamepad")->available);
+    CHECK_FALSE(ui::find_ui_pack_exact(packs, "myskin")->available);
+    CHECK(ui::find_ui_pack_exact(packs, "myskin")->unavailable_reason.find("by hand") != std::string::npos);
+    CHECK_FALSE(ui::find_ui_pack_exact(packs, "addon.maker.skin")->available); // it inherits the refused pack's code
+    CHECK(ui::find_ui_pack(packs, "myskin")->id == "modern");
+}
+
+TEST_CASE("ui packs: only the shipped modern and gamepad packs are trusted") {
+    ui::UiPack pack; pack.id = "modern";
+    CHECK(ui::trusted_ui_pack(pack));
+    pack.id = "gamepad"; CHECK(ui::trusted_ui_pack(pack));
+    pack.id = "myskin"; CHECK_FALSE(ui::trusted_ui_pack(pack)); // put in ui/ by hand
+    pack.id = "modern"; pack.source = "addon"; CHECK_FALSE(ui::trusted_ui_pack(pack));
+}
+
 TEST_CASE("addon requirements: required offers keep index identity and key without optional dismissals") {
     AddonIndex index;
     Ed25519PublicKey key{};

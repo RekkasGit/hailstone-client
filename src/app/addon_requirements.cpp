@@ -31,15 +31,24 @@ void apply_ui_addon_policy(std::vector<ui::UiPack>& packs, const plugin::Rules* 
     };
     std::set<std::string> denied;
     for (auto& pack : packs) {
-        if (pack.source != "addon") continue;
-        const auto owner = std::find_if(installed.begin(), installed.end(), [&](const InstalledAddon& addon) {
-            return addon.kind == AddonKind::Ui && folded(addon.name) == folded(pack.addon);
-        });
-        if (owner == installed.end() || plugin::addon_allowed(rules->addons, owner->source)) continue;
+        if (ui::trusted_ui_pack(pack)) continue;
+        std::string reason;
+        if (pack.source == "addon") {
+            const auto owner = std::find_if(installed.begin(), installed.end(), [&](const InstalledAddon& addon) {
+                return addon.kind == AddonKind::Ui && folded(addon.name) == folded(pack.addon);
+            });
+            if (owner == installed.end() || plugin::addon_allowed(rules->addons, owner->source)) continue;
+            reason = "This server blocks UI add-on " + owner->source + ".";
+        } else {
+            // A pack put in ui/ by hand has no repository, so no list names it: like any unlisted add-on, it is
+            // refused where the server's default is deny (docs/plugins.md "Opt-in add-on policies").
+            if (plugin::addon_allowed(rules->addons, {})) continue;
+            reason = "This server allows only the add-ons it lists; this interface was put in ui/ by hand.";
+        }
         denied.insert(pack.id);
         if (!pack.available) continue;
         pack.available = false;
-        pack.unavailable_reason = "This server blocks UI add-on " + owner->source + ".";
+        pack.unavailable_reason = std::move(reason);
     }
     // Derived interfaces cannot retain a blocked base's code through inheritance. Policy is independent of the
     // requested UI name; the normal registry fallback selects a built-in without rewriting the user's setting.
