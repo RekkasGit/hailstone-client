@@ -1295,6 +1295,10 @@ private:
     std::uint64_t distant_hidden_key_ = 0;
     // The modern sky's volumetric clouds (render/cloud_renderer.h); display.volumetric_clouds.
     bool volumetric_clouds_ = true;
+    // The fog bank past an outdoor zone's edge (render/zone_fog.h); display.zone_fog. The land's build its field was
+    // last made from (the zone renderer's; a new one, or none, uploads it again).
+    bool edge_fog_ = true;
+    std::shared_ptr<const render::HorizonBuild> zone_fog_build_;
     // display.neighbour_tint: the neighbour zones' debugging view (render::ZoneRenderer::set_debug_tint).
     bool neighbour_tint_ = false;
     // How far the replacement models' (a texture pack's generated trees') levels of detail reach, in percent of their

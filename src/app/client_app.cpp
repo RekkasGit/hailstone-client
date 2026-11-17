@@ -359,6 +359,7 @@ int ClientApp::run() {
         }
         const game::ViewDistance& lit = modern_view.view;
         glm::vec4 horizon_haze(0.0f); // the sky's blend into the haze (render::SkyFrame)
+        std::optional<render::ZoneFogView> zone_fog; // the fog past the zone's edge this frame (render/zone_fog.h)
         perf_ui_.mark(FramePhase::Prepare);
         update_view_area();
         for (auto& slot : previews_)
@@ -486,6 +487,19 @@ int ClientApp::run() {
                                        f->extent.width, f->extent.height, t);
                     render::set_weather(lighting, weather_look_);
                     horizon_haze = glm::vec4(glm::vec3(lighting.haze_color), 1.0f);
+                    // The fog past the zone's edge: outdoors, in the open air, in the haze's colour and sun glow.
+                    if (edge_fog_ && outdoor && !under_water) {
+                        const glm::mat4 v = camera_.view();
+                        render::ZoneFogView fog;
+                        fog.camera = camera_.position;
+                        fog.right = glm::vec3(v[0][0], v[1][0], v[2][0]);
+                        fog.up = glm::vec3(v[0][1], v[1][1], v[2][1]);
+                        fog.forward = -glm::vec3(v[0][2], v[1][2], v[2][2]);
+                        fog.color = glm::vec3(lighting.haze_color);
+                        fog.glow = glm::vec3(lighting.light) * (lighting.haze.w * 0.25f);
+                        fog.to_sun = glm::vec3(lighting.to_light);
+                        zone_fog = fog;
+                    }
                 }
                 // The lights' shadows: which lights have a cube (the zone's, the carried light, the spells'), before the
                 // renderers take the lighting.
@@ -696,6 +710,13 @@ int ClientApp::run() {
                                                        : glm::vec4(under_water ? water_color : lit.fog_color, 1.0f));
         if (scene && modern) {
             vk_.set_ao_view(camera_.ao_view(width, height, lit.far_plane));
+            // The zone's fog field, made again when the land was built anew (a new zone) or went.
+            auto build = zone_renderer_ ? zone_renderer_->horizon_build() : nullptr;
+            if (build != zone_fog_build_) {
+                zone_fog_build_ = build;
+                vk_.set_zone_fog_field(build ? render::zone_fog_field(build->field) : render::ZoneFogField{});
+            }
+            if (zone_fog) vk_.set_zone_fog(*zone_fog);
             // The colour grade: the time of day, the weather and the zone's fog hue (render/atmosphere.h).
             render::Daylight day = render::daylight(sky_hour, outdoor, moon_phase_, blood_moon_);
             const auto g = render::color_grade(day, outdoor, render::linear_color(view_.fog_color), weather_look_.storm);

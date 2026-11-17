@@ -121,6 +121,7 @@ struct Options {
     bool live_neighbours = false; // --live-neighbours: the neighbour zones drawn live (display.live_neighbour_zones)
     bool gpu_timing = false; // --gpu-timing: each pass's mean GPU time over the timed frames (VkContext::gpu_mark)
     bool stand = false;           // --stand: the camera at eye height on the highest floor under --pos
+    bool no_zone_fog = false; // --no-zone-fog: no fog past the zone's edge (render/zone_fog.h)
     bool no_clouds = false; // --no-clouds: the painted cloud layer, not the volumetric clouds (render/cloud_renderer.h)
     bool neighbour_tint = false;                  // --neighbour-tint: render::ZoneRenderer::set_debug_tint
     float tree_detail = 1.0f;                     // --tree-detail PCT: display.tree_detail, as a scale
@@ -323,6 +324,7 @@ void usage() {
         "                     (display.live_neighbour_zones)\n"
         "  --no-clouds        viewer: the painted clouds, not the volumetric ones (--lighting modern;\n"
         "                     display.volumetric_clouds)\n"
+        "  --no-zone-fog      viewer: no fog bank past the zone's edge (--lighting modern; display.zone_fog)\n"
         "  --neighbour-tint   viewer, with --neighbours: the neighbours' own geometry magenta, their own ground in\n"
         "                     their part of the land green (display.neighbour_tint)\n"
         "  --tree-detail PCT  viewer: replacement models' levels of detail reach PCT %% as far (display.tree_detail)\n"
@@ -535,6 +537,8 @@ Options parse_args(int argc, char** argv) {
             o.stand = true;
         } else if (arg("--no-clouds")) {
             o.no_clouds = true;
+        } else if (arg("--no-zone-fog")) {
+            o.no_zone_fog = true;
         } else if (arg("--neighbour-tint")) {
             o.neighbour_tint = true;
         } else if (arg("--tree-detail")) {
@@ -988,6 +992,7 @@ int main(int argc, char** argv) {
             flora_renderer->set_pushers(std::span<const glm::vec4>(&push, 1));
         }
         std::unique_ptr<render::ZoneRenderer> zone_renderer;
+        std::shared_ptr<const render::HorizonBuild> zone_fog_build; // the land its fog field was made from
         app::AtlasLand viewer_atlas; // --atlas
         render::PointShadows point_shadows;
         render::CoverMapState cover_state, water_state; // what the cover and water maps last showed
@@ -1438,6 +1443,7 @@ int main(int argc, char** argv) {
             render::CoverMap cover;
             bool covering = false;
             std::optional<glm::vec3> water_color; // under water (render::set_underwater)
+            std::optional<render::ZoneFogView> zone_fog; // the fog past the zone's edge (render/zone_fog.h)
             if (zone_renderer) {
                 // The lighting and the shadow cascades come before the scene.
                 game::SceneLightInput light;
@@ -1478,6 +1484,18 @@ int main(int argc, char** argv) {
                     } else {
                         render::set_haze_linear(lighting, camera.position, haze.length,
                                                 render::lightning_haze(haze.color, weather_look.flash, weather_look.storm));
+                        if (outdoor && !opts.no_zone_fog) {
+                            const glm::mat4 v = camera.view();
+                            render::ZoneFogView fog;
+                            fog.camera = camera.position;
+                            fog.right = glm::vec3(v[0][0], v[1][0], v[2][0]);
+                            fog.up = glm::vec3(v[0][1], v[1][1], v[2][1]);
+                            fog.forward = -glm::vec3(v[0][2], v[1][2], v[2][2]);
+                            fog.color = glm::vec3(lighting.haze_color);
+                            fog.glow = glm::vec3(lighting.light) * (lighting.haze.w * 0.25f);
+                            fog.to_sun = glm::vec3(lighting.to_light);
+                            zone_fog = fog;
+                        }
                     }
                     render::set_screen(lighting, camera.ao_view(width, height, draw_view.far_plane).near_plane,
                                        draw_view.far_plane, f->extent.width, f->extent.height, t);
@@ -1592,6 +1610,12 @@ int main(int argc, char** argv) {
             vk.begin_scene(*f, glm::vec4(water_color ? *water_color : view.fog_color, 1.0f));
             if (zone_renderer && opts.modern) {
                 vk.set_ao_view(camera.ao_view(width, height, draw_view.far_plane));
+                if (zone_renderer->horizon_build() != zone_fog_build) {
+                    zone_fog_build = zone_renderer->horizon_build();
+                    vk.set_zone_fog_field(zone_fog_build ? render::zone_fog_field(zone_fog_build->field)
+                                                         : render::ZoneFogField{});
+                }
+                if (zone_fog) vk.set_zone_fog(*zone_fog);
                 const render::Daylight day = render::daylight(sky_hour, outdoor, moon_phase, blood_moon);
                 const auto g = render::color_grade(day, outdoor, render::linear_color(view.fog_color), weather_look.storm);
                 vk.set_color_grade(glm::vec4(g.tint, g.saturation));

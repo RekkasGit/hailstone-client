@@ -29,6 +29,8 @@
 #include "render/swapchain_size.h"
 #include "render/temporal.h"
 #include "render/upscaler_provider.h"
+#include "render/gpu.h"
+#include "render/zone_fog.h"
 
 namespace hailstone::platform { class Window; }
 
@@ -234,6 +236,11 @@ public:
     // The sun's shafts for this frame (post.frag marches from each pixel toward the sun over the depth: the sky lets
     // the light through, everything else blocks it); call before begin_overlay.
     void set_sun_shafts(const SunShafts& shafts) { shafts_ = shafts; }
+    // The fog bank past the zone's edge (render/zone_fog.h): its field, uploaded (an invalid one clears it; the zone's,
+    // at zone-in), and this frame's view, drawn over the scene as it ends in frames that also gave set_ao_view (the
+    // depth's terms are the AO view's); call before begin_overlay.
+    void set_zone_fog_field(const ZoneFogField& field);
+    void set_zone_fog(const ZoneFogView& view) { zone_fog_view_ = view; }
     // This frame's colour grade (render/atmosphere.h ColorGrade: rgb a tint of the linear scene before the tonemap,
     // w the saturation after it); none, or with SceneOptions::color_grade off, leaves the picture as it is.
     void set_color_grade(const glm::vec4& mood) { mood_ = mood; }
@@ -470,6 +477,7 @@ private:
     void create_post_pipeline(const std::filesystem::path& shader_dir);
     void write_post_descriptors();
     void destroy_post_pipeline();
+    void draw_zone_fog(const FrameInfo& frame, const AoView& view, float depth_x, float depth_y);
     void draw_bloom(VkCommandBuffer cmd);
     void create_shadow_resources();
     void create_shadow_map(std::uint32_t size);
@@ -551,6 +559,7 @@ private:
     Image ao_;             // the ambient occlusion, R8
     std::optional<AoView> ao_view_;
     std::optional<SunShafts> shafts_;
+    std::optional<ZoneFogView> zone_fog_view_;
     std::optional<glm::vec4> mood_;
     // With a render scale below 1 (upscaling()): the post pass's picture at the scene's size, and FSR 1's upscale of it
     // at the view's, which fsr_rcas.frag sharpens into the swapchain.
@@ -655,6 +664,15 @@ private:
     VkDescriptorSet ao_set_ = VK_NULL_HANDLE;
     VkPipelineLayout ao_layout_ = VK_NULL_HANDLE;
     VkPipeline ao_pipeline_ = VK_NULL_HANDLE;
+    // The zone's fog (set_zone_fog_field): its own pool, a set per field (0 the depth, 1 the field), retired with it.
+    VkDescriptorSetLayout zone_fog_set_layout_ = VK_NULL_HANDLE;
+    VkDescriptorPool zone_fog_pool_ = VK_NULL_HANDLE;
+    VkDescriptorSet zone_fog_set_ = VK_NULL_HANDLE;
+    VkPipelineLayout zone_fog_layout_ = VK_NULL_HANDLE;
+    VkPipeline zone_fog_pipeline_ = VK_NULL_HANDLE;
+    Texture zone_fog_texture_;
+    glm::vec4 zone_fog_grid_{0.0f};  // the field's corner, 1 / its size
+    glm::vec2 zone_fog_floor_{0.0f}; // its lowest floor, the floors' range
     // The bloom passes read through the AO's set layout (one sampler): set 0 the scene, set i + 1 level i.
     std::array<VkDescriptorSet, kBloomLevels + 1> bloom_sets_{};
     VkPipelineLayout bloom_layout_ = VK_NULL_HANDLE;

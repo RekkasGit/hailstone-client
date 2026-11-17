@@ -736,6 +736,7 @@ void ClientApp::apply_settings() {
     neighbour_zones_ = config_.get_bool("display.live_neighbour_zones", false);
     horizon_hills_ = config_.get_bool("display.horizon_hills", true);
     volumetric_clouds_ = config_.get_bool("display.volumetric_clouds", true);
+    edge_fog_ = config_.get_bool("display.zone_fog", true);
     neighbour_tint_ = config_.get_bool("display.neighbour_tint", false);
     tree_detail_ = std::clamp(config_.get_int("display.tree_detail", 100), 50, 200);
     ring_cues_ = config_.get_bool("display.target_ring_cues", true);

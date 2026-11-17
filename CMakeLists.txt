@@ -401,6 +401,7 @@ add_library(hailstone_engine STATIC
   src/render/gpu.cpp
   src/render/gpu_timer.cpp
   src/render/zone_renderer.cpp
+  src/render/zone_fog.cpp
   src/render/sky_renderer.cpp
   src/render/cloud_renderer.cpp
   src/render/temporal.cpp
@@ -759,6 +760,7 @@ endif()
 hailstone_add_shaders(hailstone_shaders
   shaders/zone.vert
   shaders/zone.frag
+  shaders/zone_fog.frag
   shaders/zone_depth.frag
   shaders/spawn.vert
   shaders/spawn.frag
@@ -1185,6 +1187,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/sky_colours_test.cpp
     tests/scene_light_test.cpp
     tests/horizon_test.cpp
+    tests/zone_fog_test.cpp
     tests/horizon_terrain_test.cpp
     tests/tree_impostor_test.cpp
     tests/zone_proxy_test.cpp
