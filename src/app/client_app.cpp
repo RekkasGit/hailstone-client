@@ -499,6 +499,7 @@ int ClientApp::run() {
                         fog.color = glm::vec3(lighting.haze_color);
                         fog.glow = glm::vec3(lighting.light) * (lighting.haze.w * 0.25f);
                         fog.to_sun = glm::vec3(lighting.to_light);
+                        fog.time = static_cast<float>(t);
                         zone_fog = fog;
                     }
                 }

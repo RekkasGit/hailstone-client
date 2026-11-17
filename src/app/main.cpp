@@ -1391,6 +1391,7 @@ int main(int argc, char** argv) {
                             fog.color = glm::vec3(lighting.haze_color);
                             fog.glow = glm::vec3(lighting.light) * (lighting.haze.w * 0.25f);
                             fog.to_sun = glm::vec3(lighting.to_light);
+                            fog.time = static_cast<float>(t);
                             zone_fog = fog;
                         }
                     }
@@ -1476,8 +1477,15 @@ int main(int argc, char** argv) {
                 vk.set_ao_view(camera.ao_view(width, height, draw_view.far_plane));
                 if (zone_renderer->horizon_build() != zone_fog_build) {
                     zone_fog_build = zone_renderer->horizon_build();
-                    vk.set_zone_fog_field(zone_fog_build ? render::zone_fog_field(zone_fog_build->field)
-                                                         : render::ZoneFogField{});
+                    const render::ZoneFogField field =
+                        zone_fog_build ? render::zone_fog_field(zone_fog_build->field) : render::ZoneFogField{};
+                    if (field.valid())
+                        log::info("the zone's fog: {} x {} squares from ({:.0f}, {:.0f}), floor {:.0f} to {:.0f}; at the "
+                                  "camera {:.0f} past the zone's terrain, its floor {:.0f}",
+                                  field.nx, field.ny, field.lo.x, field.lo.y, field.floor_lo,
+                                  field.floor_lo + field.floor_range, field.distance_at(glm::vec2(camera.position)),
+                                  field.floor_at(glm::vec2(camera.position)));
+                    vk.set_zone_fog_field(field);
                 }
                 if (zone_fog) vk.set_zone_fog(*zone_fog);
                 const render::Daylight day = render::daylight(sky_hour, outdoor, moon_phase, blood_moon);

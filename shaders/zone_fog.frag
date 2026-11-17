@@ -14,28 +14,49 @@ layout(push_constant) uniform Push {
     vec4 camera;  // xyz; w the fog's lowest floor
     vec4 color;   // rgb the haze's colour (linear); w the floors' range
     vec4 glow;    // rgb the sun's light in the haze (light x glow x 0.25)
-    vec4 to_sun;  // xyz
+    vec4 to_sun;  // xyz; w the time (seconds), which the mist drifts with
     vec4 grid;    // xy the field's corner, zw 1 / its size (world units)
 } pc;
 
 layout(location = 0) out vec4 o_color;
 
 // render/zone_fog.h
-const float kRamp = 800.0;
+const float kRamp = 1000.0;
 const float kTop = 350.0;
 const float kSoft = 150.0;
+const float kSwell = 140.0;
 const float kDensity = 0.006;
 const float kDistanceStep = 16.0;
 const int kSteps = 40;
+
+// Value noise, 0..1, smooth between the lattice's points.
+// Dave Hoskins's hash without sine (fast, the same on every GPU).
+float hash(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+float noise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
 
 float density(vec3 p) {
     vec2 uv = (p.xy - pc.grid.xy) * pc.grid.zw;
     vec2 f = textureLod(field, uv, 0.0).rg;
     vec2 outside = max(-uv, 0.0) + max(uv - 1.0, 0.0);
     float d = f.r * 255.0 * kDistanceStep + length(outside / pc.grid.zw);
+    if (d <= 0.0) return 0.0; // the zone's own ground: clear, and nothing more to work out
     float ramp = smoothstep(0.0, kRamp, d);
     float over = p.z - (pc.camera.w + f.g * pc.color.w);
-    return kDensity * ramp * (1.0 - smoothstep(kTop - kSoft, kTop + kSoft, over));
+    // The bank's mean (render::zone_fog_density) broken up: its top rises and falls by up to kSwell over broad
+    // swells, and its thickness varies in patches, drifting slowly.
+    vec2 q = p.xy + vec2(pc.to_sun.w * 6.0, pc.to_sun.w * 2.5);
+    float top = kTop + (noise(q / 900.0) - 0.5) * 2.0 * kSwell;
+    if (over > top + kSoft) return 0.0;
+    float patches = 0.45 + 1.1 * noise(q / 360.0 + 7.3);
+    return kDensity * ramp * patches * (1.0 - smoothstep(top - kSoft, top + kSoft, over));
 }
 
 void main() {
@@ -57,6 +78,7 @@ void main() {
         float s0 = float(i) / float(kSteps), s1 = float(i + 1) / float(kSteps);
         float sm = (float(i) + jitter) / float(kSteps);
         tau += density(pc.camera.xyz + dir * (reach * sm * sm)) * reach * (s1 * s1 - s0 * s0);
+        if (tau > 7.0) break; // under 0.1 % shows through: the rest makes no difference
     }
     float t = exp(-tau);
     float sun = pow(max(dot(dir, pc.to_sun.xyz), 0.0), 6.0);

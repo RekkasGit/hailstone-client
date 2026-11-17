@@ -1630,6 +1630,38 @@ general rule fixed across the game's zones, and they were removed).
 `display.horizon_hills` (Options, Horizon Hills) turns it off, its trees with it; the viewer takes `--no-horizon`, and
 `--no-land-trees` for the land without its trees.
 
+## Zone edge fog
+
+In the modern lighting, outdoors and out of the water, a fog bank lies on the ground past the zone's own terrain, so
+at a zone line the world fades into mist instead of ending, and the land round the zone (Horizon hills, above) is not
+seen up close; its taller hills and mountains rise out of the bank far off. Hailstone's own; the original drew nothing
+past a zone's geometry and hid that in its fog wall. It replaces drawing the zones past the lines (up to 0.7), which
+showed walls, filler and seams there.
+
+- **Where** (`render::zone_fog_field`, `render/zone_fog.h`): the land's field (`render::HorizonField`, its 64-unit
+  squares): each open square's distance to the zone's terrain, and the zone's edge's height there (the highest terrain
+  of the nearest covered square, smoothed; the water's surface where that is water) as the bank's floor. On the zone's
+  own squares and in a pocket its terrain closes round there is none. Packed into an RGBA8 texture (distance in steps
+  of 16 units, floor over the zone's range of floors); past the grid the distance goes on growing.
+- **How thick**: density 0.006 a unit (1000 units of it leave 0.25 % of the light) times a ramp from 0 at the zone's
+  terrain to 1 at 1000 units past it, smooth, up to a top 350 units over its floor, thinning out over 150 either
+  side of it. So across open ground at a zone line it thickens until nothing shows, looking up the sky is clear (30
+  degrees up, under 10 % of it is hidden), and from a hill one looks down on the bank's top.
+- **Broken up** (`shaders/zone_fog.frag` only; the CPU functions give the mean): the top rises and falls by up to
+  140 units over swells about 900 units across, and the thickness varies in patches (0.45 to 1.55 times, about 360
+  across), both drifting slowly with the time (6 and 2.5 units a second; the clock is wrapped every 4096 s, when the
+  mist shifts once).
+- **Drawn** (`VkContext::set_zone_fog_field`, `set_zone_fog`): a full-screen pass right after the scene ends, before
+  the AO, the bloom and the upscalers, so they all see the fogged picture. Each pixel's line of sight is marched from
+  the camera to the depth (the sky's to 16000 units, at most the far plane) in 40 steps, closer together near the
+  camera (t = length s^2), with a 4 x 4 ordered dither, stopping where under 0.1 % shows through; the fog's colour is
+  the haze's with its sun glow (as `apply_haze`), blended over the scene by what shows through. The field is uploaded
+  when the zone's land is built (a new zone), the old one retired with the frames that use it. In North Karana at
+  1280 x 720 on an RX 9060 XT the pass took 0.21 ms of the GPU (the AO 0.26).
+
+`display.zone_fog` (Options, Zone Edge Fog) turns it off; the viewer takes `--no-zone-fog`, and logs the field and the
+distance past the zone's terrain at the camera.
+
 ## Smoothed ground
 
 A classic zone's ground is drawn with smooth normals and curved, subdivided triangles instead of the file's flat
@@ -2038,6 +2070,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.depth_prepass` | 0, 1 | 0 | draw the zone's opaque geometry depth-only first, then colour it with the depth test equal; the current zone only, read when a zone loads; modern only; viewer `--depth-prepass` |
 | `display.distance_blur` | 0, 1 | 1 | the far distance's slight blur; modern only |
 | `display.horizon_hills` | 0, 1 | 1 | land round an outdoor zone past its edges (Horizon hills); modern only; viewer `--no-horizon` |
+| `display.zone_fog` | 0, 1 | 1 | the fog bank on the ground past an outdoor zone's edge (Zone edge fog, Zone Edge Fog); modern only; viewer `--no-zone-fog` |
 | `display.volumetric_clouds` | 0, 1 | 1 | clouds marched through the air over the plain skies, in place of the painted cloud layer and patches (Volumetric Clouds); modern only; viewer `--no-clouds` |
 | `display.smooth_ground` | 0, 1 | 1 | a classic zone's ground drawn smooth and curved (Smoothed ground); read as each zone loads; viewer `--no-smooth-ground` |
 | `display.tree_detail` | 50 to 200 | 100 | how far a texture pack's replacement models (generated trees) keep their nearer levels of detail, in percent of their own distances (Tree Detail Distance); viewer `--tree-detail` |
