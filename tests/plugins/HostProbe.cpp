@@ -9,8 +9,8 @@
 //   get_spawns_data_bulk into n bytes (the whole buffer without n), read through the SDK's HS_Bulk_* structs cast
 //   onto the buffer
 //   /probextargets [n]  get_xtarget_data_bulk the same way, through HS_Bulk_XTargetData
-//   /probetargetbuffs [n]  get_target_buff_data_bulk the same way, through HS_Bulk_TargetBuffFixedRecord and the
-//   caster's name after each
+//   /probetargetbuffs [n]  get_target_buff_data_bulk the same way, through the int32_t count,
+//   HS_Bulk_TargetBuffFixedRecord and the caster's name after each
 //   /probeaas [n], /probediscs [n]  get_avail_aa_data_bulk / get_avail_disc_data_bulk the same way, through
 //   the int32_t count and HAILSTONE_ID_NAME_RECORD
 //   /probebuffnames [n]  get_buff_name_data_bulk the same way, through HS_Bulk_BuffNameFixedRecord and the caster's
@@ -223,8 +223,9 @@ static_assert(sizeof(HS_Bulk_TargetBuffFixedRecord) == HAILSTONE_TARGET_BUFF_REC
 
 // Each entry one line, by the buff slot the server sent (spell id, tics, spell type, caster's name); a slot number
 // skipped is one the server sent nothing for. An all-zero record (no spell, no name) is only counted as empty; the
-// host sends none, so the count shows one sent again. Then the bytes left over after the last whole record (0 when
-// every name is framed right). With n, also how many bytes past the first n the host
+// host sends none, so the count shows one sent again. Then the count the host put first, the records read after it
+// (at most the count; fewer when the buffer cut the list short) and the bytes left over after the last whole record
+// (0 when the count and every name are framed right). With n, also how many bytes past the first n the host
 // changed (guard bytes; 0 unless it wrote past the end).
 void probe_target_buffs(void*, const char* args) {
     unsigned char buf[2048];
@@ -238,11 +239,19 @@ void probe_target_buffs(void*, const char* args) {
         WriteChatf("[Probe] target buffs past the end %zu", changed);
     }
     const std::size_t size = r > 0 ? static_cast<std::size_t>(r) : 0;
-    std::size_t at = 0;
+    std::int32_t total = 0;
+    if (size < sizeof total) {
+        WriteChatf("[Probe] target buffs %d bytes", static_cast<int>(r));
+        return;
+    }
+    std::memcpy(&total, buf, sizeof total); // a plain int32_t, unaligned in general
+    std::size_t at = sizeof total;
     int count = 0;
     int empty = 0;
-    while (size - at >= sizeof(HS_Bulk_TargetBuffFixedRecord)) {
+    while (count < total && size - at >= sizeof(HS_Bulk_TargetBuffFixedRecord)) {
         const auto* rec = reinterpret_cast<const HS_Bulk_TargetBuffFixedRecord*>(buf + at);
+        const auto len = rec->casterNameLength > 0 ? static_cast<std::size_t>(rec->casterNameLength) : 0;
+        if (len > size - at - sizeof(HS_Bulk_TargetBuffFixedRecord)) break; // a name past the end: "left" shows it
         ++count;
         at += sizeof(HS_Bulk_TargetBuffFixedRecord);
         if (rec->spellID == 0 && rec->duration == 0 && rec->spellType == 0 && rec->slot == 0 &&
@@ -250,15 +259,13 @@ void probe_target_buffs(void*, const char* args) {
             ++empty; // an empty entry: every field 0 and no name follows
             continue;
         }
-        const auto len = rec->casterNameLength > 0 ? static_cast<std::size_t>(rec->casterNameLength) : 0;
-        if (len > size - at) break; // a name running past the end: the "left" count shows it
         const std::string caster(reinterpret_cast<const char*>(buf + at), len);
         at += len;
         WriteChatf("[Probe] target buff slot %d: spell %d, tics %d, spell type %d, caster %s", rec->slot, rec->spellID,
             rec->duration, rec->spellType, caster.empty() ? "-" : caster.c_str());
     }
-    WriteChatf("[Probe] target buffs %d bytes, %d records, %d empty, %zu bytes left", static_cast<int>(r), count,
-        empty, size - at);
+    WriteChatf("[Probe] target buffs count %d, %d bytes, %d records, %d empty, %zu bytes left", static_cast<int>(total),
+        static_cast<int>(r), count, empty, size - at);
 }
 
 static_assert(sizeof(HAILSTONE_ID_NAME_RECORD) == HAILSTONE_ID_NAME_RECORD_SIZE);

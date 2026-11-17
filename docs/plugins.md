@@ -563,7 +563,7 @@ same changes as a plugin, with no change to Hailstone itself. With the `extend` 
   game string with its `%1` filled. A spawn also carries its rider, mercenary and GM flags, whether it is one of the
   player's group, its con colour and its body types. Each struct starts with its size; the client fills what both know, so a plugin built
   for an older client keeps working. `get_buff_data_bulk` gives every buff slot of the player in one call,
-  `get_pet_buff_data_bulk` the pet window's buffs, `get_target_buff_data_bulk` the target window's buffs,
+  `get_pet_buff_data_bulk` the pet window's buffs, `get_target_buff_data_bulk` the current target's buffs,
   `get_avail_aa_data_bulk` the owned alternate abilities, `get_avail_disc_data_bulk` the combat abilities and
   `get_spawns_data_bulk` every spawn in the zone, as packed records (Buff and spawn records below). `server_info` gives the
   server this login is on (the saved server's name, host and port, the world's name and address), so a plugin for
@@ -761,18 +761,34 @@ and say so in the chat window.
   | 8 | i32 | the aggro meter's percent for the slot's spawn, as the server sent it (entries 7 to 26 of the meter, the extended target window's aggro labels; on EQEmu an NPC's is our hate against its current target's, a player's is its hate against our target's top). 0 with no spawn in the zone, without the meter (EQEmu's `Character:EnableAggroMeter`), or for a slot past the 20th |
   | 12 | i32 | the spawn's HP percent, as the extended target window draws it: the player's own from its points (items' HP included), anyone else's as the server last sent it (EQEmu sends it to everyone with the spawn on their list when the percent changes); 0 with no spawn in the zone or for a corpse |
 
-- `get_target_buff_data_bulk`: the current target's buffs, the ones the target window shows (what `OP_TargetBuffs`
-  last gave for that spawn), one record per buff the server sent, in the order the client keeps them, each with its
-  slot. EQEmu sends only the slots that hold a spell, in slot order, and resends the whole list when one fades, so
-  against it the records are packed (no empty ones) and the slot numbers can skip; an entry with no spell is left
-  out in any case. 0 bytes with no target, or while the buffs the client holds are still another spawn's (the server
-  has not yet sent the new target's; EQEmu sends them only where the target window shows buffs, so an NPC target on
-  a server without that shows none). Each record is a fixed part
+- `get_target_buff_data_bulk`: the current target's buffs, the list the target window's buff icons are drawn from
+  (what `OP_TargetBuffs` last gave for that spawn): a count, then one record per buff the server sent, in the order
+  the client keeps them, each with its slot. EQEmu sends only the slots that hold a spell, in slot order, and resends
+  the whole list when one fades, so against it the records are packed (no empty ones) and the slot numbers can skip;
+  an entry with no spell is left out in any case, and not counted. The read checks only that the list is the current
+  target's, not whose it is: with the player itself targeted it gives whatever `OP_TargetBuffs` gave for the player,
+  although the client's own target buff list draws nothing then.
+
+  The count is a plain i32 at the start of `out` (no struct; read it with `memcpy`): the number of the target's buffs
+  the client holds, all of them, not only those written. Each record after it is a fixed part
   (`HS_Bulk_TargetBuffFixedRecord`, `HAILSTONE_TARGET_BUFF_RECORD_SIZE` = 20 bytes) followed at once by the caster's
   name, `casterNameLength` bytes with no terminating NUL; the next record starts after the name, so walk them one by
-  one rather than by a fixed stride. Records are written as many as fit in `out_size`, each whole with its name; the
-  return value is the bytes written. A name is as long as the server sent it, so pass room to spare (2048 bytes holds
-  a full target window of ordinary names).
+  one rather than by a fixed stride. As many whole records, names included, are written as fit after the count, in
+  order, none after the first that does not fit; a plugin that reads fewer records than the count knows `out_size`
+  cut the list short. The return value is the bytes written; below 4 bytes nothing is written and 0 comes back. With
+  no target, while the buffs the client holds are still another spawn's (the server has not yet sent the new
+  target's; EQEmu sends them only where the target window shows buffs, so an NPC target on a server without that
+  shows none), or with no game connection, the count alone goes out (0, 4 bytes). A name is as long as the server
+  sent it, so pass room for the worst case: EQEmu gives an NPC 60 buff slots by default (`Spells:MaxTotalSlotsNPC`)
+  and keeps a caster's name in 64 bytes, at most 63 without the NUL, so 4 + 60 x 83 = 4984 bytes; 8192 bytes holds
+  any target on a stock server.
+
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | the number of the target's buffs the client holds |
+  | 4 | records | the records, one after another, as many as fit |
+
+  Each record:
 
   | Offset | Type | Field |
   |---|---|---|
