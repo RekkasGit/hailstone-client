@@ -59,7 +59,7 @@ layout(location = 5) in vec4 v_color2;
 layout(location = 6) in vec3 v_normal;
 layout(location = 7) in float v_fog; // oFog (zone.vert)
 layout(location = 8) in vec3 v_point;
-layout(location = 9) in vec3 v_rest; // the plants at rest, as the lights' shadow cubes hold them (point_shadow)
+layout(location = 9) in vec3 v_rest; // the plants at rest, as the lights' shadow cubes hold them (point_shadow_at)
 layout(location = 10) flat in float v_lod_distance; // zone.vert: a level of detail's fades
 
 layout(location = 11) in vec4 v_now;
@@ -115,7 +115,7 @@ float flicker(uint index, vec3 color) {
 // The zone's lights at a pixel, in two parts: `display`, half the MPL passes' sum (game::point_light_term, colour x
 // 0.5, each saturating on its own) as the base the zone's builders balanced their interiors with, and `pools`, the
 // modern lights' bright centres (light_pool, linear), so a torch lights a round pool around it. Both stop
-// where something stands between the light and the pixel (the lights with a shadow cube, point_shadow). `counted` is
+// where something stands between the light and the pixel (the lights with a shadow cube, point_shadow_at). `counted` is
 // what all the lights give the pixel as game::point_light_term weighs them (display values), the share of the baked
 // colour that is theirs; `blocked` is the part of it that stops where something stands in the way, for the baked
 // colour, which counts the light without what stands in its way, to give back.
@@ -140,8 +140,10 @@ void zone_point_lights(vec3 p, vec3 n, float wrap, out vec3 display, out vec3 po
         float falloff = 1.0 - min(d2 / (r * r), 1.0);
         if (falloff <= 0.0) continue;
         float facing = clamp((dot(n, d * inversesqrt(max(d2, 1e-6))) + wrap) / (1.0 + wrap), 0.0, 1.0);
-        float shadow = point_shadow(point_map, scene.point_shadow_light, scene.point_shadow_slot,
-                                    scene.point_shadow_params, l.position_radius, v_rest, n);
+        if (facing <= 0.0) continue; // every term below is x facing: its shadow need not be looked up
+        int entry = point_shadow_keyed(scene.point_shadow_slot, scene.point_shadow_params, l.color.w);
+        float shadow = point_shadow_at(point_map, scene.point_shadow_light, scene.point_shadow_slot,
+                                       scene.point_shadow_params, entry, l.position_radius, v_rest, n);
         float f = flicker(index, l.color.rgb) * shadow;
         counted += l.color.rgb * facing * falloff;
         blocked += l.color.rgb * facing * falloff * (1.0 - shadow);
@@ -191,10 +193,13 @@ vec3 modern_light(vec3 n, vec3 sn, bool foliage) {
     // The dynamic lights, stopped where something stands in their way (the carried light and the brightest spells
     // have shadow cubes of their own; render/point_shadows.h set_dynamic).
     int count = int(scene.params.z + 0.5);
-    for (int i = 0; i < count; ++i)
-        light += point_light_modern(scene.lights[i], v_world, sn, foliage ? 0.5 : 0.0) *
-                 point_shadow(point_map, scene.point_shadow_light, scene.point_shadow_slot, scene.point_shadow_params,
-                              scene.lights[i].position_radius, v_rest, n);
+    for (int i = 0; i < count; ++i) {
+        vec3 c = point_light_modern(scene.lights[i], v_world, sn, foliage ? 0.5 : 0.0);
+        // Out of reach or facing away: nothing to shadow (the product is 0 either way).
+        if (c != vec3(0.0))
+            light += c * scene_light_shadow(point_map, scene.point_shadow_light, scene.point_shadow_slot,
+                                            scene.point_shadow_params, scene.lights[i], v_rest, n);
+    }
     return light;
 }
 

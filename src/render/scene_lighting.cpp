@@ -168,6 +168,21 @@ SceneLighting make_scene_lighting(const game::SceneLight& scene, std::span<const
     return out;
 }
 
+void tag_shadowed_lights(SceneLighting& lighting) {
+    const auto shadowed = static_cast<std::size_t>(std::clamp(lighting.point_shadow_params.x, 0.0f,
+                                                              static_cast<float>(kMaxPointShadows)));
+    const auto count = static_cast<std::size_t>(std::clamp(lighting.params.y, 0.0f, static_cast<float>(kMaxSceneLights)));
+    for (std::size_t i = 0; i < count; ++i) {
+        GpuPointLight& l = lighting.lights[i];
+        l.color.w = 0.0f;
+        for (std::size_t e = 0; e < shadowed; ++e)
+            if (same_shadow_light(lighting.point_shadow_light[e], l.position_radius)) {
+                l.color.w = static_cast<float>(e + 1);
+                break;
+            }
+    }
+}
+
 void set_shadows(SceneLighting& lighting, const ShadowCascades& cascades, std::uint32_t map_size,
                  const glm::vec3& camera, const glm::vec3& forward) {
     lighting.shadow_view_proj = cascades.view_proj;

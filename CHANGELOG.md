@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Modern lighting: shadows from the sun and from torches and other lights cost less GPU time and look the same. A light's shadow is now only read where the light reaches, and the soft shadow edge takes four texture reads instead of nine
 - Performance window: a new "GPU passes" table shows how long the GPU spends on each part of the frame (shadows, the zone, characters, ambient occlusion, bloom, the UI and so on)
 - Environmental particles: legacy server-placed effects now draw from invisible particle switches, restoring missing waterfall cascades
 - `/doability` takes the name of any of your abilities as well as the Actions window's button (`/doability Bash`, `/doability fury`, in any case): a skill, a discipline or an activated AA, used as its Ability Book row is; a name that is more than one kind's is the skill's first, then the discipline's, then the AA's. A number still means button 1-10

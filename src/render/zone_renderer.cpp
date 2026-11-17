@@ -1973,14 +1973,17 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
     // their light numbers. Each buffer holds at least one element, for a zone without lights.
     {
         LightGrid grid = build_light_grid(zone.lights);
+        const std::vector<float> keys =
+            options.light_shadow_keys ? point_shadow_keys(zone.lights) : std::vector<float>(zone.lights.size(), 0.0f);
         struct Header { glm::vec4 grid; glm::uvec4 dims; };
         std::vector<std::byte>& lights = prep.lights;
         lights.resize(sizeof(Header));
         Header h{glm::vec4(grid.origin, 1.0f / grid.cell, 0.0f),
                  glm::uvec4(grid.width, grid.height, static_cast<std::uint32_t>(zone.lights.size()), 0u)};
         std::memcpy(lights.data(), &h, sizeof(h));
-        for (const auto& l : zone.lights) {
-            GpuPointLight g{glm::vec4(l.position, l.radius), glm::vec4(l.color, 0.0f)};
+        for (std::size_t i = 0; i < zone.lights.size(); ++i) {
+            const auto& l = zone.lights[i];
+            GpuPointLight g{glm::vec4(l.position, l.radius), glm::vec4(l.color, keys[i])};
             const auto* b = reinterpret_cast<const std::byte*>(&g);
             lights.insert(lights.end(), b, b + sizeof(g));
         }

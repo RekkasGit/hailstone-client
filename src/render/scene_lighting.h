@@ -92,6 +92,12 @@ struct GpuPointLight {
     glm::vec4 color{0.0f};
 };
 
+struct SceneLighting;
+// Each of the scene's lights (SceneLighting::lights) with its entry among the shadowed ones (the point shadow fields,
+// PointShadows::apply): color.w 1 + the first that is the same light (same_shadow_light), 0 none. The shaders read
+// it instead of searching (shaders/lighting.glsl scene_light_shadow).
+void tag_shadowed_lights(SceneLighting& lighting);
+
 // std140 and std430 lay this out the same (vec4s and mat4s only); shaders/lighting.glsl SCENE_LIGHTING_FIELDS.
 struct SceneLighting {
     glm::vec4 ambient{0.0f};
@@ -137,9 +143,10 @@ struct SceneLighting {
     glm::vec4 reveal_roof{0.0f};
     // The zone lights' shadows (render/point_shadows.h PointShadows::apply), modern only.
     std::array<glm::vec4, kMaxPointShadows> point_shadow_light{}; // xyz the light, w its radius
-    std::array<glm::vec4, kMaxPointShadows> point_shadow_slot{};  // x: its cube's first layer, y: its strength
+    // x: its cube's first layer, y: its strength, z: a zone light's shadow key (point_shadow_keys), 0 a moving light
+    std::array<glm::vec4, kMaxPointShadows> point_shadow_slot{};
     glm::vec4 point_shadow_params{0.0f}; // x: how many, y: 1 / face size, z: kPointShadowFaceScale, w: kPointShadowNear
-    std::array<GpuPointLight, kMaxSceneLights> lights{};
+    std::array<GpuPointLight, kMaxSceneLights> lights{}; // color.w: its shadow entry + 1 (tag_shadowed_lights)
 };
 
 // What the modern water needs of the view: view depth = y / (d + x) of the reverse-Z depth d (FlyCamera's near and far

@@ -1002,6 +1002,7 @@ int main(int argc, char** argv) {
             }
             options.land_trees = !opts.no_land_trees;
             options.terrain_cache = app::terrain_cache_path(opts.atlas.empty() ? std::string("viewer") : opts.atlas, zone->name);
+            options.light_shadow_keys = true; // render::plan_point_shadows shadows this zone's lights
             zone_renderer = std::make_unique<render::ZoneRenderer>(vk, *zone, shader_dir, options);
             zone_renderer->set_hide_flames(opts.modern);
             zone_renderer->set_lod_scale(opts.tree_detail);
