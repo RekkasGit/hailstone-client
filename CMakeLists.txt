@@ -399,6 +399,7 @@ add_library(hailstone_engine STATIC
   src/render/gpu_shared_cache.cpp
   src/render/pipeline_cache.cpp
   src/render/gpu.cpp
+  src/render/gpu_timer.cpp
   src/render/zone_renderer.cpp
   src/render/sky_renderer.cpp
   src/render/cloud_renderer.cpp

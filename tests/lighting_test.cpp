@@ -7,6 +7,7 @@
 #include <iterator>
 #include <limits>
 #include <string>
+#include <vector>
 
 #include <glm/common.hpp>
 #include <glm/trigonometric.hpp>
@@ -104,6 +105,58 @@ using glm::max;
 using glm::clamp;
 using glm::inversesqrt;
 #include "../shaders/ao_kernel.glsl"
+}
+
+namespace shadow_filter_test {
+using glm::vec2;
+using glm::floor;
+#include "../shaders/shadow_filter.glsl"
+
+// A hardware-filtered depth comparison on a `size` x `size` map, as the shadow sampler does it: the four texels
+// round `uv` compared (lit where `ref` <= their depth), weighed bilinearly; outside the map the border is lit.
+float compare_bilinear(const std::vector<float>& map, int size, glm::vec2 uv, float ref) {
+    const glm::vec2 s = uv * static_cast<float>(size) - 0.5f;
+    const glm::vec2 base = glm::floor(s), f = s - base;
+    auto lit = [&](int x, int y) {
+        if (x < 0 || y < 0 || x >= size || y >= size) return 1.0f;
+        return ref <= map[static_cast<std::size_t>(y * size + x)] ? 1.0f : 0.0f;
+    };
+    const int x = static_cast<int>(base.x), y = static_cast<int>(base.y);
+    return (1 - f.x) * (1 - f.y) * lit(x, y) + f.x * (1 - f.y) * lit(x + 1, y) + (1 - f.x) * f.y * lit(x, y + 1) +
+           f.x * f.y * lit(x + 1, y + 1);
+}
+} // namespace shadow_filter_test
+
+TEST_CASE("shadow filter: four lookups give the 3 x 3 grid's average") {
+    using namespace shadow_filter_test;
+    constexpr int kSize = 16;
+    const float inv = 1.0f / static_cast<float>(kSize);
+    // A map with edges every way: a hashed depth per texel.
+    std::vector<float> map(kSize * kSize);
+    for (int i = 0; i < kSize * kSize; ++i) map[static_cast<std::size_t>(i)] = static_cast<float>((i * 7919) % 101) / 100.0f;
+    int checked = 0;
+    for (int yi = 0; yi < 41; ++yi)
+        for (int xi = 0; xi < 41; ++xi)
+            for (float ref : {0.2f, 0.5f, 0.85f}) {
+                // Across the whole map and past its edges, at places between texel centres.
+                const glm::vec2 uv(-0.05f + 1.1f * static_cast<float>(xi) / 40.0f + 0.0013f,
+                                   -0.05f + 1.1f * static_cast<float>(yi) / 40.0f + 0.0007f);
+                float nine = 0.0f;
+                for (int y = -1; y <= 1; ++y)
+                    for (int x = -1; x <= 1; ++x)
+                        nine += compare_bilinear(map, kSize, uv + glm::vec2(x, y) * inv, ref);
+                nine /= 9.0f;
+                const ShadowTaps t = shadow_taps(uv, inv);
+                CHECK(t.near_w.x + t.far_w.x == doctest::Approx(3.0f));
+                const float four = (t.near_w.x * t.near_w.y * compare_bilinear(map, kSize, t.near_uv, ref) +
+                                    t.far_w.x * t.near_w.y * compare_bilinear(map, kSize, {t.far_uv.x, t.near_uv.y}, ref) +
+                                    t.near_w.x * t.far_w.y * compare_bilinear(map, kSize, {t.near_uv.x, t.far_uv.y}, ref) +
+                                    t.far_w.x * t.far_w.y * compare_bilinear(map, kSize, t.far_uv, ref)) /
+                                   9.0f;
+                CHECK(four == doctest::Approx(nine).epsilon(1e-4));
+                ++checked;
+            }
+    CHECK(checked == 41 * 41 * 3);
 }
 
 // The classic lighting's maths, the shaders' own (shaders/classic_light.glsl), compiled as C++.

@@ -119,6 +119,7 @@ void ClientApp::load_zone(const std::string& short_name) {
             options.horizon_sources =
                 horizon_hills_ ? without_copied_trees(game_, atlas_land_.sources) : atlas_land_.sources;
             options.terrain_cache = terrain_cache_path(server_profile_.id, zone_->name);
+            options.light_shadow_keys = true; // render::plan_point_shadows shadows this zone's lights
             zone_renderer_ = std::make_unique<render::ZoneRenderer>(vk_, *zone_, shader_dir_, options);
         }
         distant_hidden_key_ = 0;

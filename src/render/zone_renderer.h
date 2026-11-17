@@ -85,6 +85,10 @@ struct ZoneRenderOptions {
     // multi-pass (MPL) triple. Off draws the single-pass path, where the
     // region shaders' point lights are zero.
     bool multipass_lighting = false;
+    // The current zone, whose lights the point shadows (render/point_shadows.h) are made for: each light carries its
+    // shadow key (render::point_shadow_keys), so the shaders find its shadow without searching. Off (a neighbour, a
+    // distant copy), its lights take no shadow, as before: their numbers are not the current zone's.
+    bool light_shadow_keys = false;
 
     // A neighbouring zone drawn past a zone line (app/neighbour_zones.h): its geometry moved by `offset` into the
     // current zone's coordinates (after its own regions sorted out its water), then cut to the half-spaces in `keep`

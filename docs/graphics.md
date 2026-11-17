@@ -1171,9 +1171,15 @@ The zone's lights, the light the player carries and the spells' cast shadows in 
   alpha-tested parts of those within reach and on the face's side over the cache (`render/point_shadow_pass.h`
   takes the object renderer beside the actor renderer). In a town that keeps most slots near doors live: a cube
   copy and a few small draws each a frame.
-- **Reading:** the zone, character and object shaders find a light among the shadowed ones by its position
-  (`point_shadow`): a normal offset growing as the surface turns from the light, then 3 x 3 hardware-filtered
-  comparisons. In the zone a blocked light loses its pool and its MPL share, and the baked vertex colour, which
+- **Reading:** the shaders find a light's shadow without searching (`point_shadow_at` in `shaders/lighting.glsl`).
+  Each scene light carries its entry among the shadowed lights in `color.w` (`render::tag_shadowed_lights`, run by
+  `PointShadows::apply`, matching on position and reach within a tenth of a unit and a hundredth). Each zone light
+  carries a shadow key (`render::point_shadow_keys`: 1 + the first light in the same place, so stacked lights share a
+  cube), which its entry also holds (`slot.z`). Only the current zone's renderer stores keys
+  (`ZoneRenderOptions::light_shadow_keys`); a neighbour's or a distant copy's lights take no shadow, as before. The
+  shadow is looked up only where the light reaches the pixel and faces it, since every term it scales is zero
+  elsewhere. The lookup itself is a normal offset that grows as the surface turns from the light, then the 3 x 3
+  hardware-filtered comparisons in four lookups (see Shadows under Modern lighting). In the zone a blocked light loses its pool and its MPL share, and the baked vertex colour, which
   counts every light with nothing in its way, gives back what the light would have added there
   (`game::point_light_term`'s weight), never below a third of it.
 
@@ -1427,7 +1433,9 @@ transparent preview is resolved and unpremultiplied for ImGui. The world shader 
   the scene) and `ObjectRenderer::draw_shadow` (the doors and ground objects `prepare` placed, opaque and
   alpha-tested parts, no culling; `shaders/object_shadow.*`);
   sampled with a 1.5-texel normal offset and 3 x 3 hardware-filtered comparisons, fading out over the last 15 %. The
-  sun term of the zone, character and object shaders is multiplied by it.
+  sun term of the zone, character and object shaders is multiplied by it. The nine comparisons are taken as four
+  bilinear lookups with the same texel weights (`shaders/shadow_filter.glsl`, after Castaño 2013). The light cubes use
+  the same filter. `tests/lighting_test.cpp` checks it against the nine on a model of the hardware's filter.
 
 - **Ambient occlusion** (`shaders/ao.frag`, `shaders/ao_kernel.glsl`, `render/vk_context.h` AoView): after McGuire et al.'s scalable AO, on
   the resolved depth: view positions rebuilt from the reverse-Z projection terms, the normal from the nearer

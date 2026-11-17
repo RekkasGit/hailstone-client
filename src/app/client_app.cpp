@@ -365,6 +365,7 @@ int ClientApp::run() {
             if (slot.view) slot.view->prepare(dt);
         // A frame not drawn (the background frame rate, or a minimised window) runs as one the GPU had no image for.
         const bool screenshot_frame = !opts_.screenshot.empty() && opts_.frames && frame == opts_.frames - 1;
+        vk_.set_gpu_timing(perf_ui_.open()); // the performance window's GPU passes
         auto f = pace.draw || screenshot_frame ? vk_.begin_frame_commands() : std::nullopt;
         perf_ui_.mark(FramePhase::Wait);
         if (f) last_drawn = now;
@@ -627,6 +628,7 @@ int ClientApp::run() {
                         vk_.end_shadow_cascade(*f);
                     }
                 lap.mark("sun shadows");
+                vk_.gpu_mark(*f, "sun shadows");
                 // Each map only when what it shows has changed: its view, the zone, the doors and objects in it, the
                 // plants swaying in it (render/cover_map.h). Its layer keeps its depths meanwhile.
                 const bool draw_cover = render::cover_map_stale(
@@ -647,10 +649,12 @@ int ClientApp::run() {
                 }
                 cover_drawn_ = covering;
                 lap.mark("cover and water maps");
+                vk_.gpu_mark(*f, "cover and water maps");
                 if (light_shadows)
                     render::draw_point_shadows(vk_, *f, point_shadows_, zone_->lights, point_builds, *zone_renderer_,
                                                actor_renderer_.get(), objects);
                 lap.mark("draw point shadows");
+                vk_.gpu_mark(*f, "light shadows");
             }
         }
         for (auto& slot : previews_)
@@ -660,6 +664,7 @@ int ClientApp::run() {
             else web_textures_->collect();
         }
         lap.mark("item preview record");
+        vk_.gpu_mark(*f, "item previews, browser");
         // The sky this frame. The sky is drawn while SetFog leaves CDisplay +0x2d38 set (cleared under water, in lava
         // and with fog ending before 101).
         render::SkyFrame sky_frame{sky_hour, t, horizon_haze};
@@ -717,6 +722,7 @@ int ClientApp::run() {
                 // Where no sky is drawn, the modern haze; under water, the water.
                 if (zone_renderer_ && (under_water || (modern && !sky_drawn))) zone_renderer_->draw_backdrop(*f, vp);
                 lap.mark("sky");
+                vk_.gpu_mark(*f, "sky");
             };
             // Classic draws all zone parts together; WLD details can blend over uncovered samples.
             const bool background_first = !modern ||
@@ -744,12 +750,15 @@ int ClientApp::run() {
             // The modern water reads the opaque world: the zone's other draws wait for VkContext::begin_translucent.
             const render::ZonePhase first = modern ? render::ZonePhase::Opaque : render::ZonePhase::All;
             if (zone_renderer_) zone_renderer_->draw_depth(*f, vp, camera_.position, lit, t);
+            vk_.gpu_mark(*f, "zone depth prepass");
             if (zone_renderer_) zone_renderer_->draw(*f, vp, camera_.position, lit, t, first);
             lap.mark("zone draw");
+            vk_.gpu_mark(*f, "zone");
             const bool neighbours = neighbours_ && modern && neighbour_zones_ && in_game;
             if (neighbours) neighbours_->draw(*f, vp, camera_.position, lit, t, first);
             if (distant_copies_) distant_copies_->draw(*f, vp, camera_.position, lit, t, first);
             lap.mark("neighbour zones draw");
+            vk_.gpu_mark(*f, "neighbour zones, distant copies");
             // Objects still draw their blended parts in the same call as their opaque parts.
             // Keep their background first, and the existing object/actor/silhouette order intact.
             // The water colour copy must also already contain the sky (flora follows that copy).
@@ -759,6 +768,7 @@ int ClientApp::run() {
                 world_objects_->draw(*f, vp, camera_.position, lit);
             }
             lap.mark("objects draw");
+            vk_.gpu_mark(*f, "objects");
             if (flora_renderer_ && grass_) {
                 flora_renderer_->set_reach(flora_reach_);
                 flora_renderer_->set_density(static_cast<float>(grass_density_) / 100.0f);
@@ -800,8 +810,10 @@ int ClientApp::run() {
                 modelled = &actor_renderer_->draw_prepared(*f, vp, camera_.position, lit,
                                                            render::ActorPhase::Opaque);
             lap.mark("actors draw");
+            vk_.gpu_mark(*f, "actors");
             if (in_game) spawn_renderer_->draw(*f, vp, camera_.position, lit, conn_->world(), hidden_spawn(), modelled);
             lap.mark("spawns draw");
+            vk_.gpu_mark(*f, "spawns");
             // The depth copy is taken before the grass: the target ring lies on the ground under it, not on the
             // blades (a ring traced over them twists into a coil). The water, drawn after the grass, still meets it
             // in the depth buffer.
@@ -809,6 +821,7 @@ int ClientApp::run() {
                 vk_.begin_translucent(*f);
             if (flora_renderer_ && grass_) flora_renderer_->draw(*f, vp, camera_.position, t, frame_lighting_, modern);
             lap.mark("flora draw");
+            vk_.gpu_mark(*f, "depth copy, flora");
             if (actor_renderer_)
                 actor_renderer_->draw_prepared(*f, vp, camera_.position, lit, render::ActorPhase::Translucent);
             if (modern) {
@@ -850,6 +863,7 @@ int ClientApp::run() {
                 spell_particles_->draw(*f, vp, camera_.view(), lighting_mode_ == render::LightingMode::Modern ? render::kParticleGlow : 1.0f,
                                        particle_lighting);
             lap.mark("translucent, weather, particles");
+            vk_.gpu_mark(*f, "translucent, weather, particles");
             if (in_game) { // character select draws no target, names or picking
                 if (nav_ && nav_->overlay())
                     nav_->draw_overlay(ImGui::GetBackgroundDrawList(), plain_vp,

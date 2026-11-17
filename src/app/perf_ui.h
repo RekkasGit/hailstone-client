@@ -147,6 +147,11 @@ private:
     SectionAverages sections_;
     SectionAverages::Sections taken_sections_; // the frame's sections, their storage recycled (add_swap)
     SectionAverages::Allocations taken_bytes_;
+    // The GPU's passes (VkContext::gpu_sections, timed while the window is open), each frame read back once.
+    SectionAverages gpu_sections_;
+    SectionAverages::Sections gpu_taken_;
+    SectionAverages::Allocations gpu_no_bytes_;
+    std::uint64_t gpu_serial_ = 0;
     std::uint8_t current_presented_ = 1;
     std::uint8_t current_generated_ = 0;
     std::size_t head_ = 0;  // next slot to write
