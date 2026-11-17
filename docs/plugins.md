@@ -381,6 +381,12 @@ as a module: those files are data. That holds for the folder in any case and wit
 inside the script folders: an absolute one (`/lua run /home/x/evil`, `require('/x')`) or one whose file is a link
 leading out of the folder is not found.
 
+`/lua run` finds a script whatever the case of its name, on Linux as on Windows and macOS (`mq::script_spelled_path`):
+`/lua run autoloot` starts `scripts/AutoLoot/init.lua`. A name spelled exactly as on disk wins; otherwise each part of
+the path must match exactly one file or folder that differs from it only in case, so `AutoLoot/` beside `AUTOLOOT/`
+(possible on a case-sensitive file system only) finds neither. A `:` in a name is refused. A module's name
+(`require`) is still looked up as written.
+
 ## The Scripts window
 
 Hailstone's own window (`ScriptsWnd`; `ui/<pack>/scripts.lua`, `app/lua_eq_scripts.cpp`), opened from the EQ menu's
@@ -1390,8 +1396,9 @@ When it is decided:
   missing. Reviewing it fetches its manifest and opens the usual install card; nothing is fetched before that click,
   and installing keeps every usual check (signatures, pinned keys, platform, capabilities, approval of native code).
   An invalid policy refuses entry the same way, with the reason.
-- **Once the character is in the world**, nothing disconnects: a required add-on that fails, or the next zone's rules
-  that the installed add-ons do not meet, is a warning in chat (`[Add-ons] Required add-on owner/repo did not remain
+- **Once the character is in the world**, nothing disconnects: a required add-on that fails (a required plugin
+  whose code lets an exception out counts as failed, though it stays loaded), or the next zone's rules that the
+  installed add-ons do not meet, is a warning in chat (`[Add-ons] Required add-on owner/repo did not remain
   running. You can keep playing on this server.`), said once for each failure. Leaving to character select starts the
   check over for the next entry.
 
