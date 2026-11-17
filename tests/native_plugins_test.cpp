@@ -15,6 +15,7 @@
 #include "plugin/native_plugins.h"
 #include "mq_test_world.h"
 #include "plugin_consent_helper.h"
+#include "app/addon_requirements.h"
 #include "app/web_service.h"
 #include "plugin/web_access.h"
 #include "web/browser_host.h"
@@ -640,6 +641,47 @@ TEST_CASE("native plugins: a required plugin initialization failure prevents rea
     std::string problem;
     CHECK_FALSE(h.plugins->required_addons_ready(&problem));
     CHECK(problem.find("InitializePlugin failed") != std::string::npos);
+}
+
+// A required plugin whose callback let an exception out is a requirement not met, worked out again at once.
+TEST_CASE("native plugins: a required plugin that throws in the world is a warning, and play goes on") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    const fs::path profile = h.world.dir / "servers" / "required";
+    fs::create_directories(profile / "plugins");
+    h.plugins->set_server_dir(profile / "plugins");
+    auto rules = plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\nrequired = owner/probe\n");
+    h.policy.set_ceilings({{plugin::FileKind::Plugin, h.hash(), plugin::kCapAll, "HostProbe", "owner/probe"}});
+    h.policy.set(rules);
+    h.plugins->policy_changed({});
+    REQUIRE(h.plugins->consent());
+    h.plugins->answer_consent(true);
+    REQUIRE(h.plugins->loaded("HostProbe"));
+
+    // The gate as ClientApp::addon_world_allowed drives it.
+    app::AddonAdmission admission;
+    auto frame = [&] {
+        return admission.update(&rules, 1, true, [] { return std::string(); }, [&]() -> std::optional<std::string> {
+            std::string problem;
+            if (h.plugins->required_addons_ready(&problem)) return std::string();
+            if (problem.empty()) return std::nullopt;
+            return problem;
+        });
+    };
+    CHECK(frame().step == app::AddonAdmission::Step::Start);
+    REQUIRE(frame().step == app::AddonAdmission::Step::Play);
+    REQUIRE(admission.admitted());
+    CHECK(frame().warning.empty()); // readiness worked out, and kept
+
+    h.run("/probethrow"); // the command's callback lets an exception out
+    std::string problem;
+    CHECK_FALSE(h.plugins->required_addons_ready(&problem)); // seen although nothing else changed
+    CHECK(problem == "Required add-on hostprobe failed with an error in a command");
+    auto r = frame();
+    CHECK(r.step == app::AddonAdmission::Step::Play); // never a disconnect or a hold
+    CHECK(r.warning == problem);
+    CHECK(frame().warning.empty()); // said once
+    CHECK(h.plugins->loaded("HostProbe"));
+    CHECK(admission.admitted());
 }
 
 TEST_CASE("native plugins: a binary in the plugin's own folder under plugins/") {
