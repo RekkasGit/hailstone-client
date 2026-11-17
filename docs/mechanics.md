@@ -1250,6 +1250,14 @@ lack). Higher than 50 the server more likely means it. A spawn is measured again
 collision loads and when a door comes, goes or moves (spawns come before it, while character select's scene is still loaded); with no floor under it, every
 frame until there is one. Only `display_position` is lowered, so the model, name, target ring, picking and the NPC
 walls follow the drawn body; `position`, which range, melee and the other rules use, keeps the server's z.
+When a physics step lands a spawn on the zone's floor, its `position` is already floor + AvatarHeight, so any floor
+this test could find is at least as high (a higher door or placed-object floor only shortens the drop, and only a
+positive drop over 0.25 is drawn). The client's grounding query probes that same zone mesh, so in that case the test
+reuses the landing and draws the spawn at its position without a second zone-mesh search. A query that does not
+include the zone floor (a bare door mesh), and any case with no landing - a floating or stale spawn, zero physics
+steps, no floor, a floor past the query's reach, or bad numbers - still takes the full query. A floor that cannot be
+found is measured again the next frame, as is every spawn after `reground()` (a zone's collision loaded, a door came
+or moved); a later landing applies the short-cut again.
 
 Riding while illusioned (a deliberate difference, Hailstone's option `illusion_mounts`: hailstone.ini
 `game.illusion_mounts`, Options > General "Ride While Illusioned", on by default): the original's

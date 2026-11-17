@@ -883,9 +883,11 @@ void GameConnection::smooth(float dt, const game::WorldState::FloorFn& floor,
                             const game::WorldState::RegionFn& region,
                             const game::WorldState::VehicleFn& vehicle_under,
                             const game::WorldState::FloorFn& ground_floor,
-                            const game::WorldState::RemoteCollisionFn& collision) {
+                            const game::WorldState::RemoteCollisionFn& collision,
+                            bool ground_floor_includes_zone) {
     mount_up(world_.make_actors(actor_model));
-    world_.smooth(dt, steady_seconds(), floor, region, vehicle_under, ground_floor, collision);
+    world_.smooth(dt, steady_seconds(), floor, region, vehicle_under, ground_floor, collision,
+                  ground_floor_includes_zone);
 }
 
 void GameConnection::smooth_vehicles(float dt) { world_.smooth_vehicles(dt, steady_seconds()); }
