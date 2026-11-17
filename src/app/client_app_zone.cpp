@@ -108,6 +108,26 @@ void ClientApp::load_zone(const std::string& short_name) {
             log::info("zone fires: {} flames, {} lights added for them", zone_fires_.size(), lights);
             if (!fire_renderer_) fire_renderer_ = std::make_unique<render::FireRenderer>(vk_, shader_dir_);
         }
+        // The zone's CPU-only builds (collision, moving parts, ladders, baked light) read the finished zone and nothing
+        // else: they run on the worker threads while this thread makes the zone's GPU objects below, which only read
+        // it too, and are waited for where they are used. Nothing changes the zone until then. On an exception the
+        // tasks' handles wait in their destructors, before the zone is unloaded.
+        const assets::Zone& built_from = *zone_;
+        std::optional<game::CollisionMesh> built_collision;
+        std::optional<game::AnimatedObjects> built_animated;
+        std::vector<game::ZoneLadder> built_ladders;
+        std::optional<render::AmbientProbe> built_probe;
+        auto start = [pool = workers_.get()](std::function<void()> work) {
+            if (pool) return pool->run(std::move(work));
+            work();
+            return core::WorkerPool::Task{};
+        };
+        core::WorkerPool::Task collision_task, animated_task, ladders_task, probe_task;
+        if (!tested_collision)
+            collision_task = start([&] { built_collision = game::CollisionMesh::build(built_from); });
+        animated_task = start([&] { built_animated = game::AnimatedObjects::build(built_from); });
+        ladders_task = start([&] { built_ladders = game::zone_ladders(built_from); });
+        probe_task = start([&] { built_probe.emplace(built_from); });
         {
             // The neighbours' ground measured on earlier visits shapes the land round the zone (app/neighbour_zones.h),
             // and past them the zones of the world atlas (app/world_atlas.h).
@@ -135,12 +155,14 @@ void ClientApp::load_zone(const std::string& short_name) {
         if (spell_particles_) spell_particles_->clear();
         if (spell_bolts_) spell_bolts_->clear();
         if (actor_emitters_) actor_emitters_->clear();
-        collision_ = tested_collision ? std::move(*tested_collision) : game::CollisionMesh::build(*zone_);
+        collision_task.wait();
+        collision_ = tested_collision ? std::move(*tested_collision) : std::move(*built_collision);
         // Built only after the renderer selected/uploaded this zone's refined terrain and replacement objects.
         // World scene availability is not published until this finishes; an upload/build failure retires it all.
         world_visual_collision_ = game::CollisionMesh::build_visual(*zone_);
         if (++world_collision_revision_ == 0) ++world_collision_revision_;
-        animated_objects_ = game::AnimatedObjects::build(*zone_);
+        animated_task.wait();
+        animated_objects_ = std::move(*built_animated);
         zone_animation_origin_ms_ = static_cast<std::uint64_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time_).count());
         if (!animated_objects_->empty())
@@ -148,14 +170,16 @@ void ClientApp::load_zone(const std::string& short_name) {
                       animated_objects_->part_count());
         mark("collision");
         if (conn_) conn_->reground(); // ground_npcs measured the spawns against no floor, or the last zone's
-        zone_ladders_ = game::zone_ladders(*zone_);
+        ladders_task.wait();
+        zone_ladders_ = std::move(built_ladders);
         if (nav_)
             nav_->zone_loaded(*collision_, &zone_->regions,
                               platform::cache_dir() / "navmesh" /
                                   (server_profile_.id.empty() ? std::string("default") : server_profile_.id) /
                                   nav::ZoneNav::cache_name(short_name));
         mark("navigation");
-        ambient_probe_ = render::AmbientProbe(*zone_);
+        probe_task.wait();
+        ambient_probe_ = std::move(*built_probe);
         mark("ambient probe");
         probe_blend_.reset();
         // Zone-line boxes under the terrain (a client addition, game/zone_lines.h): walking over them fires them.

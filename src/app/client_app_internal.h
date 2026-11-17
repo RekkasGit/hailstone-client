@@ -7,8 +7,11 @@
 #include <exception>
 
 #include "app/updater.h"
+#include "app/frame_pace.h"
 #include "platform/process.h"
 #include "core/step_clock.h"
+#include "core/worker_pool.h"
+#include "render/scene_recorder.h"
 #include "app/addon_manager.h"
 #include "app/addon_requirements.h"
 #include "app/addon_suggest.h"
@@ -276,7 +279,7 @@ public:
         config_path_ = default_config_path();
         config_.load(config_path_);
         if (opts_.clip_plane != 15) clip_plane_arg_ = opts_.clip_plane;
-        if (opts_.max_fps > 0) max_fps_arg_ = opts_.max_fps;
+        if (opts_.max_fps > 0 || opts_.max_fps == kMaxFpsAuto) max_fps_arg_ = opts_.max_fps;
         // The asset folder: --game-dir or EQ_GAME_DIR, else hailstone.ini assets.path, else the picker asks.
         if (!choose_asset_folder()) {
             quit_ = true;
@@ -1085,10 +1088,23 @@ private:
     std::filesystem::path shader_dir_;
     platform::Window window_;
     std::string window_title_; // what update_window_title() set last
+    // The frame's worker threads (core/worker_pool.h; display.worker_threads), made in run(). Declared before every
+    // renderer and actor_emitters_, so it outlives the work they hand it.
+    std::unique_ptr<core::WorkerPool> workers_;
+    // This frame's actor-effect step, set in the Prepare phase and started once the frame is recorded
+    // (ActorEmitters::simulate_async), or at once for a frame not drawn.
+    std::function<void()> emitter_step_;
     render::VkContext vk_;
     // Declared after vk_, so it is destroyed before the Vulkan device it holds objects of: draw_nameplates makes it at its
     // first use.
     std::unique_ptr<NameplateLayer> plate_layer_; // draw_nameplates, made at its first use
+    // The scene's draws recorded on the worker threads (render/scene_recorder.h; display.parallel_record), made in
+    // run(); after vk_, so it goes before the device.
+    std::unique_ptr<render::SceneRecorder> scene_recorder_;
+    // The shadow layers' draws recorded the same way (display.parallel_record), with buffers of their own.
+    std::unique_ptr<render::SceneRecorder> shadow_recorder_;
+    std::vector<std::uint32_t> shadow_layers_; // this frame's shadow layers, kept for its capacity
+    bool parallel_record_ = true;
     // draw_nameplates' lists, kept for their capacity (and the plates' strings for theirs): the first plate_count_.
     struct PlateEntry {
         std::uint32_t id = 0;
@@ -1331,7 +1347,12 @@ private:
     std::unordered_map<std::uint32_t, HailstoneWorldAnchor> world_anchors_; // this render attempt's drawn poses
     void retire_world_geometry();
     bool world_geometry_scene_current() const;
-    void record_world_geometry(const render::FrameInfo& frame, const glm::mat4& view_projection);
+    // The plugins' world frame (their hooks, on this thread); true when they left batches to record.
+    bool record_world_geometry(const glm::mat4& view_projection);
+    void record_world_geometry_batches(const render::FrameInfo& frame, const glm::mat4& view_projection); // a lane's job
+    void report_world_geometry(); // after rec.flush
+    std::uint64_t world_record_frame_ = 0;
+    std::vector<std::pair<std::size_t, std::uint32_t>> world_recorded_; // batch index, vertices recorded
     int world_geometry_floor(float x, float y, float z, float& height) const;
     int world_geometry_anchor(std::uint32_t id, HailstoneWorldAnchor& anchor);
     // The last zone's character meshes and textures from the global archives, for the next zone's renderer
@@ -1570,9 +1591,6 @@ private:
     // Hailstone: the live NPCs near the player as the movement sweep's walls (game/npc_collision.h), unless the
     // server's hailstone.cfg turns them off ([movement] npc_collision).
     std::vector<game::NpcBody> npc_bodies_;
-    // The other spawns' contact probes' door hits (ZoneMoveWorld::set_contact_probe), kept so a probe does not
-    // allocate.
-    std::vector<WorldObjects::DoorHit> remote_door_hits_;
     void update_npc_bodies();
     // PlayerClient::TouchingSwitch for the local player on door `id` (game/mechanics/touching_switch.h); returns
     // whether pTouchingSwitch is cleared afterwards.
