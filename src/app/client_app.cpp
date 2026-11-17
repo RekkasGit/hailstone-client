@@ -722,6 +722,20 @@ int ClientApp::run() {
             // character renderer's caches, in one. Nothing they read changes before rec.flush.
             static const char kActorsLane = 0;
             const void* const actors_lane = &kActorsLane;
+            // The land round an outdoor zone (render/horizon.h), under an open sky or none (not the planes' and
+            // Luclin's painted skies); not where a neighbour zone is drawn. Set before the first draw is queued: a
+            // queued draw runs at rec.flush and reads the zone renderer's state then.
+            if (zone_renderer_) {
+                zone_renderer_->set_distant(in_game && modern && outdoor && horizon_hills_ &&
+                                            (!sky_renderer_ || sky_renderer_->has_atmosphere()));
+                const std::uint64_t drawn = neighbours_ && modern && neighbour_zones_ && in_game ? neighbours_->drawn_key() : 0;
+                if (drawn != distant_hidden_key_) {
+                    distant_hidden_key_ = drawn;
+                    std::vector<std::int64_t> cells;
+                    if (drawn) neighbours_->footprint(cells);
+                    zone_renderer_->set_distant_hidden(std::move(cells));
+                }
+            }
             const auto draw_background = [&] {
                 if (sky_drawn)
                     rec.add(*f, sky_renderer_.get(), [&](const render::FrameInfo& fr) {
@@ -737,19 +751,6 @@ int ClientApp::run() {
                 (zone_renderer_ && zone_renderer_->opaque_blends_background()) ||
                 (neighbours_ && modern && neighbour_zones_ && in_game && neighbours_->opaque_blends_background());
             if (background_first) draw_background();
-            // The land round an outdoor zone (render/horizon.h), under an open sky or none (not the planes' and
-            // Luclin's painted skies); not where a neighbour zone is drawn.
-            if (zone_renderer_) {
-                zone_renderer_->set_distant(in_game && modern && outdoor && horizon_hills_ &&
-                                            (!sky_renderer_ || sky_renderer_->has_atmosphere()));
-                const std::uint64_t drawn = neighbours_ && modern && neighbour_zones_ && in_game ? neighbours_->drawn_key() : 0;
-                if (drawn != distant_hidden_key_) {
-                    distant_hidden_key_ = drawn;
-                    std::vector<std::int64_t> cells;
-                    if (drawn) neighbours_->footprint(cells);
-                    zone_renderer_->set_distant_hidden(std::move(cells));
-                }
-            }
             // The modern water reads the opaque world: the zone's other draws wait for VkContext::begin_translucent.
             const render::ZonePhase first = modern ? render::ZonePhase::Opaque : render::ZonePhase::All;
             if (zone_renderer_)

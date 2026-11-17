@@ -114,7 +114,9 @@ without a pool (the tests, the tools) or from inside a worker it runs the loop i
   `set_scene_state`), and the buffers are executed in the order the jobs came, so the draws and their order are as
   they were. The scene's renderings then begin with `VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT`
   (`VkContext::set_scene_secondary`). Each frame slot keeps a command pool per lane, reset when the slot comes round.
-  Off (or without workers), the jobs run at once into the frame's own command buffer.
+  Off (or without workers), the jobs run at once into the frame's own command buffer. A queued draw runs at the
+  flush, so what it reads must not change between its `add` and the flush: the frame sets the zone renderer's distant
+  land (`set_distant`, `set_distant_hidden`) before it queues the first draw.
 
 ### Temporal upscaling
 
