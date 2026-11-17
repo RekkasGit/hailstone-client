@@ -37,6 +37,8 @@ passable_ladders = on     ; walking or swimming into a ladder whose polygons are
 ;enforce = off            ; on: the lists below apply (docs/plugins.md "Opt-in add-on policies"); off: they do not
 ;required = owner/repo    ; add-ons the player must have, by GitHub repository (never a bare name); checked at each
                           ; zone-in, they start by themselves and cannot be stopped here
+                          ; owner/repo:1.0.0 also needs that version or newer; older clients refuse a server
+                          ; using this form (an invalid policy to them): use it once your players have updated
 ;allow = owner/repo       ; add-ons permitted under default = deny; this grants no capabilities ([scripts] above does)
 ;block = owner/repo       ; add-ons refused, whatever else says
 ;default = allow          ; deny: refuse every add-on that required or allow does not name, upscalers included

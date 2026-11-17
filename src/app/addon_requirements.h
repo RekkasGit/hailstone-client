@@ -24,6 +24,7 @@ struct RequiredAddonCandidate {
     bool intact = false; // readable registry and every shipped file unchanged
     bool startable = true; // a script: where the script loader looks for it (required_script_found)
     plugin::Consent consent = plugin::Consent::Unasked;
+    std::string version{}; // the installed manifest version; checked only against a minimum version
 };
 
 struct AddonRequirementProblem {
@@ -40,7 +41,8 @@ bool required_script_found(const std::filesystem::path& data_dir, std::string_vi
 // Unasked native-code consent is handled by the existing prompt after connecting. A refusal blocks joining.
 // Upscaler selection and activation are checked separately against the provider loaded at process startup. A tool
 // is a program of its own: a required one is met by its intact installation (the client does not start it, and
-// cannot tell whether it runs).
+// cannot tell whether it runs). A versioned requirement (owner/repo:1.0.0) also needs an installed manifest version
+// at least that new, in SemVer order; one that does not parse cannot meet it.
 std::vector<AddonRequirementProblem> addon_requirement_problems(
     const plugin::Rules& rules, const std::vector<RequiredAddonCandidate>& candidates);
 

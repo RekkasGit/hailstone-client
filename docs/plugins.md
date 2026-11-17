@@ -1372,8 +1372,17 @@ default = allow
   the add-on manager recorded when it installed the package, not a folder or manifest name. A bare name
   (`dpsmeter`) is refused: any package of that name, from anyone, would satisfy it. A refused or malformed entry
   makes the policy invalid (below), and the client's log names it (`hailstone.cfg: [addons] required: "dpsmeter" is a
-  bare name; add-ons are named by their GitHub repository (owner/repo)`). These are not version pins: the manager's
+  bare name; add-ons are named by their GitHub repository (owner/repo)`). They are not version pins: the manager's
   usual update rules still apply.
+- **A minimum version** (`required` only): `required = owner/repo:1.0.0-preview.4` is met by that installed version or
+  any newer one, in semantic version order (`preview.10` is newer than `preview.4`, and `1.0.0` newer than its
+  previews; build metadata after `+` is ignored, prerelease letters keep their case). It is the manifest's `version`
+  the manager recorded at install; an installed add-on without a valid one does not meet it. A repository named more
+  than once keeps the highest minimum, and without the suffix any version does. A malformed version
+  (`owner/repo:1.2`), or a suffix on `allow` or `block`, makes the policy invalid. The login screen's review and
+  install links name the plain repository. **Older clients refuse such a server:** a Hailstone before this
+  release reads `owner/repo:version` as a malformed entry, so its invalid policy keeps every player on it out of the
+  world. Use the versioned form only once your players run a client that has it.
 - **`allow`, `block` and `default`.** `default = deny` refuses every add-on not named by `allow` or `required`,
   so a closed list can shut out every add-on, visual ones included; `default = allow` (the default) admits the rest.
   `block` wins over everything; an identity both required and blocked makes the policy invalid. An add-on put in by

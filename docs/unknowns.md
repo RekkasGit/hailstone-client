@@ -20,6 +20,8 @@ What the client does not implement yet, or implements with an approximation it c
   (the chat warning), both UI packs and a physical controller, and an external upscaler allowed/blocked/updated
   followed by restart. The server does not send its policy until the zone-in; it is a client extension, not a
   server-side attestation or anti-cheat mechanism.
+- Minimum versions on required add-ons are covered by parser and requirement tests, not live: an exact, older and
+  newer installed version at the zone-in, and an older client refused by a server using the versioned form.
 - Texture packs (Texture Studio's output in `textures/`) are not add-ons and have no repository, so no list names
   them; a server can block the Texture Studio tool, not the packs a player already built. A required tool is met by
   its installation: the client does not start it and cannot tell whether it runs.

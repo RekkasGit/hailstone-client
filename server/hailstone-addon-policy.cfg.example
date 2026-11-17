@@ -17,6 +17,7 @@ player = off
 [addons]
 enforce = on
 ;required = owner/repo
+;required = owner/repo:1.0.0-preview.4
 ;allow = owner/repo
 ;block = owner/repo
 ;suggest = owner/repo
@@ -26,6 +27,10 @@ default = allow
 ;   scripts and plugins start even when the player did not set them to, and cannot be stopped on this server. A
 ;   required compiled plugin still asks the player first. Missing at the zone-in: entry is refused and the player is
 ;   shown what to install. Failing once the character is in the world: a warning in chat, never a disconnect.
+;   owner/repo:1.0.0-preview.4 also needs that installed version or newer (semantic version order); without the
+;   suffix any version will do. WARNING: a client older than the one that added this refuses a server whose
+;   required list uses the :version form (to it the policy is invalid), so its players cannot enter. Use it only
+;   once your players have updated.
 ; allow: permitted when default = deny. Naming an add-on does not turn on [scripts] or [plugins] player above, nor
 ;   grant capabilities: enable the kind it is and choose its player_caps too.
 ; block: refused, whatever else says; an add-on both required and blocked makes the policy invalid.

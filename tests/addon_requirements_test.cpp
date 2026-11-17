@@ -25,6 +25,11 @@ RequiredAddonCandidate helper() {
     return {"helper", "maker/helper", AddonKind::Script, plugin::kCapRead, true};
 }
 
+plugin::Rules minimum_rules(std::string minimum) {
+    return plugin::parse_server_cfg("[scripts]\nplayer = on\n[plugins]\nplayer = on\n"
+                                   "[addons]\nenforce = on\nrequired = maker/helper:" + minimum + "\n");
+}
+
 } // namespace
 
 TEST_CASE("addon requirements: servers must opt in and invalid opted-in policy fails closed") {
@@ -383,4 +388,132 @@ TEST_CASE("addon requirements: a required script is found whatever its case, as 
     CHECK(problems[0].message.find("scripts/MixedCase") != std::string::npos);
     a.kind = AddonKind::Plugin; // only scripts are looked up by a lower-cased name
     CHECK(addon_requirement_problems(r, {a}).empty());
+}
+
+TEST_CASE("addon requirements: minimum versions apply to scripts, plugins, tools and upscalers") {
+    const auto r = minimum_rules("1.2.3");
+    REQUIRE(r.addons.error.empty());
+    REQUIRE(r.addons.minimum_versions.size() == 1);
+    for (const auto kind : {AddonKind::Script, AddonKind::Plugin, AddonKind::Tool, AddonKind::Upscaler}) {
+        auto a = helper();
+        a.kind = kind;
+        a.version = "1.2.3";
+        CHECK(addon_requirement_problems(r, {a}).empty());
+        a.version = "1.2.4";
+        CHECK(addon_requirement_problems(r, {a}).empty());
+        a.version = "1.2.2";
+        CHECK(addon_requirement_problems(r, {a}).size() == 1);
+        a.version.clear();
+        CHECK(addon_requirement_problems(r, {a}).size() == 1);
+    }
+}
+
+TEST_CASE("addon requirements: minimum versions use semantic numeric and prerelease precedence") {
+    const auto r = minimum_rules("1.0.0-preview.4");
+    REQUIRE(r.addons.error.empty());
+    auto a = helper();
+    for (const std::string version : {"1.0.0-preview.4", "1.0.0-preview.10", "1.0.0", "1.0.1", "2.0.0",
+                                      "v1.0.0-preview.4+windows.1"}) {
+        CAPTURE(version);
+        a.version = version;
+        CHECK(addon_requirement_problems(r, {a}).empty());
+    }
+    for (const std::string version : {"0.99.99", "1.0.0-preview.3", "1.0.0-alpha.100", "1.0.0-preview"}) {
+        CAPTURE(version);
+        a.version = version;
+        CHECK(addon_requirement_problems(r, {a}).size() == 1);
+    }
+    // A prerelease of the same numeric version does not meet a final-release minimum.
+    a.version = "1.0.0-preview.10";
+    CHECK(addon_requirement_problems(minimum_rules("1.0.0"), {a}).size() == 1);
+}
+
+TEST_CASE("addon requirements: prerelease case matters while build metadata does not") {
+    auto a = helper();
+    a.version = "1.0.0-Alpha";
+    CHECK(addon_requirement_problems(minimum_rules("1.0.0-alpha"), {a}).size() == 1);
+    a.version = "1.0.0-alpha";
+    CHECK(addon_requirement_problems(minimum_rules("1.0.0-Alpha"), {a}).empty());
+    a.version = "1.0.0-preview.4+linux.1";
+    CHECK(addon_requirement_problems(minimum_rules("1.0.0-preview.4+windows.2"), {a}).empty());
+}
+
+TEST_CASE("addon requirements: absent or invalid installed versions fail only a versioned requirement") {
+    const auto r = minimum_rules("1.2.3");
+    auto a = helper();
+    for (const std::string version : {"", "unknown", "1.2", "1.2.3-01", "1.2.3+"}) {
+        CAPTURE(version);
+        a.version = version;
+        const auto problems = addon_requirement_problems(r, {a});
+        REQUIRE(problems.size() == 1);
+        CHECK(problems[0].message.find("no valid installed version") != std::string::npos);
+        CHECK(problems[0].message.find("1.2.3 or newer") != std::string::npos);
+        CHECK(addon_requirement_problems(required_rules(), {a}).empty());
+    }
+    auto disabled = r;
+    disabled.addons.enabled = false;
+    CHECK(addon_requirement_problems(disabled, {}).empty());
+}
+
+TEST_CASE("addon requirements: minimum version failures retain plain repository identities for review") {
+    const auto r = minimum_rules("1.0.0-preview.4");
+    const auto missing = addon_requirement_problems(r, {});
+    REQUIRE(missing.size() == 1);
+    CHECK(missing[0].identity == "maker/helper");
+    CHECK(missing[0].message.find("1.0.0-preview.4 or newer") != std::string::npos);
+    auto a = helper();
+    a.version = "1.0.0-preview.3";
+    const auto problems = addon_requirement_problems(r, {a});
+    REQUIRE(problems.size() == 1);
+    CHECK(problems[0].identity == "maker/helper");
+    CHECK(problems[0].message.find("1.0.0-preview.4 or newer") != std::string::npos);
+    CHECK(problems[0].message.find("installed version is 1.0.0-preview.3") != std::string::npos);
+    const auto unlisted = required_addon_suggestions(problems, nullptr);
+    REQUIRE(unlisted.size() == 1);
+    CHECK(unlisted[0].source == "maker/helper");
+    AddonIndex index;
+    index.addons.push_back({"helper", "Maker/Helper", {}});
+    const auto listed = required_addon_suggestions(problems, &index);
+    REQUIRE(listed.size() == 1);
+    CHECK(listed[0].name == "helper");
+    CHECK(listed[0].source == "Maker/Helper");
+    ui::LoginView view;
+    present_addon_requirement(view, problems, nullptr, problems[0].message);
+    CHECK(view.addons.link == "maker/helper");
+}
+
+TEST_CASE("addon requirements: a new version still needs an intact permitted package and native consent") {
+    auto r = minimum_rules("1.2.3");
+    auto a = helper();
+    a.version = "2.0.0";
+    a.intact = false;
+    CHECK(addon_requirement_problems(r, {a}).size() == 1);
+    a.intact = true;
+    a.startable = false;
+    CHECK(addon_requirement_problems(r, {a}).size() == 1);
+    a.startable = true;
+    CHECK(addon_requirement_problems(r, {a}).empty());
+    r.addons.block = {"maker/helper"};
+    CHECK(addon_requirement_problems(r, {a}).size() == 1);
+    r.addons.block.clear();
+    a.kind = AddonKind::Plugin;
+    a.consent = plugin::Consent::Denied;
+    CHECK(addon_requirement_problems(r, {a}).size() == 1);
+}
+
+TEST_CASE("addon requirements: candidate versions cannot substitute for their repository or intact files") {
+    const auto r = minimum_rules("1.2.3");
+    auto old = helper();
+    old.version = "1.2.2";
+    old.source = "maker/helper@v9.0.0"; // the source's tag is not the installed manifest version
+    auto newer = helper();
+    newer.version = "1.2.4";
+    newer.source = "other/helper";
+    CHECK(addon_requirement_problems(r, {old, newer}).size() == 1);
+    newer.source = "maker/helper";
+    newer.intact = false;
+    CHECK(addon_requirement_problems(r, {old, newer}).size() == 1);
+    newer.intact = true;
+    CHECK(addon_requirement_problems(r, {old, newer}).empty());
+    CHECK(addon_requirement_problems(r, {newer, old}).empty());
 }

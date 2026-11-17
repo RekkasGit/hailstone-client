@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Server add-on policies: a server can ask for a minimum version of a required add-on (`required = owner/repo:1.0.0`); that version or any newer one is accepted, and an older one is shown on the login screen with a link to update it. Clients before this release refuse a server that uses this form, so server owners should wait until their players have updated
 - Interfaces: Modern and Gamepad are now built on one shared UI API (`hs.UI`). An interface of your own can build on either (`base=modern` in its `ui.ini`) and change only the windows it wants, and interfaces can be installed as add-ons from the login screen's Add-ons. An add-on interface draws the game and acts in it as the built-in ones do, but the login and server screens, your password, your add-ons and the server's compiled-plugin question stay with the built-in interface under it
 - Options > Interface: picking another interface in game switches at once, without logging in again, and the page shows the interface in use, what it builds on and any errors in it
 - For UI and add-on authors: the UI's Lua table is now named `hs`; `eq` stays another name for the same table for good, so existing add-ons and your own files keep working

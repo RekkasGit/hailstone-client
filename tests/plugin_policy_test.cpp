@@ -398,6 +398,71 @@ TEST_CASE("add-on rules: identities are GitHub repositories, without a release o
     CHECK(addon_allowed(open.addons, ""));
 }
 
+TEST_CASE("add-on rules: required minimum versions keep repository identity separate and preserve SemVer case") {
+    using namespace plugin;
+    std::vector<std::string> warnings;
+    const auto r = parse_server_cfg("[addons]\nenforce = on\ndefault = deny\n"
+                                    "required = Owner/Need:1.0.0-preview.4, "
+                                    "https://github.com/Owner/Other.git:V2.3.4-Preview.X+Build.9, Owner/Plain ; comment\n",
+                                    &warnings);
+    REQUIRE(r.addons.error.empty());
+    CHECK(warnings.empty());
+    CHECK(r.addons.required == std::vector<std::string>{"owner/need", "owner/other", "owner/plain"});
+    REQUIRE(r.addons.minimum_versions.size() == 2);
+    CHECK(r.addons.minimum_versions.at("owner/need").to_string() == "1.0.0-preview.4");
+    CHECK(r.addons.minimum_versions.at("owner/other").to_string() == "2.3.4-Preview.X");
+    CHECK_FALSE(r.addons.minimum_versions.contains("owner/plain"));
+    CHECK(addon_required(r.addons, "OWNER/NEED@v0.9.0")); // installed-version validation is admission's job
+    CHECK(addon_allowed(r.addons, "owner/need"));
+    CHECK_FALSE(addon_allowed(r.addons, "another/need"));
+}
+
+TEST_CASE("add-on rules: duplicate requirements retain the strongest minimum regardless of order") {
+    using namespace plugin;
+    for (const char* list : {
+            "owner/repo, owner/repo:1.0.0-preview.10, OWNER/REPO:1.0.0-preview.4, owner/repo:1.0.0, owner/repo",
+            "owner/repo:1.0.0, owner/repo:1.0.0-preview.4, owner/repo, owner/repo:1.0.0-preview.10"}) {
+        CAPTURE(list);
+        const auto r = parse_server_cfg(std::string("[addons]\nenforce = on\nrequired = ") + list + "\n");
+        REQUIRE(r.addons.error.empty());
+        CHECK(r.addons.required == std::vector<std::string>{"owner/repo"});
+        REQUIRE(r.addons.minimum_versions.size() == 1);
+        CHECK(r.addons.minimum_versions.at("owner/repo").to_string() == "1.0.0");
+    }
+    const auto pre = parse_server_cfg("[addons]\nenforce = on\n"
+                                      "required = owner/repo:1.0.0-preview.4, owner/repo:1.0.0-preview.10\n");
+    REQUIRE(pre.addons.error.empty());
+    CHECK(pre.addons.minimum_versions.at("owner/repo").to_string() == "1.0.0-preview.10");
+}
+
+TEST_CASE("add-on rules: malformed minimums fail closed only when enforcement is enabled") {
+    using namespace plugin;
+    for (const char* item : {"owner/repo:", "owner/repo:1.2", "owner/repo:01.2.3", "owner/repo:>=1.2.3",
+                             "owner/repo:1.2.3.4", "owner/repo:1.2.3-pre..1", "owner/repo:1.2.3+bad!",
+                             "owner/repo:1.2.3:2.0.0", "repo:1.2.3", "owner/repo:1.0.0-preview.04"}) {
+        CAPTURE(item);
+        const std::string policy = std::string("[addons]\ndefault = deny\nrequired = ") + item + "\n";
+        const auto enabled = parse_server_cfg(policy + "enforce = on\n");
+        CHECK(enabled.addons.enabled);
+        CHECK_FALSE(enabled.addons.error.empty());
+        CHECK_FALSE(addon_allowed(enabled.addons, "owner/repo"));
+        CHECK_FALSE(addon_required(enabled.addons, "owner/repo"));
+        CHECK(enabled.addons.minimum_versions.empty());
+        const auto disabled = parse_server_cfg(policy + "enforce = off\n");
+        CHECK_FALSE(disabled.addons.enabled);
+        CHECK(disabled.addons.error.empty());
+        CHECK(addon_allowed(disabled.addons, "owner/repo"));
+    }
+    for (const char* key : {"allow", "block"}) {
+        CAPTURE(key);
+        const auto r = parse_server_cfg(std::string("[addons]\nenforce = on\n") + key + " = owner/repo:1.2.3\n");
+        CHECK_FALSE(r.addons.error.empty());
+        CHECK(r.addons.minimum_versions.empty());
+    }
+    const auto conflict = parse_server_cfg("[addons]\nenforce = on\nrequired = Owner/Repo:1.2.3\nblock = owner/repo\n");
+    CHECK(conflict.addons.error.find("both required and blocked") != std::string::npos);
+}
+
 TEST_CASE("add-on rules: a bare name is refused with a message for the server owner") {
     using namespace plugin;
     for (const char* key : {"required", "allow", "block"}) {
