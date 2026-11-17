@@ -117,6 +117,8 @@ public:
     // at start and again for every later registrar.
     using Registrar = std::function<void(lua_State*)>;
     void add_ui_api(const Registrar& r);
+    // Its name up to 0.7 (app/lua_eq.h): the compiled server plugins' own tests still call it.
+    void add_eq_api(const Registrar& r) { add_ui_api(r); }
 
     // Between ImGuiLayer::new_frame and render: reloads changed scripts (once a second), maintains callback
     // lifetimes, saves settings and collects garbage. draw=false skips window/control/error rendering only;
