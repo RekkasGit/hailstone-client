@@ -106,6 +106,56 @@ using glm::inversesqrt;
 #include "../shaders/ao_kernel.glsl"
 }
 
+// The classic lighting's maths, the shaders' own (shaders/classic_light.glsl), compiled as C++.
+namespace classic_light_test {
+using glm::vec3;
+using glm::dot;
+using glm::max;
+using glm::clamp;
+using glm::exp;
+using glm::pow;
+#include "../shaders/classic_light.glsl"
+}
+
+TEST_CASE("classic_region_light: the vs_1_1 region light, saturated, the sun weighed by the vertex alpha") {
+    using classic_light_test::classic_region_light;
+    const glm::vec3 c(0.2f), ambient(0.1f), special(0.05f), bounce(0.0f), sun(0.5f);
+    const glm::vec3 dn(0.0f, 0.0f, -1.0f); // the light's way: down
+    const glm::vec3 up(0.0f, 0.0f, 1.0f), side(1.0f, 0.0f, 0.0f), none(0.0f);
+    CHECK(classic_region_light(c, 1.0f, up, ambient, special, bounce, sun, dn).x == doctest::Approx(0.85f));
+    CHECK(classic_region_light(c, 1.0f, side, ambient, special, bounce, sun, dn).x == doctest::Approx(0.35f));
+    // A mesh without normals takes no sun (the smooth path's zero normal).
+    CHECK(classic_region_light(c, 1.0f, none, ambient, special, bounce, sun, dn).x == doctest::Approx(0.35f));
+    // Indoors (alpha 0) neither the ambient nor the sun.
+    CHECK(classic_region_light(c, 0.0f, up, ambient, special, bounce, sun, dn).x == doctest::Approx(0.25f));
+    CHECK(classic_region_light(glm::vec3(0.9f), 1.0f, up, ambient, special, bounce, sun, dn).x == 1.0f);
+}
+
+TEST_CASE("soft_highlights: display values to 0.8 as they were, the rest rolled off below white") {
+    using classic_light_test::soft_highlight;
+    auto display = [](float linear) { return std::pow(linear, 1.0f / 2.2f); };
+    auto linear = [](float d) { return std::pow(d, 2.2f); };
+    for (float d : {0.0f, 0.1f, 0.5f, 0.79f}) CHECK(soft_highlight(linear(d)) == linear(d));
+    CHECK(display(soft_highlight(linear(1.0f))) == doctest::Approx(0.926f).epsilon(0.002));
+    CHECK(display(soft_highlight(linear(1.5f))) == doctest::Approx(0.994f).epsilon(0.002));
+    // Continuous at the knee, rising, and never past white.
+    CHECK(soft_highlight(linear(0.8001f)) == doctest::Approx(linear(0.8001f)).epsilon(1e-4));
+    float last = 0.0f;
+    for (float d = 0.0f; d < 4.0f; d += 0.01f) {
+        float out = soft_highlight(linear(d));
+        CHECK(out >= last);
+        CHECK(out <= 1.0f);
+        last = out;
+    }
+}
+
+TEST_CASE("automatic_tonemap: AgX modern, soft for the smooth classic lighting, none for the original's") {
+    CHECK(render::automatic_tonemap(render::LightingMode::Modern) == render::Tonemap::AgX);
+    CHECK(render::automatic_tonemap(render::LightingMode::SmoothClassic) == render::Tonemap::Soft);
+    CHECK(render::automatic_tonemap(render::LightingMode::Classic) == render::Tonemap::None);
+    CHECK(render::parse_tonemap("soft") == render::Tonemap::Soft);
+}
+
 namespace zone_surface_test {
 using glm::vec3;
 using glm::vec4;
@@ -381,6 +431,11 @@ TEST_CASE("make_scene_lighting: the shader block; classic carries no lights") {
     CHECK(classic.ambient == glm::vec4(0.1f, 0.2f, 0.3f, 0));
     CHECK(classic.vision == glm::vec4(0.15f, 0.1f, 0.0f, 0));
     CHECK(classic.lights[0].position_radius == glm::vec4(0));
+    // The smooth classic lighting is the classic one's light (only the zone shader and the tone curve differ).
+    auto smooth = render::make_scene_lighting(scene, lights, 1, render::LightingMode::SmoothClassic);
+    CHECK(smooth.params == classic.params);
+    CHECK(smooth.ambient == classic.ambient);
+    CHECK(smooth.lights[0].position_radius == glm::vec4(0));
     render::Daylight sky;
     sky.light = {2, 2, 2};
     sky.baked = 0.25f;
@@ -403,6 +458,13 @@ TEST_CASE("lighting modes by name: enhanced is the old name of modern") {
     CHECK(render::parse_lighting_mode("modern") == render::LightingMode::Modern);
     CHECK(render::parse_lighting_mode("enhanced") == render::LightingMode::Modern);
     CHECK(render::parse_lighting_mode("classic") == render::LightingMode::Classic);
+    CHECK(render::parse_lighting_mode("smooth") == render::LightingMode::SmoothClassic);
+    // Low to high, as the Options window lists them (its choice is the enum's value), and saved by name.
+    CHECK(static_cast<int>(render::LightingMode::Classic) == 0);
+    CHECK(static_cast<int>(render::LightingMode::SmoothClassic) == 1);
+    CHECK(static_cast<int>(render::LightingMode::Modern) == 2);
+    for (auto m : {render::LightingMode::Classic, render::LightingMode::SmoothClassic, render::LightingMode::Modern})
+        CHECK(render::parse_lighting_mode(render::lighting_mode_name(m)) == m);
     CHECK(!render::parse_lighting_mode("bright"));
 }
 

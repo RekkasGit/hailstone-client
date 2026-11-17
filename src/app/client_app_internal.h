@@ -940,9 +940,7 @@ private:
         // upscaler, which VkContext checks.
         scene.frame_gen = config_.get_bool("display.frame_gen", false);
         std::string tonemap = config_.get_string("display.tonemap", "auto");
-        scene.tonemap = tonemap != "auto" ? render::parse_tonemap(tonemap)
-                        : lighting_mode_ == render::LightingMode::Modern ? render::Tonemap::AgX
-                                                                         : render::Tonemap::None;
+        scene.tonemap = tonemap != "auto" ? render::parse_tonemap(tonemap) : render::automatic_tonemap(lighting_mode_);
         scene.exposure = std::strtof(config_.get_string("display.exposure", "0").c_str(), nullptr);
         scene.shadow_size = static_cast<std::uint32_t>(std::clamp(config_.get_int("display.shadows", 2048), 0, 8192));
         scene.light_shadows = static_cast<std::uint32_t>(

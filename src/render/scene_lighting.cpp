@@ -15,8 +15,27 @@ namespace hailstone::render {
 
 std::optional<LightingMode> parse_lighting_mode(std::string_view name) {
     if (name == "classic") return LightingMode::Classic;
+    if (name == "smooth") return LightingMode::SmoothClassic;
     if (name == "modern" || name == "enhanced") return LightingMode::Modern;
     return std::nullopt;
+}
+
+std::string_view lighting_mode_name(LightingMode mode) {
+    switch (mode) {
+    case LightingMode::Classic: return "classic";
+    case LightingMode::SmoothClassic: return "smooth";
+    case LightingMode::Modern: break;
+    }
+    return "modern";
+}
+
+Tonemap automatic_tonemap(LightingMode mode) {
+    switch (mode) {
+    case LightingMode::Classic: return Tonemap::None;
+    case LightingMode::SmoothClassic: return Tonemap::Soft;
+    case LightingMode::Modern: break;
+    }
+    return Tonemap::AgX;
 }
 
 namespace {
