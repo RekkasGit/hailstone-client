@@ -1786,7 +1786,12 @@ message type is a known combat type and the entire text matches a non-melee hit 
 amount (`game::spell_text_hit_report`). An optional spell name in parentheses remains in Abbreviated display.
 Ordinary dialogue, unrelated message types, malformed amounts and unrecognised or translated sentences stay full.
 An explicit DoT message type selects Damage Over Time; generic healing has no direct/tick discriminator and
-follows Healing. No nearby casts, buffs or spell names are used to guess whether a report is periodic.
+follows Healing. No nearby casts, buffs or spell names are used to guess whether a report is periodic. The
+caster and target must look like names: a comma, double quote or colon, or a " says", " tells", " shouts",
+" auctions" or " whispers", marks a speaker's prefix and keeps the line full; spaces, apostrophes and backticks
+are allowed. Stock EQEmu sends its hit and heal reports as the typed ids above; its one plain-text report is
+`Mob::HealDamage`'s caster-less "You have been healed for N points of damage." (OP_SpecialMesg, NonMelee 283),
+which follows Healing and abbreviates to "You: N heal", as YOU_HEALED (419) does for a heal on the player.
 
 An OP_Damage spell landing on the player with nonzero signed damage also follows Direct Spell Damage or Healing.
 Another target's landing text contains no amount, and zero-damage landings, casts, buffs, resists, unknown ids,

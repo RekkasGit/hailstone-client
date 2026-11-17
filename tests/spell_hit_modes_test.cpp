@@ -307,6 +307,27 @@ TEST_CASE("Spell hit modes: raw and generic combat text respects hook replacemen
     CHECK(read_hit_log(conn.chat_log_path()) == before);
 }
 
+TEST_CASE("Spell hit modes: stock EQEmu's caster-less heal message follows Healing") {
+    mq_test::World world("hailstone_spell_stock_heal");
+    auto& conn = *world.conn;
+    enable_log(conn);
+    // Client::Message: OP_SpecialMesg, speak mode Raw, journal None, language 0, no sayer, Chat::NonMelee.
+    const std::string full = "You have been healed for 42 points of damage.";
+    for (std::int32_t mode : {0, 1, 2}) {
+        CAPTURE(mode);
+        game::SpellHitModes modes;
+        modes.fill(0);
+        modes[static_cast<std::size_t>(game::SpellHitReport::Healing)] = mode;
+        conn.set_spell_hit_modes(modes);
+        Access::handle_zone(conn, special(full, 283));
+        auto event = conn.poll_chat();
+        REQUIRE(event);
+        CHECK(event->color == 283);
+        CHECK(event->text == (mode == 0 ? full : mode == 1 ? std::string("You: 42 heal") : std::string("42")));
+        CHECK(read_hit_log(conn.chat_log_path()).ends_with("] " + full + "\n"));
+    }
+}
+
 TEST_CASE("Spell hit modes: numeric OP_Damage landings retain full logs and nonnumeric landings") {
     mq_test::World world("hailstone_spell_landing_modes");
     auto& conn = *world.conn;

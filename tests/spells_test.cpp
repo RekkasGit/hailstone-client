@@ -616,6 +616,57 @@ TEST_CASE("Spell hit modes leave malformed, ambiguous and non-combat text intact
     }
 }
 
+TEST_CASE("Spell hit modes recognize stock EQEmu's caster-less heal") {
+    // zone/attack.cpp Mob::HealDamage: Message(Chat::NonMelee, "You have been healed for %d points of damage.")
+    const std::string text = "You have been healed for 42 points of damage.";
+    const auto line = game::spell_text_hit_report(text, 283);
+    REQUIRE(line);
+    CHECK(line->kind == game::SpellHitReport::Healing);
+    CHECK(line->amount == "42");
+    CHECK(game::report_spell_hit_line(*line, text, 0) == text);
+    CHECK(game::report_spell_hit_line(*line, text, 1) == "You: 42 heal");
+    CHECK(game::report_spell_hit_line(*line, text, 2) == "42");
+    CHECK_FALSE(game::spell_text_hit_report(text, 376)); // a DoT type carries no heal
+    CHECK_FALSE(game::spell_text_hit_report(text, 256));
+    CHECK_FALSE(game::spell_text_hit_report("You have been healed for 42 points of non-melee damage.", 283));
+    CHECK_FALSE(game::spell_text_hit_report("You have been healed for 4x points of damage.", 283));
+}
+
+TEST_CASE("Spell hit modes keep speaker prefixes whole and accept multi-word NPC names") {
+    for (const std::string text : {
+             "Somebody says, Bob hit Fred for 5 points of non-melee damage.",
+             "Somebody says, 'Bob hit Fred for 5 points of non-melee damage.",
+             "Bob says Bob hit Fred for 5 points of non-melee damage.",
+             "Bob tells you Bob hit Fred for 5 points of non-melee damage.",
+             "Bob shouts Bob hit Fred for 5 points of non-melee damage.",
+             "Bob auctions Bob hit Fred for 5 points of non-melee damage.",
+             "Bob tells General:1 Bob hit Fred for 5 points of non-melee damage.",
+             "\"Bob\" hit Fred for 5 points of non-melee damage.",
+             "Bob hit Fred, Sue for 5 points of non-melee damage.",
+             "Somebody says, Bob has healed Fred for 5 points of damage.",
+             "Bob has healed Fred says for 5 points of damage.",
+         }) {
+        CAPTURE(text);
+        CHECK_FALSE(game::spell_text_hit_report(text, 283));
+    }
+    struct Fixture {
+        std::string text, compact;
+    };
+    for (const auto& fixture : {
+             Fixture{"Lord Nagafen hit a gnoll`s pup for 5 points of non-melee damage.",
+                     "Lord Nagafen -> a gnoll`s pup: 5 damage"},
+             Fixture{"Ka'rul the Wise hit an orc pawn for 5 points of non-melee damage.",
+                     "Ka'rul the Wise -> an orc pawn: 5 damage"},
+             Fixture{"Guard Gehnus has healed Captain Tillin for 12 points of damage.",
+                     "Guard Gehnus -> Captain Tillin: 12 heal"},
+         }) {
+        CAPTURE(fixture.text);
+        const auto line = game::spell_text_hit_report(fixture.text, 283);
+        REQUIRE(line);
+        CHECK(line->abbreviated == fixture.compact);
+    }
+}
+
 TEST_CASE("OP_Damage spell hit modes retain nonnumeric landing lines") {
     game::WorldState world;
     world.player_id = 1;
