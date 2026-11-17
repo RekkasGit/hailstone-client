@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Options > Display has a Depth Pre-pass switch (modern lighting; both UI packs): the zone's shapes are drawn once without lighting, so only what is in front is lit. It takes effect at once, so you can compare the frame rate on and off; it was a setting read only when a zone loaded. It stays off by default
 - Interfaces: Modern and Gamepad are now built on one shared UI API (`hs.UI`). An interface of your own can build on either (`base=modern` in its `ui.ini`) and change only the windows it wants, and interfaces can be installed as add-ons from the login screen's Add-ons. An add-on interface draws the game and acts in it as the built-in ones do, but the login and server screens, your password, your add-ons and the server's compiled-plugin question stay with the built-in interface under it
 - Options > Interface: picking another interface in game switches at once, without logging in again, and the page shows the interface in use, what it builds on and any errors in it
 - For UI and add-on authors: the UI's Lua table is now named `hs`; `eq` stays another name for the same table for good, so existing add-ons and your own files keep working
