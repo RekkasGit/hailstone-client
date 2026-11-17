@@ -650,12 +650,20 @@ Buff, spawn, extended target and raid records: `get_buff_data_bulk(host, out, ou
 `out` is an `unsigned char*` and `out_size` an `int32_t`) write records into `out` and return the bytes written.
 The records are the SDK's packed structs (`HS_Bulk_BuffData`, `HS_Bulk_PetBuffData`, `HS_Bulk_SpawnHeader`,
 `HS_Bulk_SpawnFixedRecord`, `HS_Bulk_XTargetData`, `HS_Bulk_TargetBuffFixedRecord`, `HS_Bulk_BuffNameFixedRecord`,
-`HAILSTONE_ID_NAME_RECORD`, `HS_Bulk_RaidHeader`, `HS_Bulk_RaidData`, all in `#pragma pack(push, 1)`), in the machine's byte order (little-endian on every
+`HAILSTONE_ID_NAME_RECORD`, `HS_Bulk_ListHeader`, `HS_Bulk_RaidHeader`, `HS_Bulk_RaidData`, all in `#pragma pack(push, 1)`), in the machine's byte order (little-endian on every
 platform Hailstone runs on) and unaligned. For speed, the bulk reads are the one place where a struct may be cast
 onto the buffer, by the client writing it and by a plugin reading it: read each field through the packed struct
 (`rec->level`), which the compiler reads unaligned, and never keep a plain pointer or reference to a field (`&rec->x`),
 which may fault on a processor that needs aligned reads. `ByteReader` or `memcpy` work too. Without `read` they return 0
 and say so in the chat window.
+
+The reads that give a list of any length (`get_target_buff_data_bulk`, `get_avail_aa_data_bulk`,
+`get_avail_disc_data_bulk` and `get_raid_data_bulk`) share one rule for a buffer too small: they write as many whole
+records as fit, in order, and their header states both `count`, the records in this buffer, and `total`, how many the
+client holds. `count < total` means `out_size` was too small; call again with a larger buffer. The first three lead
+with `HS_Bulk_ListHeader` (`HS_BULK_LIST_HEADER_SIZE` = 8 bytes: i32 `count`, then i32 `total`), the raid read with its
+own `HS_Bulk_RaidHeader`, whose `count` and `total` mean the same. Below the header's size nothing is written and 0
+comes back; with nothing to list the header alone goes out, `count` 0 and `total` 0.
 
 - `get_buff_data_bulk`: one record of `HAILSTONE_BUFF_RECORD_SIZE` (29) bytes per buff slot, slot 0 first, in the
   client's order: the long buff slots, then the song slots, then the one discipline slot, always last. RoF2 has 42
@@ -766,31 +774,31 @@ and say so in the chat window.
   | 12 | i32 | the spawn's HP percent, as the extended target window draws it: the player's own from its points (items' HP included), anyone else's as the server last sent it (EQEmu sends it to everyone with the spawn on their list when the percent changes); 0 with no spawn in the zone or for a corpse |
 
 - `get_target_buff_data_bulk`: the current target's buffs, the list the target window's buff icons are drawn from
-  (what `OP_TargetBuffs` last gave for that spawn): a count, then one record per buff the server sent, in the order
+  (what `OP_TargetBuffs` last gave for that spawn): an `HS_Bulk_ListHeader`, then one record per buff the server sent, in the order
   the client keeps them, each with its slot. EQEmu sends only the slots that hold a spell, in slot order, and resends
   the whole list when one fades, so against it the records are packed (no empty ones) and the slot numbers can skip;
-  an entry with no spell is left out in any case, and not counted. The read checks only that the list is the current
+  an entry with no spell is left out in any case, and not counted in `total`. The read checks only that the list is the current
   target's, not whose it is: with the player itself targeted it gives whatever `OP_TargetBuffs` gave for the player,
   although the client's own target buff list draws nothing then.
 
-  The count is a plain i32 at the start of `out` (no struct; read it with `memcpy`): the number of the target's buffs
-  the client holds, all of them, not only those written. Each record after it is a fixed part
-  (`HS_Bulk_TargetBuffFixedRecord`, `HAILSTONE_TARGET_BUFF_RECORD_SIZE` = 20 bytes) followed at once by the caster's
-  name, `casterNameLength` bytes with no terminating NUL; the next record starts after the name, so walk them one by
-  one rather than by a fixed stride. As many whole records, names included, are written as fit after the count, in
-  order, none after the first that does not fit; a plugin that reads fewer records than the count knows `out_size`
-  cut the list short. The return value is the bytes written; below 4 bytes nothing is written and 0 comes back. With
-  no target, while the buffs the client holds are still another spawn's (the server has not yet sent the new
-  target's; EQEmu sends them only where the target window shows buffs, so an NPC target on a server without that
-  shows none), or with no game connection, the count alone goes out (0, 4 bytes). A name is as long as the server
-  sent it, so pass room for the worst case: EQEmu gives an NPC 60 buff slots by default (`Spells:MaxTotalSlotsNPC`)
-  and keeps a caster's name in 64 bytes, at most 63 without the NUL, so 4 + 60 x 83 = 4984 bytes; 8192 bytes holds
-  any target on a stock server.
+  The header's `total` is the number of the target's buffs the client holds, all of them, and its `count` the records
+  written after it. Each record is a fixed part (`HS_Bulk_TargetBuffFixedRecord`, `HAILSTONE_TARGET_BUFF_RECORD_SIZE`
+  = 20 bytes) followed at once by the caster's name, `casterNameLength` bytes with no terminating NUL; the next record
+  starts after the name, so walk them one by one rather than by a fixed stride. As many whole records, names
+  included, are written as fit after the header, in order, none after the first that does not fit, so `count <
+  total` means `out_size` cut the list short. The return value is the bytes written; below 8 bytes nothing is written
+  and 0 comes back. With no target, while the buffs the client holds are still another spawn's (the server has not
+  yet sent the new target's; EQEmu sends them only where the target window shows buffs, so an NPC target on a server
+  without that shows none), or with no game connection, the header alone goes out (count 0, total 0, 8 bytes). A
+  name is as long as the server sent it, so pass room for the worst case: EQEmu gives an NPC 60 buff slots by default
+  (`Spells:MaxTotalSlotsNPC`) and keeps a caster's name in 64 bytes, at most 63 without the NUL, so
+  8 + 60 x 83 = 4988 bytes; 8192 bytes holds any target on a stock server.
 
   | Offset | Type | Field |
   |---|---|---|
-  | 0 | i32 | the number of the target's buffs the client holds |
-  | 4 | records | the records, one after another, as many as fit |
+  | 0 | i32 | `count`: the records that follow in this buffer |
+  | 4 | i32 | `total`: the number of the target's buffs the client holds |
+  | 8 | records | the records, one after another, as many as fit |
 
   Each record:
 
@@ -803,19 +811,20 @@ and say so in the chat window.
   | 16 | i32 | `casterNameLength`: the bytes of the caster's name that follow; 0 when the server sent none |
   | 20 | bytes | the caster's name, `casterNameLength` bytes |
 
-- `get_avail_aa_data_bulk` and `get_avail_disc_data_bulk`: a count, then that many records, each an id and its name.
-  The count is a plain i32 at the start of `out` (no struct; read it with `memcpy`). Each record is a fixed part
-  (`HAILSTONE_ID_NAME_RECORD`, `HAILSTONE_ID_NAME_RECORD_SIZE` = 8 bytes) followed at once by the name, `nameSize` bytes
-  with no terminating NUL; the next record starts after the name, so walk them one by one. As many whole records,
-  names included, are written as fit after the count, and the count says how many follow; below 4 bytes nothing is
-  written and 0 comes back. With nothing to list, before the character's profile, or with no game connection, the
-  count alone goes out (0, 4 bytes). RoF2's lists have at most 300 entries each; 16384 bytes holds either with ordinary
-  names.
+- `get_avail_aa_data_bulk` and `get_avail_disc_data_bulk`: an `HS_Bulk_ListHeader`, then `count` records, each an
+  id and its name. Each record is a fixed part (`HAILSTONE_ID_NAME_RECORD`, `HAILSTONE_ID_NAME_RECORD_SIZE` = 8 bytes)
+  followed at once by the name, `nameSize` bytes with no terminating NUL; the next record starts after the name, so
+  walk them one by one. As many whole records, names included, are written as fit after the header, in order, none
+  after the first that does not fit; `count` says how many follow and `total` how many the list holds, so `count <
+  total` means `out_size` cut it short. Below 8 bytes nothing is written and 0 comes back. With nothing to list,
+  before the character's profile, or with no game connection, the header alone goes out (count 0, total 0, 8 bytes).
+  RoF2's lists have at most 300 entries each; 16384 bytes holds either with ordinary names.
 
   | Offset | Type | Field |
   |---|---|---|
-  | 0 | i32 | the number of records that follow |
-  | 4 | records | the records, one after another |
+  | 0 | i32 | `count`: the records that follow in this buffer |
+  | 4 | i32 | `total`: the entries the list holds, written or not |
+  | 8 | records | the records, one after another |
 
   Each record:
 
@@ -834,7 +843,7 @@ and say so in the chat window.
     out, as `aa_value` gives 0 for it.
   - `get_avail_disc_data_bulk`: the character's combat abilities (disciplines), by spell id: the profile's
     discipline list, the one `combat_ability` reads by index, without its empty (0) entries, in list order. The name
-    is the spell's, empty for a spell not in spells_us.txt. Before the profile the count is 0.
+    is the spell's, empty for a spell not in spells_us.txt. Before the profile count and total are 0.
 
 - `get_raid_data_bulk`: the raid roster, a 40-byte header followed by one `HS_Bulk_RaidData` record
   (`HS_BULK_RAID_RECORD_SIZE` = 124 bytes) per member, in roster order, as many whole records as fit in `out_size`.
@@ -845,8 +854,8 @@ and say so in the chat window.
   A reader starts the records at the header's `size` and steps by its `recordSize`, for `count` records. A later
   client may append a field to the record: read `recordSize`, never a fixed stride, and read only the fields the
   record's size covers. `version` changes only when an older reader can no longer read the header or a record at
-  all. `reserved` is the roster's total member count, so `count < reserved` means the buffer cut the roster short
-  and the caller can retry with a larger one.
+  all. `total` is the roster's member count, so `count < total` means the buffer cut the roster short and the caller
+  can retry with a larger one.
 
   Header (`HS_Bulk_RaidHeader`, `HS_BULK_RAID_HEADER_SIZE` = 40 bytes):
 
@@ -854,14 +863,14 @@ and say so in the chat window.
   |---|---|---|
   | 0 | u32 | `sizeof(HS_BulkRaidHeader)` |
   | 4 | u32 | version, 1 |
-  | 8 | u32 | member records that follow (what fit in `out_size`) |
+  | 8 | u32 | `count`: member records that follow (what fit in `out_size`) |
   | 12 | u32 | bytes between records; a later client may grow it |
   | 16 | u32 | leader's 0-based member index, or `HS_BULK_RAID_NO_INDEX` |
   | 20 | u32 | the raid window's selected member, same encoding |
   | 24 | i32 | in a raid (1) or not (0) |
   | 28 | i32 | locked (1) or not (0) |
   | 32 | i32 | loot type, as the raid window names it: 1 Leader Only, 2 Leader and Group Leader, 3 Leader Selected, 4 Entire Raid |
-  | 36 | u32 | the roster's total member count, not only those written |
+  | 36 | u32 | `total`: the roster's member count, not only those written |
 
   Each record (`HS_Bulk_RaidData`, `HS_BULK_RAID_RECORD_SIZE` = 124 bytes):
 

@@ -1495,18 +1495,19 @@ int32_t h_get_pet_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
 /// </summary>
 /// <param name="h">host</param>
 /// <param name="data">buffer to put data in</param>
-/// <param name="datamax">4 bytes for the count plus 20 per buff and its caster's name; the worst case (EQEmu: 60
-/// buff slots on an NPC by default, Spells:MaxTotalSlotsNPC; a caster's name up to 63 bytes, Buffs_Struct) is
-/// 4 + 60 * 83 = 4984, so 8192 holds any on a stock server</param>
-/// <returns>bytes written; 0 below 4 bytes</returns>
+/// <param name="datamax">8 bytes for the HS_Bulk_ListHeader plus 20 per buff and its caster's name; the worst case
+/// (EQEmu: 60 buff slots on an NPC by default, Spells:MaxTotalSlotsNPC; a caster's name up to 63 bytes, Buffs_Struct)
+/// is 8 + 60 * 83 = 4988, so 8192 holds any on a stock server</param>
+/// <returns>bytes written; 0 below 8 bytes</returns>
 int32_t h_get_target_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
 {
     Loaded& l = Loaded::of(h);
     const net::GameConnection* c = readable(l, "get_target_buff_data_bulk");
     if (!c && !l.can(kCapRead)) return 0;
-    const std::size_t headerBytes = sizeof(int32_t); // the count
+    static_assert(sizeof(HS_BulkListHeader) == HS_BULK_LIST_HEADER_SIZE);
+    const std::size_t headerBytes = sizeof(HS_BulkListHeader);
     if (!data || datamax <= 0 || static_cast<std::size_t>(datamax) < headerBytes) return 0;
-    int32_t count = 0;
+    HS_BulkListHeader header{};
     std::size_t bufferSize = headerBytes;
     const std::uint32_t target = c ? c->world().target_id : 0;
     // The same check as the target window (lua_eq_hud.cpp, spell_ui.cpp): the list is only the target's while
@@ -1523,7 +1524,7 @@ int32_t h_get_target_buff_data_bulk(void* h, unsigned char* data, int32_t datama
             // The decoder drops removed entries (0xffffffff) and EQEmu sends only valid spells, so an entry with no
             // spell is not expected; skip it, as spawn_buffs (tlo_game.cpp) and the target window do.
             if (b.empty()) continue;
-            ++count; // every buff held, written or not: fewer records than the count means the buffer was too small
+            ++header.total; // every buff held, written or not: count < total means the buffer was too small
             if (full) continue;
             const std::size_t nameBytes = b.caster_name.size();
             // Buffer is full: only whole records go out (the name is part of the record), none after the first cut.
@@ -1543,9 +1544,10 @@ int32_t h_get_target_buff_data_bulk(void* h, unsigned char* data, int32_t datama
             if (nameBytes) std::memcpy(pBuffer, b.caster_name.data(), nameBytes);
             pBuffer += nameBytes;
             bufferSize += fixedBytes + nameBytes;
+            ++header.count;
         }
     }
-    std::memcpy(data, &count, sizeof count); // in the machine's byte order, unaligned, as the records
+    std::memcpy(data, &header, sizeof header); // in the machine's byte order, unaligned, as the records
     return static_cast<int32_t>(bufferSize);
 }
 /// <summary>
@@ -1611,20 +1613,22 @@ int32_t h_get_xtarget_data_bulk(void* h, unsigned char* data, int32_t datamax)
     return bufferSize;
 }
 
-// A count-prefixed list of named ids for the bulk reads: an int32_t count, then for each id that `each` gives
-// (each(emit) calls emit(id, name) for every one, in order) an HAILSTONE_ID_NAME_RECORD followed by the name's
-// nameSize bytes (no NUL), as many whole records as fit after the count. The count says how many follow. Nothing
-// (0 bytes) when not even the count fits.
+// A list of named ids for the bulk reads: an HS_Bulk_ListHeader, then for each id that `each` gives (each(emit)
+// calls emit(id, name) for every one, in order) an HAILSTONE_ID_NAME_RECORD followed by the name's nameSize bytes (no
+// NUL), as many whole records as fit after the header, none after the first that does not. The header's count says
+// how many follow, its total how many `each` gave. Nothing (0 bytes) when not even the header fits.
 template <typename Each> int32_t write_id_str_list(unsigned char* data, int32_t datamax, Each&& each) {
     static_assert(sizeof(HAILSTONE_ID_NAME_RECORD) == HAILSTONE_ID_NAME_RECORD_SIZE);
-    const std::size_t headerBytes = sizeof(int32_t); // the count
+    static_assert(sizeof(HS_BulkListHeader) == HS_BULK_LIST_HEADER_SIZE);
+    const std::size_t headerBytes = sizeof(HS_BulkListHeader);
     const std::size_t idBytes = sizeof(HAILSTONE_ID_NAME_RECORD);
     if (!data || datamax <= 0 || static_cast<std::size_t>(datamax) < headerBytes) return 0;
     const std::size_t room = static_cast<std::size_t>(datamax);
     std::size_t bufferSize = headerBytes;
-    int32_t count = 0;
+    HS_BulkListHeader header{};
     bool full = false;
     each([&](int32_t id, std::string_view name) {
+        ++header.total; // every one given, written or not: count < total means the buffer was too small
         if (full) return;
         if (idBytes + name.size() > room - bufferSize) { // buffer is full: only whole records, the rest left out
             full = true;
@@ -1637,33 +1641,33 @@ template <typename Each> int32_t write_id_str_list(unsigned char* data, int32_t 
         bufferSize += idBytes;
         if (!name.empty()) std::memcpy(data + bufferSize, name.data(), name.size());
         bufferSize += name.size();
-        ++count;
+        ++header.count;
     });
-    std::memcpy(data, &count, sizeof count); // in the machine's byte order, unaligned, as the records
+    std::memcpy(data, &header, sizeof header); // in the machine's byte order, unaligned, as the records
     return static_cast<int32_t>(bufferSize);
 }
 
 /// <summary>
 /// The alternate abilities the character owns, one ability (group) id each, as aa_value takes it, with its name (the
 /// rank's dbstr type 1 title, as the AA window shows it; empty when the game folder's dbstr_us.txt lacks it): an
-/// int32_t count then one HAILSTONE_ID_NAME_RECORD and its name per ability, in the order of the owned list (the
-/// profile's, then OP_RespondAA's). An owned rank the AA table does not hold (OP_SendAATable has not sent it) has no
-/// known group id and is left out, as aa_value finds nothing for it. Before the profile, or with no game
-/// connection, the count is 0.
+/// HS_Bulk_ListHeader then one HAILSTONE_ID_NAME_RECORD and its name per ability, in the order of the owned list
+/// (the profile's, then OP_RespondAA's). An owned rank the AA table does not hold (OP_SendAATable has not sent it) has
+/// no known group id and is left out, as aa_value finds nothing for it. Before the profile, or with no game
+/// connection, count and total are 0.
 /// </summary>
 /// <param name="h">host</param>
 /// <param name="data">buffer to put data in</param>
-/// <param name="datamax">4 bytes for the count plus 8 per ability and its name; 16384 holds RoF2's 300 owned</param>
-/// <returns>bytes written; 0 below 4 bytes</returns>
+/// <param name="datamax">8 bytes for the HS_Bulk_ListHeader plus 8 per ability and its name; 16384 holds RoF2's 300 owned</param>
+/// <returns>bytes written; 0 below 8 bytes</returns>
 int32_t h_get_avail_aa_data_bulk(void* h, unsigned char* data, int32_t datamax)
 {
     Loaded& l = Loaded::of(h);
     const net::GameConnection* c = readable(l, "get_avail_aa_data_bulk");
-    if (!c) return l.can(kCapRead) ? write_id_str_list(data, datamax, [](auto&&) {}) : 0; // no connection: count 0
+    if (!c) return l.can(kCapRead) ? write_id_str_list(data, datamax, [](auto&&) {}) : 0; // no connection: 0, 0
     const auto& aa = c->alt_adv();
     const bool haveProfile = c->profile().has_value();
     return write_id_str_list(data, datamax, [&](auto&& emit) {
-        if (!haveProfile) return; // before the profile: the count is 0
+        if (!haveProfile) return; // before the profile: count and total 0
         for (const auto& o : aa.owned) {
             if (o.id == 0) continue; // an empty slot
             if (const game::AltAbility* a = aa.get(o.id)) emit(a->group, c->aa_name(*a));
@@ -1674,22 +1678,22 @@ int32_t h_get_avail_aa_data_bulk(void* h, unsigned char* data, int32_t datamax)
 /// <summary>
 /// The character's combat abilities (disciplines), one spell id each with the spell's name (empty for a spell not in
 /// spells_us.txt): the profile's discipline list (PcBase::GetCombatAbility, as combat_ability reads it by index)
-/// without its empty entries, in list order, as an int32_t count then one HAILSTONE_ID_NAME_RECORD and its name per
-/// discipline. Before the profile, or with no game connection, the count is 0.
+/// without its empty entries, in list order, as an HS_Bulk_ListHeader then one HAILSTONE_ID_NAME_RECORD and its name
+/// per discipline. Before the profile, or with no game connection, count and total are 0.
 /// </summary>
 /// <param name="h">host</param>
 /// <param name="data">buffer to put data in</param>
-/// <param name="datamax">4 bytes for the count plus 8 per discipline and its name; 16384 holds RoF2's 300</param>
-/// <returns>bytes written; 0 below 4 bytes</returns>
+/// <param name="datamax">8 bytes for the HS_Bulk_ListHeader plus 8 per discipline and its name; 16384 holds RoF2's 300</param>
+/// <returns>bytes written; 0 below 8 bytes</returns>
 int32_t h_get_avail_disc_data_bulk(void* h, unsigned char* data, int32_t datamax)
 {
     Loaded& l = Loaded::of(h);
     const net::GameConnection* c = readable(l, "get_avail_disc_data_bulk");
-    if (!c) return l.can(kCapRead) ? write_id_str_list(data, datamax, [](auto&&) {}) : 0; // no connection: count 0
+    if (!c) return l.can(kCapRead) ? write_id_str_list(data, datamax, [](auto&&) {}) : 0; // no connection: 0, 0
     const auto& profile = c->profile();
     const game::SpellTable& spells = c->spell_table();
     return write_id_str_list(data, datamax, [&](auto&& emit) {
-        if (!profile) return; // before the profile: the count is 0
+        if (!profile) return; // before the profile: count and total 0
         for (std::uint32_t spell : profile->disciplines) {
             if (spell == 0) continue; // an empty entry
             const game::SpellData* sp = spells.get(spell);
@@ -1715,7 +1719,7 @@ int32_t h_get_raid_data_bulk(void* h, unsigned char* data, int32_t datamax) {
     header.active = raid.active ? 1 : 0;
     header.locked = raid.locked ? 1 : 0;
     header.lootType = static_cast<int32_t>(raid.loot_type);
-    header.reserved = static_cast<std::uint32_t>(raid.members.size());
+    header.total = static_cast<std::uint32_t>(raid.members.size()); // count < total: the buffer was too small
     header.count = 0;
 
     int32_t written = static_cast<int32_t>(sizeof header);

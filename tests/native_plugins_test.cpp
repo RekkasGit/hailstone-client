@@ -925,9 +925,9 @@ TEST_CASE("native plugins: get_target_buff_data_bulk, laid out as docs/plugins.m
     auto& sp = A::spells(*h.world.conn);
     auto& w = A::world(*h.world.conn);
     REQUIRE(w.target_id == 10); // the test world targets a_rat01
-    // No OP_TargetBuffs yet: the count alone, 0.
+    // No OP_TargetBuffs yet: the header alone, count 0 and total 0.
     h.run("/probetargetbuffs");
-    CHECK(h.printed_line("[Probe] target buffs count 0, 4 bytes, 0 records, 0 empty, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] target buffs count 0, total 0, 8 bytes, 0 records, 0 empty, 0 bytes left"));
     const std::int64_t now = net::GameConnection::now_ms();
     auto target_buff = [now](std::uint32_t spell, std::int32_t tics, std::string caster, std::int64_t ticks_ago = 0) {
         game::BuffSlot b;
@@ -947,41 +947,41 @@ TEST_CASE("native plugins: get_target_buff_data_bulk, laid out as docs/plugins.m
     CHECK(h.printed_line("[Probe] target buff slot 3: spell 3002, tics 5, spell type 0, caster Tester"));
     CHECK(h.printed_line("[Probe] target buff slot 0: spell 11, tics 1, spell type 1, caster Groupie"));
     CHECK(h.printed_line("[Probe] target buff slot 7: spell 99999, tics 4, spell type 0, caster -"));
-    // 4 for the count, then 20+6, 20+7, 20+0: the entry with no spell is not sent
-    CHECK(h.printed_line("[Probe] target buffs count 3, 77 bytes, 3 records, 0 empty, 0 bytes left"));
-    // Only whole records, names included, go into a buffer too small for all, and nothing past its end; the count
-    // still says how many the client holds, so the plugin sees it was cut short. The third record (20 bytes) would
+    // 8 for the header, then 20+6, 20+7, 20+0: the entry with no spell is not sent
+    CHECK(h.printed_line("[Probe] target buffs count 3, total 3, 81 bytes, 3 records, 0 empty, 0 bytes left"));
+    // Only whole records, names included, go into a buffer too small for all, and nothing past its end; the header's
+    // count says how many follow and its total how many the client holds, so the plugin sees it was cut short. The third record (20 bytes) would
     // fit where the second (27) does not, but nothing follows the first cut: the records stay in order.
     h.printed.clear();
-    h.run("/probetargetbuffs 56");
+    h.run("/probetargetbuffs 60");
     CHECK(h.printed_line("[Probe] target buff slot 3: spell 3002, tics 5, spell type 0, caster Tester"));
     CHECK_FALSE(h.printed_line("[Probe] target buff slot 0: spell 11, tics 1, spell type 1, caster Groupie"));
     CHECK_FALSE(h.printed_line("[Probe] target buff slot 7: spell 99999, tics 4, spell type 0, caster -"));
-    CHECK(h.printed_line("[Probe] target buffs count 3, 30 bytes, 1 records, 0 empty, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] target buffs count 1, total 3, 34 bytes, 1 records, 0 empty, 0 bytes left"));
     CHECK(h.printed_line("[Probe] target buffs past the end 0"));
     h.printed.clear();
-    h.run("/probetargetbuffs 57");
-    CHECK(h.printed_line("[Probe] target buffs count 3, 57 bytes, 2 records, 0 empty, 0 bytes left"));
+    h.run("/probetargetbuffs 61");
+    CHECK(h.printed_line("[Probe] target buffs count 2, total 3, 61 bytes, 2 records, 0 empty, 0 bytes left"));
     CHECK(h.printed_line("[Probe] target buffs past the end 0"));
     // The last record needs its 20 bytes: one byte short, it is left out.
     h.printed.clear();
-    h.run("/probetargetbuffs 76");
+    h.run("/probetargetbuffs 80");
     CHECK_FALSE(h.printed_line("[Probe] target buff slot 7: spell 99999, tics 4, spell type 0, caster -"));
-    CHECK(h.printed_line("[Probe] target buffs count 3, 57 bytes, 2 records, 0 empty, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] target buffs count 2, total 3, 61 bytes, 2 records, 0 empty, 0 bytes left"));
     CHECK(h.printed_line("[Probe] target buffs past the end 0"));
     h.printed.clear();
-    h.run("/probetargetbuffs 23"); // the count and not even one fixed part
-    CHECK(h.printed_line("[Probe] target buffs count 3, 4 bytes, 0 records, 0 empty, 0 bytes left"));
+    h.run("/probetargetbuffs 27"); // the header and not even one fixed part
+    CHECK(h.printed_line("[Probe] target buffs count 0, total 3, 8 bytes, 0 records, 0 empty, 0 bytes left"));
     CHECK(h.printed_line("[Probe] target buffs past the end 0"));
     h.printed.clear();
-    h.run("/probetargetbuffs 3"); // not even the count: nothing
+    h.run("/probetargetbuffs 7"); // not even the header: nothing
     CHECK(h.printed_line("[Probe] target buffs 0 bytes"));
     CHECK(h.printed_line("[Probe] target buffs past the end 0"));
     // A new target whose buffs have not come yet: the old target's are not given as its.
     h.printed.clear();
     w.target_id = 11;
     h.run("/probetargetbuffs");
-    CHECK(h.printed_line("[Probe] target buffs count 0, 4 bytes, 0 records, 0 empty, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] target buffs count 0, total 0, 8 bytes, 0 records, 0 empty, 0 bytes left"));
     // The player itself targeted: the read does not hide the player's own list, though the client's target buff
     // list draws nothing then (docs/plugins.md).
     h.printed.clear();
@@ -990,18 +990,18 @@ TEST_CASE("native plugins: get_target_buff_data_bulk, laid out as docs/plugins.m
     sp.target_buffs = {{1, target_buff(11, 2, "Self")}};
     h.run("/probetargetbuffs");
     CHECK(h.printed_line("[Probe] target buff slot 1: spell 11, tics 2, spell type 1, caster Self"));
-    CHECK(h.printed_line("[Probe] target buffs count 1, 28 bytes, 1 records, 0 empty, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] target buffs count 1, total 1, 32 bytes, 1 records, 0 empty, 0 bytes left"));
     // No target at all.
     h.printed.clear();
     w.target_id = 0;
     sp.target_buffs_entity = 0;
     h.run("/probetargetbuffs");
-    CHECK(h.printed_line("[Probe] target buffs count 0, 4 bytes, 0 records, 0 empty, 0 bytes left"));
-    // No game connection at all (the login screen): the count 0 too, as the other count-led reads.
+    CHECK(h.printed_line("[Probe] target buffs count 0, total 0, 8 bytes, 0 records, 0 empty, 0 bytes left"));
+    // No game connection at all (the login screen): count 0 and total 0 too, as the other list reads.
     h.printed.clear();
     auto conn = std::move(h.world.conn);
     h.run("/probetargetbuffs");
-    CHECK(h.printed_line("[Probe] target buffs count 0, 4 bytes, 0 records, 0 empty, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] target buffs count 0, total 0, 8 bytes, 0 records, 0 empty, 0 bytes left"));
     h.world.conn = std::move(conn);
 }
 TEST_CASE("native plugins: get_avail_aa_data_bulk and get_avail_disc_data_bulk, laid out as docs/plugins.md says") {
@@ -1009,11 +1009,11 @@ TEST_CASE("native plugins: get_avail_aa_data_bulk and get_avail_disc_data_bulk, 
     h.approve(plugin::kCapAll);
     REQUIRE(h.plugins->load("HostProbe"));
     using A = net::GameConnectionTestAccess;
-    // Nothing owned, no disciplines: the header alone, its count 0.
+    // Nothing owned, no disciplines: the header alone, count 0 and total 0.
     h.run("/probeaas");
-    CHECK(h.printed_line("[Probe] aas count 0, 4 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] aas count 0, total 0, 8 bytes, 0 bytes left"));
     h.run("/probediscs");
-    CHECK(h.printed_line("[Probe] discs count 0, 4 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] discs count 0, total 0, 8 bytes, 0 bytes left"));
 
     // Owned ranks by their ability (group) id with the rank's name (dbstr type 1), in the owned list's order: an empty
     // slot and a rank the AA table does not hold (no group id known) are left out. A title the game folder's
@@ -1033,17 +1033,20 @@ TEST_CASE("native plugins: get_avail_aa_data_bulk and get_avail_disc_data_bulk, 
     h.run("/probeaas");
     CHECK(h.printed_line("[Probe] aas 0: ability 5, name Innate Strength"));
     CHECK(h.printed_line("[Probe] aas 1: ability 77, name -"));
-    CHECK(h.printed_line("[Probe] aas count 2, 35 bytes, 0 bytes left")); // 4, 8+15, 8+0
-    // As many whole records, names included, as fit after the count; below the count's 4 bytes nothing, and nothing
-    // past the end.
+    CHECK(h.printed_line("[Probe] aas count 2, total 2, 39 bytes, 0 bytes left")); // 8, 8+15, 8+0
+    // As many whole records, names included, as fit after the header, whose total still says how many the client
+    // holds; below the header's 8 bytes nothing, and nothing past the end.
     h.printed.clear();
-    h.run("/probeaas 34");
+    h.run("/probeaas 38");
     CHECK(h.printed_line("[Probe] aas 0: ability 5, name Innate Strength"));
     CHECK_FALSE(h.printed_line("[Probe] aas 1: ability 77, name -"));
-    CHECK(h.printed_line("[Probe] aas count 1, 27 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] aas count 1, total 2, 31 bytes, 0 bytes left"));
     CHECK(h.printed_line("[Probe] aas past the end 0"));
     h.printed.clear();
-    h.run("/probeaas 3");
+    h.run("/probeaas 8"); // the header alone: no record fits
+    CHECK(h.printed_line("[Probe] aas count 0, total 2, 8 bytes, 0 bytes left"));
+    h.printed.clear();
+    h.run("/probeaas 7");
     CHECK(h.printed_line("[Probe] aas 0 bytes"));
     CHECK(h.printed_line("[Probe] aas past the end 0"));
 
@@ -1053,27 +1056,31 @@ TEST_CASE("native plugins: get_avail_aa_data_bulk and get_avail_disc_data_bulk, 
     h.run("/probediscs");
     CHECK(h.printed_line("[Probe] discs 0: spell 4498, name Test Discipline"));
     CHECK(h.printed_line("[Probe] discs 1: spell 99999, name -"));
-    CHECK(h.printed_line("[Probe] discs count 2, 35 bytes, 0 bytes left")); // 4, 8+15, 8+0
+    CHECK(h.printed_line("[Probe] discs count 2, total 2, 39 bytes, 0 bytes left")); // 8, 8+15, 8+0
     h.printed.clear();
-    h.run("/probediscs 34");
+    h.run("/probediscs 38");
     CHECK(h.printed_line("[Probe] discs 0: spell 4498, name Test Discipline"));
     CHECK_FALSE(h.printed_line("[Probe] discs 1: spell 99999, name -"));
-    CHECK(h.printed_line("[Probe] discs count 1, 27 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] discs count 1, total 2, 31 bytes, 0 bytes left"));
     CHECK(h.printed_line("[Probe] discs past the end 0"));
-    // Before the profile: the header, count 0.
+    h.printed.clear();
+    h.run("/probediscs 7");
+    CHECK(h.printed_line("[Probe] discs 0 bytes"));
+    CHECK(h.printed_line("[Probe] discs past the end 0"));
+    // Before the profile: the header, count 0 and total 0.
     h.printed.clear();
     A::profile(*h.world.conn).reset();
     h.run("/probediscs");
-    CHECK(h.printed_line("[Probe] discs count 0, 4 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] discs count 0, total 0, 8 bytes, 0 bytes left"));
     h.run("/probeaas"); // the owned list is still there, but goes out only with the profile
-    CHECK(h.printed_line("[Probe] aas count 0, 4 bytes, 0 bytes left"));
-    // No game connection at all (the login screen): the count 0 too.
+    CHECK(h.printed_line("[Probe] aas count 0, total 0, 8 bytes, 0 bytes left"));
+    // No game connection at all (the login screen): count 0 and total 0 too.
     h.printed.clear();
     auto conn = std::move(h.world.conn);
     h.run("/probeaas");
-    CHECK(h.printed_line("[Probe] aas count 0, 4 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] aas count 0, total 0, 8 bytes, 0 bytes left"));
     h.run("/probediscs");
-    CHECK(h.printed_line("[Probe] discs count 0, 4 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] discs count 0, total 0, 8 bytes, 0 bytes left"));
     h.world.conn = std::move(conn);
 }
 TEST_CASE("native plugins: get_raid_data_bulk roster, pets, positions and edge cases") {
@@ -1107,7 +1114,9 @@ TEST_CASE("native plugins: get_raid_data_bulk roster, pets, positions and edge c
     CHECK(h.printed_line("[Probe] raid 2: Third 0 g1 f12 l45 c1 hp-1 mp-1 ep-1 pet0 ph-1"));
 
     h.printed.clear();
-    h.run("/proberaid 40"); // the header alone
+    h.run("/proberaid 39"); // not even the header: nothing
+    CHECK(h.printed_line("[Probe] raid 0 bytes"));
+    h.run("/proberaid 40"); // the header alone; count < total says the buffer was too small
     CHECK(h.printed_line("[Probe] raid active 1, count 0, total 3, leader 0, target 1, locked 1, loot 3, 40 bytes"));
     h.run("/proberaid 164"); // header + one whole record
     CHECK(h.printed_line("[Probe] raid active 1, count 1, total 3, leader 0, target 1, locked 1, loot 3, 164 bytes"));
