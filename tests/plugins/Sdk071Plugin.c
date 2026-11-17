@@ -3,7 +3,7 @@
  * the newest released ABI 3 plugins export hailstone_plugin_set_host / nmsc_plugin_set_host and know the host table
  * up to get_xtarget_data_bulk. tests/native_plugins_test.cpp loads it in this client, so a change to the loader or a
  * reordered table that would break such a plugin fails there. /sdk071 prints what it sees through the table. */
-#include <string.h>
+#include <stdio.h>
 
 #include "hailstone_plugin.h"
 
@@ -16,7 +16,7 @@ static void sdk071(void* user, const char* args) {
     (void)args;
     int32_t xtarget = -1;
     if (HAILSTONE_HOST_HAS(host, get_xtarget_data_bulk)) xtarget = host->get_xtarget_data_bulk(host->host, buf, 512);
-    strncpy(name, host->name(host->host), sizeof name - 1);
+    snprintf(name, sizeof name, "%s", host->name(host->host));
     WriteChatf("[Sdk071] abi %u table %d name %s xtarget %d", (unsigned)host->abi,
                host->size >= sizeof(PluginHostApi) ? 1 : 0, name, (int)(xtarget % HS_BULK_XTARGET_RECORD_SIZE));
 }
