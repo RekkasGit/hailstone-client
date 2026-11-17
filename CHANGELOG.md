@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Environmental particles: legacy server-placed effects now draw from invisible particle switches, restoring missing waterfall cascades
+- `/doability` takes the name of any of your abilities as well as the Actions window's button (`/doability Bash`, `/doability fury`, in any case): a skill, a discipline or an activated AA, used as its Ability Book row is; a name that is more than one kind's is the skill's first, then the discipline's, then the AA's. A number still means button 1-10
+- For plugin authors: `use_ability` uses one of the player's skills, disciplines or activated AAs by name as the Ability Book's row does, and `ability_state` says whether it is ready (its remaining and reuse time); both are added later in ABI 3, so test `HAILSTONE_HOST_HAS` first (docs/plugins.md)
+- For plugin authors: `get_ability_data_bulk` gives the Ability Book's usable entries in one call: an `HS_Bulk_ListHeader` and an `HS_Bulk_AbilityRecord` per skill, discipline and owned activated AA, each with its kind, stable id, name, ready flag, remaining and reuse time, so a rotation checks its whole list in one pass instead of calling `ability_state` per entry (added later in ABI 3; docs/plugins.md)
 - Name plates: mercenaries' names are amber, the original's colour; they were drawn light blue from the original's colour bytes read in the wrong order
 - Name plates: GM names show green as the original client does, your own GM character's too, and stay green when targeted; an anonymous or roleplaying GM's name, and a GM's corpse, keep the ordinary colour
 - Chat: spell hit modes now also shorten complete non-melee damage and healing reports sent as generic or plain-text server messages, including reports with a spell name in parentheses and stock EQEmu's "You have been healed for N points of damage.". A line spoken by someone ("Somebody says, Bob hit Fred for ...") stays whole. Full sentences remain in logs and incoming-chat hooks
