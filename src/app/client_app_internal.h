@@ -356,7 +356,7 @@ public:
         lua_ui_ = std::make_unique<ui::lua::LuaUi>(pack ? pack->dir : platform::ui_packs_dir() / "modern",
                                                    platform::ui_settings_file(ui_name_),
                                                    pack ? pack->base_dirs : std::vector<std::filesystem::path>{},
-                                                   ui_data_roots(pack), ui_name_ != "modern" && ui_name_ != "gamepad");
+                                                   ui_data_roots(pack));
         login_view_.ui_packs = ui_packs_; // the login screen picks one per server (use_ui_pack at the login)
         refresh_game_folders();
         ui_textures_ = std::make_unique<ui::UiTextures>(vk_, game_);

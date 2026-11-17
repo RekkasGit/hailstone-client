@@ -485,7 +485,7 @@ void ClientApp::use_ui_pack(std::string_view id, bool force) {
     plugin_ui_pack_.clear();
     plugin_ui_rescan_ = {};
     lua_ui_ = std::make_unique<ui::lua::LuaUi>(pack->dir, platform::ui_settings_file(ui_name_), pack->base_dirs,
-                                            ui_data_roots(pack), ui_name_ != "modern" && ui_name_ != "gamepad");
+                                            ui_data_roots(pack));
     lua_ui_->set_character_settings(CharacterFiles{ui_character_dir_}.ui_settings(ui_name_));
     if (options_open && !options_section.empty()) lua_ui_->set_setting("options.section", options_section);
     lua_ui_->set_show_control(game_view_.dev_windows);

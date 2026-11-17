@@ -270,15 +270,13 @@ values, nil/false results, caching, list invalidation and action checks keep
 their existing meanings. Flat `hs.*` bindings remain available for low-level
 host integrations. Modern, Gamepad and new UI packs use `hs.UI`.
 
-Existing compiled-plugin and script UI folders temporarily receive the deprecated
-`eq` name as an alias of their exact same guarded `hs` view. This preserves older
-addon windows while their authors migrate to `hs.UI`; it grants no additional
-permissions, mutable host tables or callback identity. Source-bound callback
-factories keep their reload checks; saved functions keep their normal owner
-and unload checks. Selected third-party interface roots also receive `eq` as
-the same host table, preserving older manually installed and managed interfaces.
-The built-in Modern and Gamepad root environments keep `hs` only. New code
-should use `hs.UI`.
+`eq`, the name up to 0.7, stays as a permanent alias of the same guarded `hs`
+view everywhere: in the built-in Modern and Gamepad packs, in add-on interfaces,
+in compiled-plugin and script UI folders and in the player's own files. Code
+written against `eq` keeps working with no end date; it grants no additional
+permissions, mutable host tables or callback identity, and source-bound callback
+factories and saved functions keep their reload and owner checks. `hs` is the
+name new code uses (`hs.UI`).
 
 Examples inside a window's draw callback:
 

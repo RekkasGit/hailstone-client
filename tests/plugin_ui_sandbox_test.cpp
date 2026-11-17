@@ -44,7 +44,7 @@ struct SandboxUi {
     std::map<std::string, std::uint32_t> caps; // each folder tag's capabilities (the app's plugin_caps)
     std::vector<ui::lua::LuaUi::Folder> folders;
 
-    explicit SandboxUi(bool legacy_root = false) {
+    SandboxUi() {
         ctx = ImGui::CreateContext();
         ImGui::GetIO().IniFilename = nullptr;
         unsigned char* px = nullptr;
@@ -54,7 +54,7 @@ struct SandboxUi {
         host.plugin_ui = &bridge;
         api = std::make_unique<app::UiApi>(host);
         lua = std::make_unique<ui::lua::LuaUi>(scratch.path() / "pack", scratch.path() / "ui.txt",
-            std::vector<fs::path>{}, ui::lua::LuaUi::DataRoots{}, legacy_root);
+            std::vector<fs::path>{}, ui::lua::LuaUi::DataRoots{});
         lua->add_ui_api([this](lua_State* L) { api->register_functions(L); });
         // As the app does (ClientApp::lua_caller_scope): a folder's code runs with its owner's capabilities.
         lua->set_caller_scope([this](std::string_view tag) -> std::shared_ptr<void> {
@@ -324,7 +324,8 @@ TEST_CASE("Plugin UI: modular contract aliases retain caller identity and nested
     s.add_folder("plugin:A");
     s.frame();
 
-    CHECK(s.run("", "return hs.UI ~= nil and eq == nil") == "true");
+    // `eq`, the name up to 0.7, stays for good, in the pack's own code as in an add-on's: the same table as hs.
+    CHECK(s.run("", "return hs.UI ~= nil and eq == hs") == "true");
     CHECK(s.run("plugin:R", "return hs.UI ~= nil and eq == hs") == "true");
 
     const std::string action = "return tostring(hs.UI.windows.ClickChild('NoWnd', 'X'))";
@@ -403,7 +404,7 @@ legacyRead=eq.InGame() and owner.read()
 ui.window('Legacy addon##'..owner.owner,function() legacyDraw=eq.InGame() end)
 )lua");
     s.frame();
-    CHECK(s.run("", "return hs.UI ~= nil and eq == nil and rawget(_G,'eq') == nil") == "true");
+    CHECK(s.run("", "return hs.UI ~= nil and eq == hs and rawget(_G,'eq') == hs") == "true");
     CHECK(s.run("plugin:legacy", "return legacyRead .. ':' .. tostring(legacyDraw)") == "native:true");
     CHECK(s.run("script:legacy", "return legacyRead .. ':' .. tostring(legacyDraw)") == "script:true");
     for (const char* tag : {"plugin:legacy", "script:legacy"}) {
@@ -421,7 +422,7 @@ ui.window('Legacy addon##'..owner.owner,function() legacyDraw=eq.InGame() end)
     CHECK(s.run("plugin:legacy", "return tostring(eq.ClickChild('NoWnd','X'))") == "nil");
 }
 
-TEST_CASE("Plugin UI: deprecated addon aliases retain reload generations and removed-owner checks") {
+TEST_CASE("Plugin UI: the eq alias in add-ons retains reload generations and removed-owner checks") {
     SandboxUi s;
     s.caps["plugin:legacy"] = plugin::kCapRead | plugin::kCapUi;
     s.add_pack_file("shared.lua", "LEGACY_SAVED={}\n");
@@ -443,11 +444,11 @@ version=1
     CHECK(s.run("", "return tostring(LEGACY_SAVED.click('NoWnd','X'))") == "false");
     s.lua->set_folders({});s.frame();
     CHECK(s.run("", "local result=LEGACY_SAVED.click('NoWnd','X');return tostring(result)") == "nil");
-    CHECK(s.run("", "return hs.UI ~= nil and eq == nil") == "true");
+    CHECK(s.run("", "return hs.UI ~= nil and eq == hs") == "true");
 }
 
-TEST_CASE("Plugin UI: selected legacy interface roots share the finalized API without widening addon views") {
-    SandboxUi s(true);
+TEST_CASE("Plugin UI: interface roots written against eq share the API without widening addon views") {
+    SandboxUi s;
     s.host.in_game = true;
     s.caps["plugin:legacy"] = plugin::kCapRead | plugin::kCapUi;
     s.add_pack_file("legacy.lua", R"lua(

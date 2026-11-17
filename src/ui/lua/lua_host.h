@@ -105,10 +105,8 @@ public:
     // `scripts`: the UI's folder (ui/<name>, ui/ui_packs.h) holding the *.lua windows; dofile paths are
     // relative to it ("lib/sidl.lua"). The settings file keeps the scripts' key=value options.
     // approved_bases is the nearest-first chain validated by list_ui_packs, not paths supplied by Lua code.
-    // legacy_alias temporarily gives a selected third-party interface root the same table under its old name.
     LuaUi(std::filesystem::path scripts, std::filesystem::path settings,
-          std::vector<std::filesystem::path> approved_bases = {}, DataRoots presentation_data = {},
-          bool legacy_alias = false);
+          std::vector<std::filesystem::path> approved_bases = {}, DataRoots presentation_data = {});
     ~LuaUi();
     LuaUi(const LuaUi&) = delete;
     LuaUi& operator=(const LuaUi&) = delete;

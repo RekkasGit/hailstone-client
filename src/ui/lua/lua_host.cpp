@@ -1605,12 +1605,10 @@ void LuaUi::Impl::make_env(const std::string& tag) {
     const int cache = lua_gettop(L);
     lua_rawgeti(L, LUA_REGISTRYINDEX, host_api_ref);
     push_wrapping(L, -1, cache, tag_at);
-    // Temporary compatibility for existing addon windows; both names are the same owner-guarded view.
-    // Selected-interface root compatibility is configured separately when its VM is created.
-    if (!tag.empty()) {
-        lua_pushvalue(L, -1);
-        lua_setfield(L, layer, "eq");
-    }
+    // `eq`, the name up to 0.7, is kept for good: add-on windows and player files written against it keep working.
+    // Both names are the same owner-guarded view.
+    lua_pushvalue(L, -1);
+    lua_setfield(L, layer, "eq");
     lua_setfield(L, layer, "hs");
     lua_pop(L, 1);
 
@@ -1718,8 +1716,7 @@ bool replaces(std::string_view screen) {
 
 void set_replaced_check(std::function<bool(std::string_view)> check) { replaced_check() = std::move(check); }
 
-LuaUi::LuaUi(fs::path scripts, fs::path settings, std::vector<fs::path> approved_bases, DataRoots presentation_data,
-             bool legacy_alias)
+LuaUi::LuaUi(fs::path scripts, fs::path settings, std::vector<fs::path> approved_bases, DataRoots presentation_data)
     : impl_(std::make_unique<Impl>()) {
     Impl& m = *impl_;
     m.dir = std::move(scripts);
@@ -1815,10 +1812,8 @@ LuaUi::LuaUi(fs::path scripts, fs::path settings, std::vector<fs::path> approved
     lua_newtable(L);
     lua_pushvalue(L, -1);
     m.host_api_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    if (legacy_alias) {
-        lua_pushvalue(L, -1);
-        lua_setglobal(L, "eq");
-    }
+    lua_pushvalue(L, -1);
+    lua_setglobal(L, "eq"); // the name up to 0.7, kept for good for every interface's own files (hs is the name)
     lua_setglobal(L, "hs");
     m.load_settings();
     log::info("ui: Lua started, scripts in {}", m.dir.string());
