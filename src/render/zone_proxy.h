@@ -87,20 +87,27 @@ std::optional<ZoneProxy> read_zone_proxy(std::span<const std::byte> data);
 // Its zone and key from the start of a cache file (nullopt: not a copy of this version).
 std::optional<std::pair<std::string, std::uint64_t>> read_zone_proxy_header(std::span<const std::byte> data);
 
-// Where a copy is drawn: from the current zone's edge out (kProxyNear past it; the land's field: its squares, how far
-// each lies from the zone), so it stands in for the neighbour zone at its line as well as far out (the live neighbour
-// zones' geometry, drawn whole, showed its boundary walls, filler and broken pictures there). Over kProxyFade it rises
-// out of the land (kProxySink under its own height at kProxyNear, kProxyRaise over it past the band, so it draws over
-// the land where the two meet); and it is drawn nowhere in the zone's own squares or its pockets. Coarser with the
-// distance: a cell every proxy_step(d) cells, kProxyChunk cells to a chunk, the chunks of a coarser step skirted down
-// so no crack shows between them.
-inline constexpr float kProxyNear = 0.0f;
-inline constexpr float kProxyFade = 128.0f;
-inline constexpr float kProxySink = 30.0f;
+// Where a copy is drawn: from kProxyNear past the current zone's edge (the land's field: its squares, how far each lies
+// from the zone), far enough that its low detail is not seen up close (drawn from the edge, a city's houses read as
+// smeared blocks at the zone line; nothing of a neighbour is drawn nearer, only the land); rising over kProxyFade out of
+// the land (kProxySink under its own height at kProxyNear, kProxyRaise over it past the band, so it draws over the land
+// where the two meet); and nowhere in the zone's own squares or its pockets. Coarser with the distance: a cell every
+// proxy_step(d) cells, kProxyChunk cells to a chunk, the chunks of a coarser step skirted down so no crack shows
+// between them.
+inline constexpr float kProxyNear = 1500.0f;
+inline constexpr float kProxyFade = 800.0f;
+inline constexpr float kProxySink = 60.0f;
 inline constexpr float kProxyRaise = 3.0f;
 inline constexpr int kProxyChunk = 32;
 // 1 within 3000 units of the zone's edge, 2 within 6000, 4 past.
 int proxy_step(float distance);
+// Its heights as drawn: opened (the lowest within kProxyFlatten cells, then the highest of those within as many), so
+// what is narrower than about 2 * kProxyFlatten + 1 cells (a house, a wall, a tower, a jungle's giant trees: 272
+// units) goes down to the ground round it and a broad hill keeps its shape; its colour from above still shows the
+// roofs. As blocks they read as smeared boxes (4 cells left Freeport's towers and the Feerrott's trees standing). NaN
+// cells are left out of both and stay NaN.
+inline constexpr int kProxyFlatten = 8;
+std::vector<float> proxy_open(const std::vector<float>& height, int nx, int ny, int radius = kProxyFlatten);
 // How far past the current zone's edge `p` lies (its coordinates), by the land's field; a negative number in the zone's
 // own squares and its pockets. Without a field (none built), far.
 float proxy_distance(const HorizonField* field, glm::vec2 p);

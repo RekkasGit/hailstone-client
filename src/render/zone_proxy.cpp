@@ -643,6 +643,39 @@ std::optional<ZoneProxy> read_zone_proxy(std::span<const std::byte> data) {
 
 int proxy_step(float distance) { return distance < 3000.0f ? 1 : distance < 6000.0f ? 2 : 4; }
 
+std::vector<float> proxy_open(const std::vector<float>& height, int nx, int ny, int radius) {
+    if (nx <= 0 || ny <= 0 || height.size() != static_cast<std::size_t>(nx) * static_cast<std::size_t>(ny) || radius <= 0)
+        return height;
+    // One pass along x then y of the lowest (or highest) within `radius`, NaN left out.
+    auto pass = [&](const std::vector<float>& in, bool lowest) {
+        std::vector<float> mid(in.size()), out(in.size());
+        auto pick = [&](float a, float b) {
+            if (!std::isfinite(a)) return b;
+            if (!std::isfinite(b)) return a;
+            return lowest ? std::min(a, b) : std::max(a, b);
+        };
+        for (int y = 0; y < ny; ++y)
+            for (int x = 0; x < nx; ++x) {
+                float v = std::numeric_limits<float>::quiet_NaN();
+                for (int k = std::max(0, x - radius); k <= std::min(nx - 1, x + radius); ++k) v = pick(v, in[at(k, y, nx)]);
+                mid[at(x, y, nx)] = v;
+            }
+        for (int y = 0; y < ny; ++y)
+            for (int x = 0; x < nx; ++x) {
+                float v = std::numeric_limits<float>::quiet_NaN();
+                for (int k = std::max(0, y - radius); k <= std::min(ny - 1, y + radius); ++k) v = pick(v, mid[at(x, k, nx)]);
+                out[at(x, y, nx)] = v;
+            }
+        return out;
+    };
+    std::vector<float> out = pass(pass(height, true), false);
+    for (std::size_t i = 0; i < out.size(); ++i)
+        if (!std::isfinite(height[i])) out[i] = height[i];
+        else if (!std::isfinite(out[i])) out[i] = height[i];
+        else out[i] = std::min(out[i], height[i]); // an opening never rises over what is there
+    return out;
+}
+
 float proxy_distance(const HorizonField* field, glm::vec2 p) {
     if (!field || field->nx <= 0 || field->ny <= 0 || field->dist.size() != static_cast<std::size_t>(field->nx) *
                                                                                static_cast<std::size_t>(field->ny))
@@ -653,10 +686,13 @@ float proxy_distance(const HorizonField* field, glm::vec2 p) {
     return std::max(field->dist[i] - 0.5f, 0.0f) * field->cell + extra;
 }
 
-ProxyZone proxy_zone(const ZoneProxy& z, const HorizonField* field, glm::vec3 offset,
+ProxyZone proxy_zone(const ZoneProxy& baked, const HorizonField* field, glm::vec3 offset,
                      std::span<const glm::vec4> keep) {
     ProxyZone out;
-    if (!z.valid()) return out;
+    if (!baked.valid()) return out;
+    // Drawn with its buildings and walls flattened (proxy_open).
+    ZoneProxy z = baked;
+    z.height = proxy_open(baked.height, baked.nx, baked.ny);
     const std::string picture = "hs_copy_" + z.zone + ".dds";
     out.zone.name = "copy:" + z.zone;
     out.zone.generated_files.emplace(picture, dds_rgba(z.picture));
