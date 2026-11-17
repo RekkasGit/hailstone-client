@@ -457,8 +457,8 @@ both passes give a surface the same depth. The pre-pass discards every pixel `zo
 camera's cut-away included, or the cut walls would keep their depth and hide what stands behind them. The water stays
 out of the pre-pass (it is drawn blended after `begin_translucent`). The pre-pass covers the current zone's geometry only: the neighbour zones (their ties go by the
 draw order, which an equal test would turn around), the objects, the flora and the characters keep their single pass.
-The setting is read when a zone loads. The pre-pass's shader is optional: without it the zone draws the single pass,
-with a warning in the log.
+A zone builds the pre-pass's two pipelines whether it is on or not, so the switch needs no reload. The pre-pass's
+shader is optional: without it the zone draws the single pass, with a warning in the log.
 
 The scene target holds linear colour. The classic lighting computes in display (sRGB) values as the classic renderer does
 and converts at the end of each shader; the modern lighting computes in linear HDR.
