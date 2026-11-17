@@ -346,8 +346,10 @@ ui.window("Raid", function()
           }
           for i, action in ipairs(direct) do table.insert(actions, i, action) end
         end
-        local extensionContext=E.RaidContext()
-        local extensionRows=E.Rows(RW,"member_actions",extensionContext)
+        local extensionUsed=E.Used(RW,"member_actions")
+        if not extensionUsed then E.Reset() end -- an add-on gone: its review goes with it
+        local extensionContext=extensionUsed and E.RaidContext() or {}
+        local extensionRows=extensionUsed and E.Rows(RW,"member_actions",extensionContext) or {}
         if side.reviewActive and not E.HasReview() then
           side.want,side.reviewFocus=nil,nil
           listState.focusNext=1

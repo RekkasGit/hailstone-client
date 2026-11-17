@@ -1221,7 +1221,6 @@ private:
     std::string ui_selection_error_;
     std::string ui_selection_context_; // profile plus logical requested ID, including a selection using a fallback
     std::chrono::steady_clock::time_point ui_registry_rescan_{};
-    std::uint64_t ui_policy_context_ = 0;
     std::uint32_t ui_policy_serial_ = 0;
     bool ui_reload_pending_ = false;
     bool ui_hidden_ = false; // session presentation only; window visibility and layout settings remain unchanged

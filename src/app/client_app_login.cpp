@@ -346,12 +346,16 @@ void ClientApp::apply_server_profile(const ServerProfile& profile) {
 }
 
 void ClientApp::refresh_ui_packs(bool force) {
-    const auto policy_context = conn_ ? conn_->interaction_context() : 0;
+    // Read again when something can have changed it: the add-on manager and new server rules force it; else only
+    // while a screen that lists the interfaces is up (the login screen, Options), at most once a second, for a pack
+    // put in ui/ by hand meanwhile. Not each second in play: it reads installed.txt and every ui.ini.
     const auto policy_serial = conn_ ? conn_->server_rules_serial() : 0;
-    force = force || policy_context != ui_policy_context_ || policy_serial != ui_policy_serial_;
+    force = force || policy_serial != ui_policy_serial_;
     const auto now = std::chrono::steady_clock::now();
-    if (!force && now < ui_registry_rescan_) return;
-    ui_policy_context_ = policy_context;
+    if (!force) {
+        const bool listing = screen_ == Screen::Login || (ui_api_ && ui_api_->shown("OptionsWindow"));
+        if (!listing || now < ui_registry_rescan_) return;
+    }
     ui_policy_serial_ = policy_serial;
     ui_registry_rescan_ = now + std::chrono::seconds(1);
     std::vector<std::string> installed;

@@ -442,7 +442,7 @@ local function actions(raid, s)
     for i = first, math.min(first + cols - 1, #choices) do row[#row + 1] = choices[i] end
     W.ButtonRow(WINDOW, row, btnH)
   end
-  E.Draw(WINDOW,"member_actions",E.RaidContext())
+  E.Draw(WINDOW,"member_actions") -- its context is built only when an add-on has an action there
 end
 
 local function membersPage(raid, s)

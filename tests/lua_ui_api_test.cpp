@@ -680,7 +680,8 @@ end)
         CHECK(last("f.drawn[1] .. ',' .. f.total .. ',' .. f.shown") == "1,200,200");
         CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
 
-        // Find: both copies share a read within one frame, with fresh eligibility in each new frame.
+        // Find: one read for both copies, again when the search changes or the moment passes (0.2 s, as before map
+        // policies; acting on a row checks its token then).
         run("SEARCH = 'x'");
         frames(1);
         CHECK(last("f.finds") == "1");
@@ -688,8 +689,7 @@ end)
         CHECK(last("f.same") == "true");
         run("finds = 0");
         frames(6); // (0.1 s)
-        CHECK(last("finds") == "6");
-        CHECK(last("f.finds") == "1");
+        CHECK(last("finds") == "0");
         CHECK(last("f.same") == "true");
         frames(1, 0.25f);
         CHECK(last("f.finds") == "1");

@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <string>
 
@@ -47,4 +49,26 @@ TEST_CASE("binary measurement: the platform resolves the running executable inde
     CHECK(executable->byte_count > 0);
     CHECK(executable->fnv1a63 <= 0x7fffffffffffffffull);
     CHECK(executable->sha256 != Sha256Digest{});
+}
+
+// A plugin may ask each frame: the cached read hashes a file again only when its size or modification time changed.
+TEST_CASE("binary measurement: the cached read follows a changed file and keeps an unchanged one") {
+    test::ScratchDir dir("binary_measurement_cached");
+    const auto path = dir.path() / "binary.dat";
+    { std::ofstream file(path, std::ios::binary); file << "abc"; }
+    const auto first = measure_binary_file_cached(path);
+    REQUIRE(first);
+    CHECK(first->sha256 == sha256(std::string_view("abc")));
+    const auto again = measure_binary_file_cached(path);
+    REQUIRE(again);
+    CHECK(again->sha256 == first->sha256);
+    const auto when = std::filesystem::last_write_time(path);
+    { std::ofstream file(path, std::ios::binary | std::ios::trunc); file << "abcd"; }
+    std::filesystem::last_write_time(path, when + std::chrono::seconds(2));
+    const auto changed = measure_binary_file_cached(path);
+    REQUIRE(changed);
+    CHECK(changed->byte_count == 4);
+    CHECK(changed->sha256 == sha256(std::string_view("abcd")));
+    std::filesystem::remove(path);
+    CHECK_FALSE(measure_binary_file_cached(path));
 }

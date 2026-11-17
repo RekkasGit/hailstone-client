@@ -128,7 +128,7 @@ TEST_CASE("UI hidden frames: removed sources release owned extension captures wi
     ComposedUi ui;
     const auto script = ui.root / "leaf/a.lua";
     ui.put(script, "local held={string.rep('x',256*1024)} WEAK=setmetatable({held},{__mode='v'}) "
-        "HANDLE=hs.UI.extensions.RegisterAction('FutureWindow','controls','capture','Capture',{},function() "
+        "HANDLE=hs.UI.extensions.RegisterAction('MapViewWnd','controls','capture','Capture',{},function() "
         "ACTED=true return {ok=true,message=held[1]} end) "
         "ui.window('NeverPainted',function() DRAWN=true end)");
     ui.start(true);
@@ -177,7 +177,7 @@ TEST_CASE("UI data imports: shared modules retain plugin environments permission
     ui.put(folder / "a.lua", "OWNER,CLICKED=hs.UI.interfaces.LoadData('lib/owner.lua',true) SAVED_DATA=hs.UI.interfaces.LoadData");
     ui.start(true);
     ui.lua->set_caller_scope([](std::string_view tag) -> std::shared_ptr<void> {
-        return std::make_shared<plugin::CallerScope>(tag.empty() ? plugin::kCapAll : 0, tag);
+        return std::make_shared<plugin::CallerScope>(tag.empty() ? std::uint32_t{plugin::kCapAll} : 0u, tag);
     });
     ui.lua->set_folders({{"plugin:Data", folder}});
     ui.frame();
@@ -314,7 +314,7 @@ TEST_CASE("UI base imports: plugin environments capabilities and lifetime remain
     ui.put(plugin / "a.lua", "local who,clicked=hs.UI.interfaces.LoadBase('lib/owner.lua') OWNER=who CLICKED=clicked SAVED_IMPORT=hs.UI.interfaces.LoadBase");
     ui.start(true);
     ui.lua->set_caller_scope([](std::string_view tag) -> std::shared_ptr<void> {
-        return std::make_shared<plugin::CallerScope>(tag.empty() ? plugin::kCapAll : 0, tag);
+        return std::make_shared<plugin::CallerScope>(tag.empty() ? std::uint32_t{plugin::kCapAll} : 0u, tag);
     });
     ui.lua->set_folders({{"plugin:Importer", plugin}});
     ui.frame();

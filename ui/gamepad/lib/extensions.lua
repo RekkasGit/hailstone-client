@@ -3,8 +3,10 @@
 local API=hs.UI
 local E={}
 local pending,message=nil,nil
-local function available()
-  return API.Supports and API.Supports("extensions","ListActions")
+local supported
+local function available() -- asked once: the catalog does not change while the interface runs
+  if supported==nil then supported=(API.Supports and API.Supports("extensions","ListActions"))==true end
+  return supported
 end
 local function value(v)
   local text=v==nil and "" or tostring(v)
@@ -16,9 +18,31 @@ local function signature(context)
   return table.concat({value(context.revision),value(selected.name),value(selected.group),
     value(selected.level),value(selected.class),value(selected.list),value(selected.row)},"|")
 end
-function E.RaidContext()
+-- Whether any add-on has an action or section at this point: read once a frame, so a window with none (every
+-- window against a stock server) builds no context for it.
+local registered={}
+function E.Used(window,section)
+  if not available() then return false end
+  local frame,key=ui.GetTime(),window.."|"..section
+  local seen=registered[key]
+  if seen and seen.frame==frame then return seen.used end
+  local actions=API.extensions.ListActions(window,section,{})
+  local used=#actions>0 or #(actions.sections or {})>0
+  registered[key]={frame=frame,used=used}
+  return used
+end
+-- A context is built at most once a frame (both the presenter and its fresh() read it).
+local built={}
+local function once(key,build)
+  local frame=ui.GetTime() -- the frame's time: the same throughout one
+  local hit=built[key]
+  if hit and hit.frame==frame then return hit.context end
+  local context=build()
+  built[key]={frame=frame,context=context}
+  return context
+end
+local function raidContext()
   local context,revision={},{}
-  if not available() then return context end
   -- Exact framed row contents are a presentation change hint, not an authority
   -- token: the addon owns stronger roster/incarnation checks at confirmation.
   for _,list in ipairs({"RAID_PlayerList","RAID_NotInGroupPlayerList"}) do
@@ -37,8 +61,12 @@ function E.RaidContext()
   context.revision=table.concat(revision,"|")
   return context
 end
+function E.RaidContext()
+  if not E.Used("RaidWindow","member_actions") then return {} end
+  return once("raid",raidContext)
+end
 -- Presentation equality only; callbacks still validate their current domain authority.
-function E.MapContext(view)
+local function mapContext(view)
   local getter=API.map.Policy
   local policy=type(getter)=="function" and getter() or {}
   if type(policy)~="table" then policy={} end
@@ -53,9 +81,19 @@ function E.MapContext(view)
   context.revision=table.concat(parts,"|")
   return context
 end
-local function fresh(window,section,context)
-  if window=="RaidWindow" and section=="member_actions" then return E.RaidContext() end
-  if window=="MapViewWnd" and section=="controls" then return E.MapContext(context and context.view) end
+function E.MapContext(view)
+  view=view=="world" and "world" or "zone"
+  return once("map:"..view,function() return mapContext(view) end)
+end
+-- Built now, for a check that must see a change made earlier in the same frame (the map controls' lifecycle).
+function E.MapContextNow(view) return mapContext(view=="world" and "world" or "zone") end
+-- live: built now, not the frame's copy (an action rechecks the context it acts on).
+local function fresh(window,section,context,live)
+  if window=="RaidWindow" and section=="member_actions" then return live and raidContext() or E.RaidContext() end
+  if window=="MapViewWnd" and section=="controls" then
+    local view=context and context.view
+    return live and mapContext(view=="world" and "world" or "zone") or E.MapContext(view)
+  end
   return context or {}
 end
 local function find(actions,handle)
@@ -115,7 +153,7 @@ function E.Message()
 end
 function E.Activate(row,context)
   if not available() then E.Reset();return false end
-  context=fresh(row.window,row.section,context)
+  context=fresh(row.window,row.section,context,true)
   local actions=API.extensions.ListActions(row.window,row.section,context)
   sync(row.window,row.section,context,actions)
   local current=find(actions,row.action.handle)
@@ -166,9 +204,10 @@ local function wrappedLabel(label,width)
   return table.concat(lines,"\n")
 end
 function E.Draw(window,section,context,focus)
-  if not available() then E.Reset();return end
+  if not E.Used(window,section) then E.Reset();return end
+  context=fresh(window,section,context)
   E.Before(window,section,context)
-  local rows=E.Rows(window,section,fresh(window,section,context))
+  local rows=E.Rows(window,section,context)
   if #rows>0 then
     ui.Spacing();ui.Separator();ui.Spacing()
     ui.TextDisabled("Addon actions");ui.Spacing()

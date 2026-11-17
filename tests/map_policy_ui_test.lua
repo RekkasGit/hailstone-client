@@ -223,8 +223,8 @@ do
  s.preferences();s.restore()
 end
 
--- The host may retain 200ms geometry, but every read authorizes its rows now. Only calls within the same
--- actual frame share a read; helper reloads share the state without extending its authorization lifetime.
+-- The rows are read again every 200ms, as before map policies, and at once on a policy, zone or search change; an
+-- action is authorized by its token when it is taken. Helper reloads share the state.
 do
  local s=rig("modern");local first=dofile("lib/find.lua");local second=dofile("lib/find.lua")
  local old=s.rows[1];old.token="actor:first"
@@ -236,12 +236,12 @@ do
  equal(s.lastSearch,"kept search","Search was not passed to the host")
  FIND_STATE.sel,FIND_STATE.selToken,FIND_STATE.hover,FIND_STATE.hoverToken=44,old.token,44,old.token
  FIND_STATE.menu,FIND_STATE.why=old,"old failure"
- s.rows={};s.frameCount=s.frameCount+1;s.time=s.time+.001
- equal(#first.rows(),0,"A hidden row survived into the next frame inside the old 200ms cache")
+ s.rows={};s.frameCount=s.frameCount+1;s.time=s.time+.25
+ equal(#first.rows(),0,"A hidden row survived past the 200ms re-read")
  check(FIND_STATE.sel==nil and FIND_STATE.hover==nil and FIND_STATE.menu==nil and FIND_STATE.why==nil,
   "Revoked actor retained selected/hovered/menu/reason state")
- equal(s.npcReads,2,"Next frame did not reread live authorization")
- s.rows={old};s.frameCount=s.frameCount+1
+ equal(s.npcReads,2,"The re-read did not ask the client again")
+ s.rows={old};s.frameCount=s.frameCount+1;s.time=s.time+.25
  equal(first.rows()[1],old,"Authorized actor was not restored")
  FIND_STATE.sel,FIND_STATE.selToken,FIND_STATE.menu=44,old.token,old
  s.policy.unknown_future_field={anything=true}
@@ -251,33 +251,32 @@ do
  second.policy()
  check(FIND_STATE.sel==nil and FIND_STATE.menu==nil and FIND_STATE.rowsCache==nil,"Same-name provider revision retained old state")
  first.rows();FIND_STATE.menu=old;FIND_STATE.why="old reason"
- s.policy.context="connection:2" -- same zone, same display name, same numeric actor id
+ s.policy.context="connection:2";s.time=s.time+.016 -- same zone, same display name, same numeric actor id; a frame later
  first.rows()
  check(FIND_STATE.menu==nil and FIND_STATE.why==nil,"Connection context change retained a menu")
  FIND_STATE.sel,FIND_STATE.selToken,FIND_STATE.hover,FIND_STATE.hoverToken=44,old.token,44,old.token
  FIND_STATE.menu,FIND_STATE.why=old,"old reason"
  local replacement={id=44,token="actor:replacement",name="Replacement",category="merchant",x=9,y=8}
- s.rows={replacement};s.frameCount=s.frameCount+1
+ s.rows={replacement};s.frameCount=s.frameCount+1;s.time=s.time+.25
  equal(first.rows()[1],replacement,"Same-id replacement was not read")
  check(FIND_STATE.sel==nil and FIND_STATE.hover==nil and FIND_STATE.menu==nil and FIND_STATE.why==nil,
   "Same-zone actor incarnation reused old UI state")
  FIND_STATE.sel,FIND_STATE.selToken,FIND_STATE.menu=44,nil,{id=44,name="Untokened old row"}
- s.frameCount=s.frameCount+1;first.rows()
+ s.frameCount=s.frameCount+1;s.time=s.time+.25;first.rows()
  check(FIND_STATE.sel==nil and FIND_STATE.menu==nil,"A missing saved token matched a token-bearing actor")
  FIND_STATE.menu,FIND_STATE.why=replacement,"old reason";s.zone="other";first.rows()
  check(FIND_STATE.menu==nil and FIND_STATE.why==nil,"Zone transition retained old menu data")
  equal(FIND_STATE.search,"kept search","Policy or identity retirement changed the user's search")
  s.preferences();equal(#s.writes,0,"Read-only retirement wrote settings")
- ui.GetFrameCount=nil
  local before=s.npcReads;first.rows();second.rows()
- equal(s.npcReads,before+2,"Missing frame API fell back to a timed authorization cache")
+ equal(s.npcReads,before,"Two reads within 200ms asked the client twice")
  s.restore()
 end
 
 for _,name in ipairs({"Map","Minimap"})do
  local s=rig("modern");s.load(name=="Map"and"map.lua"or"minimap.lua");s.frame(name)
  FIND_STATE.sel,FIND_STATE.hover,FIND_STATE.menu,FIND_STATE.why=44,44,s.rows[1],"stale reason"
- s.rows={};s.time=s.time+.001;s.popup="##findmenu";s.menuClick="Target"
+ s.rows={};s.time=s.time+.25;s.popup="##findmenu";s.menuClick="Target"
  s.frame(name)
  equal(s.triangles,0,"A newly hidden NPC retained its map/minimap mark")
  check(FIND_STATE.sel==nil and FIND_STATE.hover==nil and FIND_STATE.menu==nil and FIND_STATE.why==nil,
@@ -311,7 +310,7 @@ do
  s.frame("Map")
  equal(#s.accepted,admitted,"A TOCTOU replacement inherited an old popup action")
  equal(s.actions[#s.actions][3],"manual:actor","TOCTOU action did not carry the displayed token")
- s.beforeAction=nil;s.menuClick=nil;s.frame("Map")
+ s.beforeAction=nil;s.menuClick=nil;s.time=s.time+.25;s.frame("Map") -- (the rows re-read after 200ms)
  check(FIND_STATE.menu==nil and FIND_STATE.sel==nil,"Replacement retained the stale popup or selection")
  s.preferences();s.restore()
 end

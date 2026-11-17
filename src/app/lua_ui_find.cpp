@@ -167,13 +167,18 @@ int FindNpcs(lua_State* L) {
     FindSnapshot view;
     const std::vector<game::UsefulNpc>* list = nullptr;
     plugin::cxx_guard(L, [&] { view = snapshot(host); list = &rows(host, cache_up(L), view); });
+    if (!view.allowed) { // NPC Find off (a server's map policy) or not in game: no row, nothing asked per NPC
+        lua_newtable(L);
+        return 1;
+    }
     const std::string_view search = lua_type(L, 1) == LUA_TSTRING ? std::string_view(lua_tostring(L, 1)) : "";
     lua_createtable(L, static_cast<int>(list->size()), 0);
     int i = 0;
     for (const auto& n : *list) {
         std::optional<net::GameConnection::ActorRef> actor;
         plugin::cxx_guard(L, [&] {
-            if (game::useful_npc_matches(n, search) && npc(host, n.spawn_id) && host.conn == view.conn)
+            // The policy was read once for every row (snapshot); each row asks only its own visibility.
+            if (game::useful_npc_matches(n, search) && host.conn == view.conn && view.conn->npc_find_visible(n.spawn_id))
                 actor = view.conn->captureActorRef(n.spawn_id);
         });
         if (!actor || actor->context != view.context) continue;

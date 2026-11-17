@@ -97,9 +97,20 @@ local MEMBERS = {
   setting = "Setting", set_setting = "SetSetting", rumble = "Rumble", request_focus = "RequestFocus",
   drop_cursor = "DropCursor", takes_b = "TakesB",
 }
+-- Each member's support asked once (API.Supports scans the catalog): a pad read is a table lookup after that. The
+-- answer is kept per hs.gamepad table, so one that comes or goes later is asked again.
+local supported, supportedFor = {}, nil
 local function api(name)
   local member = MEMBERS[name]
-  local f = member and API.Supports("gamepad", member) and API.gamepad[member]
+  if not member then return stub[name] end
+  local g = API.gamepad
+  if not rawequal(g, supportedFor) then supported, supportedFor = {}, g end
+  local known = supported[member]
+  if known == nil then
+    known = API.Supports("gamepad", member) == true
+    supported[member] = known
+  end
+  local f = known and g and g[member]
   if f then return f end
   return stub[name]
 end
@@ -108,14 +119,14 @@ end
 setmetatable(pad, { __index = function(_, name) return api(name) end })
 
 -- True when the client has hs.gamepad (the C++ side), not the stand-in.
-function pad.real() return API.Supports("gamepad", "Connected") end
+function pad.real() return api("connected") ~= stub.connected end
 
 -- Whether a pad is connected and its type, read once a frame (the client reads the pad as the frame begins); the
 -- labels per type (hs.gamepad.glyph answers by the type alone). Read again when hs.gamepad comes or goes.
 local seenFrame, seenApi, isConnected, rawType, padKind = nil, nil, false, "generic", "generic"
 local labels = {}
 local function frameState()
-  local f, g = ui.GetFrameCount(), API.Supports("gamepad", "Connected") and API.gamepad or nil
+  local f, g = ui.GetFrameCount(), pad.real() and API.gamepad or nil
   if f == seenFrame and rawequal(g, seenApi) then return end
   if not rawequal(g, seenApi) then labels = {} end
   seenFrame, seenApi = f, g

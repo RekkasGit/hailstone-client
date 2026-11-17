@@ -16,8 +16,9 @@ function M.Reset()
 end
 function M.Open()return opened end
 function M.Sync(view)
-  if not (API.Supports and API.Supports("extensions","ListActions")) then M.Reset();return false end
-  context=E.MapContext(view)
+  -- No add-on with map controls (a stock server): nothing to build or show.
+  if not E.Used("MapViewWnd","controls") then M.Reset();return false end
+  context=E.MapContextNow(view)
   local _,metadata=E.Rows("MapViewWnd","controls",context)
   metadata=metadata or {}
   local present,ids=false,{}

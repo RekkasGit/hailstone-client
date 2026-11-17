@@ -135,6 +135,15 @@ bool GameConnection::npc_find_enabled() const {
     return !(server_ext().map_policy(*this).flags & game::MapPolicyDisableNpcFind);
 }
 
+bool GameConnection::npc_find_visible(std::uint32_t id) const {
+    const auto found = world_.spawns.find(id);
+    if (found == world_.spawns.end() || !found->second.is_npc || found->second.is_corpse) return false;
+    const auto incarnation = found->second.incarnation;
+    if (!server_ext().map_visible(*this, found->second, 1)) return false;
+    const auto checked = world_.spawns.find(id); // (a provider's callback may replace the actor)
+    return checked != world_.spawns.end() && checked->second.incarnation == incarnation;
+}
+
 bool GameConnection::npc_find_allowed(std::uint32_t id) const {
     const auto found = world_.spawns.find(id);
     if (found == world_.spawns.end() || !found->second.is_npc || found->second.is_corpse) return false;

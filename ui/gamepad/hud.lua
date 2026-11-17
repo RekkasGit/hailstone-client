@@ -12,6 +12,8 @@
 --                              map window (MapViewWnd), the wheel or + / - zoom, a right click turns rotation on/off
 -- Every value is the game's (hs.Label / hs.Gauge by EQType, the stock windows' children); nothing is computed here.
 local API = hs.UI
+-- Asked once: the catalog does not change while the interface runs (API.Supports scans it).
+local HAS_TARGET_DISTANCE = API.Supports and API.Supports("session", "TargetDistance") == true
 local T = dofile("lib/theme.lua")
 local pad = dofile("lib/pad.lua")
 local W = dofile("lib/window.lua")
@@ -194,7 +196,7 @@ ui.window("HUD Target", function()
     T.textIn(x0 + p + T.px(4), y0 + p - T.px(2), x1 - p - T.px(90), y0 + p + nh, name, con or C.text, 0)
     T.unfont()
     -- A distance is optional; the current host does not export this capability.
-    if API.Supports("session", "TargetDistance") then
+    if HAS_TARGET_DISTANCE then
       local d = API.session.TargetDistance()
       if d then
         T.font(18)

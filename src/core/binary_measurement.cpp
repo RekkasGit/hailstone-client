@@ -2,6 +2,8 @@
 
 #include <array>
 #include <fstream>
+#include <map>
+#include <mutex>
 #include "platform/executable_path.h"
 
 namespace hailstone {
@@ -41,9 +43,34 @@ std::optional<BinaryMeasurement> measure_binary_file(const std::filesystem::path
     return result;
 }
 
+std::optional<BinaryMeasurement> measure_binary_file_cached(const std::filesystem::path& path) {
+    struct Seen {
+        std::uintmax_t size = 0;
+        std::filesystem::file_time_type modified{};
+        BinaryMeasurement measured;
+    };
+    static std::mutex lock;
+    static std::map<std::filesystem::path, Seen> seen;
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(path, ec);
+    if (ec) return std::nullopt;
+    const auto modified = std::filesystem::last_write_time(path, ec);
+    if (ec) return std::nullopt;
+    {
+        const std::lock_guard hold(lock);
+        if (const auto it = seen.find(path); it != seen.end() && it->second.size == size && it->second.modified == modified)
+            return it->second.measured;
+    }
+    auto measured = measure_binary_file(path);
+    const std::lock_guard hold(lock);
+    if (measured) seen[path] = {size, modified, *measured};
+    else seen.erase(path);
+    return measured;
+}
+
 std::optional<BinaryMeasurement> measure_process_executable() {
     const auto path = platform::process_executable_path();
-    return path ? measure_binary_file(*path) : std::nullopt;
+    return path ? measure_binary_file_cached(*path) : std::nullopt;
 }
 
 } // namespace hailstone

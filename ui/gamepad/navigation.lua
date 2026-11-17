@@ -38,8 +38,8 @@ local function npcFindAllowed()
 end
 
 ui.window("Find", function()
+  if not API.session.InGame() or not API.find.Open() then return end -- (before the policy: shut, it costs nothing)
   if not npcFindAllowed() then return end
-  if not API.session.InGame() or not API.find.Open() then return end
   T.frame()
   if W.begin("Find", { w = 1200, h = 860, title = "Find", subtitle = "Merchants, bankers, trainers and more in this zone",
         hints = { { "a", "Show the path" }, { "x", "Walk there" }, { "b", "Close" } } }) then

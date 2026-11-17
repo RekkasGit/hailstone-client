@@ -247,12 +247,10 @@ std::optional<MapSpawnMark> ExtensionChain::map_spawn(const net::GameConnection&
     std::optional<MapSpawnMark> out;
     const bool owned = each(c, [&](const ServerExtension& e) {
         if (!(e.map_policy(c).flags & MapPolicyCustomSpawns)) return false;
-        // Ownership suppresses every other provider even when the owner has no mark.
-        const auto still_active = [&] {
-            return each(c, [&](const ServerExtension& current) { return &current == &e; });
-        };
-        if (still_active() && map_visible(c, s, 0) && still_active()) out = e.map_spawn(c, s, defaults);
-        if (!still_active() || !map_visible(c, s, 0)) out.reset();
+        // Ownership suppresses every other provider even when the owner has no mark. Visibility was asked above;
+        // only a provider gone during its own callback drops its mark.
+        out = e.map_spawn(c, s, defaults);
+        if (!each(c, [&](const ServerExtension& current) { return &current == &e; })) out.reset();
         return true;
     });
     if (owned) return out;

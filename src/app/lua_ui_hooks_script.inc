@@ -156,8 +156,10 @@ local function wrap(original,method,context)
   if wrapped[original]==method then return original end
   local policy=describe(method)
   local function dispatcher(...)
-    if not native.live(context) then return nil end
+    -- No hook on this method (always against a stock server): the original at once, one table lookup and no call
+    -- into the client. The HUD reads Gauge and Label dozens of times a frame.
     if not methods[method] then return original(...) end
+    if not native.live(context) then return original(...) end
     if depth>=limits.depth then return original(...) end
     prune()
     local selected={}

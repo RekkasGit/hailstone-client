@@ -59,6 +59,18 @@ static_assert(HAILSTONE_CAP_READ == kCapRead && HAILSTONE_CAP_COMMANDS == kCapCo
               HAILSTONE_CAP_EXTEND == kCapExtend && HAILSTONE_CAP_LOGIN == kCapLogin && HAILSTONE_CAP_NET == kCapNet &&
               HAILSTONE_CAP_WEB == kCapWeb);
 static_assert(offsetof(HailstoneMapPolicy, revision)==72 && offsetof(HailstoneMapPolicy, context)==80 && sizeof(HailstoneMapPolicy)==88);
+// The add-on service records' sizes as released (docs/plugins.md "Server add-on services"): a field moved or added
+// anywhere but the end breaks a plugin built against an earlier header. The submission holds a pointer and a size_t.
+static_assert(sizeof(HailstoneFollowProfile) == 56 && sizeof(HailstoneMountProfile) == 8);
+static_assert(sizeof(HailstoneFollowStatus) == 24 && offsetof(HailstoneFollowStatus, target_incarnation) == 16);
+static_assert(sizeof(HailstoneBinaryMeasurement) == 56 && offsetof(HailstoneBinaryMeasurement, sha256) == 24);
+static_assert(sizeof(HailstoneMerchantSellContext) == 32);
+static_assert(sizeof(HailstoneWorldFrame) == 136 && offsetof(HailstoneWorldFrame, now_ms) == 24);
+static_assert(sizeof(HailstoneWorldAnchor) == 32 && sizeof(HailstoneWorldVertex) == 28);
+static_assert(sizeof(HailstoneWorldSurfacePatch) == 64 && sizeof(HailstoneWorldSurfacePatchResult) == 576 &&
+              offsetof(HailstoneWorldSurfacePatchResult, region_xy) == 64);
+static_assert(sizeof(HailstoneWorldReceipt) == 48);
+static_assert(sizeof(void*) != 8 || (sizeof(HailstoneWorldSubmission) == 56 && offsetof(HailstoneWorldSubmission, vertices) == 40));
 
 #if defined(_WIN32)
 constexpr const char* kExt = ".dll";
@@ -275,6 +287,7 @@ struct Loaded {
     net::AppPacket* current_packet = nullptr;
     int busy = 0;              // inside one of its callbacks
     bool unload_pending = false; // unload asked for while busy: done at the next pulse
+    bool host_threw_warned = false; // (host_threw)
     bool map_policy_running = false; // get_map_policy cannot recursively invoke its caller's policy hook
     std::uint64_t policy_generation = core::next_process_identity(), map_content_revision = 0;
     std::uint64_t lifecycle_generation = core::next_process_identity();
@@ -1493,7 +1506,7 @@ int h_measure_binary(void* h, std::uint32_t kind, HailstoneBinaryMeasurement* ou
     std::optional<BinaryMeasurement> measured;
     if (kind == HAILSTONE_BINARY_EXECUTABLE) measured = measure_process_executable();
     else if (kind == HAILSTONE_BINARY_CALLING_PLUGIN) {
-        measured = measure_binary_file(l.copy);
+        measured = measure_binary_file_cached(l.copy);
         if (measured && measured->sha256 != l.hash) return 0;
     } else return 0;
     if (!measured) return 0;
@@ -2523,6 +2536,18 @@ void off_thread(void* h) {
         log::warn("plugin {}: host function called from another thread, ignored (host functions are for the "
                   "client's thread, inside a callback)", l.name);
 }
+// A host function that threw (out of memory, a provider's exception): the log says so once per plugin.
+void host_threw(void* h) noexcept {
+    if (!h) return;
+    Loaded& l = Loaded::of(h);
+    if (!l.host_threw_warned) {
+        l.host_threw_warned = true;
+        try {
+            log::warn("plugin {}: a host function failed with an error and returned nothing", l.name);
+        } catch (...) {
+        }
+    }
+}
 template <auto F> struct MainOnly;
 template <typename R, typename... A, R (*F)(void*, A...)> struct MainOnly<F> {
     static R call(void* h, A... a) {
@@ -2535,6 +2560,8 @@ template <typename R, typename... A, R (*F)(void*, A...)> struct MainOnly<F> {
             return F(h, a...);
         } catch (...) {
             // Host allocations/provider callbacks must never unwind through a plugin's C or foreign-runtime frames.
+            // The call fails as an unanswered one does; the log says so, once per plugin.
+            host_threw(h);
             if constexpr (std::is_void_v<R>) return;
             else return R{};
         }

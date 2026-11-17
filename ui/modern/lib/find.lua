@@ -5,7 +5,7 @@
 --   local FL = dofile("lib/find.lua")
 --   FL.state             -- { search, sel (the selected NPC's id), hover (the hovered row's id), why, menu }
 --   FL.CATS              -- hs.FindCategories(): { { key, label }, ... }
---   FL.rows()            -- the rows authorized this frame, nearest first (shared: do not change it)
+--   FL.rows()            -- the rows, nearest first, read again every 0.2 s (shared: do not change it)
 --   FL.current(id, token) -- the same currently authorized actor, or nil
 --   FL.hidden()          -- the kinds left out, as a set of keys (find.hidden in ui/settings/modern.txt)
 --   FL.setHidden(key, hide)
@@ -42,6 +42,13 @@ function FL.policy()
   if not find then clearState() end
   return stock, find
 end
+-- FL.policy once a frame (ui.GetTime is the frame's) for the rows and the marks, which both maps ask several times.
+local policyTime, policyStock, policyFind
+local function framePolicy()
+  local now = ui.GetTime()
+  if now ~= policyTime then policyTime, policyStock, policyFind = now, FL.policy() end
+  return policyStock, policyFind
+end
 
 FL.CATS = API.find.Categories and API.find.Categories() or {}
 FL.SHORT = { merchant = "Merchants", banker = "Bankers", guildmaster = "Guildmasters", special = "Special",
@@ -76,14 +83,16 @@ function FL.setHidden(key, hide)
   ui.SetSetting("find.hidden", table.concat(parts, ","))
 end
 
--- Geometry may be cached by the host, but authorization is live on every Npcs read. Share only within this
--- ImGui frame; a clock-based cache could keep an NPC visible after the provider stopped admitting it.
+-- The rows are read again every ROWS_REREAD seconds, as before map policies, or at once when the zone, the search,
+-- the kinds left out or the server's map policy (FL.policy clears the cache) change. Acting on a row is checked by
+-- the client against its token then (hs.UI.find), so a row kept for a moment cannot act on a replaced NPC.
+local ROWS_REREAD = 0.2
 function FL.matches(row, id, token)
   return row ~= nil and row.id == id and row.token == token
 end
 
 function FL.rows()
-  local _, allowed = FL.policy()
+  local _, allowed = framePolicy()
   if not allowed then return NO_ROWS end
   -- a new zone: its spawn ids are its own, so the old selection would name another NPC
   local zone = select(2, API.map.ZoneName()) or ""
@@ -92,9 +101,10 @@ function FL.rows()
     FIND_STATE.zone = zone
   end
   local hidden = FL.hidden()
-  local frame = type(ui.GetFrameCount) == "function" and ui.GetFrameCount() or nil
+  local now = ui.GetTime()
   local c = FIND_STATE.rowsCache
-  if frame ~= nil and c and c.frame == frame and c.zone == zone and c.search == FIND_STATE.search and c.hidden == hiddenRaw then
+  if c and c.zone == zone and c.search == FIND_STATE.search and c.hidden == hiddenRaw
+      and now - c.at < ROWS_REREAD and now >= c.at then
     return c.rows
   end
   local out, byId = {}, {}
@@ -113,7 +123,7 @@ function FL.rows()
     if FL.matches(current, menu.id, menu.token) then FIND_STATE.menu = current
     else FIND_STATE.menu, FIND_STATE.why = nil, nil end
   end
-  FIND_STATE.rowsCache = { zone = zone, search = FIND_STATE.search, hidden = hiddenRaw, frame = frame, rows = out }
+  FIND_STATE.rowsCache = { zone = zone, search = FIND_STATE.search, hidden = hiddenRaw, at = now, rows = out }
   return out
 end
 
@@ -122,7 +132,7 @@ function FL.current(id, token)
   for _, row in ipairs(FL.rows()) do if FL.matches(row, id, token) then return row end end
 end
 
-function FL.marks() return FL.policy() and ui.GetSetting("map.npcMarks") == "1" end
+function FL.marks() return framePolicy() and ui.GetSetting("map.npcMarks") == "1" end
 
 function FL.drawMark(sx, sy, r, s, lit, label, T)
   local col = FL.COLORS[r.category] or FL.COLORS.poi

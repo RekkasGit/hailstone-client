@@ -835,6 +835,9 @@ public:
     bool find_spawn(std::uint32_t spawn_id);
     bool npc_find_enabled() const;
     bool npc_find_allowed(std::uint32_t spawn_id) const;
+    // npc_find_allowed for one row of many, the map policy already read (npc_find_enabled) by the caller for them
+    // all: an NPC that is not a corpse and that every server extension lets Find show.
+    bool npc_find_visible(std::uint32_t spawn_id) const;
     // PlayerPath_FindMapLocation (MapViewMap::HandleRButtonDown): the path to a point of the map, world coordinates
     // at the player's height.
     void find_map_location(const glm::vec3& at);
