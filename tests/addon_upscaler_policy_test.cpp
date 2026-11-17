@@ -25,7 +25,7 @@ InstalledAddon upscaler_record(const std::filesystem::path& folder) {
 TEST_CASE("server add-on upscalers: legacy servers do not govern providers") {
     plugin::AddonRules rules;
     rules.default_allow = false;
-    rules.block = {"xess"};
+    rules.block = {"owner/hailstone-xess"};
     CHECK(addon_upscaler_problem(rules, {}, "xess", {}).empty());
 }
 
@@ -64,17 +64,21 @@ TEST_CASE("server add-on upscalers: blocks win and required providers need a res
     rules.required = {"owner/hailstone-xess"};
     CHECK(addon_upscaler_problem(rules, registry, "", {}).find("Select it") != std::string::npos);
     CHECK(addon_upscaler_problem(rules, registry, "XESS", dir.path()).empty());
-    rules.block = {"xess"};
+    rules.required.clear();
+    rules.block = {"owner/hailstone-xess"};
     CHECK(addon_upscaler_problem(rules, registry, "xess", dir.path()).find("does not allow") != std::string::npos);
     rules.error = "conflicting add-on rules";
     CHECK(addon_upscaler_problem(rules, registry, "xess", dir.path()) == rules.error);
 }
 
-TEST_CASE("server add-on upscalers: named exclusions allow other manual providers") {
+TEST_CASE("server add-on upscalers: a hand-put provider has no repository for a list to name") {
     plugin::AddonRules rules;
     rules.enabled = true;
-    rules.block = {"excluded"};
-    CHECK(addon_upscaler_problem(rules, {}, "another", {}).empty());
-    CHECK_FALSE(addon_upscaler_problem(rules, {}, "excluded", {}).empty());
+    rules.block = {"owner/excluded"};
+    CHECK(addon_upscaler_problem(rules, {}, "excluded", {}).empty());
     CHECK(addon_upscaler_problem(rules, {}, "", {}).empty()); // built-in rendering stays available
+    rules.default_allow = false;
+    rules.allow = {"owner/excluded"};
+    CHECK(addon_upscaler_problem(rules, {}, "excluded", {}).find("does not allow") != std::string::npos);
+    CHECK(addon_upscaler_problem(rules, {}, "", {}).empty());
 }

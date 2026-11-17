@@ -58,7 +58,7 @@ std::string addon_upscaler_problem(const plugin::AddonRules& rules, const AddonR
             return std::format("The running upscaler '{}' has an unreadable add-on record. Reinstall it and restart "
                                "Hailstone before joining this server.", active_name);
         const std::string_view source = active ? std::string_view(active->source) : std::string_view{};
-        if (!plugin::addon_allowed(rules, active_name, source) || (!rules.default_allow && !active))
+        if (!plugin::addon_allowed(rules, source) || (!rules.default_allow && !active))
             return std::format("This server does not allow the active upscaler '{}'. Choose an allowed upscaler "
                                "or a built-in option in Graphics, then restart Hailstone before joining.", active_name);
         if (active && !loaded_files_match(*active, loaded_folder))
@@ -66,7 +66,7 @@ std::string addon_upscaler_problem(const plugin::AddonRules& rules, const AddonR
                                "needed, then restart Hailstone before joining this server.", active_name);
     }
     for (const auto& addon : registry.addons) {
-        if (addon.kind != AddonKind::Upscaler || !plugin::addon_required(rules, addon.name, addon.source)) continue;
+        if (addon.kind != AddonKind::Upscaler || !plugin::addon_required(rules, addon.source)) continue;
         if (!iequals(addon.name, active_name))
             return std::format("This server requires the '{}' upscaler to run. Select it in Graphics and restart "
                                "Hailstone before joining.", addon.name);

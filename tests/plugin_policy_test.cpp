@@ -1,6 +1,7 @@
 // plugin/policy.h: the server's rules from its hailstone.cfg, and net/settings_packets.h.
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -340,12 +341,12 @@ TEST_CASE("add-on rules: enforcement is opt-in and suggestions keep their meanin
     using namespace plugin;
     const auto legacy = parse_server_cfg("[scripts]\nplayer = on\nplayer_caps = read,ui\n");
     const auto dormant = parse_server_cfg("[scripts]\nplayer = on\nplayer_caps = read,ui\n"
-                                          "[addons]\ndefault = deny\nrequired = owner/needed\nblock = mine\n"
+                                          "[addons]\ndefault = deny\nrequired = owner/needed\nblock = owner/mine\n"
                                           "suggest = Owner/Helpful, https://github.com/Owner/Other\n");
     CHECK_FALSE(dormant.addons.enabled);
     CHECK(dormant.addons.error.empty());
-    CHECK(addon_allowed(dormant.addons, "mine"));
-    CHECK_FALSE(addon_required(dormant.addons, "needed", "owner/needed"));
+    CHECK(addon_allowed(dormant.addons, "owner/mine"));
+    CHECK_FALSE(addon_required(dormant.addons, "owner/needed"));
     CHECK(dormant.suggest_addons == std::vector<std::string>{"owner/helpful", "owner/other"});
     Policy p;
     const auto hash = sha256(std::string_view("untracked script"));
@@ -357,39 +358,61 @@ TEST_CASE("add-on rules: enforcement is opt-in and suggestions keep their meanin
     const auto off = parse_server_cfg("[addons]\nenforce = off\ndefault = broken\nallow = *\n");
     CHECK_FALSE(off.addons.enabled);
     CHECK(off.addons.error.empty());
-    CHECK(addon_allowed(off.addons, "anything"));
+    CHECK(addon_allowed(off.addons, "owner/anything"));
 }
 
-TEST_CASE("add-on rules: names and repository URLs normalize without binding a release or branch") {
+TEST_CASE("add-on rules: identities are GitHub repositories, without a release or branch") {
     using namespace plugin;
     std::vector<std::string> warnings;
     const auto r = parse_server_cfg("[addons]\nEnforce = ON\nDefault = DENY\n"
-                                    "Required = Required_Name, https://GitHub.com/Owner/Required.git/\n"
-                                    "Allow = Optional, Owner/Optional, OPTIONAL\nBlock = Forbidden\n", &warnings);
+                                    "Required = https://GitHub.com/Owner/Required.git/\n"
+                                    "Allow = Owner/Optional, OWNER/OPTIONAL\nBlock = owner/forbidden\n", &warnings);
     CHECK(warnings.empty());
     CHECK(r.addons.enabled);
     CHECK_FALSE(r.addons.default_allow);
     CHECK(r.addons.error.empty());
-    CHECK(r.addons.required == std::vector<std::string>{"required_name", "owner/required"});
-    CHECK(r.addons.allow == std::vector<std::string>{"optional", "owner/optional"});
-    CHECK(addon_identity_matches("REQUIRED_NAME", "Required_Name", "somebody/else"));
-    CHECK(addon_identity_matches("OWNER/REQUIRED", "different_name", "owner/required@v2.0"));
-    CHECK(addon_identity_matches("owner/required", "different_name", "https://github.com/OWNER/Required/tree/main"));
-    CHECK(addon_identity_matches("Owner/Required.git", "different_name", "owner/required@v2"));
-    CHECK_FALSE(addon_identity_matches("owner/required", "required", "another/required"));
-    CHECK_FALSE(addon_identity_matches("owner/required", "required"));
-    CHECK(addon_allowed(r.addons, "Required_Name"));
-    CHECK(addon_allowed(r.addons, "another_name", "Owner/Required#next"));
-    CHECK(addon_allowed(r.addons, "Optional"));
-    CHECK(addon_allowed(r.addons, "other_name", "owner/optional@v1"));
-    CHECK_FALSE(addon_allowed(r.addons, "anything_else"));
-    CHECK_FALSE(normalize_addon_identity("*"));
-    CHECK_FALSE(normalize_addon_identity("../optional"));
-    CHECK_FALSE(normalize_addon_identity("https://example.org/owner/optional"));
+    CHECK(r.addons.required == std::vector<std::string>{"owner/required"});
+    CHECK(r.addons.allow == std::vector<std::string>{"owner/optional"});
+    CHECK(r.addons.block == std::vector<std::string>{"owner/forbidden"});
+    CHECK(addon_identity_matches("OWNER/REQUIRED", "owner/required@v2.0"));
+    CHECK(addon_identity_matches("owner/required", "https://github.com/OWNER/Required/tree/main"));
+    CHECK(addon_identity_matches("Owner/Required.git", "owner/required@v2"));
+    CHECK_FALSE(addon_identity_matches("owner/required", "another/required"));
+    CHECK_FALSE(addon_identity_matches("owner/required", ""));
+    CHECK_FALSE(addon_identity_matches("required", "required"));
+    CHECK(addon_allowed(r.addons, "Owner/Required#next"));
+    CHECK(addon_allowed(r.addons, "owner/optional@v1"));
+    CHECK_FALSE(addon_allowed(r.addons, "owner/forbidden"));
+    CHECK_FALSE(addon_allowed(r.addons, "owner/anything_else"));
+    CHECK_FALSE(addon_allowed(r.addons, "")); // a hand-installed add-on has no identity to allow
+    CHECK(addon_identity("owner/Required@v1") == "owner/required");
+    CHECK(addon_identity("").empty());
+    for (const char* bad : {"*", "helper", "Required_Name", "../optional", "https://example.org/owner/optional"}) {
+        CAPTURE(bad);
+        CHECK_FALSE(normalize_addon_identity(bad));
+    }
 
     const auto open = parse_server_cfg("[addons]\nenforce = on\n");
     CHECK(open.addons.default_allow);
-    CHECK(addon_allowed(open.addons, "anything_else"));
+    CHECK(addon_allowed(open.addons, "owner/anything_else"));
+    CHECK(addon_allowed(open.addons, ""));
+}
+
+TEST_CASE("add-on rules: a bare name is refused with a message for the server owner") {
+    using namespace plugin;
+    for (const char* key : {"required", "allow", "block"}) {
+        CAPTURE(key);
+        std::vector<std::string> warnings;
+        const auto r = parse_server_cfg(std::string("[addons]\nenforce = on\n") + key + " = owner/fine, helper\n",
+                                        &warnings);
+        CHECK(r.addons.enabled);
+        CHECK(r.addons.error.find("\"helper\" is a bare name") != std::string::npos);
+        CHECK(r.addons.error.find("owner/repo") != std::string::npos);
+        REQUIRE(warnings.size() == 1);
+        CHECK(warnings[0] == r.addons.error);
+        for (const auto* list : {&r.addons.required, &r.addons.allow, &r.addons.block})
+            CHECK(std::find(list->begin(), list->end(), "helper") == list->end());
+    }
 }
 
 TEST_CASE("add-on rules: malformed enabled policies fail closed and a required block is an error") {
@@ -398,8 +421,9 @@ TEST_CASE("add-on rules: malformed enabled policies fail closed and a required b
         "[addons]\nenforce = maybe\n",
         "[addons]\nenforce = on\ndefault = denny\n",
         "[addons]\nenforce = on\nallow = *\n",
-        "[addons]\nenforce = on\nrequired = owner/repo,,other\n",
-        "[addons]\nenforce = on\nallow = optional,\n",
+        "[addons]\nenforce = on\nallow = optional\n",
+        "[addons]\nenforce = on\nrequired = owner/repo,,owner/other\n",
+        "[addons]\nenforce = on\nallow = owner/optional,\n",
         "[addons]\nenforce = on\nrequire = owner/repo\n",
         "[addons]\nenforce = on\ndefault deny\n",
         "[addons\nenforce = on\n",
@@ -412,19 +436,18 @@ TEST_CASE("add-on rules: malformed enabled policies fail closed and a required b
         CHECK(r.addons.enabled);
         CHECK_FALSE(r.addons.error.empty());
         CHECK_FALSE(warnings.empty());
-        CHECK_FALSE(addon_allowed(r.addons, "anything", "owner/repo"));
+        CHECK_FALSE(addon_allowed(r.addons, "owner/repo"));
+        CHECK_FALSE(addon_allowed(r.addons, ""));
+        const auto installed = sha256(std::string_view("installed plugin"));
         const auto server = sha256(std::string_view("server plugin"));
         r.server_files.push_back({FileKind::Plugin, "plugins/anything.dll", server});
         Policy p;
+        p.set_ceilings({{FileKind::Plugin, installed, kCapAll, "repo", "owner/repo"}});
         p.set(r);
-        CHECK(p.caps(FileKind::Plugin, server) == 0);
-        CHECK_FALSE(p.required_file(FileKind::Plugin, server));
+        CHECK(p.caps(FileKind::Plugin, installed) == 0);
+        CHECK_FALSE(p.required_file(FileKind::Plugin, installed));
+        CHECK(p.caps(FileKind::Plugin, server) == kCapAll); // the server's own files are not add-ons
     }
-
-    auto conflict = parse_server_cfg("[addons]\nenforce = on\nrequired = owner/repo\nblock = actual_name\n");
-    CHECK(conflict.addons.error.empty()); // name/repository overlap becomes known only with the manifest
-    CHECK(addon_required(conflict.addons, "actual_name", "owner/repo"));
-    CHECK_FALSE(addon_allowed(conflict.addons, "actual_name", "owner/repo"));
 }
 
 TEST_CASE("Policy: required and allowed add-ons are identified by every registered file hash") {
@@ -436,9 +459,9 @@ TEST_CASE("Policy: required and allowed add-ons are identified by every register
     Policy p;
     p.set_ceilings({{FileKind::Script, entry, kCapRead | kCapUi, "needed", "owner/needed@v1"},
                     {FileKind::Script, module, kCapRead | kCapUi, "needed", "owner/needed@v1"},
-                    {FileKind::Plugin, optional, kCapRead, "optional", "owner/optional"}});
+                    {FileKind::Plugin, optional, kCapRead, "optional", "https://github.com/Owner/Optional"}});
     auto r = parse_server_cfg("[scripts]\nplayer = on\n[plugins]\nplayer = on\n"
-                              "[addons]\nenforce = on\ndefault = deny\nrequired = owner/needed\nallow = optional\n");
+                              "[addons]\nenforce = on\ndefault = deny\nrequired = owner/needed\nallow = owner/optional\n");
     p.set(r);
     CHECK(p.caps(FileKind::Script, entry, "renamed") == (kCapRead | kCapUi));
     CHECK(p.caps(FileKind::Script, module) == (kCapRead | kCapUi));
@@ -467,7 +490,7 @@ TEST_CASE("Policy: shared bytes obey all add-on identities and explicit blocks w
     Policy p;
     p.set_ceilings({{FileKind::Script, shared, kCapRead | kCapUi, "needed", "owner/needed"},
                     {FileKind::Script, shared, kCapRead | kCapChat, "other", "owner/other"}});
-    auto r = parse_server_cfg("[scripts]\nplayer = on\n[addons]\nenforce = on\ndefault = deny\nrequired = needed\n");
+    auto r = parse_server_cfg("[scripts]\nplayer = on\n[addons]\nenforce = on\ndefault = deny\nrequired = owner/needed\n");
     p.set(r);
     CHECK(p.caps(FileKind::Script, shared) == 0);
     CHECK(p.required_file(FileKind::Script, shared)); // a refused requirement must still prevent joining
@@ -475,51 +498,46 @@ TEST_CASE("Policy: shared bytes obey all add-on identities and explicit blocks w
     p.set(r);
     CHECK(p.caps(FileKind::Script, shared) == kCapRead);
     CHECK(p.required_file(FileKind::Script, shared));
-    r.addons.block.push_back("blocked_alias");
-    p.set(r);
-    CHECK(p.caps(FileKind::Script, shared, "blocked_alias") == 0);
+    r.addons.allow.clear();
     r.addons.block.push_back("owner/other");
     p.set(r);
     CHECK(p.caps(FileKind::Script, shared) == 0);
     CHECK(p.required_file(FileKind::Script, shared));
 
-    // Under default allow, hand-installed content is still blocked by its runtime name.
+    // Under default allow, other bytes running under a blocked add-on's name are still refused.
     r.addons.default_allow = true;
     p.set(r);
     const auto manual = sha256(std::string_view("hand installed"));
-    CHECK(p.caps(FileKind::Script, manual, "blocked_alias") == 0);
+    CHECK(p.caps(FileKind::Script, manual, "Other") == 0);
     CHECK(p.caps(FileKind::Script, manual, "another_alias") == kCapAll);
 }
 
-TEST_CASE("Policy: server-owned files have identities inferred from their trusted paths") {
+TEST_CASE("Policy: the server's own files are never named, required or refused by add-on rules") {
     using namespace plugin;
     const auto script = sha256(std::string_view("server script"));
-    const auto nested = sha256(std::string_view("server helper"));
     const auto plugin_hash = sha256(std::string_view("server plugin"));
-    const auto unknown = sha256(std::string_view("other server plugin"));
-    auto r = parse_server_cfg("[addons]\nenforce = on\ndefault = deny\nrequired = needed\nallow = approved\n");
+    auto r = parse_server_cfg("[addons]\nenforce = on\ndefault = deny\nrequired = owner/needed\n");
     r.server_files = {{FileKind::Script, "scripts/needed.lua", script},
-                      {FileKind::Script, "scripts/needed/lib/helper.lua", nested},
-                      {FileKind::Plugin, "plugins/bundle/libapproved.so", plugin_hash},
-                      {FileKind::Plugin, "plugins/unknown/unknown.dll", unknown}};
+                      {FileKind::Plugin, "plugins/needed/needed.dll", plugin_hash}};
     Policy p;
     p.set(r);
     CHECK(p.caps(FileKind::Script, script) == kCapAll);
-    CHECK(p.caps(FileKind::Script, nested) == kCapAll);
     CHECK(p.caps(FileKind::Plugin, plugin_hash) == kCapAll);
-    CHECK(p.caps(FileKind::Plugin, unknown) == 0);
-    CHECK(p.required_file(FileKind::Script, script));
-    CHECK(p.required_file(FileKind::Script, nested));
-    CHECK_FALSE(p.required_file(FileKind::Plugin, plugin_hash));
-    r.addons.block.push_back("needed");
+    CHECK_FALSE(p.required_file(FileKind::Script, script));
+    CHECK(p.required_entries(FileKind::Script).empty());
+    CHECK(p.required_entries(FileKind::Plugin).empty());
+    r.addons.block = {"owner/needed"};
+    r.addons.required.clear();
     p.set(r);
-    CHECK(p.caps(FileKind::Script, script) == 0);
-    CHECK(p.required_file(FileKind::Script, script));
+    CHECK(p.caps(FileKind::Script, script, "needed") == kCapAll);
+    r.addons.error = "broken";
+    p.set(r);
+    CHECK(p.caps(FileKind::Plugin, plugin_hash) == kCapAll);
 
     // An installed add-on's registered source also identifies the same bytes supplied by a server.
     r.addons.block.clear();
+    r.addons.error.clear();
     r.addons.required = {"owner/approved"};
-    r.addons.allow.clear();
     p.set_ceilings({{FileKind::Plugin, plugin_hash, kCapRead, "approved", "owner/approved"}});
     p.set(r);
     CHECK(p.caps(FileKind::Plugin, plugin_hash) == kCapAll); // server-owned capabilities are preserved
@@ -531,7 +549,7 @@ TEST_CASE("Policy: opted-in identity checks preserve provisional login capabilit
     const auto entry = sha256(std::string_view("required script"));
     Policy p;
     p.set_ceilings({{FileKind::Script, entry, kCapRead | kCapUi, "needed", "owner/needed"}});
-    auto r = parse_server_cfg("[scripts]\nplayer = on\n[addons]\nenforce = on\ndefault = deny\nrequired = needed\n");
+    auto r = parse_server_cfg("[scripts]\nplayer = on\n[addons]\nenforce = on\ndefault = deny\nrequired = owner/needed\n");
     r.provisional = true;
     p.set(r);
     CHECK(p.caps(FileKind::Script, entry) == 0);
@@ -577,33 +595,23 @@ TEST_CASE("Policy: required entrypoints remain expected when absent shadowed or 
     const auto helper = sha256(std::string_view("required helper.lua"));
     const auto changed = sha256(std::string_view("edited init.lua"));
     const auto shadow = sha256(std::string_view("server's different init.lua"));
-    const auto server = sha256(std::string_view("server owned script"));
-    const auto native = sha256(std::string_view("server owned native plugin"));
     Policy p;
-    p.set_ceilings({{FileKind::Script, entry, kCapRead, "needed", "owner/needed", true, true},
-                    {FileKind::Script, entry, kCapRead, "needed", "owner/needed", true, true},
-                    {FileKind::Script, helper, kCapRead, "needed", "owner/needed", true, false},
-                    {FileKind::Script, changed, 0, "needed", "owner/needed", false, true}});
-    auto r = parse_server_cfg("[addons]\nenforce = on\ndefault = deny\nrequired = owner/needed, server_owned\n"
-                              "block = needed\n");
-    r.server_files = {{FileKind::Script, "scripts/needed/init.lua", shadow},
-                      {FileKind::Script, "scripts/server_owned.lua", server},
-                      {FileKind::Script, "scripts/server_owned/helper.lua", helper},
-                      {FileKind::Plugin, "plugins/bundle/libserver_owned.so", native}};
+    p.set_ceilings({{FileKind::Script, entry, kCapRead, "Needed", "owner/needed", true, true},
+                    {FileKind::Script, entry, kCapRead, "Needed", "owner/needed", true, true},
+                    {FileKind::Script, entry, kCapRead, "blocked", "owner/blocked", true, true},
+                    {FileKind::Script, helper, kCapRead, "Needed", "owner/needed", true, false},
+                    {FileKind::Script, changed, 0, "Needed", "owner/needed", false, true}});
+    auto r = parse_server_cfg("[addons]\nenforce = on\ndefault = deny\nrequired = owner/needed\nblock = owner/blocked\n");
+    r.server_files = {{FileKind::Script, "scripts/needed/init.lua", shadow}};
     p.set(r);
     const auto scripts = p.required_entries(FileKind::Script);
-    REQUIRE(scripts.size() == 2);
+    REQUIRE(scripts.size() == 1);
     CHECK(scripts[0].first == "needed");
     CHECK(scripts[0].second == entry); // the shadowing server file cannot satisfy a repository requirement
-    CHECK(scripts[1].first == "server_owned");
-    CHECK(scripts[1].second == server);
     CHECK(p.caps(FileKind::Script, entry, "needed") == 0); // denied requirements remain expected
     CHECK(p.required_file(FileKind::Script, entry));
     CHECK(p.required_file(FileKind::Script, helper)); // modules retain restrictions but are not autostarted
-    const auto plugins = p.required_entries(FileKind::Plugin);
-    REQUIRE(plugins.size() == 1);
-    CHECK(plugins[0].first == "server_owned");
-    CHECK(plugins[0].second == native);
+    CHECK(p.required_entries(FileKind::Plugin).empty());
     r.addons.enabled = false;
     p.set(r);
     CHECK(p.required_entries(FileKind::Script).empty());

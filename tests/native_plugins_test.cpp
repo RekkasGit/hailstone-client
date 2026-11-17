@@ -505,10 +505,12 @@ TEST_CASE("native plugins: required managed plugins autoload with consent and st
     CHECK(h.plugins->required_addons_ready());
 }
 
-TEST_CASE("native plugins: named blocks apply to hand-installed plugins") {
+TEST_CASE("native plugins: blocks name an installed plugin by its repository, not a hand-installed one") {
     Host h;
     h.policy.set(plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\ndefault = allow\n"
-                                          "block = MQ2Example\n"));
+                                          "block = owner/example\n"));
+    CHECK(h.plugins->list().front().caps != 0); // put in by hand: no repository for a list to name
+    h.policy.set_ceilings({{plugin::FileKind::Plugin, h.hash(), plugin::kCapAll, "MQ2Example", "owner/example"}});
     CHECK(h.plugins->list().front().caps == 0);
     CHECK_FALSE(h.plugins->load("mq2example"));
     CHECK_FALSE(h.plugins->loaded("MQ2Example"));
@@ -536,7 +538,8 @@ TEST_CASE("native plugins: missing or shadowed required libraries cannot disappe
     fs::create_directories(profile / "plugins");
     h.plugins->set_server_dir(profile / "plugins");
     auto rules = plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\ndefault = deny\n"
-                                          "required = owner/example\nallow = MQ2Example\n");
+                                          "required = owner/example\n");
+    REQUIRE(rules.addons.error.empty());
     h.policy.set_ceilings({{plugin::FileKind::Plugin, expected, plugin::kCapAll, "MQ2Example", "owner/example"}});
     SUBCASE("the managed library is missing") {
         fs::remove(h.file);
@@ -562,7 +565,7 @@ TEST_CASE("native plugins: dismissing required consent reports a failure instead
     const fs::path profile = h.world.dir / "servers" / "required";
     fs::create_directories(profile / "plugins");
     h.plugins->set_server_dir(profile / "plugins");
-    auto rules = plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\nrequired = MQ2Example\n");
+    auto rules = plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\nrequired = owner/example\n");
     h.policy.set_ceilings({{plugin::FileKind::Plugin, h.hash(), plugin::kCapAll, "MQ2Example", "owner/example"}});
     h.policy.set(rules);
     h.plugins->policy_changed({});
@@ -579,7 +582,7 @@ TEST_CASE("native plugins: a required plugin initialization failure prevents rea
     const fs::path profile = h.world.dir / "servers" / "required";
     fs::create_directories(profile / "plugins");
     h.plugins->set_server_dir(profile / "plugins");
-    auto rules = plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\nrequired = HostProbeThrow\n");
+    auto rules = plugin::parse_server_cfg("[plugins]\nplayer = on\n[addons]\nenforce = on\nrequired = owner/throw\n");
     h.policy.set_ceilings({{plugin::FileKind::Plugin, h.hash(), plugin::kCapAll, "HostProbeThrow", "owner/throw"}});
     h.policy.set(rules);
     h.plugins->policy_changed({});

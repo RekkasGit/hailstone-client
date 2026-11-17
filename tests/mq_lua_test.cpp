@@ -352,7 +352,7 @@ TEST_CASE("MQ Lua: required script startup failures prevent readiness") {
     const std::string text = "error('required startup failed')\n";
     h.write("needed/init.lua", text);
     h.policy.set_ceilings({{plugin::FileKind::Script, sha256(text), plugin::kCapRead, "needed", "owner/needed"}});
-    h.policy.set(plugin::parse_server_cfg("[scripts]\nplayer = on\n[addons]\nenforce = on\nrequired = needed\n"));
+    h.policy.set(plugin::parse_server_cfg("[scripts]\nplayer = on\n[addons]\nenforce = on\nrequired = owner/needed\n"));
     h.scripts->policy_changed();
     h.pulses(1);
     std::string problem;
@@ -381,7 +381,8 @@ TEST_CASE("MQ Lua: missing or shadowed required entry points cannot disappear fr
     h.write("needed/init.lua", text);
     h.policy.set_ceilings({{plugin::FileKind::Script, sha256(text), plugin::kCapRead, "needed", "owner/needed"}});
     auto rules = plugin::parse_server_cfg("[scripts]\nplayer = on\n[addons]\nenforce = on\ndefault = deny\n"
-                                          "required = owner/needed\nallow = needed\n");
+                                          "required = owner/needed\n");
+    REQUIRE(rules.addons.error.empty());
     SUBCASE("the managed entry is missing") {
         fs::remove(h.lua_dir / "needed/init.lua");
     }
@@ -401,17 +402,20 @@ TEST_CASE("MQ Lua: missing or shadowed required entry points cannot disappear fr
     CHECK_FALSE(problem.empty());
 }
 
-TEST_CASE("MQ Lua: named blocks apply to hand-installed scripts and already-loaded modules") {
+TEST_CASE("MQ Lua: blocks apply to an installed add-on's entry, its paths and already-loaded modules") {
     Host h;
-    h.write("blocked/init.lua", "print('blocked entry')\n");
-    h.write("blocked/helper.lua", "return {value = 42}\n");
+    const std::string entry = "print('blocked entry')\n", helper = "return {value = 42}\n";
+    h.write("blocked/init.lua", entry);
+    h.write("blocked/helper.lua", helper);
+    h.policy.set_ceilings({{plugin::FileKind::Script, sha256(entry), plugin::kCapAll, "blocked", "owner/blocked"},
+                          {plugin::FileKind::Script, sha256(helper), plugin::kCapAll, "blocked", "owner/blocked"}});
     h.write("main.lua", "local helper = require('blocked.helper') while true do require('mq').delay(10) end\n");
     auto rules = plugin::parse_server_cfg("[scripts]\nplayer = on\n[addons]\nenforce = on\ndefault = allow\n");
     h.policy.set(rules);
     REQUIRE(h.scripts->run("main", {}));
     h.pulses(1);
     REQUIRE(h.scripts->running("main"));
-    rules.addons.block = {"blocked"};
+    rules.addons.block = {"owner/blocked"};
     h.policy.set(rules);
     std::string problem;
     CHECK_FALSE(h.scripts->required_addons_ready(&problem)); // before policy_changed retires the loaded module

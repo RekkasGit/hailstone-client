@@ -18,8 +18,7 @@ struct RequiredAddonCandidate {
     std::string name, source;
     AddonKind kind = AddonKind::Script;
     std::uint32_t caps = 0;
-    bool intact = false; // readable registry and every shipped file unchanged, or the server's verified entry
-    bool server_owned = false;
+    bool intact = false; // readable registry and every shipped file unchanged
     plugin::Consent consent = plugin::Consent::Unasked;
 };
 
@@ -27,10 +26,6 @@ struct AddonRequirementProblem {
     std::string identity;
     std::string message;
 };
-
-// Only names/paths used for matching are case-folded; opening a listed file retains its actual case.
-std::vector<RequiredAddonCandidate> server_addon_requirement_candidates(
-    const plugin::Rules& rules, std::string_view platform, bool verify_files = true);
 
 // Unasked native-code consent is handled by the existing prompt after connecting. A refusal blocks joining.
 // Upscaler selection and activation are checked separately against the provider loaded at process startup.

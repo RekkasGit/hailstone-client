@@ -10,7 +10,7 @@
 #include <thread>
 #include <utility>
 
-#include "core/addon_manifest.h"
+#include "core/ascii_case.h"
 #include "core/addon_source.h"
 #include "core/ini_file.h"
 #include "core/log.h"
@@ -216,53 +216,23 @@ bool known_caps(std::string_view text) {
     return true;
 }
 
-bool identity_in(const std::vector<std::string>& identities, std::string_view name, std::string_view source) {
-    return std::any_of(identities.begin(), identities.end(), [&](const std::string& identity) {
-        return addon_identity_matches(identity, name, source);
-    });
+// `identity` in normalize_addon_identity's form ("" for none: it is in no list). The lists hold that form too.
+bool identity_in(const std::vector<std::string>& identities, std::string_view identity) {
+    return !identity.empty() && std::find(identities.begin(), identities.end(), identity) != identities.end();
 }
 
-std::string server_addon_name(const ServerFile& file) {
-    std::string path = lower(file.path);
-    std::replace(path.begin(), path.end(), '\\', '/');
-    const std::string_view prefix = file.kind == FileKind::Script ? "scripts/" : "plugins/";
-    if (!path.starts_with(prefix)) return {};
-    std::string name = path.substr(prefix.size());
-    const std::size_t last_slash = name.rfind('/');
-    const std::string_view filename = std::string_view(name).substr(last_slash == std::string::npos ? 0 : last_slash + 1);
-    const bool library = file.kind == FileKind::Plugin &&
-                         (filename.ends_with(".so") || filename.ends_with(".dll") || filename.ends_with(".dylib"));
-    if (library) {
-        name = std::string(filename);
-        name.resize(name.rfind('.'));
-        if (name.size() > 3 && name.starts_with("lib")) name.erase(0, 3);
-        return addon_name_ok(name) ? name : std::string();
-    }
-    const std::size_t slash = name.find('/');
-    if (slash != std::string::npos) name.resize(slash);
-    else {
-        const std::size_t dot = name.rfind('.');
-        if (dot != std::string::npos) name.resize(dot);
-    }
-    return addon_name_ok(name) ? name : std::string();
-}
-
-bool server_addon_entry(const ServerFile& file) {
-    std::string path = lower(file.path);
-    std::replace(path.begin(), path.end(), '\\', '/');
-    if (file.kind == FileKind::Plugin)
-        return path.ends_with(".so") || path.ends_with(".dll") || path.ends_with(".dylib");
-    if (!path.starts_with("scripts/")) return false;
-    const std::string_view rest = std::string_view(path).substr(8);
-    const std::size_t slash = rest.find('/');
-    return slash == std::string_view::npos ? rest.ends_with(".lua") : rest.substr(slash + 1) == "init.lua";
+bool allowed_identity(const AddonRules& rules, std::string_view identity) {
+    if (!rules.enabled) return true;
+    if (!rules.error.empty() || identity_in(rules.block, identity)) return false;
+    return identity_in(rules.required, identity) || identity_in(rules.allow, identity) || rules.default_allow;
 }
 
 } // namespace
 
 std::optional<std::string> normalize_addon_identity(std::string_view identity) {
+    // A GitHub repository only: a bare manifest name ("dpsmeter") would be satisfied by any package of that name.
     std::string normalized = lower(trim(identity));
-    if (addon_name_ok(normalized)) return normalized;
+    if (normalized.find('/') == std::string::npos) return std::nullopt;
     if (auto source = parse_addon_link(normalized)) {
         if (source->repo.size() > 4 && source->repo.ends_with(".git")) source->repo.resize(source->repo.size() - 4);
         return lower(source->owner + "/" + source->repo);
@@ -270,22 +240,23 @@ std::optional<std::string> normalize_addon_identity(std::string_view identity) {
     return std::nullopt;
 }
 
-bool addon_identity_matches(std::string_view identity, std::string_view name, std::string_view source) {
+std::string addon_identity(std::string_view source) {
+    auto normalized = normalize_addon_identity(source);
+    return normalized ? std::move(*normalized) : std::string();
+}
+
+bool addon_identity_matches(std::string_view identity, std::string_view source) {
     const auto normalized = normalize_addon_identity(identity);
-    if (!normalized) return false;
-    if (normalized->find('/') == std::string::npos) return *normalized == lower(trim(name));
-    const auto repository = normalize_addon_identity(source);
-    return repository && *normalized == *repository;
+    return normalized && *normalized == addon_identity(source);
 }
 
-bool addon_required(const AddonRules& rules, std::string_view name, std::string_view source) {
-    return rules.enabled && identity_in(rules.required, name, source);
+bool addon_required(const AddonRules& rules, std::string_view source) {
+    // An invalid policy refuses every add-on; it requires none (nothing is started or kept for it).
+    return rules.enabled && rules.error.empty() && identity_in(rules.required, addon_identity(source));
 }
 
-bool addon_allowed(const AddonRules& rules, std::string_view name, std::string_view source) {
-    if (!rules.enabled) return true;
-    if (!rules.error.empty() || identity_in(rules.block, name, source)) return false;
-    return identity_in(rules.required, name, source) || identity_in(rules.allow, name, source) || rules.default_allow;
+bool addon_allowed(const AddonRules& rules, std::string_view source) {
+    return allowed_identity(rules, addon_identity(source));
 }
 
 Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings) {
@@ -437,7 +408,10 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
                         if (auto identity = normalize_addon_identity(item)) {
                             if (std::find(identities.begin(), identities.end(), *identity) == identities.end())
                                 identities.push_back(std::move(*identity));
-                        } else invalid_addons(std::format("{}: \"{}\" is not an add-on name or GitHub repository", where, item));
+                        } else if (!item.empty() && item.find('/') == std::string_view::npos) {
+                            invalid_addons(std::format("{}: \"{}\" is a bare name; add-ons are named by their GitHub "
+                                                       "repository (owner/repo)", where, item));
+                        } else invalid_addons(std::format("{}: \"{}\" is not a GitHub repository (owner/repo)", where, item));
                         if (comma == std::string_view::npos) break;
                         rest.remove_prefix(comma + 1);
                         if (trim(rest).empty()) invalid_addons(where + ": an empty add-on identity follows ','");
@@ -520,11 +494,6 @@ Rules server_rules(const std::filesystem::path& dir, const std::vector<ListedFil
     return r;
 }
 
-void Policy::set_ceilings(std::vector<Ceiling> ceilings) {
-    ceilings_ = std::move(ceilings);
-    ++serial_;
-}
-
 std::optional<std::uint32_t> Policy::ceiling(FileKind kind, const Sha256Digest& hash) const {
     std::optional<std::uint32_t> out;
     // A file two add-ons both ship gets what both allow.
@@ -550,69 +519,59 @@ bool Policy::server_file(FileKind kind, const Sha256Digest& hash) const {
                        [&](const ServerFile& f) { return f.kind == kind && f.sha256 == hash; });
 }
 
+void Policy::set_ceilings(std::vector<Ceiling> ceilings) {
+    // Sources in normalize_addon_identity's form once, so the checks each frame compare strings only.
+    for (auto& c : ceilings) c.addon_source = addon_identity(c.addon_source);
+    ceilings_ = std::move(ceilings);
+    ++serial_;
+}
+
 bool Policy::addon_file_allowed(FileKind kind, const Sha256Digest& hash, std::string_view name) const {
     if (!rules_) return false;
     const AddonRules& addons = rules_->addons;
     if (!addons.enabled) return true;
-    if (!addons.error.empty() || identity_in(addons.block, name, {})) return false;
+    // The server's own files (listed by hash this login) are not add-ons: it chose to send them, so its add-on
+    // rules do not name them (they have no repository) and never refuse them.
+    if (server_file(kind, hash)) return true;
+    if (!addons.error.empty()) return false;
     // Files can be edited after the registry's hash scan. A known runtime name can still carry its recorded
     // source's explicit block; it never proves permission, a requirement or a capability ceiling.
     if (!name.empty()) {
-        const std::string runtime_name = lower(trim(name));
         for (const auto& c : ceilings_)
-            if (c.kind == kind && lower(c.addon_name) == runtime_name &&
-                identity_in(addons.block, c.addon_name, c.addon_source)) return false;
+            if (c.kind == kind && iequals(c.addon_name, trim(name)) && identity_in(addons.block, c.addon_source))
+                return false;
     }
     bool identified = false;
     // A shared module is subject to every add-on that supplied its bytes, just as its capability ceilings are.
     for (const auto& c : ceilings_) {
-        if (c.kind != kind || c.sha256 != hash || (c.addon_name.empty() && c.addon_source.empty())) continue;
+        if (c.kind != kind || c.sha256 != hash || c.addon_source.empty()) continue;
         if (!c.verified) {
-            if (!addons.default_allow || identity_in(addons.block, c.addon_name, c.addon_source)) return false;
+            if (!addons.default_allow || identity_in(addons.block, c.addon_source)) return false;
             continue;
         }
         identified = true;
-        if (!addon_allowed(addons, c.addon_name, c.addon_source)) return false;
-    }
-    const bool installed = identified;
-    for (const auto& f : rules_->server_files) {
-        if (f.kind != kind || f.sha256 != hash) continue;
-        const std::string server_name = server_addon_name(f);
-        if (identity_in(addons.block, server_name, {})) return false;
-        if (!installed) {
-            identified = true;
-            if (!addon_allowed(addons, server_name)) return false;
-        }
+        if (!allowed_identity(addons, c.addon_source)) return false;
     }
     // A typed name is not proof of identity: renaming or editing an allowlisted file cannot admit unknown bytes.
     return identified || addons.default_allow;
 }
 
 bool Policy::required_file(FileKind kind, const Sha256Digest& hash) const {
-    if (!rules_ || !rules_->addons.enabled) return false;
+    if (!rules_ || !rules_->addons.enabled || !rules_->addons.error.empty()) return false;
     for (const auto& c : ceilings_)
-        if (c.verified && c.kind == kind && c.sha256 == hash &&
-            addon_required(rules_->addons, c.addon_name, c.addon_source)) return true;
-    for (const auto& f : rules_->server_files)
-        if (f.kind == kind && f.sha256 == hash && addon_required(rules_->addons, server_addon_name(f))) return true;
+        if (c.verified && c.kind == kind && c.sha256 == hash && identity_in(rules_->addons.required, c.addon_source))
+            return true;
     return false;
 }
 
 std::vector<std::pair<std::string, Sha256Digest>> Policy::required_entries(FileKind kind) const {
     std::vector<std::pair<std::string, Sha256Digest>> out;
-    if (!rules_ || !rules_->addons.enabled) return out;
-    auto add = [&](std::string name, const Sha256Digest& hash) {
-        if (name.empty()) return;
-        std::pair<std::string, Sha256Digest> entry{lower(name), hash};
+    if (!rules_ || !rules_->addons.enabled || !rules_->addons.error.empty()) return out;
+    for (const auto& c : ceilings_) {
+        if (!c.verified || !c.entry_point || c.kind != kind || c.addon_name.empty() ||
+            !identity_in(rules_->addons.required, c.addon_source)) continue;
+        std::pair<std::string, Sha256Digest> entry{lower(c.addon_name), c.sha256};
         if (std::find(out.begin(), out.end(), entry) == out.end()) out.push_back(std::move(entry));
-    };
-    for (const auto& c : ceilings_)
-        if (c.verified && c.entry_point && c.kind == kind &&
-            addon_required(rules_->addons, c.addon_name, c.addon_source)) add(c.addon_name, c.sha256);
-    for (const auto& f : rules_->server_files) {
-        if (f.kind != kind || !server_addon_entry(f)) continue;
-        const std::string name = server_addon_name(f);
-        if (addon_required(rules_->addons, name)) add(name, f.sha256);
     }
     return out;
 }

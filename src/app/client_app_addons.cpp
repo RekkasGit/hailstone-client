@@ -94,10 +94,10 @@ std::vector<RequiredAddonCandidate> ClientApp::addon_requirement_candidates(cons
     const auto data = platform::data_dir();
     const auto registry = read_addon_registry(data);
     for (const auto& a : registry.addons) {
-        if (!plugin::addon_required(rules.addons, a.name, a.source)) continue;
+        if (!plugin::addon_required(rules.addons, a.source)) continue;
         RequiredAddonCandidate c{a.name, a.source, a.kind, a.caps,
                                  !registry.newer && !a.files.empty() &&
-                                     (!verify_files || modified_addon_files(data, a).empty()), false};
+                                     (!verify_files || modified_addon_files(data, a).empty())};
         if (a.kind == AddonKind::Plugin)
             for (const auto& f : a.files)
                 if (same_name(addon_rel(f.path).extension().string(), plugin_extension(update_platform()))) {
@@ -106,9 +106,6 @@ std::vector<RequiredAddonCandidate> ClientApp::addon_requirement_candidates(cons
                 }
         out.push_back(std::move(c));
     }
-    // A required bare name may be supplied by the server's listed, unchanged entry point.
-    auto server = server_addon_requirement_candidates(rules, update_platform(), verify_files);
-    for (auto& candidate : server) out.push_back(std::move(candidate));
     return out;
 }
 
@@ -304,7 +301,7 @@ void ClientApp::update_addons() {
     v.server = profile.empty() ? std::string() : login_view_.name;
     v.suggestions.clear();
     for (const AddonSuggestion& sg : suggestions_) {
-        const bool required = plugin::addon_required(addons_rules_.addons, sg.name, sg.source);
+        const bool required = plugin::addon_required(addons_rules_.addons, sg.source);
         const std::string text = required ? "Required to play on this server: " + (sg.name.empty() ? sg.source : sg.name) + "."
                                           : addon_suggestion_text(sg, v.server);
         v.suggestions.push_back({sg.name, sg.source, text, sg.from_server, required});
@@ -376,8 +373,8 @@ void ClientApp::update_addons() {
         const auto* installed = find_addon(installed_for_notes, name);
         const auto source = installed ? installed->source : std::string();
         if (rules.addons.enabled) {
-            if (!plugin::addon_allowed(rules.addons, name, source)) return "This server blocks this add-on.";
-            if (plugin::addon_required(rules.addons, name, source)) return "Required to play on this server.";
+            if (!plugin::addon_allowed(rules.addons, source)) return "This server blocks this add-on.";
+            if (plugin::addon_required(rules.addons, source)) return "Required to play on this server.";
         }
         // A tool or an upscaler is no server's business: neither is a script or a plugin it rules.
         if (profile.empty() || kind == AddonKind::Tool || kind == AddonKind::Upscaler) return {};
@@ -391,7 +388,7 @@ void ClientApp::update_addons() {
         return {};
     };
     auto required_consent = [&](ui::AddonRowView& row, const InstalledAddon& addon) {
-        if (profile.empty() || !plugin::addon_required(rules.addons, addon.name, addon.source) ||
+        if (profile.empty() || !plugin::addon_required(rules.addons, addon.source) ||
             addon.kind != AddonKind::Plugin) return;
         const auto hashes = addon_plugin_hashes(addon);
         plugin::Consent consent = plugin::Consent::Allowed;
@@ -488,7 +485,6 @@ void ClientApp::update_addons() {
             r.note = by + ": it always runs there, and cannot be removed or turned off.";
         }
         r.folder = path_text(login_view_.servers_dir / profile / (s.kind == AddonKind::Script ? "scripts" : "plugins"));
-        if (plugin::addon_required(rules.addons, s.name)) r.note = "Required to play on this server. " + r.note;
         v.rows.push_back(std::move(r));
     }
 }
@@ -527,7 +523,7 @@ bool ClientApp::start_addon_tool(std::string_view name, std::string* error) {
     const auto rules = conn_ && conn_->server_rules() ? *conn_->server_rules()
                        : profile.empty() ? plugin::Rules{}
                                          : net::cached_server_rules(login_view_.servers_dir / profile);
-    if (!plugin::addon_allowed(rules.addons, a->name, a->source)) {
+    if (!plugin::addon_allowed(rules.addons, a->source)) {
         if (error) *error = a->name + " is blocked by this server's add-on policy.";
         return false;
     }
@@ -608,7 +604,7 @@ void ClientApp::addons_login_action(ui::LoginAction action) {
         const auto installed = read_installed_addons(data);
         const auto* managed = find_addon(installed, v.choice);
         const bool required = managed && managed->kind == AddonKind::Plugin &&
-                              plugin::addon_required(addons_rules_.addons, managed->name, managed->source);
+                              plugin::addon_required(addons_rules_.addons, managed->source);
         found = found || required;
         if (!found || profile.empty()) break;
         const std::filesystem::path dir = login_view_.servers_dir / profile;
@@ -654,7 +650,7 @@ void ClientApp::addons_login_action(ui::LoginAction action) {
             addons_->inspect(sg->source, std::move(expect));
             break;
         }
-        if (plugin::addon_required(addons_rules_.addons, sg->name, sg->source)) {
+        if (plugin::addon_required(addons_rules_.addons, sg->source)) {
             v.status = {"This add-on is required to play on this server. Install it, or choose another server.", true};
             break;
         }

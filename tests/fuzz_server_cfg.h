@@ -30,28 +30,29 @@ inline void check_rules(const plugin::Rules& rules) {
         }
 
     if (!addons.enabled) {
-        require(plugin::addon_allowed(addons, "helper", "maker/helper"), "disabled add-on policy refused an identity");
-        require(!plugin::addon_required(addons, "helper", "maker/helper"), "disabled add-on policy required an identity");
+        require(plugin::addon_allowed(addons, "maker/helper"), "disabled add-on policy refused an identity");
+        require(!plugin::addon_required(addons, "maker/helper"), "disabled add-on policy required an identity");
         return;
     }
     if (!addons.error.empty()) {
-        require(!plugin::addon_allowed(addons, "helper", "maker/helper"), "invalid add-on policy permitted an identity");
+        require(!plugin::addon_allowed(addons, "maker/helper"), "invalid add-on policy permitted an identity");
+        require(!plugin::addon_allowed(addons, ""), "invalid add-on policy permitted a hand-installed add-on");
         plugin::Policy policy;
         auto invalid = rules;
         const auto hash = sha256(std::string_view("configuration fuzz fixture"));
+        const auto server = sha256(std::string_view("configuration fuzz server file"));
         invalid.player_script_caps = plugin::kCapAll;
-        invalid.server_files.push_back({plugin::FileKind::Script, "scripts/helper/init.lua", hash});
+        invalid.server_files.push_back({plugin::FileKind::Script, "scripts/server/init.lua", server});
         policy.set_ceilings({{plugin::FileKind::Script, hash, plugin::kCapAll, "helper", "maker/helper"}});
         policy.set(std::move(invalid));
         require(policy.caps(plugin::FileKind::Script, hash, "helper") == 0,
-                "invalid add-on policy permitted a registered/server-owned file");
+                "invalid add-on policy permitted a registered add-on file");
+        require(policy.caps(plugin::FileKind::Script, server) != 0,
+                "an add-on policy refused one of the server's own files");
         return;
     }
-    for (const auto& identity : addons.block) {
-        const bool repository = identity.find('/') != std::string::npos;
-        require(!plugin::addon_allowed(addons, repository ? "helper" : identity,
-                                      repository ? identity : "maker/helper"), "an explicit add-on block did not win");
-    }
+    for (const auto& identity : addons.block)
+        require(!plugin::addon_allowed(addons, identity), "an explicit add-on block did not win");
 }
 
 inline void feed(std::span<const std::byte> input) {

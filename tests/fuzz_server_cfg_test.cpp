@@ -24,7 +24,7 @@ TEST_CASE("fuzz: server cfg survives truncated mutated and binary text with opt-
     const std::vector<std::string_view> text_seeds = {
         "",
         "[scripts]\nplayer = on\nplayer_caps = read,ui\n[plugins]\nplayer = off\n",
-        "[addons]\nenforce = on\ndefault = deny\nrequired = maker/required\nallow = optional\nblock = excluded\n",
+        "[addons]\nenforce = on\ndefault = deny\nrequired = maker/required\nallow = maker/optional\nblock = maker/excluded\n",
         "[addons]\nenforce = off\ndefault = broken\nrequired = *\nunknown = ignored\n",
         "[addons\nenforce = on\ndefault = deny\n",
         "[addons]\nenforce = on\ndefault deny\n",
