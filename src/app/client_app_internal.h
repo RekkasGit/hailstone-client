@@ -481,13 +481,13 @@ public:
         perf_ui_.set_open(config_.get_bool("ui.perf_window", false));
         perf_ui_.set_log_hitches(config_.get_bool("ui.perf_log_hitches", false));
         automation_->hooks().add_command(plugin::Hooks::kClient, "/perf", [this](std::string_view) { perf_ui_.toggle(); });
-        // /neighbourzones [on | off]: the zones past the outdoor zone lines (display.neighbour_zones).
+        // /neighbourzones [on | off]: the zones past the outdoor zone lines drawn live (display.live_neighbour_zones).
         automation_->hooks().add_command(plugin::Hooks::kClient, "/neighbourzones", [this](std::string_view args) {
             while (!args.empty() && args.front() == ' ') args.remove_prefix(1);
             bool on = args.empty() ? !neighbour_zones_ : !(args.starts_with("off") || args.starts_with("0"));
             set_display_option("neighbour_zones", on ? 1 : 0);
             if (conn_)
-                conn_->ui_message(std::format("Neighbour zones: {} ({} loaded).", on ? "on" : "off",
+                conn_->ui_message(std::format("Live neighbour zones: {} ({} loaded).", on ? "on" : "off",
                                               neighbours_ ? neighbours_->loaded() : 0));
         });
         automation_->hooks().add_command(plugin::Hooks::kClient, "/screenshot", [this](std::string_view) { take_screenshot(); });

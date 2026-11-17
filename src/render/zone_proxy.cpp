@@ -745,17 +745,16 @@ ProxyZone proxy_zone(const ZoneProxy& z, const HorizonField* field, glm::vec3 of
                 mesh.vertices.push_back(v);
                 return it->second;
             };
-            // A wall's quad: its own four corners, all at the walls' colour of its highest cell.
+            // A wall's quad: its own four corners, each at the walls' colour of its own cell, so the colour runs across
+            // a cliff face and the quads sharing a corner agree (one colour a quad, from its highest cell, drew a cliff
+            // as a checkerboard of blocks once the copies reached the zone line).
             auto wall = [&](const int (&q)[4][2]) {
-                int hx = q[0][0], hy = q[0][1];
-                for (const auto& c : q)
-                    if (z.height[at(c[0], c[1], z.nx)] > z.height[at(hx, hy, z.nx)]) hx = c[0], hy = c[1];
                 const auto base = static_cast<std::uint32_t>(mesh.vertices.size());
                 for (const auto& c : q) {
                     assets::Vertex v;
                     v.position = glm::vec3(local_of(c[0], c[1]), height_of(c[0], c[1]));
                     v.normal = normal_of(c[0], c[1]);
-                    v.uv = side_uv(hx, hy);
+                    v.uv = side_uv(c[0], c[1]);
                     v.color = z.light;
                     mesh.vertices.push_back(v);
                 }

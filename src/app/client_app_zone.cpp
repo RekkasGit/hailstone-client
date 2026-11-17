@@ -903,9 +903,10 @@ bool ClientApp::set_display_option(std::string_view name, int value) {
         return true;
     }
     if (name == "neighbour_zones") {
-        // The zones past the outdoor zone lines (app/neighbour_zones.h): freed at once when turned off.
+        // The zones past the outdoor zone lines drawn live (app/neighbour_zones.h): freed at once when turned off, and
+        // their distant copies drawn in their place.
         neighbour_zones_ = value != 0;
-        config_.set_bool("display.neighbour_zones", neighbour_zones_);
+        config_.set_bool("display.live_neighbour_zones", neighbour_zones_);
         config_.save(config_path_);
         return true;
     }

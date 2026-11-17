@@ -4,7 +4,7 @@
 // world atlas places past the current one, baked once from its own files on the CPU into a low-detail copy (its
 // surface seen from above, terrain and buildings, as heights on a grid; its colour seen from above as one picture, with
 // the colour of its walls beside it; its trees as pictures on crossed cards where they stand), cached on disk, and
-// drawn far out past the current zone's edge in place of the land there (app/distant_copies.h). The original drew
+// drawn from the current zone's edge out in place of the land there (app/distant_copies.h). The original drew
 // nothing past a zone's own geometry.
 
 #include <atomic>
@@ -87,14 +87,16 @@ std::optional<ZoneProxy> read_zone_proxy(std::span<const std::byte> data);
 // Its zone and key from the start of a cache file (nullopt: not a copy of this version).
 std::optional<std::pair<std::string, std::uint64_t>> read_zone_proxy_header(std::span<const std::byte> data);
 
-// Where a copy is drawn: from kProxyNear past the current zone's edge (the land's field: its squares, how far each lies
-// from the zone), rising over kProxyFade out of the land (kProxySink under its own height at kProxyNear, kProxyRaise
-// over it past the band, so it draws over the land where the two meet); and nowhere in the zone's own squares or its
-// pockets. Coarser with the distance: a cell every proxy_step(d) cells, kProxyChunk cells to a chunk, the chunks of a
-// coarser step skirted down so no crack shows between them.
-inline constexpr float kProxyNear = 1200.0f;
-inline constexpr float kProxyFade = 400.0f;
-inline constexpr float kProxySink = 60.0f;
+// Where a copy is drawn: from the current zone's edge out (kProxyNear past it; the land's field: its squares, how far
+// each lies from the zone), so it stands in for the neighbour zone at its line as well as far out (the live neighbour
+// zones' geometry, drawn whole, showed its boundary walls, filler and broken pictures there). Over kProxyFade it rises
+// out of the land (kProxySink under its own height at kProxyNear, kProxyRaise over it past the band, so it draws over
+// the land where the two meet); and it is drawn nowhere in the zone's own squares or its pockets. Coarser with the
+// distance: a cell every proxy_step(d) cells, kProxyChunk cells to a chunk, the chunks of a coarser step skirted down
+// so no crack shows between them.
+inline constexpr float kProxyNear = 0.0f;
+inline constexpr float kProxyFade = 128.0f;
+inline constexpr float kProxySink = 30.0f;
 inline constexpr float kProxyRaise = 3.0f;
 inline constexpr int kProxyChunk = 32;
 // 1 within 3000 units of the zone's edge, 2 within 6000, 4 past.

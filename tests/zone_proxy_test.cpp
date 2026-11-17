@@ -212,7 +212,7 @@ std::size_t vertices_of(const render::ProxyZone& p) {
 
 } // namespace
 
-TEST_CASE("zone proxy: drawn only far past the zone's edge, rising out of the land, coarser far away") {
+TEST_CASE("zone proxy: drawn from the zone's edge out, rising out of the land, coarser far away") {
     const auto z = render::bake_zone_proxy(test_zone(), 1);
     REQUIRE(z.valid());
     const render::HorizonField field = flat_field();
@@ -231,21 +231,25 @@ TEST_CASE("zone proxy: drawn only far past the zone's edge, rising out of the la
         CHECK(p.footprint.empty());
         CHECK(p.zone.generated_files.contains("hs_copy_testzone.dds"));
     }
-    SUBCASE("the near band is left out, the band past it rises out of the land") {
-        // Its west edge 800 units past the zone's: its cells west of its own x 400 left out, the band to x 800.
-        const glm::vec3 offset(2800.0f, 0.0f, 0.0f);
+    SUBCASE("nothing in the zone's own squares, from its edge out, the band at the edge rising out of the land") {
+        // Its west part over the zone's own squares (to x 2000): left out; from the zone's edge it is drawn.
+        const glm::vec3 offset(1600.0f, 0.0f, 0.0f);
         const auto p = render::proxy_zone(z, &field, offset, {});
         REQUIRE(p.triangles > 0);
-        float lowest_rise = 0.0f;
+        float lowest_rise = 0.0f, nearest = std::numeric_limits<float>::max();
         for (const auto& m : p.zone.terrain)
             for (const auto& v : m.vertices) {
                 const glm::vec2 at = glm::vec2(v.position) + glm::vec2(offset);
                 const float d = render::proxy_distance(&field, at);
                 CHECK(d >= render::kProxyNear - 2.0f * render::kProxyCell);
+                nearest = std::min(nearest, d);
                 // In the band, under its own height (the ground there is 0).
-                if (d < render::kProxyNear + 0.25f * render::kProxyFade && v.position.x > 300.0f)
+                if (d < render::kProxyNear + 0.5f * render::kProxyFade && v.position.x > 300.0f)
                     lowest_rise = std::min(lowest_rise, v.position.z);
             }
+        // It reaches the zone's edge (the field's first square past it, its middle half a square out): no gap where the
+        // neighbour zone was drawn live.
+        CHECK(nearest <= render::kProxyNear + 0.5f * render::kHorizonCell);
         CHECK(lowest_rise < -10.0f);
         // The land's squares it covers whole past the band, each one's middle past the band.
         REQUIRE_FALSE(p.footprint.empty());

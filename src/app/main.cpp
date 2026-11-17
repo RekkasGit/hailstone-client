@@ -118,6 +118,7 @@ struct Options {
     bool no_horizon = false;                      // --no-horizon: no land round the zone (render/horizon.h)
     bool no_land_trees = false;                   // --no-land-trees: the land round the zone without its trees
     bool no_distant_copies = false;               // --no-distant-copies: the atlas's zones not drawn as copies
+    bool live_neighbours = false; // --live-neighbours: the neighbour zones drawn live (display.live_neighbour_zones)
     bool no_clouds = false; // --no-clouds: the painted cloud layer, not the volumetric clouds (render/cloud_renderer.h)
     bool neighbour_tint = false;                  // --neighbour-tint: render::ZoneRenderer::set_debug_tint
     float tree_detail = 1.0f;                     // --tree-detail PCT: display.tree_detail, as a scale
@@ -305,6 +306,8 @@ void usage() {
         "  --no-horizon       viewer: no land round the zone (--lighting modern; display.horizon_hills)\n"
         "  --no-land-trees    viewer: the land round the zone without its trees\n"
         "  --no-distant-copies viewer, with --atlas: the atlas's zones not drawn as distant copies\n"
+        "  --live-neighbours  viewer: the neighbour zones drawn live, whole, in place of their copies\n"
+        "                     (display.live_neighbour_zones)\n"
         "  --no-clouds        viewer: the painted clouds, not the volumetric ones (--lighting modern;\n"
         "                     display.volumetric_clouds)\n"
         "  --neighbour-tint   viewer, with --neighbours: the neighbours' own geometry magenta, their own ground in\n"
@@ -510,6 +513,8 @@ Options parse_args(int argc, char** argv) {
             o.no_land_trees = true;
         } else if (arg("--no-distant-copies")) {
             o.no_distant_copies = true;
+        } else if (arg("--live-neighbours")) {
+            o.live_neighbours = true;
         } else if (arg("--no-clouds")) {
             o.no_clouds = true;
         } else if (arg("--neighbour-tint")) {
@@ -1029,13 +1034,9 @@ int main(int argc, char** argv) {
         if (zone && opts.modern && !opts.atlas.empty() && !opts.no_distant_copies && !opts.no_horizon) {
             copies_game = std::make_unique<GameDir>(open_game_dir(opts.game_dir, opts.classic_dir));
             distant_copies = std::make_unique<app::DistantCopies>(vk, *copies_game, shader_dir);
-            std::vector<app::DistantCopies::Placed> placed;
-            for (const auto& p : viewer_atlas.placed_zones) {
-                app::DistantCopies::Placed c{p.zone, p.offset, {}};
-                if (auto it = viewer_atlas.cuts.find(p.zone); it != viewer_atlas.cuts.end()) c.keep = it->second;
-                placed.push_back(std::move(c));
-            }
-            distant_copies->enter(std::move(placed), zone_renderer->horizon_build());
+            distant_copies->enter(app::copy_placements(viewer_atlas, neighbours ? neighbours->copy_targets()
+                                                                                 : std::vector<app::NeighbourZones::CopyTarget>{}),
+                                  zone_renderer->horizon_build());
             distant_copies->update(true, {});
             distant_copies->finish_loading();
         }
@@ -1460,11 +1461,11 @@ int main(int argc, char** argv) {
                     zone_renderer->set_lighting(lighting);
                     frame_lighting = lighting;
                     if (neighbours) {
-                        neighbours->update(camera.position, draw_view.far_plane, true);
+                        neighbours->update(camera.position, draw_view.far_plane, true, opts.live_neighbours);
                         // The first frame waits for the loads the camera's place starts (a screenshot shows them).
                         while (frame == 0 && neighbours->busy()) {
                             std::this_thread::sleep_for(std::chrono::milliseconds(20));
-                            neighbours->update(camera.position, draw_view.far_plane, true);
+                            neighbours->update(camera.position, draw_view.far_plane, true, opts.live_neighbours);
                         }
                         neighbours->set_scene_light(scene_light);
                         neighbours->set_lighting(lighting);
