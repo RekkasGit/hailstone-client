@@ -224,3 +224,53 @@ TEST_CASE("zone renderer: the land's sea is drawn from both faces; its ground ta
     CHECK(land2.tinted_triangles > 0);
     CHECK(land2.tinted_triangles < land2.triangles[0]); // not the land past the zone's other sides
 }
+
+TEST_CASE("zone renderer: the land's ground is no sea bed under water, and its rock no roof over a floor") {
+    // A shore in miniature: grass at z 50 for y < 600 (from x 100); a larger sea bed at z 0 beyond, under a water
+    // region (region 1: z <= 10 and y >= 600); a cliff falling from z 150 to the grass at the zone's west edge; and
+    // more roof than cliff, sloping as steeply but standing over the grass.
+    std::vector<wld::BspNode> nodes = {
+        split({0, 0, -1}, 10, 2, 4),   // 1: z <= 10
+        split({0, 1, 0}, -600, 3, 4),  // 2: y >= 600
+        leaf(1),                       // 3: the sea
+        leaf(2),                       // 4: dry
+    };
+    assets::Zone zone;
+    zone.name = "shore";
+    zone.regions = assets::ZoneRegions::build(nodes, 2, {tag("WT_ZONE", {0})});
+    zone.terrain.push_back(flat_terrain(100, 0, 2000, 600, 100, 50, "grass.bmp"));
+    zone.terrain.push_back(flat_terrain(0, 600, 2000, 1500, 100, 0, "seabed.bmp"));
+    // A slope of 45 degrees: from (x0, z0) up to (x1, z1) along x, over y0..y1.
+    auto ramp = [](float x0, float z0, float x1, float z1, float y0, float y1, const char* texture) {
+        assets::Mesh m;
+        for (float y = y0; y < y1; y += 100.0f)
+            for (glm::vec3 p : {glm::vec3(x0, y, z0), glm::vec3(x1, y, z1), glm::vec3(x1, y + 100, z1),
+                                glm::vec3(x0, y, z0), glm::vec3(x1, y + 100, z1), glm::vec3(x0, y + 100, z0)}) {
+                assets::Vertex v;
+                v.position = p;
+                v.normal = glm::normalize(glm::vec3(z0 - z1, 0.0f, x1 - x0));
+                v.uv = glm::vec2(p) / 64.0f;
+                v.color = 0xff808080u;
+                m.indices.push_back(static_cast<std::uint32_t>(m.vertices.size()));
+                m.vertices.push_back(v);
+            }
+        m.materials.resize(1);
+        m.materials[0].name = texture;
+        m.materials[0].frames = {texture};
+        m.parts.push_back({0, static_cast<std::uint32_t>(m.indices.size()), 0, true});
+        return m;
+    };
+    zone.terrain.push_back(ramp(0, 150, 100, 50, 0, 600, "cliff.bmp"));
+    for (float x : {400.0f, 700.0f, 1000.0f, 1300.0f}) zone.terrain.push_back(ramp(x, 100, x + 100, 200, 100, 500, "slate.bmp"));
+    zone.bounds_min = {0, 0, 0};
+    zone.bounds_max = {2000, 1500, 200};
+
+    const auto prepared = render::ZoneRenderer::prepare(zone, {}, 64);
+    REQUIRE(prepared);
+    const auto land = render::ZoneRenderer::prepared_land(*prepared);
+    REQUIRE(land.build);
+    REQUIRE_FALSE(land.build->ground.frames.empty());
+    REQUIRE_FALSE(land.build->rock.frames.empty());
+    CHECK(land.build->ground.frames.front() == "grass.bmp");
+    CHECK(land.build->rock.frames.front() == "cliff.bmp");
+}

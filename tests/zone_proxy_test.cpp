@@ -212,7 +212,7 @@ std::size_t vertices_of(const render::ProxyZone& p) {
 
 } // namespace
 
-TEST_CASE("zone proxy: drawn from the zone's edge out, rising out of the land, coarser far away") {
+TEST_CASE("zone proxy: drawn only past the zone's edge, rising out of the land, coarser far away") {
     const auto z = render::bake_zone_proxy(test_zone(), 1);
     REQUIRE(z.valid());
     const render::HorizonField field = flat_field();
@@ -231,25 +231,22 @@ TEST_CASE("zone proxy: drawn from the zone's edge out, rising out of the land, c
         CHECK(p.footprint.empty());
         CHECK(p.zone.generated_files.contains("hs_copy_testzone.dds"));
     }
-    SUBCASE("nothing in the zone's own squares, from its edge out, the band at the edge rising out of the land") {
-        // Its west part over the zone's own squares (to x 2000): left out; from the zone's edge it is drawn.
-        const glm::vec3 offset(1600.0f, 0.0f, 0.0f);
+    SUBCASE("the near band is left out, the band past it rises out of the land") {
+        // Its west edge 500 units short of the band (the zone's edge at x 2000): its cells west of its own x 500 left
+        // out, the band past them.
+        const glm::vec3 offset(2000.0f + render::kProxyNear - 500.0f, 0.0f, 0.0f);
         const auto p = render::proxy_zone(z, &field, offset, {});
         REQUIRE(p.triangles > 0);
-        float lowest_rise = 0.0f, nearest = std::numeric_limits<float>::max();
+        float lowest_rise = 0.0f;
         for (const auto& m : p.zone.terrain)
             for (const auto& v : m.vertices) {
                 const glm::vec2 at = glm::vec2(v.position) + glm::vec2(offset);
                 const float d = render::proxy_distance(&field, at);
                 CHECK(d >= render::kProxyNear - 2.0f * render::kProxyCell);
-                nearest = std::min(nearest, d);
                 // In the band, under its own height (the ground there is 0).
-                if (d < render::kProxyNear + 0.5f * render::kProxyFade && v.position.x > 300.0f)
+                if (d < render::kProxyNear + 0.25f * render::kProxyFade && v.position.x > 500.0f)
                     lowest_rise = std::min(lowest_rise, v.position.z);
             }
-        // It reaches the zone's edge (the field's first square past it, its middle half a square out): no gap where the
-        // neighbour zone was drawn live.
-        CHECK(nearest <= render::kProxyNear + 0.5f * render::kHorizonCell);
         CHECK(lowest_rise < -10.0f);
         // The land's squares it covers whole past the band, each one's middle past the band.
         REQUIRE_FALSE(p.footprint.empty());
@@ -260,8 +257,8 @@ TEST_CASE("zone proxy: drawn from the zone's edge out, rising out of the land, c
             const glm::vec2 mid(0.5f * (field.xs[c] + field.xs[c + 1]), 0.5f * (field.ys[r] + field.ys[r + 1]));
             CHECK(render::proxy_distance(&field, mid) >= render::kProxyNear + render::kProxyFade);
         }
-        // Its tree stands past the band: kept.
-        CHECK(p.trees == 1);
+        // Its tree (at its own x 1000) stands in the band: left out, trees only past it.
+        CHECK(p.trees == 0);
     }
     SUBCASE("far away, fewer vertices") {
         const auto near = render::proxy_zone(z, &field, glm::vec3(3500.0f, 0.0f, 0.0f), {});
@@ -278,4 +275,30 @@ TEST_CASE("zone proxy: drawn from the zone's edge out, rising out of the land, c
         for (const auto& m : p.zone.terrain)
             for (const auto& v : m.vertices) CHECK(v.position.x >= 1000.0f - 2.0f * render::kProxyCell);
     }
+}
+
+TEST_CASE("zone proxy: drawn heights opened, a house or a wall down to the ground round it, a hill kept") {
+    const int n = 80;
+    std::vector<float> h(static_cast<std::size_t>(n) * n, 0.0f);
+    auto at = [&](int x, int y) -> float& { return h[static_cast<std::size_t>(y) * n + static_cast<std::size_t>(x)]; };
+    // A broad ridge (rows 0..39): rising 5 a cell to x 40 and falling beyond, 80 cells across.
+    for (int y = 0; y < 40; ++y)
+        for (int x = 0; x < n; ++x) at(x, y) = 5.0f * static_cast<float>(x < 40 ? x : 80 - x);
+    // On the flat beyond: a house 6 cells across and a wall 1 cell thick, 60 tall; a gap with nothing.
+    for (int y = 55; y < 61; ++y)
+        for (int x = 20; x < 26; ++x) at(x, y) = 60.0f;
+    for (int y = 45; y < 80; ++y) at(60, y) = 60.0f;
+    at(5, 75) = std::numeric_limits<float>::quiet_NaN();
+    const auto o = render::proxy_open(h, n, n);
+    REQUIRE(o.size() == h.size());
+    auto get = [&](int x, int y) { return o[static_cast<std::size_t>(y) * n + static_cast<std::size_t>(x)]; };
+    CHECK(get(22, 58) == doctest::Approx(0.0f));
+    CHECK(get(60, 65) == doctest::Approx(0.0f));
+    // The ridge: its flanks as they were, its peak cut by no more than its slope over the radius.
+    CHECK(get(20, 15) == doctest::Approx(at(20, 15)));
+    CHECK(get(60, 15) == doctest::Approx(at(60, 15)));
+    CHECK(get(40, 15) >= 200.0f - 5.0f * static_cast<float>(render::kProxyFlatten) - 0.01f);
+    CHECK(std::isnan(get(5, 75)));
+    for (std::size_t i = 0; i < h.size(); ++i)
+        if (std::isfinite(h[i])) CHECK(o[i] <= h[i]);
 }
