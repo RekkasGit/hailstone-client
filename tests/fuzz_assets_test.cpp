@@ -20,6 +20,7 @@
 #include "assets/eqg_character.h"
 #include "assets/gltf_mesh.h"
 #include "assets/jpeg_read.h"
+#include "assets/legacy_particles.h"
 #include "assets/model_points.h"
 #include "assets/pfs.h"
 #include "assets/regions.h"
@@ -696,6 +697,19 @@ TEST_CASE("fuzz: XMI, sound and effect tables, ini and tag text") {
     sweep("parse_spell_effect_sounds", {fuzz::random_bytes(rng, 800)}, 4, 300, [](std::span<const std::byte> d) { (void)parse_spell_effect_sounds(d); });
     sweep("parse_spell_effects", {fuzz::random_bytes(rng, 1200)}, 4, 300, [](std::span<const std::byte> d) { (void)parse_spell_effects(d); });
     {
+        // The old spells.eff is parsed only at exactly 256 records, so the seed is that size: the mutations reach the
+        // slot reader, and every cut short of it the size check. Selector 1 in every slot admits each slot for reading.
+        Bytes legacy = fuzz::random_bytes(rng, kLegacyParticleEffectCount * kLegacyParticleEffectSize);
+        for (std::size_t effect = 0; effect < kLegacyParticleEffectCount; ++effect)
+            for (std::size_t slot = 0; slot < 3; ++slot) {
+                const std::size_t at = effect * kLegacyParticleEffectSize + 8 + 2 * 0x3a0 + 0x8c + slot * 4;
+                legacy[at] = std::byte{1};
+                legacy[at + 1] = legacy[at + 2] = legacy[at + 3] = std::byte{0};
+            }
+        sweep("parse_legacy_switch_effects", {legacy}, 4, 60,
+              [](std::span<const std::byte> d) { (void)parse_legacy_switch_effects(d); });
+    }
+    {
         Bytes edd = text_bytes("EDD110");
         edd.resize(8 + 0x1a0, std::byte{0});
         sweep("parse_edd", {edd}, 8, 500, [](std::span<const std::byte> d) { (void)parse_edd(d); });
@@ -836,6 +850,7 @@ TEST_CASE("fuzz: the world atlas's records") {
     z.top.assign(40, 2.0f);
     z.water.assign(40, std::numeric_limits<float>::quiet_NaN());
     z.color.assign(40, 0xff204060u);
+    z.trees.assign(40, 2);
     game::ZoneLineCell c;
     c.region = 1;
     c.hi = {50.0f, 50.0f, 50.0f};

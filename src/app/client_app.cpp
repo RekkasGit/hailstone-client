@@ -47,7 +47,11 @@ int ClientApp::run() {
         const int max_fps =
             effective_max_fps(opts_.max_fps, opts_.max_fps == kMaxFpsAuto ? window_.refresh_rate() : 0.0f);
         const FramePace pace = frame_pace(max_fps, background_fps_, window_.focused(),
-            std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - last_drawn));
+        // A login/loading screen keeps an unlimited cap at kLightScreenCap so it does not spin; that includes the
+        // settle after zone-in, where screen_ is already InGame but the loading overlay is still drawn.
+        const bool light_screen = is_light_screen(screen_ == Screen::InGame, zone_settling());
+        const FramePace pace = frame_pace(opts_.max_fps, background_fps_, window_.focused(),
+            std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - last_drawn), light_screen);
         // To the microsecond on every system (platform/precise_sleep.h), timed from the last deadline (next_frame_deadline).
         if (pace.cap > 0) {
             frame_deadline = next_frame_deadline(frame_deadline, Clock::now(),
@@ -186,7 +190,9 @@ int ClientApp::run() {
                 };
                 conn_->set_remote_probe_range(game::actor_clip_distance(actor_clip_plane_, view_.far_plane));
             }
-            conn_->smooth(dt, floor, actor_model, region, vehicle_under, ground_floor, remote_collision);
+            // ground_floor is grounding_floor: it probes the same zone mesh the landing check uses, so a landed
+            // spawn's drop is known to be 0 and WorldState::smooth can skip its second collision query.
+            conn_->smooth(dt, floor, actor_model, region, vehicle_under, ground_floor, remote_collision, true);
             trace_spawn(dt);
         }
         update_lap.mark("spawn smoothing");
@@ -285,6 +291,10 @@ int ClientApp::run() {
             audio_->update(now_ms);
         }
         if (zone_particles_ && (in_world || pre_game)) zone_particles_->update(dt, camera_.position);
+        if (switch_particles_ && in_world && conn_) {
+            switch_particles_->reconcile(conn_->doors());
+            switch_particles_->update(dt, camera_.position);
+        }
         if (spell_particles_ && in_world && conn_) {
             auto cues = conn_->take_spell_effect_cues();
             auto effect_packets = conn_->take_effect_packets();
@@ -912,6 +922,9 @@ int ClientApp::run() {
                     zone_particles_->draw(fr, vp, camera_.view(), modern ? render::kParticleGlow : 1.0f, !modern,
                                           particle_lighting);
                 });
+            if (switch_particles_ && in_game)
+                switch_particles_->draw(*f, vp, camera_.view(), modern ? render::kParticleGlow : 1.0f,
+                                        particle_lighting);
             if (modern && fire_renderer_)
                 rec.add(*f, fire_renderer_.get(), [&](const render::FrameInfo& fr) {
                     fire_renderer_->draw(fr, vp, camera_.position, t, frame_fire_list_, frame_lighting_,

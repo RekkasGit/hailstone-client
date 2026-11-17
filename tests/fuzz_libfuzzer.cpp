@@ -4,15 +4,20 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
 #include <span>
 #include <string_view>
 #include <vector>
 
+#if defined(HAILSTONE_FUZZ_SERVER_CFG)
+#include "fuzz_server_cfg.h"
+#else
 #include "assets/character.h"
 #include "assets/eqg.h"
 #include "assets/eqg_character.h"
 #include "assets/jpeg_read.h"
+#include "assets/legacy_particles.h"
 #include "assets/model_points.h"
 #include "assets/pfs.h"
 #include "assets/texture.h"
@@ -74,6 +79,7 @@
 #include "fuzz_game_decoders.h"
 #include "fuzz_achievements.h"
 #endif
+#endif
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
     std::span<const std::byte> in(reinterpret_cast<const std::byte*>(data), size);
@@ -101,17 +107,28 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
         (void)hailstone::assets::decode_jpeg(in);
         (void)hailstone::assets::wld::decode_palette_map(in);
 #elif defined(HAILSTONE_FUZZ_MODELS)
-        // The small model and zone side files: byte 0 picks the parser, the rest is the file.
+        // The small model and zone side files, and the old spells.eff: byte 0 picks the parser, the rest is the file.
         if (size >= 1) {
             namespace a = hailstone::assets;
             const auto body = in.subspan(1);
-            switch (data[0] % 6) {
+            switch (data[0] % 7) {
             case 0: (void)a::eqg_character::parse_layers(body); break;
             case 1: (void)a::parse_pts(body); break;
             case 2: (void)a::parse_prt(body); break;
             case 3: (void)a::eqg::parse_texture_animation(body); break;
             case 4: (void)a::eqg::parse_eco_flora(body); break;
-            default: (void)a::eqg::parse_radial_flora(body); break;
+            case 5: (void)a::eqg::parse_radial_flora(body); break;
+            default: {
+                // The old spells.eff is read only at exactly 256 records: the body is repeated to that size so the
+                // slot reader is reached, and an empty body tests the size check.
+                std::vector<std::byte> eff;
+                if (!body.empty()) {
+                    eff.resize(a::kLegacyParticleEffectCount * a::kLegacyParticleEffectSize);
+                    for (std::size_t i = 0; i < eff.size(); ++i) eff[i] = body[i % body.size()];
+                }
+                (void)a::parse_legacy_switch_effects(eff);
+                break;
+            }
             }
         }
 #elif defined(HAILSTONE_FUZZ_SOE)
@@ -174,6 +191,8 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
             default: (void)hailstone::render::gpu_cache::decode_texture(body); break;
             }
         }
+#elif defined(HAILSTONE_FUZZ_SERVER_CFG)
+        hailstone::fuzz_server_cfg::feed(in);
 #elif defined(HAILSTONE_FUZZ_ZIP)
         // The updater's inputs (docs/updater.md): a package zip read whole, and the same bytes as a manifest.
         hailstone::ZipReader zip;
@@ -188,10 +207,15 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
         (void)hailstone::read_binary_header(in);
         (void)hailstone::parse_addon_index(text, hailstone::Ed25519PublicKey{});
 #else
-#error "define one of HAILSTONE_FUZZ_PFS, HAILSTONE_FUZZ_WLD, HAILSTONE_FUZZ_TEXTURE, HAILSTONE_FUZZ_SOE, HAILSTONE_FUZZ_PACKETS, HAILSTONE_FUZZ_DECODERS, HAILSTONE_FUZZ_ZIP, HAILSTONE_FUZZ_GPUCACHE, HAILSTONE_FUZZ_MODELS"
+#error "define one of HAILSTONE_FUZZ_PFS, HAILSTONE_FUZZ_WLD, HAILSTONE_FUZZ_TEXTURE, HAILSTONE_FUZZ_SOE, HAILSTONE_FUZZ_PACKETS, HAILSTONE_FUZZ_DECODERS, HAILSTONE_FUZZ_ZIP, HAILSTONE_FUZZ_GPUCACHE, HAILSTONE_FUZZ_MODELS, HAILSTONE_FUZZ_SERVER_CFG"
 #endif
     } catch (const std::exception&) {
+#if defined(HAILSTONE_FUZZ_SERVER_CFG)
+        // Unlike asset readers, parse_server_cfg reports malformed input through warnings/error fields.
+        std::abort();
+#else
         // A reported error is the expected outcome for malformed input; crashes and sanitizer reports are not.
+#endif
     }
     return 0;
 }

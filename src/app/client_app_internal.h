@@ -13,7 +13,9 @@
 #include "core/worker_pool.h"
 #include "render/scene_recorder.h"
 #include "app/addon_manager.h"
+#include "app/addon_requirements.h"
 #include "app/addon_suggest.h"
+#include "app/ability_bulk.h"
 #include "app/window_icon.h"
 #include "app/automation.h"
 #include "app/progress_ui.h"
@@ -135,6 +137,7 @@
 #include "app/spell_bolts.h"
 #include "app/spell_particles.h"
 #include "app/zone_particles.h"
+#include "app/switch_particles.h"
 #include "audio/audio_system.h"
 #include "audio/listener.h"
 #include "game/server_ext.h"
@@ -463,6 +466,7 @@ public:
         };
         aenv.autoskill_list = [this] { return autoskill_list(eq_host_); };
         aenv.use_ability = [this](mq::AbilityKind kind, std::string_view name) { return use_ability(eq_host_, kind, name); };
+        aenv.ability_bulk = [this] { return ability_bulk_rows(eq_host_); };
         aenv.can_see = [this](std::uint32_t id) -> std::optional<bool> {
             return conn_ ? can_see_spawn(id) : std::nullopt;
         };
@@ -634,6 +638,14 @@ private:
     void start_addons();
     void update_addons();
     void addons_login_action(ui::LoginAction action);
+    std::vector<RequiredAddonCandidate> addon_requirement_candidates(const plugin::Rules& rules,
+                                                                     bool verify_files = true) const;
+    // The opted-in add-on policy (docs/plugins.md "Opt-in add-on policies"), each frame of a connection
+    // (AddonAdmission): the cached rules only inform the login screen. No code is installed here.
+    bool addon_world_allowed();
+    void show_addon_requirement(const std::vector<AddonRequirementProblem>& problems, std::string message);
+    // The upscaler loaded at startup must be allowed, and a required provider must be selected and loaded.
+    std::string upscaler_addon_problem(const plugin::Rules& rules) const;
     // Starts the installed tool add-on `name` (tools/<name>/, docs/addons.md), told the data folder; false with
     // *error why not (not installed, its program gone, or the system would not start it).
     bool start_addon_tool(std::string_view name, std::string* error);
@@ -1133,6 +1145,8 @@ private:
     std::vector<ServerAddon> server_addons_;
     std::vector<ManualAddon> manual_addons_;
     plugin::Rules addons_rules_;
+    AddonAdmission addon_admission_;
+    std::vector<AddonRequirementProblem> addon_problems_; // the zone-in's, for the install card
     // Suggested add-ons (app/addon_suggest.h): the picked server's, as the login screen shows them, and those put
     // away for this run (by profile and addon_repo_key).
     std::vector<AddonSuggestion> suggestions_;
@@ -1314,6 +1328,7 @@ private:
     std::uint8_t motion_head_wet_ = 0; // this frame's HeadWet (PlayerMovement)
     std::uint8_t motion_body_wet_ = 0; // this frame's BodyWet (+0xa2)
     std::unique_ptr<ZoneParticles> zone_particles_;         // the zone's torch and lantern flames (app/zone_particles.h)
+    std::unique_ptr<SwitchParticles> switch_particles_;     // server-placed legacy particle switches
     // The modern lighting's flames in place of the zone's own (render/fire_renderer.h): the zone's, found when it
     // loads (assets/zone_fires.h), and this frame's with the doors' and ground objects' added.
     std::unique_ptr<render::FireRenderer> fire_renderer_;
@@ -1462,6 +1477,7 @@ private:
     float step_turn_ = 0.0f, step_pitch_ = 0.0f;
     std::array<game::mechanics::SwitchSpawn, 1> rider_spawns_{};
     game::DoorRiders door_riders_;
+    game::DoorParticles door_particles_;
     PlayerMovement movement_;
     std::optional<PlayerMovement> local_body_movement_; // the passive body while an Eye has the controls
     std::uint32_t driven_eye_ = 0;
