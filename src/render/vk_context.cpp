@@ -395,6 +395,7 @@ VkContext::~VkContext() {
     }
     // Imported owners retired by the renderers are released before the importing device.
     gpu_shared_cache_.reset();
+    if (gpu_queries_) vkDestroyQueryPool(device_, gpu_queries_, nullptr);
     for (VkFence f : free_fences_) vkDestroyFence(device_, f, nullptr);
     free_fences_.clear();
     if (upload_pool_) vkDestroyCommandPool(device_, upload_pool_, nullptr);
@@ -586,6 +587,14 @@ void VkContext::pick_physical_device() {
     caps_.max_anisotropy = features.samplerAnisotropy ? props.limits.maxSamplerAnisotropy : 0.0f;
     // Frame generation's GPU time (the performance window): every graphics queue can time where this is set.
     timestamp_period_ns_ = props.limits.timestampComputeAndGraphics ? props.limits.timestampPeriod : 0.0f;
+    {
+        std::uint32_t qcount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(physical_, &qcount, nullptr);
+        std::vector<VkQueueFamilyProperties> families(qcount);
+        vkGetPhysicalDeviceQueueFamilyProperties(physical_, &qcount, families.data());
+        timestamp_bits_ = queue_family_ < qcount ? families[queue_family_].timestampValidBits : 0u;
+        if (timestamp_bits_ == 0) timestamp_period_ns_ = 0.0f;
+    }
     caps_.msaa_counts = props.limits.framebufferColorSampleCounts & props.limits.framebufferDepthSampleCounts;
     caps_.fsr3 = Fsr3Upscaler::supported(physical_);
     VkPhysicalDeviceDriverProperties driver{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
@@ -1590,6 +1599,25 @@ std::optional<FrameInfo> VkContext::begin_frame_commands() {
 
     ++frames_begun_;
     recording_ = true;
+    // The passes' GPU time: the slot's last frame is done (its fence above), so its timestamps are read, then the
+    // slot starts again.
+    read_gpu_marks(frame_index_);
+    if (gpu_timing_ && !gpu_queries_) {
+        VkQueryPoolCreateInfo qi{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+        qi.queryType = VK_QUERY_TYPE_TIMESTAMP;
+        qi.queryCount = (kMaxGpuMarks + 1) * kFramesInFlight;
+        if (vkCreateQueryPool(device_, &qi, nullptr, &gpu_queries_) != VK_SUCCESS) {
+            gpu_queries_ = VK_NULL_HANDLE;
+            gpu_queries_failed_ = true;
+            gpu_timing_ = false;
+        }
+    }
+    if (gpu_timing_ && gpu_queries_) {
+        const std::uint32_t first = (kMaxGpuMarks + 1) * frame_index_;
+        vkCmdResetQueryPool(f.cmd, gpu_queries_, first, kMaxGpuMarks + 1);
+        vkCmdWriteTimestamp2(f.cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, gpu_queries_, first);
+        gpu_started_[frame_index_] = true;
+    }
     // The temporal upscaler's jitter for this frame: a cycle as long as the upscale asks (render/temporal.h).
     if (temporal()) {
         const float scale = static_cast<float>(scene_extent_.width) / static_cast<float>(std::max(view_extent_.width, 1u));
@@ -1813,6 +1841,7 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
     if (!taa) history_valid_ = false;
     VkCommandBuffer cmd = frame.cmd;
     vkCmdEndRendering(cmd);
+    gpu_mark(frame, "scene end (resolve)");
 
     const bool ao = taken && scene_options_.ambient_occlusion && ao_pipeline_;
     // The depth for the AO and the post pass (a depth resolve runs in the colour output stage).
@@ -1874,6 +1903,7 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
         vkCmdPushConstants(cmd, ao_layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
         vkCmdDraw(cmd, 3, 1, 0, 0);
         vkCmdEndRendering(cmd);
+        gpu_mark(frame, "ambient occlusion");
     }
     image_barrier(cmd, ao_.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1894,6 +1924,7 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
     const bool bloom = taken && scene_options_.bloom > 0.0f && bloom_down_pipeline_;
     if (bloom) {
         draw_bloom(cmd);
+        gpu_mark(frame, "bloom");
     } else {
         image_barrier(cmd, bloom_[0].image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
@@ -2107,6 +2138,7 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
         vkCmdPushConstants(cmd, post_layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
         vkCmdDraw(cmd, 3, 1, 0, 0);
     }
+    gpu_mark(frame, "upscale and post");
 }
 
 void VkContext::draw_into(VkCommandBuffer cmd, const Image& target, VkExtent2D extent, VkPipeline pipeline,
@@ -2256,6 +2288,34 @@ void VkContext::read_frame_gen_time(std::uint32_t frame_slot) {
     (fg_query_state_[frame_slot] == 2 ? fg_stats_.gpu_ms : fg_stats_.gpu_real_ms) = ms;
 }
 
+void VkContext::gpu_mark(const FrameInfo& frame, const char* name) {
+    if (!recording_ || !gpu_timing_ || !gpu_started_[frame.frame_slot]) return;
+    auto& marks = gpu_marks_[frame.frame_slot];
+    if (marks.size() >= kMaxGpuMarks) return;
+    marks.push_back(name);
+    vkCmdWriteTimestamp2(frame.cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, gpu_queries_,
+                         (kMaxGpuMarks + 1) * frame.frame_slot + static_cast<std::uint32_t>(marks.size()));
+}
+
+void VkContext::read_gpu_marks(std::uint32_t frame_slot) {
+    auto& marks = gpu_marks_[frame_slot];
+    const bool started = gpu_started_[frame_slot];
+    gpu_started_[frame_slot] = false;
+    if (!started || marks.empty() || !gpu_queries_) {
+        marks.clear();
+        return;
+    }
+    // Done, as read_frame_gen_time's: nothing is waited for, and a result the device did not give is dropped.
+    std::array<std::uint64_t, kMaxGpuMarks + 1> ticks{};
+    const auto n = static_cast<std::uint32_t>(marks.size()) + 1u;
+    if (vkGetQueryPoolResults(device_, gpu_queries_, (kMaxGpuMarks + 1) * frame_slot, n, sizeof(std::uint64_t) * n,
+                              ticks.data(), sizeof(std::uint64_t), VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
+        render::gpu_sections(marks, std::span(ticks).first(n), timestamp_period_ns_, timestamp_bits_, gpu_sections_);
+        ++gpu_sections_serial_;
+    }
+    marks.clear();
+}
+
 FrameGenStats VkContext::frame_gen_stats() const {
     FrameGenStats s = fg_stats_;
     s.requested = frame_gen_requested_;
@@ -2395,11 +2455,13 @@ void VkContext::end_frame(const FrameInfo& frame) {
     VkImage image = images_[frame.image_index];
     begin_overlay(frame);
     vkCmdEndRendering(frame.cmd);
+    gpu_mark(frame, "UI");
     // Frame generation: the UI went into its own image; the real frame and the in-between one are composited now.
     std::optional<std::uint32_t> generated;
     if (overlay_open_) {
         overlay_open_ = false;
         generated = finish_frame_gen(frame);
+        gpu_mark(frame, "frame generation");
     } else {
         picture_ready_ = false; // a frame without its picture: the next one has nothing to start from
     }

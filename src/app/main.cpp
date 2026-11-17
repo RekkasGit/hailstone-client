@@ -119,6 +119,7 @@ struct Options {
     bool no_land_trees = false;                   // --no-land-trees: the land round the zone without its trees
     bool no_distant_copies = false;               // --no-distant-copies: the atlas's zones not drawn as copies
     bool live_neighbours = false; // --live-neighbours: the neighbour zones drawn live (display.live_neighbour_zones)
+    bool gpu_timing = false; // --gpu-timing: each pass's mean GPU time over the timed frames (VkContext::gpu_mark)
     bool no_clouds = false; // --no-clouds: the painted cloud layer, not the volumetric clouds (render/cloud_renderer.h)
     bool neighbour_tint = false;                  // --neighbour-tint: render::ZoneRenderer::set_debug_tint
     float tree_detail = 1.0f;                     // --tree-detail PCT: display.tree_detail, as a scale
@@ -275,6 +276,7 @@ void usage() {
         "  --light-shadows N  how many lights cast shadows (0 off; default 8, at most 8), modern\n"
         "  --no-ao            no screen-space ambient occlusion (--lighting modern)\n"
         "  --depth-prepass    draw the opaque geometry depth-only first, then colour it (--lighting modern)\n"
+        "  --gpu-timing       with --frames, log each pass's mean GPU time over the timed frames\n"
         "  --bloom N          bloom strength 0..1 (--lighting modern; default 0.5)\n"
         "  --render-scale P   draw the 3D view at P percent of its size (33..100) and upscale it (--upscaler)\n"
         "  --sharpness N      FSR 1's sharpening below a render scale of 100, 0..1 (default 0.5)\n"
@@ -497,6 +499,8 @@ Options parse_args(int argc, char** argv) {
             o.grass_density = std::strtof(argv[++i], nullptr);
         } else if (arg("--no-ao")) {
             o.scene.ambient_occlusion = false;
+        } else if (arg("--gpu-timing")) {
+            o.gpu_timing = true;
         } else if (arg("--depth-prepass")) {
             o.scene.depth_prepass = true;
         } else if (arg("--weather-age")) {
@@ -1231,6 +1235,9 @@ int main(int argc, char** argv) {
         auto timed_start = start;
         render::ZoneDrawn drawn; // the last frame's
         int generated_frames = 0; // frame generation's in-between frames presented in the timed frames
+        // --gpu-timing: each pass's GPU time summed over the timed frames read back, in the order first seen.
+        std::vector<std::pair<const char*, double>> gpu_totals;
+        std::uint64_t gpu_serial = vk.gpu_sections_serial(), gpu_frames = 0;
         for (int frame = 0; window.poll_events(); ++frame) {
             if (opts.frames && frame == timed_from) timed_start = std::chrono::steady_clock::now();
             if (opts.frames && frame >= opts.frames) {
@@ -1241,6 +1248,17 @@ int main(int argc, char** argv) {
                               ms / (frame - timed_from), timed_from, frame - 1, 1000.0 * (frame - timed_from) / ms,
                               drawn.triangles, drawn.calls, drawn.shadow_triangles, drawn.shadow_calls);
                 if (const std::string fsr3 = vk.fsr3_timing(); !fsr3.empty()) log::info("FSR 3.1 GPU time: {}", fsr3);
+                if (gpu_frames > 0) {
+                    double total = 0.0;
+                    for (const auto& [name, sum] : gpu_totals) {
+                        log::info("gpu pass: {:.3f} ms {}", sum / static_cast<double>(gpu_frames), name);
+                        total += sum;
+                    }
+                    log::info("gpu pass: {:.3f} ms in all, mean over {} frames", total / static_cast<double>(gpu_frames),
+                              gpu_frames);
+                } else if (opts.gpu_timing) {
+                    log::info("gpu pass: no frames timed (the GPU cannot time, or too few frames)");
+                }
                 if (vk.frame_gen_active())
                     log::info("frame generation: {} in-between frames presented in frames {}..{}", generated_frames,
                               timed_from, frame - 1);
@@ -1370,6 +1388,7 @@ int main(int argc, char** argv) {
                 fog_frame = scene_fog.frame(in);
                 view = fog_frame.view;
             }
+            vk.set_gpu_timing(opts.gpu_timing);
             auto f = vk.begin_frame_commands();
             if (!f) {
                 if (ui_layer) ui_layer->end_frame_without_render();
@@ -1493,15 +1512,18 @@ int main(int argc, char** argv) {
                             zone_renderer->set_distant_hidden(std::move(cells));
                         }
                     }
+                    vk.gpu_mark(*f, "frame start, uploads");
                     if (vk.point_shadow_slots() > 0)
                         render::draw_point_shadows(vk, *f, point_shadows, zone->lights, point_builds, *zone_renderer,
                                                    nullptr);
+                    vk.gpu_mark(*f, "light shadows");
                     if (shadows)
                         for (std::uint32_t c = 0; c < render::kShadowCascades; ++c) {
                             vk.begin_shadow_cascade(*f, c);
                             zone_renderer->draw_shadow(*f, c);
                             vk.end_shadow_cascade(*f);
                         }
+                    vk.gpu_mark(*f, "sun shadows");
                     // Each map only when what it shows has changed (render/cover_map.h).
                     const std::uint64_t contents =
                         render::cover_contents(zone_renderer->id(), vk.shadow_generation(), 0);
@@ -1517,6 +1539,7 @@ int main(int argc, char** argv) {
                         zone_renderer->draw_shadow(*f, layer);
                         vk.end_shadow_cascade(*f);
                     }
+                    vk.gpu_mark(*f, "cover and water maps");
                 }
             }
             // The sky this frame; its volumetric clouds are marched before the scene begins (as the client).
@@ -1539,6 +1562,7 @@ int main(int argc, char** argv) {
                     sky_renderer->prepare(*f, camera.projection(width, height, draw_view.far_plane), camera.view(),
                                           sky_frame);
             }
+            vk.gpu_mark(*f, "sky prepare (clouds)");
             // The plain camera first: begin_scene hands it to the scene's shaders for their own motion.
             if (zone_renderer) vk.set_temporal_view(camera.view(), camera.projection(width, height, draw_view.far_plane));
             vk.begin_scene(*f, glm::vec4(water_color ? *water_color : view.fog_color, 1.0f));
@@ -1577,19 +1601,26 @@ int main(int argc, char** argv) {
                                            (!sky_renderer || sky_renderer->has_atmosphere()));
                 if (opts.modern) {
                     // The water reads the opaque world (VkContext::begin_translucent).
+                    vk.gpu_mark(*f, "sky");
                     zone_renderer->draw_depth(*f, vp, camera.position, draw_view, t);
+                    vk.gpu_mark(*f, "zone depth prepass");
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
+                    vk.gpu_mark(*f, "zone");
                     if (neighbours) neighbours->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
                     if (distant_copies)
                         distant_copies->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
+                    vk.gpu_mark(*f, "neighbour zones, distant copies");
                     if (flora_renderer) flora_drawn = flora_renderer->draw(*f, vp, camera.position, t, frame_lighting, true);
+                    vk.gpu_mark(*f, "flora");
                     // Before the colour copy (water reflects the sky) and every translucent draw.
                     if (!background_first) draw_background();
+                    vk.gpu_mark(*f, "sky");
                     vk.begin_translucent(*f);
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);
                     if (neighbours) neighbours->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);
                     if (distant_copies)
                         distant_copies->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);
+                    vk.gpu_mark(*f, "depth copy, translucent");
                 } else {
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t);
                 }
@@ -1609,6 +1640,7 @@ int main(int argc, char** argv) {
                                            2.0f / (static_cast<float>(std::max(1, width)) * proj[0][0]),
                                            weather.particles(), 1.0f,
                                            opts.modern ? render::kModernPrecipitation : render::kClassicPrecipitation);
+                vk.gpu_mark(*f, "particles, fire, weather");
             }
             if (plate_ui && frame >= 3) {
                 plate_ui->new_frame();
@@ -1652,6 +1684,19 @@ int main(int argc, char** argv) {
             if (ui_layer) ui_layer->render(*f);
             vk.end_frame(*f);
             if (opts.frames && frame >= timed_from && vk.frame_generated()) ++generated_frames;
+            // The frames read back since (a frame or two behind), from the timed ones on.
+            if (vk.gpu_sections_serial() != gpu_serial) {
+                gpu_serial = vk.gpu_sections_serial();
+                if (opts.frames && frame >= timed_from + 2) {
+                    ++gpu_frames;
+                    for (const auto& s : vk.gpu_sections()) {
+                        auto it = std::find_if(gpu_totals.begin(), gpu_totals.end(),
+                                               [&](const auto& e) { return e.first == s.name; });
+                        if (it == gpu_totals.end()) gpu_totals.emplace_back(s.name, s.ms);
+                        else it->second += s.ms;
+                    }
+                }
+            }
             if (zone_renderer) drawn = zone_renderer->take_drawn();
         }
         return 0;
