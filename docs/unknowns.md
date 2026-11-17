@@ -8,8 +8,9 @@ What the client does not implement yet, or implements with an approximation it c
   are drawn from the player's old `spells.eff`; actor-dependent old selectors are still skipped. Native day/night
   switch mode 2 also activates with `CDisplay::bRainScreen` (`0x488030`), whose renderer-state equivalent has not
   been connected here; only its hour test is applied. Closing a switch removes its particles immediately rather
-  than the native one-second shutdown fade. Live waterfall rendering acceptance has passed; the remaining gaps
-  concern these unsupported selectors, the rain-screen override and the shutdown tail.
+  than the native one-second shutdown fade. The waterfall was seen live on the stock PEQ test server (Stonebrunt's
+  effect-142 switches, a level-69 character); the remaining gaps concern these unsupported selectors, the rain-screen
+  override, the shutdown tail and the slot level gates, which were not tried live with a low-level character.
 
 ## Server add-on policy
 

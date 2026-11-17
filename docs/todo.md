@@ -20,7 +20,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 ### Legacy environmental particles
 
 - [x] Draw explicit-position legacy particle switches from server-supplied door records and the player's `spells.eff`/global sprites, including waterfall cascades; parser, converter and lifecycle coverage.
-- [x] Live waterfall rendering acceptance.
+- [x] Live waterfall rendering acceptance: seen on the stock PEQ test server in the Stonebrunt Mountains (its effect-142 switches, doors 41 and 44, at night in the rain), with the cascade absent from a client built without this change at the same view. A level-69 character, so the level gates of the second and third slots were not exercised live.
 - [ ] Connect the native day/night switch mode-2 rain-screen override and one-second shutdown tail (unknowns.md).
 
 ### Adventures (LDoN)
