@@ -292,6 +292,9 @@ public:
     void set_scene_light(const game::SceneLight& light);
     // The modern mode's switch, daylight and dynamic lights (render/scene_lighting.h); classic: params.x 0.
     void set_lighting(const SceneLighting& lighting);
+    // The smooth classic lighting (LightingMode::SmoothClassic, Hailstone's own): the classic region light per pixel
+    // instead of per vertex (shaders/zone.frag; SceneLighting::ambient.w). No effect on the modern lighting.
+    void set_classic_smooth(bool on) { scene_.lighting.ambient.w = on ? 1.0f : 0.0f; }
     // How far the replacement models' levels of detail reach (render/lod_bands.h), times their own distances: the
     // tree detail setting (display.tree_detail). 0.25 to 4.
     void set_lod_scale(float scale) { lod_scale_ = std::clamp(scale, 0.25f, 4.0f); }

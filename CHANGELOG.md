@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Lighting has a third level between Classic and Modern: Smooth Classic, the classic light worked out per pixel instead of at the corners of each triangle, so trees' leaves show their sunlit and shaded sides and brightly lit walls no longer dim between their corners, and torch and brazier flames keep colour in their cores instead of clipping to flat white. Options > Graphics > Lighting (gamepad: Display) now lists Classic (Low), Smooth Classic (Medium) and Modern (High); `/lighting smooth` picks it. Classic stays the original's exact look
 - Environmental particles: legacy server-placed effects now draw from invisible particle switches, restoring missing waterfall cascades
 - `/doability` takes the name of any of your abilities as well as the Actions window's button (`/doability Bash`, `/doability fury`, in any case): a skill, a discipline or an activated AA, used as its Ability Book row is; a name that is more than one kind's is the skill's first, then the discipline's, then the AA's. A number still means button 1-10
 - For plugin authors: `use_ability` uses one of the player's skills, disciplines or activated AAs by name as the Ability Book's row does, and `ability_state` says whether it is ready (its remaining and reuse time); both are added later in ABI 3, so test `HAILSTONE_HOST_HAS` first (docs/plugins.md)
