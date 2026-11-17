@@ -1646,11 +1646,16 @@ showed walls, filler and seams there.
   own squares and in a pocket its terrain closes round there is none. Packed into an RGBA8 texture (distance in steps
   of 16 units, floor over the zone's range of floors); past the grid the distance goes on growing.
 - **How thick**: density 0.006 a unit (1000 units of it leave 0.25 % of the light) times a ramp from 0 at the zone's
-  terrain to 1 at 1000 units past it, smooth, up to a top 350 units over its floor, thinning out over 150 either
+  terrain to 1 at 1000 units past it, smooth, up to a top 250 units over its floor, thinning out over 100 either
   side of it. So across open ground at a zone line it thickens until nothing shows, looking up the sky is clear (30
   degrees up, under 10 % of it is hidden), and from a hill one looks down on the bank's top.
+- **Never round the player** (the camera is always in the zone, whatever the field says): none within 300 units of the
+  camera, full by 900. Where the field has the camera past the zone's terrain (ground the field does not count: it is
+  made from the zone's terrain mesh alone, and East Freeport's ground by its North Ro gate is placed objects), the fog
+  is pushed out by that much and its floor kept under the camera's feet; before, the camera stood in the bank there
+  and the sky above it was fogged.
 - **Broken up** (`shaders/zone_fog.frag` only; the CPU functions give the mean): the top rises and falls by up to
-  140 units over swells about 900 units across, and the thickness varies in patches (0.45 to 1.55 times, about 360
+  100 units over swells about 900 units across, and the thickness varies in patches (0.45 to 1.55 times, about 360
   across), both drifting slowly with the time (6 and 2.5 units a second; the clock is wrapped every 4096 s, when the
   mist shifts once).
 - **Drawn** (`VkContext::set_zone_fog_field`, `set_zone_fog`): a full-screen pass right after the scene ends, before

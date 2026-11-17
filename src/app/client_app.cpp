@@ -500,6 +500,7 @@ int ClientApp::run() {
                         fog.glow = glm::vec3(lighting.light) * (lighting.haze.w * 0.25f);
                         fog.to_sun = glm::vec3(lighting.to_light);
                         fog.time = static_cast<float>(t);
+                        fog.camera_past = zone_fog_field_.distance_at(glm::vec2(camera_.position));
                         zone_fog = fog;
                     }
                 }
@@ -666,7 +667,8 @@ int ClientApp::run() {
             auto build = zone_renderer_ ? zone_renderer_->horizon_build() : nullptr;
             if (build != zone_fog_build_) {
                 zone_fog_build_ = build;
-                vk_.set_zone_fog_field(build ? render::zone_fog_field(build->field) : render::ZoneFogField{});
+                zone_fog_field_ = build ? render::zone_fog_field(build->field) : render::ZoneFogField{};
+                vk_.set_zone_fog_field(zone_fog_field_);
             }
             if (zone_fog) vk_.set_zone_fog(*zone_fog);
             // The colour grade: the time of day, the weather and the zone's fog hue (render/atmosphere.h).

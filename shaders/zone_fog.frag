@@ -13,7 +13,7 @@ layout(push_constant) uniform Push {
     vec4 forward; // xyz; w the sky's march
     vec4 camera;  // xyz; w the fog's lowest floor
     vec4 color;   // rgb the haze's colour (linear); w the floors' range
-    vec4 glow;    // rgb the sun's light in the haze (light x glow x 0.25)
+    vec4 glow;    // rgb the sun's light in the haze (light x glow x 0.25); w the field's distance past the zone at the camera
     vec4 to_sun;  // xyz; w the time (seconds), which the mist drifts with
     vec4 grid;    // xy the field's corner, zw 1 / its size (world units)
 } pc;
@@ -22,9 +22,11 @@ layout(location = 0) out vec4 o_color;
 
 // render/zone_fog.h
 const float kRamp = 1000.0;
-const float kTop = 350.0;
-const float kSoft = 150.0;
-const float kSwell = 140.0;
+const float kTop = 250.0;
+const float kSoft = 100.0;
+const float kSwell = 100.0;
+const float kClear = 300.0;
+const float kClearFade = 900.0;
 const float kDensity = 0.006;
 const float kDistanceStep = 16.0;
 const int kSteps = 40;
@@ -46,17 +48,21 @@ float density(vec3 p) {
     vec2 uv = (p.xy - pc.grid.xy) * pc.grid.zw;
     vec2 f = textureLod(field, uv, 0.0).rg;
     vec2 outside = max(-uv, 0.0) + max(uv - 1.0, 0.0);
-    float d = f.r * 255.0 * kDistanceStep + length(outside / pc.grid.zw);
+    // Pushed out by the camera's own distance past the zone: the camera is in the zone, whatever the field says.
+    float d = f.r * 255.0 * kDistanceStep + length(outside / pc.grid.zw) - pc.glow.w;
     if (d <= 0.0) return 0.0; // the zone's own ground: clear, and nothing more to work out
     float ramp = smoothstep(0.0, kRamp, d);
-    float over = p.z - (pc.camera.w + f.g * pc.color.w);
+    float floor_z = pc.camera.w + f.g * pc.color.w;
+    floor_z = mix(floor_z, min(floor_z, pc.camera.z - 6.0), smoothstep(0.0, 64.0, pc.glow.w));
+    float over = p.z - floor_z;
     // The bank's mean (render::zone_fog_density) broken up: its top rises and falls by up to kSwell over broad
     // swells, and its thickness varies in patches, drifting slowly.
     vec2 q = p.xy + vec2(pc.to_sun.w * 6.0, pc.to_sun.w * 2.5);
     float top = kTop + (noise(q / 900.0) - 0.5) * 2.0 * kSwell;
     if (over > top + kSoft) return 0.0;
     float patches = 0.45 + 1.1 * noise(q / 360.0 + 7.3);
-    return kDensity * ramp * patches * (1.0 - smoothstep(top - kSoft, top + kSoft, over));
+    float near = smoothstep(kClear, kClearFade, distance(p, pc.camera.xyz));
+    return kDensity * ramp * patches * near * (1.0 - smoothstep(top - kSoft, top + kSoft, over));
 }
 
 void main() {

@@ -1417,7 +1417,7 @@ void VkContext::draw_zone_fog(const FrameInfo& frame, const AoView& view, float 
     push.forward = glm::vec4(fog.forward, std::min(fog.reach, view.far_plane));
     push.camera = glm::vec4(fog.camera, zone_fog_floor_.x);
     push.color = glm::vec4(fog.color, zone_fog_floor_.y);
-    push.glow = glm::vec4(fog.glow, 0.0f);
+    push.glow = glm::vec4(fog.glow, fog.camera_past);
     // The time wrapped, so the noise stays precise far from its origin; the mist shifts once every 68 minutes.
     push.to_sun = glm::vec4(fog.to_sun, std::fmod(fog.time, 4096.0f));
     push.grid = zone_fog_grid_;

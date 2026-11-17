@@ -137,27 +137,44 @@ ZoneFogField zone_fog_field(const HorizonField& field) {
     return out;
 }
 
+namespace {
+
+float smooth01(float x) {
+    x = std::clamp(x, 0.0f, 1.0f);
+    return x * x * (3.0f - 2.0f * x);
+}
+
+float layer(float over) { return 1.0f - smooth01((over - (kZoneFogTop - kZoneFogSoft)) / (2.0f * kZoneFogSoft)); }
+
+} // namespace
+
 float zone_fog_density(const ZoneFogField& field, glm::vec3 p) {
     if (!field.valid()) return 0.0f;
-    const float d = std::clamp(field.distance_at(glm::vec2(p)) / kZoneFogRamp, 0.0f, 1.0f);
-    const float ramp = d * d * (3.0f - 2.0f * d);
-    const float over = p.z - field.floor_at(glm::vec2(p));
-    const float top = std::clamp((over - (kZoneFogTop - kZoneFogSoft)) / (2.0f * kZoneFogSoft), 0.0f, 1.0f);
-    return kZoneFogDensity * ramp * (1.0f - top * top * (3.0f - 2.0f * top));
+    const float ramp = smooth01(field.distance_at(glm::vec2(p)) / kZoneFogRamp);
+    return kZoneFogDensity * ramp * layer(p.z - field.floor_at(glm::vec2(p)));
+}
+
+float zone_fog_density(const ZoneFogField& field, glm::vec3 p, glm::vec3 eye, float eye_past) {
+    if (!field.valid()) return 0.0f;
+    const float d = std::max(field.distance_at(glm::vec2(p)) - eye_past, 0.0f);
+    float floor = field.floor_at(glm::vec2(p));
+    floor += (std::min(floor, eye.z - 6.0f) - floor) * smooth01(eye_past / 64.0f);
+    const float near = smooth01((glm::distance(p, eye) - kZoneFogClear) / (kZoneFogClearFade - kZoneFogClear));
+    return kZoneFogDensity * smooth01(d / kZoneFogRamp) * near * layer(p.z - floor);
 }
 
 float zone_fog_transmittance(const ZoneFogField& field, glm::vec3 from, glm::vec3 to) {
     const float length = glm::distance(from, to);
     if (!field.valid() || length <= 0.0f) return 1.0f;
     const glm::vec3 dir = (to - from) / length;
+    const float past = field.distance_at(glm::vec2(from));
     // Steps closer together near the camera (t = length x s^2), each sampled at its middle.
+    const float n = static_cast<float>(kZoneFogSteps);
     float tau = 0.0f;
     for (int i = 0; i < kZoneFogSteps; ++i) {
-        const float n = static_cast<float>(kZoneFogSteps);
         const float s0 = static_cast<float>(i) / n, s1 = static_cast<float>(i + 1) / n;
-        const float t0 = length * s0 * s0, t1 = length * s1 * s1;
         const float sm = (s0 + s1) * 0.5f;
-        tau += zone_fog_density(field, from + dir * (length * sm * sm)) * (t1 - t0);
+        tau += zone_fog_density(field, from + dir * (length * sm * sm), from, past) * length * (s1 * s1 - s0 * s0);
     }
     return std::exp(-tau);
 }

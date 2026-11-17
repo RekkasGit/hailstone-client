@@ -28,11 +28,11 @@ struct HorizonField;
 // The fog reaches full density this far past the zone's terrain.
 inline constexpr float kZoneFogRamp = 1000.0f;
 // The bank's top over its floor, and how far either side of it it thins out.
-inline constexpr float kZoneFogTop = 350.0f;
-inline constexpr float kZoneFogSoft = 150.0f;
+inline constexpr float kZoneFogTop = 250.0f;
+inline constexpr float kZoneFogSoft = 100.0f;
 // The shader breaks the bank up round the mean these functions give: its top rises and falls by up to kZoneFogSwell
 // over broad swells, its thickness varies in patches (0.45 to 1.55 times), both drifting slowly with the time.
-inline constexpr float kZoneFogSwell = 140.0f;
+inline constexpr float kZoneFogSwell = 100.0f;
 // Its optical depth per unit at full density on its floor: through 1000 units of it, 0.25 % of the light is left.
 inline constexpr float kZoneFogDensity = 0.006f;
 // The sky's line of sight is marched this far.
@@ -60,10 +60,20 @@ struct ZoneFogField {
 // Empty (not valid) when the field is not.
 ZoneFogField zone_fog_field(const HorizonField& field);
 
-// The density at `p` (per unit), as zone_fog.frag has it.
+// Round the camera, which is always in the zone, there is never fog, whatever the field says: none within
+// kZoneFogClear of it, full by kZoneFogClearFade. And where the field has the camera past the zone's terrain (ground
+// the land's field does not count, such as East Freeport's by its North Ro gate, which is placed objects), the fog is
+// pushed out by that much and its floor kept under the camera's feet.
+inline constexpr float kZoneFogClear = 300.0f;
+inline constexpr float kZoneFogClearFade = 900.0f;
+
+// The density at `p` (per unit) without the camera's rules (the bank as it lies).
 float zone_fog_density(const ZoneFogField& field, glm::vec3 p);
-// The share of the light from `to` that reaches `from` through the fog, marched as zone_fog.frag marches it
-// (kZoneFogSteps, without its dither).
+// The density at `p` (per unit) as zone_fog.frag has it, seen from `eye` (`eye_past`: the field's distance past the
+// zone's terrain at the eye, ZoneFogField::distance_at).
+float zone_fog_density(const ZoneFogField& field, glm::vec3 p, glm::vec3 eye, float eye_past);
+// The share of the light from `to` that reaches `from` (the eye) through the fog, marched as zone_fog.frag marches
+// it (kZoneFogSteps, without its dither).
 inline constexpr int kZoneFogSteps = 40;
 float zone_fog_transmittance(const ZoneFogField& field, glm::vec3 from, glm::vec3 to);
 
@@ -77,6 +87,7 @@ struct ZoneFogView {
     glm::vec3 to_sun{0.0f, 0.0f, 1.0f};
     float reach = kZoneFogReach; // the sky's march (no further than the far plane)
     float time = 0.0f;           // seconds: the mist drifts with it
+    float camera_past = 0.0f;    // the field's distance past the zone's terrain at the camera (distance_at)
 };
 
 } // namespace hailstone::render

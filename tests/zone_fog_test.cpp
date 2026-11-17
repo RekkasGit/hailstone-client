@@ -117,3 +117,18 @@ TEST_CASE("zone fog: a wall along the zone's edge does not lift the bank off the
     CHECK(render::zone_fog_density(fog, {3500.0f, 1000.0f, 26.0f}) == doctest::Approx(render::kZoneFogDensity));
     CHECK(render::zone_fog_density(fog, {3500.0f, 1000.0f, 640.0f}) == 0.0f);
 }
+
+TEST_CASE("zone fog: never round the camera, even where the field has it outside the zone") {
+    const auto fog = level_zone(20.0f);
+    REQUIRE(fog.valid());
+    // A camera the field puts 400 units past the zone's terrain (ground the field does not count), on ground under
+    // the fog's floor there.
+    const glm::vec3 eye(2400.0f, 1000.0f, 0.0f);
+    const float past = fog.distance_at(glm::vec2(eye));
+    REQUIRE(past > 300.0f);
+    CHECK(render::zone_fog_density(fog, eye + glm::vec3(100.0f, 0.0f, 0.0f), eye, past) == 0.0f);
+    // The sky over it is clear, and across the ground ahead it still thickens.
+    const glm::vec3 up30 = eye + glm::vec3(std::cos(0.5236f), 0.0f, std::sin(0.5236f)) * render::kZoneFogReach;
+    CHECK(render::zone_fog_transmittance(fog, eye, up30) > 0.9f);
+    CHECK(render::zone_fog_transmittance(fog, eye, eye + glm::vec3(4000.0f, 0.0f, 0.0f)) < 0.05f);
+}

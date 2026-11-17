@@ -1273,6 +1273,7 @@ private:
     // last made from (the zone renderer's; a new one, or none, uploads it again).
     bool edge_fog_ = true;
     std::shared_ptr<const render::HorizonBuild> zone_fog_build_;
+    render::ZoneFogField zone_fog_field_; // the uploaded field, for the camera's distance past the zone
     // How far the replacement models' (a texture pack's generated trees') levels of detail reach, in percent of their
     // own distances (render::ZoneRenderer::set_lod_scale); display.tree_detail, 50 to 200.
     int tree_detail_ = 100;
