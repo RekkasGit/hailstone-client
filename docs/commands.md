@@ -95,7 +95,7 @@ follow the RoF2 client; the ones Hailstone adds are marked as Hailstone's. For t
 | `/stopcast` | Stop casting. |
 | `/melody <gems>`, `/stopsong` | Twist songs; stop singing. |
 | `/discipline <name>`, `/stopdisc` | Use a discipline; end the active one. |
-| `/doability <n or name>` | Use an ability or skill. |
+| `/doability <n \| name>` | Use an ability or skill: button 1-10 of the Actions window, as RoF2; or (Hailstone's) the player's skill, discipline or activated AA of that name, in any case, as its Ability Book row uses it. A name more than one kind has is the skill's first, then the discipline's, then the AA's; a discipline's name may leave out its rank. |
 | `/pet <command>` | Pet commands (attack, back off, follow, guard, sit and the rest). |
 | `/shield`, `/shieldgroup` | Shield your target. |
 | `/targetgroupbuff [on\|off]`, `/tgb` | Group spells land on the target's group. |
@@ -233,7 +233,7 @@ These are not in the original client.
 | `/web [address]` | The in-game browser, on a new tab (docs/browser.md). |
 | `/luasocial [1..120 \| new]` | The Lua social editor. |
 | `/lighting [modern \| smooth \| classic]` | Switch the lighting (docs/graphics.md); without a mode, between modern and classic. |
-| `/neighbourzones [on \| off]` | Draw the zones past outdoor zone lines (docs/graphics.md). |
+| `/neighbourzones [on \| off]` | Draw the zones past outdoor zone lines live, whole, in place of their distant copies (docs/graphics.md). |
 | `/screenshot` | Take a screenshot. |
 | `/perf` | The performance window. |
 

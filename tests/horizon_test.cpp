@@ -205,7 +205,11 @@ TEST_CASE("horizon: where the zone's edge is water, the sea, its floor under the
     CHECK(mesh.water_level == doctest::Approx(0.0f));
     for (std::uint32_t i : mesh.water) {
         CHECK(mesh.positions[i].z == doctest::Approx(0.0f));
-        CHECK(mesh.positions[i].x < 100.0f); // off the west shore
+        // Off the west shore: beside the zone not past its edge, and past its corners only as far as a bay of the
+        // coast wanders.
+        const glm::vec3 p = mesh.positions[i];
+        if (p.y > 0.0f && p.y < 2000.0f) CHECK(p.x < 100.0f);
+        CHECK(p.x < 700.0f);
     }
     // Off the shore the floor lies under the surface.
     int floor = 0;

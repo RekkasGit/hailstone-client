@@ -62,7 +62,10 @@ public:
     // Zoning: drops every neighbour and abandons a load under way.
     void clear();
     // Each frame: starts the nearest wanted neighbour's load, uploads one that is ready, frees those far away.
-    void update(const glm::vec3& camera, float far_plane, bool enabled);
+    // `enabled` false: nothing is loaded, measured or drawn. `live` false (display.live_neighbour_zones, the default):
+    // the neighbours are measured for the land and the world atlas but not loaded or drawn; their distant copies
+    // (app/distant_copies.h, copy_targets) stand in for them from the zone line out.
+    void update(const glm::vec3& camera, float far_plane, bool enabled, bool live = true);
 
     void set_scene_light(const game::SceneLight& light);
     void set_lighting(const render::SceneLighting& lighting);
@@ -77,7 +80,19 @@ public:
     // set_distant_hidden; and a number that changes when which are drawn does.
     void footprint(std::vector<std::int64_t>& out) const;
     std::uint64_t drawn_key() const;
+    // The short names of the neighbours drawn now (their distant copies, app/distant_copies.h, are not).
+    void drawn_names(std::vector<std::string>& out) const;
     bool opaque_blends_background() const;
+
+    // The neighbours that would be drawn (the lines that qualify), as distant copies: each one's short name, its
+    // offset (its measured ground's when known, else the first estimate from the zone points) and the plane at its
+    // seam, keeping what lies past it. After enter.
+    struct CopyTarget {
+        std::string name;
+        glm::vec3 offset{0.0f};
+        glm::vec4 keep{0.0f};
+    };
+    std::vector<CopyTarget> copy_targets() const;
 
     bool entered() const { return entered_; }
     // A load is under way (update starts and finishes them), its ground being sampled included.
@@ -158,6 +173,9 @@ private:
 
 // Where the neighbours' ground of `zone` is cached for `server` (cache/horizon/<server>/<zone>/, docs/layout.md).
 std::filesystem::path horizon_cache_dir(std::string_view server, std::string_view zone);
+// Where `zone`'s land's worn terrain is cached for `server` (cache/terrain/<server>/<zone>.bin, docs/layout.md;
+// render::ZoneRenderOptions::terrain_cache).
+std::filesystem::path terrain_cache_path(std::string_view server, std::string_view zone);
 // What a cache file of `zone`'s neighbour `neighbour` must say it was measured from: the two zones' files' sizes (0
 // when either is missing, which no file matches).
 std::uint64_t horizon_cache_key(const GameDir& game, std::string_view zone, std::string_view neighbour);
