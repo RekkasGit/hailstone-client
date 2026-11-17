@@ -1069,6 +1069,9 @@ private:
     // The scene's draws recorded on the worker threads (render/scene_recorder.h; display.parallel_record), made in
     // run(); after vk_, so it goes before the device.
     std::unique_ptr<render::SceneRecorder> scene_recorder_;
+    // The shadow layers' draws recorded the same way (display.parallel_record), with buffers of their own.
+    std::unique_ptr<render::SceneRecorder> shadow_recorder_;
+    std::vector<std::uint32_t> shadow_layers_; // this frame's shadow layers, kept for its capacity
     bool parallel_record_ = true;
     // draw_nameplates' lists, kept for their capacity (and the plates' strings for theirs): the first plate_count_.
     struct PlateEntry {
@@ -1516,9 +1519,6 @@ private:
     // Hailstone: the live NPCs near the player as the movement sweep's walls (game/npc_collision.h), unless the
     // server's hailstone.cfg turns them off ([movement] npc_collision).
     std::vector<game::NpcBody> npc_bodies_;
-    // The other spawns' contact probes' door hits (ZoneMoveWorld::set_contact_probe), kept so a probe does not
-    // allocate.
-    std::vector<WorldObjects::DoorHit> remote_door_hits_;
     void update_npc_bodies();
     // PlayerClient::TouchingSwitch for the local player on door `id` (game/mechanics/touching_switch.h); returns
     // whether pTouchingSwitch is cleared afterwards.

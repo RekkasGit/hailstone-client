@@ -2875,7 +2875,7 @@ void VkContext::destroy_shadow_map() {
     shadow_size_ = 0;
 }
 
-void VkContext::begin_shadow_cascade(const FrameInfo& frame, std::uint32_t cascade) {
+void VkContext::begin_shadow_cascade(const FrameInfo& frame, std::uint32_t cascade, bool secondary) {
     VkCommandBuffer cmd = frame.cmd;
     shadow_open_ = cascade;
     // The previous frame's scene read this layer.
@@ -2892,7 +2892,21 @@ void VkContext::begin_shadow_cascade(const FrameInfo& frame, std::uint32_t casca
     rendering.renderArea = {{0, 0}, {shadow_size_, shadow_size_}};
     rendering.layerCount = 1;
     rendering.pDepthAttachment = &depth;
+    if (secondary) rendering.flags = VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT;
     vkCmdBeginRendering(cmd, &rendering);
+    if (!secondary) set_shadow_state(cmd, cascade);
+}
+
+VkCommandBufferInheritanceRenderingInfo VkContext::shadow_inheritance() const {
+    // As begin_shadow_cascade renders: the depth alone, one sample.
+    VkCommandBufferInheritanceRenderingInfo info{VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO};
+    info.depthAttachmentFormat = shadow_format_;
+    info.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
+    info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    return info;
+}
+
+void VkContext::set_shadow_state(VkCommandBuffer cmd, std::uint32_t cascade) const {
     VkViewport vp{0.0f, 0.0f, static_cast<float>(shadow_size_), static_cast<float>(shadow_size_), 0.0f, 1.0f};
     VkRect2D scissor{{0, 0}, {shadow_size_, shadow_size_}};
     vkCmdSetViewport(cmd, 0, 1, &vp);
