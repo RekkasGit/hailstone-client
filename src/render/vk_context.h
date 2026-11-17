@@ -187,6 +187,13 @@ struct FrameInfo {
     std::uint32_t frame_slot = 0; // 0..kFramesInFlight-1, for per-frame resources
 };
 
+// The real frame's queue results, independent of an optional generated frame.
+// Presented means accepted by vkQueuePresentKHR, not a visible-pixel guarantee.
+struct FrameOutcome {
+    bool submitted = false;
+    bool presented = false;
+};
+
 // Vulkan 1.3 device, swapchain, scene target and frame loop. Uses dynamic
 // rendering and synchronization2, so there are no render pass or framebuffer
 // objects. Depth uses reverse Z: clear to 0, test GREATER_OR_EQUAL.
@@ -226,7 +233,13 @@ public:
     // Depth-only rendering into one layer of the shadow map (shadow_format(), one sample, no colour attachment,
     // a slope-scaled depth bias set): a cascade, or kCoverLayer. Every cascade is drawn in a frame that uses shadows;
     // the cover map when it is used.
-    void begin_shadow_cascade(const FrameInfo& frame, std::uint32_t cascade);
+    // `secondary`: its draws come from secondary command buffers (render/scene_recorder.h), which set the layer's
+    // dynamic state themselves (set_shadow_state); the rendering then holds nothing but vkCmdExecuteCommands.
+    void begin_shadow_cascade(const FrameInfo& frame, std::uint32_t cascade, bool secondary = false);
+    // A secondary command buffer's inheritance for a shadow layer's rendering, and the dynamic state
+    // begin_shadow_cascade sets for `cascade` (the viewport, the scissor, the depth bias), into `cmd`.
+    VkCommandBufferInheritanceRenderingInfo shadow_inheritance() const;
+    void set_shadow_state(VkCommandBuffer cmd, std::uint32_t cascade) const;
     void end_shadow_cascade(const FrameInfo& frame);
     bool shadows_enabled() const { return scene_options_.shadow_size > 0; }
     // Turns on the AO and the distance blur for this frame (the modern lighting's 3D view); call before begin_overlay.
@@ -276,6 +289,16 @@ public:
     // Without independentBlend (DeviceCaps) the temporal upscaler runs on the camera's motion alone.
     bool scene_motion() const { return scene_options_.upscaler != Upscaler::Fsr1 && caps_.independent_blend; }
     VkPipelineRenderingCreateInfo scene_rendering(bool scene = true) const;
+    // This frame's scene takes its draws from secondary command buffers (render/scene_recorder.h): set before
+    // begin_scene, cleared when the scene ends (begin_overlay). The scene's renderings then hold nothing but
+    // vkCmdExecuteCommands.
+    void set_scene_secondary(bool on) { scene_secondary_ = on; }
+    bool scene_secondary() const { return scene_secondary_; }
+    // A secondary command buffer's inheritance for the scene's rendering: its attachments' formats and samples.
+    VkCommandBufferInheritanceRenderingInfo scene_inheritance() const;
+    // The scene's dynamic state as begin_scene sets it (the flipped viewport, the scissor), into `cmd`: each secondary
+    // command buffer of the scene starts with it.
+    void set_scene_state(VkCommandBuffer cmd) const;
     SceneBlends scene_blends(const VkPipelineColorBlendAttachmentState& color, SceneOutput output,
                              bool scene = true) const;
     std::uint32_t shadow_size() const { return shadow_size_; }
@@ -300,7 +323,7 @@ public:
     // map's); binding 4 the point shadow map's faces (sampler2DArrayShadow).
     VkDescriptorSetLayout shadow_set_layout() const { return shadow_set_layout_; }
     VkDescriptorSet shadow_set() const { return shadow_set_; }
-    void end_frame(const FrameInfo& frame);
+    FrameOutcome end_frame(const FrameInfo& frame);
 
     // Call once before the scene renderers are made (their pipelines take the
     // sample count); later calls change the tonemap and exposure, and the
@@ -478,6 +501,7 @@ private:
     void destroy_point_shadow_map();
     void write_water_descriptors();
     void begin_scene_rendering(VkCommandBuffer cmd, bool load, const glm::vec4& clear_color);
+    bool scene_secondary_ = false; // set_scene_secondary
 
     platform::Window& window_;
     VkInstance instance_ = VK_NULL_HANDLE;

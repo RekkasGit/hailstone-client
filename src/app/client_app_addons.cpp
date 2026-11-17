@@ -26,6 +26,17 @@ namespace client_internal {
 
 namespace {
 
+std::vector<std::string> addon_access(AddonKind kind, std::uint32_t caps) {
+    // An interface acts in the game as the player does; the login password, add-on installs and the compiled-plugin
+    // question stay with the built-in interfaces (UiHost::trusted_ui).
+    return kind == AddonKind::Ui
+               ? std::vector<std::string>{"Draw the game's windows and act in the game as you do (cast, move items, "
+                                          "speak, target)",
+                                          "Not your login password, your add-ons or the server's compiled-plugin "
+                                          "question: the built-in interface handles those"}
+               : plugin::caps_described(caps);
+}
+
 std::string state_text(const AddonStatus& s) {
     const std::string v = s.new_version.empty() ? std::string("A newer version") : "Version " + s.new_version;
     switch (s.state) {
@@ -98,6 +109,7 @@ std::vector<RequiredAddonCandidate> ClientApp::addon_requirement_candidates(cons
         RequiredAddonCandidate c{a.name, a.source, a.kind, a.caps,
                                  !registry.newer && !a.files.empty() &&
                                      (!verify_files || modified_addon_files(data, a).empty())};
+        c.version = a.version;
         if (a.kind == AddonKind::Script) c.startable = required_script_found(data, a.name);
         if (a.kind == AddonKind::Plugin)
             for (const auto& f : a.files)
@@ -141,6 +153,7 @@ bool ClientApp::addon_world_allowed() {
         if (text.back() != '.') text += '.';
         game_view_.chat.add(ui::ChatChannel::Error, "[Add-ons] " + text + " You can keep playing on this server.");
     }
+    update_addon_policy_view();
     using Step = AddonAdmission::Step;
     switch (r.step) {
     case Step::Play: return true;
@@ -163,10 +176,49 @@ bool ClientApp::addon_world_allowed() {
     return true;
 }
 
+void ClientApp::update_addon_policy_view() {
+    const bool failed = addon_admission_.admitted() && !addon_admission_.failure().empty();
+    if (failed == addon_policy_view_.failed && addon_admission_.failure_serial() == addon_policy_failure_serial_) return;
+    addon_policy_failure_serial_ = addon_admission_.failure_serial();
+    auto& v = addon_policy_view_;
+    v.failed = failed;
+    v.can_retry = failed && addon_admission_.failure_retriable();
+    v.message = failed ? addon_admission_.failure() : std::string();
+    ++v.serial; // (never reused: a closed warning, and the packs' cached table, go by it)
+}
+
+void ClientApp::retry_required_addons() {
+    if (!automation_ || !addon_policy_view_.failed || !addon_policy_view_.can_retry) return;
+    const std::size_t tried = automation_->retry_required_addons();
+    log::info("Add-ons: the player retried the required add-ons ({} tried again)", tried);
+    if (tried == 0)
+        game_view_.chat.add(ui::ChatChannel::Error,
+                            "[Add-ons] Retry found nothing it could start again.");
+}
+
+void ClientApp::addon_policy_window() {
+    const auto& v = addon_policy_view_;
+    if (!v.failed || screen_ != Screen::InGame || addon_policy_closed_ == v.serial || ui::lua::replaces("AddonPolicy"))
+        return;
+    bool open = true;
+    ImGui::SetNextWindowSize(ImVec2(400, 0), ImGuiCond_FirstUseEver);
+    constexpr ImGuiWindowFlags kFlags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing;
+    if (ImGui::Begin("Server add-ons", &open, kFlags)) {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 26.0f);
+        ImGui::TextColored(ImVec4(1.0f, 0.65f, 0.25f, 1.0f), "%s", v.message.c_str());
+        ImGui::TextUnformatted("You can keep playing on this server.");
+        ImGui::PopTextWrapPos();
+        if (v.can_retry && ImGui::Button("Retry")) retry_required_addons();
+    }
+    ImGui::End();
+    if (!open) addon_policy_closed_ = v.serial;
+}
+
 void ClientApp::start_addons() {
     const std::filesystem::path data = platform::data_dir();
     addons_at_start(data);
     if (automation_) automation_->set_addon_ceilings(addon_ceilings(data));
+    if (automation_) automation_->refresh_managed_addons();
     ui::AddonsView& v = login_view_.addons;
     if (!opts_.updates) {
         v.why_off = "Add-ons are not fetched on a test run.";
@@ -264,6 +316,8 @@ void ClientApp::update_addons() {
         upscaler_providers_.reset(); // an upscaler may have come or gone
         addons_dirty_ = false;
         if (automation_) automation_->set_addon_ceilings(addon_ceilings(data));
+        if (automation_) automation_->refresh_managed_addons();
+        refresh_ui_packs(true);
         addons_listed_ = {};
     }
     if (!at_login) return;
@@ -312,6 +366,7 @@ void ClientApp::update_addons() {
         ov.version = o.manifest.version_text;
         ov.author = o.manifest.author;
         ov.description = o.manifest.description;
+        ov.autoload = o.manifest.autoload;
         ov.source = o.source;
         ov.page = o.page;
         ov.notes = o.manifest.notes;
@@ -319,7 +374,7 @@ void ClientApp::update_addons() {
         ov.installed_version = o.installed_version;
         ov.older = o.older;
         ov.blocked = o.blocked;
-        ov.caps = plugin::caps_described(o.caps);
+        ov.caps = addon_access(o.manifest.kind, o.caps);
         v.offer = std::move(ov);
     }
 
@@ -373,8 +428,9 @@ void ClientApp::update_addons() {
             if (!plugin::addon_allowed(rules.addons, source)) return "This server blocks this add-on.";
             if (plugin::addon_required(rules.addons, source)) return "Required to play on this server.";
         }
-        // A tool or an upscaler is no server's business: neither is a script or a plugin it rules.
-        if (profile.empty() || kind == AddonKind::Tool || kind == AddonKind::Upscaler) return {};
+        // Repository requirements/blocks apply to all installed kinds. Local interfaces, tools and upscalers do
+        // not run as scripts or plugins and do not borrow those capabilities or autorun rules.
+        if (profile.empty() || kind == AddonKind::Tool || kind == AddonKind::Upscaler || kind == AddonKind::Ui) return {};
         for (const auto& s : server_addons_)
             if (s.kind == kind && s.name == name) return "This server has its own " + name + ": that one runs there.";
         if (!rules.configured) return {};
@@ -416,7 +472,7 @@ void ClientApp::update_addons() {
         r.state = std::string(addon_state_word(s.state));
         r.state_text = state_text(s);
         r.new_version = s.new_version;
-        r.caps = plugin::caps_described(a.caps);
+        r.caps = addon_access(a.kind, a.caps);
         if (s.state == AddonState::NeedsApproval) r.new_caps = plugin::caps_described(s.new_caps & ~a.caps);
         r.approve_caps = s.state == AddonState::NeedsApproval ? s.new_caps : a.caps;
         r.approve_version = s.new_version;
@@ -424,6 +480,8 @@ void ClientApp::update_addons() {
         r.note = server_note(a.kind, a.name, a.caps);
         required_consent(r, a);
         r.auto_update = a.auto_update;
+        r.managed = a.kind == AddonKind::Script && a.autoload;
+        r.enabled = r.managed && a.enabled;
         r.signed_ = a.key.has_value();
         r.can_update = addons_ != nullptr && s.installed &&
                        (s.state == AddonState::Available || s.state == AddonState::NeedsApproval ||
@@ -445,10 +503,12 @@ void ClientApp::update_addons() {
             r.page = repo_page(a.source);
             r.author = a.author;
             r.description = a.description;
-            r.caps = plugin::caps_described(a.caps);
+            r.caps = addon_access(a.kind, a.caps);
             r.note = server_note(a.kind, a.name, a.caps);
             required_consent(r, a);
             r.auto_update = a.auto_update;
+            r.managed = a.kind == AddonKind::Script && a.autoload;
+            r.enabled = r.managed && a.enabled;
             r.signed_ = a.key.has_value();
             r.can_remove = true;
             r.folder = path_text(addon_folder(data, a.kind, a.name));
@@ -579,6 +639,17 @@ void ClientApp::addons_login_action(ui::LoginAction action) {
         } else {
             v.status = {why, true};
         }
+        break;
+    }
+    case A::AddonEnabled: {
+        if (!row || row->group != "installed" || !row->managed) break;
+        const bool ok = addons_ ? addons_->set_enabled(row->name, v.choice_on)
+                               : set_addon_enabled(data, row->name, v.choice_on);
+        if (ok) {
+            addons_dirty_ = true;
+            if (automation_) automation_->refresh_managed_addons();
+            v.status = {row->name + (v.choice_on ? " is enabled." : " is disabled."), false};
+        } else v.status = {"The add-on activation setting could not be saved.", true};
         break;
     }
     case A::AddonAuto:

@@ -56,6 +56,46 @@ std::string lower(std::string_view s) {
 
 } // namespace
 
+// A script is found whatever the case of its name, on a case-sensitive file system as on Windows and macOS: the
+// loader asks for a lower-cased name, and an add-on keeps its package's spelling on disk (scripts/AutoLoot). The
+// exact spelling wins; otherwise each part of the path must have exactly one match that differs only in case, so
+// Foo/ beside foo/ is refused rather than one picked.
+std::optional<fs::path> script_spelled_path(const fs::path& root, const fs::path& relative) {
+    if (relative.empty() || relative.has_root_path()) return std::nullopt;
+    const auto& native = relative.native();
+    // Nothing rooted (a leading backslash is not, to Linux), no drive or stream (':'), no NUL.
+    if (native.front() == static_cast<fs::path::value_type>('\\') ||
+        native.find(static_cast<fs::path::value_type>(':')) != fs::path::string_type::npos ||
+        native.find(fs::path::value_type{}) != fs::path::string_type::npos)
+        return std::nullopt;
+    for (const auto& part : relative)
+        if (part == "." || part == "..") return std::nullopt;
+    // As UTF-8: path::string() throws on Windows for a name the code page cannot hold.
+    auto utf8 = [](const fs::path& p) {
+        const auto u = p.u8string();
+        return std::string(u.begin(), u.end());
+    };
+    fs::path current = root;
+    for (const auto& part : relative) {
+        std::error_code ec;
+        const fs::path exact = current / part;
+        if (fs::exists(exact, ec)) {
+            current = exact;
+            continue;
+        }
+        const std::string want = utf8(part);
+        std::optional<fs::path> found;
+        for (fs::directory_iterator it(current, ec), end; !ec && it != end; it.increment(ec)) {
+            if (!iequals(utf8(it->path().filename()), want)) continue;
+            if (found) return std::nullopt; // Foo and foo: neither
+            found = it->path();
+        }
+        if (!found || ec) return std::nullopt;
+        current = *found;
+    }
+    return current;
+}
+
 // The running one first: one stopped while pulse() or imgui() walked the list stays in it until reap().
 Script* ScriptHost::Impl::find(std::string_view name) const {
     Script* stopped = nullptr;
@@ -1067,6 +1107,13 @@ void search_module(Script& s, std::string_view given, ModuleFile& out) {
                     continue;
                 auto text = read_file(cand);
                 if (!text) continue;
+                for (const auto& addon : s.host->managed) {
+                    std::error_code entry_error;
+                    if (fs::equivalent(cand, addon.entry, entry_error)) {
+                        out.msg = "managed add-on '" + addon.name + "'s entry cannot be loaded as another script's module";
+                        return;
+                    }
+                }
                 Sha256Digest h = sha256(*text);
                 const std::string owner = script_identity(*s.host, cand, s.name);
                 const std::uint32_t module_caps =
@@ -1326,7 +1373,10 @@ std::optional<fs::path> ScriptHost::Impl::resolve(const std::string& name) const
         std::error_code ec;
         const fs::path root = fs::weakly_canonical(d, ec);
         if (ec) continue;
-        for (const fs::path& cand : {d / (base + ".lua"), d / base / "init.lua"}) {
+        for (const fs::path& relative : {fs::path(base + ".lua"), fs::path(base) / "init.lua"}) {
+            const auto spelled = script_spelled_path(d, relative.lexically_normal());
+            if (!spelled) continue;
+            const fs::path& cand = *spelled;
             if (in_config_dir(d, cand) || !fs::is_regular_file(cand, ec)) continue;
             // It must stay in the folder once links are followed.
             const fs::path rel = fs::weakly_canonical(cand, ec).lexically_relative(root);
@@ -1344,12 +1394,12 @@ void Script::close() {
     release_plugin(*this);
     if (host->env.hooks && owner) host->env.hooks->remove(owner);
     if (L) lua_close(L);
+    L = co = nullptr; // final cleanup must not revisit the state lua_close just freed
     // What the state's last code (a to-be-closed variable, a C finalizer) still gave the client, though need_caps
     // refuses it while closing: nothing may keep this Script once it is freed.
     release_plugin(*this);
     if (host->env.hooks && owner) host->env.hooks->remove(owner);
     owner = 0;
-    L = co = nullptr;
 }
 
 ScriptHost::ScriptHost(ScriptEnv env) : impl_(std::make_unique<Impl>()) {
@@ -1539,6 +1589,17 @@ bool ScriptHost::run(const std::string& name, const std::vector<std::string>& ar
     auto text = read_file(*entry);
     if (!text) return refuse("cannot read " + entry->string());
     Sha256Digest hash = sha256(*text);
+    const ManagedScript* managed = nullptr;
+    for (const auto& addon : m.managed) {
+        std::error_code ec;
+        if (fs::equivalent(*entry, addon.entry, ec)) { managed = &addon; break; }
+    }
+    // Activation follows the installed file, not its spelling in /lua run. Paths such as addon/init.lua,
+    // dotted aliases and in-folder links must never bypass disabled state or create a second owner of its UI.
+    if (managed && (!managed->enabled || !managed->verified || hash != managed->hash))
+        return refuse(key + ": the installed add-on is disabled or its installed files do not verify");
+    if (managed && key != managed->name)
+        return refuse(key + ": use the installed add-on's name " + managed->name);
     if (!m.env.policy) return refuse("scripts are off");
     std::uint32_t caps = m.env.policy->caps(plugin::FileKind::Script, hash, script_identity(m, *entry, key));
     if (caps == 0) return refuse(std::format("{} may not run: {}", key, m.env.policy->refusal(plugin::FileKind::Script)));
@@ -1557,6 +1618,8 @@ bool ScriptHost::run(const std::string& name, const std::vector<std::string>& ar
     sc.entry = *entry;
     sc.root = entry->parent_path();
     sc.hash = hash;
+    sc.managed = managed != nullptr;
+    if (managed) sc.managed_revision = managed->revision;
     sc.caps = caps;
     sc.args = args;
     sc.owner = m.env.hooks->new_guest("lua:" + key);
@@ -1875,6 +1938,7 @@ void ScriptHost::policy_changed(const std::vector<std::string>& autoload) {
             m.end(s, "stopped: it may not run here");
         } else if (caps != s.caps) {
             s.caps = caps;
+            invalidate_plugin_lifecycle(s);
             m.say(std::format("[Lua] {} now may: {}", s.name, plugin::caps_text(caps)));
         }
     }
@@ -1885,6 +1949,7 @@ void ScriptHost::policy_changed(const std::vector<std::string>& autoload) {
             if (button_running(social)) m.say("[Lua] " + s.name + " stopped: this server does not let it run on");
             m.stop_threads(s);
         } else {
+            if (s.caps != r.caps) invalidate_plugin_lifecycle(s);
             s.caps = r.caps;
         }
     }
@@ -1910,6 +1975,66 @@ void ScriptHost::policy_changed(const std::vector<std::string>& autoload) {
     // The player's own the settings and the character's autorun list name.
     m.start_allowed(autoload);
     m.start_allowed(m.autorun);
+    m.start_managed();
+}
+
+std::size_t ScriptHost::retry_required_addons() {
+    Impl& m = *impl_;
+    if (!m.env.policy || !m.env.policy->current() || m.env.policy->current()->provisional) return 0;
+    m.reap();
+    std::size_t started = 0;
+    const auto required = m.required; // (run() can reach policy_changed)
+    for (const auto& [name, hash] : required) {
+        if (running(name)) continue;
+        const auto file = m.resolve(name);
+        const auto text = file ? read_file(*file) : std::nullopt;
+        if (!text || sha256(*text) != hash || m.env.policy->caps(plugin::FileKind::Script, hash, name) == 0) continue;
+        log::info("lua: the player retries the required add-on {}", name);
+        if (run(name, {})) ++started;
+    }
+    return started;
+}
+
+void ScriptHost::Impl::start_managed() {
+    if (!env.policy || !env.policy->received()) return;
+    for (const auto& addon : managed) {
+        if (!addon.enabled || !addon.verified || self->running(addon.name)) continue;
+        auto entry = resolve(addon.name);
+        std::error_code ec;
+        if (!entry || !fs::equivalent(*entry, addon.entry, ec)) continue; // never start a shadowing server/manual file
+        const auto hash = file_hash(*entry);
+        if (!hash || *hash != addon.hash || env.policy->caps(plugin::FileKind::Script, *hash) == 0) continue;
+        self->run(addon.name, {});
+    }
+}
+
+void ScriptHost::set_managed_addons(std::vector<ManagedScript> addons) {
+    Impl& m = *impl_;
+    for (auto& addon : addons) addon.name = lower(addon.name);
+    // No unverified manifest or changed file can turn into a hand-installed script through this path.
+    for (auto& sp : m.scripts) {
+        Script& s = *sp;
+        const auto found = std::find_if(addons.begin(), addons.end(), [&](const ManagedScript& a) {
+            std::error_code path_error;
+            return fs::equivalent(s.entry, a.entry, path_error);
+        });
+        std::error_code ec;
+        const bool owns_entry = found != addons.end() && fs::equivalent(s.entry, found->entry, ec);
+        if (s.managed && (found == addons.end() || !owns_entry || !found->enabled || !found->verified ||
+                          s.hash != found->hash || s.managed_revision != found->revision)) {
+            if (!s.stop_requested) m.end(s, "managed add-on deactivated or changed");
+        } else if (owns_entry) {
+            if (s.name != found->name || !found->enabled || !found->verified || s.hash != found->hash) {
+                if (!s.stop_requested) m.end(s, "managed add-on is disabled or modified");
+            } else {
+                s.managed = true;
+                s.managed_revision = found->revision;
+            }
+        }
+    }
+    m.managed = std::move(addons);
+    m.reap();
+    m.start_managed();
 }
 
 bool ScriptHost::required_addons_ready(std::string* problem) const {
