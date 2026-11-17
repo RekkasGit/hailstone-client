@@ -1,7 +1,7 @@
 // ClientApp: Zone load and unload, scene fog, listener and music, entering the zone.
 
 #include "app/client_app_internal.h"
-#include "app/neighbour_zones.h"
+#include "app/terrain_cache.h"
 
 #include <array>
 #include <algorithm>
@@ -129,20 +129,11 @@ void ClientApp::load_zone(const std::string& short_name) {
         ladders_task = start([&] { built_ladders = game::zone_ladders(built_from); });
         probe_task = start([&] { built_probe.emplace(built_from); });
         {
-            // The neighbours' ground measured on earlier visits shapes the land round the zone (app/neighbour_zones.h),
-            // and past them the zones of the world atlas (app/world_atlas.h).
             auto options = render::zone_render_options(game_);
-            atlas_land_ = atlas_land(game_, server_profile_.id, zone_->name,
-                                     horizon_cache_entries(game_, horizon_cache_dir(server_profile_.id, zone_->name),
-                                                           zone_->name));
-            // Where a zone's distant copy is cached, the copy draws its own trees (app/distant_copies.h).
-            options.horizon_sources =
-                horizon_hills_ ? without_copied_trees(game_, atlas_land_.sources) : atlas_land_.sources;
             options.terrain_cache = terrain_cache_path(server_profile_.id, zone_->name);
             options.light_shadow_keys = true; // render::plan_point_shadows shadows this zone's lights
             zone_renderer_ = std::make_unique<render::ZoneRenderer>(vk_, *zone_, shader_dir_, options);
         }
-        distant_hidden_key_ = 0;
         vk_.reset_history(); // the temporal upscaler's history shows the last zone
         mark("zone renderer");
         try {
@@ -353,8 +344,6 @@ void ClientApp::unload_zone() {
     if (audio_) audio_->set_zone("");
     if (zone_renderer_ || world_geometry_renderer_) vk_.wait_idle();
     world_geometry_renderer_.reset();
-    if (neighbours_) neighbours_->clear();
-    if (distant_copies_) distant_copies_->clear();
     ui_host_.zone_exits.clear();
     ui_host_.zone_exits_zone = 0;
     zone_renderer_.reset();
@@ -875,9 +864,9 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
     // The zone's depth pre-pass (render/zone_renderer.h set_depth_prepass), off by default; switched at once.
     if (name == "depth_prepass") return config_.get_bool("display.depth_prepass", false) ? 1 : 0;
     if (name == "color_grade") return config_.get_bool("display.color_grade", true) ? 1 : 0;
-    if (name == "neighbour_zones") return neighbour_zones_ ? 1 : 0;
     if (name == "horizon_hills") return horizon_hills_ ? 1 : 0;
     if (name == "volumetric_clouds") return volumetric_clouds_ ? 1 : 0;
+    if (name == "zone_fog") return edge_fog_ ? 1 : 0;
     if (name == "tree_detail") return tree_detail_;
     // Hailstone: NPCs the server leaves in the air are drawn on the floor (game::WorldState::ground_npcs), on by default.
     if (name == "ground_npcs") return config_.get_bool("display.ground_npcs", true) ? 1 : 0;
@@ -947,18 +936,17 @@ bool ClientApp::set_display_option(std::string_view name, int value) {
         config_.save(config_path_);
         return true;
     }
-    if (name == "neighbour_zones") {
-        // The zones past the outdoor zone lines drawn live (app/neighbour_zones.h): freed at once when turned off, and
-        // their distant copies drawn in their place.
-        neighbour_zones_ = value != 0;
-        config_.set_bool("display.live_neighbour_zones", neighbour_zones_);
-        config_.save(config_path_);
-        return true;
-    }
     if (name == "horizon_hills") {
         // The distant hills round an outdoor zone (render/horizon.h).
         horizon_hills_ = value != 0;
         config_.set_bool("display.horizon_hills", horizon_hills_);
+        config_.save(config_path_);
+        return true;
+    }
+    if (name == "zone_fog") {
+        // The fog bank past an outdoor zone's edge (render/zone_fog.h).
+        edge_fog_ = value != 0;
+        config_.set_bool("display.zone_fog", edge_fog_);
         config_.save(config_path_);
         return true;
     }

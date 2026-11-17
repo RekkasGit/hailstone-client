@@ -750,10 +750,10 @@ local function graphicsTab()
     check("distance_blur", "Distance Blur", "Softens the far distance a little (modern lighting).")
     check("depth_prepass", "Depth Pre-pass",
       "Draws the zone's shapes once without lighting first, then lights only what is in front, so surfaces hidden behind others are not lit (modern lighting). Applies at once, so you can compare.")
-    check("neighbour_zones", "Live Neighbour Zones",
-      "Draws the next zone past an outdoor zone line whole from its own files, in place of its low-detail copy. Shows the neighbour's boundary walls and filler, and costs more (modern lighting; scenery only).")
     check("horizon_hills", "Horizon Hills",
       "Land, hills and mountains past the edges of outdoor zones, in the zone's own ground, so the world does not end in haze (modern lighting; scenery only).")
+    check("zone_fog", "Zone Edge Fog",
+      "A fog bank on the ground past the edges of outdoor zones, so the world fades into mist at a zone line instead of ending; the far mountains rise out of it (modern lighting).")
     check("volumetric_clouds", "Volumetric Clouds",
       "Clouds with depth that drift with the wind, light with the sun and close over in a storm, in place of the painted cloud layer (modern lighting, open skies). Turn off if the frame rate drops outdoors.")
     slider("tree_detail", "Tree Detail Distance", 50, 200, pct,
