@@ -1545,7 +1545,7 @@ services does anything until a plugin uses it.
   and installed configurations. Bag contents are never reported as augment IDs.
 - `item_flags`, `item_description_append`, `item_presentation_revision` and `loot_confirmation` let an active
   extension supply plain text metadata and an additional loot question. They do not suppress stock no-drop
-  confirmation. `zone_display_name(zone_id, instance_id)` changes a display label only, never protocol identity.
+  confirmation. `zone_display_name(zone_id, instance_id)` changes a display label only (the HUD's and the map's zone name), never protocol identity: the `Zone` TLO and `Zone.Name` stay the zone's own long name.
 - `get_memorized_spell` (`read`) returns a received usable gem's spell ID, zero for empty or unavailable.
   `monotonic_ms` (`read`) uses the same epoch as a world frame's `now_ms`, independent of wall-clock time.
 - `measure_binary(kind, out)` (`read`, main thread) measures either the platform-resolved running executable file
