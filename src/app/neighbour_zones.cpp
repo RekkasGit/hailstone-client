@@ -347,6 +347,11 @@ std::uint64_t NeighbourZones::drawn_key() const {
     return key;
 }
 
+void NeighbourZones::drawn_names(std::vector<std::string>& out) const {
+    for (const Line& l : lines_)
+        if (l.renderer && !l.idle) out.push_back(l.name);
+}
+
 std::size_t NeighbourZones::loaded() const {
     return static_cast<std::size_t>(std::count_if(lines_.begin(), lines_.end(), [](const Line& l) { return l.renderer != nullptr; }));
 }

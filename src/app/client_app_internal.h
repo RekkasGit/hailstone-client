@@ -122,6 +122,7 @@
 #include "app/stats_ui.h"
 #include "app/actions_ui.h"
 #include "app/neighbour_zones.h"
+#include "app/distant_copies.h"
 #include "app/world_atlas.h"
 #include "app/world_objects.h"
 #include "app/zone_move_world.h"
@@ -330,6 +331,7 @@ public:
         spawn_renderer_ = std::make_unique<render::SpawnRenderer>(vk_, shader_dir_);
         world_objects_ = std::make_unique<WorldObjects>(vk_, game_, shader_dir_);
         neighbours_ = std::make_unique<NeighbourZones>(vk_, game_, shader_dir_);
+        distant_copies_ = std::make_unique<DistantCopies>(vk_, game_, shader_dir_);
         log_memory("startup: world objects");
         spell_ui_ = std::make_unique<SpellUi>(vk_, game_);
         item_ui_ = std::make_unique<ItemUi>(vk_, game_);
@@ -1269,6 +1271,9 @@ private:
     // display.neighbour_zones.
     std::unique_ptr<NeighbourZones> neighbours_;
     bool neighbour_zones_ = true;
+    // The zones the world atlas places past it, drawn far out as low-detail copies (app/distant_copies.h); with the
+    // land, display.horizon_hills.
+    std::unique_ptr<DistantCopies> distant_copies_;
     // The world atlas's part in the land round the zone (app/world_atlas.h), as the zone was loaded: the cuts for the
     // neighbours' ground measured this visit, and the zones whose record the neighbour zones' loader measures.
     AtlasLand atlas_land_;

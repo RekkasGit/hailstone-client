@@ -564,6 +564,17 @@ int ClientApp::run() {
                             !load_atlas_zone(game_, zone_->name))
                             in.atlas_missing.insert(in.atlas_missing.begin(), zone_->name);
                         neighbours_->enter(in);
+                        // The atlas's zones as distant copies (app/distant_copies.h), over the land just built.
+                        if (distant_copies_) {
+                            std::vector<DistantCopies::Placed> placed;
+                            for (const auto& p : atlas_land_.placed_zones) {
+                                DistantCopies::Placed c{p.zone, p.offset, {}};
+                                if (auto it = atlas_land_.cuts.find(p.zone); it != atlas_land_.cuts.end())
+                                    c.keep = it->second;
+                                placed.push_back(std::move(c));
+                            }
+                            distant_copies_->enter(std::move(placed), in.horizon);
+                        }
                     }
                     neighbours_->update(camera_.position, lit.far_plane, modern && neighbour_zones_ && in_game);
                     lap.mark("neighbour zones update");
@@ -571,6 +582,15 @@ int ClientApp::run() {
                     neighbours_->set_lighting(lighting);
                     neighbours_->set_lod_scale(static_cast<float>(tree_detail_) / 100.0f);
                     neighbours_->set_debug_tint(neighbour_tint_);
+                }
+                if (distant_copies_) {
+                    std::vector<std::string> live;
+                    if (neighbours_ && modern && neighbour_zones_ && in_game) neighbours_->drawn_names(live);
+                    distant_copies_->update(in_game && modern && outdoor && horizon_hills_ &&
+                                                (!sky_renderer_ || sky_renderer_->has_atmosphere()),
+                                            live);
+                    distant_copies_->set_scene_light(scene_light);
+                    distant_copies_->set_lighting(lighting);
                 }
                 frame_lighting_ = lighting;
                 if (actor_renderer_) {
@@ -706,11 +726,16 @@ int ClientApp::run() {
             if (zone_renderer_) {
                 zone_renderer_->set_distant(in_game && modern && outdoor && horizon_hills_ &&
                                             (!sky_renderer_ || sky_renderer_->has_atmosphere()));
-                const std::uint64_t drawn = neighbours_ && modern && neighbour_zones_ && in_game ? neighbours_->drawn_key() : 0;
+                const std::uint64_t live = neighbours_ && modern && neighbour_zones_ && in_game ? neighbours_->drawn_key() : 0;
+                const std::uint64_t copied = distant_copies_ ? distant_copies_->drawn_key() : 0;
+                const std::uint64_t drawn = live * 1000003u + copied;
                 if (drawn != distant_hidden_key_) {
                     distant_hidden_key_ = drawn;
                     std::vector<std::int64_t> cells;
-                    if (drawn) neighbours_->footprint(cells);
+                    if (live) neighbours_->footprint(cells);
+                    if (copied) distant_copies_->footprint(cells);
+                    std::sort(cells.begin(), cells.end());
+                    cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
                     zone_renderer_->set_distant_hidden(std::move(cells));
                 }
             }
@@ -721,6 +746,7 @@ int ClientApp::run() {
             lap.mark("zone draw");
             const bool neighbours = neighbours_ && modern && neighbour_zones_ && in_game;
             if (neighbours) neighbours_->draw(*f, vp, camera_.position, lit, t, first);
+            if (distant_copies_) distant_copies_->draw(*f, vp, camera_.position, lit, t, first);
             lap.mark("neighbour zones draw");
             // Objects still draw their blended parts in the same call as their opaque parts.
             // Keep their background first, and the existing object/actor/silhouette order intact.
@@ -787,6 +813,8 @@ int ClientApp::run() {
                 if (zone_renderer_)
                     zone_renderer_->draw(*f, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
                 if (neighbours) neighbours_->draw(*f, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
+                if (distant_copies_)
+                    distant_copies_->draw(*f, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
             }
             // The target ring lies on the depth copy (taken above, or by it in the classic lighting), under the
             // weather and particles. Character select draws no target.

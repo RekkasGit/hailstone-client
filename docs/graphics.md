@@ -1796,13 +1796,63 @@ zone's own geometry. `game/world_atlas.h` holds the records and the walk, `app/w
   its cover (`HorizonMesh::tint`; a record's colours softened over 5 x 5 squares, so its squares do not show as a
   checkerboard), and `zone.frag` (`kLandTint`) multiplies the texture by that colour over the texture's own average
   (its last mip). From Qeynos Hills, South Qeynos's cobbles and brick past North Qeynos instead of more grass.
-- **Not yet**: their buildings: a classic city's houses are its terrain, which the 64-unit record flattens (South
-  Qeynos: 471 of its 562 squares with ground have their highest point under 10 units over the ground); drawing them
-  means drawing those zones' geometry as the neighbour zones are (tens of megabytes each). The zones reached only by
+- **Their buildings**: a classic city's houses are its terrain, which the 64-unit record flattens (South Qeynos: 471 of
+  its 562 squares with ground have their highest point under 10 units over the ground); far out, the distant copies
+  (below) draw them. The zones reached only by
   boat are not in it: the stock PEQ test server gives South Qeynos no zone point to Erud's Crossing (its boats are
   translocator NPCs, whose destination says nothing of where the zones lie), and the open sea past the harbour fills
   that view. A zone not visited on the server is not either (a server's zone list and zone points come from it
   alone); whether a zone's line past a tunnel should place it on the horizon is not settled (it does).
+
+## Distant copies
+
+Far out past the current zone's edge, each zone the world atlas places (above; its neighbours too) is drawn as a
+low-detail copy of itself, in place of the land there: from Qeynos Hills, Qeynos's houses, quays and canals past North
+Qeynos; from East Karana, the real ground, paths and trees of the Karanas round it. Hailstone's own; the original drew
+nothing past a zone's own geometry. `render/zone_proxy.h` bakes and builds a copy, `app/distant_copies.h` loads and
+draws them.
+
+- **The bake** (`render::bake_zone_proxy`, on a background thread at low priority, cached as `cache/proxies/<zone>.bin`
+  keyed by the zone's files as the atlas's records are): the zone loaded from the asset folder and drawn from above on
+  the CPU, its terrain and its placed objects (a city's roofs and walls), not its water and lava (the land draws those),
+  what is not drawn or glows, or its plants: heights every 16 units (each cell's highest point, then opened over three
+  cells, so posts and banners do not stand as spikes) and its colour seen from above every 8 units, from the game's own
+  textures (a texture pack's are not read), at most 1024 texels a side (a cell two texels). The steep triangles, its
+  walls, give each cell they stand in the colour of its walls (the texels under seven points of each, the mean,
+  darkened to 0.85), kept beside the picture, a texel a cell; a cell with no wall of its own takes its colour from
+  above, darkened to 0.6. Its trees (plants at least 20 units tall at their placement's scale) are kept as tree
+  pictures where they stand (render/tree_impostor.h), each placement tinted by its own light. Every vertex of the copy
+  takes the zone's baked light on its terrain (the median vertex colour). 22 to 133 ms a zone past loading it (Beholder's
+  Maze to South Qeynos); from the cache 4 to 39 ms.
+- **Its boundary**: within 384 units of the edge of what it has (the grid's border, or a gap the border reaches
+  through cells with nothing, so a harbour or canal inside it is no edge), where a zone keeps its boundary walls and
+  filler, a cell is kept only when it stands at most 150 units over the zone's own ground near it (the median of the
+  cells past that ring in blocks of 16 x 16 cells, the nearest block with any within three): a city's wall stays, the
+  mountains ringing a wild zone go. A piece cut off from the rest that is smaller than 256 cells goes too. The
+  prototype's floating piece of West Karana's border ridge over Qeynos Hills is gone so.
+- **Drawn** (`render::proxy_zone`, built on the loader with the current zone's land): a zone of its own for the zone
+  renderer, moved by the atlas's offset and cut by its planes (as a neighbour's geometry is), its pictures given to it
+  as generated files. From 1200 units past the current zone's edge (by the land's field: none in the zone's own squares
+  or its pockets), so the live neighbours and the land keep the near band, rising out of the land over 400 units (60
+  under its own height at the start, 3 over it past the band, so it draws over the land where the two meet); its trees
+  only past that band. Coarser with the distance: a cell every 1, 2 or 4 cells (within 3000 units of the zone's edge,
+  6000, past), 32 cells to a chunk, a chunk next to one of another step skirted down under the seam so no crack shows.
+  A steep quad (its corners more than 1.2 times its width apart in height) is drawn in the walls' colour of its
+  highest cell rather than the picture from above stretched down it. Each copy is 3,000 to 113,000 triangles (the
+  prototype drew 0.8 to 2.1 million for the zones round one zone).
+- **The land under it**: the land's squares a copy covers whole past its band are hidden, as under a drawn neighbour
+  (`ZoneRenderer::set_distant_hidden`); where a copy's zone is cached, the land does not plant that zone's trees too
+  (`app::without_copied_trees`), the copy's own stand there.
+- **With the neighbours**: a neighbour zone drawn live wins over its copy, which is not drawn while it is
+  (`NeighbourZones::drawn_names`). No shadows, as the neighbours'.
+- **Cost** (zone viewer, 1600 x 900, the five comparison views at clip plane 20, view distance 4): 0.00 to 0.09 ms of
+  frame time (East Karana 0.79 ms with them, 0.70 without; North Karana 1.05 both), and 72 to 104 MB more at the peak,
+  much of it the zone loaded for a bake, freed after.
+
+They go with the land (`display.horizon_hills`, Options, Horizon Hills): the land they stand in for, and drawn under
+the same conditions. The viewer takes `--no-distant-copies`. Open: a city's houses read as coloured blocks close to the
+band; the copies' trees are their own zone's but drawn as flat pictures; the steep threshold and the boundary's
+thresholds were set by eye on the classic zones round Qeynos and the Karanas.
 
 ## Smoothed ground
 

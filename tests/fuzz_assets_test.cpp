@@ -39,6 +39,7 @@
 #include "platform/gpu_ipc.h"
 #include "render/gpu_cache_protocol.h"
 #include "render/horizon.h"
+#include "render/zone_proxy.h"
 #include "fuzz_support.h"
 #include "scratch_dir.h"
 #include "pfs_fixtures.h"
@@ -880,5 +881,45 @@ TEST_CASE("fuzz: the world atlas's records") {
         for (glm::vec2 p : {glm::vec2(0.0f), glm::vec2(400.0f, 200.0f), glm::vec2(-1e6f, 1e6f), glm::vec2(511.9f, 319.9f)})
             (void)got->ground_at(p);
         (void)game::collect_neighbour_lines(got->lines, v.points, 0);
+    });
+}
+
+// ---- The distant copies' cache (render/zone_proxy.h) ---------------------------------------------------------------
+// read_zone_proxy, then the copy it gives turned into its zone: a broken file must be refused or give a copy that
+// builds without reading past its grid or its pictures.
+
+TEST_CASE("fuzz: the distant copies' cache") {
+    fuzz::QuietLog quiet;
+    render::ZoneProxy z;
+    z.zone = "qeynos";
+    z.key = 5;
+    z.lo = {-100.0f, 50.0f};
+    z.cell = 16.0f;
+    z.texel = 8.0f;
+    z.nx = 6;
+    z.ny = 5;
+    z.height.assign(30, 4.0f);
+    z.height[7] = std::numeric_limits<float>::quiet_NaN();
+    z.drawn.assign(30, 1);
+    z.drawn[7] = 0;
+    z.top_width = 12;
+    z.top_height = 10;
+    z.picture.width = 12;
+    z.picture.height = 10 + render::kProxyStripGap + 5;
+    z.picture.mips.emplace_back(static_cast<std::size_t>(z.picture.width) * z.picture.height * 4, std::byte{0x80});
+    render::ZoneProxy::TreeKind kind;
+    kind.lo = {-5.0f, -5.0f, 0.0f};
+    kind.hi = {5.0f, 5.0f, 30.0f};
+    kind.image.width = 2;
+    kind.image.height = 2;
+    kind.image.mips.emplace_back(16, std::byte{0x40});
+    z.tree_kinds.push_back(kind);
+    z.trees.push_back({glm::mat4(1.0f), 0, 0xffffffffu});
+    REQUIRE(z.valid());
+    sweep("read_zone_proxy", {render::write_zone_proxy(z)}, 64, 1500, [&](std::span<const std::byte> d) {
+        (void)render::read_zone_proxy_header(d);
+        auto got = render::read_zone_proxy(d);
+        if (!got) return;
+        (void)render::proxy_zone(*got, nullptr, glm::vec3(3000.0f, 0.0f, 0.0f), {});
     });
 }
