@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Name plates: mercenaries' names are amber, the original's colour; they were drawn light blue from the original's colour bytes read in the wrong order
+- Name plates: GM names show green as the original client does, your own GM character's too, and stay green when targeted; an anonymous or roleplaying GM's name keeps the ordinary colour
 - Chat: spell hit modes now also shorten complete non-melee damage and healing reports sent as generic or plain-text server messages, including reports with a spell name in parentheses and stock EQEmu's "You have been healed for N points of damage.". A line spoken by someone ("Somebody says, Bob hit Fred for ...") stays whole. Full sentences remain in logs and incoming-chat hooks
 - Performance: keeping moving NPCs on the ground no longer searches the zone's collision a second time when a physics step has just landed the spawn on its floor
 - Frame rate: the login, server select, character select/creation and loading screens (including the last stretch of a zone-in) no longer run as fast as they can when `display.max_fps` is unlimited; they are capped at 240 fps; any other `display.max_fps` value is still followed exactly
