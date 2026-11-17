@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Environmental particles: legacy server-placed effects now draw from invisible particle switches, restoring missing waterfall cascades
+- `/doability` takes the name of any of your abilities as well as the Actions window's button (`/doability Bash`, `/doability fury`, in any case): a skill, a discipline or an activated AA, used as its Ability Book row is; a name that is more than one kind's is the skill's first, then the discipline's, then the AA's. A number still means button 1-10
+- For plugin authors: `use_ability` uses one of the player's skills, disciplines or activated AAs by name as the Ability Book's row does, and `ability_state` says whether it is ready (its remaining and reuse time); both are added later in ABI 3, so test `HAILSTONE_HOST_HAS` first (docs/plugins.md)
+- For plugin authors: `get_ability_data_bulk` gives the Ability Book's usable entries in one call: an `HS_Bulk_ListHeader` and an `HS_Bulk_AbilityRecord` per skill, discipline and owned activated AA, each with its kind, stable id, name, ready flag, remaining and reuse time, so a rotation checks its whole list in one pass instead of calling `ability_state` per entry (added later in ABI 3; docs/plugins.md)
 - Performance window (Ctrl+Shift+P, `/perf`): the "Frame sections" table updates twice a second instead of every frame and draws only the rows in view, so keeping it open costs far less frame time and its numbers can be read
 - Frame cap: `display.max_fps` (and `--max-fps`) is now held to the frame on every system. On Windows a cap of 144 ran at about 128, because each frame's wait woke up to a millisecond late and the next frame was timed from that late start
 - Frame cap: Options > Display > Frame Rate Limit has Auto (`display.max_fps = -1`, `--max-fps auto`), a little under the display's refresh rate (138 at 144 Hz, 116 at 120 Hz). With FreeSync or G-Sync it keeps every frame inside the display's range, so play is as smooth as with vsync without vsync's delay

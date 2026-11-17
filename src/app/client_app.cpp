@@ -288,6 +288,10 @@ int ClientApp::run() {
             audio_->update(now_ms);
         }
         if (zone_particles_ && (in_world || pre_game)) zone_particles_->update(dt, camera_.position);
+        if (switch_particles_ && in_world && conn_) {
+            switch_particles_->reconcile(conn_->doors());
+            switch_particles_->update(dt, camera_.position);
+        }
         if (spell_particles_ && in_world && conn_) {
             auto cues = conn_->take_spell_effect_cues();
             auto effect_packets = conn_->take_effect_packets();
@@ -880,6 +884,11 @@ int ClientApp::run() {
                 rec.add(*f, zone_particles_.get(), [&](const render::FrameInfo& fr) {
                     zone_particles_->draw(fr, vp, camera_.view(), modern ? render::kParticleGlow : 1.0f, !modern,
                                           particle_lighting);
+                });
+            if (switch_particles_ && in_game)
+                rec.add(*f, switch_particles_.get(), [&](const render::FrameInfo& fr) {
+                    switch_particles_->draw(fr, vp, camera_.view(), modern ? render::kParticleGlow : 1.0f,
+                                            particle_lighting);
                 });
             if (modern && fire_renderer_)
                 rec.add(*f, fire_renderer_.get(), [&](const render::FrameInfo& fr) {
