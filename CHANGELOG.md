@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Permission requests for required plugins appear above the loading screen, where players can allow or refuse them.
 - Modern lighting: shadows from the sun and from torches and other lights cost less GPU time and look the same. A light's shadow is now only read where the light reaches, and the soft shadow edge takes four texture reads instead of nine
 - Performance window: a new "GPU passes" table shows how long the GPU spends on each part of the frame (shadows, the zone, characters, ambient occlusion, bloom, the UI and so on). While the scene is recorded on the worker threads (`display.parallel_record`, the default) the scene shows as a whole (two rows in the modern lighting: its opaque part and the rest); `display.parallel_record = 0` splits them again
 - Lighting has a third level between Classic and Modern: Smooth Classic, the classic light worked out per pixel instead of at the corners of each triangle, so trees' leaves show their sunlit and shaded sides and brightly lit walls no longer dim between their corners, and torch and brazier flames keep colour in their cores instead of clipping to flat white. Options > Graphics > Lighting (gamepad: Display) now lists Classic (Low), Smooth Classic (Medium) and Modern (High); `/lighting smooth` picks it. Classic stays the original's exact look

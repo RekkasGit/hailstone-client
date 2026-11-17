@@ -139,8 +139,9 @@ int ClientApp::run() {
         // The gamepad before the UI frame: its mode decides what ImGui gets from it (docs/gamepad.md).
         update_gamepad(dt);
         // /safelock: the windows get no mouse while the interface is locked (__ProcessMouseEvents).
-        // Behind the loading screen (zone_settle_) neither do they.
-        ui_.set_mouse_locked(conn_ && screen_ == Screen::InGame && (conn_->interface_locked() || zone_settling()));
+        // Behind the loading screen (zone_settle_) neither do they, except to answer a native plugin question.
+        ui_.set_mouse_locked(ui_mouse_locked(conn_ && screen_ == Screen::InGame, conn_ && conn_->interface_locked(),
+                                             zone_settling(), automation_ && automation_->plugin_consent().has_value()));
         ui_.new_frame();
         update_lap.mark("gamepad, UI new frame");
         // The boats move first: the player is carried by, and collides with, a boat where it is drawn this frame.
@@ -237,7 +238,8 @@ int ClientApp::run() {
         }
         window_.set_text_input(std::exchange(web_text_input_, false) && ui_.visible()); // a page that has the keys (app/lua_ui_web.cpp)
         settle_frame_.ui = true; // UI maintenance ran; loading/settling presentations are always visible
-        if (screen_ == Screen::InGame && zone_settling()) ui::loading_overlay(loading_view_);
+        if (screen_ == Screen::InGame && zone_settling())
+            ui::loading_overlay(loading_view_, !(automation_ && automation_->plugin_consent().has_value()));
         if (automation_ && ui_.visible()) automation_->imgui(game_view_.dev_windows);
         if (ui_.visible()) addon_policy_window();
         // The select clock runs on through character creation (input scripts drive both screens).
