@@ -102,7 +102,7 @@ without a pool (the tests, the tools) or from inside a worker it runs the loop i
   place is read from the poses as drawn (on the main thread), then both particle systems step on a worker while the
   frame is submitted and the next one begins; every other call on them waits for the step. The next frame draws the
   result, from the same poses the step used before (those drawn the frame before), the particles' own time one frame
-  behind. The item previews' and the tests' emitters still step inline.
+  behind. The item previews' emitters still step inline; the tests take both ways (the constructor's `async`).
 - The scene's command recording (`render::SceneRecorder`, `display.parallel_record`). Each draw between `begin_scene`
   and the scene's end is a job in a lane: a renderer's own draws share its lane, and the characters, the spawn boxes,
   the target ring and the isometric markers share one (the markers ask the character renderer's caches, and the
