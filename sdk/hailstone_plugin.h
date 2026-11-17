@@ -299,7 +299,7 @@ typedef struct HS_Bulk_RaidData {
     int32_t pctHPs;       /* -1 unknown */
     int32_t pctMana;      /* -1 unknown; group members only */
     int32_t pctEndurance; /* -1 unknown; group members only */
-    uint32_t petSpawnID;  /* 0 none */
+    uint32_t petSpawnID;  /* 0 none; never a mercenary or a temporary pet */
     int32_t petPctHPs;    /* -1 unknown or no pet */
     float x, y, z;        /* the zone's coordinates, as HailstoneSpawn.x/y/z */
     float distance;       /* 3D from the player; 0 when the member is not here */

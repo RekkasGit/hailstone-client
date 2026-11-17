@@ -1139,6 +1139,25 @@ TEST_CASE("native plugins: get_raid_data_bulk roster, pets, positions and edge c
     CHECK(h.printed_line("[Probe] raid 2: Guard 0 g0 f0 l0 c0 hp-1 mp-1 ep-1 pet0 ph-1"));
     CHECK(h.printed_line("[Probe] raid pos 2: 0.00 0.00 0.00 0.00"));
 
+    // A mercenary and a temporary pet carry their owner in pet_owner_id too (EQEmu's FillSpawnStruct), but neither is
+    // the member's pet: with a real pet up that one answers, and with only a mercenary and a swarm pet there is none.
+    h.world.add(54, "Pinmerc001", true, 20, {3, 4, 0});
+    h.world.add(55, "Solo", false, 30, {0, 0, 0});
+    h.world.add(56, "Solomerc001", true, 30, {0, 0, 0});
+    h.world.add(57, "Solo`s_swarm", true, 30, {0, 0, 0});
+    w.spawns[54].mercenary = true;
+    w.spawns[54].pet_owner_id = 50;
+    w.spawns[56].mercenary = true;
+    w.spawns[56].pet_owner_id = 55;
+    w.spawns[57].temp_pet = true;
+    w.spawns[57].pet_owner_id = 55;
+    raid.members = {mq_test::raid_member("Pin", 0, 1, 10), mq_test::raid_member("Solo", 1, 2, 30)};
+    h.printed.clear();
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid 0: Pin 50 g0 f128 l10 c1 hp100 mp40 ep60 pet51 ph55"));
+    CHECK(h.printed_line("[Probe] raid 1: Solo 55 g1 f128 l30 c2 hp100 mp-1 ep-1 pet0 ph-1"));
+    for (std::uint32_t id : {54u, 55u, 56u, 57u}) w.spawns.erase(id);
+
     // The player's own record with no spawn and max HP 0: HP is unknown, not 0, but the roster's level and class
     // and the player's own mana and endurance still answer.
     auto& ps = A::status(*h.world.conn);
@@ -1151,6 +1170,29 @@ TEST_CASE("native plugins: get_raid_data_bulk roster, pets, positions and edge c
     CHECK(h.printed_line("[Probe] raid active 1, count 1, total 1, leader 4294967295, target 4294967295, locked 0, loot 1, 164 bytes"));
     CHECK(h.printed_line("[Probe] raid 0: Tester 0 g0 f256 l50 c2 hp-1 mp25 ep50 pet0 ph-1"));
     CHECK(h.printed_line("[Probe] raid pos 0: 0.00 0.00 0.00 0.00"));
+
+    // Mana and endurance past RoF2's limits: cur * 100 does not fit 32 bits, and the percent is still right.
+    ps.mana = 30'000'000;
+    ps.max_mana = 40'000'000;
+    ps.endurance = 25'000'000;
+    ps.max_endurance = 50'000'000;
+    h.printed.clear();
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid 0: Tester 0 g0 f256 l50 c2 hp-1 mp75 ep50 pet0 ph-1"));
+
+    // The player's spawn is in the world but world.player_id is not known yet: the character name says which member
+    // is the player, and the distance is measured from that spawn.
+    h.world.add(1, "Tester", false, 50, {0, 0, 0});
+    h.world.add(58, "Farther", false, 20, {0, 0, 7});
+    w.player_id = 0;
+    raid.members = {mq_test::raid_member("Tester", 0, 2, 50), mq_test::raid_member("Farther", 0, 2, 20)};
+    h.printed.clear();
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid 0: Tester 1 g0 f384 l50 c2 hp-1 mp75 ep50 pet0 ph-1"));
+    CHECK(h.printed_line("[Probe] raid 1: Farther 58 g0 f128 l20 c2 hp100 mp-1 ep-1 pet0 ph-1"));
+    CHECK(h.printed_line("[Probe] raid pos 1: 0.00 0.00 7.00 7.00"));
+    w.player_id = 1;
+    w.spawns.erase(58);
 
     // No 72-member cap: every whole record fits, and reserved says how many the roster has.
     raid.members.clear();

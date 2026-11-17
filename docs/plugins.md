@@ -860,7 +860,7 @@ and say so in the chat window.
   | 24 | i32 | HP percent; -1 when unknown |
   | 28 | i32 | mana percent; -1 when unknown (the client has it only for group members) |
   | 32 | i32 | endurance percent; same |
-  | 36 | u32 | pet spawn id; 0 none |
+  | 36 | u32 | pet spawn id (the pet window's for the player, else a spawn the member owns that is neither a mercenary nor a temporary pet); 0 none |
   | 40 | i32 | pet HP percent; -1 unknown or no pet |
   | 44 | f32 | x (the zone's coordinates, as `HailstoneSpawn.x`) |
   | 48 | f32 | y |

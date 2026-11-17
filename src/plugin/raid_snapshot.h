@@ -69,7 +69,11 @@ struct NameEqual {
 };
 
 // A raid member is a player or a mercenary, never an ordinary NPC: the name index leaves NPCs (and pets) out, so a
-// roster name cannot pick up a guard or a pet with the same name. The pet index is every live spawn with an owner.
+// roster name cannot pick up a guard or a pet with the same name. The pet index is every live spawn with an owner
+// except a mercenary and a temporary pet: EQEmu sends a mercenary with its owner in petOwnerId (Mob::FillSpawnStruct,
+// Merc::SetMerc), and a swarm pet is not the member's pet either, as the group window's pet rule has it
+// (GameConnection's own-pet tracking skips temp_pet too). Without that, a member with a pet and a mercenary up would
+// get whichever the map met first.
 struct SpawnIndex {
     std::unordered_map<std::string_view, const game::Spawn*, NameHash, NameEqual> by_name;
     std::unordered_map<std::uint32_t, const game::Spawn*> pet_of;
@@ -83,7 +87,7 @@ inline SpawnIndex index_spawns(const net::GameConnection& c) {
     for (const auto& entry : c.world().spawns) {
         const game::Spawn& s = entry.second;
         if (s.is_corpse) continue;
-        if (s.pet_owner_id) index.pet_of.try_emplace(s.pet_owner_id, &s);
+        if (s.pet_owner_id && !s.mercenary && !s.temp_pet) index.pet_of.try_emplace(s.pet_owner_id, &s);
         if (s.is_npc && !s.mercenary) continue;
         index.by_name.try_emplace(s.name, &s);
         if (s.mercenary) index.mercenaries.push_back(&s);
@@ -114,17 +118,23 @@ inline RaidSnapshot build_raid_snapshot(const net::GameConnection& c) {
     out.active = raid.active;
     out.locked = raid.locked;
     out.loot_type = raid.loot_type;
-    const game::Spawn* self = c.world().player();
+    const std::uint32_t player_id = c.world().player_id;
     const detail::SpawnIndex index = detail::index_spawns(c);
+    // Before world.player_id is known the player's spawn can already be in the world: find it by the character name.
+    const game::Spawn* self = c.world().player();
+    if (!self && player_id == 0) {
+        const auto it = index.by_name.find(c.character_name());
+        if (it != index.by_name.end()) self = it->second;
+    }
     out.members.reserve(raid.members.size());
     for (std::size_t i = 0; i < raid.members.size(); ++i) {
         const game::RaidMember& m = raid.members[i];
         RaidMemberSnapshot s;
         s.name = m.name;
         const game::Spawn* spawn = detail::find_raid_spawn(index, m.name);
-        // The player's own spawn, or their roster name when the spawn is not in the world yet. world.player_id is
-        // the same id the extended target read uses.
-        const bool is_me = spawn ? spawn->id == c.world().player_id : iequals(m.name, c.character_name());
+        // The player's own spawn, or their roster name when the spawn is not in the world yet or world.player_id is
+        // not known yet. world.player_id is the same id the extended target read uses.
+        const bool is_me = spawn && player_id ? spawn->id == player_id : iequals(m.name, c.character_name());
         if (spawn) {
             s.spawn_id = spawn->id;
             s.x = spawn->position.x;
@@ -165,10 +175,12 @@ inline RaidSnapshot build_raid_snapshot(const net::GameConnection& c) {
         // member outside the player's group has neither.
         if (is_me) {
             const auto& ps = c.player_status();
-            s.pct_mana = ps.max_mana ? static_cast<std::int32_t>(ps.mana) * 100 / static_cast<std::int32_t>(ps.max_mana) : -1;
-            s.pct_endurance = ps.max_endurance
-                                  ? static_cast<std::int32_t>(ps.endurance) * 100 / static_cast<std::int32_t>(ps.max_endurance)
-                                  : -1;
+            // In 64 bits, as the HP line: a server past RoF2's limits can send pools where cur * 100 overflows 32.
+            const auto percent = [](std::uint32_t cur, std::uint32_t max) {
+                return max ? static_cast<std::int32_t>(std::int64_t{cur} * 100 / std::int64_t{max}) : -1;
+            };
+            s.pct_mana = percent(ps.mana, ps.max_mana);
+            s.pct_endurance = percent(ps.endurance, ps.max_endurance);
         } else if (spawn) {
             const auto mana = c.group().mana_percent.find(spawn->id);
             if (mana != c.group().mana_percent.end()) s.pct_mana = mana->second;
