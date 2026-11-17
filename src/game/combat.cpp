@@ -133,11 +133,13 @@ std::optional<std::uint32_t> npc_name_colour(const Spawn& s, int my_level, std::
 
 std::optional<std::uint32_t> gm_name_colour(const Spawn& s) {
     // PlayerClient::SetNameSpriteTint @0x58bf00 (rof2decomp name_sprite.cpp): races from 0x8cd up take their own tint
-    // first; then IsGM (vtable +0xdc, the record's gm byte) with Type != 1 and Anon == 0 gives the GM green. Type 1 is
-    // a live NPC only, so a corpse that carries the gm flag keeps it (EQEmu sends corpses with gm 0). Anon is the
-    // whole field, so anonymous (1) and roleplaying (2) both drop it. Its tint bytes are blue, green, red
+    // first; then IsGM (vtable +0xdc, the record's gm byte) with Type != 1 and Anon == 0 gives the GM green. Anon is
+    // the whole field, so anonymous (1) and roleplaying (2) both drop it. Its tint bytes are blue, green, red
     // (docs/graphics.md "Name plates").
-    if (!s.gm || s.race >= 0x8cd || (s.is_npc && !s.is_corpse) || s.anon != 0) return std::nullopt;
+    // A deliberate difference: Type 1 is a live NPC only, so the original keeps the green on a corpse that carries the
+    // gm flag; here a corpse never takes it and shows the ordinary corpse colour. Stock EQEmu sends corpses with gm 0,
+    // so this only shows on a server that does not.
+    if (!s.gm || s.race >= 0x8cd || s.is_npc || s.is_corpse || s.anon != 0) return std::nullopt;
     return 0x1da64bu;
 }
 
