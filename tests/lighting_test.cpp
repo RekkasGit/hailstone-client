@@ -106,6 +106,57 @@ using glm::inversesqrt;
 #include "../shaders/ao_kernel.glsl"
 }
 
+// The classic lighting's maths, the shaders' own (shaders/classic_light.glsl), compiled as C++.
+namespace classic_light_test {
+using glm::vec3;
+using glm::dot;
+using glm::max;
+using glm::clamp;
+using glm::exp;
+using glm::pow;
+#include "../shaders/classic_light.glsl"
+}
+
+TEST_CASE("classic_region_light: the vs_1_1 region light, saturated, the sun weighed by the vertex alpha") {
+    using classic_light_test::classic_region_light;
+    const glm::vec3 c(0.2f), ambient(0.1f), special(0.05f), bounce(0.0f), sun(0.5f);
+    const glm::vec3 dn(0.0f, 0.0f, -1.0f); // the light's way: down
+    const glm::vec3 up(0.0f, 0.0f, 1.0f), side(1.0f, 0.0f, 0.0f), none(0.0f);
+    CHECK(classic_region_light(c, 1.0f, up, ambient, special, bounce, sun, dn).x == doctest::Approx(0.85f));
+    CHECK(classic_region_light(c, 1.0f, side, ambient, special, bounce, sun, dn).x == doctest::Approx(0.35f));
+    // A mesh without normals takes no sun (the smooth path's zero normal).
+    CHECK(classic_region_light(c, 1.0f, none, ambient, special, bounce, sun, dn).x == doctest::Approx(0.35f));
+    // Indoors (alpha 0) neither the ambient nor the sun.
+    CHECK(classic_region_light(c, 0.0f, up, ambient, special, bounce, sun, dn).x == doctest::Approx(0.25f));
+    CHECK(classic_region_light(glm::vec3(0.9f), 1.0f, up, ambient, special, bounce, sun, dn).x == 1.0f);
+}
+
+TEST_CASE("soft_highlights: display values to 0.8 as they were, the rest rolled off below white") {
+    using classic_light_test::soft_highlight;
+    auto display = [](float linear) { return std::pow(linear, 1.0f / 2.2f); };
+    auto linear = [](float d) { return std::pow(d, 2.2f); };
+    for (float d : {0.0f, 0.1f, 0.5f, 0.79f}) CHECK(soft_highlight(linear(d)) == linear(d));
+    CHECK(display(soft_highlight(linear(1.0f))) == doctest::Approx(0.926f).epsilon(0.002));
+    CHECK(display(soft_highlight(linear(1.5f))) == doctest::Approx(0.994f).epsilon(0.002));
+    // Continuous at the knee, rising, and never past white.
+    CHECK(soft_highlight(linear(0.8001f)) == doctest::Approx(linear(0.8001f)).epsilon(1e-4));
+    float last = 0.0f;
+    for (float d = 0.0f; d < 4.0f; d += 0.01f) {
+        float out = soft_highlight(linear(d));
+        CHECK(out >= last);
+        CHECK(out <= 1.0f);
+        last = out;
+    }
+}
+
+TEST_CASE("automatic_tonemap: AgX modern, soft for the smooth classic lighting, none for the original's") {
+    CHECK(render::automatic_tonemap(true, true) == render::Tonemap::AgX);
+    CHECK(render::automatic_tonemap(true, false) == render::Tonemap::AgX);
+    CHECK(render::automatic_tonemap(false, true) == render::Tonemap::Soft);
+    CHECK(render::automatic_tonemap(false, false) == render::Tonemap::None);
+    CHECK(render::parse_tonemap("soft") == render::Tonemap::Soft);
+}
+
 namespace zone_surface_test {
 using glm::vec3;
 using glm::vec4;

@@ -286,6 +286,7 @@ local PAGES = {
       optionRow("Grass density", "grass_density", { 25, 200, 25, " %" }),
       optionRow("Tree detail distance", "tree_detail", { 50, 200, 10, " %" }),
       optionRow("Lighting", "lighting", { "Modern", "Classic" }),
+      optionRow("Smooth classic lighting", "classic_smooth", "bool"),
       optionRow("Max camera zoom", "max_camera_distance", { 10, 150, 10, " units" }),
       optionRow("Ground floating NPCs", "ground_npcs", "bool"),
       -- the texture pack (display.texture_folder, from the next start): Off, then each folder of textures/

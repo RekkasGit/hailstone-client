@@ -811,6 +811,7 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
         return std::clamp(static_cast<int>(std::lround((config_float(r->key, r->fallback) - r->at_zero) / r->per_tick)), 0, 20);
     if (name == "lighting") return lighting_mode_ == render::LightingMode::Modern ? 0 : 1;
     if (name == "ao") return config_.get_bool("display.ao", true) ? 1 : 0;
+    if (name == "classic_smooth") return config_.get_bool("display.classic_smooth", true) ? 1 : 0;
     if (name == "render_scale")
         return std::clamp(config_.get_int("display.render_scale", 100), render::kMinRenderScalePercent, 100);
     // Frame generation (render/frame_gen.h): a frame made between each two real ones, with a temporal upscaler.
@@ -969,7 +970,7 @@ bool ClientApp::set_display_option(std::string_view name, int value) {
     } else if (name == "lighting") {
         lighting_command(value == 0 ? "modern" : "classic"); // saves and applies
         return true;
-    } else if (name == "ao" || name == "distance_blur" || name == "color_grade") {
+    } else if (name == "ao" || name == "distance_blur" || name == "color_grade" || name == "classic_smooth") {
         config_.set_bool("display." + std::string(name), value != 0);
     } else if (name == "render_scale") {
         config_.set_int("display.render_scale", std::clamp(value, render::kMinRenderScalePercent, 100));

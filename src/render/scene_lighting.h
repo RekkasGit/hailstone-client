@@ -94,7 +94,7 @@ struct GpuPointLight {
 
 // std140 and std430 lay this out the same (vec4s and mat4s only); shaders/lighting.glsl SCENE_LIGHTING_FIELDS.
 struct SceneLighting {
-    glm::vec4 ambient{0.0f};
+    glm::vec4 ambient{0.0f}; // w: 1 the smooth classic lighting (ZoneRenderer::set_classic_smooth; the zone only)
     glm::vec4 special_ambient{0.0f};
     glm::vec4 directional{0.0f};
     glm::vec4 direction{0.0f};

@@ -418,7 +418,10 @@ int ClientApp::run() {
                     light.vision_lift = fog_frame->vision_lift;
                 }
                 game::SceneLight scene_light = game::compute_scene_light(light);
-                if (zone_renderer_) zone_renderer_->set_scene_light(scene_light);
+                if (zone_renderer_) {
+                    zone_renderer_->set_scene_light(scene_light);
+                    zone_renderer_->set_classic_smooth(classic_smooth_);
+                }
                 // The zone objects that play their own animation, drawn where the zone's animation clock has them now.
                 if (zone_renderer_)
                     zone_renderer_->set_animation_time(zone_animation_ms(static_cast<std::uint64_t>(

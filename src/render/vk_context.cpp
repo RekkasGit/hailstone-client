@@ -251,7 +251,13 @@ SceneBlends make_scene_blends(const VkPipelineColorBlendAttachmentState& color, 
 Tonemap parse_tonemap(std::string_view name) {
     if (name == "agx") return Tonemap::AgX;
     if (name == "aces") return Tonemap::Aces;
+    if (name == "soft") return Tonemap::Soft;
     return Tonemap::None;
+}
+
+Tonemap automatic_tonemap(bool modern, bool classic_smooth) {
+    if (modern) return Tonemap::AgX;
+    return classic_smooth ? Tonemap::Soft : Tonemap::None;
 }
 
 namespace {

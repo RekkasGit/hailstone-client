@@ -595,7 +595,14 @@ void main() {
     vec3 sn = mapped && normal_slot != 0u ? PACK_NORMAL(n, v_world, v_uv, tex(normal_slot, v_uv).rg * 2.0 - 1.0) : n;
     if (unlit) g_light = vec3(1.0);
     else if (g_modern) g_light = modern_light(n, sn, pc.params.x > 0.0);
-    else g_light = v_light.rgb; // the lit vertex colour (zone.vert)
+    else if (scene.ambient.w > 0.5) {
+        // The smooth classic lighting: the region light per pixel, so the sun shades a large triangle evenly and its
+        // saturation follows the pixel, not the corners. A mesh without normals (none to light) takes none here too.
+        float a = mode == 6u ? 1.0 : v_color.a;
+        g_light = classic_region_light(v_color.rgb, a, len > 1e-6 ? n : vec3(0.0), scene.ambient.rgb,
+                                       scene.special_ambient.rgb, scene.bounce.rgb, scene.directional.rgb,
+                                       scene.direction.xyz) + v_point;
+    } else g_light = v_light.rgb; // the lit vertex colour (zone.vert)
     float k = scene.fog.z;
     vec3 color;
     float alpha;
