@@ -910,3 +910,97 @@ TEST_CASE("the Ability Book's plugin bulk rows: order, ids, names and readiness"
     });
     REQUIRE(ran);
 }
+
+TEST_CASE("/doability by name: a skill, then a discipline, then an activated AA, in any case") {
+    test::EmptyGameDir dir;
+    // Each name is given to more than one kind: "Kick" is the skill's, a discipline's and an AA's; "Fury" a
+    // discipline's and an AA's; "Lone Strike" an AA's alone.
+    std::ofstream(dir.path() / "spells_us.txt")
+        << mq_test::spell_line({{0, "200"}, {1, "Kick"}, {9, "100"}, {13, "1500"}, {17, "0"}, {19, "10"}, {83, "1"},
+                                {98, "5"}, {104, "255"}, {105, "1"}})
+        << '\n'
+        << mq_test::spell_line({{0, "201"}, {1, "Fury"}, {9, "100"}, {13, "1500"}, {17, "0"}, {19, "10"}, {83, "1"},
+                                {98, "5"}, {104, "255"}, {105, "1"}})
+        << '\n'
+        << mq_test::spell_line({{0, "202"}, {1, "Lone Strike"}, {9, "100"}, {13, "1500"}, {17, "0"}, {19, "10"},
+                                {83, "1"}, {98, "5"}, {104, "255"}, {105, "1"}})
+        << '\n'
+        << mq_test::spell_line({{0, "4498"}, {1, "Kick"}, {17, "5"}, {83, "1"}}) << '\n'
+        << mq_test::spell_line({{0, "4499"}, {1, "Fury"}, {17, "5"}, {83, "1"}}) << '\n';
+    GameDir game(dir.path());
+    test::MockEqServer server(test::MockConfig::standard());
+    net::GameConnection c(game, test::quick_options());
+    auto until = [&](const std::function<bool()>& done) {
+        return test::pump([&] { c.update(); server.poll(); }, done);
+    };
+    c.start(server.ticket());
+    REQUIRE(until([&] { return c.state() == net::ConnectionState::CharacterSelect; }));
+    c.enter_world("Gennro");
+    REQUIRE(until([&] { return c.state() == net::ConnectionState::InZone && c.player_status().max_hp != 0; }));
+
+    Config config;
+    app::ActionsUi actions(config, dir.path() / "hailstone.ini");
+    app::EqHost host;
+    host.in_game = host.ui_ready = true;
+    host.conn = &c;
+    host.actions = &actions;
+    std::vector<game::HotButton> pressed;
+    host.run_button = [&](const game::HotButton& b) { pressed.push_back(b); };
+    bool ran = false;
+    A::with_character(c, [&](mech::Character& ch) {
+        host.character = &ch;
+        auto& aa = A::alt_adv(c);
+        int n = 0;
+        for (std::int32_t spell : {200, 201, 202}) {
+            game::AltAbility rank;
+            rank.id = static_cast<std::uint32_t>(1003 + n);
+            rank.group = 5 + n; // 5 Kick, 6 Fury, 7 Lone Strike
+            rank.rank = 1;
+            rank.spell = spell;
+            aa.add(rank);
+            aa.owned.push_back({rank.id, 1, 0});
+            ++n;
+        }
+        A::profile(c)->disciplines = {4498, 4499, 0};
+        auto doability = [&](const std::string& args) {
+            actions.doability_command(c, &ch, app::AbilityView{}, args,
+                                      [&](std::string_view name) { return app::use_ability_named(host, name); });
+            return actions.take_messages();
+        };
+
+        // The skill, over the discipline and the AA of the same name.
+        CHECK(doability("KICK").empty());
+        REQUIRE(pressed.size() == 1);
+        CHECK(pressed[0].type == game::HotButtonType::Skill);
+        CHECK(pressed[0].slot == static_cast<std::int32_t>(mech::skill::kKick));
+        // The discipline, over the AA.
+        CHECK(doability("  fury ").empty());
+        REQUIRE(pressed.size() == 2);
+        CHECK(pressed[1].type != game::HotButtonType::Skill);
+        CHECK(pressed[1].type != game::HotButtonType::Social);
+        // The AA, when nothing else has the name: its hot button, the AA window's (a social slot past the socials).
+        CHECK(doability("lone strike").empty());
+        REQUIRE(pressed.size() == 3);
+        CHECK(pressed[2].type == game::HotButtonType::Social);
+        CHECK(pressed[2].slot == game::kSocialCount + 7);
+
+        // None of the player's: says so and presses nothing.
+        const auto none = doability("Flying Kick");
+        REQUIRE(none.size() == 1);
+        CHECK(none.front().first == "No ability by that name.");
+        CHECK(pressed.size() == 3);
+        // Without the name lookup, the same.
+        actions.doability_command(c, &ch, app::AbilityView{}, "Kick");
+        const auto unlooked = actions.take_messages();
+        REQUIRE(unlooked.size() == 1);
+        CHECK(unlooked.front().first == "No ability by that name.");
+        // Found but not usable now (out of the world): nothing pressed and nothing said, as its hot button.
+        host.in_game = false;
+        CHECK(doability("Kick").empty());
+        CHECK(pressed.size() == 3);
+        CHECK(app::use_ability_named(host, "Kick") == std::optional<bool>(false));
+        CHECK_FALSE(app::use_ability_named(host, "Flying Kick").has_value());
+        ran = true;
+    });
+    REQUIRE(ran);
+}

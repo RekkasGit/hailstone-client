@@ -687,6 +687,18 @@ bool use_ability(EqHost& h, mq::AbilityKind kind, std::string_view name) {
     return use(h, *e);
 }
 
+std::optional<bool> use_ability_named(EqHost& h, std::string_view name) {
+    // A skill first: the kind RoF2's /doability uses (its Actions buttons hold skills alone).
+    using K = mq::AbilityKind;
+    for (const K kind : {K::Skill, K::Discipline, K::AltAbility})
+        if (const std::optional<Entry> e = by_name(h, kind, name)) {
+            if (e->passive) return false;
+            log::info("/doability uses {} ({})", e->name, e->key);
+            return use(h, *e);
+        }
+    return std::nullopt;
+}
+
 // The entries all_entries lists, without the allocations a window row needs (its description, classes, icon and hot
 // button): what get_ability_data_bulk writes. The same filters and the same readiness helpers as the book's entries.
 std::vector<plugin::AbilityBulkRow> ability_bulk_rows(EqHost& h) {

@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "app/actions_ui.h"
+#include "app/lua_eq.h"
 #include "core/config.h"
 #include "core/ini_file.h"
 #include "game/client_options.h"
@@ -164,8 +165,16 @@ TEST_CASE("mock server: /doability takes a skill's name") {
 
     Config config;
     app::ActionsUi actions(config, rig.dir.path() / "hailstone.ini");
+    // The client's path: the name found as the Ability Book finds it, then its hot button run by the Actions window.
     net::GameConnectionTestAccess::with_character(rig.conn, [&](mech::Character& ch) {
-        actions.doability_command(rig.conn, &ch, app::AbilityView{}, "forage"); // a name, in any case
+        app::EqHost host;
+        host.in_game = host.ui_ready = true;
+        host.conn = &rig.conn;
+        host.character = &ch;
+        host.actions = &actions;
+        host.run_button = [&](const game::HotButton& b) { actions.run_button(rig.conn, &ch, app::AbilityView{}, b); };
+        actions.doability_command(rig.conn, &ch, app::AbilityView{}, "forage", // a name, in any case
+                                  [&](std::string_view name) { return app::use_ability_named(host, name); });
     });
     REQUIRE(rig.until([&] { return raw_count(rig.server.zone_log, kOpForage) == 1; }));
 

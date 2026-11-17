@@ -88,14 +88,6 @@ std::string seconds_text(std::uint32_t ms) {
     return std::to_string(s);
 }
 
-// /doability's name: a skill's name as the client shows it, without regard to case (as /discipline matches one).
-bool same_name(std::string_view a, std::string_view b) {
-    return a.size() == b.size() &&
-           std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
-               return std::tolower(static_cast<unsigned char>(x)) == std::tolower(static_cast<unsigned char>(y));
-           });
-}
-
 } // namespace
 
 ActionsUi::ActionsUi(Config& config, std::filesystem::path config_path)
@@ -408,27 +400,22 @@ bool ActionsUi::use_combat_ability_button(net::GameConnection& conn, int button)
 }
 
 void ActionsUi::doability_command(net::GameConnection& conn, const mech::Character* ch, const AbilityView& view,
-                                  const std::string& args) {
+                                  const std::string& args, const NamedAbility& use_named) {
     // _atoi(args) - 1: 0..5 index the [Abilities] list (0xe15e60), 6..9 the four dwords before it, the
     // [CombatSkills] list (0xe15e50; the original indexes 0xe15e38 + 4 * n).
     // In 64 bits: "-2147483648" - 1 overflowed.
     std::string_view name = args;
     while (!name.empty() && std::isspace(static_cast<unsigned char>(name.front()))) name.remove_prefix(1);
     while (!name.empty() && std::isspace(static_cast<unsigned char>(name.back()))) name.remove_suffix(1);
-    // Hailstone's extension: anything that does not start as a number is a skill's name, used as the Ability Book's
-    // row of that name is (combat page first, then the abilities page). A number is the original's button, as before;
-    // disciplines stay /discipline's and AAs /alternateadv's.
+    // Hailstone's extension: anything that does not start as a number is the name of one of the player's abilities,
+    // used as the Ability Book's row of that name is (the plugins' use_ability, by name, in any case): a skill first,
+    // then a discipline, then an activated AA. RoF2's /doability takes only a button number, which stays as it was.
     const bool numeric = name.empty() || std::isdigit(static_cast<unsigned char>(name.front())) ||
                          name.front() == '-' || name.front() == '+';
     if (!numeric) {
-        if (!ch) return;
-        for (bool combat : {true, false})
-            for (std::uint32_t skill : mech::usable_skills(*ch, combat, skill_race(conn, *ch)))
-                if (same_name(skill_name(conn, skill), name)) {
-                    use_skill(conn, ch, view, skill);
-                    return;
-                }
-        messages_.push_back({"No ability by that name.", 0x111});
+        const std::optional<bool> used = use_named ? use_named(name) : std::nullopt;
+        // Found but refused for the moment (not in the world): nothing to say, as its hot button says nothing.
+        if (!used.has_value()) messages_.push_back({"No ability by that name.", 0x111});
         return;
     }
     const std::int64_t wide = std::int64_t{core::msvc_atoi(args)} - 1;
