@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Environmental particles: legacy server-placed effects now draw from invisible particle switches, restoring missing waterfall cascades
+- `/doability` takes the name of any of your abilities as well as the Actions window's button (`/doability Bash`, `/doability fury`, in any case): a skill, a discipline or an activated AA, used as its Ability Book row is; a name that is more than one kind's is the skill's first, then the discipline's, then the AA's. A number still means button 1-10
+- For plugin authors: `use_ability` uses one of the player's skills, disciplines or activated AAs by name as the Ability Book's row does, and `ability_state` says whether it is ready (its remaining and reuse time); both are added later in ABI 3, so test `HAILSTONE_HOST_HAS` first (docs/plugins.md)
+- For plugin authors: `get_ability_data_bulk` gives the Ability Book's usable entries in one call: an `HS_Bulk_ListHeader` and an `HS_Bulk_AbilityRecord` per skill, discipline and owned activated AA, each with its kind, stable id, name, ready flag, remaining and reuse time, so a rotation checks its whole list in one pass instead of calling `ability_state` per entry (added later in ABI 3; docs/plugins.md)
 - Gamepad windows fit the available viewport at narrow and short resolutions, keeping their title bars and close controls onscreen.
 - Lua UI: all public window flags are exposed, including horizontal and forced scrollbar flags, so interfaces can use their native values in windows and child windows.
 - Addon actions use compact wrapping rows with readable labels and separate review controls; Gamepad Raid retains full-width controller rows with clear grouping.
@@ -32,7 +36,8 @@
 - Modern lighting: the zones beyond a zone line no longer freeze the game for about a third of a second as each one comes into view while you play; it now takes a few milliseconds
 - Server add-ons: a server can require, allow or block add-ons (scripts, plugins, tools, upscalers) by their GitHub repository (`owner/repo`) in its `hailstone.cfg`, once it says `[addons] enforce = on`. A bare add-on name is refused, and the log says why
 - Required add-ons start by themselves on that server and cannot be stopped there. They keep the usual install review and native-code approval
-- A required add-on that is missing, changed or refused at the zone-in keeps the character out, with the add-on panel open on it. Once in the world, a required add-on that fails is a warning in chat, never a disconnect. The check uses the rules the zone-in brings, so a server that fixes its policy never locks players out
+- A required add-on that is missing, changed or refused at the zone-in keeps the character out, with the add-on panel open on it. Once in the world, a required add-on that fails (a required plugin whose code hits an error counts) is a warning in chat, never a disconnect. The check uses the rules the zone-in brings, so a server that fixes its policy never locks players out
+- Scripts: on Linux, `/lua run` and a server's required scripts find a script whatever the case of its name, as on Windows and macOS (`/lua run autoloot` starts `scripts/AutoLoot`); before, a script add-on whose folder had capitals could not be started there
 - An upscaler a server blocks keeps the character out of that server until another is picked and the client restarted
 - Server map extensions can own spawn markers, suppress stock NPC overlays and disable NPC Find in both UI packs.
   Live policy and actor identity changes retire only Find-owned guides and walks; ordinary navigation remains available.

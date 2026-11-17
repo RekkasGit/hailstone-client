@@ -70,6 +70,27 @@ void ClientApp::load_zone(const std::string& short_name) {
         mark("flora");
         zone_particles_ = std::make_unique<ZoneParticles>(vk_, game_, shader_dir_, *zone_);
         zone_particles_->set_density(environment_particle_density_);
+        switch_particles_ = std::make_unique<SwitchParticles>(vk_, game_, shader_dir_);
+        switch_particles_->set_density(environment_particle_density_);
+        if (conn_) {
+            door_particles_.local_player = [this] {
+                return switch_particles_ && conn_ && conn_->world().player();
+            };
+            door_particles_.update_day_night = [this](game::Door& door) {
+                if (door.particle && switch_particles_ && !switch_particles_->active(door)) door.particle = false;
+                if (conn_)
+                    if (const auto time = conn_->current_time_of_day())
+                        game::update_particle_switch_day_night(door, time->hour);
+            };
+            door_particles_.start = [this](game::Door& door, std::int32_t effect) {
+                const auto* me = conn_ ? conn_->world().player() : nullptr;
+                return switch_particles_ && me && switch_particles_->start(door, effect, me->level);
+            };
+            door_particles_.stop = [this](game::Door& door) {
+                if (switch_particles_) switch_particles_->stop(door);
+            };
+            conn_->set_door_particles(&door_particles_);
+        }
         // PlayerClient::PostBuildInit makes the spawns' lights only with ShowDynamicLights (/dynamiclights: "takes
         // effect the next time you zone").
         dynamic_lights_ = config_.get_bool("display.dynamic_lights", true);
@@ -310,6 +331,8 @@ void ClientApp::unload_zone() {
     zone_renderer_.reset();
     flora_renderer_.reset(); // holds the zone's plants
     zone_particles_.reset(); // reads the zone's archives
+    if (conn_) conn_->set_door_particles(nullptr);
+    switch_particles_.reset();
     zone_fires_.clear();
     zone_mesh_fires_.clear();
     frame_fires_.clear();
@@ -757,6 +780,7 @@ void ClientApp::set_particle_density(std::string_view kind, float density) {
     } else {
         environment_particle_density_ = density;
         if (zone_particles_) zone_particles_->set_density(density);
+        if (switch_particles_) switch_particles_->set_density(density);
     }
     config_.set(std::format("display.{}_particle_density", kind), std::format("{:.2f}", density));
 }

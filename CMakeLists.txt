@@ -381,6 +381,7 @@ add_library(hailstone_engine STATIC
   src/assets/sky_weather.cpp
   src/assets/spell_effects.cpp
   src/assets/wld_particles.cpp
+  src/assets/legacy_particles.cpp
   src/assets/zone_fires.cpp
   src/platform/window.cpp
   src/platform/mouse_capture.cpp
@@ -661,6 +662,7 @@ add_library(hailstone_engine STATIC
   src/app/spell_particles.cpp
   src/app/spell_bolts.cpp
   src/app/zone_particles.cpp
+  src/app/switch_particles.cpp
   src/audio/codec_impl.cpp
   src/platform/audio_device.cpp
 )
@@ -1115,6 +1117,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mq_combat_test.cpp
     tests/automation_test.cpp
     tests/mq_lua_test.cpp
+    tests/mq_script_path_test.cpp
     tests/mq_event_pattern_test.cpp
     tests/lua_social_test.cpp
     tests/code_syntax_test.cpp
@@ -1356,6 +1359,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/particles_test.cpp
     tests/spell_effect_timers_test.cpp
     tests/wld_particles_test.cpp
+    tests/legacy_particles_test.cpp
+    tests/switch_particles_test.cpp
     tests/wld_detail_test.cpp
     tests/movement_test.cpp
     tests/movement_vectors_test.cpp
