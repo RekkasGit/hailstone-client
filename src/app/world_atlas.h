@@ -82,6 +82,14 @@ struct AtlasLand {
     // The zones the atlas wanted whose record is not measured yet (the neighbour zones' loader measures them).
     std::vector<std::string> missing;
     std::size_t placed = 0; // zones of the atlas's own that give the land their ground
+    // Every zone the walk placed past the current one (its neighbours too), with its offset (its coordinates + offset
+    // are the current zone's): the distant copies (app/distant_copies.h).
+    struct Placed {
+        std::string zone;
+        glm::vec3 offset{0.0f};
+        int hop = 0;
+    };
+    std::vector<Placed> placed_zones;
 };
 // The land's sources for `zone` on `server`: `measured` (the neighbour zones' cached ground, with the offsets it was
 // moved by) and the atlas's zones within kAtlasReach.

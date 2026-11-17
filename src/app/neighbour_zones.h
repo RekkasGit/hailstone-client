@@ -77,6 +77,8 @@ public:
     // set_distant_hidden; and a number that changes when which are drawn does.
     void footprint(std::vector<std::int64_t>& out) const;
     std::uint64_t drawn_key() const;
+    // The short names of the neighbours drawn now (their distant copies, app/distant_copies.h, are not).
+    void drawn_names(std::vector<std::string>& out) const;
     bool opaque_blends_background() const;
 
     bool entered() const { return entered_; }

@@ -94,7 +94,9 @@ void ClientApp::load_zone(const std::string& short_name) {
             atlas_land_ = atlas_land(game_, server_profile_.id, zone_->name,
                                      horizon_cache_entries(game_, horizon_cache_dir(server_profile_.id, zone_->name),
                                                            zone_->name));
-            options.horizon_sources = atlas_land_.sources;
+            // Where a zone's distant copy is cached, the copy draws its own trees (app/distant_copies.h).
+            options.horizon_sources =
+                horizon_hills_ ? without_copied_trees(game_, atlas_land_.sources) : atlas_land_.sources;
             zone_renderer_ = std::make_unique<render::ZoneRenderer>(vk_, *zone_, shader_dir_, options);
         }
         distant_hidden_key_ = 0;
@@ -289,6 +291,7 @@ void ClientApp::unload_zone() {
     if (audio_) audio_->set_zone("");
     if (zone_renderer_) vk_.wait_idle();
     if (neighbours_) neighbours_->clear();
+    if (distant_copies_) distant_copies_->clear();
     eq_host_.zone_exits.clear();
     eq_host_.zone_exits_zone = 0;
     zone_renderer_.reset();
