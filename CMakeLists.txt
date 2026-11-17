@@ -153,6 +153,7 @@ add_library(hailstone_engine STATIC
   src/render/atmosphere.cpp
   src/render/clouds.cpp
   src/render/horizon.cpp
+  src/render/tree_impostor.cpp
   src/render/ambient_probe.cpp
   src/render/shadows.cpp
   src/render/light_grid.cpp
@@ -1151,6 +1152,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mounts_test.cpp
     tests/spawn_is_named_test.cpp
     tests/world_state_smooth_test.cpp
+    tests/floor_grounding_test.cpp
     tests/attack_check_test.cpp
     tests/attack_rules_vectors_test.cpp
     tests/ui_rules_vectors_test.cpp
@@ -1172,6 +1174,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/sky_colours_test.cpp
     tests/scene_light_test.cpp
     tests/horizon_test.cpp
+    tests/tree_impostor_test.cpp
     tests/collision_test.cpp
     tests/nav_test.cpp
     tests/map_data_test.cpp
