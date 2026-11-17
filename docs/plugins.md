@@ -514,7 +514,8 @@ work there exports `nmsc_plugin_hooks` as well.
 
 The client calls a plugin on its own thread, and the host functions are for that thread only, from inside one of the
 plugin's callbacks (`InitializePlugin`, `OnPulse`, a command, a hook, ...): the client's state has no locks. A call
-from a thread the plugin started does nothing and returns 0 / NULL, with a line in the log once. A plugin that works
+from a thread the plugin started does nothing and returns 0 / NULL (`ability_state` -1, "unknown", since its 0
+means "on reuse"), with a line in the log once. A plugin that works
 on a thread of its own hands its results over and acts on them in `OnPulse`.
 
 A C++ plugin must not let an exception out of anything the client calls (callbacks, commands, TLOs, hooks, UI
@@ -878,11 +879,11 @@ size nothing is written and 0 comes back; with nothing to list the header alone 
 
   Readiness is what `ability_state` gives: an AA's own reuse (with the SPA 264 reduction applied), a discipline's
   reuse timer, and a skill's timer rounded up to the whole second the book shows, all times in ms. Before the
-  character's profile the header alone goes out (count 0, total 0); a plugin without `read`, or with no game
-  connection, gets 0 bytes. The list is bounded by what the character has: at most 28 activated skill ids in the
-  client's table, 300 discipline slots, and the owned AAs the server sends (300 on a stock server). A 65536-byte
-  buffer holds every entry with ordinary names; `count < total` says the buffer was too small, so retry with a larger
-  one. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_ability_data_bulk)` first.
+  character's profile, or with no game connection, the header alone goes out (count 0, total 0), as
+  `get_avail_aa_data_bulk` and `get_avail_disc_data_bulk` do; a plugin without `read` gets 0 bytes. The list is
+  bounded by what the character has: at most 28 activated skill ids in the client's table, 300 discipline slots, and
+  the owned AAs the server sends (300 on a stock server). A 65536-byte buffer holds every entry with ordinary names;
+  `count < total` says the buffer was too small, so retry with a larger one. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_ability_data_bulk)` first.
 
 - `get_raid_data_bulk`: the raid roster, a 40-byte header followed by one `HS_Bulk_RaidData` record
   (`HS_BULK_RAID_RECORD_SIZE` = 124 bytes) per member, in roster order, as many whole records as fit in `out_size`.

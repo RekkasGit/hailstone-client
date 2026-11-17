@@ -32,8 +32,8 @@
  *
  * Threads: the client calls the plugin on its own thread, and the host table is for that thread only, from inside
  * one of the plugin's callbacks (InitializePlugin, OnPulse, a command, a hook ...): the client's state has no locks.
- * A call from a thread the plugin started does nothing and returns 0 / NULL (a line in the log says so, once). A
- * plugin that works on a thread of its own hands its results over and acts on them in OnPulse.
+ * A call from a thread the plugin started does nothing and returns 0 / NULL (ability_state: -1), and a line in the
+ * log says so, once. A plugin that works on a thread of its own hands its results over and acts on them in OnPulse.
  *
  * Exceptions: a C++ plugin must not let an exception out of any function the client calls (callbacks, commands,
  * TLOs, hooks, UI functions). The client catches what it can and treats the call as unanswered (an exception out of
@@ -844,15 +844,15 @@ typedef struct PluginHostApi {
      * first. */
     int (*use_ability)(void* host, int kind, const char* name);
     /* Whether that ability is ready (HAILSTONE_CAP_READ): 1 ready, 0 on reuse, -1 the player has none such, the client
-     * is not in a zone, or the plugin lacks `read`. When it is found, *remaining_ms and *reuse_ms are filled for both
-     * (either may be NULL). `kind` and `name` as use_ability's. Added later in ABI 3: test
-     * HAILSTONE_HOST_HAS(host, ability_state) first. */
+     * is not in a zone, the plugin lacks `read`, or it was called off the client's thread. When it is found,
+     * *remaining_ms and *reuse_ms are filled for both (either may be NULL). `kind` and `name` as use_ability's. Added
+     * later in ABI 3: test HAILSTONE_HOST_HAS(host, ability_state) first. */
     int (*ability_state)(void* host, int kind, const char* name, int64_t* remaining_ms, int64_t* reuse_ms);
     /* The Ability Book's entries in one call (HAILSTONE_CAP_READ): an HS_Bulk_ListHeader (count, total), then up to
      * `count` HS_Bulk_AbilityRecord records, each followed by its name, as many whole records as fit. Every usable
      * entry the book lists: the owned activated AAs, the disciplines and the skills, in its order. An entry's id is a
      * skill's id, a discipline's spell id or an AA's ability (group) id; readiness is as ability_state's. Before the
-     * profile, count and total are 0; with no connection, or without `read`, 0 bytes. Below the header's size nothing
+     * profile, or with no connection, count and total are 0; without `read`, 0 bytes. Below the header's size nothing
      * is written; count < total means out_size was too small. Added later in ABI 3: test
      * HAILSTONE_HOST_HAS(host, get_ability_data_bulk) first. */
     int32_t (*get_ability_data_bulk)(void* host, unsigned char* out, int32_t out_size);

@@ -1966,7 +1966,10 @@ int sdk_ability_kind(mq::AbilityKind kind) {
 
 int32_t h_get_ability_data_bulk(void* h, unsigned char* out, int32_t out_size) {
     Loaded& l = Loaded::of(h);
-    if (!readable(l, "get_ability_data_bulk")) return 0;
+    // Without a connection (the login screen) the header alone, count and total 0, as the AA and discipline reads; 0
+    // bytes only without 'read'.
+    const bool connected = readable(l, "get_ability_data_bulk") != nullptr;
+    if (!connected && !l.can(kCapRead)) return 0;
     static_assert(sizeof(HS_BulkListHeader) == HS_BULK_LIST_HEADER_SIZE);
     static_assert(sizeof(HS_Bulk_AbilityRecord) == HAILSTONE_ABILITY_RECORD_SIZE);
     static_assert(offsetof(HS_Bulk_AbilityRecord, kind) == 0);
@@ -1975,8 +1978,9 @@ int32_t h_get_ability_data_bulk(void* h, unsigned char* out, int32_t out_size) {
     static_assert(offsetof(HS_Bulk_AbilityRecord, remainingMs) == 12);
     static_assert(offsetof(HS_Bulk_AbilityRecord, reuseMs) == 20);
     static_assert(offsetof(HS_Bulk_AbilityRecord, nameSize) == 28);
-    if (!out || out_size < static_cast<int32_t>(sizeof(HS_BulkListHeader)) || !l.host->env.ability_bulk) return 0;
-    const std::vector<AbilityBulkRow> rows = l.host->env.ability_bulk();
+    if (!out || out_size < static_cast<int32_t>(sizeof(HS_BulkListHeader))) return 0;
+    const std::vector<AbilityBulkRow> rows =
+        connected && l.host->env.ability_bulk ? l.host->env.ability_bulk() : std::vector<AbilityBulkRow>{};
     auto* header = reinterpret_cast<HS_BulkListHeader*>(out);
     header->count = 0;
     header->total = static_cast<int32_t>(rows.size());
@@ -2205,6 +2209,18 @@ template <typename R, typename... A, R (*F)(void*, A...)> struct MainOnly<F> {
     }
 };
 template <auto F> constexpr auto main_only = &MainOnly<F>::call;
+// The same, for a host function whose 0 means something: off the client's thread it returns `off` instead.
+template <auto F, auto Off> struct MainOnlyOr;
+template <typename R, typename... A, R (*F)(void*, A...), auto Off> struct MainOnlyOr<F, Off> {
+    static R call(void* h, A... a) {
+        if (!on_main_thread()) {
+            off_thread(h);
+            return static_cast<R>(Off);
+        }
+        return F(h, a...);
+    }
+};
+template <auto F, auto Off> constexpr auto main_only_or = &MainOnlyOr<F, Off>::call;
 
 template <typename F> F symbol(SDL_SharedObject* lib, const char* name) {
     return reinterpret_cast<F>(SDL_LoadFunction(lib, name));
@@ -2485,7 +2501,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.get_buff_name_data_bulk = main_only<h_get_buff_name_data_bulk>;
     p.table.get_raid_data_bulk = main_only<h_get_raid_data_bulk>;
     p.table.use_ability = main_only<h_use_ability>;
-    p.table.ability_state = main_only<h_ability_state>;
+    p.table.ability_state = main_only_or<h_ability_state, -1>; // off the thread "unknown", not 0 ("on reuse")
     p.table.get_ability_data_bulk = main_only<h_get_ability_data_bulk>;
     p.table.cursor_origin = main_only<h_cursor_origin>;
     p.owner = m.env.hooks->new_guest("plugin:" + name);

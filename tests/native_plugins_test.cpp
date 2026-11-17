@@ -706,6 +706,10 @@ TEST_CASE("native plugins: host functions from another thread do nothing; the ca
     REQUIRE(h.plugins->load("HostProbe"));
     h.run("/probethread");
     CHECK(h.printed_line("[Probe] thread: add_command 0, caps 0, imgui null"));
+    // ability_state's 0 means "on reuse": off the client's thread it is -1 ("unknown"), the times untouched, and the
+    // host's state is never asked.
+    CHECK(h.printed_line("[Probe] thread: ability_state -1, -2 of -2 ms"));
+    CHECK(h.checked.empty());
     CHECK_FALSE(h.printed_line("[Probe] written from the thread"));
     CHECK_FALSE(h.printed_line("from the thread"));
     CHECK_FALSE(h.hooks.has_command("/fromthread"));
@@ -1541,12 +1545,18 @@ TEST_CASE("native plugins: get_ability_data_bulk, its layout, truncation and the
     CHECK(denied.printed_line("[Probe] abilities 0 bytes"));
     CHECK(denied.printed_line("[Plugin] HostProbe: get_ability_data_bulk needs the server's 'read' permission"));
 
-    // No game connection at all (the login screen): 0 bytes, as the other bulk reads.
+    // No game connection at all (the login screen): the header alone, count and total 0, as get_avail_aa_data_bulk
+    // and get_avail_disc_data_bulk; the rows are not asked for.
     Host disconnected(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     disconnected.approve(plugin::kCapAll);
+    disconnected.ability_rows = {{mq::AbilityKind::Skill, 30, true, 0, 6000, "Kick"}};
     REQUIRE(disconnected.plugins->load("HostProbe"));
     auto conn = std::move(disconnected.world.conn);
     disconnected.run("/probeabilities");
+    CHECK(disconnected.printed_line("[Probe] abilities count 0, total 0, 8 bytes, 0 records, 0 bytes left"));
+    disconnected.printed.clear();
+    disconnected.run("/probeabilities 7"); // below the header: nothing written
     CHECK(disconnected.printed_line("[Probe] abilities 0 bytes"));
+    CHECK(disconnected.printed_line("[Probe] abilities past the end 0"));
     disconnected.world.conn = std::move(conn);
 }

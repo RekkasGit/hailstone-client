@@ -1,6 +1,7 @@
 // A compiled test plugin (tests/native_plugins_test.cpp), in C++ against the SDK alone: it calls the host table from
 // where a plugin should not, to check that the client holds.
-//   /probethread   calls host functions from a std::thread, then reports what they answered
+//   /probethread   calls host functions from a std::thread, then reports what they answered (ability_state too,
+//   when the host table has it)
 //   /probethrow    lets an exception out (not a std::exception); so do ${Probe.Throw} and OnUpdateImGui
 //   /probestate n  web_state(tab 1) with a struct whose size says n bytes, as a plugin built with a shorter one
 //   /probemessage n  web_message(tab 1) into a buffer of n bytes (0: no buffer)
@@ -53,6 +54,13 @@ void probe_thread(void*, const char*) {
     t.join();
     WriteChatf("[Probe] thread: add_command %d, caps %u, imgui %s", added, static_cast<unsigned>(caps),
                imgui ? "set" : "null");
+    if (HAILSTONE_HOST_HAS(host, ability_state)) {
+        int state = 7;
+        std::int64_t remaining = -2, reuse = -2;
+        std::thread([&] { state = host->ability_state(host->host, 0, "Kick", &remaining, &reuse); }).join();
+        WriteChatf("[Probe] thread: ability_state %d, %lld of %lld ms", state, static_cast<long long>(remaining),
+                   static_cast<long long>(reuse));
+    }
 }
 
 void probe_throw(void*, const char*) { throw 42; }
