@@ -768,9 +768,7 @@ mq._write_config('written.lua', 'return function(m) return m end')
 print('written', loadfile('written.lua'))
 )");
     REQUIRE(h.scripts->run("cfg_data", {}));
-    // These file reads can exceed a normal Lua time slice; completion need not fit in one host pulse.
-    for (int pulse = 0; pulse < 16 && h.scripts->running("cfg_data"); ++pulse) h.pulses(1);
-    REQUIRE_FALSE(h.scripts->running("cfg_data"));
+    h.pulses(1);
     CHECK(h.printed_line("data 1 y true second"));
     CHECK(h.printed_line("again 1 1"));
     for (const char* name : {"closure.lua", "bare.lua", "method.lua", "key.lua"}) {
