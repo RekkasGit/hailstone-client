@@ -15,6 +15,7 @@
 //   the int32_t count and HAILSTONE_ID_NAME_RECORD
 //   /probebuffnames [n]  get_buff_name_data_bulk the same way, through HS_Bulk_BuffNameFixedRecord and the caster's
 //   name after each
+//   /proberaid [n]  get_raid_data_bulk the same way, through HS_Bulk_RaidHeader / HS_Bulk_RaidData
 //   /probecursor   cursor_origin, when the host table has it
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
@@ -344,6 +345,44 @@ void probe_disc(void*, const char* args) {
         size - at);
 }
 
+static_assert(sizeof(HS_Bulk_RaidHeader) == HS_BULK_RAID_HEADER_SIZE);
+static_assert(sizeof(HS_Bulk_RaidData) == HS_BULK_RAID_RECORD_SIZE);
+
+// The header, then each member one line: slot, name, spawn id, group, flags, level, class, HP/mana/endurance
+// percent, pet spawn id and pet HP percent.
+void probe_raid(void*, const char* args) {
+    if (!HAILSTONE_HOST_HAS(host, get_raid_data_bulk)) {
+        WriteChatf("[Probe] raid: not in this client");
+        return;
+    }
+    unsigned char buf[16384];
+    const std::int32_t r = host->get_raid_data_bulk(host->host, buf, size_arg(args, sizeof buf));
+    if (r < static_cast<std::int32_t>(sizeof(HS_Bulk_RaidHeader))) {
+        WriteChatf("[Probe] raid %d bytes", r);
+        return;
+    }
+    const auto* header = reinterpret_cast<const HS_Bulk_RaidHeader*>(buf);
+    WriteChatf("[Probe] raid active %d, count %u, total %u, leader %u, target %u, locked %d, loot %d, %d bytes",
+        header->active, header->count, header->reserved, header->leaderIndex, header->targetIndex, header->locked,
+        header->lootType, r);
+    // The reference reader: records start at header.size and step by header.recordSize, so a later client that
+    // appends a record field is still read correctly.
+    std::size_t at = header->size >= sizeof(HS_Bulk_RaidHeader) ? header->size : sizeof(HS_Bulk_RaidHeader);
+    if (header->recordSize < sizeof(HS_Bulk_RaidData)) {
+        WriteChatf("[Probe] raid record size %u, smaller than this reader's %zu", header->recordSize,
+            sizeof(HS_Bulk_RaidData));
+        return;
+    }
+    for (std::uint32_t i = 0; i < header->count && at + header->recordSize <= static_cast<std::size_t>(r); ++i) {
+        const auto* rec = reinterpret_cast<const HS_Bulk_RaidData*>(buf + at);
+        WriteChatf("[Probe] raid %u: %s %u g%d f%u l%d c%d hp%d mp%d ep%d pet%u ph%d", i, rec->name, rec->spawnID,
+            rec->group, rec->flags, rec->level, rec->classID, rec->pctHPs, rec->pctMana, rec->pctEndurance,
+            rec->petSpawnID, rec->petPctHPs);
+        WriteChatf("[Probe] raid pos %u: %.2f %.2f %.2f %.2f", i, rec->x, rec->y, rec->z, rec->distance);
+        at += header->recordSize;
+    }
+}
+
 void probe_cursor(void*, const char*) {
     if (!HAILSTONE_HOST_HAS(host, cursor_origin)) {
         WriteChatf("[Probe] cursor origin: not in this client");
@@ -376,6 +415,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probetargetbuffs", probe_target_buffs, nullptr);
     AddCommand("/probeaas", probe_aa, nullptr);
     AddCommand("/probediscs", probe_disc, nullptr);
+    AddCommand("/proberaid", probe_raid, nullptr);
     AddCommand("/probecursor", probe_cursor, nullptr);
     AddTopLevelObject("Probe", probe_tlo, nullptr);
 #ifdef HAILSTONE_PROBE_THROW_INIT
@@ -397,6 +437,7 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probetargetbuffs");
     RemoveCommand("/probeaas");
     RemoveCommand("/probediscs");
+    RemoveCommand("/proberaid");
     RemoveCommand("/probecursor");
     RemoveTopLevelObject("Probe");
 }

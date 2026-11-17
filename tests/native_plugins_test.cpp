@@ -1076,6 +1076,156 @@ TEST_CASE("native plugins: get_avail_aa_data_bulk and get_avail_disc_data_bulk, 
     CHECK(h.printed_line("[Probe] discs count 0, 4 bytes, 0 bytes left"));
     h.world.conn = std::move(conn);
 }
+TEST_CASE("native plugins: get_raid_data_bulk roster, pets, positions and edge cases") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+    using A = net::GameConnectionTestAccess;
+    auto& raid = A::raid(*h.world.conn);
+    raid.active = true;
+    raid.leader = "Groupie";
+    raid.locked = true;
+    raid.loot_type = 3;
+    raid.looters = {"Tester"};
+    raid.target = "Tester";
+    raid.members = {
+        mq_test::raid_member("Groupie", 0, 2, 48, true, true),
+        mq_test::raid_member("Tester", 0, 2, 50),
+        mq_test::raid_member("Third", 1, 1, 45, false, false, true),
+    };
+    auto& leadership = A::leadership(*h.world.conn);
+    leadership.raid_assist_names[0] = "Groupie";
+    leadership.raid_assist_names[1] = "Third";
+
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid active 1, count 3, total 3, leader 0, target 1, locked 1, loot 3, 412 bytes"));
+    // Leader, group leader, main assist, looter (the leader) and present; 100% HP from the test spawn.
+    CHECK(h.printed_line("[Probe] raid 0: Groupie 12 g0 f167 l48 c2 hp100 mp-1 ep-1 pet0 ph-1"));
+    // The listed looter, in the zone and the player: own HP 75%, mana 25%, endurance 50%.
+    CHECK(h.printed_line("[Probe] raid 1: Tester 1 g0 f416 l50 c2 hp75 mp25 ep50 pet0 ph-1"));
+    // No spawn in this zone: the roster's level and class, the marker flag, and no percentages.
+    CHECK(h.printed_line("[Probe] raid 2: Third 0 g1 f12 l45 c1 hp-1 mp-1 ep-1 pet0 ph-1"));
+
+    h.printed.clear();
+    h.run("/proberaid 40"); // the header alone
+    CHECK(h.printed_line("[Probe] raid active 1, count 0, total 3, leader 0, target 1, locked 1, loot 3, 40 bytes"));
+    h.run("/proberaid 164"); // header + one whole record
+    CHECK(h.printed_line("[Probe] raid active 1, count 1, total 3, leader 0, target 1, locked 1, loot 3, 164 bytes"));
+    CHECK(h.printed_line("[Probe] raid 0: Groupie 12 g0 f167 l48 c2 hp100 mp-1 ep-1 pet0 ph-1"));
+    CHECK_FALSE(h.printed_line("[Probe] raid 1: Tester 1 g0 f416 l50 c2 hp75 mp25 ep50 pet0 ph-1"));
+
+    // 4 Entire Raid: every member may loot, so the unlisted third member gains the looter flag too.
+    h.printed.clear();
+    raid.loot_type = 4;
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid active 1, count 3, total 3, leader 0, target 1, locked 1, loot 4, 412 bytes"));
+    CHECK(h.printed_line("[Probe] raid 0: Groupie 12 g0 f167 l48 c2 hp100 mp-1 ep-1 pet0 ph-1"));
+    CHECK(h.printed_line("[Probe] raid 1: Tester 1 g0 f416 l50 c2 hp75 mp25 ep50 pet0 ph-1"));
+    CHECK(h.printed_line("[Probe] raid 2: Third 0 g1 f44 l45 c1 hp-1 mp-1 ep-1 pet0 ph-1"));
+
+    raid.clear();
+    h.printed.clear();
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid active 0, count 0, total 0, leader 4294967295, target 4294967295, locked 0, loot 1, 40 bytes"));
+
+    // Pets, position and distance, group mana/endurance, an ungrouped member, a mercenary's clean-name fallback
+    // and an ordinary NPC of the same name. One Host for the whole test: the reference reader is loaded once.
+    auto& w = A::world(*h.world.conn);
+    h.world.add(50, "Pin", false, 10, {3, 4, 0});
+    h.world.add(51, "Pin`s_pet", true, 5, {3, 4, 0});
+    h.world.add(52, "Mercenary001", true, 20, {1, 2, 3});
+    h.world.add(53, "Guard", true, 30, {0, 0, 0});
+    w.spawns[51].pet_owner_id = 50;
+    w.spawns[51].hp_percent = 55;
+    w.spawns[52].mercenary = true;
+    auto& group = A::group(*h.world.conn);
+    group.mana_percent[50] = 40;
+    group.endurance_percent[50] = 60;
+    raid.active = true;
+    raid.locked = false;
+    raid.leader.clear();
+    raid.target.clear();
+    raid.looters.clear();
+    raid.loot_type = 1;
+    raid.members = {
+        mq_test::raid_member("Pin", 0, 1, 10),
+        mq_test::raid_member("Mercenary"), // the cleaned-name fallback, for a mercenary
+        mq_test::raid_member("Guard", 0),  // an ordinary NPC with that name is not a raid member
+    };
+    h.printed.clear();
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid active 1, count 3, total 3, leader 4294967295, target 4294967295, locked 0, loot 1, 412 bytes"));
+    CHECK(h.printed_line("[Probe] raid 0: Pin 50 g0 f128 l10 c1 hp100 mp40 ep60 pet51 ph55"));
+    CHECK(h.printed_line("[Probe] raid pos 0: 3.00 4.00 0.00 5.00"));
+    CHECK(h.printed_line("[Probe] raid 1: Mercenary 52 g-1 f128 l20 c1 hp80 mp-1 ep-1 pet0 ph-1"));
+    CHECK(h.printed_line("[Probe] raid pos 1: 1.00 2.00 3.00 3.74"));
+    CHECK(h.printed_line("[Probe] raid 2: Guard 0 g0 f0 l0 c0 hp-1 mp-1 ep-1 pet0 ph-1"));
+    CHECK(h.printed_line("[Probe] raid pos 2: 0.00 0.00 0.00 0.00"));
+
+    // A mercenary and a temporary pet carry their owner in pet_owner_id too (EQEmu's FillSpawnStruct), but neither is
+    // the member's pet: with a real pet up that one answers, and with only a mercenary and a swarm pet there is none.
+    h.world.add(54, "Pinmerc001", true, 20, {3, 4, 0});
+    h.world.add(55, "Solo", false, 30, {0, 0, 0});
+    h.world.add(56, "Solomerc001", true, 30, {0, 0, 0});
+    h.world.add(57, "Solo`s_swarm", true, 30, {0, 0, 0});
+    w.spawns[54].mercenary = true;
+    w.spawns[54].pet_owner_id = 50;
+    w.spawns[56].mercenary = true;
+    w.spawns[56].pet_owner_id = 55;
+    w.spawns[57].temp_pet = true;
+    w.spawns[57].pet_owner_id = 55;
+    raid.members = {mq_test::raid_member("Pin", 0, 1, 10), mq_test::raid_member("Solo", 1, 2, 30)};
+    h.printed.clear();
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid 0: Pin 50 g0 f128 l10 c1 hp100 mp40 ep60 pet51 ph55"));
+    CHECK(h.printed_line("[Probe] raid 1: Solo 55 g1 f128 l30 c2 hp100 mp-1 ep-1 pet0 ph-1"));
+    for (std::uint32_t id : {54u, 55u, 56u, 57u}) w.spawns.erase(id);
+
+    // The player's own record with no spawn and max HP 0: HP is unknown, not 0, but the roster's level and class
+    // and the player's own mana and endurance still answer.
+    auto& ps = A::status(*h.world.conn);
+    ps.hp = 0;
+    ps.max_hp = 0;
+    w.spawns.erase(1);
+    raid.members = {mq_test::raid_member("Tester", 0, 2, 50)};
+    h.printed.clear();
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid active 1, count 1, total 1, leader 4294967295, target 4294967295, locked 0, loot 1, 164 bytes"));
+    CHECK(h.printed_line("[Probe] raid 0: Tester 0 g0 f256 l50 c2 hp-1 mp25 ep50 pet0 ph-1"));
+    CHECK(h.printed_line("[Probe] raid pos 0: 0.00 0.00 0.00 0.00"));
+
+    // Mana and endurance past RoF2's limits: cur * 100 does not fit 32 bits, and the percent is still right.
+    ps.mana = 30'000'000;
+    ps.max_mana = 40'000'000;
+    ps.endurance = 25'000'000;
+    ps.max_endurance = 50'000'000;
+    h.printed.clear();
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid 0: Tester 0 g0 f256 l50 c2 hp-1 mp75 ep50 pet0 ph-1"));
+
+    // The player's spawn is in the world but world.player_id is not known yet: the character name says which member
+    // is the player, and the distance is measured from that spawn.
+    h.world.add(1, "Tester", false, 50, {0, 0, 0});
+    h.world.add(58, "Farther", false, 20, {0, 0, 7});
+    w.player_id = 0;
+    raid.members = {mq_test::raid_member("Tester", 0, 2, 50), mq_test::raid_member("Farther", 0, 2, 20)};
+    h.printed.clear();
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid 0: Tester 1 g0 f384 l50 c2 hp-1 mp75 ep50 pet0 ph-1"));
+    CHECK(h.printed_line("[Probe] raid 1: Farther 58 g0 f128 l20 c2 hp100 mp-1 ep-1 pet0 ph-1"));
+    CHECK(h.printed_line("[Probe] raid pos 1: 0.00 0.00 7.00 7.00"));
+    w.player_id = 1;
+    w.spawns.erase(58);
+
+    // No 72-member cap: every whole record fits, and reserved says how many the roster has.
+    raid.members.clear();
+    for (int i = 0; i < 73; ++i)
+        raid.members.push_back(mq_test::raid_member("M" + std::to_string(i), static_cast<std::uint32_t>(i % 12), 1, 50));
+    h.printed.clear();
+    h.run("/proberaid");
+    CHECK(h.printed_line("[Probe] raid active 1, count 73, total 73, leader 4294967295, target 4294967295, locked 0, loot 1, 9092 bytes"));
+    CHECK(h.printed_line("[Probe] raid 72: M72 0 g0 f0 l50 c1 hp-1 mp-1 ep-1 pet0 ph-1"));
+}
 TEST_CASE("native plugins: cursor_origin gives the cursor item's origin, and needs 'read'") {
     using A = net::GameConnectionTestAccess;
     auto server_item = [](std::uint32_t id) {
@@ -1121,6 +1271,8 @@ TEST_CASE("native plugins: the buff bulk reads need 'read'") {
     CHECK(h.printed_line("[Probe] spawns 0 bytes")); // the denial is said once per plugin, above
     h.run("/probextargets 512");
     CHECK(h.printed_line("[Probe] xtargets 0 bytes"));
+    h.run("/proberaid 512");
+    CHECK(h.printed_line("[Probe] raid 0 bytes"));
     h.run("/probetargetbuffs 2048");
     CHECK(h.printed_line("[Probe] target buffs 0 bytes"));
     h.run("/probeaas 2048");

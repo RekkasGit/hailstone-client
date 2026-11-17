@@ -260,6 +260,62 @@ typedef struct HS_Bulk_XTargetData {
     int32_t pctHPs;     /* the spawn's HP percent; 0 without a spawn or for a corpse */
 } HS_BulkXTargetData;
 #pragma pack(pop)
+
+/* get_raid_data_bulk: the raid roster, its header and one record per member
+ * (HS_BULK_RAID_HEADER_SIZE and HS_BULK_RAID_RECORD_SIZE bytes today). The header is always written when out_size
+ * holds it, with count 0 and active 0 outside a raid; only whole records follow it.
+ *
+ * A reader steps from the first record at header.size by header.recordSize bytes, for header.count records. The
+ * record may grow at its end in a later client: read recordSize, never a fixed stride, and read only the fields the
+ * record's size covers. version changes only when an older reader can no longer read the header or a record at all.
+ * reserved is the roster's total member count, so a caller whose buffer cut the roster short can see it from
+ * count < reserved and retry with a larger one.
+ *
+ * A member not in this zone has spawnID 0 and no HP, position or pet (the percentages are -1, the rest 0); the
+ * roster's level and class still answer. */
+#define HS_BULK_RAID_HEADER_SIZE 40
+#define HS_BULK_RAID_RECORD_SIZE 124
+#define HS_BULK_RAID_NO_INDEX 0xffffffffu
+#pragma pack(push, 1)
+typedef struct HS_Bulk_RaidHeader {
+    uint32_t size;        /* sizeof(HS_Bulk_RaidHeader); the first record starts here */
+    uint32_t version;     /* 1; changes only when an older reader cannot read the data */
+    uint32_t count;       /* member records that follow (what fit in out_size) */
+    uint32_t recordSize;  /* bytes between records; may grow, so step by it */
+    uint32_t leaderIndex; /* 0-based member, HS_BULK_RAID_NO_INDEX for none */
+    uint32_t targetIndex; /* the raid window's selected member, same encoding */
+    int32_t active;       /* in a raid */
+    int32_t locked;
+    int32_t lootType;     /* 1 Leader Only, 2 Leader and Group Leader, 3 Leader Selected, 4 Entire Raid */
+    uint32_t reserved;    /* the roster's total member count, not only those written */
+} HS_BulkRaidHeader;
+
+typedef struct HS_Bulk_RaidData {
+    int32_t slot;         /* 0-based roster order */
+    uint32_t spawnID;     /* 0: not in this zone */
+    int32_t group;        /* 0..11; -1 ungrouped */
+    uint32_t flags;       /* HS_BULK_RAID_* */
+    int32_t level;        /* 0 when unknown */
+    int32_t classID;      /* 0 when unknown */
+    int32_t pctHPs;       /* -1 unknown */
+    int32_t pctMana;      /* -1 unknown; group members only */
+    int32_t pctEndurance; /* -1 unknown; group members only */
+    uint32_t petSpawnID;  /* 0 none; never a mercenary or a temporary pet */
+    int32_t petPctHPs;    /* -1 unknown or no pet */
+    float x, y, z;        /* the zone's coordinates, as HailstoneSpawn.x/y/z */
+    float distance;       /* 3D from the player; 0 when the member is not here */
+    char name[64];
+} HS_BulkRaidData;
+#pragma pack(pop)
+#define HS_BULK_RAID_LEADER 0x0001u
+#define HS_BULK_RAID_GROUP_LEADER 0x0002u
+#define HS_BULK_RAID_MAIN_ASSIST 0x0004u
+#define HS_BULK_RAID_MARKER 0x0008u /* the member holds the raid Marker role */
+#define HS_BULK_RAID_WAYPOINTER 0x0010u
+#define HS_BULK_RAID_LOOTER 0x0020u
+/* bit 0x0040 is reserved: this client keeps no offline flag for a raid member */
+#define HS_BULK_RAID_PRESENT 0x0080u
+#define HS_BULK_RAID_ME 0x0100u
 /* A TLO the plugin adds (AddTopLevelObject): asked for ${Name[index]} (member NULL: the TLO's own value) and for
  * ${Name[index].Member[member_index]}. Return nonzero when `out` was set; zero is NULL. */
 typedef int (*HailstoneTloFn)(void* user, const char* index, const char* member, const char* member_index,
@@ -755,6 +811,10 @@ typedef struct PluginHostApi {
     int32_t (*get_avail_aa_data_bulk)(void* host, unsigned char* out, int32_t out_size);
     int32_t (*get_avail_disc_data_bulk)(void* host, unsigned char* out, int32_t out_size);
     int32_t (*get_buff_name_data_bulk)(void* host, unsigned char* out, int32_t out_size);
+    /* The raid roster: HS_Bulk_RaidHeader, then up to HS_Bulk_RaidData records, as many whole records as fit;
+     * bytes written, or 0 when out_size cannot hold the header. Outside a raid the header says active 0, count 0.
+     * Added later in ABI 3: test HAILSTONE_HOST_HAS(host, get_raid_data_bulk) first (HAILSTONE_CAP_READ). */
+    int32_t (*get_raid_data_bulk)(void* host, unsigned char* out, int32_t out_size);
 } PluginHostApi;
 /* Not known: it was on the cursor at zone-in, replaced a cursor item, or came by a path the client does not mark.
  * Treat it as the player's; never destroy it unattended. */
