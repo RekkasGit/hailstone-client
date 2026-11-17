@@ -16,6 +16,7 @@
 #include <system_error>
 
 #include "app/client_app.h"
+#include "app/terrain_cache.h"
 #include "app/update_install.h"
 #include "app/updater.h"
 #include "core/build_info.h"
@@ -64,9 +65,6 @@
 #include "app/nameplate_layer.h"
 #include "app/plate_test.h"
 #include "game/collision.h"
-#include "app/neighbour_zones.h"
-#include "app/distant_copies.h"
-#include "app/world_atlas.h"
 #include "game/zone_names.h"
 #include "game/sky_colours.h"
 #include "game/particles.h"
@@ -89,12 +87,6 @@ struct Options {
     std::optional<float> pitch_deg;
     std::string screenshot; // save this frame's image and exit (with --frames)
     bool screenshot_generated = false; // viewer: the screenshot is frame generation's in-between frame
-    // --neighbours "N:zone:x:y:z,...": the zone points OP_SendZonepoints would send (server coordinates, 999999
-    // keeps), so the viewer draws the neighbour zones past the zone lines (app/neighbour_zones.h).
-    std::optional<std::vector<hailstone::game::ZonePointTarget>> neighbours;
-    // --atlas SERVER: the world atlas the client keeps for that server (app/world_atlas.h) shapes the land round the
-    // zone, with the neighbours' ground its cache holds; without --neighbours, the zone points of its visit.
-    std::string atlas;
     std::optional<glm::vec2> fog; // override fog start/end (viewer only)
     std::optional<hailstone::game::ZoneFogInput> zone_fog; // viewer: OP_NewZone's fog values (--zone-fog)
     int sky = 1;                  // viewer sky index (0 = none, indoor)
@@ -117,12 +109,9 @@ struct Options {
     bool no_smooth_ground = false;                // --no-smooth-ground: the viewer draws the file's flat ground
     bool no_horizon = false;                      // --no-horizon: no land round the zone (render/horizon.h)
     bool no_land_trees = false;                   // --no-land-trees: the land round the zone without its trees
-    bool no_distant_copies = false;               // --no-distant-copies: the atlas's zones not drawn as copies
-    bool live_neighbours = false; // --live-neighbours: the neighbour zones drawn live (display.live_neighbour_zones)
     bool gpu_timing = false; // --gpu-timing: each pass's mean GPU time over the timed frames (VkContext::gpu_mark)
     bool stand = false;           // --stand: the camera at eye height on the highest floor under --pos
     bool no_clouds = false; // --no-clouds: the painted cloud layer, not the volumetric clouds (render/cloud_renderer.h)
-    bool neighbour_tint = false;                  // --neighbour-tint: render::ZoneRenderer::set_debug_tint
     float tree_detail = 1.0f;                     // --tree-detail PCT: display.tree_detail, as a scale
     float flora_distance = 400.0f;                // --flora-distance: how far the viewer draws the flora
     float grass_density = 100.0f;                 // --grass-density: how thick the lawn is, percent
@@ -255,10 +244,6 @@ void usage() {
         "  --look YAW PITCH   camera direction in degrees (yaw 0 = +X, 90 = +Y)\n"
         "  --clip-plane N     view distance setting 0..20 (default 15)\n"
         "  --screenshot FILE  save the last frame as PNG (use with --frames); a relative FILE goes to screenshots/\n"
-        "  --neighbours N:ZONE:X:Y:Z,...  the zone points (server coordinates, 999999 keeps) the server would send:\n"
-        "                     draws the neighbour zones past the outdoor zone lines (modern lighting)\n"
-        "  --atlas SERVER     viewer: the world atlas the client keeps for SERVER (its folder under servers/) shapes\n"
-        "                     the land round the zone; the zone points of its last visit when --neighbours is not given\n"
         "  --fog START END    override fog distances (default: the client's no-server fallback)\n"
         "  --zone-fog ZTYPE R G B FOGMIN FOGMAX DENSITY MINCLIP MAXCLIP\n"
         "                     viewer: OP_NewZone's fog (ztype 0: fog off; colour bytes; the first fog clips)\n"
@@ -316,15 +301,10 @@ void usage() {
         "  --no-grade         viewer: no colour grade (--lighting modern; display.color_grade)\n"
         "  --no-horizon       viewer: no land round the zone (--lighting modern; display.horizon_hills)\n"
         "  --no-land-trees    viewer: the land round the zone without its trees\n"
-        "  --no-distant-copies viewer, with --atlas: the atlas's zones not drawn as distant copies\n"
-        "  --live-neighbours  viewer: the neighbour zones drawn live, whole, in place of their copies\n"
         "  --stand            viewer: the camera at eye height on the highest floor under --pos's x y\n"
         "                     (no higher than its z)\n"
-        "                     (display.live_neighbour_zones)\n"
         "  --no-clouds        viewer: the painted clouds, not the volumetric ones (--lighting modern;\n"
         "                     display.volumetric_clouds)\n"
-        "  --neighbour-tint   viewer, with --neighbours: the neighbours' own geometry magenta, their own ground in\n"
-        "                     their part of the land green (display.neighbour_tint)\n"
         "  --tree-detail PCT  viewer: replacement models' levels of detail reach PCT %% as far (display.tree_detail)\n"
         "  --view-distance X  with --lighting modern: draw X times further than the original, into haze (2.5)\n"
         "  --model A,B,...    model viewer: classic character models by code (HUM) or race (r:RACE[:GENDER]);\n"
@@ -408,25 +388,6 @@ Options parse_args(int argc, char** argv) {
             o.yaw_deg = std::strtof(argv[i + 1], nullptr);
             o.pitch_deg = std::strtof(argv[i + 2], nullptr);
             i += 2;
-        } else if (arg("--neighbours")) {
-            need(1);
-            std::vector<hailstone::game::ZonePointTarget> points;
-            std::string list = argv[++i];
-            std::size_t at = 0;
-            while (at < list.size()) {
-                std::size_t end = list.find(',', at);
-                std::string item = list.substr(at, end == std::string::npos ? std::string::npos : end - at);
-                hailstone::game::ZonePointTarget z;
-                if (std::sscanf(item.c_str(), "%u:%u:%f:%f:%f", &z.number, &z.zone_id, &z.server_x, &z.server_y,
-                                &z.server_z) == 5)
-                    points.push_back(z);
-                if (end == std::string::npos) break;
-                at = end + 1;
-            }
-            o.neighbours = std::move(points);
-        } else if (arg("--atlas")) {
-            need(1);
-            o.atlas = argv[++i];
         } else if (arg("--screenshot")) {
             need(1);
             o.screenshot = hailstone::platform::screenshot_path(argv[++i]).string();
@@ -527,16 +488,10 @@ Options parse_args(int argc, char** argv) {
             o.no_horizon = true;
         } else if (arg("--no-land-trees")) {
             o.no_land_trees = true;
-        } else if (arg("--no-distant-copies")) {
-            o.no_distant_copies = true;
-        } else if (arg("--live-neighbours")) {
-            o.live_neighbours = true;
         } else if (arg("--stand")) {
             o.stand = true;
         } else if (arg("--no-clouds")) {
             o.no_clouds = true;
-        } else if (arg("--neighbour-tint")) {
-            o.neighbour_tint = true;
         } else if (arg("--tree-detail")) {
             need(1);
             o.tree_detail = std::strtof(argv[++i], nullptr) / 100.0f;
@@ -988,34 +943,14 @@ int main(int argc, char** argv) {
             flora_renderer->set_pushers(std::span<const glm::vec4>(&push, 1));
         }
         std::unique_ptr<render::ZoneRenderer> zone_renderer;
-        app::AtlasLand viewer_atlas; // --atlas
         render::PointShadows point_shadows;
         render::CoverMapState cover_state, water_state; // what the cover and water maps last showed
         render::FlyCamera camera;
         if (zone) {
             const GameDir game = open_game_dir(opts.game_dir, opts.classic_dir);
             auto options = render::zone_render_options(game);
-            // The neighbours' ground an earlier run measured (--neighbours) shapes the land round the zone; with
-            // --atlas, that server's, and the world atlas's zones past them.
-            if (!opts.atlas.empty() && opts.modern) {
-                if (!opts.neighbours)
-                    if (auto visit = app::load_atlas_visit(opts.atlas, zone->name)) opts.neighbours = visit->points;
-                viewer_atlas = app::atlas_land(
-                    game, opts.atlas, zone->name,
-                    app::horizon_cache_entries(game, app::horizon_cache_dir(opts.atlas, zone->name), zone->name));
-                if (std::find(viewer_atlas.missing.begin(), viewer_atlas.missing.end(), zone->name) ==
-                        viewer_atlas.missing.end() &&
-                    !app::load_atlas_zone(game, zone->name))
-                    viewer_atlas.missing.insert(viewer_atlas.missing.begin(), zone->name);
-                options.horizon_sources = opts.no_distant_copies || opts.no_horizon
-                                              ? viewer_atlas.sources
-                                              : app::without_copied_trees(game, viewer_atlas.sources);
-            } else if (opts.neighbours && opts.modern) {
-                options.horizon_sources =
-                    app::cached_horizon_sources(game, app::horizon_cache_dir("viewer", zone->name), zone->name);
-            }
             options.land_trees = !opts.no_land_trees;
-            options.terrain_cache = app::terrain_cache_path(opts.atlas.empty() ? std::string("viewer") : opts.atlas, zone->name);
+            options.terrain_cache = app::terrain_cache_path("viewer", zone->name);
             options.light_shadow_keys = true; // render::plan_point_shadows shadows this zone's lights
             zone_renderer = std::make_unique<render::ZoneRenderer>(vk, *zone, shader_dir, options);
             zone_renderer->set_hide_flames(opts.modern);
@@ -1030,40 +965,6 @@ int main(int argc, char** argv) {
                 if (auto floor = collision.floor_below(camera.position, 0.0f)) camera.position.z = *floor + 6.0f;
                 else log::warn("--stand: no floor under ({:.0f} {:.0f})", camera.position.x, camera.position.y);
             }
-        }
-        // --neighbours: the zones past the zone lines, loaded before the first frame (the screenshot waits for them).
-        std::unique_ptr<GameDir> neighbour_game;
-        std::unique_ptr<app::NeighbourZones> neighbours;
-        std::uint64_t distant_hidden_key = 0; // the drawn neighbours the land round the zone was last hidden for
-        std::optional<game::CollisionMesh> neighbour_collision; // the zone's, which the neighbours read until they go
-        if (zone && opts.neighbours && opts.modern) {
-            neighbour_game = std::make_unique<GameDir>(open_game_dir(opts.game_dir, opts.classic_dir));
-            neighbours = std::make_unique<app::NeighbourZones>(vk, *neighbour_game, shader_dir);
-            neighbour_collision = game::CollisionMesh::build(*zone);
-            app::NeighbourZones::ZoneIn in;
-            in.zone = &*zone;
-            in.collision = &*neighbour_collision;
-            in.points = *opts.neighbours;
-            in.zone_id = game::zone_id_by_short_name(opts.zone);
-            const int tt = opts.time_type >= 0 ? opts.time_type : (opts.sky > 0 ? 1 : 0);
-            in.outdoor = opts.sky > 0 && (tt == 1 || tt == 2 || tt == 5);
-            in.horizon = zone_renderer->horizon_build();
-            in.cache_dir = app::horizon_cache_dir(opts.atlas.empty() ? std::string("viewer") : opts.atlas, zone->name);
-            in.cuts = viewer_atlas.cuts;
-            in.atlas_missing = viewer_atlas.missing;
-            neighbours->enter(in);
-        }
-        // --atlas: the atlas's zones as distant copies (app/distant_copies.h), loaded before the first frame.
-        std::unique_ptr<GameDir> copies_game;
-        std::unique_ptr<app::DistantCopies> distant_copies;
-        if (zone && opts.modern && !opts.atlas.empty() && !opts.no_distant_copies && !opts.no_horizon) {
-            copies_game = std::make_unique<GameDir>(open_game_dir(opts.game_dir, opts.classic_dir));
-            distant_copies = std::make_unique<app::DistantCopies>(vk, *copies_game, shader_dir);
-            distant_copies->enter(app::copy_placements(viewer_atlas, neighbours ? neighbours->copy_targets()
-                                                                                 : std::vector<app::NeighbourZones::CopyTarget>{}),
-                                  zone_renderer->horizon_build());
-            distant_copies->update(true, {});
-            distant_copies->finish_loading();
         }
         if (opts.yaw_deg) camera.yaw = glm::radians(*opts.yaw_deg);
         if (opts.pitch_deg) camera.pitch = glm::radians(*opts.pitch_deg);
@@ -1287,10 +1188,6 @@ int main(int argc, char** argv) {
                     log::info("frame generation: {} in-between frames presented in frames {}..{}", generated_frames,
                               timed_from, frame - 1);
                 if (flora_renderer) log::info("flora: the last frame drew {} plants", flora_drawn);
-                if (neighbours)
-                    log::info("neighbour zones: {} loaded, the last frame drew {} triangles in {} calls, {:.3f} ms of CPU",
-                              neighbours->loaded(), neighbours->drawn_triangles(), neighbours->drawn_calls(),
-                              neighbours->draw_ms());
                 break;
             }
             if (opts.screenshot_generated && !opts.screenshot.empty() && opts.frames && frame == opts.frames - 2) {
@@ -1503,39 +1400,6 @@ int main(int argc, char** argv) {
                                                                   nullptr, lighting);
                     zone_renderer->set_lighting(lighting);
                     frame_lighting = lighting;
-                    if (neighbours) {
-                        neighbours->update(camera.position, draw_view.far_plane, true, opts.live_neighbours);
-                        // The first frame waits for the loads the camera's place starts (a screenshot shows them).
-                        while (frame == 0 && neighbours->busy()) {
-                            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-                            neighbours->update(camera.position, draw_view.far_plane, true, opts.live_neighbours);
-                        }
-                        neighbours->set_scene_light(scene_light);
-                        neighbours->set_lighting(lighting);
-                        neighbours->set_debug_tint(opts.neighbour_tint);
-                    }
-                    if (distant_copies) {
-                        std::vector<std::string> live;
-                        if (neighbours) neighbours->drawn_names(live);
-                        distant_copies->update(outdoor && (!sky_renderer || sky_renderer->has_atmosphere()), live);
-                        distant_copies->set_scene_light(scene_light);
-                        distant_copies->set_lighting(lighting);
-                    }
-                    // As the client: no land round the zone where a neighbour or a copy is drawn.
-                    {
-                        const std::uint64_t live = neighbours ? neighbours->drawn_key() : 0;
-                        const std::uint64_t copied = distant_copies ? distant_copies->drawn_key() : 0;
-                        const std::uint64_t key = live * 1000003u + copied;
-                        if (key != distant_hidden_key) {
-                            distant_hidden_key = key;
-                            std::vector<std::int64_t> cells;
-                            if (neighbours) neighbours->footprint(cells);
-                            if (distant_copies) distant_copies->footprint(cells);
-                            std::sort(cells.begin(), cells.end());
-                            cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
-                            zone_renderer->set_distant_hidden(std::move(cells));
-                        }
-                    }
                     vk.gpu_mark(*f, "frame start, uploads");
                     if (vk.point_shadow_slots() > 0)
                         render::draw_point_shadows(vk, *f, point_shadows, zone->lights, point_builds, *zone_renderer,
@@ -1617,8 +1481,7 @@ int main(int argc, char** argv) {
                     if (backdrop_drawn) zone_renderer->draw_backdrop(*f, vp);
                 };
                 // Classic draws all zone parts together; WLD details can blend over uncovered samples.
-                const bool background_first = !opts.modern || zone_renderer->opaque_blends_background() ||
-                    (neighbours && neighbours->opaque_blends_background());
+                const bool background_first = !opts.modern || zone_renderer->opaque_blends_background();
                 if (background_first) draw_background();
                 // The land round an outdoor zone, under an open sky or none (not the planes' painted skies).
                 zone_renderer->set_distant(opts.modern && outdoor && !opts.no_horizon &&
@@ -1630,10 +1493,6 @@ int main(int argc, char** argv) {
                     vk.gpu_mark(*f, "zone depth prepass");
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
                     vk.gpu_mark(*f, "zone");
-                    if (neighbours) neighbours->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
-                    if (distant_copies)
-                        distant_copies->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
-                    vk.gpu_mark(*f, "neighbour zones, distant copies");
                     if (flora_renderer) flora_drawn = flora_renderer->draw(*f, vp, camera.position, t, frame_lighting, true);
                     vk.gpu_mark(*f, "flora");
                     // Before the colour copy (water reflects the sky) and every translucent draw.
@@ -1641,9 +1500,6 @@ int main(int argc, char** argv) {
                     vk.gpu_mark(*f, "sky");
                     vk.begin_translucent(*f);
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);
-                    if (neighbours) neighbours->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);
-                    if (distant_copies)
-                        distant_copies->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);
                     vk.gpu_mark(*f, "depth copy, translucent");
                 } else {
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t);

@@ -143,7 +143,7 @@ struct EqHost {
     // The server's own folder (servers/<profile>, core/server_profile.h): the map's zone links are kept there
     // (game/zone_routes.h).
     std::filesystem::path server_dir;
-    // The current zone's exits, from its zone-line regions and zone points (game::collect_neighbour_lines), worked
+    // The current zone's exits, from its zone-line regions and zone points (game::collect_zone_exits), worked
     // out by the app once the zone points are in: each zone a line leads to, and where (world coordinates). For the
     // map's exits and the zone finder's "lead me there" (docs/navigation.md "Zone atlas").
     struct ZoneExit {

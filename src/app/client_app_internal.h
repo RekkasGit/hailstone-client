@@ -123,9 +123,6 @@
 #include "app/perf_ui.h"
 #include "app/stats_ui.h"
 #include "app/actions_ui.h"
-#include "app/neighbour_zones.h"
-#include "app/distant_copies.h"
-#include "app/world_atlas.h"
 #include "app/world_objects.h"
 #include "app/zone_move_world.h"
 #include "app/group_ui.h"
@@ -333,8 +330,6 @@ public:
         }
         spawn_renderer_ = std::make_unique<render::SpawnRenderer>(vk_, shader_dir_);
         world_objects_ = std::make_unique<WorldObjects>(vk_, game_, shader_dir_);
-        neighbours_ = std::make_unique<NeighbourZones>(vk_, game_, shader_dir_);
-        distant_copies_ = std::make_unique<DistantCopies>(vk_, game_, shader_dir_);
         log_memory("startup: world objects");
         spell_ui_ = std::make_unique<SpellUi>(vk_, game_);
         item_ui_ = std::make_unique<ItemUi>(vk_, game_);
@@ -481,15 +476,6 @@ public:
         perf_ui_.set_open(config_.get_bool("ui.perf_window", false));
         perf_ui_.set_log_hitches(config_.get_bool("ui.perf_log_hitches", false));
         automation_->hooks().add_command(plugin::Hooks::kClient, "/perf", [this](std::string_view) { perf_ui_.toggle(); });
-        // /neighbourzones [on | off]: the zones past the outdoor zone lines drawn live (display.live_neighbour_zones).
-        automation_->hooks().add_command(plugin::Hooks::kClient, "/neighbourzones", [this](std::string_view args) {
-            while (!args.empty() && args.front() == ' ') args.remove_prefix(1);
-            bool on = args.empty() ? !neighbour_zones_ : !(args.starts_with("off") || args.starts_with("0"));
-            set_display_option("neighbour_zones", on ? 1 : 0);
-            if (conn_)
-                conn_->ui_message(std::format("Live neighbour zones: {} ({} loaded).", on ? "on" : "off",
-                                              neighbours_ ? neighbours_->loaded() : 0));
-        });
         automation_->hooks().add_command(plugin::Hooks::kClient, "/screenshot", [this](std::string_view) { take_screenshot(); });
         // /web [address]: the in-game browser (docs/browser.md; a client extension), on the address in a new tab.
         // The player's own: a script or plugin opens pages with /url, under its 'web' permission.
@@ -1279,24 +1265,10 @@ private:
     bool web_text_input_ = false;                    // a page has the keyboard this frame
     std::unique_ptr<WorldObjects> world_objects_;           // doors and ground objects (app/world_objects.h)
     std::uint32_t grounded_doors_ = 0;                      // world_objects_' floor_generation the spawns were grounded on
-    // The zones past the outdoor zone lines, drawn in the distance in the modern lighting (app/neighbour_zones.h);
-    // display.neighbour_zones.
-    std::unique_ptr<NeighbourZones> neighbours_;
-    bool neighbour_zones_ = true;
-    // The zones the world atlas places past it, drawn far out as low-detail copies (app/distant_copies.h); with the
-    // land, display.horizon_hills.
-    std::unique_ptr<DistantCopies> distant_copies_;
-    // The world atlas's part in the land round the zone (app/world_atlas.h), as the zone was loaded: the cuts for the
-    // neighbours' ground measured this visit, and the zones whose record the neighbour zones' loader measures.
-    AtlasLand atlas_land_;
-    // The land round an outdoor zone in the modern lighting (render/horizon.h); display.horizon_hills. The drawn
-    // neighbours (NeighbourZones::drawn_key) it was last hidden for.
+    // The land round an outdoor zone in the modern lighting (render/horizon.h); display.horizon_hills.
     bool horizon_hills_ = true;
-    std::uint64_t distant_hidden_key_ = 0;
     // The modern sky's volumetric clouds (render/cloud_renderer.h); display.volumetric_clouds.
     bool volumetric_clouds_ = true;
-    // display.neighbour_tint: the neighbour zones' debugging view (render::ZoneRenderer::set_debug_tint).
-    bool neighbour_tint_ = false;
     // How far the replacement models' (a texture pack's generated trees') levels of detail reach, in percent of their
     // own distances (render::ZoneRenderer::set_lod_scale); display.tree_detail, 50 to 200.
     int tree_detail_ = 100;
