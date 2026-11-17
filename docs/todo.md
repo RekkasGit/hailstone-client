@@ -17,6 +17,12 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 
 ## 1. Gameplay a player will hit
 
+### Legacy environmental particles
+
+- [x] Draw explicit-position legacy particle switches from server-supplied door records and the player's `spells.eff`/global sprites, including waterfall cascades; parser, converter and lifecycle coverage.
+- [x] Live waterfall rendering acceptance.
+- [ ] Connect the native day/night switch mode-2 rain-screen override and one-second shutdown tail (unknowns.md).
+
 ### Adventures (LDoN)
 - [x] Alt+V and recruiter request/offer windows in both UI packs, entry/completion timers and progress, profile point balances, seven-column theme stats and native leaderboard categories, risk choices and tied ranks; native protocol investigation, unit and mock-server coverage.
 - [ ] Complete an adventure live: request, accept/decline, zone in, objective updates, finish, leave and cross-zone refresh; confirm stats, leaderboard standings and physical controller operation. Remaining protocol ambiguity is in unknowns.md.

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Environmental particles: legacy server-placed effects now draw from invisible particle switches, restoring missing waterfall cascades
 - Name plates: mercenaries' names are amber, the original's colour; they were drawn light blue from the original's colour bytes read in the wrong order
 - Name plates: GM names show green as the original client does, your own GM character's too, and stay green when targeted; an anonymous or roleplaying GM's name, and a GM's corpse, keep the ordinary colour
 - Chat: spell hit modes now also shorten complete non-melee damage and healing reports sent as generic or plain-text server messages, including reports with a spell name in parentheses and stock EQEmu's "You have been healed for N points of damage.". A line spoken by someone ("Somebody says, Bob hit Fred for ...") stays whole. Full sentences remain in logs and incoming-chat hooks

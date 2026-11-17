@@ -2,6 +2,15 @@
 
 What the client does not implement yet, or implements with an approximation it cannot confirm. Entries are removed once settled.
 
+## Legacy environmental particles
+
+- Legacy particle switches (`app/switch_particles.*`, `assets/legacy_particles.*`): explicit-position stage-2 slots
+  are drawn from the player's old `spells.eff`; actor-dependent old selectors are still skipped. Native day/night
+  switch mode 2 also activates with `CDisplay::bRainScreen` (`0x488030`), whose renderer-state equivalent has not
+  been connected here; only its hour test is applied. Closing a switch removes its particles immediately rather
+  than the native one-second shutdown fade. Live waterfall rendering acceptance has passed; the remaining gaps
+  concern these unsupported selectors, the rain-screen override and the shutdown tail.
+
 ## Server add-on policy
 
 - The optional required/allow/block policy is covered by parser, package identity, admission, runtime and gate

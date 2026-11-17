@@ -133,6 +133,7 @@
 #include "app/spell_bolts.h"
 #include "app/spell_particles.h"
 #include "app/zone_particles.h"
+#include "app/switch_particles.h"
 #include "audio/audio_system.h"
 #include "audio/listener.h"
 #include "game/server_ext.h"
@@ -1309,6 +1310,7 @@ private:
     std::uint8_t motion_head_wet_ = 0; // this frame's HeadWet (PlayerMovement)
     std::uint8_t motion_body_wet_ = 0; // this frame's BodyWet (+0xa2)
     std::unique_ptr<ZoneParticles> zone_particles_;         // the zone's torch and lantern flames (app/zone_particles.h)
+    std::unique_ptr<SwitchParticles> switch_particles_;     // server-placed legacy particle switches
     // The modern lighting's flames in place of the zone's own (render/fire_renderer.h): the zone's, found when it
     // loads (assets/zone_fires.h), and this frame's with the doors' and ground objects' added.
     std::unique_ptr<render::FireRenderer> fire_renderer_;
@@ -1457,6 +1459,7 @@ private:
     float step_turn_ = 0.0f, step_pitch_ = 0.0f;
     std::array<game::mechanics::SwitchSpawn, 1> rider_spawns_{};
     game::DoorRiders door_riders_;
+    game::DoorParticles door_particles_;
     PlayerMovement movement_;
     std::optional<PlayerMovement> local_body_movement_; // the passive body while an Eye has the controls
     std::uint32_t driven_eye_ = 0;
