@@ -5,6 +5,7 @@
 #include "core/build_info.h"
 #include "core/frame_sections.h"
 #include "core/wipe.h"
+#include "game/zone_exits.h"
 
 namespace hailstone::app {
 
@@ -546,8 +547,8 @@ int ClientApp::run() {
                     for (const auto& p : conn_->zone_points()) points.push_back({p.number, p.zone_id, p.x, p.y, p.z});
                     const auto zid = static_cast<std::uint32_t>(conn_->zone_id());
                     eq_host_.zone_exits.clear();
-                    for (const auto& g : game::collect_neighbour_lines(zone_->regions, zone_->bounds_min, zone_->bounds_max,
-                                                                       points, zid)) {
+                    for (const auto& g :
+                         game::collect_zone_exits(zone_->regions, zone_->bounds_min, zone_->bounds_max, points, zid)) {
                         EqHost::ZoneExit e;
                         e.zone_id = g.zone_id;
                         for (int i = 0; i < 3; ++i) {
@@ -558,56 +559,6 @@ int ClientApp::run() {
                         eq_host_.zone_exits.push_back(std::move(e));
                     }
                     eq_host_.zone_exits_zone = zid;
-                }
-                if (neighbours_) {
-                    // The zone past each outdoor zone line, once the zone points are in (app/neighbour_zones.h).
-                    if (in_game && zone_ && conn_ && !neighbours_->entered()) {
-                        NeighbourZones::ZoneIn in;
-                        in.zone = &*zone_;
-                        in.collision = collision_ ? &*collision_ : nullptr;
-                        for (const auto& p : conn_->zone_points())
-                            in.points.push_back({p.number, p.zone_id, p.x, p.y, p.z});
-                        in.zone_id = static_cast<std::uint32_t>(conn_->zone_id());
-                        const auto& z = conn_->zone_info();
-                        in.outdoor = z && z->sky != 0 && outdoor;
-                        if (zone_renderer_) in.horizon = zone_renderer_->horizon_build();
-                        in.cache_dir = horizon_cache_dir(server_profile_.id, zone_->name);
-                        // The world atlas: this visit, and what it wants measured (app/world_atlas.h).
-                        game::AtlasVisit visit;
-                        visit.zone = zone_->name;
-                        visit.zone_id = in.zone_id;
-                        visit.outdoor = in.outdoor;
-                        visit.points = in.points;
-                        save_atlas_visit(server_profile_.id, visit);
-                        in.cuts = atlas_land_.cuts;
-                        in.atlas_missing = atlas_land_.missing;
-                        if (std::find(in.atlas_missing.begin(), in.atlas_missing.end(), zone_->name) ==
-                                in.atlas_missing.end() &&
-                            !load_atlas_zone(game_, zone_->name))
-                            in.atlas_missing.insert(in.atlas_missing.begin(), zone_->name);
-                        neighbours_->enter(in);
-                        // The atlas's zones as distant copies (app/distant_copies.h), over the land just built.
-                        if (distant_copies_) {
-                            distant_copies_->enter(copy_placements(atlas_land_, neighbours_->copy_targets()), in.horizon);
-                        }
-                    }
-                    // Measured whenever in the world (the land and the atlas take their shape from it); drawn live only
-                    // with display.live_neighbour_zones, their copies otherwise.
-                    neighbours_->update(camera_.position, lit.far_plane, modern && in_game, neighbour_zones_);
-                    lap.mark("neighbour zones update");
-                    neighbours_->set_scene_light(scene_light);
-                    neighbours_->set_lighting(lighting);
-                    neighbours_->set_lod_scale(static_cast<float>(tree_detail_) / 100.0f);
-                    neighbours_->set_debug_tint(neighbour_tint_);
-                }
-                if (distant_copies_) {
-                    std::vector<std::string> live;
-                    if (neighbours_ && modern && neighbour_zones_ && in_game) neighbours_->drawn_names(live);
-                    distant_copies_->update(in_game && modern && outdoor && horizon_hills_ &&
-                                                (!sky_renderer_ || sky_renderer_->has_atmosphere()),
-                                            live);
-                    distant_copies_->set_scene_light(scene_light);
-                    distant_copies_->set_lighting(lighting);
                 }
                 frame_lighting_ = lighting;
                 if (actor_renderer_) {
@@ -746,28 +697,13 @@ int ClientApp::run() {
                 vk_.gpu_mark(*f, "sky");
             };
             // Classic draws all zone parts together; WLD details can blend over uncovered samples.
-            const bool background_first = !modern ||
-                (zone_renderer_ && zone_renderer_->opaque_blends_background()) ||
-                (neighbours_ && modern && neighbour_zones_ && in_game && neighbours_->opaque_blends_background());
+            const bool background_first = !modern || (zone_renderer_ && zone_renderer_->opaque_blends_background());
             if (background_first) draw_background();
             // The land round an outdoor zone (render/horizon.h), under an open sky or none (not the planes' and
-            // Luclin's painted skies); not where a neighbour zone is drawn.
-            if (zone_renderer_) {
+            // Luclin's painted skies).
+            if (zone_renderer_)
                 zone_renderer_->set_distant(in_game && modern && outdoor && horizon_hills_ &&
                                             (!sky_renderer_ || sky_renderer_->has_atmosphere()));
-                const std::uint64_t live = neighbours_ && modern && neighbour_zones_ && in_game ? neighbours_->drawn_key() : 0;
-                const std::uint64_t copied = distant_copies_ ? distant_copies_->drawn_key() : 0;
-                const std::uint64_t drawn = live * 1000003u + copied;
-                if (drawn != distant_hidden_key_) {
-                    distant_hidden_key_ = drawn;
-                    std::vector<std::int64_t> cells;
-                    if (live) neighbours_->footprint(cells);
-                    if (copied) distant_copies_->footprint(cells);
-                    std::sort(cells.begin(), cells.end());
-                    cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
-                    zone_renderer_->set_distant_hidden(std::move(cells));
-                }
-            }
             // The modern water reads the opaque world: the zone's other draws wait for VkContext::begin_translucent.
             const render::ZonePhase first = modern ? render::ZonePhase::Opaque : render::ZonePhase::All;
             if (zone_renderer_) zone_renderer_->draw_depth(*f, vp, camera_.position, lit, t);
@@ -775,11 +711,6 @@ int ClientApp::run() {
             if (zone_renderer_) zone_renderer_->draw(*f, vp, camera_.position, lit, t, first);
             lap.mark("zone draw");
             vk_.gpu_mark(*f, "zone");
-            const bool neighbours = neighbours_ && modern && neighbour_zones_ && in_game;
-            if (neighbours) neighbours_->draw(*f, vp, camera_.position, lit, t, first);
-            if (distant_copies_) distant_copies_->draw(*f, vp, camera_.position, lit, t, first);
-            lap.mark("neighbour zones draw");
-            vk_.gpu_mark(*f, "neighbour zones, distant copies");
             // Objects still draw their blended parts in the same call as their opaque parts.
             // Keep their background first, and the existing object/actor/silhouette order intact.
             // The water colour copy must also already contain the sky (flora follows that copy).
@@ -845,13 +776,8 @@ int ClientApp::run() {
             vk_.gpu_mark(*f, "depth copy, flora");
             if (actor_renderer_)
                 actor_renderer_->draw_prepared(*f, vp, camera_.position, lit, render::ActorPhase::Translucent);
-            if (modern) {
-                if (zone_renderer_)
-                    zone_renderer_->draw(*f, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
-                if (neighbours) neighbours_->draw(*f, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
-                if (distant_copies_)
-                    distant_copies_->draw(*f, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
-            }
+            if (modern && zone_renderer_)
+                zone_renderer_->draw(*f, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
             // The target ring lies on the depth copy (taken above, or by it in the classic lighting), under the
             // weather and particles. Character select draws no target.
             if (in_game) draw_target_ring(*f, vp, lit.far_plane, modern, t);

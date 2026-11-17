@@ -84,12 +84,9 @@ const uint kMolten = 512u;     // RegionLava whose texture's name says lava or m
 const uint kEnergy = 1024u;    // RegionLavaH (harbingers' towers): drawn as lava (modern)
 const uint kEnvMap = 2048u;    // water: slot 2 is its own environment, an octahedral map (a "noswap" cube)
 const uint kFlagLodFade = 4096u; // a level of detail: extra3 its band (coverage.glsl lod_fade_samples)
-const uint kTintNeighbour = 32768u; // render/zone_renderer.h set_debug_tint: a neighbour's own geometry
-const uint kTintLand = 65536u;      // its own ground in its part of the land
 const uint kPackedNormal = 131072u; // CBGG1/CBSG1: RG normal, B glow, A gloss
 const uint kGlow = 262144u;         // blue channel of slot 1
 const uint kAdditiveGlow = 524288u; // AddAlpha surfaces emit into modern HDR
-const uint kLandTint = 1048576u;    // render/zone_renderer.cpp: the land's ground moved toward color2 (an atlas zone's)
 const uint kLandSplat = 2097152u;   // render/zone_renderer.cpp: the land's rock (slot 1) and sand (slot 2) by v_uv2
 
 vec4 tex(uint i, vec2 uv) { return texture(textures[nonuniformEXT(i)], uv); }
@@ -581,8 +578,6 @@ void main() {
     // is combined with the alpha test below, as in zone_depth.frag.
     int lod_samples = lod_fade_samples((pc.tex2.z & kFlagLodFade) != 0u, v_lod_distance, pc.extra3, gl_FragCoord.xy);
     if (lod_samples == 0) discard;
-    // A neighbour's part of the land: this draw's ground or the other's (coverage.glsl land_blend_discard).
-    if (land_blend_discard(pc.tex2.z, v_color2.a, v_world)) discard;
     uint mode = pc.tex2.y;
     uint flags = pc.tex2.z;
     bool unlit = (flags & kUnlit) != 0u;
@@ -770,12 +765,6 @@ void main() {
                                              smoothstep(0.1, 0.25, v_uv2.x));
             if (v_uv2.y > 0.05) t.rgb = mix(t.rgb, sand, smoothstep(0.2, 0.8, clamp(v_uv2.y + grain * 0.4, 0.0, 1.0)));
         }
-        // The land over a zone of the world atlas: the zone's ground texture, its detail kept, carried to that zone's
-        // own ground colour (its texture's average over the colour the atlas measured there).
-        if ((flags & kLandTint) != 0u && v_color2.a > 0.0) {
-            vec3 average = max(textureLod(textures[nonuniformEXT(pc.tex.x)], v_uv, 14.0).rgb, vec3(0.02));
-            t.rgb = mix(t.rgb, clamp(t.rgb / average * v_color2.rgb, 0.0, 1.0), v_color2.a);
-        }
         color = lit(t.rgb);
         alpha = t.a;
         // The sun's or moon's highlight, shadowed, by the sky's share of the light (v_color.a).
@@ -810,9 +799,6 @@ void main() {
     gl_SampleMask[0] = lod_samples & alpha_coverage_samples(out_alpha, gl_FragCoord.xy);
     // The modern water over the copies is the whole result (it blends the floor itself).
     if (g_modern && (flags & kWaterCopies) != 0u) out_alpha = 1.0;
-    // The neighbour zones' debugging view: what comes from where.
-    if ((flags & kTintNeighbour) != 0u) color = mix(color, vec3(dot(color, vec3(0.3, 0.6, 0.1))) * vec3(1.6, 0.2, 1.4), 0.75);
-    if ((flags & kTintLand) != 0u) color = mix(color, vec3(dot(color, vec3(0.3, 0.6, 0.1))) * vec3(0.2, 1.6, 0.3), 0.6);
     if (g_modern) {
         if ((flags & kNoFog) == 0u)
             color = apply_haze(color, v_world, scene.camera, scene.haze, scene.haze_color, scene.to_light, scene.light);

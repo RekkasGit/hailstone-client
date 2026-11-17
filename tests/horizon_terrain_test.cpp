@@ -47,8 +47,8 @@ Coast make_coast(float seed = 4.0f) {
 TEST_CASE("horizon terrain: the same land wears the same way, another zone's otherwise") {
     const Coast c = make_coast();
     REQUIRE(c.field.valid());
-    const auto a = render::horizon_terrain(c.field, {});
-    const auto b = render::horizon_terrain(c.field, {});
+    const auto a = render::horizon_terrain(c.field);
+    const auto b = render::horizon_terrain(c.field);
     REQUIRE(a.valid());
     REQUIRE(b.valid());
     CHECK(a.nx == b.nx);
@@ -60,22 +60,15 @@ TEST_CASE("horizon terrain: the same land wears the same way, another zone's oth
     CHECK(a.worn_lo >= -render::kHorizonTerrainMaxCut - 0.5f);
     CHECK(a.worn_hi <= render::kHorizonTerrainMaxFill + 0.5f);
     const Coast other = make_coast(9.0f);
-    CHECK(render::horizon_terrain(other.field, {}).delta != a.delta);
+    CHECK(render::horizon_terrain(other.field).delta != a.delta);
 }
 
-TEST_CASE("horizon terrain: the known ground is not moved: the zone, a neighbour's ground, the sea") {
+TEST_CASE("horizon terrain: the known ground is not moved: the zone, the sea") {
     const Coast c = make_coast();
-    // A neighbour's ground east of the zone, from x 2000 to 6000 at 20.
-    const glm::vec2 lo(2000.0f, -500.0f);
-    const int nx = 63, ny = 47;
-    std::vector<float> ground(static_cast<std::size_t>(nx * ny), 20.0f);
-    auto source = std::make_shared<const render::HorizonSource>(
-        render::horizon_source("east", lo, render::kHorizonCell, nx, ny, ground));
-    const render::HorizonSources sources{source};
     auto field = c.field;
-    const auto t = render::horizon_terrain(field, sources);
+    const auto t = render::horizon_terrain(field);
     REQUIRE(t.valid());
-    std::size_t zone = 0, neighbour = 0, sea = 0;
+    std::size_t zone = 0, sea = 0;
     for (int y = 0; y < t.ny; ++y)
         for (int x = 0; x < t.nx; ++x) {
             const glm::vec2 p = t.lo + glm::vec2(static_cast<float>(x), static_cast<float>(y)) * t.cell;
@@ -84,10 +77,6 @@ TEST_CASE("horizon terrain: the known ground is not moved: the zone, a neighbour
                 CHECK(d == 0.0f);
                 ++zone;
             }
-            if (render::sample_source(*source, p).cover >= 0.99f) {
-                CHECK(std::abs(d) < 0.01f);
-                ++neighbour;
-            }
             // Straight off the west shore, the open sea.
             if (p.x < -2500.0f && p.y > 300.0f && p.y < 1700.0f) {
                 CHECK(std::abs(d) < 0.01f);
@@ -95,17 +84,16 @@ TEST_CASE("horizon terrain: the known ground is not moved: the zone, a neighbour
             }
         }
     CHECK(zone > 50);
-    CHECK(neighbour > 50);
     CHECK(sea > 50);
     // The land's own sea floor is where it was, under the surface.
     field.terrain = std::make_shared<const render::HorizonTerrain>(t);
-    CHECK(render::horizon_height(field, sources, {-4000.0f, 1000.0f}) < -100.0f);
+    CHECK(render::horizon_height(field, {-4000.0f, 1000.0f}) < -100.0f);
 }
 
 TEST_CASE("horizon terrain: the land's sea follows the ground, not the squares") {
     Coast c = make_coast();
-    c.field.terrain = std::make_shared<const render::HorizonTerrain>(render::horizon_terrain(c.field, {}));
-    const auto mesh = render::horizon_mesh(c.field, {});
+    c.field.terrain = std::make_shared<const render::HorizonTerrain>(render::horizon_terrain(c.field));
+    const auto mesh = render::horizon_mesh(c.field);
     REQUIRE_FALSE(mesh.water.empty());
     // Some water squares have a corner whose ground stands above the surface: the land rises through the water there,
     // so the shoreline runs where the ground crosses the surface.
@@ -120,8 +108,7 @@ TEST_CASE("horizon terrain: the land's sea follows the ground, not the squares")
         through += above ? 1 : 0;
     }
     CHECK(through > 10);
-    // The ground and rock are one draw for the current zone, splatted by the vertices' weights.
-    CHECK(mesh.rock.empty());
+    // The ground and rock are one draw, splatted by the vertices' weights.
     REQUIRE(mesh.splat.size() == mesh.positions.size());
     bool rock = false, sand = false;
     for (const glm::vec2& s : mesh.splat) {
@@ -138,9 +125,9 @@ TEST_CASE("horizon terrain: the land's sea follows the ground, not the squares")
 
 TEST_CASE("horizon terrain: cached and read back for the same land; another land's or a damaged file is refused") {
     const Coast c = make_coast();
-    const auto t = render::horizon_terrain(c.field, {});
+    const auto t = render::horizon_terrain(c.field);
     REQUIRE(t.valid());
-    const std::uint64_t key = render::horizon_terrain_key(c.field, {});
+    const std::uint64_t key = render::horizon_terrain_key(c.field);
     const auto bytes = render::write_horizon_terrain(t, key);
     const auto back = render::read_horizon_terrain(bytes, key);
     REQUIRE(back);
@@ -150,13 +137,9 @@ TEST_CASE("horizon terrain: cached and read back for the same land; another land
     CHECK(back->cell == t.cell);
     CHECK(back->delta == t.delta); // stored as generated (both already on the cache's steps)
     CHECK(back->wet == t.wet);
-    // Another land (another seed, a source added) has another key, and its file does not fit this one.
+    // Another land (another seed) has another key, and its file does not fit this one.
     const Coast other = make_coast(9.0f);
-    CHECK(render::horizon_terrain_key(other.field, {}) != key);
-    std::vector<float> ground(64, 20.0f);
-    auto source = std::make_shared<const render::HorizonSource>(
-        render::horizon_source("east", {2000.0f, 0.0f}, render::kHorizonCell, 8, 8, ground));
-    CHECK(render::horizon_terrain_key(c.field, {source}) != key);
+    CHECK(render::horizon_terrain_key(other.field) != key);
     CHECK_FALSE(render::read_horizon_terrain(bytes, key + 1));
     // Damaged: cut short anywhere, or with its sizes changed.
     for (std::size_t cut : {std::size_t{0}, std::size_t{3}, std::size_t{20}, bytes.size() / 2, bytes.size() - 1})

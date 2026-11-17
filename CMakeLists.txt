@@ -154,7 +154,6 @@ add_library(hailstone_engine STATIC
   src/render/clouds.cpp
   src/render/horizon.cpp
   src/render/tree_impostor.cpp
-  src/render/zone_proxy.cpp
   src/render/ambient_probe.cpp
   src/render/shadows.cpp
   src/render/light_grid.cpp
@@ -431,8 +430,7 @@ add_library(hailstone_engine STATIC
   src/nav/zone_nav.cpp
   src/nav/path_follower.cpp
   src/game/zone_lines.cpp
-  src/game/neighbour_zones.cpp
-  src/game/world_atlas.cpp
+  src/game/zone_exits.cpp
   src/game/world_state.cpp
   src/game/useful_npcs.cpp
   src/game/path_trail.cpp
@@ -626,9 +624,6 @@ add_library(hailstone_engine STATIC
   src/render/actor_layers.cpp
   src/render/object_renderer.cpp
   src/app/world_objects.cpp
-  src/app/neighbour_zones.cpp
-  src/app/distant_copies.cpp
-  src/app/world_atlas.cpp
   src/app/world_objects_ladder.cpp
   src/render/vma_impl.cpp
   src/assets/sound_files.cpp
@@ -1190,8 +1185,6 @@ if(HAILSTONE_BUILD_TESTS)
     tests/zone_fog_test.cpp
     tests/horizon_terrain_test.cpp
     tests/tree_impostor_test.cpp
-    tests/zone_proxy_test.cpp
-    tests/distant_copies_test.cpp
     tests/collision_test.cpp
     tests/nav_test.cpp
     tests/map_data_test.cpp
@@ -1200,6 +1193,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/atlas_test.cpp
     tests/zone_routes_test.cpp
     tests/zone_atlas_api_test.cpp
+    tests/zone_exits_test.cpp
     tests/map_windows_test.cpp
     tests/map_spawns_test.cpp
     tests/ui_windows_test.cpp
@@ -1409,8 +1403,6 @@ if(HAILSTONE_BUILD_TESTS)
     tests/use_skill_vectors_test.cpp
     tests/picking_vectors_test.cpp
     tests/zoning_vectors_test.cpp
-    tests/neighbour_zones_test.cpp
-    tests/world_atlas_test.cpp
     tests/zone_liquid_test.cpp
     tests/depth_prepass_test.cpp
     tests/player_placement_test.cpp
