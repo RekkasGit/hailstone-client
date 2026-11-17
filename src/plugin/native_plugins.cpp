@@ -133,7 +133,8 @@ struct NativePlugins::Impl {
     struct ReadyInputs {
         std::uint32_t policy_serial = 0, approvals_generation = 0;
         std::vector<std::pair<std::string, Sha256Digest>> required;
-        std::vector<std::tuple<std::string, Sha256Digest, std::uint32_t>> loaded;
+        // A loaded plugin's name, file, capabilities and how many of its callbacks have let an exception out.
+        std::vector<std::tuple<std::string, Sha256Digest, std::uint32_t, std::size_t>> loaded;
         std::vector<std::pair<std::string, std::string>> failures;
         std::vector<Sha256Digest> pending;
         std::vector<std::pair<Sha256Digest, bool>> session_answers;
@@ -2635,7 +2636,7 @@ bool NativePlugins::required_addons_ready(std::string* problem) const {
     const auto& rules = *m.env.policy->current();
     if (!rules.addons.enabled || rules.provisional) return true;
     Impl::ReadyInputs inputs{m.env.policy->serial(), plugin_approvals_generation(), m.required, {}, {}, {}, {}};
-    for (const auto& l : m.loaded) inputs.loaded.emplace_back(l->name, l->hash, l->caps);
+    for (const auto& l : m.loaded) inputs.loaded.emplace_back(l->name, l->hash, l->caps, l->threw_at.size());
     for (const auto& f : m.failures) inputs.failures.emplace_back(f.name, f.error);
     for (const auto& p : m.pending) inputs.pending.push_back(p.sha256);
     for (const auto& a : m.session_answers) inputs.session_answers.emplace_back(a.sha256, a.allowed);
@@ -2665,6 +2666,10 @@ bool NativePlugins::check_required_addons(std::string* problem) const {
         const Loaded* l = m.find(name);
         if (l && l->hash != hash)
             return fail("Required add-on " + name + " is shadowed by a different plugin");
+        // One that let an exception out stays loaded (its other callbacks may still work) but is not counted as
+        // running as the server requires: the player is told, and plays on (ClientApp::addon_world_allowed).
+        if (l && l->hash == hash && !l->threw_at.empty())
+            return fail("Required add-on " + name + " failed with an error in " + l->threw_at.front());
         const Consent consent = m.consent_for(hash);
         if (consent == Consent::Denied) return fail("Required add-on " + name + " was not approved");
         if (consent == Consent::Unasked) {

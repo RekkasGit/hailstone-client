@@ -1356,8 +1356,9 @@ When it is decided:
   missing. Reviewing it fetches its manifest and opens the usual install card; nothing is fetched before that click,
   and installing keeps every usual check (signatures, pinned keys, platform, capabilities, approval of native code).
   An invalid policy refuses entry the same way, with the reason.
-- **Once the character is in the world**, nothing disconnects: a required add-on that fails, or the next zone's rules
-  that the installed add-ons do not meet, is a warning in chat (`[Add-ons] Required add-on owner/repo did not remain
+- **Once the character is in the world**, nothing disconnects: a required add-on that fails (a required plugin
+  whose code lets an exception out counts as failed, though it stays loaded), or the next zone's rules that the
+  installed add-ons do not meet, is a warning in chat (`[Add-ons] Required add-on owner/repo did not remain
   running. You can keep playing on this server.`), said once for each failure. Leaving to character select starts the
   check over for the next entry.
 
