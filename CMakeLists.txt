@@ -1080,6 +1080,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mq_combat_test.cpp
     tests/automation_test.cpp
     tests/mq_lua_test.cpp
+    tests/mq_script_path_test.cpp
     tests/mq_event_pattern_test.cpp
     tests/lua_social_test.cpp
     tests/code_syntax_test.cpp

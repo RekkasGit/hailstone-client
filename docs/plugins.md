@@ -381,6 +381,12 @@ as a module: those files are data. That holds for the folder in any case and wit
 inside the script folders: an absolute one (`/lua run /home/x/evil`, `require('/x')`) or one whose file is a link
 leading out of the folder is not found.
 
+`/lua run` finds a script whatever the case of its name, on Linux as on Windows and macOS (`mq::script_spelled_path`):
+`/lua run autoloot` starts `scripts/AutoLoot/init.lua`. A name spelled exactly as on disk wins; otherwise each part of
+the path must match exactly one file or folder that differs from it only in case, so `AutoLoot/` beside `AUTOLOOT/`
+(possible on a case-sensitive file system only) finds neither. A `:` in a name is refused. A module's name
+(`require`) is still looked up as written.
+
 ## The Scripts window
 
 Hailstone's own window (`ScriptsWnd`; `ui/<pack>/scripts.lua`, `app/lua_eq_scripts.cpp`), opened from the EQ menu's
