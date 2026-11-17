@@ -143,6 +143,11 @@ The map's compact **Map controls** panel contains registered actions and before/
 LT enters this panel; B returns or explicitly cancels a review before closing the map. While the panel owns input,
 map pan/zoom and Find shortcuts are suspended. Outside the panel, ordinary map controls keep their behavior.
 
+Only the display points the interfaces offer take actions and sections; any other window or part is an error
+(`RegisterAction`, `RegisterSection`, `ListActions` and `DrawSection` alike), so an add-on cannot claim a part of a
+window that was not offered: `RaidWindow` `member_actions`, `MapViewWnd` `controls`, `MapViewWnd` `map.canvas` and
+the map toolbar's buttons, `MapViewWnd` `toolbar.<button>` (`toolbar.zin`, `toolbar.mapcontrols`, ...).
+
 `RegisterSection(window,section,'before'|'after'|'replace',id,callback[,options])` registers a drawing callback receiving
 `window,section,placement,context`. `DrawSection(window,section,placement,context)` is the presenter entry point
 and, for `before`/`after`, retains its numeric count of successful callbacks, zero outside an active drawing frame.

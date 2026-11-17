@@ -1,6 +1,7 @@
 // ClientApp: the main loop, and run_client.
 
 #include "app/client_app_internal.h"
+#include "app/ui_visibility.h"
 #include "app/frame_pace.h"
 #include "core/build_info.h"
 #include "core/frame_sections.h"
@@ -109,7 +110,8 @@ int ClientApp::run() {
         // Presentation hiding is local to play. Loading and pregame screens remain usable, and returning to
         // character selection/login starts with the interface visible again.
         if (screen_ != Screen::InGame && screen_ != Screen::Loading) ui_hidden_ = false;
-        ui_.set_visible(!ui_hidden_ || screen_ != Screen::InGame || zone_settling());
+        ui_.set_visible(ui_shown(ui_hidden_, screen_ == Screen::InGame, zone_settling(),
+                                 ui_hidden_ && automation_ && automation_->plugin_consent().has_value()));
         // The gamepad before the UI frame: its mode decides what ImGui gets from it (docs/gamepad.md).
         update_gamepad(dt);
         // /safelock: the windows get no mouse while the interface is locked (__ProcessMouseEvents).

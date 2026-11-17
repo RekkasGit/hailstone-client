@@ -9,6 +9,7 @@
 #include <imgui_internal.h>
 
 #include "ui/imgui_layer.h"
+#include "app/ui_visibility.h"
 #include "app/actions_ui.h"
 #include "core/config.h"
 #include "platform/window.h"
@@ -268,4 +269,15 @@ TEST_CASE("UI visibility key: Options capture, both remapped banks and reset per
     REQUIRE(defaults.load(path));
     CHECK_FALSE(defaults.get("KEYMAPPING_FULLSCREEN_1"));
     CHECK_FALSE(defaults.get("KEYMAPPING_FULLSCREEN_2"));
+}
+
+// F10's hide is the world's only, and a question only the player may answer (the compiled-plugin consent) shows the
+// interface while it waits (app/ui_visibility.h).
+TEST_CASE("UI visibility: F10 hides in the world only, and a waiting consent question shows the interface") {
+    using hailstone::app::ui_shown;
+    CHECK(ui_shown(false, true, false, false));
+    CHECK_FALSE(ui_shown(true, true, false, false));
+    CHECK(ui_shown(true, false, false, false)); // pre-game and loading screens
+    CHECK(ui_shown(true, true, true, false));   // a zone still settling
+    CHECK(ui_shown(true, true, false, true));   // the consent question waits
 }

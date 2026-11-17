@@ -65,7 +65,21 @@ bool point(std::string_view window, std::string_view section) {
                    c == '_' || c == '.' || c == ':' || c == '-';
         });
     };
-    return identifier(window) && identifier(section);
+    if (!identifier(window) || !identifier(section)) return false;
+    // The display points the interfaces offer, nothing else: an add-on cannot claim a window's other parts by naming
+    // them. A trailing '*' takes any rest (the map toolbar's buttons, "toolbar.zin", ...). docs/ui-api.md lists them.
+    struct Declared { std::string_view window, section; };
+    static constexpr Declared kDeclared[] = {
+        {"RaidWindow", "member_actions"},
+        {"MapViewWnd", "controls"},
+        {"MapViewWnd", "map.canvas"},
+        {"MapViewWnd", "toolbar.*"},
+    };
+    return std::ranges::any_of(kDeclared, [&](const Declared& d) {
+        if (d.window != window) return false;
+        if (d.section.ends_with('*')) return section.starts_with(d.section.substr(0, d.section.size() - 1));
+        return d.section == section;
+    });
 }
 bool visible(const Entry& e) {
     const auto tag = ui::lua::LuaUi::caller_tag();
@@ -184,7 +198,7 @@ bool invoke(lua_State* L, Registry& r, Entry& e, int args, int results, bool dra
 
 int Register(lua_State* L, bool action) {
     const auto window = text(L, 1), section = text(L, 2);
-    if (!point(window, section)) return luaL_error(L, "Window and section must be bounded ASCII identifiers");
+    if (!point(window, section)) return luaL_error(L, "Not a display point an interface offers (docs/ui-api.md)");
     const int idAt = action ? 3 : 4, optionsAt = action ? 5 : 6, callbackAt = action ? 6 : 5;
     const auto id = text(L, idAt);
     std::string_view label, placement;
@@ -268,7 +282,7 @@ int Remove(lua_State* L) {
 }
 int ListActions(lua_State* L) {
     const auto window = text(L, 1), section = text(L, 2);
-    if (!point(window, section)) return luaL_error(L, "Window and section must be bounded ASCII identifiers");
+    if (!point(window, section)) return luaL_error(L, "Not a display point an interface offers (docs/ui-api.md)");
     const bool selected = selection(L, 3);
     auto& r = registry(L); auto& call = plugin::lua_keep<Call>(L);
     plugin::cxx_guard(L, [&] { prune(L, r); ordered(call, r, window, section, true); });

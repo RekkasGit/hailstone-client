@@ -239,13 +239,13 @@ TEST_CASE("UI extensions: map sections execute only at their declared active dra
     ImGui::End(); ImGui::Render();
 }
 
-TEST_CASE("UI extensions: arbitrary slots validate identifiers without injecting into unemitted components") {
+TEST_CASE("UI extensions: only declared slots, valid identifiers, and nothing injected into unemitted components") {
     ExtensionUi ui;
     CHECK(ui.run(R"(
       local E=hs.UI.extensions
-      arbitrary=E.RegisterAction('New.Window:1','toolbar.left-2','action','Action',{},function()actionRan=true return {ok=true}end)
-      display=E.RegisterSection('New.Window:1','toolbar.left-2','replace','display',function()displayRan=true end)
-      local rows=E.ListActions('New.Window:1','toolbar.left-2',{})
+      arbitrary=E.RegisterAction('MapViewWnd','toolbar.left-2','action','Action',{},function()actionRan=true return {ok=true}end)
+      display=E.RegisterSection('MapViewWnd','toolbar.left-2','replace','display',function()displayRan=true end)
+      local rows=E.ListActions('MapViewWnd','toolbar.left-2',{})
       assert(#rows==1 and #rows.sections==1 and rows.sections[1].placement=='replace')
       for _,bad in ipairs({'bad name','bad/name','bad+name','bad\0name','é',string.rep('x',129)}) do
         assert(not pcall(E.RegisterAction,bad,'slot','bad','Bad',{},function()end))
@@ -253,47 +253,50 @@ TEST_CASE("UI extensions: arbitrary slots validate identifiers without injecting
         assert(not pcall(E.ListActions,'Window',bad,{}))
         assert(not pcall(E.DrawSection,bad,'slot','replace',{}))
       end
-      assert(E.RegisterSection(string.rep('a',128),string.rep('b',128),'before','long',function()end))
+      -- Only the points the interfaces offer (lua_ui_extensions.cpp): another window or part is refused.
+      assert(not pcall(E.RegisterSection,'New.Window','caption','before','undeclared',function()end))
+      assert(not pcall(E.RegisterAction,'MapViewWnd','legend','undeclared','Undeclared',{},function()end))
+      assert(not pcall(E.RegisterSection,'RaidWindow','member_actions.extra','before','undeclared',function()end))
       assert(not pcall(E.RegisterSection,'Window','slot','unknown','bad',function()end))
-      return E.DrawSection('New.Window:1','toolbar.left-2','replace',{})==false and actionRan==nil and displayRan==nil
+      return E.DrawSection('MapViewWnd','toolbar.left-2','replace',{})==false and actionRan==nil and displayRan==nil
     )", kA) == "true");
     ui.frame();
     CHECK(ui.run("return actionRan==nil and displayRan==nil", kA) == "true");
-    CHECK(ui.run("local rows=hs.UI.extensions.ListActions('Different.Window','toolbar.left-2',{}) return #rows==0 and #rows.sections==0") == "true");
+    CHECK(ui.run("local rows=hs.UI.extensions.ListActions('MapViewWnd','toolbar.other',{}) return #rows==0 and #rows.sections==0") == "true");
 }
 
 TEST_CASE("UI extensions: one deterministic replacement wins and an empty success suppresses the default") {
     ExtensionUi ui;
     CHECK(ui.run(R"(
-      high=hs.UI.extensions.RegisterSection('New.Window','caption','replace','high',function(...)
+      high=hs.UI.extensions.RegisterSection('MapViewWnd','toolbar.caption','replace','high',function(...)
         assert(select('#',...)==4)
         local window,section,placement,context=...
-        assert(window=='New.Window' and section=='caption' and placement=='replace' and context.value==7)
+        assert(window=='MapViewWnd' and section=='toolbar.caption' and placement=='replace' and context.value==7)
         highCalls=(highCalls or 0)+1
       end,{priority=-10,requiredCaps={'chat'}})
       return type(high)
     )", kA) == "string");
     CHECK(ui.run(R"(
-      low=hs.UI.extensions.RegisterSection('New.Window','caption','replace','low',function()lowCalls=(lowCalls or 0)+1 end,{priority=10})
+      low=hs.UI.extensions.RegisterSection('MapViewWnd','toolbar.caption','replace','low',function()lowCalls=(lowCalls or 0)+1 end,{priority=10})
       return type(low)
     )", kB) == "string");
     ImGui::SetCurrentContext(ui.imgui);
     ui.api->begin_frame(); ImGui::NewFrame(); ImGui::Begin("Replacement fixture");
     const auto draw = [&] {
-        return ui.run("local replaced=hs.UI.extensions.DrawSection('New.Window','caption','replace',{value=7}) "
+        return ui.run("local replaced=hs.UI.extensions.DrawSection('MapViewWnd','toolbar.caption','replace',{value=7}) "
             "if not replaced then defaults=(defaults or 0)+1 end return type(replaced)..':'..tostring(replaced)");
     };
     CHECK(draw() == "boolean:true");
     CHECK(ui.run("return highCalls", kA) == "1"); CHECK(ui.run("return lowCalls==nil", kB) == "true");
     CHECK(ui.run("return defaults==nil") == "true"); // an empty successful callback intentionally hides the default
     ui.caps[kA] &= ~plugin::kCapChat;
-    CHECK(ui.run("local s=hs.UI.extensions.ListActions('New.Window','caption',{}).sections return #s==2 and not s[1].enabled and s[2].enabled") == "true");
+    CHECK(ui.run("local s=hs.UI.extensions.ListActions('MapViewWnd','toolbar.caption',{}).sections return #s==2 and not s[1].enabled and s[2].enabled") == "true");
     CHECK(draw() == "boolean:true"); CHECK(ui.run("return lowCalls", kB) == "1");
     ui.caps[kA] = plugin::kCapAll;
     CHECK(draw() == "boolean:true"); CHECK(ui.run("return highCalls", kA) == "2");
-    CHECK(ui.run("return hs.UI.extensions.DrawSection('New.Window','caption','replace',{value=7})", kC) == "false");
+    CHECK(ui.run("return hs.UI.extensions.DrawSection('MapViewWnd','toolbar.caption','replace',{value=7})", kC) == "false");
     CHECK(ui.run("return lowCalls", kB) == "1");
-    CHECK(ui.run("failure=hs.UI.extensions.RegisterSection('New.Window','caption','replace','failure',function()error('replace failed')end,{priority=-20}) return failure~=nil", kA) == "true");
+    CHECK(ui.run("failure=hs.UI.extensions.RegisterSection('MapViewWnd','toolbar.caption','replace','failure',function()error('replace failed')end,{priority=-20}) return failure~=nil", kA) == "true");
     CHECK(draw() == "boolean:false");
     CHECK(ui.run("return defaults") == "1");
     CHECK(ui.run("return lowCalls", kB) == "1"); // a failed winner restores default, not the lower-priority addon
@@ -304,7 +307,7 @@ TEST_CASE("UI extensions: one deterministic replacement wins and an empty succes
     CHECK(ui.run("return highCalls", kA) == "3"); CHECK(ui.run("return lowCalls", kB) == "1");
     CHECK(ui.run("return hs.UI.extensions.Remove(high)", kA) == "true");
     CHECK(draw() == "boolean:true"); CHECK(ui.run("return lowCalls", kB) == "2");
-    CHECK(ui.run("return hs.UI.extensions.DrawSection('Unemitted.Window','caption','replace',{})") == "false");
+    CHECK(ui.run("return hs.UI.extensions.DrawSection('MapViewWnd','toolbar.unemitted','replace',{})") == "false");
     ImGui::End(); ImGui::Render();
 }
 
