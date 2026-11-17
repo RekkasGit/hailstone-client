@@ -345,7 +345,8 @@ A script can extend the client as a compiled plugin does, with no native code: t
 | `on_packet(stream, direction, opcode, fn)` | `fn(opcode, data)` for each such packet (`'world'` / `'zone'`, `'in'` / `'out'`, opcode 0 all): `true` drops it, a string replaces its data. With Lua's `string.pack` / `string.unpack` a script reads and writes any layout (`packets`) |
 | `send_packet(stream, opcode, data)` | a packet to the server (`packets`) |
 | `ui_function(name, fn)`, `option{name, label, min, max, get, set}`, `menu(label, command)` | for its windows, as a compiled plugin's (`ui`); `eq.Plugin("<script name>")`. A Lua social cannot call them (an error): its state goes whenever the social is edited, and its name is only its title |
-| `player()`, `spawn(id)`, `spawns()`, `spell(id)`, `item(slot [, sub])`, `buff(i)`, `xtarget(i)`, `eqstr(id, ...)`, `zone_name(id)`, `server()` | the game state as tables (`read`); `server()` is the server this login is on (`{name, host, port, world, world_host}`, nil before the world login); `player()`'s `cur_hp` and `max_hp`, like a compiled plugin's `HailstonePlayer` and `Me.CurrentHPs`, include the items' HP that EQEmu's own HP update leaves out, as the windows show them |
+| `player()`, `spawn(id)`, `spawns()`, `spell(id)`, `item(slot [, sub])`, `buff(i)`, `xtarget(i)`, `raid()`, `eqstr(id, ...)`, `zone_name(id)`, `server()` | the game state as tables (`read`); `server()` is the server this login is on (`{name, host, port, world, world_host}`, nil before the world login); `player()`'s `cur_hp` and `max_hp`, like a compiled plugin's `HailstonePlayer` and `Me.CurrentHPs`, include the items' HP that EQEmu's own HP update leaves out, as the windows show them |
+| `raid()` | the raid roster as columnar tables: `active, locked, loot_type, count, leader, target, spawn_id[], name[], group[], flags[], level[], class[], pct_hp[], pct_mana[], pct_endurance[], pet_spawn_id[], pet_pct_hp[], x[], y[], z[], distance[]` (members 1-based; `leader`/`target` 1-based, 0 none; `-1` an unknown percentage). The `hailstone` module also has the flag bits as `RAID_LEADER`, `RAID_GROUP_LEADER`, `RAID_MAIN_ASSIST`, `RAID_MARKER`, `RAID_WAYPOINTER`, `RAID_LOOTER`, `RAID_PRESENT` and `RAID_ME`, with the SDK's `HS_BULK_RAID_*` values |
 | `spell(id)` display fields | raw spell data: `range`, `ae_range`, `push_back`, `duration_formula`, `duration_cap` (ticks), `spell_type`, `resist`, `resist_adj`, `spell_icon`, `category`, `subcategory`, `cast_on_you`, `cast_on_other`, `wear_off`, and `effects` (12 1-based entries with `effect`, `base`, `base2`, `max`, `formula`). These are the loaded record values, not computed duration or effect descriptions; a script decides how to present them. |
 | `eq.DisplaySpellId(n)`, `eq.DisplayItemData(n)` | in a Lua UI window, read the actual spell ID or item in display instance 1..6, or nil when absent. Item data gives `id`, `name`, `icon`, `lore`, `value` (copper), `stackCount`, `damage`, `delay`, `itemType` and `favor` (`stack_count` and `item_type`, the names before, are kept); this is the inspected item, not necessarily one in inventory. |
 | `right_click_item(slot [, class])`, `close_spell_book()`, `clear_spell_recovery()`, `set_window_pet(id)`, `inspect_item(id [, augments])`, `set_max_camera_distance(d)` | the client's own actions (`actions`) |
@@ -568,9 +569,11 @@ same changes as a plugin, with no change to Hailstone itself. With the `extend` 
   game string with its `%1` filled. A spawn also carries its rider, mercenary and GM flags, whether it is one of the
   player's group, its con colour and its body types. Each struct starts with its size; the client fills what both know, so a plugin built
   for an older client keeps working. `get_buff_data_bulk` gives every buff slot of the player in one call,
-  `get_pet_buff_data_bulk` the pet window's buffs, `get_target_buff_data_bulk` the target window's buffs,
-  `get_avail_aa_data_bulk` the owned alternate abilities, `get_avail_disc_data_bulk` the combat abilities and
-  `get_spawns_data_bulk` every spawn in the zone, as packed records (Buff and spawn records below). `server_info` gives the
+  `get_pet_buff_data_bulk` the pet window's buffs, `get_target_buff_data_bulk` the current target's buffs,
+  `get_avail_aa_data_bulk` the owned alternate abilities, `get_avail_disc_data_bulk` the combat abilities,
+  `get_buff_name_data_bulk` the player's buffs with their casters' names, `get_spawns_data_bulk` every spawn in the
+  zone and `get_raid_data_bulk` the raid roster, as packed records (Buff, spawn, extended target and raid records
+  below). `server_info` gives the
   server this login is on (the saved server's name, host and port, the world's name and address), so a plugin for
   one server can tell it from another that sends the same packets.
 - **take item clicks** (`item_right_click`, then the client's own with `right_click_item`, which needs `actions`)
@@ -644,14 +647,15 @@ when the cursor no longer holds an item of that id, so an item the player put th
 
 Both need `actions`, as `/destroy` does. The id is a plain decimal number above 0; anything else does nothing.
 
-Buff and spawn records: `get_buff_data_bulk(host, out, out_size)`, `get_pet_buff_data_bulk(host, out, out_size)`,
+Buff, spawn, extended target and raid records: `get_buff_data_bulk(host, out, out_size)`, `get_pet_buff_data_bulk(host, out, out_size)`,
 `get_spawns_data_bulk(host, out, out_size)`, `get_xtarget_data_bulk(host, out, out_size)`,
 `get_target_buff_data_bulk(host, out, out_size)`, `get_avail_aa_data_bulk(host, out, out_size)`,
-`get_avail_disc_data_bulk(host, out, out_size)` and `get_buff_name_data_bulk(host, out, out_size)` (with `read`; added later in ABI 3, so test `HAILSTONE_HOST_HAS(host, <field>)` first;
+`get_avail_disc_data_bulk(host, out, out_size)`, `get_buff_name_data_bulk(host, out, out_size)` and
+`get_raid_data_bulk(host, out, out_size)` (with `read`; added later in ABI 3, so test `HAILSTONE_HOST_HAS(host, <field>)` first;
 `out` is an `unsigned char*` and `out_size` an `int32_t`) write records into `out` and return the bytes written.
 The records are the SDK's packed structs (`HS_Bulk_BuffData`, `HS_Bulk_PetBuffData`, `HS_Bulk_SpawnHeader`,
 `HS_Bulk_SpawnFixedRecord`, `HS_Bulk_XTargetData`, `HS_Bulk_TargetBuffFixedRecord`, `HS_Bulk_BuffNameFixedRecord`,
-`HAILSTONE_ID_NAME_RECORD`, all in `#pragma pack(push, 1)`), in the machine's byte order (little-endian on every
+`HAILSTONE_ID_NAME_RECORD`, `HS_Bulk_RaidHeader`, `HS_Bulk_RaidData`, all in `#pragma pack(push, 1)`), in the machine's byte order (little-endian on every
 platform Hailstone runs on) and unaligned. For speed, the bulk reads are the one place where a struct may be cast
 onto the buffer, by the client writing it and by a plugin reading it: read each field through the packed struct
 (`rec->level`), which the compiler reads unaligned, and never keep a plain pointer or reference to a field (`&rec->x`),
@@ -766,18 +770,34 @@ and say so in the chat window.
   | 8 | i32 | the aggro meter's percent for the slot's spawn, as the server sent it (entries 7 to 26 of the meter, the extended target window's aggro labels; on EQEmu an NPC's is our hate against its current target's, a player's is its hate against our target's top). 0 with no spawn in the zone, without the meter (EQEmu's `Character:EnableAggroMeter`), or for a slot past the 20th |
   | 12 | i32 | the spawn's HP percent, as the extended target window draws it: the player's own from its points (items' HP included), anyone else's as the server last sent it (EQEmu sends it to everyone with the spawn on their list when the percent changes); 0 with no spawn in the zone or for a corpse |
 
-- `get_target_buff_data_bulk`: the current target's buffs, the ones the target window shows (what `OP_TargetBuffs`
-  last gave for that spawn), one record per buff the server sent, in the order the client keeps them, each with its
-  slot. EQEmu sends only the slots that hold a spell, in slot order, and resends the whole list when one fades, so
-  against it the records are packed (no empty ones) and the slot numbers can skip; an entry with no spell is left
-  out in any case. 0 bytes with no target, or while the buffs the client holds are still another spawn's (the server
-  has not yet sent the new target's; EQEmu sends them only where the target window shows buffs, so an NPC target on
-  a server without that shows none). Each record is a fixed part
+- `get_target_buff_data_bulk`: the current target's buffs, the list the target window's buff icons are drawn from
+  (what `OP_TargetBuffs` last gave for that spawn): a count, then one record per buff the server sent, in the order
+  the client keeps them, each with its slot. EQEmu sends only the slots that hold a spell, in slot order, and resends
+  the whole list when one fades, so against it the records are packed (no empty ones) and the slot numbers can skip;
+  an entry with no spell is left out in any case, and not counted. The read checks only that the list is the current
+  target's, not whose it is: with the player itself targeted it gives whatever `OP_TargetBuffs` gave for the player,
+  although the client's own target buff list draws nothing then.
+
+  The count is a plain i32 at the start of `out` (no struct; read it with `memcpy`): the number of the target's buffs
+  the client holds, all of them, not only those written. Each record after it is a fixed part
   (`HS_Bulk_TargetBuffFixedRecord`, `HAILSTONE_TARGET_BUFF_RECORD_SIZE` = 20 bytes) followed at once by the caster's
   name, `casterNameLength` bytes with no terminating NUL; the next record starts after the name, so walk them one by
-  one rather than by a fixed stride. Records are written as many as fit in `out_size`, each whole with its name; the
-  return value is the bytes written. A name is as long as the server sent it, so pass room to spare (2048 bytes holds
-  a full target window of ordinary names).
+  one rather than by a fixed stride. As many whole records, names included, are written as fit after the count, in
+  order, none after the first that does not fit; a plugin that reads fewer records than the count knows `out_size`
+  cut the list short. The return value is the bytes written; below 4 bytes nothing is written and 0 comes back. With
+  no target, while the buffs the client holds are still another spawn's (the server has not yet sent the new
+  target's; EQEmu sends them only where the target window shows buffs, so an NPC target on a server without that
+  shows none), or with no game connection, the count alone goes out (0, 4 bytes). A name is as long as the server
+  sent it, so pass room for the worst case: EQEmu gives an NPC 60 buff slots by default (`Spells:MaxTotalSlotsNPC`)
+  and keeps a caster's name in 64 bytes, at most 63 without the NUL, so 4 + 60 x 83 = 4984 bytes; 8192 bytes holds
+  any target on a stock server.
+
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | the number of the target's buffs the client holds |
+  | 4 | records | the records, one after another, as many as fit |
+
+  Each record:
 
   | Offset | Type | Field |
   |---|---|---|
@@ -820,6 +840,63 @@ and say so in the chat window.
   - `get_avail_disc_data_bulk`: the character's combat abilities (disciplines), by spell id: the profile's
     discipline list, the one `combat_ability` reads by index, without its empty (0) entries, in list order. The name
     is the spell's, empty for a spell not in spells_us.txt. Before the profile the count is 0.
+
+- `get_raid_data_bulk`: the raid roster, a 40-byte header followed by one `HS_Bulk_RaidData` record
+  (`HS_BULK_RAID_RECORD_SIZE` = 124 bytes) per member, in roster order, as many whole records as fit in `out_size`.
+  The header is written whenever `out_size` holds it: outside a raid it says `active` 0 and `count` 0. The records
+  are 0-based (`slot` 0 is the first member), while MacroQuest's `Raid.Member[1]` is the first; `leaderIndex` and
+  `targetIndex` are 0-based too, `HS_BULK_RAID_NO_INDEX` (0xffffffff) for none.
+
+  A reader starts the records at the header's `size` and steps by its `recordSize`, for `count` records. A later
+  client may append a field to the record: read `recordSize`, never a fixed stride, and read only the fields the
+  record's size covers. `version` changes only when an older reader can no longer read the header or a record at
+  all. `reserved` is the roster's total member count, so `count < reserved` means the buffer cut the roster short
+  and the caller can retry with a larger one.
+
+  Header (`HS_Bulk_RaidHeader`, `HS_BULK_RAID_HEADER_SIZE` = 40 bytes):
+
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | u32 | `sizeof(HS_BulkRaidHeader)` |
+  | 4 | u32 | version, 1 |
+  | 8 | u32 | member records that follow (what fit in `out_size`) |
+  | 12 | u32 | bytes between records; a later client may grow it |
+  | 16 | u32 | leader's 0-based member index, or `HS_BULK_RAID_NO_INDEX` |
+  | 20 | u32 | the raid window's selected member, same encoding |
+  | 24 | i32 | in a raid (1) or not (0) |
+  | 28 | i32 | locked (1) or not (0) |
+  | 32 | i32 | loot type, as the raid window names it: 1 Leader Only, 2 Leader and Group Leader, 3 Leader Selected, 4 Entire Raid |
+  | 36 | u32 | the roster's total member count, not only those written |
+
+  Each record (`HS_Bulk_RaidData`, `HS_BULK_RAID_RECORD_SIZE` = 124 bytes):
+
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | roster slot, 0-based |
+  | 4 | u32 | spawn id; 0 when the member is not in this zone |
+  | 8 | i32 | the server's raid group 0..11; -1 ungrouped or any other value |
+  | 12 | u32 | flags (below) |
+  | 16 | i32 | level; 0 when unknown |
+  | 20 | i32 | class id; 0 when unknown |
+  | 24 | i32 | HP percent; -1 when unknown |
+  | 28 | i32 | mana percent; -1 when unknown (the client has it only for group members) |
+  | 32 | i32 | endurance percent; same |
+  | 36 | u32 | pet spawn id (the pet window's for the player, else a spawn the member owns that is neither a mercenary nor a temporary pet); 0 none |
+  | 40 | i32 | pet HP percent; -1 unknown or no pet |
+  | 44 | f32 | x (the zone's coordinates, as `HailstoneSpawn.x`) |
+  | 48 | f32 | y |
+  | 52 | f32 | z |
+  | 56 | f32 | 3D distance from the player; 0 when the member is not here |
+  | 60 | char[64] | member name, NUL-terminated |
+
+  Flags (bit: meaning): 0 leader, 1 group leader, 2 main assist, 3 raid marker (the member holds the Marker role),
+  4 waypointer, 5 looter, 6 reserved (this client keeps no offline flag), 7 present in this zone, 8 the player. A
+  main assist's own member flag is used first, then the raid's assigned assist names. A member who is not in the
+  zone has no spawn id, position or percentages; the roster's level and class still answer.
+
+  The `LOOTER` flag follows the loot type: 1 Leader Only, 2 Leader and Group Leader, 3 Leader Selected, 4 Entire
+  Raid. That differs from the raid window's own `looter()` check for the member menu, which only tests the leader
+  and the listed looters; the flag here answers "may this member loot under the current type".
 
 ### Connections (ABI 2)
 
