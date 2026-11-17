@@ -811,13 +811,14 @@ TEST_CASE("gm_name_colour: a GM's name is green unless anonymous or roleplaying,
     game::Spawn npc = gm;
     npc.is_npc = true;
     CHECK_FALSE(game::gm_name_colour(npc).has_value());
-    // A corpse is type 2, not 1: one that carries the gm byte keeps the green, as in the original.
+    // A deliberate difference: the original keeps the green on a corpse (type 2) that carries the gm byte; here a
+    // corpse never takes it and shows the ordinary corpse colour.
     game::Spawn corpse = gm;
     corpse.is_corpse = true;
-    CHECK(game::gm_name_colour(corpse) == 0x1da64bu);
+    CHECK_FALSE(game::gm_name_colour(corpse).has_value());
     game::Spawn npc_corpse = npc;
     npc_corpse.is_corpse = true;
-    CHECK(game::gm_name_colour(npc_corpse) == 0x1da64bu);
+    CHECK_FALSE(game::gm_name_colour(npc_corpse).has_value());
     // Races from 0x8cd up take their own tint before the GM test.
     game::Spawn high_race = gm;
     high_race.race = 0x8cd;

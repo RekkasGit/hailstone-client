@@ -197,10 +197,19 @@ typedef struct HS_Bulk_PetBuffData {
     int32_t duration;
     int32_t spellType;
 } HS_BulkPetBuffData;
-/* get_target_buff_data_bulk: an int32_t count of the current target's buffs the client holds, then one record per
- * buff, HAILSTONE_TARGET_BUFF_RECORD_SIZE fixed bytes each, immediately followed by casterNameLength bytes of the
- * caster's name (no NUL); the next record starts after them. As many whole records as fit follow the count, so fewer
- * records than the count means out_size cut the list short; below 4 bytes nothing is written (0 returned). */
+/* The header of a list-type bulk read (get_target_buff_data_bulk, get_avail_aa_data_bulk, get_avail_disc_data_bulk),
+ * HS_BULK_LIST_HEADER_SIZE bytes before the first record. Like HS_Bulk_RaidHeader's count and total, it states both
+ * how many records this buffer holds and how many the client has: count < total means out_size was too small to hold
+ * them all, so retry with a larger buffer. Below HS_BULK_LIST_HEADER_SIZE bytes nothing is written (0 returned); with
+ * nothing to list, the header alone goes out, count 0 and total 0. */
+typedef struct HS_Bulk_ListHeader {
+    int32_t count; /* records that follow in this buffer (as many whole records as fit) */
+    int32_t total; /* records the client holds, written or not */
+} HS_BulkListHeader;
+/* get_target_buff_data_bulk: an HS_Bulk_ListHeader for the current target's buffs, then one record per buff,
+ * HAILSTONE_TARGET_BUFF_RECORD_SIZE fixed bytes each, immediately followed by casterNameLength bytes of the caster's
+ * name (no NUL); the next record starts after them. As many whole records as fit follow the header, in order, none
+ * after the first that does not fit. */
 typedef struct HS_Bulk_TargetBuffFixedRecord {
     int32_t spellID;          /* the buff's spell; entries with no spell are not sent */
     int32_t duration;         /* tics left (the server's count less the 6 s ticks since); negative: permanent */
@@ -208,9 +217,9 @@ typedef struct HS_Bulk_TargetBuffFixedRecord {
     int32_t slot;             /* the target's buff slot, as the server sent it (EQEmu: the mob's own slot index) */
     int32_t casterNameLength; /* bytes of the caster's name that follow; 0 for none */
 } HS_BulkTargetBuffFixedRecord;
-/* get_avail_aa_data_bulk and get_avail_disc_data_bulk: an int32_t count, then `count` records, each an
+/* get_avail_aa_data_bulk and get_avail_disc_data_bulk: an HS_Bulk_ListHeader, then `count` records, each an
  * HAILSTONE_ID_NAME_RECORD (HAILSTONE_ID_NAME_RECORD_SIZE bytes) immediately followed by nameSize bytes of the name (no
- * NUL); the next record starts after them. */
+ * NUL); the next record starts after them. As many whole records as fit follow the header, in order. */
 typedef struct HAILSTONE_ID_NAME_RECORD {
     int32_t id;       /* an AA's ability (group) id, or a discipline's spell id */
     int32_t nameSize; /* bytes of the AA's or the discipline's name that follow; 0 when the client has none */
@@ -268,8 +277,8 @@ typedef struct HS_Bulk_XTargetData {
  * A reader steps from the first record at header.size by header.recordSize bytes, for header.count records. The
  * record may grow at its end in a later client: read recordSize, never a fixed stride, and read only the fields the
  * record's size covers. version changes only when an older reader can no longer read the header or a record at all.
- * reserved is the roster's total member count, so a caller whose buffer cut the roster short can see it from
- * count < reserved and retry with a larger one.
+ * total is the roster's member count, so a caller whose buffer cut the roster short can see it from count < total
+ * and retry with a larger one (the rule every list-type bulk read follows, HS_Bulk_ListHeader).
  *
  * A member not in this zone has spawnID 0 and no HP, position or pet (the percentages are -1, the rest 0); the
  * roster's level and class still answer. */
@@ -287,7 +296,7 @@ typedef struct HS_Bulk_RaidHeader {
     int32_t active;       /* in a raid */
     int32_t locked;
     int32_t lootType;     /* 1 Leader Only, 2 Leader and Group Leader, 3 Leader Selected, 4 Entire Raid */
-    uint32_t reserved;    /* the roster's total member count, not only those written */
+    uint32_t total;       /* the roster's member count, not only those written; count < total: buffer too small */
 } HS_BulkRaidHeader;
 
 typedef struct HS_Bulk_RaidData {
@@ -837,6 +846,7 @@ typedef struct PluginHostApi {
 #define HS_BULK_XTARGET_RECORD_SIZE 16
 #define HAILSTONE_TARGET_BUFF_RECORD_SIZE 20
 #define HAILSTONE_ID_NAME_RECORD_SIZE 8
+#define HS_BULK_LIST_HEADER_SIZE 8 /* HS_Bulk_ListHeader */
 /* Whether this client's host table has `field` (one added after the plugin's ABI) and it is set. */
 #define HAILSTONE_HOST_HAS(h, field)                                                                                   \
     ((h) && (h)->size >= offsetof(PluginHostApi, field) + sizeof((h)->field) && (h)->field)

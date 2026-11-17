@@ -1290,7 +1290,9 @@ and `npc_owner_line`
   sets neither offline flag, so its traders and buyers show only "Trader " / "Buyer ".
 - A GM's name is green (`#1da64b`) as in the original (PlayerClient::SetNameSpriteTint @0x58bf00,
   `game::gm_name_colour`): the gm flag, not a live NPC (type 1), and Anon 0, so an anonymous or roleplaying GM shows
-  the ordinary colour. A targeted GM keeps the green, where the original fades the target's tint toward white. The
+  the ordinary colour. A deliberate difference: the original keeps the green on a corpse that carries the gm flag,
+  where Hailstone gives every corpse the ordinary corpse colour (stock EQEmu sends corpses with gm 0, so only a server
+  that does not would show the difference). A targeted GM keeps the green, where the original fades the target's tint toward white. The
   other colours are this client's, not the original's; NPC names in their consider colour are a Hailstone option
   (`display.con_name_colour`, on by default): docs/graphics.md "Name plates".
 - Hailstone's own, not the original's: a plate's text is hidden wherever the scene (geometry, doors, characters) is
