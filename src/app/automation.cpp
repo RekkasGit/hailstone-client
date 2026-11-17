@@ -332,6 +332,8 @@ void Automation::imgui(bool dev) {
     ui::lua::raise_guarded_windows(); // the question above every window drawn this frame
 }
 
+bool Automation::world_wanted() const { return impl_->plugins && impl_->plugins->world_wanted(); }
+
 void Automation::world_frame(HailstoneWorldFrame frame, plugin::WorldQueries queries) {
     if (impl_->plugins) impl_->plugins->world_frame(frame, std::move(queries));
 }

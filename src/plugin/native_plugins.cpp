@@ -2674,6 +2674,12 @@ std::vector<NativePlugins::Info> NativePlugins::list() const {
     return out;
 }
 
+bool NativePlugins::world_wanted() const {
+    const auto& m = *impl_;
+    return m.world_geometry.active() || !m.world_owners.empty() ||
+           std::any_of(m.loaded.begin(), m.loaded.end(), [](const auto& l) { return l->hooks.world_frame && world_allowed(*l); });
+}
+
 void NativePlugins::world_frame(HailstoneWorldFrame frame, WorldQueries queries) {
     auto& m = *impl_;
     if (m.world_geometry.active()) world_unavailable();

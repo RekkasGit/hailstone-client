@@ -82,6 +82,9 @@ class NativePlugins {
 public:
     explicit NativePlugins(NativeEnv env);
     ~NativePlugins(); // unloads everything (ShutdownPlugin)
+    // Whether a loaded plugin may take a world frame (it has the world_frame hook and its permissions): without one,
+    // the client builds no frame (a stock server's case).
+    bool world_wanted() const;
     void world_frame(HailstoneWorldFrame frame, WorldQueries queries);
     const std::vector<OwnedWorldBatch>& world_batches() const;
     void world_recorded(std::size_t batch, std::uint32_t vertices);

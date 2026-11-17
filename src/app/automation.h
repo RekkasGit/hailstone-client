@@ -120,6 +120,7 @@ public:
     // stands in for it ("PluginConsent", hs.ReplaceWindow), and with `dev` the "Plugins & Lua" window.
     void imgui(bool dev);
     // Before the connection goes: the plugins unload, the scripts stop.
+    bool world_wanted() const; // NativePlugins::world_wanted
     void world_frame(HailstoneWorldFrame frame, plugin::WorldQueries queries);
     const std::vector<plugin::OwnedWorldBatch>& world_batches() const;
     void world_recorded(std::size_t batch, std::uint32_t vertices);

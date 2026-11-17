@@ -977,7 +977,7 @@ int ClientApp::world_geometry_anchor(std::uint32_t id, HailstoneWorldAnchor& anc
 
 void ClientApp::record_world_geometry(const render::FrameInfo& frame, const glm::mat4& view_projection) {
     world_anchors_.clear();
-    if (!automation_) return;
+    if (!automation_ || !automation_->world_wanted()) return; // no plugin draws in the world: no frame is built
     if (!world_geometry_scene_current() || !world_geometry_renderer_ || !vk_.frames_begun()) {
         automation_->world_unavailable();
         return;
