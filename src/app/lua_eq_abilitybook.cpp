@@ -198,8 +198,10 @@ void skill_ready_fields(const EqHost& h, std::uint32_t skill, std::int32_t& reus
     reuse_s = static_cast<std::int32_t>(reuse_ms / 1000);
 }
 
-// An owned AA as an entry: its owned rank; its reuse from AltAdvManager::IsAbilityReady.
-std::optional<Entry> aa_entry(const net::GameConnection& c, const game::AltAbility& a) {
+// An owned AA as an entry: its owned rank; its reuse from AltAdvManager::IsAbilityReady, or `known` when the caller
+// asked aa_readiness_bulk for many at once.
+std::optional<Entry> aa_entry(const net::GameConnection& c, const game::AltAbility& a,
+                              const game::AAReadiness* known = nullptr) {
     if (a.group <= 0) return std::nullopt;
     Entry e;
     e.kind = AbilityKind::AltAbility;
@@ -218,8 +220,7 @@ std::optional<Entry> aa_entry(const net::GameConnection& c, const game::AltAbili
     if (!e.passive) {
         fill_spell(c, e, static_cast<std::uint32_t>(a.spell));
         e.timer = a.timers.empty() ? -1 : a.timers.front();
-        const game::AAReadiness r = c.aa_readiness(a.id);
-        aa_ready_fields(r, a, e.reuse, e.remaining);
+        aa_ready_fields(known ? *known : c.aa_readiness(a.id), a, e.reuse, e.remaining);
         e.button.type = game::HotButtonType::Social; // the AA window's hotkey: DoHotButton queues /alt activate
         e.button.slot = game::kSocialCount + a.group;
     }
@@ -281,9 +282,19 @@ std::vector<Entry> all_entries(EqHost& h) {
     std::vector<Entry> out;
     if (!h.conn || !h.character) return out;
     const auto& c = *h.conn;
-    for (const auto& o : c.alt_adv().owned)
-        if (const game::AltAbility* a = o.id ? c.alt_adv().get(o.id) : nullptr)
-            if (auto e = aa_entry(c, *a); e && !e->passive) out.push_back(std::move(*e));
+    // The activated AAs' readiness in one pass (aa_readiness_bulk: the character's SPA 264 sheet built once, not once
+    // per AA).
+    std::vector<const game::AltAbility*> ranks;
+    std::vector<std::uint32_t> rank_ids;
+    for (const auto& o : c.alt_adv().owned) {
+        const game::AltAbility* a = o.id ? c.alt_adv().get(o.id) : nullptr;
+        if (!a || a->group <= 0 || !a->activated()) continue;
+        ranks.push_back(a);
+        rank_ids.push_back(a->id);
+    }
+    const std::vector<game::AAReadiness> readiness = c.aa_readiness_bulk(rank_ids);
+    for (std::size_t i = 0; i < ranks.size(); ++i)
+        if (auto e = aa_entry(c, *ranks[i], &readiness[i])) out.push_back(std::move(*e));
     for (int n = 0; n < kCombatAbilities; ++n)
         if (c.combat_ability(n) && combat_ability_listed(c, n))
             if (auto e = discipline_entry(c, n)) out.push_back(std::move(*e));
