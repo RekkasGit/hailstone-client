@@ -45,7 +45,7 @@ static_assert(offsetof(PluginHostApi, get_target_buff_data_bulk) == offsetof(Plu
 static_assert(offsetof(PluginHostApi, get_buff_name_data_bulk) == offsetof(PluginHostApi, caps) + 84 * sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, get_raid_data_bulk) == offsetof(PluginHostApi, caps) + 85 * sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, get_ability_data_bulk) == offsetof(PluginHostApi, caps) + 88 * sizeof(PluginHostApi::caps));
-static_assert(offsetof(PluginHostApi, get_raid_roster) == offsetof(PluginHostApi, caps) + 89 * sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, select_raid_member) == offsetof(PluginHostApi, caps) + 89 * sizeof(PluginHostApi::caps));
 
 namespace {
 
@@ -461,25 +461,25 @@ void probe_decode(void*, const char* arguments) {
         std::memcmp(old_item.data(), &item, sizeof(item)) == 0, item.id);
 }
 
-HailstoneRaidRoster saved_raid{};
-HailstoneRaidMember saved_member{};
+HailstoneSpawn saved_spawn{};
 void probe_services(void*, const char*) {
-    HailstoneSpawn spawn{}; spawn.size = sizeof(spawn);
-    const auto found = host->get_spawn(host->host, 12, &spawn);
-    saved_raid = {}; saved_raid.size = sizeof(saved_raid);
-    saved_member = {}; saved_member.size = sizeof(saved_member);
-    const auto roster = host->get_raid_roster(host->host, &saved_raid);
-    const auto member = host->get_raid_member(host->host, saved_raid.revision, 0, &saved_member);
-    HailstoneRaidMember stale{}; stale.size = sizeof(stale);
-    const auto rejected = host->get_raid_member(host->host, saved_raid.revision + 1, 0, &stale);
-    WriteChatf("[Probe] services spawn %d token %llu flags %u mana %u roster %d count %u member %d actor %u stale %d",
-        found, static_cast<unsigned long long>(spawn.incarnation), spawn.observation_flags, spawn.mana_percent,
-        roster, saved_raid.count, member, saved_member.spawn_id, rejected);
+    saved_spawn = {}; saved_spawn.size = sizeof(saved_spawn);
+    const auto found = host->get_spawn(host->host, 12, &saved_spawn);
+    WriteChatf("[Probe] services spawn %d token %llu flags %u mana %u", found,
+        static_cast<unsigned long long>(saved_spawn.incarnation), saved_spawn.observation_flags, saved_spawn.mana_percent);
 }
-void probe_select(void*, const char*) {
-    const auto result = host->select_raid_member(host->host, saved_raid.revision,
-        saved_member.spawn_id, saved_member.incarnation);
+// /probeselectraid [stale]: select_raid_member on the spawn /probeservices read, with its incarnation or a later one.
+void probe_select(void*, const char* args) {
+    const auto incarnation = saved_spawn.incarnation + (args && *args ? 1u : 0u);
+    const auto result = host->select_raid_member(host->host, saved_spawn.id, incarnation);
     WriteChatf("[Probe] raid selection %d", result);
+}
+// /proberaidmove <name> <group>: raid_action HAILSTONE_RAID_MOVE.
+void probe_raid_move(void*, const char* args) {
+    char name[64] = {};
+    int group = 0;
+    if (!args || std::sscanf(args, "%63s %d", name, &group) != 2) return;
+    WriteChatf("[Probe] raid move %d", host->raid_action(host->host, name, HAILSTONE_RAID_MOVE, group));
 }
 
 std::uint32_t map_flags = 0;
@@ -650,6 +650,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probedecode", probe_decode, nullptr);
     AddCommand("/probeservices", probe_services, nullptr);
     AddCommand("/probeselectraid", probe_select, nullptr);
+    AddCommand("/proberaidmove", probe_raid_move, nullptr);
     AddCommand("/probemapset", probe_map_set, nullptr);
     AddCommand("/probemappolicy", probe_map, nullptr);
     AddCommand("/probemapthread", probe_map_thread, nullptr);
@@ -684,6 +685,7 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probedecode");
     RemoveCommand("/probeservices");
     RemoveCommand("/probeselectraid");
+    RemoveCommand("/proberaidmove");
     RemoveCommand("/probemapset");
     RemoveCommand("/probemappolicy");
     RemoveCommand("/probemapthread");

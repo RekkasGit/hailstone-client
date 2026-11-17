@@ -279,15 +279,6 @@ struct Loaded {
     std::uint64_t policy_generation = core::next_process_identity(), map_content_revision = 0;
     std::uint64_t lifecycle_generation = core::next_process_identity();
 
-    std::uint64_t raid_revision = 0, raid_owner = 0;
-    const net::GameConnection* raid_connection = nullptr;
-    std::uint64_t raid_spawns = 0;
-    std::uint32_t raid_id = 0;
-    bool raid_active = false;
-    std::string raid_leader;
-    std::vector<game::RaidMember> raid_source;
-    std::vector<HailstoneRaidMember> raid_members;
-
     // Its TCP connections (tcp_open ...), closed with it.
     struct Tcp {
         std::int32_t id = 0;
@@ -1381,91 +1372,30 @@ int h_get_spawn(void* h, std::uint32_t id, HailstoneSpawn* out) {
     return it == c->world().spawns.end() ? 0 : give(out, spawn_struct(*c, it->second));
 }
 
-bool refresh_raid(Loaded& l) {
-    const auto* c = readable(l, "get_raid_roster");
-    const auto* me = c && c->in_zone() ? c->world().player() : nullptr;
-    const auto owner = me ? me->incarnation : 0;
-    const auto usable = me && owner && c->raid().active && c->raid().members.size() <= 72;
-    bool same = l.raid_revision && l.raid_connection == c && l.raid_owner == owner && l.raid_active == usable;
-    if (same && usable) {
-        const auto& source = c->raid();
-        same = l.raid_id == source.id && l.raid_spawns == c->world().spawn_set_serial &&
-            l.raid_leader == source.leader && l.raid_source.size() == source.members.size();
-        for (std::size_t i = 0; same && i < source.members.size(); ++i) {
-            const auto& a = source.members[i]; const auto& b = l.raid_source[i];
-            same = a.name == b.name && a.group == b.group && a.class_ == b.class_ && a.level == b.level &&
-                a.group_leader == b.group_leader && a.main_assist == b.main_assist && a.marker == b.marker;
-        }
-        for (const auto& member : l.raid_members) {
-            if (!same || !member.spawn_id) continue;
-            const auto actor = c->world().spawns.find(member.spawn_id);
-            same = actor != c->world().spawns.end() && actor->second.incarnation == member.incarnation &&
-                !actor->second.is_npc && !actor->second.is_corpse && iequal(actor->second.name, member.name);
-        }
-    }
-    if (same) return c && me && l.active && l.can(kCapRead);
-    std::vector<HailstoneRaidMember> members;
-    if (usable) {
-        members.reserve(c->raid().members.size());
-        for (const auto& m : c->raid().members) {
-            HailstoneRaidMember member{}; member.size = sizeof(member);
-            copy_name(member.name, m.name);
-            member.group_id = m.group < 12 ? m.group + 1 : 0;
-            member.class_id = m.class_; member.level = m.level;
-            if (iequal(m.name, c->raid().leader)) member.flags |= HAILSTONE_RAID_LEADER;
-            if (m.group_leader) member.flags |= HAILSTONE_RAID_GROUP_LEADER;
-            if (m.main_assist) member.flags |= HAILSTONE_RAID_ASSIST;
-            if (m.marker) member.flags |= HAILSTONE_RAID_MARKER;
-            // A roster name alone does not prove an in-zone identity. Match a
-            // unique current player, never an NPC or a corpse with that name.
-            for (const auto& [id, actor] : c->world().spawns) {
-                if (actor.is_npc || actor.is_corpse || !actor.incarnation || !iequal(actor.name, m.name)) continue;
-                if (member.spawn_id) { member.spawn_id = 0; member.incarnation = 0; break; }
-                member.spawn_id = id; member.incarnation = actor.incarnation;
-            }
-            members.push_back(member);
-        }
-    }
-    l.raid_revision = core::next_process_identity(); l.raid_connection = c;
-    l.raid_owner = owner; l.raid_members = std::move(members); l.raid_active = usable;
-    l.raid_source = usable ? c->raid().members : std::vector<game::RaidMember>{};
-    l.raid_leader = usable ? c->raid().leader : std::string{}; l.raid_id = usable ? c->raid().id : 0;
-    l.raid_spawns = usable ? c->world().spawn_set_serial : 0;
-    return c && me && l.active && l.can(kCapRead);
+// A current roster member's in-zone actor: a player (never an NPC or corpse) of a roster name.
+const game::RaidMember* raid_member_of(const net::GameConnection& c, const game::Spawn& actor) {
+    if (actor.is_npc || actor.is_corpse) return nullptr;
+    const auto& members = c.raid().members;
+    const auto it = std::find_if(members.begin(), members.end(), [&](const auto& m) { return iequal(m.name, actor.name); });
+    return it == members.end() ? nullptr : &*it;
 }
-int h_get_raid_roster(void* h, HailstoneRaidRoster* out) {
+int h_select_raid_member(void* h, std::uint32_t id, std::uint64_t incarnation) {
     auto& l = Loaded::of(h);
-    if (!refresh_raid(l)) return 0;
-    HailstoneRaidRoster value{}; value.size = sizeof(value);
-    value.revision = l.raid_revision; value.owner_incarnation = l.raid_owner;
-    value.count = static_cast<std::uint32_t>(l.raid_members.size());
-    return give(out, value);
-}
-int h_get_raid_member(void* h, std::uint64_t revision, std::uint32_t index, HailstoneRaidMember* out) {
-    auto& l = Loaded::of(h);
-    return refresh_raid(l) && revision == l.raid_revision && index < l.raid_members.size() ? give(out, l.raid_members[index]) : 0;
-}
-int h_select_raid_member(void* h, std::uint64_t revision, std::uint32_t id, std::uint64_t incarnation) {
-    auto& l = Loaded::of(h);
-    if (!l.active || !l.can(kCapRead | kCapTarget) || !id || !incarnation ||
-        !refresh_raid(l) || revision != l.raid_revision) return 0;
+    if (!l.active || !l.can(kCapRead | kCapTarget) || !id || !incarnation) return 0;
     auto* c = connection_of(l);
-    if (!c || !c->in_zone() || c->player_status().dead || c->interface_locked()) return 0;
-    const auto member = std::find_if(l.raid_members.begin(), l.raid_members.end(), [&](const auto& m) {
-        return m.spawn_id == id && m.incarnation == incarnation;
-    });
-    const auto actor = c->world().spawns.find(id);
-    if (actor == c->world().spawns.end() || actor->second.incarnation != incarnation ||
-        !game::is_targetable(actor->second) || c->market_hidden(actor->second)) return 0;
-    if (member == l.raid_members.end()) {
+    if (!c || !c->in_zone() || !c->raid().active || c->player_status().dead || c->interface_locked()) return 0;
+    const auto& spawns = c->world().spawns;
+    const auto actor = spawns.find(id);
+    if (actor == spawns.end() || actor->second.incarnation != incarnation || !game::is_targetable(actor->second) ||
+        c->market_hidden(actor->second)) return 0;
+    if (!raid_member_of(*c, actor->second)) {
+        // A member's pet: an NPC whose owner is a member in the zone.
         if (!actor->second.is_npc || actor->second.is_corpse || !actor->second.pet_owner_id) return 0;
-        const auto owner = c->world().spawns.find(actor->second.pet_owner_id);
-        if (owner == c->world().spawns.end() || owner->second.is_npc || owner->second.is_corpse ||
-            std::none_of(l.raid_members.begin(), l.raid_members.end(), [&](const auto& m) {
-                return m.spawn_id == owner->first && m.incarnation == owner->second.incarnation;
-            })) return 0;
+        const auto owner = spawns.find(actor->second.pet_owner_id);
+        if (owner == spawns.end() || !raid_member_of(*c, owner->second)) return 0;
     }
-    c->set_target(id); return 1;
+    c->set_target(id);
+    return 1;
 }
 std::optional<net::ItemPacket> received_item(const void* data, std::size_t size) {
     if (!data || size < 4 || size > 262144) return std::nullopt;
@@ -1596,9 +1526,9 @@ int h_get_map_policy(void* h, HailstoneMapPolicy* out) {
 std::uint64_t h_monotonic_ms(void* h) {
     return Loaded::of(h).can(kCapRead) ? static_cast<std::uint64_t>(net::GameConnection::now_ms()) : 0;
 }
-int h_raid_action(void* h, std::uint64_t revision, const char* name, std::uint32_t action, std::uint32_t group) {
+int h_raid_action(void* h, const char* name, std::uint32_t action, std::int32_t group) {
     auto& l = Loaded::of(h);
-    if (!l.active || !l.can(kCapRead | kCapActions) || !name || !refresh_raid(l) || revision != l.raid_revision) return 0;
+    if (!l.active || !l.can(kCapRead | kCapActions) || !name) return 0;
     std::size_t length = 0; while (length < 64 && name[length]) ++length;
     if (!length || length == 64) return 0;
     const std::string n(name, length);
@@ -1607,8 +1537,8 @@ int h_raid_action(void* h, std::uint64_t revision, const char* name, std::uint32
     const auto& raid = c->raid();
     const auto member = std::find_if(raid.members.begin(), raid.members.end(), [&](const auto& m) { return iequal(m.name, n); });
     if (!raid.active || !raid.locked || member == raid.members.end() || !iequal(raid.leader, c->character_name())) return 0;
-    if (action != HAILSTONE_RAID_MOVE || group > 12) return 0;
-    const auto target = group == 0 ? -1 : static_cast<std::int32_t>(group - 1);
+    if (action != HAILSTONE_RAID_MOVE || group < -1 || group > 11) return 0;
+    const std::int32_t target = group;
     if (target >= 0 && std::count_if(raid.members.begin(), raid.members.end(), [&](const auto& m) {
             return m.group == static_cast<std::uint32_t>(target) && !iequal(m.name, n);
         }) >= 6) return 0;
@@ -3037,8 +2967,6 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.cursor_origin = main_only<h_cursor_origin>;
     p.owner = m.env.hooks->new_guest("plugin:" + name);
 
-    p.table.get_raid_roster = main_only<h_get_raid_roster>;
-    p.table.get_raid_member = main_only<h_get_raid_member>;
     p.table.select_raid_member = main_only<h_select_raid_member>;
     p.table.decode_item_packet = main_only<h_decode_item_packet>;
     p.table.inspect_item_packet = main_only<h_inspect_item_packet>;

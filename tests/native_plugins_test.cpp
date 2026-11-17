@@ -158,7 +158,7 @@ TEST_CASE("native plugins: received item decode commits both outputs only for an
     CHECK(h.printed_line("[Probe] decode 0 slot_unchanged 1 item_unchanged 1 id 1515870810"));
 }
 
-TEST_CASE("native plugins: copied raid actors expose known vitals and reject stale identity selections") {
+TEST_CASE("native plugins: a raid member is targeted by spawn id and incarnation, a reused id refused") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);
     auto& w = net::GameConnectionTestAccess::world(*h.world.conn);
@@ -171,10 +171,13 @@ TEST_CASE("native plugins: copied raid actors expose known vitals and reject sta
     raid.members.push_back(member);
     REQUIRE(h.plugins->load("HostProbe"));
     h.run("/probeservices");
-    CHECK(h.printed_line("[Probe] services spawn 1 token 200 flags 3 mana 42 roster 1 count 1 member 1 actor 12 stale 0"));
+    CHECK(h.printed_line("[Probe] services spawn 1 token 200 flags 3 mana 42"));
+    h.run("/probeselectraid stale");
+    CHECK(h.printed_line("[Probe] raid selection 0")); CHECK(w.target_id == 10);
     h.run("/probeselectraid");
     CHECK(h.printed_line("[Probe] raid selection 1")); CHECK(w.target_id == 12);
-    ++actor.incarnation; w.target_id = 10;
+    // Not in the roster any more: refused, though the spawn is the same.
+    raid.members.clear(); w.target_id = 10; h.printed.clear();
     h.run("/probeselectraid");
     CHECK(h.printed_line("[Probe] raid selection 0")); CHECK(w.target_id == 10);
 }
@@ -190,6 +193,35 @@ TEST_CASE("native plugins: raid actor selection requires target permission") {
     REQUIRE(h.plugins->load("HostProbe"));
     h.run("/probeservices"); h.run("/probeselectraid");
     CHECK(h.printed_line("[Probe] raid selection 0")); CHECK(w.target_id == 10);
+}
+
+// raid_action numbers groups as get_raid_data_bulk does (0..11, -1 none) and is the raid leader's, in a locked raid.
+TEST_CASE("native plugins: raid_action moves a member only as the locked raid's leader, to a group with room") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    auto& raid = net::GameConnectionTestAccess::raid(*h.world.conn);
+    raid.active = true; raid.leader = "Someone"; raid.locked = true;
+    game::RaidMember member; member.name = "Groupie"; member.group = 0;
+    raid.members.push_back(member);
+    for (int i = 0; i < 6; ++i) {
+        game::RaidMember full; full.name = "Full" + std::to_string(i); full.group = 3;
+        raid.members.push_back(full);
+    }
+    REQUIRE(h.plugins->load("HostProbe"));
+    auto move = [&](const std::string& args) {
+        h.printed.clear();
+        h.run("/proberaidmove " + args);
+        return h.printed.empty() ? std::string{} : h.printed.back();
+    };
+    CHECK(move("Groupie 2") == "[Probe] raid move 0"); // not the leader
+    raid.leader = h.world.conn->character_name();
+    CHECK(move("Groupie 2") == "[Probe] raid move 1");
+    CHECK(move("Groupie -1") == "[Probe] raid move 1");
+    CHECK(move("Groupie 3") == "[Probe] raid move 0");  // six there already
+    CHECK(move("Groupie 12") == "[Probe] raid move 0"); // no such group
+    CHECK(move("Nobody 2") == "[Probe] raid move 0");
+    raid.locked = false;
+    CHECK(move("Groupie 2") == "[Probe] raid move 0");
 }
 
 TEST_CASE("native plugins: binary measurement uses the admitted library copy and preserves failures") {

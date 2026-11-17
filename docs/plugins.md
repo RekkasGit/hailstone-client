@@ -1525,12 +1525,13 @@ services does anything until a plugin uses it.
   full stack quantity, top-level inventory slot and lossless `HailstoneItemSlot`; it grants no inventory ownership.
   An add-on supplies its private packet and consumes the click when its option is enabled; any context flag requires consuming without sending. Returning zero keeps
   the ordinary item path. The client ships no private sale opcode or server-specific slot translation.
-- `get_raid_roster` / `get_raid_member` (`read`) copy the received roster with a process-unique revision. Off-zone
-  members have zero actor identity. `select_raid_member` (`read` and `target`) requires that exact revision and
-  current actor incarnation, including a current member's pet. `raid_action` (`read` and `actions`) supports
-  `HAILSTONE_RAID_MOVE`, group 0 ungrouped or 1..12; current raid leadership, locking, membership and capacity are
-  checked again. Direct subgroup leader promotion is not implemented by this service. These are requests: the
-  server remains authoritative. The host never invents remote HP, mana or endurance.
+- The raid roster is read with `get_raid_data_bulk` ("Buff and spawn records"). `select_raid_member(spawn_id,
+  incarnation)` (`read` and `target`) targets a roster member in the zone, or a member's pet: the spawn id is a
+  record's `spawnID`, the incarnation `get_spawn`'s for it, so a spawn id the zone has given to someone else since
+  is refused. `raid_action(name, HAILSTONE_RAID_MOVE, group)` (`read` and `actions`) moves a member to a group,
+  numbered as the bulk read numbers them (0..11, -1 out of every group): only the leader of a locked raid, only a
+  roster member, only to a group with room. Both are requests: the server decides, and the roster changes when it
+  says so.
 - `HailstoneSpawn.incarnation` identifies a full actor record. Resource fields count only with the corresponding
   `HAILSTONE_SPAWN_*_KNOWN` bit, so an absent percentage is not zero or full. Resource observations are retired on
   actor replacement/removal. `display_name` is the ordinary cleaned name; social flags and guild text are received

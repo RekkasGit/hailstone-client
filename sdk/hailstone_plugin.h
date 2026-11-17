@@ -46,7 +46,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "hailstone_follow.h"
-#include "hailstone_raid.h"
 #include "hailstone_world_geometry.h"
 
 #ifdef __cplusplus
@@ -942,11 +941,10 @@ typedef struct PluginHostApi {
      * is written; count < total means out_size was too small. Added later in ABI 3: test
      * HAILSTONE_HOST_HAS(host, get_ability_data_bulk) first. */
     int32_t (*get_ability_data_bulk)(void* host, unsigned char* out, int32_t out_size);
-    /* READ: copied current raid; stale revisions are refused. */
-    int (*get_raid_roster)(void* host, HailstoneRaidRoster* out);
-    int (*get_raid_member)(void* host, uint64_t revision, uint32_t index, HailstoneRaidMember* out);
-    /* READ + TARGET: exact current raid actor or a current member's pet. */
-    int (*select_raid_member)(void* host, uint64_t revision, uint32_t spawn_id, uint64_t incarnation);
+    /* Targets a raid member in the zone, or a member's pet (HAILSTONE_CAP_READ and HAILSTONE_CAP_TARGET): spawn_id
+     * as get_raid_data_bulk's spawnID, incarnation as get_spawn's HailstoneSpawn.incarnation for it, so a spawn id
+     * reused since is refused. 1 targeted, 0 not. Added later in ABI 3: test HAILSTONE_HOST_HAS first. */
+    int (*select_raid_member)(void* host, uint32_t spawn_id, uint64_t incarnation);
     /* READ: local decoder, at most 256 KiB. READ + UI: local item inspector. */
     int (*decode_item_packet)(void* host, const void* data, size_t size, HailstoneItemSlot* slot, HailstoneItem* item);
     int (*inspect_item_packet)(void* host, const void* data, size_t size);
@@ -954,8 +952,11 @@ typedef struct PluginHostApi {
     int (*manual_follow)(void* host, const char* action);
     int (*get_follow_status)(void* host, HailstoneFollowStatus* out);
     uint32_t (*get_memorized_spell)(void* host, uint32_t index);
-    /* READ + ACTIONS: permission and current-revision checked native raid operations. */
-    int (*raid_action)(void* host, uint64_t revision, const char* name, uint32_t action, uint32_t group);
+    /* Asks the server to change the raid (HAILSTONE_CAP_READ and HAILSTONE_CAP_ACTIONS), as the raid window's
+     * leader does: HAILSTONE_RAID_MOVE puts the member `name` in `group`, as get_raid_data_bulk numbers groups (0..11,
+     * -1 ungrouped). Only the raid's leader, in a locked raid, to a group with room; 1 sent, 0 refused. The server
+     * decides; the roster changes when it says so. Added later in ABI 3: test HAILSTONE_HOST_HAS first. */
+    int (*raid_action)(void* host, const char* name, uint32_t action, int32_t group);
     uint64_t (*monotonic_ms)(void* host);
     uint32_t (*world_capabilities)(void* host);
     /* Highest upward drawn opaque/masked surface at or below seed_z (the caller's
@@ -1009,6 +1010,8 @@ enum HS_AbilityKinds {
 #define HAILSTONE_ID_NAME_RECORD_SIZE 8
 #define HAILSTONE_ABILITY_RECORD_SIZE 32 /* get_ability_data_bulk's fixed part, before the name */
 #define HS_BULK_LIST_HEADER_SIZE 8 /* HS_Bulk_ListHeader */
+/* raid_action's actions. */
+#define HAILSTONE_RAID_MOVE 1u /* move a member to another group, or out of every group */
 /* Whether this client's host table has `field` (one added after the plugin's ABI) and it is set. */
 #define HAILSTONE_HOST_HAS(h, field)                                                                                   \
     ((h) && (h)->size >= offsetof(PluginHostApi, field) + sizeof((h)->field) && (h)->field)
