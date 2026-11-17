@@ -90,6 +90,7 @@ const uint kPackedNormal = 131072u; // CBGG1/CBSG1: RG normal, B glow, A gloss
 const uint kGlow = 262144u;         // blue channel of slot 1
 const uint kAdditiveGlow = 524288u; // AddAlpha surfaces emit into modern HDR
 const uint kLandTint = 1048576u;    // render/zone_renderer.cpp: the land's ground moved toward color2 (an atlas zone's)
+const uint kLandSplat = 2097152u;   // render/zone_renderer.cpp: the land's rock (slot 1) and sand (slot 2) by v_uv2
 
 vec4 tex(uint i, vec2 uv) { return texture(textures[nonuniformEXT(i)], uv); }
 
@@ -710,6 +711,26 @@ void main() {
         alpha = v_color2.a;
     } else {
         vec4 t = tex(pc.tex.x, v_uv);
+        // The generated terrain's land: rock on the steep and the high, sand by the water, the edges between broken up
+        // by the textures' own light and dark so they do not follow the triangles.
+        if ((flags & kLandSplat) != 0u) {
+            // The ground's repeat broken up: the texture over itself at a fifteenth of its scale, as a light and dark.
+            vec3 ground_average = max(textureLod(textures[nonuniformEXT(pc.tex.x)], v_uv, 14.0).rgb, vec3(0.02));
+            t.rgb *= mix(vec3(1.0), clamp(tex(pc.tex.x, v_uv * 0.067).rgb / ground_average, 0.6, 1.5), 0.55);
+            // The rock at its own scale (params.z), taken from the side on a slope so it is not stretched down it.
+            float scale = pc.params.z > 0.0 ? pc.params.z : 0.01;
+            vec3 an = abs(n);
+            vec3 rock_top = tex(pc.tex.y, v_world.xy * scale).rgb;
+            vec3 rock_side = an.x > an.y ? tex(pc.tex.y, v_world.yz * scale).rgb : tex(pc.tex.y, v_world.xz * scale).rgb;
+            vec3 rock = mix(rock_side, rock_top, smoothstep(0.55, 0.85, an.z));
+            vec3 rock_average = max(textureLod(textures[nonuniformEXT(pc.tex.y)], v_uv, 14.0).rgb, vec3(0.02));
+            rock *= mix(vec3(1.0), clamp(tex(pc.tex.y, v_world.xy * scale * 0.071).rgb / rock_average, 0.6, 1.5), 0.5);
+            vec3 sand = tex(pc.tex.z, v_uv).rgb;
+            if (pc.tex.z == pc.tex.x) sand = vec3(dot(sand, vec3(0.33))) * vec3(1.55, 1.42, 1.15);
+            float grain = dot(t.rgb - rock, vec3(0.33));
+            t.rgb = mix(t.rgb, rock, smoothstep(0.35, 0.65, clamp(v_uv2.x + grain * 0.6, 0.0, 1.0)));
+            t.rgb = mix(t.rgb, sand, smoothstep(0.2, 0.8, clamp(v_uv2.y + grain * 0.4, 0.0, 1.0)));
+        }
         // The land over a zone of the world atlas: the zone's ground texture, its detail kept, carried to that zone's
         // own ground colour (its texture's average over the colour the atlas measured there).
         if ((flags & kLandTint) != 0u && v_color2.a > 0.0) {

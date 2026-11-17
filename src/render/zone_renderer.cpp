@@ -231,6 +231,8 @@ constexpr std::uint32_t kTintLand = 65536;
 // The current zone's land (Draw::distant, no land_fade): its ground texture moved toward the colour in color2 (sRGB),
 // by color2's alpha, where a zone of the world atlas gives the land its ground (render::HorizonMesh::tint).
 constexpr std::uint32_t kLandTint = 1048576;
+// The current zone's land splatted with rock (slot 1) and sand (slot 2) by uv2 (the prototype's generated terrain).
+constexpr std::uint32_t kLandSplat = 2097152;
 // A land vertex's tint (linear rgb, a its amount) as color2: the colour in sRGB, the amount in alpha.
 std::uint32_t pack_tint(const glm::vec4& tint) {
     std::uint32_t out = static_cast<std::uint32_t>(std::lround(std::clamp(tint.a, 0.0f, 1.0f) * 255.0f)) << 24;
@@ -312,11 +314,12 @@ struct MaterialKey {
     std::uint32_t instanced = 0; // an instanced model's number + 1 (ZoneRenderer::Draw::instanced)
     bool distant = false;        // the land round the zone (render/horizon.h)
     std::uint8_t land_fade = 0;  // ZoneRenderer::Draw::land_fade
+    bool land_splat = false;     // ZoneRenderer::Draw::land_splat
     bool operator<(const MaterialKey& o) const {
         return std::tie(blend, eqg, two_sided, front_ccw, frames, delay, multipass, effect, liquid, flame, lod,
-                        instanced, distant, land_fade) < std::tie(o.blend, o.eqg, o.two_sided, o.front_ccw, o.frames,
-                                                                  o.delay, o.multipass, o.effect, o.liquid, o.flame,
-                                                                  o.lod, o.instanced, o.distant, o.land_fade);
+                        instanced, distant, land_fade, land_splat) <
+               std::tie(o.blend, o.eqg, o.two_sided, o.front_ccw, o.frames, o.delay, o.multipass, o.effect, o.liquid,
+                        o.flame, o.lod, o.instanced, o.distant, o.land_fade, o.land_splat);
     }
 };
 
@@ -1190,11 +1193,13 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
     // flat with `look`'s texture scale, wound its way, its colour times the vertices' shade; with `fade`
     // (Draw::land_fade) the vertices' weight in color2's alpha. Returns the triangles added.
     auto add_land = [&](MaterialKey key, const assets::Material& material, const HorizonLook& look,
-                        const HorizonMesh& mesh, const std::vector<std::uint32_t>& tris, std::uint8_t fade) {
+                        const HorizonMesh& mesh, const std::vector<std::uint32_t>& tris, std::uint8_t fade,
+                        bool splat = false) {
         if (tris.empty()) return std::size_t{0};
         key.distant = true;
         key.multipass = false;
         key.land_fade = fade;
+        key.land_splat = splat;
         looks.try_emplace(key, material);
         auto& out = by_material[key];
         std::unordered_map<std::uint32_t, std::uint32_t> made;
@@ -1218,6 +1223,7 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
                                    << 24;
                     else if (fade == 0 && v < mesh.tint.size() && mesh.tint[v].a > 0.0f)
                         g.color2 = pack_tint(mesh.tint[v]);
+                    if (splat && v < mesh.splat.size()) g.uv2 = mesh.splat[v];
                     vertices.push_back(g);
                 }
                 out.push_back(it->second);
@@ -1226,6 +1232,8 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
         return tris.size() / 3;
     };
 
+    std::string splat_rock, splat_sand; // the generated terrain's splat textures (Draw::land_splat)
+    float splat_rock_density = 0.0f;
     // Pictures made here rather than read from the zone's files (the land's trees'), by texture name.
     std::unordered_map<std::string, assets::Image> generated_textures;
     // The land's trees (render::horizon_trees): the zone's own commonest trees (placed plants at least
@@ -1382,6 +1390,16 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
         HorizonField field = horizon_field(horizon_triangles, prep.horizon);
         HorizonSources sources = options.horizon_sources;
         sort_sources(sources);
+        if (options.generated_terrain && field.valid()) {
+            const auto started = std::chrono::steady_clock::now();
+            field.generated = true;
+            auto terrain = std::make_shared<HorizonTerrain>(horizon_terrain(field, sources));
+            log::info("zone renderer: the land's generated terrain, {}x{} nodes of {:.0f} units, worn {:.0f} to {:.0f} "
+                      "units in {:.0f} ms",
+                      terrain->nx, terrain->ny, terrain->cell, terrain->worn_lo, terrain->worn_hi,
+                      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count());
+            if (terrain->valid()) field.terrain = std::move(terrain);
+        }
         const HorizonMesh land = horizon_mesh(field, sources);
         const LandPick pick = pick_land();
         std::size_t land_triangles = 0;
@@ -1390,7 +1408,26 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
             auto build = std::make_shared<HorizonBuild>();
             build->ground = look_of(*pick.ground, land_color);
             build->rock = look_of(*pick.rock, land_color);
-            land_triangles += add_land(*pick.ground, looks.at(*pick.ground), build->ground, land, land.ground, 0);
+            land_triangles += add_land(*pick.ground, looks.at(*pick.ground), build->ground, land, land.ground, 0,
+                                       !land.splat.empty());
+            if (!land.splat.empty()) {
+                splat_rock = pick.rock->frames.front();
+                splat_rock_density = build->rock.density;
+                // Sand: the zone's plain level texture that says so by its name, else the ground's own, made sandy.
+                float best = 0.0f;
+                for (const auto& [key, use] : horizon_uses) {
+                    if (key.liquid != 0 || key.frames.empty() || key.eqg != assets::EqgShader::None) continue;
+                    std::string name = key.frames.front();
+                    for (char& c : name) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                    if (name.find("sand") == std::string::npos && name.find("beach") == std::string::npos) continue;
+                    if (use.level > best) {
+                        best = use.level;
+                        splat_sand = key.frames.front();
+                    }
+                }
+                if (splat_sand.empty()) splat_sand = pick.ground->frames.front();
+                log::info("zone renderer: the land splatted: rock '{}', sand '{}'", splat_rock, splat_sand);
+            }
             land_triangles += add_land(*pick.rock, looks.at(*pick.rock), build->rock, land, land.rock, 0);
             if (pick.water) {
                 const HorizonLook water = look_of(*pick.water, median_color(horizon_uses.at(*pick.water).colors));
@@ -1680,6 +1717,7 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
         d.lod = key.lod;
         d.instanced = key.instanced;
         d.land_trees = key.instanced != 0 && models[key.instanced - 1].land_trees;
+        d.land_splat = key.land_splat;
         MaterialState st = material_state(look);
         for (const auto& name : key.frames) d.frame_slots.push_back(slot_for(name, st.masked_texture, TextureUse::Color, !st.alpha_unused()));
         const auto& e = look.effect;
@@ -1730,6 +1768,11 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
         d.flame = key.flame;
         d.distant = key.distant;
         d.land_fade = key.land_fade;
+        if (d.land_splat) {
+            d.extra_slots[0] = slot_for(splat_rock, false);
+            d.extra_slots[1] = slot_for(splat_sand, false);
+            d.param_z = splat_rock_density; // zone.frag: the rock's texture scale (its repeats a unit)
+        }
         d.pass = static_cast<Pass>(st.pass);
         d.alpha_ref = st.alpha_ref;
         d.opacity = st.opacity;
@@ -2437,6 +2480,7 @@ void ZoneRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, cons
                                   (d.liquid == Liquid::Water ? kWaterSurface | copies : 0u) |
                                   (d.liquid == Liquid::Lava ? kLavaSurface : 0u) |
                                   (d.distant && d.land_fade == 0 && d.liquid == Liquid::None ? kLandTint : 0u) |
+                                  (d.land_splat ? kLandSplat : 0u) |
                                   zone_surface::view_surface_flags(d.surface, lighting_ == VertexLighting::None);
             bind_draw(cmd, d, flags, time_ms);
         }, kSceneLod);

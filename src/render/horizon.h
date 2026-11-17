@@ -74,6 +74,23 @@ inline constexpr float kHorizonRock = 0.8f;
 // How far under the water's surface the sea's floor lies, past the shore.
 inline constexpr float kHorizonSeaDepth = 250.0f;
 
+// A generated world terrain (prototype; the viewer's `--distant terrain`): the land's own hills shaped by warped
+// ridged noise, then worn by water and slumping (horizon_terrain), the known ground (the zone's edge, its
+// neighbours', the atlas zones', the sea) held where it is. A grid over the land: how far the wear moved the ground
+// (`delta`, added to the land's height) and how much water ran over it (`wet`, 0..1: valleys and runnels).
+struct HorizonTerrain {
+    glm::vec2 lo{0.0f};
+    float cell = 64.0f;
+    int nx = 0, ny = 0;
+    std::vector<float> delta, wet;
+    float worn_lo = 0.0f, worn_hi = 0.0f; // the deepest the wear cut, the highest it built (for the log)
+    bool valid() const {
+        return nx > 1 && ny > 1 && delta.size() == static_cast<std::size_t>(nx) * static_cast<std::size_t>(ny) &&
+               wet.size() == delta.size();
+    }
+    float sample(const std::vector<float>& layer, glm::vec2 p) const;
+};
+
 // What the land is built from: the zone's terrain on the grid (horizon_field), and the mesh's lines. The same field
 // gives the same lines, so the current zone's land and a neighbour's part of it (horizon_mesh with `only`) meet
 // vertex for vertex.
@@ -92,6 +109,10 @@ struct HorizonField {
     float water_level = 0.0f;           // the median of the zone's water surfaces
     bool has_water = false;
     std::vector<float> xs, ys;          // the mesh's lines
+    // The prototype's generated terrain: `generated` shapes the land's hills with it (warped ridged noise, natural
+    // coasts, splatted materials); `terrain` is their wear once horizon_terrain has run (null before).
+    bool generated = false;
+    std::shared_ptr<const HorizonTerrain> terrain;
 
     bool valid() const { return land.valid && nx > 0 && xs.size() > 1 && ys.size() > 1; }
     std::size_t at(int x, int y) const {
@@ -202,6 +223,16 @@ inline constexpr float kHorizonBandSlope = 3.0f;
 inline constexpr float kHorizonBandMin = 200.0f;
 inline constexpr float kHorizonBandMax = 800.0f;
 
+// Wears the land of a `generated` field: its heights on a grid (at least kHorizonCell, at most kHorizonTerrainMax
+// squares a side) worn by kHorizonDroplets droplets a square of water running downhill (Beyer's particle erosion)
+// and a few passes of slumping where it is steeper than the rock holds, each square only as much as it is free:
+// none on the zone, on a neighbour's or an atlas zone's ground or under the sea, all of it kHorizonTerrainFree past
+// the zone's edge. Deterministic: the same field and sources give the same terrain.
+inline constexpr int kHorizonTerrainMax = 512;
+inline constexpr float kHorizonDroplets = 1.5f;
+inline constexpr float kHorizonTerrainFree = 1500.0f;
+HorizonTerrain horizon_terrain(const HorizonField& field, const HorizonSources& sources);
+
 // The land's height at `p` (as the mesh's vertices have it).
 float horizon_height(const HorizonField& field, const HorizonSources& sources, glm::vec2 p);
 
@@ -227,6 +258,9 @@ struct HorizonMesh {
     // Per vertex: the colour the ground takes on there (linear rgb: an atlas zone's own, HorizonSource::color), and in
     // a how much (its cover); 0 where none. The renderer moves the zone's ground texture toward it.
     std::vector<glm::vec4> tint;
+    // Per vertex, a `generated` field's: how much rock (x: slopes, peaks) and sand (y: by the water) cover the ground
+    // (zone.frag kLandSplat); empty otherwise.
+    std::vector<glm::vec2> splat;
     // Triangles (index triples into positions), counter-clockwise seen from above: the zone's ground material, its
     // rock (slopes and peaks), and its water (a flat surface at water_level).
     std::vector<std::uint32_t> ground, rock, water;

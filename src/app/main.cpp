@@ -115,6 +115,7 @@ struct Options {
     bool no_grass = false;                        // --no-grass: the viewer without the zone's flora
     bool no_smooth_ground = false;                // --no-smooth-ground: the viewer draws the file's flat ground
     bool no_horizon = false;                      // --no-horizon: no land round the zone (render/horizon.h)
+    std::string distant;                          // --distant terrain: the prototype's generated world terrain
     bool no_land_trees = false;                   // --no-land-trees: the land round the zone without its trees
     bool no_clouds = false; // --no-clouds: the painted cloud layer, not the volumetric clouds (render/cloud_renderer.h)
     bool neighbour_tint = false;                  // --neighbour-tint: render::ZoneRenderer::set_debug_tint
@@ -301,6 +302,7 @@ void usage() {
         "  --weather-stopped S  viewer: --weather stopped S seconds ago (the clearing)\n"
         "  --no-grade         viewer: no colour grade (--lighting modern; display.color_grade)\n"
         "  --no-horizon       viewer: no land round the zone (--lighting modern; display.horizon_hills)\n"
+        "  --distant terrain  viewer: the distant land as a generated, worn terrain (a prototype)\n"
         "  --no-land-trees    viewer: the land round the zone without its trees\n"
         "  --no-clouds        viewer: the painted clouds, not the volumetric ones (--lighting modern;\n"
         "                     display.volumetric_clouds)\n"
@@ -503,6 +505,9 @@ Options parse_args(int argc, char** argv) {
             o.scene.color_grade = false;
         } else if (arg("--no-horizon")) {
             o.no_horizon = true;
+        } else if (arg("--distant")) {
+            need(1);
+            o.distant = argv[++i];
         } else if (arg("--no-land-trees")) {
             o.no_land_trees = true;
         } else if (arg("--no-clouds")) {
@@ -985,6 +990,7 @@ int main(int argc, char** argv) {
                     app::cached_horizon_sources(game, app::horizon_cache_dir("viewer", zone->name), zone->name);
             }
             options.land_trees = !opts.no_land_trees;
+            options.generated_terrain = opts.distant == "terrain";
             zone_renderer = std::make_unique<render::ZoneRenderer>(vk, *zone, shader_dir, options);
             zone_renderer->set_hide_flames(opts.modern);
             zone_renderer->set_lod_scale(opts.tree_detail);
