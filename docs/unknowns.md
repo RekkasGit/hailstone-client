@@ -4,15 +4,18 @@ What the client does not implement yet, or implements with an approximation it c
 
 ## Server add-on policy
 
-- Cached requirements can prevent a login that would refresh an outdated policy. Failures during an established
-  session currently disconnect immediately, and readiness checks repeat consent-file reads and identity work each
-  frame. Cached admission, mid-session failure handling and readiness invalidation still need their final design.
-
-- The optional required/allow/block policy is covered by parser, package identity, runtime and gate regressions.
-  Live acceptance still needs a first visit and a cached return visit, installing missing requirements, native
-  consent allowed/refused/closed, a required add-on failing after startup, both UI packs and a physical controller,
-  and an external upscaler allowed/blocked/updated followed by restart. The server does not send this policy until
-  the first zone-in; it is a client extension, not a server-side attestation or anti-cheat mechanism.
+- The optional required/allow/block policy is covered by parser, package identity, admission, runtime and gate
+  regressions, not live. Live acceptance still needs a first visit and a return visit, a server fixing its policy,
+  installing missing requirements, native consent allowed/refused/closed, a required add-on failing in the world
+  (the chat warning), both UI packs and a physical controller, and an external upscaler allowed/blocked/updated
+  followed by restart. The server does not send its policy until the zone-in; it is a client extension, not a
+  server-side attestation or anti-cheat mechanism.
+- Texture packs (Texture Studio's output in `textures/`) are not add-ons and have no repository, so no list names
+  them; a server can block the Texture Studio tool, not the packs a player already built. A required tool is met by
+  its installation: the client does not start it and cannot tell whether it runs.
+- A script add-on whose name has capitals is not found by the script loader on a case-sensitive file system
+  (`ScriptHost::run` looks scripts up by their lower-cased name). Admission holds such a requirement unmet rather
+  than letting it pass and fail to start; the loader itself is unchanged.
 
 ## Evolving items
 

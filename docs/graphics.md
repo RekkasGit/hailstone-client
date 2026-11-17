@@ -212,7 +212,9 @@ links or ships any of them.
 
 - **Loading** (`render/upscaler_provider.*`): at the start, before the Vulkan instance, from a copy of its folder in
   `cache/upscalers/<name>-<key>/` (the key from its files' names, sizes and times; a box set's windows share one), so
-  the add-on manager can replace the folder while the copy is loaded. No server sends one or decides about one.
+  the add-on manager can replace the folder while the copy is loaded. No server sends one; a server's opted-in
+  add-on policy can require, allow or block one, checked against the loaded copy as the character enters
+  (docs/plugins.md "Opt-in add-on policies").
 - **The device**: the provider names the instance and device extensions and the Vulkan 1.0 to 1.3 features it needs,
   and may chain feature structs of extensions of its own (`gather_extra_features`); `VkContext` turns them on beside
   its own when the loader and the GPU have the extensions and the core features (`missing_names`,
