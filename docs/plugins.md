@@ -513,10 +513,9 @@ types, the `NMSC_*` macros, the global `nmsc`, the namespace `nmsc` for `ByteRea
 `nmsc_plugin_abi`, `nmsc_plugin_set_host` and `nmsc_plugin_hooks`. A plugin written against them builds unchanged:
 the two old headers are still in `sdk/`, include the new ones and add the old names back (`nmsc` is a macro for
 `host`; define `NMSC_NO_OLD_GLOBAL` before the include to leave the name free). A built plugin loads unchanged: the
-client looks for the released binding exports under their new names, then their old ones. Rebuilding against this
-SDK keeps those source aliases but uses the layout marker and versioned host binding described below. Clients
-without that binding refuse the rebuilt library before initialization; new SDK builds do not promise old-client
-binary compatibility.
+client looks for each export under its new name, then its old one. `HAILSTONE_PLUGIN` exports the two required
+functions under both names, so a plugin built with this SDK loads in a 0.6 client too; one with hooks that should
+work there exports `nmsc_plugin_hooks` as well.
 
 The client calls a plugin on its own thread, and the host functions are for that thread only, from inside one of the
 plugin's callbacks (`InitializePlugin`, `OnPulse`, a command, a hook, ...): the client's state has no locks. A call
@@ -622,43 +621,6 @@ call, since a client older than the call has a shorter table. The structs a plug
 ..., `HailstoneWebState`) carry their size too and the client fills what both know; `HailstoneWebState`'s `size` is a `size_t`
 (as ABI 3 shipped it), the others' a `uint32_t`.
 
-Released unmarked ABI 1–3 libraries retain their original binding export and canonical prefix. New SDK builds use
-`hailstone_plugin_layout()` and `hailstone_plugin_set_host_v2(host, layout)`: the host validates the published
-host/hook and packed bulk-payload contract fingerprint before binding or calling `InitializePlugin`. Unknown contracts, a missing matching
-setter, or a refused binding do not initialize the library. The SDK macro deliberately omits the unversioned setter,
-so older clients refuse new builds instead of binding incompatible optional slots. Optional services still need
-`HAILSTONE_HOST_HAS`; a recognized layout is not a permission grant or promise of service availability. The layout
-model test detects table signature/order and packed bulk-schema drift; incompatible declarations or payload
-semantics must never reuse an accepted ID. `HAILSTONE_PLUGIN_DECLARATION_MODEL_SHA256` records the host/hook model,
-`HAILSTONE_PLUGIN_BULK_MODEL_SHA256` records packed bulk declarations/constants and their semantic version, and
-`HAILSTONE_PLUGIN_LAYOUT_MODEL_SHA256` covers both. A semantic change without changed declarations must increment
-`HAILSTONE_PLUGIN_BULK_SCHEMA_VERSION`.
-
-The current marked contract is `dbf47b044fcdb052`. Both preceding marked contracts are recognized automatically:
-`f6b34b37061be009` receives its original 832-byte table, and `e7faba7b569803ce` its original 840-byte table. Each gets
-its own ID at the versioned setter. The current contract also has an 840-byte table, including the upstream
-`get_raid_data_bulk` reader before the appended services, but uses the new eight-byte list header. The older marked
-contracts retain four-byte headers for target buffs, AA and disciplines: target's count is total held, AA/disc counts
-are records written. The raid header's renamed `total` field keeps its original offset and value.
-These byte sizes describe 64-bit builds. Each library keeps its own table for its loaded lifetime. A future table
-append must retain accepted older IDs and their frozen typed views; a newer SDK declaration is not automatically
-accepted by an older client. The model test and explicit current-ID check require that maintenance deliberately.
-Unmarked libraries use the current upstream bulk format; an unmarked build expecting the earlier optional reader
-formats must be rebuilt because neither ABI 3 nor its table size identifies those semantics reliably.
-
-Earlier unmarked UI API previews placed draft functions where upstream later added five released bulk readers.
-Rebuilding those old preview libraries is recommended. ABI 3 and table size alone cannot distinguish them from released
-libraries; the loader does not guess from a filename or hash. A temporary, explicit alternative for a known old
-binary is `plugin.sdk_layout.<exact SHA-256>=ui-preview-1` in the player's shared `hailstone.ini`.
-The fingerprint accepts either hex case; conflicting case variants and an unreadable existing shared config fail
-closed. A character or server configuration cannot select this adapter. Remove or blank the entry after rebuilding.
-It selects the earlier preview's 800-byte (64-bit) per-library table only for those exact admitted bytes; marked
-previews use automatic recognition instead. Unknown values and any
-override on a marked library are refused before initialization. Changing the binary's bytes leaves the old setting
-inapplicable; a new binary uses the canonical default unless explicitly identified again. Remove this setting after
-rebuilding. Permission checks, consent and live owner lifetime rules still apply; this is a table-layout adapter,
-not an authority bypass. No server-specific libraries, names or hashes are built into this compatibility path.
-
 The host contains C++ allocation/provider exceptions at its SDK entry points and returns the ordinary zero/void
 failure result. It does not retry actions or promise to undo side effects completed before an exception.
 
@@ -716,8 +678,6 @@ client holds. `count < total` means `out_size` was too small; call again with a 
 with `HS_Bulk_ListHeader` (`HS_BULK_LIST_HEADER_SIZE` = 8 bytes: i32 `count`, then i32 `total`), the raid read with its
 own `HS_Bulk_RaidHeader`, whose `count` and `total` mean the same. Below the header's size nothing is written and 0
 comes back; with nothing to list the header alone goes out, `count` 0 and `total` 0.
-This describes the current SDK contract and unmarked upstream libraries. The recognized older marked contracts
-keep their original four-byte headers for the first three reads, as described under compatibility above.
 
 - `get_buff_data_bulk`: one record of `HAILSTONE_BUFF_RECORD_SIZE` (29) bytes per buff slot, slot 0 first, in the
   client's order: the long buff slots, then the song slots, then the one discipline slot, always last. RoF2 has 42
@@ -1466,11 +1426,11 @@ rest.
 
 ## Server add-on services
 
-These fields follow the released ABI 3 prefix, including `get_target_buff_data_bulk`, `get_avail_aa_data_bulk`,
-`get_avail_disc_data_bulk`, `get_buff_name_data_bulk` and `get_raid_data_bulk`. Their order and offsets remain unchanged. Check
-`HAILSTONE_HOST_HAS` before calling a host function and the struct's
-returned size before reading an appended field. Plugins compiled against earlier tables retain their existing
-layout. New functions do not imply that an older host supplies the service.
+These host functions and hooks are added later in ABI 3, at the end of their tables, after every entry before
+them (the bulk reads through `get_raid_data_bulk` and the ability calls). Check `HAILSTONE_HOST_HAS` before calling
+a host function, the hook table's `size` (the client does), and the struct's returned size before reading an
+appended field. A plugin built against an earlier header keeps its positions. Against a stock server none of these
+services does anything until a plugin uses it.
 
 - `follow_profile` and `mount_profile` (`extend`) return bounded data for host-owned movement. A profile never
   starts a follow. `manual_follow(host, "start" | "stop" | "toggle")` requires `move` and `extend`, validates the

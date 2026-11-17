@@ -43,8 +43,6 @@ struct AutomationEnv {
     std::filesystem::path data_dir;    // the folder Hailstone writes to (platform::data_dir())
     std::string autoload = "*";       // plugins.autoload
     std::string script_autoload;      // scripts.autoload: the player's scripts started when the rules allow them
-    // The player's shared config only: plugin.sdk_layout.<exact SHA-256, either case>. Empty selects canonical.
-    std::function<std::string(std::string_view hash)> sdk_layout;
     std::function<net::GameConnection*()> connection;
     std::function<std::string()> server_name;
     std::function<std::string()> server_profile; // the saved server's id (servers/<id>/), "" for a test login
@@ -72,10 +70,6 @@ struct AutomationEnv {
     std::function<std::optional<bool>(std::uint32_t spawn)> can_see;
     std::function<std::optional<bool>(const std::array<float, 3>&, const std::array<float, 3>&)> line_of_sight;
 };
-
-// Fresh, unlayered read: server/character settings cannot choose the native SDK table layout. Missing config is
-// canonical; an existing unreadable/non-file config or malformed hash returns an invalid layout for fail-closed load.
-std::string configured_plugin_sdk_layout(const std::filesystem::path& shared_config, std::string_view hash);
 
 class Automation {
 public:

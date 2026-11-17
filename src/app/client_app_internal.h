@@ -445,7 +445,6 @@ public:
         aenv.data_dir = platform::data_dir();
         aenv.autoload = config_.get("plugins.autoload").value_or("*");
         aenv.script_autoload = config_.get("scripts.autoload").value_or("");
-        aenv.sdk_layout = [this](std::string_view hash) { return configured_plugin_sdk_layout(config_path_, hash); };
         aenv.connection = [this] { return conn_.get(); };
         aenv.server_name = [this] { return char_view_.server_name; };
         aenv.server_profile = [this] { return server_profile_.id; };

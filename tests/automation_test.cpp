@@ -11,8 +11,6 @@
 #include "app/automation.h"
 #include "app/addon_install.h"
 #include "app/addon_requirements.h"
-#include "core/config.h"
-#include "core/game_dir.h"
 #include "mq/lua_mq.h"
 #include "mq_test_world.h"
 #include "core/sha256.h"
@@ -27,12 +25,11 @@ struct AutomationHost {
     mq_test::World world{"hailstone_automation_test"};
     std::unique_ptr<app::Automation> automation;
     std::vector<std::pair<mq::AbilityKind, std::string>> used;
-    explicit AutomationHost(std::function<std::string(std::string_view)> sdk_layout = {}) {
+    AutomationHost() {
         net::GameConnectionTestAccess::set_server_rules(*world.conn, plugin::Rules{}); // no hailstone.cfg: free
         app::AutomationEnv env;
         env.data_dir = world.dir / "data";
         env.install_dir = world.dir / "install";
-        env.sdk_layout = std::move(sdk_layout);
         env.connection = [this] { return world.conn.get(); };
         env.autoskill_list = [] {
             game::AutoskillRule kick;
@@ -65,36 +62,6 @@ struct AutomationHost {
     }
 };
 } // namespace
-
-TEST_CASE("Automation: SDK layout settings are fresh exact-hash shared-file reads") {
-    mq_test::World world("sdk_layout_settings");
-    const auto shared_path = world.dir / "hailstone.ini";
-    const std::string hash(64, 'a'), upper(64, 'A'), other(64, 'b');
-    const auto key = "plugin.sdk_layout." + hash;
-    CHECK(app::configured_plugin_sdk_layout(shared_path, hash).empty());
-    Config shared;
-    shared.set(key, "ui-preview-1"); REQUIRE(shared.save(shared_path));
-    CHECK(app::configured_plugin_sdk_layout(shared_path, hash) == "ui-preview-1");
-    CHECK(app::configured_plugin_sdk_layout(shared_path, other).empty());
-    CHECK(app::configured_plugin_sdk_layout(shared_path, upper) == "ui-preview-1");
-    REQUIRE(shared.attach_character(world.dir / "character.ini"));
-    shared.set(key, "character-must-not-choose"); REQUIRE(shared.save(shared_path));
-    CHECK(shared.get(key) == "character-must-not-choose");
-    CHECK(app::configured_plugin_sdk_layout(shared_path, hash) == "ui-preview-1");
-    Config changed; changed.set(key, "unknown-layout"); REQUIRE(changed.save(shared_path));
-    CHECK(app::configured_plugin_sdk_layout(shared_path, hash) == "unknown-layout"); // loader validates the value
-    changed.set(key, ""); REQUIRE(changed.save(shared_path));
-    CHECK(app::configured_plugin_sdk_layout(shared_path, hash).empty());
-    changed.erase(key); changed.set("plugin.sdk_layout." + upper, "ui-preview-1"); REQUIRE(changed.save(shared_path));
-    CHECK(app::configured_plugin_sdk_layout(shared_path, hash) == "ui-preview-1");
-    changed.set(key, ""); REQUIRE(changed.save(shared_path));
-    CHECK_FALSE(app::configured_plugin_sdk_layout(shared_path, hash).empty()); // conflicting case variants fail closed
-    CHECK(app::configured_plugin_sdk_layout(shared_path, hash) != "ui-preview-1");
-    changed.set(key, "ui-preview-1"); REQUIRE(changed.save(shared_path));
-    CHECK(app::configured_plugin_sdk_layout(shared_path, hash) == "ui-preview-1");
-    CHECK_FALSE(app::configured_plugin_sdk_layout(shared_path, "../bad-key").empty());
-    CHECK_FALSE(app::configured_plugin_sdk_layout(world.dir, hash).empty()); // existing non-file is not a missing config
-}
 
 TEST_CASE("Automation: a script holds autoskill off while it runs; stopping it lets go") {
     AutomationHost h;
@@ -345,29 +312,6 @@ print('[max] train ' .. tostring(hs.train_aa(10)) .. ' ' .. tostring(hs.train_aa
 }
 
 #ifdef HAILSTONE_EXAMPLE_PLUGIN
-TEST_CASE("Automation: native loading forwards the exact admitted binary hash and refreshes layout decisions") {
-    std::vector<std::string> hashes;
-    std::string selected = "invalid-layout-fixture";
-    AutomationHost h([&](std::string_view hash) { hashes.emplace_back(hash); return selected; });
-    const fs::path built = HAILSTONE_EXAMPLE_PLUGIN;
-    const fs::path plugin_dir = h.world.dir / "data" / "plugins" / "MQ2Example";
-    fs::create_directories(plugin_dir);
-    fs::copy_file(built, plugin_dir / built.filename());
-    const auto bytes = read_file(built); REQUIRE(bytes);
-    const auto actual = sha256(*bytes);
-    h.automation->frame();
-    REQUIRE_FALSE(hashes.empty()); CHECK(hashes.back() == to_hex(actual));
-    CHECK(h.automation->plugin_caps("plugin:MQ2Example") == 0);
-    const auto attempts = hashes.size();
-    selected.clear();
-    // Reload through Automation's real command bus, as ClientApp's connection dispatches plugin commands.
-    std::string retry = "/plugin MQ2Example load";
-    REQUIRE(h.automation->hooks().command(retry)); h.automation->frame();
-    CHECK(hashes.size() > attempts);
-    CHECK(h.automation->plugin_caps("plugin:MQ2Example") == plugin::kCapAll);
-    CHECK(hashes.back() == to_hex(actual));
-}
-
 // A script add-on that names itself after a compiled plugin (a "read,ui" script called "nms" beside the NMS server's
 // plugin) gets neither the plugin's capabilities in its windows nor its folder, functions, options or menu: each is
 // the owner's by kind and name (plugin::UiBridge::owner_tag).

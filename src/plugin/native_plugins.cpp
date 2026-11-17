@@ -60,68 +60,6 @@ static_assert(HAILSTONE_CAP_READ == kCapRead && HAILSTONE_CAP_COMMANDS == kCapCo
               HAILSTONE_CAP_WEB == kCapWeb);
 static_assert(offsetof(HailstoneMapPolicy, revision)==72 && offsetof(HailstoneMapPolicy, context)==80 && sizeof(HailstoneMapPolicy)==88);
 
-// Frozen service signatures for accepted older layouts. An incompatible current signature must fail assignment
-// here until it has an explicit adapter; deriving these types from the mutable current table would hide drift.
-template <std::size_t Prefix> struct alignas(PluginHostApi) Abi3ServicesV1View {
-    std::array<std::byte, Prefix> common;
-    int (*get_raid_roster)(void*, HailstoneRaidRoster*);
-    int (*get_raid_member)(void*, std::uint64_t, std::uint32_t, HailstoneRaidMember*);
-    int (*select_raid_member)(void*, std::uint64_t, std::uint32_t, std::uint64_t);
-    int (*decode_item_packet)(void*, const void*, std::size_t, HailstoneItemSlot*, HailstoneItem*);
-    int (*inspect_item_packet)(void*, const void*, std::size_t);
-    int (*manual_follow)(void*, const char*);
-    int (*get_follow_status)(void*, HailstoneFollowStatus*);
-    std::uint32_t (*get_memorized_spell)(void*, std::uint32_t);
-    int (*raid_action)(void*, std::uint64_t, const char*, std::uint32_t, std::uint32_t);
-    std::uint64_t (*monotonic_ms)(void*);
-    std::uint32_t (*world_capabilities)(void*);
-    int (*world_floor_below)(void*, std::uint64_t, std::uint32_t, float, float, float, float*);
-    int (*world_anchor)(void*, std::uint64_t, std::uint32_t, std::uint32_t, HailstoneWorldAnchor*);
-    int (*world_submit)(void*, const HailstoneWorldSubmission*);
-    int (*world_surface_patch)(void*, const HailstoneWorldSurfacePatch*, HailstoneWorldSurfacePatchResult*);
-    int (*measure_binary)(void*, std::uint32_t, HailstoneBinaryMeasurement*);
-    int (*get_map_policy)(void*, HailstoneMapPolicy*);
-};
-using PreviewHostApi = Abi3ServicesV1View<offsetof(PluginHostApi, caps) + 81 * sizeof(PluginHostApi::caps)>;
-using Canonical1HostApi = Abi3ServicesV1View<offsetof(PluginHostApi, caps) + 85 * sizeof(PluginHostApi::caps)>;
-using Canonical2HostApi = Abi3ServicesV1View<offsetof(PluginHostApi, caps) + 86 * sizeof(PluginHostApi::caps)>;
-static_assert(offsetof(PreviewHostApi, get_raid_roster) == offsetof(PluginHostApi, get_target_buff_data_bulk));
-static_assert(offsetof(Canonical1HostApi, get_raid_roster) == offsetof(PluginHostApi, get_raid_data_bulk));
-static_assert(sizeof(PreviewHostApi) == offsetof(PluginHostApi, caps) + 98 * sizeof(PluginHostApi::caps));
-static_assert(sizeof(Canonical1HostApi) == offsetof(PluginHostApi, caps) + 102 * sizeof(PluginHostApi::caps));
-static_assert(offsetof(Canonical2HostApi, get_raid_roster) == offsetof(PluginHostApi, get_raid_roster));
-static_assert(sizeof(Canonical2HostApi) == offsetof(PluginHostApi, caps) + 103 * sizeof(PluginHostApi::caps));
-
-enum class HostLayoutView { Current, Canonical1, Canonical2 };
-enum class BulkListFormat { LegacyCount, CountTotal };
-struct SdkLayout { std::uint64_t id; HostLayoutView view; BulkListFormat bulk; };
-constexpr std::array kSdkLayouts{
-    SdkLayout{HAILSTONE_PLUGIN_LAYOUT_ABI3_CANONICAL_1, HostLayoutView::Canonical1, BulkListFormat::LegacyCount},
-    SdkLayout{HAILSTONE_PLUGIN_LAYOUT_ABI3_CANONICAL_2, HostLayoutView::Canonical2, BulkListFormat::LegacyCount},
-    SdkLayout{HAILSTONE_PLUGIN_LAYOUT_ABI3_CANONICAL_3, HostLayoutView::Current, BulkListFormat::CountTotal},
-};
-// A future SDK update must deliberately retain older accepted views and identify exactly one current model.
-static_assert(kSdkLayouts.back().id == HAILSTONE_PLUGIN_LAYOUT);
-static_assert(std::count_if(kSdkLayouts.begin(), kSdkLayouts.end(), [](const auto& layout) {
-    return layout.view == HostLayoutView::Current;
-}) == 1);
-
-template <typename View> View compatible_host_api(const PluginHostApi& canonical) {
-    View out{};
-    std::memcpy(out.common.data(), &canonical, out.common.size());
-    const auto size = static_cast<std::uint32_t>(sizeof(out));
-    std::memcpy(out.common.data() + offsetof(PluginHostApi, size), &size, sizeof(size));
-#define COPY_SERVICE_FIELD(field) out.field = canonical.field
-    COPY_SERVICE_FIELD(get_raid_roster); COPY_SERVICE_FIELD(get_raid_member); COPY_SERVICE_FIELD(select_raid_member);
-    COPY_SERVICE_FIELD(decode_item_packet); COPY_SERVICE_FIELD(inspect_item_packet); COPY_SERVICE_FIELD(manual_follow);
-    COPY_SERVICE_FIELD(get_follow_status); COPY_SERVICE_FIELD(get_memorized_spell); COPY_SERVICE_FIELD(raid_action);
-    COPY_SERVICE_FIELD(monotonic_ms); COPY_SERVICE_FIELD(world_capabilities); COPY_SERVICE_FIELD(world_floor_below);
-    COPY_SERVICE_FIELD(world_anchor); COPY_SERVICE_FIELD(world_submit); COPY_SERVICE_FIELD(world_surface_patch);
-    COPY_SERVICE_FIELD(measure_binary); COPY_SERVICE_FIELD(get_map_policy);
-#undef COPY_SERVICE_FIELD
-    return out;
-}
-
 #if defined(_WIN32)
 constexpr const char* kExt = ".dll";
 #elif defined(__APPLE__)
@@ -292,10 +230,6 @@ struct Loaded {
     std::uint32_t caps = 0;
     SDL_SharedObject* lib = nullptr;
     PluginHostApi table{};
-    std::optional<PreviewHostApi> preview_table;
-    std::optional<Canonical1HostApi> canonical1_table;
-    std::optional<Canonical2HostApi> canonical2_table;
-    BulkListFormat bulk_list_format = BulkListFormat::CountTotal;
     Hooks::Owner owner = 0;
     std::vector<std::string> tlos;
 
@@ -1982,9 +1916,13 @@ int32_t h_get_pet_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
     return bufferSize;
 }
 /// <summary>
-/// The current target's buffs, as OP_TargetBuffs last gave them: a counted header, then whole records and caster
-/// names. Current contracts report written and total counts; recognized older marked contracts keep their single
-/// total count. Empty, stale and missing target lists produce just the appropriate empty header.
+/// The current target's buffs in one call, as OP_TargetBuffs last gave them, in the order the client keeps them, each
+/// with the slot the server sent: an HS_Bulk_ListHeader (count, total), then one HS_Bulk_TargetBuffFixedRecord per
+/// buff followed by its caster's name, casterNameLength bytes with no NUL. An entry with no spell is neither counted
+/// nor written. Only whole records go out, as many as fit after the header; count < total means the buffer cut the
+/// list short. Nothing (0 bytes) when not even the header fits. The header alone (0, 0) without a target, when the
+/// buffs the client holds are another spawn's (the server has not sent the new target's yet), or with no game
+/// connection.
 /// </summary>
 /// <param name="h">host</param>
 /// <param name="data">buffer to put data in</param>
@@ -1992,25 +1930,13 @@ int32_t h_get_pet_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
 /// (EQEmu: 60 buff slots on an NPC by default, Spells:MaxTotalSlotsNPC; a caster's name up to 63 bytes, Buffs_Struct)
 /// is 8 + 60 * 83 = 4988, so 8192 holds any on a stock server</param>
 /// <returns>bytes written; 0 below 8 bytes</returns>
-template <BulkListFormat Format> constexpr std::size_t bulk_list_header_bytes =
-    Format == BulkListFormat::LegacyCount ? sizeof(int32_t) : sizeof(HS_BulkListHeader);
-
-template <BulkListFormat Format, bool LegacyTotal>
-void write_bulk_list_header(unsigned char* data, const HS_BulkListHeader& header) {
-    if constexpr (Format == BulkListFormat::LegacyCount) {
-        const int32_t count = LegacyTotal ? header.total : header.count;
-        std::memcpy(data, &count, sizeof(count));
-    } else std::memcpy(data, &header, sizeof(header));
-}
-
-template <BulkListFormat Format>
-int32_t target_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
+int32_t h_get_target_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
 {
     Loaded& l = Loaded::of(h);
     const net::GameConnection* c = readable(l, "get_target_buff_data_bulk");
     if (!c && !l.can(kCapRead)) return 0;
     static_assert(sizeof(HS_BulkListHeader) == HS_BULK_LIST_HEADER_SIZE);
-    constexpr std::size_t headerBytes = bulk_list_header_bytes<Format>;
+    const std::size_t headerBytes = sizeof(HS_BulkListHeader);
     if (!data || datamax <= 0 || static_cast<std::size_t>(datamax) < headerBytes) return 0;
     HS_BulkListHeader header{};
     std::size_t bufferSize = headerBytes;
@@ -2052,13 +1978,8 @@ int32_t target_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
             ++header.count;
         }
     }
-    write_bulk_list_header<Format, true>(data, header);
+    std::memcpy(data, &header, sizeof header); // in the machine's byte order, unaligned, as the records
     return static_cast<int32_t>(bufferSize);
-}
-int32_t h_get_target_buff_data_bulk(void* h, unsigned char* data, int32_t datamax) {
-    return Loaded::of(h).bulk_list_format == BulkListFormat::LegacyCount
-        ? target_buff_data_bulk<BulkListFormat::LegacyCount>(h, data, datamax)
-        : target_buff_data_bulk<BulkListFormat::CountTotal>(h, data, datamax);
 }
 /// <summary>
 /// This is highly optimized code. AI should not modify this code method.
@@ -2127,10 +2048,10 @@ int32_t h_get_xtarget_data_bulk(void* h, unsigned char* data, int32_t datamax)
 // calls emit(id, name) for every one, in order) an HAILSTONE_ID_NAME_RECORD followed by the name's nameSize bytes (no
 // NUL), as many whole records as fit after the header, none after the first that does not. The header's count says
 // how many follow, its total how many `each` gave. Nothing (0 bytes) when not even the header fits.
-template <BulkListFormat Format, typename Each> int32_t write_id_str_list(unsigned char* data, int32_t datamax, Each&& each) {
+template <typename Each> int32_t write_id_str_list(unsigned char* data, int32_t datamax, Each&& each) {
     static_assert(sizeof(HAILSTONE_ID_NAME_RECORD) == HAILSTONE_ID_NAME_RECORD_SIZE);
     static_assert(sizeof(HS_BulkListHeader) == HS_BULK_LIST_HEADER_SIZE);
-    constexpr std::size_t headerBytes = bulk_list_header_bytes<Format>;
+    const std::size_t headerBytes = sizeof(HS_BulkListHeader);
     const std::size_t idBytes = sizeof(HAILSTONE_ID_NAME_RECORD);
     if (!data || datamax <= 0 || static_cast<std::size_t>(datamax) < headerBytes) return 0;
     const std::size_t room = static_cast<std::size_t>(datamax);
@@ -2153,14 +2074,8 @@ template <BulkListFormat Format, typename Each> int32_t write_id_str_list(unsign
         bufferSize += name.size();
         ++header.count;
     });
-    write_bulk_list_header<Format, false>(data, header);
+    std::memcpy(data, &header, sizeof header); // in the machine's byte order, unaligned, as the records
     return static_cast<int32_t>(bufferSize);
-}
-template <typename Each>
-int32_t write_id_str_list(BulkListFormat format, unsigned char* data, int32_t datamax, Each&& each) {
-    return format == BulkListFormat::LegacyCount
-        ? write_id_str_list<BulkListFormat::LegacyCount>(data, datamax, std::forward<Each>(each))
-        : write_id_str_list<BulkListFormat::CountTotal>(data, datamax, std::forward<Each>(each));
 }
 
 /// <summary>
@@ -2179,10 +2094,10 @@ int32_t h_get_avail_aa_data_bulk(void* h, unsigned char* data, int32_t datamax)
 {
     Loaded& l = Loaded::of(h);
     const net::GameConnection* c = readable(l, "get_avail_aa_data_bulk");
-    if (!c) return l.can(kCapRead) ? write_id_str_list(l.bulk_list_format, data, datamax, [](auto&&) {}) : 0;
+    if (!c) return l.can(kCapRead) ? write_id_str_list(data, datamax, [](auto&&) {}) : 0; // no connection: 0, 0
     const auto& aa = c->alt_adv();
     const bool haveProfile = c->profile().has_value();
-    return write_id_str_list(l.bulk_list_format, data, datamax, [&](auto&& emit) {
+    return write_id_str_list(data, datamax, [&](auto&& emit) {
         if (!haveProfile) return; // before the profile: count and total 0
         for (const auto& o : aa.owned) {
             if (o.id == 0) continue; // an empty slot
@@ -2205,10 +2120,10 @@ int32_t h_get_avail_disc_data_bulk(void* h, unsigned char* data, int32_t datamax
 {
     Loaded& l = Loaded::of(h);
     const net::GameConnection* c = readable(l, "get_avail_disc_data_bulk");
-    if (!c) return l.can(kCapRead) ? write_id_str_list(l.bulk_list_format, data, datamax, [](auto&&) {}) : 0;
+    if (!c) return l.can(kCapRead) ? write_id_str_list(data, datamax, [](auto&&) {}) : 0; // no connection: 0, 0
     const auto& profile = c->profile();
     const game::SpellTable& spells = c->spell_table();
-    return write_id_str_list(l.bulk_list_format, data, datamax, [&](auto&& emit) {
+    return write_id_str_list(data, datamax, [&](auto&& emit) {
         if (!profile) return; // before the profile: count and total 0
         for (std::uint32_t spell : profile->disciplines) {
             if (spell == 0) continue; // an empty entry
@@ -2862,11 +2777,6 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     auto bytes = read_file(*file);
     if (!bytes) return refuse("cannot read " + file->string());
     Sha256Digest hash = sha256(*bytes);
-    std::string selected_layout;
-    try { if (m.env.sdk_layout) selected_layout = m.env.sdk_layout(hash); }
-    catch (...) { return refuse(name + " could not resolve its SDK layout setting"); }
-    if (!selected_layout.empty() && selected_layout != "ui-preview-1")
-        return refuse(name + " has an unknown SDK layout setting");
     if (!m.env.policy) return refuse("plugins are off");
     std::uint32_t caps = m.env.policy->caps(FileKind::Plugin, hash, name);
     if (caps == 0) return refuse(std::format("{} may not load: {}", name, m.env.policy->refusal(FileKind::Plugin)));
@@ -2911,12 +2821,10 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     if (!p.lib) return refuse(std::format("{} did not load: {}", name, SDL_GetError()));
     auto abi = sdk_symbol<std::uint32_t (*)()>(p.lib, "abi");
     auto set_host = sdk_symbol<void (*)(const PluginHostApi*)>(p.lib, "set_host");
-    auto layout = sdk_symbol<std::uint64_t (*)()>(p.lib, "layout");
-    auto set_host_v2 = sdk_symbol<int (*)(const PluginHostApi*, std::uint64_t)>(p.lib, "set_host_v2");
-    if (!abi || (!set_host && !set_host_v2)) {
+    if (!abi || !set_host) {
         SDL_UnloadObject(p.lib);
         return refuse(name +
-                      " is not a Hailstone plugin (missing ABI or host-binding export; use HAILSTONE_PLUGIN)");
+                      " is not a Hailstone plugin (no hailstone_plugin_abi / hailstone_plugin_set_host; use HAILSTONE_PLUGIN)");
     }
     // Older ABIs load (the tables only grow at their end); a newer one needs a newer client.
     std::uint32_t got = 0;
@@ -2928,25 +2836,6 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
         SDL_UnloadObject(p.lib);
         return refuse(std::format("{} was built for plugin ABI {}, this client has {}", name, got, HAILSTONE_PLUGIN_ABI));
     }
-    const SdkLayout* accepted_layout = nullptr;
-    if (layout) {
-        std::uint64_t requested = 0;
-        const bool reported = guarded(p, "hailstone_plugin_layout", [&] { requested = layout(); return true; });
-        const auto accepted = std::ranges::find_if(kSdkLayouts, [&](const auto& entry) { return entry.id == requested; });
-        if (!reported || got != 3 || accepted == kSdkLayouts.end() || !set_host_v2) {
-            SDL_UnloadObject(p.lib);
-            return refuse(name + " has an unsupported SDK layout or missing versioned host binding; rebuild with the current SDK");
-        }
-        accepted_layout = &*accepted;
-    } else if (set_host_v2) {
-        SDL_UnloadObject(p.lib);
-        return refuse(name + " has a versioned host binding without an SDK layout; rebuild with the current SDK");
-    }
-    if (!selected_layout.empty() && (layout || set_host_v2 || got != 3)) {
-        SDL_UnloadObject(p.lib);
-        return refuse(name + " has an SDK layout override that does not apply to this marked or non-ABI-3 library");
-    }
-    p.bulk_list_format = accepted_layout ? accepted_layout->bulk : BulkListFormat::CountTotal;
     p.initialize = symbol<void (*)()>(p.lib, "InitializePlugin");
     p.shutdown = symbol<void (*)()>(p.lib, "ShutdownPlugin");
     p.pulse = symbol<void (*)()>(p.lib, "OnPulse");
@@ -3137,31 +3026,13 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     // Its Lua windows (<folder>/ui/<pack>/), with the UI capability.
     if (p.can(kCapUi) && m.env.ui) m.env.ui->set_folder(name, plugin_folder(*file, name));
 
-    const bool bound = guarded(p, "plugin host binding", [&] {
-        if (accepted_layout) {
-            const PluginHostApi* table = &p.table;
-            if (accepted_layout->view == HostLayoutView::Canonical1) {
-                p.canonical1_table = compatible_host_api<Canonical1HostApi>(p.table);
-                table = reinterpret_cast<const PluginHostApi*>(&*p.canonical1_table);
-            } else if (accepted_layout->view == HostLayoutView::Canonical2) {
-                p.canonical2_table = compatible_host_api<Canonical2HostApi>(p.table);
-                table = reinterpret_cast<const PluginHostApi*>(&*p.canonical2_table);
-            }
-            return set_host_v2(table, accepted_layout->id) != 0;
-        }
-        if (selected_layout == "ui-preview-1") {
-            p.preview_table = compatible_host_api<PreviewHostApi>(p.table);
-            set_host(reinterpret_cast<const PluginHostApi*>(&*p.preview_table));
+    if (!guarded(p, "hailstone_plugin_set_host", [&] {
+            set_host(&p.table);
             return true;
-        }
-        set_host(&p.table); // released unmarked ABI 1–3 retain their original prefix and binding contract
-        return true;
-    });
-    if (!bound) {
+        })) {
         discard(m, std::move(l), false);
-        return refuse(name + " refused its SDK host binding; InitializePlugin was not called");
+        return refuse(name + " failed while taking its host table; InitializePlugin was not called");
     }
-    if (p.preview_table) m.say("[Plugin] " + name + ": using the temporary exact-binary ui-preview-1 SDK layout; rebuild with the current SDK");
     m.loaded.push_back(std::move(l));
     std::erase_if(m.failures, [&](const Info& f) { return iequal(f.name, name); });
     // A plugin whose start lets an exception out is taken out again with all it registered so far.

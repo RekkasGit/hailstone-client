@@ -1,6 +1,5 @@
 #include "app/automation.h"
 
-#include <algorithm>
 #include <chrono>
 #include <set>
 #include <format>
@@ -12,9 +11,7 @@
 #include <imgui.h>
 
 #include "app/addon_install.h"
-#include "core/config.h"
 #include "core/log.h"
-#include "core/sha256.h"
 #include "game/nameplate_canvas.h"
 #include "mq/commands.h"
 #include "mq/lua_mq.h"
@@ -28,30 +25,6 @@
 namespace hailstone::app {
 
 namespace fs = std::filesystem;
-
-std::string configured_plugin_sdk_layout(const fs::path& shared_config, std::string_view hash) {
-    constexpr auto invalid = "invalid-shared-sdk-layout-config";
-    if (hash.size() != 64 || !std::all_of(hash.begin(), hash.end(), [](char c) {
-            return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-        })) return invalid;
-    std::error_code error;
-    const auto status = fs::symlink_status(shared_config, error);
-    if (status.type() == fs::file_type::not_found && (!error || error == std::errc::no_such_file_or_directory)) return {};
-    if (error || !fs::is_regular_file(shared_config, error) || error) return invalid;
-    Config shared;
-    if (!shared.load(shared_config)) return invalid;
-    constexpr std::string_view prefix = "plugin.sdk_layout.";
-    const auto lower = [](char c) { return c >= 'A' && c <= 'F' ? static_cast<char>(c + ('a' - 'A')) : c; };
-    std::optional<std::string> selected;
-    for (const auto& [key, value] : shared.entries()) {
-        if (!key.starts_with(prefix) || key.size() != prefix.size() + hash.size()) continue;
-        const auto suffix = std::string_view(key).substr(prefix.size());
-        if (!std::equal(hash.begin(), hash.end(), suffix.begin(), [&](char a, char b) { return lower(a) == lower(b); })) continue;
-        if (selected && *selected != value) return invalid; // differently cased copies must agree, including empty values
-        selected = value;
-    }
-    return selected.value_or("");
-}
 
 namespace {
 // The data folder's own folder first, then the install's when that is another folder and exists (a non-portable
@@ -255,9 +228,6 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     ne.ui = &m.plugin_ui;
     ne.web = m.env.web;
     ne.connection = [&m] { return m.conn(); };
-    ne.sdk_layout = [&m](const Sha256Digest& hash) {
-        return m.env.sdk_layout ? m.env.sdk_layout(to_hex(hash)) : std::string{};
-    };
     ne.max_camera_distance = m.env.max_camera_distance;
     ne.set_max_camera_distance = m.env.set_max_camera_distance;
     ne.hot_button = m.env.hot_button;

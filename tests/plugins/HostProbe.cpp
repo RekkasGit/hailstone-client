@@ -34,14 +34,12 @@
 
 HAILSTONE_PLUGIN
 
-// Pin the released prefix before this SDK's appended services. All supported targets use one function-pointer size.
+// Pin the released prefix (0.7.1 ends at get_xtarget_data_bulk) and the entries after it: the table only grows at its
+// end. All supported targets use one function-pointer size.
 static_assert(offsetof(PluginHostApi, get_xtarget_data_bulk) == offsetof(PluginHostApi, caps) + 80 * sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, get_target_buff_data_bulk) == offsetof(PluginHostApi, caps) + 81 * sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, get_buff_name_data_bulk) == offsetof(PluginHostApi, caps) + 84 * sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, get_raid_data_bulk) == offsetof(PluginHostApi, caps) + 85 * sizeof(PluginHostApi::caps));
-static_assert(offsetof(PluginHostApi, get_raid_roster) == offsetof(PluginHostApi, caps) + 86 * sizeof(PluginHostApi::caps));
-static_assert(offsetof(PluginHostApi, get_map_policy) == offsetof(PluginHostApi, caps) + 102 * sizeof(PluginHostApi::caps));
-static_assert(sizeof(PluginHostApi) == offsetof(PluginHostApi, caps) + 103 * sizeof(PluginHostApi::caps));
 
 namespace {
 

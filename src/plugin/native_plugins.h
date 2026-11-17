@@ -65,9 +65,6 @@ struct NativeEnv {
     std::vector<std::filesystem::path> dirs; // where plugins are looked for, and one level down (plugins/<name>/)
     std::filesystem::path cache_dir;         // the approved copies
     std::filesystem::path config_dir;        // each plugin's own directory is config_dir / name
-    // Temporary, explicit compatibility selection for these exact admitted bytes. Empty is canonical;
-    // "ui-preview-1" selects the earlier unmarked ABI 3 preview. Unknown values fail closed before initialization.
-    std::function<std::string(const Sha256Digest&)> sdk_layout;
     // The per-server and per-character folders (server_config_dir, character_config_dir) are under the connection's:
     // the server's rules' folder (servers/<profile>/) and its character's files.
 };

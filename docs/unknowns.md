@@ -25,11 +25,6 @@ What the client does not implement yet, or implements with an approximation it c
 
 ## Modular interfaces
 
-- Older unmarked preview SDK binaries cannot always be distinguished from released plugins with the same ABI
-  number. Released layouts remain the default. Rebuild preview addons, or explicitly select the documented
-  temporary layout for their exact binary hash; selecting an incompatible layout can call the wrong host function.
-  New SDK builds negotiate their layout before initialization (`docs/plugins.md`).
-
 - The generic world-nameplate canvas has synthetic parser, painter, ownership and input coverage. Actual GPU depth,
   dense scenes, sustained zoning and physical mouse/controller acceptance remain unverified; addons own visual
   recipes and must validate them against a live session.

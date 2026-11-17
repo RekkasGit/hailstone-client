@@ -1509,17 +1509,12 @@ if(HAILSTONE_BUILD_TESTS)
   add_library(HostProbe MODULE tests/plugins/HostProbe.cpp)
   add_library(HostProbeThrow MODULE tests/plugins/HostProbe.cpp)
   target_compile_definitions(HostProbeThrow PRIVATE HAILSTONE_PROBE_THROW_INIT)
-  set(sdk_probe_mode 0)
-  foreach(sdk_probe Modern Unknown MissingSetter MissingMarker Reject Legacy Preview MarkedF6 MarkedE7)
-    add_library(SdkLayout${sdk_probe} MODULE tests/plugins/SdkLayoutProbe.c)
-    target_compile_features(SdkLayout${sdk_probe} PRIVATE c_std_11)
-    target_compile_definitions(SdkLayout${sdk_probe} PRIVATE HAILSTONE_SDK_PROBE_MODE=${sdk_probe_mode})
-    target_include_directories(SdkLayout${sdk_probe} PRIVATE sdk)
-    target_compile_options(SdkLayout${sdk_probe} PRIVATE ${HAILSTONE_WARNINGS})
-    set_target_properties(SdkLayout${sdk_probe} PROPERTIES PREFIX "")
-    add_dependencies(hailstone_tests SdkLayout${sdk_probe})
-    math(EXPR sdk_probe_mode "${sdk_probe_mode} + 1")
-  endforeach()
+  # A plugin built against the 0.7.1-beta SDK header (a frozen copy): released plugins must keep loading.
+  add_library(Sdk071Plugin MODULE tests/plugins/Sdk071Plugin.c)
+  target_include_directories(Sdk071Plugin PRIVATE tests/plugins/sdk071)
+  target_compile_options(Sdk071Plugin PRIVATE ${HAILSTONE_WARNINGS})
+  set_target_properties(Sdk071Plugin PROPERTIES PREFIX "")
+  add_dependencies(hailstone_tests Sdk071Plugin)
   foreach(p ExtendTest ExtendTestV1 ExtendTestNew HostProbe HostProbeThrow)
     target_include_directories(${p} PRIVATE sdk)
     set_target_properties(${p} PROPERTIES PREFIX "")
@@ -1551,15 +1546,7 @@ if(HAILSTONE_BUILD_TESTS)
   add_dependencies(hailstone_tests MQ2Example ExtendTest ExtendTestV1 ExtendTestNew HostProbe HostProbeThrow hailstone_mock_web_helper)
   target_compile_definitions(hailstone_tests PRIVATE HAILSTONE_EXAMPLE_PLUGIN="$<TARGET_FILE:MQ2Example>"
     HAILSTONE_PROBE_PLUGIN="$<TARGET_FILE:HostProbe>" HAILSTONE_PROBE_THROW_PLUGIN="$<TARGET_FILE:HostProbeThrow>"
-    HAILSTONE_SDK_LAYOUT_MODERN="$<TARGET_FILE:SdkLayoutModern>"
-    HAILSTONE_SDK_LAYOUT_UNKNOWN="$<TARGET_FILE:SdkLayoutUnknown>"
-    HAILSTONE_SDK_LAYOUT_MISSING_SETTER="$<TARGET_FILE:SdkLayoutMissingSetter>"
-    HAILSTONE_SDK_LAYOUT_MISSING_MARKER="$<TARGET_FILE:SdkLayoutMissingMarker>"
-    HAILSTONE_SDK_LAYOUT_REJECT="$<TARGET_FILE:SdkLayoutReject>"
-    HAILSTONE_SDK_LAYOUT_LEGACY="$<TARGET_FILE:SdkLayoutLegacy>"
-    HAILSTONE_SDK_LAYOUT_PREVIEW="$<TARGET_FILE:SdkLayoutPreview>"
-    HAILSTONE_SDK_LAYOUT_MARKED_F6="$<TARGET_FILE:SdkLayoutMarkedF6>"
-    HAILSTONE_SDK_LAYOUT_MARKED_E7="$<TARGET_FILE:SdkLayoutMarkedE7>"
+    HAILSTONE_SDK071_PLUGIN="$<TARGET_FILE:Sdk071Plugin>"
     HAILSTONE_EXTEND_PLUGIN="$<TARGET_FILE:ExtendTest>" HAILSTONE_EXTEND_PLUGIN_V1="$<TARGET_FILE:ExtendTestV1>"
     HAILSTONE_EXTEND_PLUGIN_NEW="$<TARGET_FILE:ExtendTestNew>"
     HAILSTONE_TEST_UPSCALERS_DIR="${HAILSTONE_TEST_UPSCALERS_DIR}"

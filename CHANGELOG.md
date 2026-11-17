@@ -15,8 +15,7 @@
 - F10 hides and restores in-game UI presentations without changing window settings. The existing Toggle UI Display action is remappable in Options > Keys > Windows.
 - UI composition accepts Lua-declared component slots with before/after content and reversible replacement or hiding. Both maps expose addon controls; map marker policy also applies to group markers without changing player Find.
 
-- Addon compatibility preserves the released native SDK prefix and adds layout negotiation for new builds, with an
-  explicit exact-binary preview adapter. Legacy addon UI calls share the guarded host API while built-in interfaces
+- Legacy addon UI calls share the guarded host API while built-in interfaces
   keep the modular namespace. Nameplate callbacks and extension removal now retain their caller's permissions and
   lifetime across reloads and reentrant calls. Portable UI bundles reject conflicting nested path spellings.
 

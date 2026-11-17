@@ -54,17 +54,6 @@ extern "C" {
 #endif
 
 #define HAILSTONE_PLUGIN_ABI 3
-/* Canonical host/hook and bulk payload contract, independent of optional service availability. Never reuse an ID
- * for changed declarations or payload semantics. A compatible host may recognize several published contracts. */
-#define HAILSTONE_PLUGIN_LAYOUT_ABI3_CANONICAL_1 UINT64_C(0xf6b34b37061be009)
-#define HAILSTONE_PLUGIN_LAYOUT_ABI3_CANONICAL_2 UINT64_C(0xe7faba7b569803ce)
-#define HAILSTONE_PLUGIN_LAYOUT_ABI3_CANONICAL_3 UINT64_C(0xdbf47b044fcdb052)
-#define HAILSTONE_PLUGIN_DECLARATION_MODEL_SHA256 "e7faba7b569803ce8d17f96d44a13a2d25a969599ca1cefc2e54159110fe1f02"
-/* Increment for a bulk payload semantic change even when the record declarations and sizes stay the same. */
-#define HAILSTONE_PLUGIN_BULK_SCHEMA_VERSION 2
-#define HAILSTONE_PLUGIN_BULK_MODEL_SHA256 "6fcc11f0d2a1cc04e5537dcebf4579fa398e8cb25aba3069fbd1393e09af27f5"
-#define HAILSTONE_PLUGIN_LAYOUT_MODEL_SHA256 "dbf47b044fcdb0523778e76a90b3b1e76cdaef0777395ac6ef48a61e53e3696b"
-#define HAILSTONE_PLUGIN_LAYOUT HAILSTONE_PLUGIN_LAYOUT_ABI3_CANONICAL_3
 
 #if defined(_WIN32)
 #define HAILSTONE_EXPORT __declspec(dllexport)
@@ -989,9 +978,7 @@ typedef struct PluginHostApi {
 /* ---- what a plugin exports (all optional but the first two, which HAILSTONE_PLUGIN defines; declare each with
  * HAILSTONE_API so a C++ plugin exports it under its C name) ----
  *   uint32_t hailstone_plugin_abi(void);                     returns HAILSTONE_PLUGIN_ABI
- *   uint64_t hailstone_plugin_layout(void);                 canonical layout ID
- *   int hailstone_plugin_set_host_v2(const PluginHostApi* h, uint64_t layout); called first; 1 accepts
- * Older released plugins may instead export void hailstone_plugin_set_host(const PluginHostApi* h).
+ *   void hailstone_plugin_set_host(const PluginHostApi* h);  called first
  *   void InitializePlugin(void);  void ShutdownPlugin(void);
  *   void OnPulse(void);           void SetGameState(int state);
  *   void OnBeginZone(void);       void OnEndZone(void);    void OnZoned(void);
@@ -1003,10 +990,9 @@ typedef struct PluginHostApi {
  *   const HailstoneHooks* hailstone_plugin_hooks(void);
  *                                   (ABI 2, HAILSTONE_CAP_EXTEND; read once after InitializePlugin)
  *
- * Released plugins may use the earlier nmsc_plugin_* names; the loader recognizes them too. New HAILSTONE_PLUGIN
- * builds retain the existing ABI alias and use hailstone layout/versioned binding exports, omitting the old setter.
- * A host that does not understand layout negotiation must refuse the plugin before initialization. Hook exports retain their
- * existing optional name compatibility.
+ * Up to 0.6 the three hailstone_plugin_* exports were named nmsc_plugin_*. The client takes either name;
+ * HAILSTONE_PLUGIN exports both, so the plugin also loads in those clients. A plugin with hooks that should work in
+ * them exports nmsc_plugin_hooks too (returning the same table).
  */
 
 
@@ -1014,19 +1000,14 @@ typedef struct PluginHostApi {
 
 extern const PluginHostApi* host;
 
-/* In one source file: the layout-checked exports and `host` global. The old unversioned setter is deliberately
- * absent: an older host must refuse this SDK rather than bind a table with an incompatible optional-tail order. */
+/* In one source file of the plugin: the two required exports (under both names, see above) and the `host`
+ * global. */
 #define HAILSTONE_PLUGIN                                                                                               \
     HAILSTONE_HOST_GLOBAL                                                                                              \
     HAILSTONE_API uint32_t hailstone_plugin_abi(void) { return HAILSTONE_PLUGIN_ABI; }                                 \
-    HAILSTONE_API uint64_t hailstone_plugin_layout(void) { return HAILSTONE_PLUGIN_LAYOUT; }                           \
-    HAILSTONE_API int hailstone_plugin_set_host_v2(const PluginHostApi* h, uint64_t layout) {                           \
-        if (!h || layout != HAILSTONE_PLUGIN_LAYOUT || h->size < offsetof(PluginHostApi, get_raid_roster)) {            \
-            host = 0; return 0;                                                                                       \
-        }                                                                                                            \
-        host = h; return 1;                                                                                           \
-    }                                                                                                                \
-    HAILSTONE_API uint32_t nmsc_plugin_abi(void) { return HAILSTONE_PLUGIN_ABI; }
+    HAILSTONE_API void hailstone_plugin_set_host(const PluginHostApi* h) { host = h; }                                 \
+    HAILSTONE_API uint32_t nmsc_plugin_abi(void) { return HAILSTONE_PLUGIN_ABI; }                                      \
+    HAILSTONE_API void nmsc_plugin_set_host(const PluginHostApi* h) { host = h; }
 
 /* MQ-style helpers over `host` (plain C). */
 #include <stdarg.h>
