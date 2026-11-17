@@ -22,6 +22,7 @@ struct RequiredAddonCandidate {
     AddonKind kind = AddonKind::Script;
     std::uint32_t caps = 0;
     bool intact = false; // readable registry and every shipped file unchanged
+    bool startable = true; // a script: where the script loader looks for it (required_script_found)
     plugin::Consent consent = plugin::Consent::Unasked;
 };
 
@@ -29,6 +30,12 @@ struct AddonRequirementProblem {
     std::string identity;
     std::string message;
 };
+
+// Whether the script loader finds the installed script add-on `name` to start it. ScriptHost looks a script up by
+// its lower-cased name (mq/lua_mq.cpp, ScriptHost::run and Impl::resolve), so on a case-sensitive file system a
+// folder with capitals (scripts/AutoLoot) is not found: admission holds such a requirement unmet rather than
+// passing it and failing to start it.
+bool required_script_found(const std::filesystem::path& data_dir, std::string_view name);
 
 // Unasked native-code consent is handled by the existing prompt after connecting. A refusal blocks joining.
 // Upscaler selection and activation are checked separately against the provider loaded at process startup.

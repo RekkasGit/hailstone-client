@@ -98,6 +98,7 @@ std::vector<RequiredAddonCandidate> ClientApp::addon_requirement_candidates(cons
         RequiredAddonCandidate c{a.name, a.source, a.kind, a.caps,
                                  !registry.newer && !a.files.empty() &&
                                      (!verify_files || modified_addon_files(data, a).empty())};
+        if (a.kind == AddonKind::Script) c.startable = required_script_found(data, a.name);
         if (a.kind == AddonKind::Plugin)
             for (const auto& f : a.files)
                 if (same_name(addon_rel(f.path).extension().string(), plugin_extension(update_platform()))) {

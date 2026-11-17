@@ -7,6 +7,14 @@
 
 namespace hailstone::app {
 
+bool required_script_found(const std::filesystem::path& data_dir, std::string_view name) {
+    std::string key(name);
+    for (char& c : key)
+        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+    std::error_code ec;
+    return std::filesystem::is_regular_file(addon_folder(data_dir, AddonKind::Script, key) / "init.lua", ec);
+}
+
 std::vector<AddonRequirementProblem> addon_requirement_problems(
     const plugin::Rules& rules, const std::vector<RequiredAddonCandidate>& candidates) {
     std::vector<AddonRequirementProblem> out;
@@ -27,6 +35,9 @@ std::vector<AddonRequirementProblem> addon_requirement_problems(
                 problem = "Required add-on " + required + " is a separate tool and cannot run as a game add-on.";
             } else if (!a.intact) {
                 problem = "Required add-on " + required + " has missing or changed files. Reinstall it in Add-ons.";
+            } else if (a.kind == AddonKind::Script && !a.startable) {
+                problem = "Required add-on " + required + " cannot be started here: Hailstone finds scripts by their "
+                          "lower-case name, and its folder scripts/" + a.name + " has capitals.";
             } else if ((a.kind == AddonKind::Script || a.kind == AddonKind::Plugin) &&
                        (a.caps == 0 || (a.caps & ~allowed_caps))) {
                 problem = "Required add-on " + required + " needs capabilities this server does not allow.";

@@ -268,3 +268,25 @@ TEST_CASE("addon admission: a server that does not enforce never asks the add-on
     CHECK(g.zone_checks == 0);
     CHECK(g.ready_checks == 0);
 }
+
+TEST_CASE("addon requirements: a required script must be where the script loader looks for it") {
+    test::ScratchDir scratch("required_script_case");
+    addon_test::put_file(addon_folder(scratch.path(), AddonKind::Script, "helper") / "init.lua", "-- helper");
+    addon_test::put_file(addon_folder(scratch.path(), AddonKind::Script, "MixedCase") / "init.lua", "-- mixed");
+    CHECK(required_script_found(scratch.path(), "helper"));
+    CHECK(required_script_found(scratch.path(), "HELPER"));
+    CHECK_FALSE(required_script_found(scratch.path(), "absent"));
+    // The loader asks for scripts/mixedcase/init.lua: found on a case-insensitive file system only.
+    const bool folded = std::filesystem::exists(scratch.path() / "scripts" / "mixedcase" / "init.lua");
+    CHECK(required_script_found(scratch.path(), "MixedCase") == folded);
+
+    const auto r = required_rules();
+    auto a = helper();
+    a.name = "MixedCase";
+    a.startable = false;
+    auto problems = addon_requirement_problems(r, {a});
+    REQUIRE(problems.size() == 1);
+    CHECK(problems[0].message.find("scripts/MixedCase") != std::string::npos);
+    a.kind = AddonKind::Plugin; // only scripts are looked up by a lower-cased name
+    CHECK(addon_requirement_problems(r, {a}).empty());
+}
