@@ -20,6 +20,7 @@
 #include <string_view>
 #include <vector>
 
+#include "mq/tlo.h"
 #include "net/packet.h"
 #include "plugin/consent.h"
 #include "plugin/hooks.h"
@@ -60,6 +61,10 @@ struct NativeEnv {
     std::function<bool(int bar, int page, int button, const std::string& spec)> set_hot_button;
     std::function<int(int bar)> hot_bar_page;
     std::function<void(int bar, int page)> set_hot_bar_page;
+    // ABI 3: the player's abilities by name (use_ability, ability_state), as the Ability Book's rows use and check
+    // them (app/lua_eq_abilitybook.cpp, shared with the scripts and the TLOs). Empty: none known.
+    std::function<bool(mq::AbilityKind, std::string_view)> use_ability;
+    std::function<std::optional<mq::AbilityState>(mq::AbilityKind, std::string_view)> ability;
     std::vector<std::filesystem::path> dirs; // where plugins are looked for, and one level down (plugins/<name>/)
     std::filesystem::path cache_dir;         // the approved copies
     std::filesystem::path config_dir;        // each plugin's own directory is config_dir / name

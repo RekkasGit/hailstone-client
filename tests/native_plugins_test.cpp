@@ -35,6 +35,8 @@ struct Host {
     mq::Registry reg;
     mq::Context ctx;
     std::vector<std::string> printed, sent;
+    std::vector<std::pair<int, std::string>> used, checked; // use_ability, ability_state (kind and name)
+    bool ability_ready = true;
     std::vector<std::pair<plugin::Stream, net::AppPacket>> packets;
     std::unique_ptr<mq::Commands> commands;
     std::unique_ptr<plugin::NativePlugins> plugins;
@@ -70,6 +72,19 @@ struct Host {
         ne.config_dir = world.dir / "config";
         ne.web = web;
         ne.connection = [this] { return world.conn.get(); };
+        ne.use_ability = [this](mq::AbilityKind kind, std::string_view name) {
+            used.emplace_back(static_cast<int>(kind), std::string(name));
+            return true;
+        };
+        ne.ability = [this](mq::AbilityKind kind, std::string_view name) -> std::optional<mq::AbilityState> {
+            checked.emplace_back(static_cast<int>(kind), std::string(name));
+            mq::AbilityState st;
+            st.name = std::string(name);
+            st.ready = ability_ready;
+            st.remaining_ms = ability_ready ? 0 : 1500;
+            st.reuse_ms = 6000;
+            return st;
+        };
         plugins = std::make_unique<plugin::NativePlugins>(ne);
     }
     ~Host() {
@@ -1445,4 +1460,35 @@ TEST_CASE("native plugins: the buff bulk reads need 'read'") {
     CHECK(h.printed_line("[Probe] aas 0 bytes"));
     h.run("/probediscs 2048");
     CHECK(h.printed_line("[Probe] discs 0 bytes"));
+}
+
+TEST_CASE("native plugins: use_ability and ability_state, by kind and name, held to 'read' and 'actions'") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+    h.run("/probeability 0 Kick"); // HS_ABILITY_SKILL
+    REQUIRE(h.used.size() == 1);
+    CHECK(h.used[0].first == static_cast<int>(mq::AbilityKind::Skill));
+    CHECK(h.used[0].second == "Kick");
+    REQUIRE(h.checked.size() == 1);
+    CHECK(h.checked[0].first == static_cast<int>(mq::AbilityKind::Skill));
+    CHECK(h.checked[0].second == "Kick");
+    CHECK(h.printed_line("[Probe] ability 0 Kick: state 1, 0 of 6000 ms, use 1"));
+
+    // On reuse: ability_state says so, with the remaining time; use_ability is still the plugin's to try.
+    h.ability_ready = false;
+    h.run("/probeability 1 Guard"); // HS_ABILITY_DISCIPLINE
+    REQUIRE(h.used.size() == 2);
+    CHECK(h.used[1].first == static_cast<int>(mq::AbilityKind::Discipline));
+    CHECK(h.used[1].second == "Guard");
+    CHECK(h.printed_line("[Probe] ability 1 Guard: state 0, 1500 of 6000 ms, use 1"));
+
+    Host denied(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    denied.approve(plugin::kCapAll & ~(plugin::kCapRead | plugin::kCapActions));
+    REQUIRE(denied.plugins->load("HostProbe"));
+    denied.run("/probeability 2 Innate");
+    CHECK(denied.printed_line("[Plugin] HostProbe: ability_state needs the server's 'read' permission"));
+    CHECK(denied.printed_line("[Plugin] HostProbe: use_ability needs the server's 'actions' permission"));
+    CHECK(denied.used.empty());
+    CHECK(denied.checked.empty());
 }

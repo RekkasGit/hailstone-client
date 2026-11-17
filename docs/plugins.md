@@ -162,10 +162,10 @@ extension's `command_line`) from the moment it lost the bit, and its web tabs cl
 
 | Bit | Name | Lets a script or plugin |
 |---|---|---|
-| 1 | `read` | read game state: `mq.TLO`, `${...}`, `mq.parse`, `ParseMacroData`, spawn events |
+| 1 | `read` | read game state: `mq.TLO`, `${...}`, `mq.parse`, `ParseMacroData`, spawn events, `ability_state` |
 | 2 | `commands` | run commands outside the groups below: windows, options, `/who`, other plugins' commands, `/lua`; add commands of its own (`mq.bind`, `AddCommand`). The player is told "run other commands (windows, options, /who, other plugins' commands)" |
 | 4 | `target` | change the target: `/target`, `/assist`, `/xtarget`, ... |
-| 8 | `actions` | act: `/cast`, `/disc`, `/doability`, `/useitem`, `/attack`, `/memspellset`, `/pet`, `/loot`, `/autoinventory`, `/alternateadv` (`/alt`), `/split`, `/consent`, `/guilddelete`, non-movement `/keypress`; Hailstone's own item commands `/destroy`, `/destroycursor` and `/stowcursor` |
+| 8 | `actions` | act: `/cast`, `/disc`, `/doability`, `/useitem`, `/attack`, `/memspellset`, `/pet`, `/loot`, `/autoinventory`, `/alternateadv` (`/alt`), `/split`, `/consent`, `/guilddelete`, non-movement `/keypress`; Hailstone's own item commands `/destroy`, `/destroycursor` and `/stowcursor`, and `use_ability` |
 | 16 | `move` | move: `/face`, movement `/keypress` (forward, jump, ...), `/follow`, `/sit`, `/stand`, `/duck`, `/camp` |
 | 32 | `chat` | speak: plain text, `/say`, `/tell`, `/g`, `/gu`, `/rs`, channels, emotes |
 | 64 | `events` | see chat lines: `mq.event`, `OnIncomingChat`, and hide them (`OnFilterChat`) |
@@ -567,7 +567,8 @@ same changes as a plugin, with no change to Hailstone itself. With the `extend` 
   `get_player`, `get_spawn` and `next_spawn` (every spawn in the zone), `get_spell`, `get_item` (an inventory
   slot), `get_buff`, `get_xtarget`, `combat_ability` (the character's combat abilities), `skill` (a skill's value as
   the profile holds it), `aa_value` (an owned alternate ability's slot value, by its ability id), and `eqstr` for a
-  game string with its `%1` filled. A spawn also carries its rider, mercenary and GM flags, whether it is one of the
+  game string with its `%1` filled. `ability_state` says whether a skill, a discipline or an activated AA is ready,
+  and its remaining and reuse time, by name or number. A spawn also carries its rider, mercenary and GM flags, whether it is one of the
   player's group, its con colour and its body types. Each struct starts with its size; the client fills what both know, so a plugin built
   for an older client keeps working. `get_buff_data_bulk` gives every buff slot of the player in one call,
   `get_pet_buff_data_bulk` the pet window's buffs, `get_target_buff_data_bulk` the current target's buffs,
@@ -582,7 +583,9 @@ same changes as a plugin, with no change to Hailstone itself. With the `extend` 
 - **act** (with `actions`): close the spell book, end the global spell recovery, show another of several pets in the
   pet window (`set_window_pet`, the client's choice only), open an item's display (`inspect_item`), open the
   bank window at any spawn or at the player itself, without a banker's class and range checks (`open_bank`), change the
-  camera's zoom limit (`set_max_camera_distance`), and change the hot buttons: `hot_button` reads any button of
+  camera's zoom limit (`set_max_camera_distance`), use one of the player's abilities by name as the Ability Book's row
+  does (`use_ability`: a skill, a discipline or an activated AA; `kind` is `HS_ABILITY_SKILL`,
+  `HS_ABILITY_DISCIPLINE` or `HS_ABILITY_ALT`), and change the hot buttons: `hot_button` reads any button of
   any bar and page as the stock character ini's string (with `read`), `set_hot_button` puts one, `hot_bar_page`
   and `set_hot_bar_page` a bar's page; a change is saved with the character. Before the use of a skill
   `before_use_skill` may refuse it, and `command_line` may rewrite a typed or scripted line before the client runs
@@ -612,7 +615,8 @@ Compatibility: the host table and the hook table carry their size and only grow 
 older ABI loads in a newer client; one built for a newer ABI does not load in an older client. ABI 3 added the web
 pages (`web_*`, "Web pages" below); a plugin built with this SDK reports ABI 3, so a client older than that does not
 load it. Calls added to the host table since then keep ABI 3: test `HAILSTONE_HOST_HAS(host, open_bank)` before such a
-call, since a client older than the call has a shorter table. The structs a plugin passes to be filled (`HailstonePlayer`, `HailstoneSpawn`,
+call, since a client older than the call has a shorter table; `use_ability`, `ability_state` and the other calls
+under "added later in ABI 3" in `sdk/hailstone_plugin.h` are such calls. The structs a plugin passes to be filled (`HailstonePlayer`, `HailstoneSpawn`,
 ..., `HailstoneWebState`) carry their size too and the client fills what both know; `HailstoneWebState`'s `size` is a `size_t`
 (as ABI 3 shipped it), the others' a `uint32_t`.
 

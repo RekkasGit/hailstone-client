@@ -191,7 +191,8 @@ public:
                    std::uint32_t skill);
     // Cmd_doability @0x4e8aa0 (/doability n): buttons 1..6 are the Abilities page's ([Abilities]), 7..10 the Combat
     // page's ([CombatSkills]); an empty one does nothing; any other number prints its usage (13256 and 13257,
-    // colour 0x111). UseSkill on the target.
+    // colour 0x111). UseSkill on the target. Hailstone's extension: a name instead of a number uses the player's
+    // skill of that name (the Ability Book's list, combat page first), as /discipline takes a name.
     void doability_command(net::GameConnection& conn, const game::mechanics::Character* ch, const AbilityView& view,
                            const std::string& args);
     void set_page(int bar, int page);

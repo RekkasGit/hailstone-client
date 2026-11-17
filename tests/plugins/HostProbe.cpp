@@ -17,10 +17,12 @@
 //   name after each
 //   /proberaid [n]  get_raid_data_bulk the same way, through HS_Bulk_RaidHeader / HS_Bulk_RaidData
 //   /probecursor   cursor_origin, when the host table has it
+//   /probeability <kind> <name>  ability_state then use_ability, when the host table has them
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
@@ -390,6 +392,25 @@ void probe_cursor(void*, const char*) {
     WriteChatf("[Probe] cursor origin %u", static_cast<unsigned>(host->cursor_origin(host->host)));
 }
 
+// /probeability <kind> <name>: ability_state then use_ability, both added later in ABI 3.
+void probe_ability(void*, const char* args) {
+    if (!HAILSTONE_HOST_HAS(host, ability_state) || !HAILSTONE_HOST_HAS(host, use_ability)) {
+        WriteChatf("[Probe] ability: not in this client");
+        return;
+    }
+    int kind = -1;
+    char name[64] = {};
+    if (!args || std::sscanf(args, "%d %63s", &kind, name) != 2) {
+        WriteChatf("[Probe] ability: kind and name?");
+        return;
+    }
+    std::int64_t remaining = -1, reuse = -1;
+    const int state = host->ability_state(host->host, kind, name, &remaining, &reuse);
+    const int used = host->use_ability(host->host, kind, name);
+    WriteChatf("[Probe] ability %d %s: state %d, %lld of %lld ms, use %d", kind, name, state,
+               static_cast<long long>(remaining), static_cast<long long>(reuse), used);
+}
+
 int probe_tlo(void*, const char*, const char* member, const char*, HailstoneValue* out) {
     if (member && std::strcmp(member, "Throw") == 0) throw std::runtime_error("the TLO threw");
     out->kind = HAILSTONE_STRING;
@@ -416,6 +437,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probediscs", probe_disc, nullptr);
     AddCommand("/proberaid", probe_raid, nullptr);
     AddCommand("/probecursor", probe_cursor, nullptr);
+    AddCommand("/probeability", probe_ability, nullptr);
     AddTopLevelObject("Probe", probe_tlo, nullptr);
 #ifdef HAILSTONE_PROBE_THROW_INIT
     throw std::runtime_error("InitializePlugin threw");
@@ -438,6 +460,7 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probediscs");
     RemoveCommand("/proberaid");
     RemoveCommand("/probecursor");
+    RemoveCommand("/probeability");
     RemoveTopLevelObject("Probe");
 }
 HAILSTONE_API void OnUpdateImGui(void) { throw std::runtime_error("OnUpdateImGui threw"); }

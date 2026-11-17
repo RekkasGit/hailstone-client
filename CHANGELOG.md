@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `/doability` takes a skill's name as well as the Actions window's button (`/doability Bash`, in any case, wherever the skill is); a number still means button 1-10, and a discipline is still `/discipline`'s
+- For plugin authors: `use_ability` uses one of the player's skills, disciplines or activated AAs by name as the Ability Book's row does, and `ability_state` says whether it is ready (its remaining and reuse time); both are added later in ABI 3, so test `HAILSTONE_HOST_HAS` first (docs/plugins.md)
 - Name plates: mercenaries' names are amber, the original's colour; they were drawn light blue from the original's colour bytes read in the wrong order
 - Name plates: GM names show green as the original client does, your own GM character's too, and stay green when targeted; an anonymous or roleplaying GM's name, and a GM's corpse, keep the ordinary colour
 - Chat: spell hit modes now also shorten complete non-melee damage and healing reports sent as generic or plain-text server messages, including reports with a spell name in parentheses and stock EQEmu's "You have been healed for N points of damage.". A line spoken by someone ("Somebody says, Bob hit Fred for ...") stays whole. Full sentences remain in logs and incoming-chat hooks

@@ -824,7 +824,24 @@ typedef struct PluginHostApi {
      * bytes written, or 0 when out_size cannot hold the header. Outside a raid the header says active 0, count 0.
      * Added later in ABI 3: test HAILSTONE_HOST_HAS(host, get_raid_data_bulk) first (HAILSTONE_CAP_READ). */
     int32_t (*get_raid_data_bulk)(void* host, unsigned char* out, int32_t out_size);
+    /* Uses one of the player's abilities as its Ability Book row or hot button does (HAILSTONE_CAP_ACTIONS): 1 used,
+     * 0 not (the player has none such, it is passive, or the client refused it for the moment). `kind` is
+     * HS_ABILITY_*; `name` is what the Ability Book takes: a skill's name or number, a discipline's name with or
+     * without its rank, an AA's name or group id. Added later in ABI 3: test HAILSTONE_HOST_HAS(host, use_ability)
+     * first. */
+    int (*use_ability)(void* host, int kind, const char* name);
+    /* Whether that ability is ready (HAILSTONE_CAP_READ): 1 ready, 0 on reuse, -1 the player has none such, the client
+     * is not in a zone, or the plugin lacks `read`. When it is found, *remaining_ms and *reuse_ms are filled for both
+     * (either may be NULL). `kind` and `name` as use_ability's. Added later in ABI 3: test
+     * HAILSTONE_HOST_HAS(host, ability_state) first. */
+    int (*ability_state)(void* host, int kind, const char* name, int64_t* remaining_ms, int64_t* reuse_ms);
 } PluginHostApi;
+/* What use_ability and ability_state take: the kinds of ability the Ability Book lists. The values are stable. */
+enum HS_AbilityKinds {
+    HS_ABILITY_SKILL = 0,      /* a skill (Bash, Kick, ...) */
+    HS_ABILITY_DISCIPLINE = 1, /* a combat ability (a discipline) */
+    HS_ABILITY_ALT = 2         /* an activated alternate ability */
+};
 /* Not known: it was on the cursor at zone-in, replaced a cursor item, or came by a path the client does not mark.
  * Treat it as the player's; never destroy it unattended. */
 #define HAILSTONE_CURSOR_ORIGIN_UNKNOWN 0

@@ -1923,6 +1923,36 @@ std::uint32_t h_aa_value(void* h, std::int32_t group) {
     return 0;
 }
 
+// HS_ABILITY_* (the SDK's) as the app's mq::AbilityKind; nullopt for a value this client does not know.
+std::optional<mq::AbilityKind> ability_kind(int kind) {
+    switch (kind) {
+    case HS_ABILITY_SKILL: return mq::AbilityKind::Skill;
+    case HS_ABILITY_DISCIPLINE: return mq::AbilityKind::Discipline;
+    case HS_ABILITY_ALT: return mq::AbilityKind::AltAbility;
+    default: return std::nullopt;
+    }
+}
+
+int h_use_ability(void* h, int kind, const char* name) {
+    Loaded& l = Loaded::of(h);
+    if (!acting(l, "use_ability")) return 0;
+    const auto k = ability_kind(kind);
+    if (!k || !name || !*name || !l.host->env.use_ability) return 0;
+    return l.host->env.use_ability(*k, name) ? 1 : 0;
+}
+
+int h_ability_state(void* h, int kind, const char* name, std::int64_t* remaining_ms, std::int64_t* reuse_ms) {
+    Loaded& l = Loaded::of(h);
+    if (!readable(l, "ability_state")) return -1;
+    const auto k = ability_kind(kind);
+    if (!k || !name || !*name || !l.host->env.ability) return -1;
+    const std::optional<mq::AbilityState> st = l.host->env.ability(*k, name);
+    if (!st) return -1;
+    if (remaining_ms) *remaining_ms = st->remaining_ms;
+    if (reuse_ms) *reuse_ms = st->reuse_ms;
+    return st->ready ? 1 : 0;
+}
+
 std::int32_t h_hot_bar_page(void* h, std::int32_t bar) {
     Loaded& l = Loaded::of(h);
     if (!readable(l, "hot_bar_page") || !l.host->env.hot_bar_page) return -1;
@@ -2408,6 +2438,8 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.get_avail_disc_data_bulk = main_only<h_get_avail_disc_data_bulk>;
     p.table.get_buff_name_data_bulk = main_only<h_get_buff_name_data_bulk>;
     p.table.get_raid_data_bulk = main_only<h_get_raid_data_bulk>;
+    p.table.use_ability = main_only<h_use_ability>;
+    p.table.ability_state = main_only<h_ability_state>;
     p.table.cursor_origin = main_only<h_cursor_origin>;
     p.owner = m.env.hooks->new_guest("plugin:" + name);
 
