@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <exception>
+#include <filesystem>
+#include <optional>
+#include <system_error>
 
 #include "assets/legacy_particles.h"
 #include "assets/pfs.h"
@@ -19,6 +22,75 @@ bool positioned(const game::Door& d) {
     const auto p = d.world_position();
     return std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z);
 }
+
+// The resolved effects of spells.eff with gequip.s3d's sprites; empty when nothing resolves.
+std::vector<SwitchParticles::Effect> read_effects(const GameDir& game, const std::filesystem::path& s3d_path) {
+    const auto data = game.read("spells.eff");
+    if (!data) return {};
+    const auto archive = assets::PfsArchive::open(s3d_path, assets::PfsArchive::storage_for(game, s3d_path),
+                                                  game.shared_file_cache());
+    const auto bytes = archive.read("gequip.wld");
+    if (!bytes) return {};
+    const auto wld = assets::wld::WldFile::parse(*bytes, "gequip.s3d:gequip.wld");
+    const auto parsed = assets::parse_legacy_switch_effects(*data);
+    std::vector<SwitchParticles::Effect> effects(parsed.size());
+    bool any = false;
+    for (std::size_t i = 1; i < parsed.size(); ++i)
+        for (std::size_t slot = 0; slot < parsed[i].size(); ++slot) {
+            if (!parsed[i][slot]) continue;
+            const auto& source = *parsed[i][slot];
+            const auto* fragment = wld.find(source.sprite);
+            if (!fragment) continue;
+            const auto ref = static_cast<assets::wld::Ref>(fragment - wld.fragments().data() + 1);
+            const auto texture = assets::particle_texture(wld, ref);
+            if (!texture) continue;
+            // A missing sprite is skipped rather than drawn as an opaque fallback quad.
+            if (std::any_of(texture->files.begin(), texture->files.end(),
+                            [&](const std::string& name) { return !archive.contains(name); })) continue;
+            effects[i][slot] = assets::legacy_switch_definition(source, *texture);
+            any = any || effects[i][slot].has_value();
+        }
+    if (!any) effects.clear();
+    return effects;
+}
+
+struct Stamp {
+    std::filesystem::path path;
+    std::uintmax_t size = 0;
+    std::filesystem::file_time_type time{};
+    bool operator==(const Stamp&) const = default;
+};
+
+std::optional<Stamp> stamp(const std::filesystem::path& path) {
+    std::error_code size_error, time_error;
+    const auto size = std::filesystem::file_size(path, size_error);
+    const auto time = std::filesystem::last_write_time(path, time_error);
+    if (size_error || time_error) return std::nullopt;
+    return Stamp{path, size, time};
+}
+
+// Read again only when either file found is another or has changed: every zone-in makes SwitchParticles again, and
+// this parses the whole of gequip.wld. The archive itself is not kept (an overlay's may be replaced meanwhile).
+std::vector<SwitchParticles::Effect> load_effects(const GameDir& game) {
+    struct Cached {
+        Stamp eff, s3d;
+        std::vector<SwitchParticles::Effect> effects;
+    };
+    static std::optional<Cached> cache;
+    const auto eff_path = game.find("spells.eff");
+    const auto s3d_path = game.find("gequip.s3d");
+    if (!eff_path || !s3d_path) return {};
+    const auto eff = stamp(*eff_path), s3d = stamp(*s3d_path);
+    if (cache && eff && s3d && cache->eff == *eff && cache->s3d == *s3d) return cache->effects;
+    std::vector<SwitchParticles::Effect> effects;
+    try {
+        effects = read_effects(game, *s3d_path);
+    } catch (const std::exception& e) {
+        log::warn("switch particles: {}", e.what());
+    }
+    if (eff && s3d) cache = Cached{*eff, *s3d, effects};
+    return effects;
+}
 } // namespace
 
 SwitchParticles::SwitchParticles(std::vector<Effect> effects) { set_effects(std::move(effects)); }
@@ -33,31 +105,13 @@ void SwitchParticles::set_effects(std::vector<Effect> effects) {
 }
 
 SwitchParticles::SwitchParticles(const GameDir& game) {
+    auto effects = load_effects(game);
+    if (effects.empty()) return;
     try {
-        const auto data = game.read("spells.eff");
         const auto path = game.find("gequip.s3d");
-        if (!data || !path) return;
+        if (!path) return;
         auto archive = std::make_shared<assets::PfsArchive>(assets::PfsArchive::open(
             *path, assets::PfsArchive::storage_for(game, *path), game.shared_file_cache()));
-        const auto bytes = archive->read("gequip.wld");
-        if (!bytes) return;
-        const auto wld = assets::wld::WldFile::parse(*bytes, "gequip.s3d:gequip.wld");
-        const auto parsed = assets::parse_legacy_switch_effects(*data);
-        std::vector<Effect> effects(parsed.size());
-        for (std::size_t i = 1; i < parsed.size(); ++i)
-            for (std::size_t slot = 0; slot < parsed[i].size(); ++slot) {
-                if (!parsed[i][slot]) continue;
-                const auto& source = *parsed[i][slot];
-                const auto* fragment = wld.find(source.sprite);
-                if (!fragment) continue;
-                const auto ref = static_cast<assets::wld::Ref>(fragment - wld.fragments().data() + 1);
-                const auto texture = assets::particle_texture(wld, ref);
-                if (!texture) continue;
-                // A missing sprite is skipped rather than drawn as an opaque fallback quad.
-                if (std::any_of(texture->files.begin(), texture->files.end(),
-                                [&](const std::string& name) { return !archive->contains(name); })) continue;
-                effects[i][slot] = assets::legacy_switch_definition(source, *texture);
-            }
         set_effects(std::move(effects));
         if (particles_.definitions().size() <= 1) return;
         archive_ = std::move(archive);

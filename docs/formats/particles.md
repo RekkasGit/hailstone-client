@@ -27,8 +27,10 @@ modes use the received game hour: mode 0 keeps the packet state, mode 1 is activ
 and mode 2 at night. The native mode-2 rain-screen override remains unconnected (docs/unknowns.md).
 
 Coverage includes synthetic parser, converter and lifecycle tests, plus installed-asset checks when `EQ_GAME_DIR`
-is set. Live waterfall rendering has also passed acceptance. Other old effect selectors that need actor attachments
-are not implemented by this switch path.
+is set, and a test that the parsed effects are kept until `spells.eff` or `gequip.s3d` changes (each zone-in makes
+the switch manager again; `gequip.wld` is parsed only when a file's path, size or time differs). Live waterfall rendering
+has also passed acceptance. Other old effect selectors that need actor attachments are not implemented by this switch
+path.
 
 Code: `src/assets/spell_effects.{h,cpp}` (files), `src/game/particles.{h,cpp}` (stage loop, emitters), `src/render/particle_renderer.{h,cpp}` and `shaders/particle.{vert,frag}` (drawing), `src/app/spell_particles.{h,cpp}` (the game's cues). Tests: `tests/particles_test.cpp`.  Field meanings and the simulation are traced from EQGraphicsDX9.dll (CEmitterDef::CreateEmitter @0x1006c920, the emitter constructor @0x1006c4d0, the per-frame update and quad builder FUN_10072160); OpenEQ's spell effect format notes named the fields first.
 

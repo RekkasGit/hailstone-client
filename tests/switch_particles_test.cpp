@@ -1,11 +1,21 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <limits>
+#include <string>
+#include <vector>
 
 #include "app/switch_particles.h"
+#include "assets/legacy_particles.h"
+#include "core/byte_io.h"
 #include "core/game_dir.h"
 #include "game_files.h"
+#include "pfs_fixtures.h"
+#include "scratch_dir.h"
+#include "wld_fixtures.h"
 
 using namespace hailstone;
 
@@ -35,6 +45,47 @@ game::Door emitter_door(std::uint8_t id = 7) {
     d.z = 30;
     d.param = 4;
     return d;
+}
+// An old spells.eff whose effect 4 has one explicit-position slot drawing `sprite`.
+std::vector<std::byte> legacy_table(const std::string& sprite) {
+    std::vector<std::byte> out(assets::kLegacyParticleEffectCount * assets::kLegacyParticleEffectSize);
+    const std::size_t stage = 4 * assets::kLegacyParticleEffectSize + 8 + 2 * 0x3a0;
+    ByteWriter name;
+    name.fixed_string(sprite, 32);
+    std::copy(name.data().begin(), name.data().end(), out.begin() + static_cast<std::ptrdiff_t>(stage));
+    out[stage + 0x8c] = std::byte{1}; // selector 1: an explicit position
+    return out;
+}
+
+// gequip.s3d with one 0x26 sprite named `sprite` on GENG00.DDS, stored uncompressed: its size depends on the
+// sprite name's length alone.
+std::vector<std::byte> gequip(const std::string& sprite) {
+    using namespace test::wld_fixtures;
+    WldBuilder b;
+    const auto bmp_name = b.str("GENG00.DDS");
+    auto bmp = b.add(0x03, bmp_name, bitmap_name("GENG00.DDS"));
+    ByteWriter info;
+    info.le(std::uint32_t{0x18});
+    info.le(std::uint32_t{1});
+    info.le(std::uint32_t{100});
+    info.le(bmp);
+    auto def = b.add(0x04, b.str("SWITCH_SPRITE"), info);
+    ByteWriter ref;
+    ref.le(def);
+    ref.le(std::uint32_t{0});
+    auto simple = b.add(0x05, 0, ref);
+    ByteWriter blit;
+    blit.le(std::uint32_t{0});
+    blit.le(simple);
+    blit.le(std::uint32_t{0x80000017});
+    b.add(0x26, b.str(sprite), blit);
+    return test::pfs_fixtures::make_pfs({{"gequip.wld", b.build()}, {"geng00.dds", std::vector<std::byte>(16)}}, 3000,
+                                        Z_NO_COMPRESSION);
+}
+
+void write_file(const std::filesystem::path& path, const std::vector<std::byte>& bytes) {
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
 }
 } // namespace
 
@@ -186,4 +237,38 @@ TEST_CASE("Installed legacy waterfall effects resolve sprites and fall from serv
         }
         particles.clear();
     }
+}
+
+TEST_CASE("Switch particle effects are read again only when spells.eff or gequip.s3d changes") {
+    test::ScratchDir dir("switch_particles");
+    const auto s3d = dir.path() / "gequip.s3d";
+    write_file(dir.path() / "spells.eff", legacy_table("SWITCH_SPRITE_A"));
+    write_file(s3d, gequip("SWITCH_SPRITE_A"));
+    const auto written = std::filesystem::last_write_time(s3d);
+    const GameDir game(dir.path());
+    const auto door = emitter_door();
+    {
+        app::SwitchParticles particles(game);
+        CHECK(particles.start(door, door.param));
+    }
+    // The same size and time with the sprite renamed: the parsed effects are kept, as nothing was read again.
+    const auto renamed = gequip("SWITCH_SPRITE_B");
+    REQUIRE(renamed.size() == std::filesystem::file_size(s3d));
+    write_file(s3d, renamed);
+    std::filesystem::last_write_time(s3d, written);
+    {
+        app::SwitchParticles particles(game);
+        CHECK(particles.start(door, door.param));
+    }
+    // A new time reads the archive again, where the effect's sprite is no longer found.
+    std::filesystem::last_write_time(s3d, written + std::chrono::seconds(10));
+    {
+        app::SwitchParticles particles(game);
+        CHECK_FALSE(particles.start(door, door.param));
+    }
+    // So does a changed spells.eff naming the new sprite.
+    write_file(dir.path() / "spells.eff", legacy_table("SWITCH_SPRITE_B"));
+    std::filesystem::last_write_time(dir.path() / "spells.eff", written + std::chrono::seconds(20));
+    app::SwitchParticles particles(game);
+    CHECK(particles.start(door, door.param));
 }
