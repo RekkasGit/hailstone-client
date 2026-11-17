@@ -2979,10 +2979,14 @@ TEST_CASE("UI packs: each claims the achievement and reward windows while they a
 }
 
 TEST_CASE("UI packs: the server plugins' question draws in each pack in the client's place") {
+    // In the world, and on the loading screen, where a required plugin's question holds the zone-in (no game or
+    // character UI is ready there).
+    for (const bool in_game : {true, false})
     for (const char* pack : {"modern", "gamepad"}) {
         CAPTURE(pack);
+        CAPTURE(in_game);
         fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
-        hailstone::test::ScratchDir dir_scratch(std::string("ui_pack_consent_") + pack);
+        hailstone::test::ScratchDir dir_scratch(std::string("ui_pack_consent_") + pack + (in_game ? "_game" : "_load"));
         fs::path dir = dir_scratch.path();
         fs::create_directories(dir / "game");
         fs::copy(src, dir / pack, fs::copy_options::recursive);
@@ -2992,7 +2996,7 @@ TEST_CASE("UI packs: the server plugins' question draws in each pack in the clie
         int w = 0, h = 0;
         ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
         {
-            Session s(dir, pack, {}, false); // loading/required-addon wait: no game or character UI is ready
+            Session s(dir, pack, {}, in_game);
             std::optional<plugin::ConsentPrompt> prompt;
             s.host.plugin_consent = [&] { return prompt; };
             s.host.answer_plugin_consent = [&](std::optional<bool>) { prompt.reset(); };
