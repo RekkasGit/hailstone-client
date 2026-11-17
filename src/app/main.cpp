@@ -131,7 +131,7 @@ struct Options {
     std::string upscaler_name;             // --upscaler as given: an upscaler provider's name loads it
     bool modern = false;              // --lighting modern (render/scene_lighting.h)
     bool tonemap_given = false;
-    bool classic_smooth = true;       // --classic-smooth (display.classic_smooth)
+    bool classic_smooth = false;      // --lighting smooth (render::LightingMode::SmoothClassic)
     float view_distance = 2.5f;       // --view-distance (render::modern_view)
     std::optional<hailstone::app::DemoScreen> ui_demo; // show the developer UI demo
     float ui_scale = 0.0f;                        // > 0 overrides the display scale
@@ -168,6 +168,12 @@ struct Options {
     float pan = 0.0f;      // viewer: the camera turns this many degrees a second to its left (--pan)
     hailstone::app::ModelViewerOptions model; // --model viewer; active when model.codes is not empty
 };
+
+// The viewer's --lighting as the client's lighting mode (none, full-bright, counts as classic).
+hailstone::render::LightingMode lighting_mode(const Options& o) {
+    using hailstone::render::LightingMode;
+    return o.modern ? LightingMode::Modern : o.classic_smooth ? LightingMode::SmoothClassic : LightingMode::Classic;
+}
 
 void usage() {
     std::printf(
@@ -264,13 +270,11 @@ void usage() {
         "  --sky-timescale S  viewer: the procedural sky's TimeScale property (cloud motion; default 1)\n"
         "  --time-type N      viewer zone time type: 1, 2, 5 outdoor, 4 half lit, else dark (default 1 with a\n"
         "                     sky, 0 without)\n"
-        "  --lighting MODE    classic (the original's vertex lighting, default), modern (docs/graphics.md) or\n"
-        "                     none (full-bright)\n"
+        "  --lighting MODE    classic (the original's vertex lighting, default), smooth (the classic, per pixel),\n"
+        "                     modern (docs/graphics.md) or none (full-bright)\n"
         "  --msaa N           samples per pixel (1, 2, 4, 8; default 4)\n"
-        "  --tonemap NAME     none, agx, aces or soft (default: agx with --lighting modern, else soft, or none\n"
-        "                     with --classic-smooth 0)\n"
-        "  --classic-smooth N 1 (default): the classic lighting's light per pixel and its highlights rolled\n"
-        "                     off; 0: the original's look (display.classic_smooth)\n"
+        "  --tonemap NAME     none, agx, aces or soft (default: agx with --lighting modern, soft with smooth,\n"
+        "                     else none)\n"
         "  --exposure EV      scene exposure in stops (default 0)\n"
         "  --shadows N        shadow map size per cascade (0 off; default 2048), with --lighting modern\n"
         "  --light-shadows N  how many lights cast shadows (0 off; default 8, at most 8), modern\n"
@@ -468,12 +472,10 @@ Options parse_args(int argc, char** argv) {
             using hailstone::render::VertexLighting;
             o.lighting = m == "none" ? VertexLighting::None : VertexLighting::Classic;
             o.modern = m == "modern";
+            o.classic_smooth = m == "smooth";
         } else if (arg("--msaa")) {
             need(1);
             o.scene.msaa = static_cast<std::uint32_t>(std::clamp(std::atoi(argv[++i]), 1, static_cast<int>(hailstone::render::kMaxMsaa)));
-        } else if (arg("--classic-smooth")) {
-            need(1);
-            o.classic_smooth = std::atoi(argv[++i]) != 0;
         } else if (arg("--tonemap")) {
             need(1);
             o.scene.tonemap = hailstone::render::parse_tonemap(argv[++i]);
@@ -837,7 +839,7 @@ int main(int argc, char** argv) {
             m.screenshot_generated = opts.screenshot_generated;
             m.modern = opts.modern;
             m.hour = opts.time_hour;
-            if (!opts.tonemap_given) m.scene.tonemap = render::automatic_tonemap(opts.modern, opts.classic_smooth);
+            if (!opts.tonemap_given) m.scene.tonemap = render::automatic_tonemap(lighting_mode(opts));
             m.zone = opts.zone;
             m.camera_pos = opts.position;
             m.yaw_deg = opts.yaw_deg;
@@ -937,7 +939,7 @@ int main(int argc, char** argv) {
         render::VkContext vk(window, opts.validation, render::load_upscaler_setting(opts.upscaler_name, platform::upscalers_dir(),
                                                                                  platform::cache_dir() / "upscalers"));
         std::filesystem::path shader_dir = platform::shaders_dir();
-        if (!opts.tonemap_given) opts.scene.tonemap = render::automatic_tonemap(opts.modern, opts.classic_smooth);
+        if (!opts.tonemap_given) opts.scene.tonemap = render::automatic_tonemap(lighting_mode(opts));
         vk.set_scene_options(opts.scene, shader_dir);
         if (opts.no_vsync) vk.set_vsync(render::VkContext::Vsync::Off);
 

@@ -420,7 +420,7 @@ int ClientApp::run() {
                 game::SceneLight scene_light = game::compute_scene_light(light);
                 if (zone_renderer_) {
                     zone_renderer_->set_scene_light(scene_light);
-                    zone_renderer_->set_classic_smooth(classic_smooth_);
+                    zone_renderer_->set_classic_smooth(lighting_mode_ == render::LightingMode::SmoothClassic);
                 }
                 // The zone objects that play their own animation, drawn where the zone's animation clock has them now.
                 if (zone_renderer_)

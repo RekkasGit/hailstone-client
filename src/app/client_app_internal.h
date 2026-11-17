@@ -935,13 +935,8 @@ private:
         // Frame generation (render/frame_gen.h): applied at once (the swapchain is made again); only with a temporal
         // upscaler, which VkContext checks.
         scene.frame_gen = config_.get_bool("display.frame_gen", false);
-        // display.classic_smooth (Hailstone's own): the classic lighting's region light per pixel and its
-        // highlights rolled off (ZoneRenderer::set_classic_smooth, render::Tonemap::Soft); off, the original's look.
-        classic_smooth_ = config_.get_bool("display.classic_smooth", true);
         std::string tonemap = config_.get_string("display.tonemap", "auto");
-        scene.tonemap = tonemap != "auto" ? render::parse_tonemap(tonemap)
-                                          : render::automatic_tonemap(lighting_mode_ == render::LightingMode::Modern,
-                                                                      classic_smooth_);
+        scene.tonemap = tonemap != "auto" ? render::parse_tonemap(tonemap) : render::automatic_tonemap(lighting_mode_);
         scene.exposure = std::strtof(config_.get_string("display.exposure", "0").c_str(), nullptr);
         scene.shadow_size = static_cast<std::uint32_t>(std::clamp(config_.get_int("display.shadows", 2048), 0, 8192));
         scene.light_shadows = static_cast<std::uint32_t>(
@@ -1234,7 +1229,6 @@ private:
     // /keypress's commands for the next frame, and a tap's release for the one after.
     std::vector<game::KeyMap::Event> script_keys_, script_key_release_;
     render::LightingMode lighting_mode_ = render::LightingMode::Classic;
-    bool classic_smooth_ = true; // display.classic_smooth (apply_scene_options)
     float view_distance_ = 2.5f; // display.view_distance
     glm::vec3 last_velocity_{0.0f};               // the last frame's SpeedX/Y/Z (hide checks)
     bool follow_detour_ = false;          // /follow's last step went round by the mesh (for the log)

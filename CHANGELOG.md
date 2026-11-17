@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Classic lighting: its light is worked out per pixel instead of at the corners of each triangle, so trees' leaves show their sunlit and shaded sides and brightly lit walls no longer dim between their corners, and torch and brazier flames keep colour in their cores instead of clipping to flat white. Options > Graphics > Smooth Classic Lighting (gamepad: Display) turns it off for the original's exact look
+- Lighting has a third level between Classic and Modern: Smooth Classic, the classic light worked out per pixel instead of at the corners of each triangle, so trees' leaves show their sunlit and shaded sides and brightly lit walls no longer dim between their corners, and torch and brazier flames keep colour in their cores instead of clipping to flat white. Options > Graphics > Lighting (gamepad: Display) now lists Classic (Low), Smooth Classic (Medium) and Modern (High); `/lighting smooth` picks it. Classic stays the original's exact look
 - Environmental particles: legacy server-placed effects now draw from invisible particle switches, restoring missing waterfall cascades
 - Name plates: mercenaries' names are amber, the original's colour; they were drawn light blue from the original's colour bytes read in the wrong order
 - Name plates: GM names show green as the original client does, your own GM character's too, and stay green when targeted; an anonymous or roleplaying GM's name, and a GM's corpse, keep the ordinary colour

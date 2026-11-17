@@ -375,9 +375,10 @@ and converts at the end of each shader; the modern lighting computes in linear H
 
 ### Smooth classic lighting
 
-`display.classic_smooth` (on by default; Options > Graphics > Smooth Classic Lighting, the gamepad's Display page;
-the viewer's `--classic-smooth 0|1`) keeps the classic lighting's values and changes only where two of them are
-worked out. It is Hailstone's own; off, the classic lighting is the original's as before. Its maths is in
+The lighting has three levels, low to high (`render::LightingMode`, the Options window's Lighting choices): Classic,
+the original's look; Smooth Classic (`display.lighting = smooth`, `/lighting smooth`, the viewer's `--lighting
+smooth`); and Modern. Smooth Classic keeps the classic lighting's values and changes only where two of them are worked
+out. It is Hailstone's own; Classic is the original's as before. Its maths is in
 `shaders/classic_light.glsl`, which the CPU tests compile too.
 
 - **The region light per pixel.** The original runs the region effects' light (`classic_region_light`: the vertex
@@ -386,7 +387,7 @@ worked out. It is Hailstone's own; off, the classic lighting is the original's a
   the lights.wld term (`v_point`) as before. Outdoors the sun shades by the pixel's own normal (the classic trees'
   leaves show their sunlit and shaded sides); and where a face's corners saturate, the middle no longer dims between
   them (Befallen's red-lit walls by about 3 %). A mesh without normals takes no sun, as per vertex.
-- **Soft highlights** (`render::Tonemap::Soft`, the automatic tone curve while it is on). The original's frame buffer
+- **Soft highlights** (`render::Tonemap::Soft`, Smooth Classic's automatic tone curve). The original's frame buffer
   clips, and what is drawn past white turns flat: at night in the cities it is the braziers' and torches' flames
   (North Qeynos and North Freeport, thousands of pixels a view), seldom a wall. Display values to 0.8 stay exactly as
   they were; above, each channel rolls off towards white (`soft_highlight`: display 1 to about 0.93, 1.5 to 0.99),
@@ -397,7 +398,8 @@ The fog was tried per pixel too and left per vertex: at no view tried (Qeynos Hi
 the smoothed ground) did it change more than a few hundred pixels by a few levels.
 
 Nothing is added to a frame but a few instructions per pixel: no pass, texture or buffer. The ZoneRenderer carries the
-switch in `SceneLighting::ambient.w` (`ZoneRenderer::set_classic_smooth`).
+switch in `SceneLighting::ambient.w` (`ZoneRenderer::set_classic_smooth`); everything else treats Smooth Classic as
+Classic.
 
 The classic lighting lights the characters with the zone's scene light (`render::classic_actor_light`, mirrored in
 `shaders/actor.frag`): the region shaders' vertex formula, with the zone's baked light where the player stands (the
@@ -2191,7 +2193,7 @@ but Apple's is Low.
 
 In `hailstone.ini`, and in the Options window (`ui/modern/options.lua`, this client's own window: its Display and
 Graphics tabs; the client's options by name in `app/client_app_options.cpp`, the graphics ones `display_option`); the
-viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--classic-smooth`, `--exposure`, `--render-scale`,
+viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--render-scale`,
 `--sharpness` and `--upscaler`, `--frame-gen` and `--screenshot-generated`.
 
 | Key | Values | Default | |
@@ -2201,8 +2203,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--classic-smooth`, `-
 | `display.upscaler` | off, fsr1, taa, fsr3 | off | off (the default on every computer): no upscaling and no frame generation, the view drawn at full size whatever `display.render_scale` and `display.frame_gen` say (both kept for later; applied at once, a temporal upscaler already running stays as anti-aliasing until the next start); fsr1: FSR 1 below a render scale of 100; taa: temporal anti-aliasing and upscaling at every render scale, MSAA off (Temporal upscaling); fsr3: the same with AMD FSR 3.1's upscaler (AMD FSR 3.1; taa where the GPU lacks what it needs); read at start-up |
 | `display.frame_gen` | true, false | false | present a frame made between each two real ones (Frame generation); only with `display.upscaler` taa or fsr3; forces vertical sync and holds the game to half the refresh; applied at once |
 | `display.sharpness` | 0 .. 1 | 0.5 | RCAS sharpening: FSR 1's below a render scale of 100, the temporal upscaler's or FSR 3.1's own at every scale; 0 none |
-| `display.tonemap` | auto, none, agx, aces, soft | auto | auto: AgX (with a little extra saturation) for modern; for classic soft (Smooth classic lighting) while `display.classic_smooth` is on, else none |
-| `display.classic_smooth` | 0, 1 | 1 | the classic lighting's region light per pixel and its highlights rolled off (Smooth classic lighting); 0 the original's look; classic only; viewer `--classic-smooth N` |
+| `display.tonemap` | auto, none, agx, aces, soft | auto | auto: AgX (with a little extra saturation) for modern, soft for smooth classic (Smooth classic lighting), none for classic |
 | `display.exposure` | EV | 0 | the scene is scaled by 2^EV before the tonemap |
 | `display.shadows` | 0, 256 .. 8192 | 2048 | texels per side of each shadow cascade; 0 off; modern only |
 | `display.light_shadows` | 0 .. 8 | 8 | how many lights cast shadows (Light shadows: the zone's, the carried light, spells); 0 off; modern only |
@@ -2228,7 +2229,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--classic-smooth`, `-
 | `display.contrast` | 0.5 .. 1.5 | 1 | around mid grey, after the tonemap |
 | `display.gamma` | 0.5 .. 1.5 | 1 | after the tonemap; above 1 lifts the shadows |
 | `display.color_grade` | 0, 1 | 1 | the modern lighting's colour grade by time of day, weather and zone (Colour grade); viewer `--no-grade` |
-| `display.lighting` | modern, classic | modern | `render/scene_lighting.h`; `/lighting` switches; `enhanced` is read as modern |
+| `display.lighting` | classic, smooth, modern | modern | low to high (Smooth classic lighting); `render/scene_lighting.h`; `/lighting` switches; `enhanced` is read as modern |
 | `display.window_mode` | windowed, borderless, fullscreen | windowed | borderless: a window over the whole display at the desktop's mode; fullscreen: exclusive at `display.resolution` |
 | `display.resolution` | WxH | the desktop's | the fullscreen mode (the closest the display has); in a window, the Options window's Resolution sets the window's size |
 | `display.vsync` | off, on, adaptive | on | the present mode: immediate (else mailbox), FIFO, FIFO relaxed; FIFO when the surface lacks one |

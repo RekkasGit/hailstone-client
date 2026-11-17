@@ -753,12 +753,10 @@ local function graphicsTab()
       "The original's view distance setting (the classic lighting draws this far; modern multiplies it).")
   end)
   section("Lighting", function()
-    combo("lighting", "Lighting", { "Modern", "Classic" },
-      "Modern: per-pixel sun, shadows and haze. Classic: the original game's look.")
-    check("classic_smooth", "Smooth Classic Lighting",
-      "Classic lighting with its light worked out per pixel and soft highlights in flames. Off: exactly the original's look.")
+    combo("lighting", "Lighting", { "Classic (Low)", "Smooth Classic (Medium)", "Modern (High)" },
+      "Classic: the original game's look. Smooth Classic: the same light worked out per pixel, with soft highlights in flames. Modern: per-pixel sun, shadows and haze.")
     combo("tonemap", "Tone Map", { "Automatic", "None", "AgX", "ACES" },
-      "How bright light is fitted to the screen. Automatic: AgX with modern lighting; with classic, soft highlights when it is smooth, else none.")
+      "How bright light is fitted to the screen. Automatic: none with classic lighting, soft highlights with smooth classic, AgX with modern.")
     ticks("exposure", "Exposure", function(t) return string.format("%+.1f EV", -2 + t * 0.2) end,
       "The overall scene brightness before the tone map, in stops.")
     check("color_grade", "Colour Grade",
@@ -805,7 +803,6 @@ local function graphicsTab()
     eq.SetOption("ao", 1)
     eq.SetOption("distance_blur", 1)
     if eq.Option("color_grade") ~= nil then eq.SetOption("color_grade", 1) end
-    if eq.Option("classic_smooth") ~= nil then eq.SetOption("classic_smooth", 1) end
     eq.SetOption("shadows", 2)
     eq.SetOption("tonemap", 0)
     eq.SetOption("clip_plane", 15)

@@ -255,11 +255,6 @@ Tonemap parse_tonemap(std::string_view name) {
     return Tonemap::None;
 }
 
-Tonemap automatic_tonemap(bool modern, bool classic_smooth) {
-    if (modern) return Tonemap::AgX;
-    return classic_smooth ? Tonemap::Soft : Tonemap::None;
-}
-
 namespace {
 std::string joined(const std::vector<std::string>& names) {
     std::string out;
