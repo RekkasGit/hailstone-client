@@ -219,6 +219,11 @@ std::filesystem::path horizon_cache_dir(std::string_view server, std::string_vie
            std::string(zone);
 }
 
+std::filesystem::path terrain_cache_path(std::string_view server, std::string_view zone) {
+    return platform::cache_dir() / "terrain" / std::string(server.empty() ? std::string_view("default") : server) /
+           (std::string(zone) + ".bin");
+}
+
 std::uint64_t horizon_cache_key(const GameDir& game, std::string_view zone, std::string_view neighbour) {
     auto size_of = [&](std::string_view z) -> std::uint64_t {
         for (const char* ext : {".s3d", ".eqg"})
@@ -340,6 +345,11 @@ std::uint64_t NeighbourZones::drawn_key() const {
     for (const Line& l : lines_)
         if (l.renderer && !l.idle) key = key * 1000003u + l.renderer->id();
     return key;
+}
+
+void NeighbourZones::drawn_names(std::vector<std::string>& out) const {
+    for (const Line& l : lines_)
+        if (l.renderer && !l.idle) out.push_back(l.name);
 }
 
 std::size_t NeighbourZones::loaded() const {

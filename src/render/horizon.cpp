@@ -1,9 +1,11 @@
 #include "render/horizon.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -204,19 +206,27 @@ Point land_point(const HorizonField& g, const HorizonSources& sources, const Sha
         return out;
     }
     const float d = (std::max(g.dist[i] - 0.5f, 0.0f)) * g.cell + extra;
-    const float roll = smooth(0.2f, 0.8f, fbm(p / 1300.0f, 4, k.seed, false)) * 0.85f +
-                       fbm(p / 420.0f, 2, k.seed + 3u, false) * 0.15f;
-    float mtn = fbm(p / 3200.0f, 5, k.seed + 7u, true);
-    mtn *= mtn;
+    // Warped: the hills' lines bend and branch, not a value noise's grid of blobs; the mountains ridged and sharper the
+    // higher they stand, their foothills rolling into them.
+    const glm::vec2 warp(fbm(p / 2600.0f, 3, k.seed + 21u, false), fbm(p / 2600.0f, 3, k.seed + 22u, false));
+    const glm::vec2 q = p + (warp - 0.5f) * 1800.0f;
+    const float roll = smooth(0.15f, 0.85f, fbm(q / 1500.0f, 5, k.seed, false));
+    const float ridge = fbm(q / 3600.0f, 6, k.seed + 7u, true);
+    const float mass = smooth(0.3f, 0.75f, fbm(q / 7000.0f, 3, k.seed + 9u, false));
+    const float mtn = std::pow(ridge, 1.5f) * (0.75f + 0.75f * mass);
     const float rise = k.near_amp * roll * smooth(0.0f, 800.0f, d) + k.far_amp * mtn * smooth(800.0f, 5000.0f, d);
     const float start = g.edge[i] - 20.0f;
     float h = glm::mix(start, g.land.ground + rise, smooth(0.0f, kHorizonBlend, d));
     // Past a shore the sea goes on to the land's reach: nothing says where the next coast is (docs/unknowns.md).
-    if (g.sea[i] > 0.0f) {
+    // Where the shore ends, the coast wanders in headlands and bays rather than following the blur.
+    float sea_here = g.sea[i];
+    if (sea_here > 0.0f && sea_here < 1.0f)
+        sea_here = smooth(0.0f, 1.0f, sea_here + 0.9f * (fbm(p / 700.0f, 4, k.seed + 31u, false) - 0.5f));
+    if (sea_here > 0.0f) {
         const float floor = glm::mix(g.water_level - 20.0f, g.water_level - kHorizonSeaDepth, smooth(0.0f, 800.0f, d));
-        h = glm::mix(h, floor, g.sea[i]);
+        h = glm::mix(h, floor, sea_here);
     }
-    out.sea = g.sea[i];
+    out.sea = sea_here;
     out.level = g.water_level;
     // The neighbours' ground: from the zone's edge it eases onto theirs across the band, and fades back into the hills
     // past it as their cover does. Past a neighbour's shore the sea goes on (the land sinks to its floor, under the
@@ -278,6 +288,8 @@ Point land_point(const HorizonField& g, const HorizonSources& sources, const Sha
         out.sea = wet;
         out.level = wet_level;
     }
+    // The wear (horizon_terrain): none where the ground is held.
+    if (g.terrain) h += g.terrain->sample(g.terrain->delta, p);
     out.h = h;
     out.peak = smooth(0.45f, 0.75f, (h - g.land.ground) / k.far_amp) * (1.0f - flat);
     return out;
@@ -918,6 +930,201 @@ std::optional<float> source_top(const HorizonSource& s, glm::vec2 p) {
     return h;
 }
 
+float HorizonTerrain::sample(const std::vector<float>& layer, glm::vec2 p) const {
+    if (!valid() || layer.size() != delta.size()) return 0.0f;
+    const glm::vec2 q = (p - lo) / cell;
+    if (!(q.x >= 0.0f && q.y >= 0.0f && q.x <= static_cast<float>(nx - 1) && q.y <= static_cast<float>(ny - 1)))
+        return 0.0f;
+    const int x0 = std::min(static_cast<int>(q.x), nx - 2), y0 = std::min(static_cast<int>(q.y), ny - 2);
+    const float fx = q.x - static_cast<float>(x0), fy = q.y - static_cast<float>(y0);
+    auto at = [&](int x, int y) {
+        return layer[static_cast<std::size_t>(y) * static_cast<std::size_t>(nx) + static_cast<std::size_t>(x)];
+    };
+    return glm::mix(glm::mix(at(x0, y0), at(x0 + 1, y0), fx), glm::mix(at(x0, y0 + 1), at(x0 + 1, y0 + 1), fx), fy);
+}
+
+HorizonTerrain horizon_terrain(const HorizonField& g, const HorizonSources& sources) {
+    HorizonTerrain t;
+    if (!g.valid()) return t;
+    const Shape k = shape_of(g.land);
+    const glm::vec2 lo(g.xs.front(), g.ys.front()), hi(g.xs.back(), g.ys.back());
+    const float side = std::max(hi.x - lo.x, hi.y - lo.y);
+    t.cell = std::max(kHorizonCell, side / static_cast<float>(kHorizonTerrainMax));
+    t.lo = lo;
+    t.nx = static_cast<int>(std::ceil((hi.x - lo.x) / t.cell)) + 1;
+    t.ny = static_cast<int>(std::ceil((hi.y - lo.y) / t.cell)) + 1;
+    const int nx = t.nx, ny = t.ny;
+    const std::size_t n = static_cast<std::size_t>(nx) * static_cast<std::size_t>(ny);
+    auto at = [&](int x, int y) { return static_cast<std::size_t>(y) * static_cast<std::size_t>(nx) + static_cast<std::size_t>(x); };
+    // The land as it stands (in squares of height, so the slopes are the wear's own), and how free each node is.
+    std::vector<float> h(n), h0(n), free(n, 0.0f), visits(n, 0.0f);
+    // Each node on its own, so the rows are shared out among a few threads (the result is the same however many).
+    auto rows = [&](int y0, int y1) {
+        for (int y = y0; y < y1; ++y)
+            for (int x = 0; x < nx; ++x) {
+                const glm::vec2 p = lo + glm::vec2(static_cast<float>(x), static_cast<float>(y)) * t.cell;
+                const Point pt = land_point(g, sources, k, p, -1);
+                float extra = 0.0f;
+                const std::size_t i = g.square(p, extra);
+                const float d = std::max(g.dist[i] - 0.5f, 0.0f) * g.cell + extra;
+                const bool held = pt.tucked || (extra <= 0.0f && !g.open[i]);
+                h[at(x, y)] = h0[at(x, y)] = pt.h / t.cell;
+                if (!held)
+                    free[at(x, y)] = smooth(200.0f, kHorizonTerrainFree, d) * (1.0f - smooth(0.2f, 0.6f, pt.cover)) *
+                                     (1.0f - smooth(0.6f, 0.95f, pt.sea));
+            }
+    };
+    {
+        const int threads = std::clamp(static_cast<int>(std::thread::hardware_concurrency()), 1, 8);
+        std::vector<std::thread> pool;
+        const int per = (ny + threads - 1) / threads;
+        for (int k0 = per; k0 < ny; k0 += per) pool.emplace_back(rows, k0, std::min(ny, k0 + per));
+        rows(0, std::min(ny, per));
+        for (auto& th : pool) th.join();
+    }
+    auto height = [&](glm::vec2 q, glm::vec2* grad) {
+        const int x0 = std::clamp(static_cast<int>(q.x), 0, nx - 2), y0 = std::clamp(static_cast<int>(q.y), 0, ny - 2);
+        const float fx = q.x - static_cast<float>(x0), fy = q.y - static_cast<float>(y0);
+        const float a = h[at(x0, y0)], b = h[at(x0 + 1, y0)], c = h[at(x0, y0 + 1)], d = h[at(x0 + 1, y0 + 1)];
+        if (grad) *grad = glm::vec2((b - a) * (1.0f - fy) + (d - c) * fy, (c - a) * (1.0f - fx) + (d - b) * fx);
+        return a * (1.0f - fx) * (1.0f - fy) + b * fx * (1.0f - fy) + c * (1.0f - fx) * fy + d * fx * fy;
+    };
+    // Droplets (Hans Theobald Beyer, "Implementation of a method for hydraulic erosion", 2015): each runs downhill
+    // with inertia, takes up ground while it can carry more than it holds and drops it where it slows or climbs.
+    constexpr float kInertia = 0.08f, kCapacity = 3.0f, kMinCapacity = 0.01f, kErode = 0.25f, kDeposit = 0.3f;
+    constexpr float kEvaporate = 0.02f, kGravity = 4.0f;
+    constexpr int kSteps = kHorizonDropletSteps, kRadius = 2;
+    std::uint32_t rng = 0x9e3779b9u ^ (k.seed * 2654435761u);
+    auto next = [&] {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        return static_cast<float>(rng & 0xffffffu) / 16777216.0f;
+    };
+    // A node's wear is kept within kMaxCut under and kMaxFill over where it stood: a pit the droplets keep running into
+    // otherwise deepens without end. Returns what was moved.
+    const float kMaxCut = kHorizonTerrainMaxCut / t.cell, kMaxFill = kHorizonTerrainMaxFill / t.cell; // squares of height
+    auto wear = [&](std::size_t i, float amount) {
+        const float before = h[i];
+        h[i] = std::clamp(h[i] + amount, h0[i] - kMaxCut, h0[i] + kMaxFill);
+        return h[i] - before;
+    };
+    // The droplet's brush: the nodes within kRadius, weighted by how near (their weights add up to 1).
+    struct Brush {
+        int dx, dy;
+        float w;
+    };
+    std::vector<Brush> brush;
+    {
+        float weights = 0.0f;
+        for (int by = -kRadius; by <= kRadius; ++by)
+            for (int bx = -kRadius; bx <= kRadius; ++bx) {
+                const float r = std::sqrt(static_cast<float>(bx * bx + by * by));
+                if (r < static_cast<float>(kRadius)) {
+                    brush.push_back({bx, by, static_cast<float>(kRadius) - r});
+                    weights += static_cast<float>(kRadius) - r;
+                }
+            }
+        for (Brush& b : brush) b.w /= weights;
+    }
+    const auto droplets = static_cast<std::size_t>(static_cast<float>(n) * kHorizonDroplets);
+    for (std::size_t drop = 0; drop < droplets; ++drop) {
+        glm::vec2 pos(next() * static_cast<float>(nx - 2), next() * static_cast<float>(ny - 2));
+        if (free[at(static_cast<int>(pos.x), static_cast<int>(pos.y))] <= 0.0f) continue;
+        glm::vec2 dir(0.0f);
+        float speed = 1.0f, water = 1.0f, sediment = 0.0f;
+        for (int step = 0; step < kSteps; ++step) {
+            const int cx = static_cast<int>(pos.x), cy = static_cast<int>(pos.y);
+            glm::vec2 grad;
+            const float here = height(pos, &grad);
+            dir = dir * kInertia - grad * (1.0f - kInertia);
+            const float len = glm::length(dir);
+            if (!(len > 1e-6f)) break;
+            dir /= len;
+            const glm::vec2 was = pos;
+            pos += dir;
+            if (!(pos.x >= 0.0f && pos.y >= 0.0f && pos.x < static_cast<float>(nx - 1) && pos.y < static_cast<float>(ny - 1)))
+                break;
+            const float dh = height(pos, nullptr) - here;
+            const float capacity = std::max(-dh * speed * water * kCapacity, kMinCapacity);
+            const glm::vec2 off = was - glm::vec2(static_cast<float>(cx), static_cast<float>(cy));
+            visits[at(cx, cy)] += water;
+            if (sediment > capacity || dh > 0.0f) {
+                const float drop_amount = dh > 0.0f ? std::min(dh, sediment) : (sediment - capacity) * kDeposit;
+                sediment -= drop_amount;
+                const float w[4] = {(1 - off.x) * (1 - off.y), off.x * (1 - off.y), (1 - off.x) * off.y, off.x * off.y};
+                const std::size_t c[4] = {at(cx, cy), at(cx + 1, cy), at(cx, cy + 1), at(cx + 1, cy + 1)};
+                for (int j = 0; j < 4; ++j) wear(c[j], drop_amount * w[j] * free[c[j]]);
+            } else {
+                const float take = std::min((capacity - sediment) * kErode, -dh);
+                for (const Brush& b : brush) {
+                    const int x = cx + b.dx, y = cy + b.dy;
+                    if (x < 0 || y < 0 || x >= nx || y >= ny) continue;
+                    const std::size_t j = at(x, y);
+                    if (free[j] <= 0.0f) continue;
+                    sediment -= wear(j, -take * b.w * free[j]);
+                }
+            }
+            speed = std::sqrt(std::max(speed * speed - dh * kGravity, 0.0f)); // faster downhill
+            water *= 1.0f - kEvaporate;
+        }
+    }
+    // Slumping: ground steeper than kTalus between neighbours slides down, half the excess a pass.
+    constexpr float kTalus = 0.9f;
+    for (int pass = 0; pass < 6; ++pass)
+        for (int y = 0; y + 1 < ny; ++y)
+            for (int x = 0; x + 1 < nx; ++x)
+                for (int dirn = 0; dirn < 2; ++dirn) {
+                    const std::size_t a = at(x, y), b = dirn == 0 ? at(x + 1, y) : at(x, y + 1);
+                    const float diff = h[a] - h[b];
+                    if (std::abs(diff) <= kTalus) continue;
+                    const std::size_t from = diff > 0.0f ? a : b, to = diff > 0.0f ? b : a;
+                    const float move = 0.25f * (std::abs(diff) - kTalus) * std::min(free[from], free[to]);
+                    h[from] -= move;
+                    h[to] += move;
+                }
+    t.delta.resize(n);
+    t.wet.resize(n);
+    // On the cache's steps (write_horizon_terrain): an eighth of a unit, a 255th of the water.
+    auto step_delta = [](float v) {
+        return std::round(std::clamp(v, -kHorizonTerrainMaxCut, kHorizonTerrainMaxFill) * 8.0f) / 8.0f;
+    };
+    double total = 0.0;
+    std::size_t counted = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        t.delta[i] = step_delta((h[i] - h0[i]) * t.cell * free[i]);
+        if (visits[i] > 0.0f) {
+            total += visits[i];
+            ++counted;
+        }
+    }
+    const float mean = counted ? static_cast<float>(total / static_cast<double>(counted)) : 1.0f;
+    {
+        float lo_d = 0.0f, hi_d = 0.0f;
+        for (float v : t.delta) {
+            lo_d = std::min(lo_d, v);
+            hi_d = std::max(hi_d, v);
+        }
+        t.worn_lo = lo_d;
+        t.worn_hi = hi_d;
+    }
+    // Wet where more water ran than most places, softened over a square each way.
+    for (int y = 0; y < ny; ++y)
+        for (int x = 0; x < nx; ++x) {
+            float sum = 0.0f;
+            int count = 0;
+            for (int by = -1; by <= 1; ++by)
+                for (int bx = -1; bx <= 1; ++bx) {
+                    const int px = x + bx, py = y + by;
+                    if (px < 0 || py < 0 || px >= nx || py >= ny) continue;
+                    sum += visits[at(px, py)];
+                    ++count;
+                }
+            t.wet[at(x, y)] = std::round((1.0f - std::exp(-(sum / static_cast<float>(count)) / (3.0f * mean))) * 255.0f) / 255.0f;
+        }
+    return t;
+}
+
 float horizon_height(const HorizonField& field, const HorizonSources& sources, glm::vec2 p) {
     if (!field.valid()) return 0.0f;
     return land_point(field, sources, shape_of(field.land), p, -1).h;
@@ -959,6 +1166,7 @@ HorizonMesh horizon_mesh(const HorizonField& g, const HorizonSources& sources, i
     mesh.weight.resize(mesh.positions.size(), 0.0f);
     mesh.settled.resize(mesh.positions.size(), 0.0f);
     mesh.tint.resize(mesh.positions.size(), glm::vec4(0.0f));
+    mesh.splat.resize(mesh.positions.size(), glm::vec2(0.0f));
     for (std::size_t r = 0; r < rows; ++r)
         for (std::size_t c = 0; c < cols; ++c) {
             const std::size_t v = r * cols + c;
@@ -978,7 +1186,21 @@ HorizonMesh horizon_mesh(const HorizonField& g, const HorizonSources& sources, i
             const float valley = smooth(-100.0f, 400.0f, mesh.positions[v].z - g.land.ground);
             // Broad patches of lighter and darker ground, so the texture's repeat does not show across the plains.
             const float patches = 0.88f + 0.24f * fbm(p / 380.0f, 3, k.seed + 17u, false);
-            mesh.shade[v] = std::min((1.0f - 0.3f * woods) * glm::mix(0.85f, 1.0f, valley) * patches, 1.0f);
+            {
+                // Rock on the steep and the high, sand along the water; the runnels and valleys the water wore
+                // darker and lusher.
+                const float wet = g.terrain ? g.terrain->sample(g.terrain->wet, p) : 0.0f;
+                const float rock = std::max(smooth(0.8f, 0.62f, mesh.normals[v].z), smooth(0.55f, 0.85f, points[v].peak));
+                // Sand only by the sea (a beach a few units above its surface, the shallows under it).
+                // (not on a neighbour's or an atlas zone's ground, which keeps its own colour).
+                const float sand = points[v].sea > 0.02f && points[v].cover < 0.5f
+                                       ? smooth(points[v].level + 14.0f, points[v].level + 3.0f, mesh.positions[v].z) *
+                                             (1.0f - rock)
+                                       : 0.0f;
+                mesh.splat[v] = glm::vec2(rock, sand);
+                const float woods_here = std::clamp(0.6f * woods + 0.8f * wet, 0.0f, 1.0f) * (1.0f - rock);
+                mesh.shade[v] = std::min((1.0f - 0.32f * woods_here) * glm::mix(0.88f, 1.0f, valley) * patches, 1.0f);
+            }
             // Under the sea, darker with the depth: the water map that darkens a zone's own sea floor does not reach
             // this far (ZoneRenderer: the land's draws are left out of it), and a sunlit floor under clear water
             // reads as dry land.
@@ -1001,6 +1223,7 @@ HorizonMesh horizon_mesh(const HorizonField& g, const HorizonSources& sources, i
             mesh.weight.push_back(0.0f);
             mesh.settled.push_back(0.0f);
             mesh.tint.emplace_back(0.0f);
+            if (!mesh.splat.empty()) mesh.splat.emplace_back(0.0f);
         }
         return water_vertex[v];
     };
@@ -1010,7 +1233,9 @@ HorizonMesh horizon_mesh(const HorizonField& g, const HorizonSources& sources, i
         const float len = glm::length(n);
         const bool steep = len > 0.0f && n.z / len < kHorizonRock;
         const bool high = (points[a].peak + points[b].peak + points[c].peak) / 3.0f > 0.5f;
-        auto& out = steep || high ? mesh.rock : mesh.ground;
+        // The current zone's land is one draw, the rock blended in by the vertices' splat (zone.frag kLandSplat); a
+        // neighbour's part keeps its rock apart.
+        auto& out = (steep || high) && only >= 0 ? mesh.rock : mesh.ground;
         out.insert(out.end(), {a, b, c});
     };
     for (std::size_t r = 0; r + 1 < rows; ++r)
@@ -1040,10 +1265,24 @@ HorizonMesh horizon_mesh(const HorizonField& g, const HorizonSources& sources, i
                 add(b, cc, d);
             }
             if (!any_sea || only >= 0) continue;
-            bool open_sea = true, below = false;
+            bool open_sea = true, below = false, some_sea = false;
             for (std::size_t corner : q) {
                 open_sea &= points[corner].sea >= 0.5f;
+                some_sea |= points[corner].sea >= 0.5f;
                 below |= mesh.positions[corner].z < points[corner].level;
+            }
+            // The water over any square the sea reaches, its edge where the land rises through it (a coast following
+            // the ground, not the squares).
+            {
+                open_sea = some_sea;
+                // Not where the corners' seas stand at different levels (a neighbour's beside the zone's): a sloped
+                // sheet of water.
+                float lo_level = points[q[0]].level, hi_level = lo_level;
+                for (std::size_t corner : q) {
+                    lo_level = std::min(lo_level, points[corner].level);
+                    hi_level = std::max(hi_level, points[corner].level);
+                }
+                if (hi_level - lo_level > 2.0f) open_sea = false;
             }
             if (!open_sea || !below) continue;
             // Not over the zone's own terrain or water (which draws its own), up to the square beside it, and over a
@@ -1119,7 +1358,9 @@ std::vector<HorizonTree> horizon_trees(const HorizonField& g, const HorizonSourc
             if (d < kHorizonTreeFrom || d > kHorizonTreeReach) continue;
             // The woods as horizon_mesh shades them (with no slope or peak yet: those are tested below). Tested first
             // where no source is, as it is cheap and most spots go on it.
-            const float in_woods = smooth(0.52f, 0.64f, fbm(p / 650.0f, 3, k.seed + 13u, false));
+            float in_woods = smooth(0.52f, 0.64f, fbm(p / 650.0f, 3, k.seed + 13u, false));
+            // The woods follow the water, thick in the valleys and runnels it wore.
+            if (g.terrain) in_woods = std::clamp(0.6f * in_woods + 1.2f * g.terrain->sample(g.terrain->wet, p), 0.0f, 1.0f);
             float keep = in_woods + (1.0f - in_woods) * open_share;
             if (d > kHorizonTreeThin) keep *= kHorizonTreeThin / d;
             const bool sourced = std::any_of(sources.begin(), sources.end(), [&](const auto& src) {
@@ -1245,6 +1486,122 @@ std::optional<HorizonCacheEntry> read_horizon_cache(std::span<const std::byte> d
         }
         finish_horizon_source(s);
         return e;
+    } catch (const std::out_of_range&) {
+        return std::nullopt;
+    }
+}
+
+} // namespace hailstone::render
+
+namespace hailstone::render {
+
+namespace {
+constexpr std::uint32_t kTerrainMagic = 0x31525448u; // "HTR1"
+// 1: warped ridged hills, droplet wear (kHorizonDroplets, kHorizonDropletSteps) and slumping. Raise it whenever the
+// generator changes what it makes from the same ground.
+constexpr std::uint32_t kTerrainVersion = 1;
+
+// FNV-1a over the bytes of what the terrain is worn from.
+struct Fnv {
+    std::uint64_t h = 1469598103934665603ull;
+    void byte(std::uint8_t b) {
+        h ^= b;
+        h *= 1099511628211ull;
+    }
+    void u32(std::uint32_t v) {
+        for (int i = 0; i < 4; ++i) byte(static_cast<std::uint8_t>(v >> (8 * i)));
+    }
+    // NaN as one value, so that a NaN's bits do not change the key.
+    void f32(float v) { u32(std::isnan(v) ? 0x7fc00000u : std::bit_cast<std::uint32_t>(v)); }
+    void floats(const std::vector<float>& v) {
+        u32(static_cast<std::uint32_t>(v.size()));
+        for (float f : v) f32(f);
+    }
+    void bytes8(const std::vector<std::uint8_t>& v) {
+        u32(static_cast<std::uint32_t>(v.size()));
+        for (std::uint8_t b : v) byte(b);
+    }
+};
+} // namespace
+
+std::uint64_t horizon_terrain_key(const HorizonField& g, const HorizonSources& sources) {
+    Fnv f;
+    f.u32(kTerrainVersion);
+    f.f32(g.land.seed);
+    f.f32(g.land.ground);
+    f.f32(g.land.relief);
+    f.f32(g.lo.x);
+    f.f32(g.lo.y);
+    f.f32(g.cell);
+    f.u32(static_cast<std::uint32_t>(g.nx));
+    f.u32(static_cast<std::uint32_t>(g.ny));
+    for (const auto* layer : {&g.zmin, &g.zmax, &g.water, &g.dist, &g.edge, &g.sea, &g.under, &g.xs, &g.ys})
+        f.floats(*layer);
+    f.bytes8(g.dry);
+    f.bytes8(g.wet);
+    f.bytes8(g.open);
+    f.f32(g.water_level);
+    f.u32(static_cast<std::uint32_t>(sources.size()));
+    for (const auto& s : sources) {
+        for (char c : s->name) f.byte(static_cast<std::uint8_t>(c));
+        f.f32(s->lo.x);
+        f.f32(s->lo.y);
+        f.f32(s->cell);
+        f.u32(static_cast<std::uint32_t>(s->nx));
+        f.u32(static_cast<std::uint32_t>(s->ny));
+        f.floats(s->height);
+        f.floats(s->water);
+        f.u32(s->draws_water ? 1u : 0u);
+    }
+    return f.h;
+}
+
+std::vector<std::byte> write_horizon_terrain(const HorizonTerrain& t, std::uint64_t key) {
+    ByteWriter w;
+    w.le(kTerrainMagic);
+    w.le(kTerrainVersion);
+    w.le(key);
+    w.f32(t.lo.x);
+    w.f32(t.lo.y);
+    w.f32(t.cell);
+    w.f32(t.worn_lo);
+    w.f32(t.worn_hi);
+    const bool ok = t.valid();
+    w.le(static_cast<std::uint32_t>(ok ? t.nx : 0));
+    w.le(static_cast<std::uint32_t>(ok ? t.ny : 0));
+    if (ok) {
+        // An eighth of a unit (the generator's own steps), and the water in 255ths.
+        for (float d : t.delta) w.le(static_cast<std::int16_t>(std::lround(std::clamp(d, -4000.0f, 4000.0f) * 8.0f)));
+        for (float v : t.wet) w.le(static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)));
+    }
+    return w.take();
+}
+
+std::optional<HorizonTerrain> read_horizon_terrain(std::span<const std::byte> data, std::uint64_t key) {
+    try {
+        ByteReader r(data);
+        if (r.le<std::uint32_t>() != kTerrainMagic || r.le<std::uint32_t>() != kTerrainVersion) return std::nullopt;
+        if (r.le<std::uint64_t>() != key) return std::nullopt;
+        HorizonTerrain t;
+        t.lo.x = r.f32();
+        t.lo.y = r.f32();
+        t.cell = r.f32();
+        t.worn_lo = r.f32();
+        t.worn_hi = r.f32();
+        const auto nx = r.le<std::uint32_t>(), ny = r.le<std::uint32_t>();
+        if (!std::isfinite(t.lo.x) || !std::isfinite(t.lo.y) || !(t.cell >= 1.0f && t.cell <= 4096.0f) ||
+            !std::isfinite(t.worn_lo) || !std::isfinite(t.worn_hi) || nx < 2 || ny < 2 ||
+            nx > static_cast<std::uint32_t>(kHorizonTerrainMax + 1) || ny > static_cast<std::uint32_t>(kHorizonTerrainMax + 1))
+            return std::nullopt;
+        const std::size_t n = static_cast<std::size_t>(nx) * static_cast<std::size_t>(ny);
+        if (r.remaining() != n * 3) return std::nullopt;
+        t.nx = static_cast<int>(nx);
+        t.ny = static_cast<int>(ny);
+        t.delta.resize(n);
+        t.wet.resize(n);
+        for (float& d : t.delta) d = static_cast<float>(r.le<std::int16_t>()) / 8.0f;
+        for (float& v : t.wet) v = static_cast<float>(r.le<std::uint8_t>()) / 255.0f;
+        return t;
     } catch (const std::out_of_range&) {
         return std::nullopt;
     }

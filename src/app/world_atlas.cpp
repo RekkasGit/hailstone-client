@@ -423,6 +423,8 @@ AtlasLand atlas_land(const GameDir& game, std::string_view server, std::string_v
     for (const auto& note : plan.notes) log::info("world atlas: {}", note);
     out.missing = plan.missing;
     out.cuts = game::atlas_cuts(plan);
+    for (const auto& p : plan.zones)
+        if (p.hop >= 1) out.placed_zones.push_back({p.zone, p.offset, p.hop});
     auto cut = [&](const render::HorizonSource& s) {
         auto it = out.cuts.find(s.name);
         return it == out.cuts.end() ? s : render::cut_horizon_source(s, it->second);
