@@ -708,13 +708,13 @@ after thirty seconds, a Hailstone recovery choice. See `docs/unknowns.md` for th
 | MonsterMissionResult | Z→C | 0x5a67 | {u32, u32, u32 template ID, u32 result}. Zero acknowledges the selection. |
 
 The first u32 after the regular player profile checksum and checksum size carries the profile type. The RoF2
-profile reader at 0x57c650 and the M5 profile-install trace route it through 0x7bf270 to the live profile's
+profile reader at 0x57c650 routes it through 0x7bf270, which stores it at the live profile's
 `+0x340c` (1 Spirit Shroud, 2 Monster Mission). The form snapshot uses the same base-profile destinations,
 as confirmed by REA's trace of 0x4c2ea0. Character selection applies the roster's alternate race and class
 to the model through 0x51c050.
 
 The native Spirit Shroud sends at 0x41375f, 0x413842 and 0x413912 count the application's opcode in their total
-length. The payload sizes above exclude it. The M5 dispatch listing and the stock Monster Mission handlers at
+length. The payload sizes above exclude it. CTaskManager's message handler (0x482080) and its Monster Mission handlers at
 0x481e80 and 0x482ae0 establish the native mission catalog. The Quest Journal can reopen an offered catalog while
 that task is active. The client uses the catalog's role names and the roster's assignments to show capacity.
 The server decides all form admission, storage, mission progress and rewards. A successful mission selection

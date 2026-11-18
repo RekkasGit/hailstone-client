@@ -84,8 +84,8 @@ ShroudItemReply read_item_reply(ByteReader& r, std::uint32_t selection_id) {
 
 // The ZoneEntry spawn and CharInventory blocks use their usual wire layouts.
 // The section between them is a fixed internal profile image, not the counted
-// OP_PlayerProfile wire format. M5's zone_profile.cpp recovered this fixed
-// representation, which is also used by the RoF2 server shroud encoder.
+// OP_PlayerProfile wire format: Handle_Msg6562_ReplacePlayer @0x4c2ea0 installs
+// it and hands the bytes after its 0x4ff8 to the inventory reader.
 constexpr std::size_t kShroudProfileBytes = 0x4ff8;
 
 std::vector<std::uint32_t> profile_u32_array(ByteReader& r, std::size_t start, std::size_t end) {
