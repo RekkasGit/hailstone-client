@@ -942,13 +942,15 @@ u32 checksum (eq_crc32 of bytes [8, size−1)), u32 size−9, 2×u32; u8 gender,
 
 ### Guild banners
 
-These are zone-session application messages. REA on the RoF2 executable (`2a8702ad…`) identified the Guild window's
-kit request and readers at `0x684ad0`, `0x6836c0`, `0x685670` and `0x6830c0`. M5's zone dispatch shows that the
-corresponding receive selectors are the wire opcodes. M5's profile installation trace maps the guild and unique
-player IDs to the existing profile fields (the profile reader stores the u32 EQEmu writes as `char_id`, after the
-343-byte block, at `0x57ead6`; the installer copies it to PcBase +0x20a8 at `0x579c71`) and the character expansion
-getter to the profile's expansion mask. The native actions use The Buried Sea bit `0x1000` and guild permission 1
-Change, 2 Plant or 3 Remove.
+These are zone-session application messages. The Guild window (CGuildMgmtWnd) sends them from RequestBannerKitList
+(`0x684ad0`: the kit list request, then always the status request), `0x680a40` (the status request alone),
+SaveBannerSettings (`0x6833a0`), `0x683870` (remove) and Send_PlantGuildBanner (`0x54e340`). HandleWorldMessage
+(`0x4c3250`) passes `0x0001` to HandleBannerKitList (`0x6836c0`), `0x56c9` to `0x685670`, `0x1e50` to `0x6830c0`,
+each only while the window is open, and handles `0x4683` itself (`0x4d1aca`). The requests carry PcBase GuildID and
+UniquePlayerID (+0x20a8): the profile reader stores the u32 EQEmu writes as `char_id`, after the 343-byte block, at
+`0x57ead6`, and the installer copies it to +0x20a8 at `0x579c71`. The window's actions need guild permission 1
+Change (`0x6833a0`), 2 Plant or 3 Remove, and UpdateBannerPage also checks bit `0x1000` of PcBase's virtual +0x5c
+(`0x681b6e`), which the client reads as the profile's expansion mask (The Buried Sea; docs/unknowns.md).
 
 | Message | Direction | Wire | Payload |
 | --- | --- | --- | --- |

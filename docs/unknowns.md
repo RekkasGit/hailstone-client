@@ -277,6 +277,9 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   server is needed to verify the full live workflow, including modification-item consumption, portal travel,
   upgrade benefits and the order of kit and status replies. Reserved fields in the banner packets are documented
   in the protocol notes. The in-world cloth uses Hailstone lighting and its two received texture layers.
+  UpdateBannerPage checks bit `0x1000` of PcBase's virtual +0x5c (`0x681b6e`); the client takes it as the
+  profile's expansion mask and gates Change, Plant and Remove on it (The Buried Sea in EQEmu's list), but the
+  getter behind +0x5c was not traced.
   While the design editor is open, the original asks for the kit list and status again after every mode 2
   status reply (`0x685670`); if a server answers each status request with mode 2, that repeats until the editor
   closes. The client does the same; a banner server's traffic would show whether it does.
