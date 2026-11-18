@@ -90,10 +90,9 @@ local function note(text)
   ui.TableNextRow()
   ui.TableNextColumn()
   ui.TableNextColumn()
-  local d = C.faint
-  ui.PushStyleColor(ui.Col.Text, d[1], d[2], d[3], d[4] or 1)
-  ui.TextWrapped(text)
-  ui.PopStyleColor()
+  ui.PushTextWrapPos(0)
+  ui.TextDisabled(text)
+  ui.PopTextWrapPos()
 end
 
 -- A heading and a table of rows. While a search is typed, a section none of whose rows match is left out whole; the
