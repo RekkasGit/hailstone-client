@@ -2066,6 +2066,7 @@ void LuaUi::frame(bool draw) {
     Impl& m = *impl_;
     lua_State* L = m.L;
     core::frame_sections::Lap lap;
+    core::lua_scratch_new_generation(); // (no Lua runs here: a scratch box still held was left by a raise)
     if (m.scripts.empty() && m.last_scan == Clock::time_point{}) {
         m.last_scan = Clock::now();
         m.scan(true);
