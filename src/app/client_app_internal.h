@@ -199,9 +199,10 @@ inline float ui_scale_setting(const ClientOptions& o) {
 // The upscaler provider hailstone.ini's display.upscaler names (render/upscaler_provider.h), loaded before the
 // Vulkan instance is made, which takes its requirements; nullptr for the client's own upscalers. Read at the start
 // only, as display.upscaler always is.
-inline std::unique_ptr<render::UpscalerProvider> start_upscaler_provider() {
+inline std::unique_ptr<render::UpscalerProvider> start_upscaler_provider(const ClientOptions& o) {
     Config c;
-    if (!c.load(default_config_path())) return nullptr;
+    if (!c.load(default_config_path()) && o.display_settings.empty()) return nullptr;
+    for (const auto& [key, value] : o.display_settings) c.set_run_override(key, value); // --upscaler
     return render::load_upscaler_setting(c.get_string("display.upscaler", "off"), platform::upscalers_dir(),
                                          platform::cache_dir() / "upscalers");
 }
@@ -257,7 +258,7 @@ public:
     ClientApp& operator=(const ClientApp&) = delete;
     explicit ClientApp(ClientOptions& options)
         : opts_(options), window_(window_desc(options)),
-          vk_(window_, options.validation, start_upscaler_provider()),
+          vk_(window_, options.validation, start_upscaler_provider(options)),
           ui_(window_, vk_,
               ui::ImGuiLayerDesc{.scale_override = ui_scale_setting(options),
                                  .ini_path = platform::imgui_ini()}) {
@@ -284,6 +285,12 @@ public:
         }
         // A new install's graphics settings for this computer (render/graphics_tier.h), before they are first read.
         detect_graphics_at_first_start();
+        // The display flags (--lighting, --msaa ...) over the saved settings for this run, after a new install's own
+        // settings are written; a change in the Options window takes over from them (Config::set_run_override).
+        for (const auto& [key, value] : opts_.display_settings) {
+            config_.set_run_override(key, value);
+            log::info("{} = {} for this run (a command-line flag)", key, value);
+        }
         // The settings (hailstone.ini's until a character enters, then the character's: apply_settings), before the
         // renderers: their pipelines take the sample count.
         apply_settings();

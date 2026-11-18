@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The client now takes `--lighting` and the other display flags (`--msaa`, `--tonemap`, `--exposure`, `--shadows`, `--light-shadows`, `--no-ao`, `--depth-prepass`, `--bloom`, `--render-scale`, `--sharpness`, `--upscaler`, `--frame-gen`, `--view-distance`) for that run, over the saved settings and without saving them; they used to reach only the zone and model viewers. `--lighting none` stays the viewer's
 - `--window-size 1280x720` now opens a 1280 x 720 window. That size was taken as no size given, so the window came back at its saved size instead
 - Grass: it now grows where a zone line's region lies over the ground. Some classic zone lines are boxes the size of a field: the whole field north of North Qeynos, by the gate to Qeynos Hills, had none
 - Modern lighting: the grass goes on for about 300 units past the edge of an outdoor zone onto the distant land, so it no longer stops in a line where the zone's ground ends
