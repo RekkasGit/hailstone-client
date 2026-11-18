@@ -34,6 +34,8 @@ LINE = re.compile(r"^OP_([A-Za-z0-9_]+)\s*=\s*0x([0-9A-Fa-f]{1,4})\b")
 # UpdateAltResponse is the campsite kit list, not an alternate roster.
 # Native guild banner sends: 0x684ad0 (kit and status requests), 0x6833a0 (save),
 # 0x54e340 (plant), 0x683870 (remove). Receive routes: 0x4d19ab and 0x4d1970.
+# Shrouding and Shroud Bank use the stock manager routes, also mapped in the EQEmu draft.
+# The stock task manager at 0x482080 uses separate Monster Mission messages.
 STOCK_ROF2_ADDITIONS = (
     ("AchievementReward", 0x6411), ("RewardSelection", 0x6471),
     ("AchievementDefinitions", 0xDAB0), ("AchievementUpdate", 0x618F),
@@ -49,6 +51,15 @@ STOCK_ROF2_ADDITIONS = (
     ("GuildBannerModificationToken", 0x1E50),
     ("GuildBannerSave", 0x4377), ("GuildBannerPlant", 0x765B), ("GuildBannerRemove", 0x9E18),
     ("GuildBannerAppearance", 0x4683),
+    ("AltStorage", 0x7B71), ("AltStorageList", 0x1115), ("AltStorageNoItems", 0x0728),
+    ("Shroud", 0x6562), ("ShroudRemove", 0x67E8), ("ShroudSelectionWindow", 0x2EC3),
+    ("ShroudRequestStats", 0x2B37), ("ShroudRespondStats", 0x6C04), ("ShroudSelect", 0x1CD0),
+    ("ShroudSelectCancel", 0x79DA), ("ShroudProgress", 0x541D), ("ShroudProgress2", 0x3823),
+    ("ShroudRequestAbility", 0x3ACC), ("ShroudRespondAbility", 0x006E),
+    ("ShroudRequestItem", 0x4B25), ("ShroudRespondItem", 0x2507),
+    ("MonsterMissionCatalog", 0x3C54), ("MonsterMissionStats", 0x3D20),
+    ("MonsterMissionAbility", 0x34F4), ("MonsterMissionItem", 0x5F08),
+    ("MonsterMissionSelect", 0x4EEA), ("MonsterMissionAssignment", 0x2E8D), ("MonsterMissionResult", 0x5A67),
 )
 
 

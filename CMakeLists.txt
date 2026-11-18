@@ -216,6 +216,7 @@ add_library(hailstone_engine STATIC
   src/net/game_connection_options.cpp
   src/net/game_connection_client.cpp
   src/net/game_connection_progress.cpp
+  src/net/game_connection_shroud.cpp
   src/net/game_connection_player.cpp
   src/net/game_connection_game_commands.cpp
   src/net/game_connection_names.cpp
@@ -242,6 +243,7 @@ add_library(hailstone_engine STATIC
   src/net/guild_bank_packets.cpp
   src/net/real_estate_packets.cpp
   src/net/task_packets.cpp
+  src/net/shroud_packets.cpp
   src/net/reward_packets.cpp
   src/net/achievement_packets.cpp
   src/net/game_connection_rewards.cpp
@@ -1212,6 +1214,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/ui_rules_vectors_test.cpp
     tests/net_login_test.cpp
     tests/net_packets_test.cpp
+    tests/shroud_packets_test.cpp
     tests/pfs_test.cpp
     tests/pfs_mapped_test.cpp
     tests/wld_deferred_test.cpp
@@ -1283,6 +1286,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/spell_sets_test.cpp
     tests/hot_button_sets_test.cpp
     tests/group_commands_test.cpp
+    tests/shroud_flow_test.cpp
     tests/leadership_bonuses_test.cpp
     tests/leadership_spell_awareness_test.cpp
     tests/raid_invites_test.cpp
