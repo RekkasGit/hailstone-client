@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A Lua script that ends with an error writes it to the client's log once, with its traceback; the error's first line was written twice
 - Server add-on policies: why entry was refused (an add-on missing, too old, changed, or needing capabilities the server does not allow) is now in the client's log too, one line for each, not only on the login screen
 - Server add-on policies: the warnings about a required add-on that failed or is missing name it by its repository (`owner/repo`), as the server's list does, not by its folder or plugin name
 - `/nav ... distance=<n>` stops that far from the goal along the path again; when the path bent round the goal near its end, the walk went on to the last corner, right up to the NPC

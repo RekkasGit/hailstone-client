@@ -1823,8 +1823,7 @@ void ScriptHost::pulse() {
             luaL_traceback(s.L, s.co, err ? err : "error", 0);
             std::string trace = lua_tostring(s.L, -1);
             lua_pop(s.L, 1);
-            s.fail(trace.substr(0, trace.find('\n')));
-            log::warn("lua script {}: {}", s.name, trace);
+            s.fail(trace.substr(0, trace.find('\n')), trace); // the traceback in the log, once
         }
         m.resume_threads(s);
         --s.busy;
