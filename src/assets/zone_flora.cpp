@@ -589,7 +589,8 @@ std::size_t ZoneFloraGrower::triangles() const { return d_->tris.size(); }
 namespace {
 
 // Whether a plant may stand at `p` with the texel `under` beneath it: +green's test (a texture that cannot be read
-// grows nothing with +green: no telling grass from stone), out of water, lava and zone lines, and not under cover.
+// grows nothing with +green: no telling grass from stone), out of water and lava, and not under cover. A zone line's
+// region does not keep it out: a classic zone's can be a box over a whole field (North Qeynos's to Qeynos Hills).
 bool green_enough(const ZoneFloraRules::Ground& ground, const std::optional<std::uint32_t>& under) {
     if (!under) return false;
     const auto r = static_cast<std::uint8_t>(*under & 0xff), g = static_cast<std::uint8_t>(*under >> 8 & 0xff),
@@ -603,9 +604,9 @@ bool may_grow(const ZoneFloraGrower::Data& d, const ZoneFloraRules::Ground& grou
               const glm::vec3& p, bool green = true, bool cover = true) {
     if (green && ground.green_only && !green_enough(ground, under)) return false;
     if (!d.regions.empty()) {
-        // In the water or lava, or standing on its surface (the region just under the foot), or in a zone line.
+        // In the water or lava, or standing on its surface (the region just under the foot).
         const RegionInfo r = d.regions.lookup(p + glm::vec3(0.0f, 0.0f, 1.0f));
-        if (r.is_water() || r.is_lava() || r.is_zone_line()) return false;
+        if (r.is_water() || r.is_lava()) return false;
         const RegionInfo below = d.regions.lookup(p - glm::vec3(0.0f, 0.0f, 1.0f));
         if (below.is_water() || below.is_lava()) return false;
     }
