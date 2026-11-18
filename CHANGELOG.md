@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `/nav ... distance=<n>` stops that far from the goal along the path again; when the path bent round the goal near its end, the walk went on to the last corner, right up to the NPC
 - Closing the game window while a zone change was coming (a `#zone`, a gate) no longer leaves the client running: the zone change ended the camp the close started, and nothing camped again. The client now camps to the desktop again once the next zone shows
 - The client now takes `--lighting` and the other display flags (`--msaa`, `--tonemap`, `--exposure`, `--shadows`, `--light-shadows`, `--no-ao`, `--depth-prepass`, `--bloom`, `--render-scale`, `--sharpness`, `--upscaler`, `--frame-gen`, `--view-distance`) for that run, over the saved settings and without saving them; they used to reach only the zone and model viewers. `--lighting none` stays the viewer's
 - `--window-size 1280x720` now opens a 1280 x 720 window. That size was taken as no size given, so the window came back at its saved size instead
