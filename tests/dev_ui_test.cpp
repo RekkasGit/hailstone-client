@@ -18,6 +18,7 @@
 #include "platform/open_folder.h"
 #include "ui/dev_screens.h"
 #include "ui/imgui_layer.h"
+#include "ui/lua/lua_host.h"
 
 namespace {
 struct VisibilityUi {
@@ -93,34 +94,39 @@ TEST_CASE("UI visibility: hiding discards every draw list while preserving the w
     CHECK(ui.shown);
 }
 
-TEST_CASE("Loading presentation: questions stay above its background and ordinary loading keeps its foreground cover") {
-    for (const bool cover_ui : {false, true})
-    for (const bool presentation_first : {false, true}) {
-        CAPTURE(cover_ui);
-        CAPTURE(presentation_first);
+TEST_CASE("Loading presentation: over every window, or beneath the plugins' question alone while it waits") {
+    for (const bool question : {false, true}) {
+        CAPTURE(question);
         VisibilityUi ui;
         hailstone::ui::LoadingView loading;
         loading.title = "Checking required add-ons";
         loading.detail = "Review the plugin's permission request.";
         loading.progress = 0.5f;
+        hailstone::ui::lua::set_consent_guard(question);
         for (int frame = 0; frame < 2; ++frame) {
             ui.begin();
-            auto present = [&] {
-                if (cover_ui) hailstone::ui::loading_overlay(loading); // retain the existing one-argument contract
-                else hailstone::ui::loading_overlay(loading, false);
-            };
-            if (presentation_first) present();
+            // As ClientApp::run: without a question, the overlay (order does not matter); with one, the cover after the
+            // frame's other windows, then the question's windows raised above it.
+            if (!question) hailstone::ui::loading_overlay(loading);
             ImGui::SetNextWindowPos(ImVec2(100, 100));
             ImGui::SetNextWindowSize(ImVec2(360, 180));
             ImGui::Begin("Server plugin permission", nullptr, ImGuiWindowFlags_NoSavedSettings);
+            hailstone::ui::lua::guard_current_window();
             ImGui::TextUnformatted("Allow this server's plugin?");
             ImGui::Button("Allow");
-            ImGui::SameLine();
-            ImGui::Button("Don't allow");
-            const ImDrawList* question = ImGui::GetWindowDrawList();
+            const ImDrawList* asked = ImGui::GetWindowDrawList();
             ImGui::End();
-            if (!presentation_first) present();
-            const ImDrawList* presentation = cover_ui ? ImGui::GetForegroundDrawList() : ImGui::GetBackgroundDrawList();
+            // Another window, begun after the question (it would be in front of it without the raise).
+            ImGui::SetNextWindowPos(ImVec2(50, 50));
+            ImGui::SetNextWindowSize(ImVec2(200, 120));
+            ImGui::Begin("Chat", nullptr, ImGuiWindowFlags_NoSavedSettings);
+            ImGui::TextUnformatted("hello");
+            const ImDrawList* other = ImGui::GetWindowDrawList();
+            ImGui::End();
+            if (question) {
+                hailstone::ui::loading_overlay(loading, false);
+                hailstone::ui::lua::raise_guarded_windows();
+            }
             REQUIRE(ui.visibility.finish_frame(true));
             const ImDrawData* data = ImGui::GetDrawData();
             REQUIRE(data);
@@ -129,12 +135,25 @@ TEST_CASE("Loading presentation: questions stay above its background and ordinar
                     if (data->CmdLists[i] == list) return i;
                 return -1;
             };
-            REQUIRE(position(question) >= 0);
-            REQUIRE(position(presentation) >= 0);
-            CHECK(presentation->VtxBuffer.Size > 0);
-            if (cover_ui) CHECK(position(question) < position(presentation));
-            else CHECK(position(presentation) < position(question));
+            REQUIRE(position(asked) >= 0);
+            REQUIRE(position(other) >= 0);
+            const ImGuiWindow* cover = ImGui::FindWindowByName(hailstone::ui::kLoadingCoverWindow);
+            if (!question) {
+                const ImDrawList* fg = ImGui::GetForegroundDrawList();
+                CHECK(fg->VtxBuffer.Size > 0);
+                CHECK(position(asked) < position(fg));
+                CHECK(position(other) < position(fg));
+                CHECK(cover == nullptr);
+                continue;
+            }
+            REQUIRE(cover);
+            CHECK(cover->DrawList->VtxBuffer.Size > 0);
+            CHECK(position(other) < position(cover->DrawList));
+            CHECK(position(cover->DrawList) < position(asked));
+            CHECK(ImGui::GetForegroundDrawList()->VtxBuffer.Size == 0);
+            CHECK(ImGui::GetBackgroundDrawList()->VtxBuffer.Size == 0);
         }
+        hailstone::ui::lua::set_consent_guard(false);
     }
 }
 

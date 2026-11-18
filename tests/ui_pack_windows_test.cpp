@@ -87,12 +87,18 @@ struct Session {
             api.begin_frame();
             ImGui::NewFrame();
             if (fallback) (void)ui::in_game_overlay(*fallback);
-            const bool cover_ui = !loading || !host.plugin_consent || !host.plugin_consent().has_value();
-            // Match the app's two call sites: Loading draws before the pack, zone settling after it.
-            if (loading && !host.in_game) ui::loading_overlay(*loading, cover_ui);
+            // As the app draws the loading screen (ClientApp::run): over everything, or, while the plugins' question
+            // waits (Automation::frame's guard), a window after the others with the question raised above it.
+            const bool question = loading && host.plugin_consent && host.plugin_consent().has_value();
+            ui::lua::set_consent_guard(question);
+            if (loading && !question) ui::loading_overlay(*loading);
             lua.frame();
-            if (loading && host.in_game) ui::loading_overlay(*loading, cover_ui);
+            if (question) {
+                ui::loading_overlay(*loading, false);
+                ui::lua::raise_guarded_windows();
+            }
             ImGui::Render();
+            ui::lua::set_consent_guard(false);
         }
     }
 };
@@ -3230,11 +3236,27 @@ TEST_CASE("UI packs: the server plugins' question draws above the loading cover 
             s.frames(3, nullptr, &loading);
             ImGuiWindow* consent = consent_window();
             REQUIRE(consent);
-            const ImDrawList* background = ImGui::GetBackgroundDrawList();
-            CHECK_FALSE(background->VtxBuffer.empty());
-            CHECK(draw_index(background) == 0);
-            CHECK(draw_index(consent->DrawList) > draw_index(background));
+            // The loading screen is a window over every other one (in the world: the pack's windows, drawn before it),
+            // beneath the question alone; nothing goes in the foreground list over the question.
+            ImGuiWindow* cover = ImGui::FindWindowByName(ui::kLoadingCoverWindow);
+            REQUIRE(cover);
+            CHECK_FALSE(cover->DrawList->VtxBuffer.empty());
+            CHECK(draw_index(consent->DrawList) > draw_index(cover->DrawList));
+            int beneath = 0;
+            for (ImGuiWindow* win : ImGui::GetCurrentContext()->Windows) {
+                if (win == cover || win->RootWindow == consent || !win->WasActive || win->DrawList->VtxBuffer.empty() ||
+                    draw_index(win->DrawList) < 0)
+                    continue;
+                CAPTURE(win->Name);
+                CHECK(draw_index(win->DrawList) < draw_index(cover->DrawList));
+                ++beneath;
+            }
+            if (in_game) CHECK(beneath > 0); // (the pack draws its game windows; the check above has something to do)
             CHECK(ImGui::GetForegroundDrawList()->VtxBuffer.empty());
+            // The mouse anywhere but the question is over the cover, not the windows beneath it.
+            ImGui::GetIO().AddMousePosEvent(consent->Pos.x > 40.0f ? 5.0f : 1595.0f, 895.0f);
+            s.frames(1, nullptr, &loading);
+            CHECK(ImGui::GetCurrentContext()->HoveredWindow == cover);
             CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
             prompt.reset();
             s.frames(2, nullptr, &loading);
