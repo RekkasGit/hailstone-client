@@ -621,18 +621,22 @@ lookup 1500, follow AI 3000):
   random helpers are a `ChatRandom`, replayed from the vectors' recorded calls).
 - Melee lines (`game::damage_report`, `hit_line_shown`; no vectors, unit tests in `tests/combat_test.cpp`):
   ReportSuccessfulHit's chat filters, a filter hiding when its mode is 1 (setting 0). A hit by somebody else on
-  somebody else under filter 15 shows exactly when the player's pet hit; an NPC
+  somebody else under filter 15 shows exactly when the player's pet hit (and was reported, see below); an NPC
   hitting itself is never reported; a miss on the player is hidden under 16, the player's own under 13, somebody
   else's on somebody else under 14 shows exactly when the player's pet missed. The pet's lines take colour 0x148.
-  **Deliberate Hailstone changes:** `combat.report_range = 200` in `hailstone.ini` sets the maximum distance
-  from the player to the victim for received melee hit/miss lines (pets and others) and their hit sounds,
-  including killing blows and the separate "X has been slain by Y" death text. Any finite positive distance is accepted; missing, invalid or nonpositive values
-  use 200. `75` restores the original OP_Damage range (RoF2 used a separate 50 for killing blows). Damage by
-  or on the player is not range-limited. The others' hit/miss pet exceptions no longer revive an unreported
-  line: hiding others cannot bypass the distance check. Only packets the server actually sends can be shown;
-  spell/server text messages keep their existing handling. This is a character setting, read on login; edit
-  `servers/<profile>/characters/<world>/<character>/hailstone.ini` for an existing character, or the main
-  `hailstone.ini` for new characters.
+  Which lines are reported at all follows the original's distances: Handle_OP_Damage reports a hit between two
+  others only when the victim is within 75 units of the player (@0x4b5a8a), and OP_Death reports the killing
+  blow and the death text only within 50 (`game::report_death`); damage by or on the player always reports.
+  **Extension** (hailstone.ini `combat.report_range`, unset by default): one distance from the player to the
+  victim in place of both, for others' melee hit and miss lines (the pet's included), their hit sounds, killing
+  blows and the "X has been slain by Y" text. Unset, not a number or not above 0 keeps RoF2's 75 and 50. It
+  can only show what the server sends: stock EQEmu sends OP_Damage only within its `Range:DamageMessages`
+  (50 by default) of the attacker, so a larger value helps only where the server raises that rule. Spell and
+  server text messages are not affected. It is a character setting (`servers/<profile>/characters/<world>/
+  <character>/hailstone.ini`, or the main `hailstone.ini` as the default for every character).
+  **Deliberate change from RoF2 (a fix):** with filter 15 or 14 hiding others' lines, the original replaces
+  the report flag with the pet flag (@0x53092c, @0x53078b), so the pet's lines beyond the report range showed
+  only while others' were hidden. Here an unreported line stays hidden whatever the filters.
   Owned-pet classification matches ReportSuccessfulHit @0x52efd3: the focused pet (PetID), or an attacker with
   the spawn record's temporary-pet byte set and MasterID equal to the local player's SpawnID. The summoned bit
   alone does not qualify. The temporary flag is retained on every full spawn update and ownership changes apply

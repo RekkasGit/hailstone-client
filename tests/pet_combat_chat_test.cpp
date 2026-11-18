@@ -163,13 +163,15 @@ TEST_CASE("Pet combat chat: current owner and replacement records determine temp
     w.expect_line(false); // No local player must not make an ownerless temporary pet ours.
 }
 
-TEST_CASE("Pet combat chat: killing blows obey the configured range with either others filter") {
+TEST_CASE("Pet combat chat: killing blows obey the death range with either others filter") {
     PetCombatWorld w;
     w.spawn(20, 0, 1);
     w.spawn(21, 1, 1);
     w.spawn(22, 1, 12);
-    for (float range : {75.0f, 200.0f, 300.0f}) {
-        w.conn->set_combat_report_range(range);
+    for (float setting : {0.0f, 75.0f, 200.0f, 300.0f}) {
+        w.conn->set_combat_report_range(setting);
+        // Unset: RoF2's 50 for OP_Death (game::report_death).
+        const float range = setting > 0.0f ? setting : net::GameConnection::kRof2DeathReportRange;
         for (bool hide_others : {false, true}) {
             w.conn->set_chat_filter(15, hide_others ? 0 : 1);
             for (std::uint32_t killer : {20u, 21u, 22u}) {
@@ -204,27 +206,32 @@ TEST_CASE("Pet combat chat: killing blows obey the configured range with either 
     }
 }
 
-TEST_CASE("Pet combat chat: default range is 200 from the target and filters cannot bypass it") {
+TEST_CASE("Pet combat chat: the hit range defaults to RoF2's 75 from the target and filters cannot bypass it") {
     PetCombatWorld w;
     w.spawn(20, 0, 1);
     w.spawn(21, 1, 1);
     w.spawn(22, 0, 0);
     // Range is measured to the victim, not to the attacker.
     for (auto id : {20u, 21u, 22u}) w.conn->world_for_test().spawns.at(id).position = {1000, 0, 0};
-    for (bool hide_others : {false, true}) {
-        w.conn->set_chat_filter(14, hide_others ? 0 : 1);
-        w.conn->set_chat_filter(15, hide_others ? 0 : 1);
-        for (float distance : {75.0f, 135.0f, 200.0f, 200.25f}) {
-            w.conn->world_for_test().spawns.at(10).position = {0, distance, 0};
-            for (std::uint16_t source : {std::uint16_t{20}, std::uint16_t{21}, std::uint16_t{22}}) {
-                for (std::int32_t amount : {7, 0}) {
-                    CAPTURE(hide_others);
-                    CAPTURE(distance);
-                    CAPTURE(source);
-                    CAPTURE(amount);
-                    w.damage(source, amount);
-                    w.expect_line(distance <= 200.0f && (!hide_others || source != 22),
-                                  source != 22 ? 0x148u : (amount ? 279u : 280u));
+    for (float setting : {0.0f, 200.0f}) {
+        w.conn->set_combat_report_range(setting);
+        const float range = setting > 0.0f ? setting : 75.0f;
+        for (bool hide_others : {false, true}) {
+            w.conn->set_chat_filter(14, hide_others ? 0 : 1);
+            w.conn->set_chat_filter(15, hide_others ? 0 : 1);
+            for (float distance : {50.0f, 75.0f, 75.25f, 135.0f, 200.0f, 200.25f}) {
+                w.conn->world_for_test().spawns.at(10).position = {0, distance, 0};
+                for (std::uint16_t source : {std::uint16_t{20}, std::uint16_t{21}, std::uint16_t{22}}) {
+                    for (std::int32_t amount : {7, 0}) {
+                        CAPTURE(setting);
+                        CAPTURE(hide_others);
+                        CAPTURE(distance);
+                        CAPTURE(source);
+                        CAPTURE(amount);
+                        w.damage(source, amount);
+                        w.expect_line(distance <= range && (!hide_others || source != 22),
+                                      source != 22 ? 0x148u : (amount ? 279u : 280u));
+                    }
                 }
             }
         }
@@ -236,17 +243,16 @@ TEST_CASE("Pet combat chat: default range is 200 from the target and filters can
     w.expect_line(true, 266);
 }
 
-TEST_CASE("Pet combat chat: ini range overrides and invalid values fall back to 200") {
+TEST_CASE("Pet combat chat: the ini range overrides and invalid values keep RoF2's range") {
     PetCombatWorld w;
     w.spawn(20, 0, 1);
     for (const auto& [value, range] :
-         {std::pair{"75", 75.0f}, {"300.5", 300.5f}, {"", 200.0f}, {"invalid", 200.0f},
-          {"nan", 200.0f}, {"inf", 200.0f}, {"0", 200.0f}, {"-1", 200.0f}}) {
+         {std::pair{"40", 40.0f}, {"300.5", 300.5f}, {"", 75.0f}, {"invalid", 75.0f},
+          {"nan", 75.0f}, {"inf", 75.0f}, {"0", 75.0f}, {"-1", 75.0f}}) {
         CAPTURE(value);
         Config config;
         config.parse(std::string("combat.report_range = ") + value);
-        w.conn->set_combat_report_range(
-            config.get_float("combat.report_range", net::GameConnection::kDefaultCombatReportRange));
+        w.conn->set_combat_report_range(config.get_float("combat.report_range", 0.0f));
         for (float distance : {range, range + 0.25f}) {
             w.conn->world_for_test().spawns.at(10).position = {distance, 0, 0};
             w.damage(20);
@@ -255,10 +261,10 @@ TEST_CASE("Pet combat chat: ini range overrides and invalid values fall back to 
     }
     for (float range : {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
         w.conn->set_combat_report_range(range);
-        w.conn->world_for_test().spawns.at(10).position = {200, 0, 0};
+        w.conn->world_for_test().spawns.at(10).position = {75, 0, 0};
         w.damage(20);
         w.expect_line(true);
-        w.conn->world_for_test().spawns.at(10).position.x = 201;
+        w.conn->world_for_test().spawns.at(10).position.x = 76;
         w.damage(20);
         w.expect_line(false);
     }
@@ -274,11 +280,12 @@ TEST_CASE("Pet combat chat: death announcements use combat range and retain loca
     w.game->rescan();
     w.conn->reload_game_files();
     w.spawn(20, 0, 1);
-    for (float range : {75.0f, 200.0f, 300.0f}) {
-        w.conn->set_combat_report_range(range);
+    for (float setting : {0.0f, 75.0f, 200.0f, 300.0f}) {
+        w.conn->set_combat_report_range(setting);
+        const float range = setting > 0.0f ? setting : 50.0f; // unset: RoF2's 50
         for (std::uint32_t killer : {0u, 1u, 20u, 999u}) {
-            for (float distance : {60.0f, range, range + 1.0f}) {
-                CAPTURE(range);
+            for (float distance : {40.0f, range, range + 1.0f}) {
+                CAPTURE(setting);
                 CAPTURE(killer);
                 CAPTURE(distance);
                 w.spawn(30, 0, 0);

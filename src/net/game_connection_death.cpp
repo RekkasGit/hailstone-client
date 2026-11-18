@@ -29,7 +29,7 @@ void GameConnection::handle_death(const Death& d) {
     game::Spawn* dead = find(d.spawn_id);
     const game::Spawn* killer = find(d.killer_id);
     game::DeathInput in;
-    in.report_range = combat_report_range_;
+    in.report_range = combat_report_range_ > 0.0f ? combat_report_range_ : kRof2DeathReportRange;
     in.dead_known = dead != nullptr;
     in.dead_is_local = d.spawn_id == me;
     in.dead_id = d.spawn_id;
@@ -138,10 +138,10 @@ void GameConnection::handle_death(const Death& d) {
         auto_target_due_ = true; // Hailstone (auto_target_xtarget): another attacker on the list, if any
     }
     std::erase(xtarget_attackers_, d.spawn_id);
-    // Hailstone: killing blows use the configured combat range too, not RoF2's separate 50-unit death range.
+    // ReportSuccessfulHit: the killing blow, shown when reported (OP_Death's 50 units, or combat.report_range).
     if (r.hit)
         if (auto line = game::damage_report(strings_, world_, d.spawn_id, d.killer_id, r.hit_type, r.hit_damage, 0))
-            report_hit(*line, d.killer_id, hit_reported(d.spawn_id, d.killer_id));
+            report_hit(*line, d.killer_id, r.hit_report);
     if (d.damage > 0 && d.attack_skill < 231) melee_sound(d.spawn_id, d.killer_id, static_cast<std::int32_t>(d.damage));
     if (r.local_died) {
         release_eye_control(true);

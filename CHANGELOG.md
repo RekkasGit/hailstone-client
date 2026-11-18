@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Combat chat: received melee hits and misses, including your pet's, killing blows and death announcements, now show up to 200 units away. Set `combat.report_range` in your character's `hailstone.ini` to change it (75 for the original hit range). Hiding others' hits or misses no longer lets your pet's lines bypass the range. The server still decides which damage it sends.
+- Combat chat: `combat.report_range` in the character's `hailstone.ini` sets how far away others' melee hits and misses (your pet's included), killing blows and death messages are shown. Unset, the original's 75 units for hits and 50 for deaths stay. The server still decides which damage it sends: stock EQEmu sends others' melee damage only within 50 units unless its `Range:DamageMessages` rule is raised. Hiding others' hits or misses no longer lets your pet's out-of-range lines through.
 - NPCs, pets and other players that have stopped no longer walk in place with their footsteps sounding: a spawn that has not moved for a second plays its standing and idle animations
 - Permission requests for required plugins appear above the loading screen, where players can allow or refuse them.
 - Achievements: objective counts and live state updates now arrive as the original client reads them. A progress record whose type is a requirement kind (3 or 4, as some servers send) was refused, so the window kept saying "Objective counts have not arrived yet"; and a state update whose leading number was not newer than the last was dropped, which the original never checks. A progress record for an unknown achievement or a descriptive-only objective is now skipped instead of throwing away the whole packet
