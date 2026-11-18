@@ -3,7 +3,6 @@
 
 #include <doctest/doctest.h>
 
-#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -12,6 +11,7 @@
 #include "mock_server/harness.h"
 #include "mq_test_world.h"
 #include "net/item_packets.h"
+#include "net/spell_packets.h"
 
 using namespace hailstone;
 using namespace hailstone::net;
@@ -99,8 +99,8 @@ TEST_CASE("CastSpell over the live adapter: SPA 129 range focus from a worn item
     for (const auto& p : rig.server.zone_log)
         if (from_wire(p.opcode) == Op::CastSpell) sent = &p;
     REQUIRE(sent);
-    REQUIRE(sent->data.size() >= 8);
-    std::uint32_t spell_id = 0;
-    std::memcpy(&spell_id, sent->data.data() + 4, 4);
-    CHECK(spell_id == 6810);
+    auto packet = decode_cast_spell(*sent);
+    REQUIRE(packet);
+    CHECK(packet->spell_id == 6810);
+    CHECK(packet->target_id == kTarget);
 }
