@@ -201,6 +201,15 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 - AllowedToAttack's newbie-zone rule reads the target's Zone (+0x210); the client fills it for every spawn with the current zone's id and instance (`AttackCheckInput::zone`), as a spawn is only known in the player's own zone. Where the original writes a spawn's +0x210 (the spawn packet or the zone-in) was not traced; tracing those writes would settle it.
 
 - Buffs in a zone that suspends them (OP_NewZone +876, 0xddfc5c), what is still open. The plugin bulk reads of the player's own buffs (`get_buff_data_bulk`, `get_buff_name_data_bulk`) take no zone flag: they stay right only because the held buff tick sets `received_ms` every 6 s, so without the game folder's BaseData.txt row for the character (the tick then waits) they count a held buff down by the time since it arrived. `get_pet_buff_data_bulk` takes no zone flag either, so it counts a pet's suspendable buff down while the pet windows hold it; the method is its author's to change (its comment asks for that). Pet and target buffs are not ticked by the client: when a quest clears the flag in the middle of a zone (EQEmu's `set_zone_header("suspendbuffs", 0)` sends OP_NewZone again), the ones that came before it count down by all the time since they came until the server sends them again. A live session with a pet in a suspendbuffs zone, and one where a script clears the flag, would show how far they drift.
+- Spell descriptions with a live game folder and no server `eqstr_us.txt`: the spell display and the item display put
+  a description in RoF2's eqstr 8507 ("Spell Effect:  %1"); a live `eqstr_us.txt` has another sentence under that id
+  ("Your %1 equipment set failed to load due to an error. (%2)"), so Courage's description reads "Your Provides your
+  target with ... equipment set failed to load due to an error. ()". The description itself (dbstr type 6, its `#` /
+  `$` / `@` / `%` codes) is filled correctly; the wrapper id is RoF2's. This is docs/layout.md's "Files the server must
+  match": the stock PEQ test server's `client_files` (export_client_files) bring `dbstr_us.txt` and `spells_us.txt` but
+  no `eqstr_us.txt`, so the live file is read and every one of its reworded ids can show such text. Not worked around in
+  the client (it would mean carrying RoF2's string table). Settled by the server's assets bringing RoF2's
+  `eqstr_us.txt`; whether to refuse a live file's reworded ids instead is open.
 
 ## Items, inventory and commerce
 
@@ -357,7 +366,7 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 - The spell book's Mem. This Page buttons do nothing in RoF2: the window looks them up but never handles them, and its layout makes them 1 x 1; neither pack shows them.
 - The trophy tribute, zone guide and zone path windows have no data on EQEmu servers.
 - The Find window's quest givers (server/README.md) are the NPCs whose own quest file has a say or hand-in handler, by the file's text: a handler a Perl plugin or an encounter adds at run time is missed, and a file that has the handler but does nothing in it is counted. Two NPC types with the same name in a zone, one of them scripted by id, both show as having quests. Asking EQEmu's own `HasQuestSub` from Lua (not exposed) would settle it. The tribute trophy list is empty.
-- Voice macros and audio triggers are not implemented by choice, nor are a few commercial-service windows (the marketplace's funding and credit-card pages, polls, alerts and event calendar, trading cards, social sharing).
+- Voice macros and audio triggers are not implemented by choice, nor are a few commercial-service windows (the marketplace's funding and credit-card pages, polls, alerts and event calendar, trading cards, social sharing). The alert history window and its key stay; a stock server sends no alerts, so it is empty.
 - Context menus and the EQ menu use this client's own style; the cursor attachment's placement is approximate.
 - Windows scale with the display scale; sizes are stored unscaled.
 - Escape and the UI pack's windows: the modern pack's windows close on the close-top-window key only when "Close with Esc" is ticked in their right-click menu (on by default for the windows opened to look at something, listed in `lib/escape.lua` DEFAULT_ON; off for the rest), the frontmost by the order they were opened or clicked. Which of the original's windows close on Escape, in which order, and whether it then also clears the target, is not traced (CLOSE_TOP_WINDOW in `__ExecuteCmd` and the window manager's escape handling would settle it).

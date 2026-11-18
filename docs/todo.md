@@ -140,6 +140,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [ ] Trades with players: live separation with outstanding items and coin; the merchant page-handler-2 exception (docs/mechanics.md "Leaving an NPC interaction").
 - [x] Partial-stack looting asks the quantity (EQEmu ignores it); Link All; the loot music (entry 5 has no asset).
 - [x] Loot All preserves an active queue on repeated activation (an individual request in flight does not block it), and retains the first NO DROP question when a later confirmation aborts the queue (planner and mock-server regressions; docs/mechanics.md "Loot All").
+- [x] Loot All: a second click while its "are you sure" question is up or queued asks nothing more (mock-server regression).
 - [ ] Loot All: live rapid activation with delayed replies and recovery from several NO DROP items requiring confirmation.
 - [ ] Loot All: trace native auto-close timing when an accepted NO DROP question overlaps the last automatic request (docs/unknowns.md).
 - [x] Ctrl + right-click bag swapping; Ctrl+click bag contents' slot order and refusal text (game/bag_move).
@@ -308,6 +309,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] `mq.TLO` values' metatable locked, so a script cannot swap in a `__gc` (tests/mq_lua_test.cpp).
 - [x] MQ's `Math` TLO (its Calculate arithmetic), `If` and `Range`, and the rest of MQ's int, float and string members, with MQ's edge cases (`mq/calc.h`; tests/mq_calc_test.cpp, tests/mq_tlo_test.cpp).
 - [x] Spawn searches follow MacroQuest's words and matching rules: spawn types, pets, 3D radius, named test, group, raid, guild, xtarget, light, player state (`mq/spawn_search.h`; tests/mq_tlo_test.cpp).
+- [x] The alerts key (CMD_HISTORIC_ALERTS, __ExecuteCmd case 168) toggles AlertHistoryWnd in both packs, listed with its Shift+H default (unit tests; seen live in the Modern pack on the stock PEQ test server).
 - [ ] MacroQuest's alert lists (`/alert`, and the spawn search's `alert`, `noalert`, `nearalert`, `notnearalert`): none kept yet, so those words act as with an empty list.
 - [ ] The spawn search's `next` / `prev` (MacroQuest's `/target next`, cycling from the current target through the matching spawns): accepted and ignored.
 - [x] `mq.event` patterns match as MacroQuest's Lua events do (Blech): case-insensitive, every `#...#` up to the first place the next literal is, `#name#`, `|${...}|`, `##` / `||`, arguments by number with gaps, item links shown as their text unless `keepLinks` (`mq/event_pattern.h`; tests/mq_event_pattern_test.cpp).
@@ -331,6 +333,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] Trace and fix the upstream gamepad all-pack smoke test's cursor-extent assertion with ImGui debug checks enabled (docs/unknowns.md "UI").
 
 - [x] Group role controls in both packs: right-click member names or the player's own name (Y on a gamepad Group window row), with server-confirmed role icons beside names in the Group and Player windows; leader-only Main Tank / Main Assist / Puller changes, with mercenaries restricted to tank. Unit and mock-server coverage; live gameplay remains unverified.
+- [x] AA names missing from dbstr_us.txt (a live folder's renumbered titles, gaps in a server's export): the windows show the spell's name, else "Ability <group>" (GameConnection::aa_display_name; plugins and /alternateadv list keep the raw title). Unit test; seen live on the stock PEQ test server.
 - [x] Modern AA window: aligned headers and rows at the dialog's scale, current-frame column bounds, saved column resizing, clipped cells and Reset columns (UI input tests; live acceptance pending).
 - [x] Hover respawn: validate availability; recover same-zone player identity, placement and resources; handle resurrection confirmation, server timeout and disconnect safely. Both UI packs and loopback packet sequences have regressions; live gameplay acceptance remains outstanding.
 - [x] Modern Quest Journal and independent Quest Tracker: compact tracked-first Active and History pages, with shared tasks included in Active; a Shared members popup for the native roster, member roles and permission-gated membership/leader actions; Objectives/Description/Rewards sections, individual hidden objective rows with native group separators, and per-character tracking flags. The tracker reads authoritative active tasks while the journal is closed and uses the shared HUD move/resize/lock/roll-up behavior. Packet-driven and headless UI tests; live quest updates across zoning, shared roster updates and membership actions, and mouse interaction still to check.
@@ -414,6 +417,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 ## 4. Check live (implemented, not confirmed)
 
 - [x] Shift-click / Ctrl-click quantity flags (checked live).
+- [x] Modern quantity dialog: opened again for another request while its box has the keyboard, the box shows the new amount (headless ImGui test).
 - [x] Equip slot availability (the profile's slot mask) and auto-inventory's use check, ported.
 - [x] Guilds tried live with a GM-made guild (2026-10-29): invites across zones, chat, MOTD, ranks and permissions, notes, alts, leader change, the guild bank; the join, leave and rank lines and the nameplate's show-guild flag fixed. Open: a second member's view of the guild bank; /guildwar and /guildpeace are only logged by EQEmu.
 - [x] The guild window's Tribute page (each member's tribute and trophy states, donations, last donation; the opt-out buttons) and Banner page (as the original shows it without banner messages, which EQEmu never sends). Checked live on the NMS dev server (2026-10-31) with a GM-made guild of two: the leader's OptOut for the member (`guild_tribute_opt_out`) came back as OP_GuildOptInOut to both and updated the member's row (tribute on to off, `guild_members.tribute_enable` 0), and the Tribute Benefit window's button (`guild_tribute_opt`) opted the member in, out and in again (playprobe `--tribute-opt-out`, `--tribute-cycle`). The Banner page was not tried live. Open: the banner requests and editing (docs/unknowns.md).
