@@ -41,6 +41,7 @@ bool GameConnection::guild_banner_context() const {
 void GameConnection::reset_guild_banner() {
     guild_banner_ = {};
     guild_banner_requested_ = false;
+    guild_banner_editing_ = false;
     guild_banner_received_ms_ = 0;
     ++guild_banner_revision_;
     discard_questions([](const Confirmation& question) { return question.id == kBannerMissingTokenNotice; });
@@ -59,11 +60,13 @@ bool GameConnection::handle_guild_banner(Op op, const AppPacket& p) {
     } else if (op == Op::GuildBannerModificationToken) {
         if (auto reply = decode_guild_banner_token(p)) guild_banner_.modification_token = std::move(*reply);
     } else if (auto reply = decode_guild_banner_status(p)) {
-        const bool refresh_kits = reply->kind != 2;
+        // The status handler @0x685670 stores the reply, then calls RequestBannerKitList (@0x684ad0, the kit list
+        // and status requests both) unless it is mode 2 with the editor closed (+0x364 clear): while the editor is
+        // open, a mode 2 reply asks again too.
+        const bool ask_again = reply->kind != 2 || guild_banner_editing_;
         guild_banner_.status = std::move(*reply);
         guild_banner_received_ms_ = session_now_ms();
-        // An event update can consume or return a kit. Mode 2 answers our status request.
-        if (refresh_kits) guild_banner_request_kits();
+        if (ask_again) guild_banner_request();
     }
     return true;
 }
@@ -86,18 +89,15 @@ void GameConnection::guild_banner_refresh(unsigned filter, bool show_all) {
     if (!guild_banner_context() || filter > kLastGuildBannerFilter) return;
     guild_banner_filter_ = filter;
     guild_banner_show_all_ = show_all;
-    const auto revision = guild_banner_revision_;
-    const auto current = [this, revision] {
-        return guild_banner_revision_ == revision && guild_banner_context();
-    };
-    guild_banner_request_kits();
-    if (current() &&
-        send_zone(encode_guild_banner_status_request(guild_.guild_id, profile_->character_id), true, current)) {
-        guild_banner_requested_ = true;
-    }
+    guild_banner_request();
 }
 
-void GameConnection::guild_banner_request_kits() {
+void GameConnection::guild_banner_set_editing(bool editing) {
+    guild_banner_editing_ = editing;
+}
+
+// RequestBannerKitList @0x684ad0: the kit list request (0x0d92), then always the status request (0x4924).
+void GameConnection::guild_banner_request() {
     const auto revision = guild_banner_revision_;
     const auto inventory_revision = inventory_.revision();
     const auto filter = guild_banner_filter_;
@@ -109,6 +109,11 @@ void GameConnection::guild_banner_request_kits() {
                              inventory_.revision() == inventory_revision &&
                              filter == guild_banner_filter_ && show_all == guild_banner_show_all_;
                   })) {
+        guild_banner_requested_ = true;
+    }
+    const auto current = [this, revision] { return guild_banner_revision_ == revision && guild_banner_context(); };
+    if (current() &&
+        send_zone(encode_guild_banner_status_request(guild_.guild_id, profile_->character_id), true, current)) {
         guild_banner_requested_ = true;
     }
 }

@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
 
 #include <imgui.h>
 #include <lua.hpp>
@@ -227,19 +228,24 @@ TEST_CASE("mock server: guild banner page selects kits, edits a draft, and saves
         kits.le<std::uint8_t>(0);
         kits.le<std::uint32_t>(101);
         rig.conn.receive_zone_packet_for_test({net::to_wire(net::Op::GuildBannerKitList), kits.take()});
-        ByteWriter status;
-        status.zeros(12);
-        status.le<std::uint32_t>(40);
-        status.le<std::uint32_t>(102);
-        status.le<std::int32_t>(3661000);
-        status.fixed_string("Fixture active banner", 128);
-        status.zeros(16);
-        status.le<std::uint32_t>(40);
-        status.le<std::uint32_t>(4);
-        status.le<std::uint32_t>(1);
-        status.le<std::uint32_t>(0x102030);
-        status.le<std::uint32_t>(0xabcdef);
-        rig.conn.receive_zone_packet_for_test({net::to_wire(net::Op::GuildBannerStatus), status.take()});
+        const auto status_packet = [](std::uint32_t mode) {
+            ByteWriter status;
+            status.zeros(4);
+            status.le(mode);
+            status.zeros(4);
+            status.le<std::uint32_t>(40);
+            status.le<std::uint32_t>(102);
+            status.le<std::int32_t>(3661000);
+            status.fixed_string("Fixture active banner", 128);
+            status.zeros(16);
+            status.le<std::uint32_t>(40);
+            status.le<std::uint32_t>(4);
+            status.le<std::uint32_t>(1);
+            status.le<std::uint32_t>(0x102030);
+            status.le<std::uint32_t>(0xabcdef);
+            return net::AppPacket{net::to_wire(net::Op::GuildBannerStatus), status.take()};
+        };
+        rig.conn.receive_zone_packet_for_test(status_packet(0));
         api.begin_frame();
 
         CHECK(run(L, "return hs.ChildShown(g, 'BannerData')") == "true");
@@ -280,7 +286,32 @@ TEST_CASE("mock server: guild banner page selects kits, edits a draft, and saves
         CHECK(run(L, "return hs.ListClick(g, list, 2, 'left')") == "true");
         CHECK(run(L, "return enabled('PlantBannerButton')") == "false");
 
+        // The status handler @0x685670 asks again (RequestBannerKitList @0x684ad0: kit list and status requests)
+        // after a mode 2 reply only while the editor is open.
+        const auto requests = [&] {
+            return std::pair{MockEqServer::count(rig.server.zone_log, net::Op::GuildBannerKitRequest),
+                             MockEqServer::count(rig.server.zone_log, net::Op::GuildBannerStatusRequest)};
+        };
+        const auto settle = [&] {
+            int frames = 0;
+            rig.until([&] {
+                clock.advance(2ms);
+                return ++frames > 25;
+            });
+        };
+        settle();
+        const auto before = requests();
+        rig.conn.receive_zone_packet_for_test(status_packet(2));
+        settle();
+        CHECK(requests() == before);
         CHECK(run(L, "return click('EditBannerButton')") == "true");
+        rig.conn.receive_zone_packet_for_test(status_packet(2));
+        REQUIRE(rig.until([&] {
+            clock.advance(2ms);
+            return requests() == std::pair{before.first + 1, before.second + 1};
+        }));
+        settle();
+        CHECK(requests() == std::pair{before.first + 1, before.second + 1});
         CHECK(run(L, "return hs.ChildShown(g, 'SaveBannerSettings')") == "true");
         CHECK(run(L, "click('Layer1TextureNext'); return value('BannerBackgroundPattern')") == "0");
         CHECK(run(L, "click('CancelEditBanner'); return value('BannerBackgroundPattern')") == "4");

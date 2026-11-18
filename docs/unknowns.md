@@ -277,6 +277,9 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   server is needed to verify the full live workflow, including modification-item consumption, portal travel,
   upgrade benefits and the order of kit and status replies. Reserved fields in the banner packets are documented
   in the protocol notes. The in-world cloth uses Hailstone lighting and its two received texture layers.
+  While the design editor is open, the original asks for the kit list and status again after every mode 2
+  status reply (`0x685670`); if a server answers each status request with mode 2, that repeats until the editor
+  closes. The client does the same; a banner server's traffic would show whether it does.
 - Guild window, Tribute page: the opt-out request's command and master (stack bytes the original leaves unset) are sent as 0; EQEmu echoes the command, so after an opt-out the member's states show yellow (flag 0) until the next roster, where the original's (unknown) bytes probably show white (seen live on the NMS dev server, 2026-10-31: every opt change came back with command 0). The TributePool label (EQType 122) is the guild's favour, as the benefit window's.
 - Raids: zoning in, EQEmu sends the raid one OP_RaidUpdate add (action 0) per member, and the client prints "%1 joined the raid." (5059) for each after the first, as CRaid::AddRaidMember is read to do for a member new to the list; seen live (2026-10-31) as 17 lines for a raid of 18. Whether the original prints them at zone-in too (a flag that marks the initial list, or EQEmu's packets differing from live's) is not known; a capture from the original client zoning into a raid on EQEmu would settle it.
 

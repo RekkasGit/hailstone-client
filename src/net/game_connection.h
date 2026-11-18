@@ -2354,6 +2354,8 @@ public:
     void guild_banner_open();
     void guild_banner_close();
     void guild_banner_refresh(unsigned filter, bool show_all);
+    // The Guild window's design editor is open (CGuildMgmtWnd +0x364): a mode 2 status reply then asks again.
+    void guild_banner_set_editing(bool editing);
     bool guild_banner_can_plant(std::uint32_t kit_id, bool active = false) const;
     bool guild_banner_can_remove() const;
     bool guild_banner_can_edit() const;
@@ -2920,7 +2922,7 @@ private:
     void reset_guild_banner();
     bool guild_banner_context() const;
     bool guild_banner_permitted(std::int32_t permission) const;
-    void guild_banner_request_kits();
+    void guild_banner_request();
     void fellowship_invite_tick();
     bool fellowship_request_allowed(FellowshipAction action, std::uint32_t target) const;
     void send_fellowship_request(FellowshipAction action, std::uint32_t target = 0,
@@ -3540,6 +3542,7 @@ private:
     bool guild_banner_requested_ = false;
     unsigned guild_banner_filter_ = 0;
     bool guild_banner_show_all_ = false;
+    bool guild_banner_editing_ = false;
     Tracking tracking_;
     struct TrackingAdmission { std::uint64_t context = 0, lifecycle = 0; };
     std::optional<TrackingAdmission> tracking_request_, tracking_data_;

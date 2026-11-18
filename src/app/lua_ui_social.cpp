@@ -673,7 +673,10 @@ private:
         } else if (id == "RemoveBannerButton") {
             c.guild_banner_remove();
         } else if (id == "EditBannerButton") {
-            if (banner.status) banner_draft_ = banner.status->style;
+            if (banner.status) {
+                banner_draft_ = banner.status->style;
+                c.guild_banner_set_editing(true);
+            }
         } else if (id == "SaveBannerSettings") {
             if (c.guild_banner_save(*banner_draft_)) cancel_banner_edit(host);
         } else if (id == "CancelEditBanner") {
@@ -698,6 +701,7 @@ private:
     }
 
     void cancel_banner_edit(UiHost& host) {
+        if (banner_draft_ && host.conn) host.conn->guild_banner_set_editing(false);
         banner_draft_.reset();
         if (host.color_pick && host.color_pick->caller == this) host.color_pick.reset();
     }

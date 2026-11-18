@@ -2050,6 +2050,7 @@ kit list filtered by category and inventory. Categories come from the player's `
 Both UI packs show the active banner and available kits. The original's two design layers are previewed using
 the textures in the player's game folder, with separate pattern and colour controls. Cancel discards the draft.
 Saving requires a modification item reported by the server. The next received design replaces the saved preview.
+A status update asks for the kit list and status again, as does a status reply while the design editor is open.
 
 Change, Plant and Remove require separate guild permissions and ownership of The Buried Sea. Plant also checks
 zone placement and proximity to the floor. The server decides where banners can actually be planted, nearby
