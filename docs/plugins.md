@@ -79,7 +79,10 @@ a `hailstone.cfg`. The server's Lua scripts and its plugins' Lua windows are not
 Hailstone's limits.
 
 A compiled plugin an opted-in policy requires ("Opt-in add-on policies") asks the same question, by the same
-per-server, per-hash approval.
+per-server, per-hash approval. It is the player's own add-on, not the server's, so the question says so: "Allow your
+add-on this server requires?", the server requiring that plugin from the player's add-ons, and a warning to allow it
+only when the add-on's author is trusted (the server's own plugins: "Allow this server's plugin?" and trust in the
+server; both at once: "Allow these plugins?"). The words are Hailstone's own; the original has no plugins.
 
 - **The question.** When such a plugin would load (the zone-in, the world login for a `login` one, `/plugin <name>
   load`) and the player has not answered for its SHA-256 on this server, it stays unloaded and a window asks: which
@@ -121,7 +124,9 @@ the file cannot be written, the answer holds for this run only. A box set's wind
 one window settles the same question in the others within a second.
 
 The packs draw the question (`ui/modern/pluginconsent.lua`, the Gamepad UI's `dialogs.lua`) with
-`hs.PluginConsent()` (nil, or `{server, serial, warning, plugins = {{name, file, size, sha256, short}}}`) and
+`hs.PluginConsent()` (nil, or `{server, serial, title, intro, warning, plugins = {{name, file, size, sha256, short,
+required}}}`: the title, the line before the list and the warning worded for what is asked about, `required` true for
+the player's own add-on the server requires) and
 `hs.AnswerPluginConsent(true | false | nil, serial)`, where `serial` is the question's: an answer to a question that has
 since been replaced by another (another server's, or other bytes) is refused (false) and nothing is kept. Both packs
 leave Allow and Don't allow off for a second after a question shows or a new one takes its place, so a click or press

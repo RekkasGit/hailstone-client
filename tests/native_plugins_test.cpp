@@ -563,6 +563,7 @@ TEST_CASE("native plugins: the server's compiled plugin waits for the player's y
     CHECK(q->files[0].name == "MQ2Example");
     CHECK(q->files[0].file == h.file);
     CHECK(q->files[0].size == size);
+    CHECK_FALSE(q->files[0].required_addon); // the server's own: "Allow this server's plugin?"
     CHECK(q->files[0].sha256 == h.hash());
     CHECK(h.printed_line("[Plugin] MQ2Example waits for your answer: this server's compiled plugins load only once "
                          "you allow them"));
@@ -733,6 +734,7 @@ TEST_CASE("native plugins: required managed plugins autoload with consent and st
     h.policy.set(rules);
     h.plugins->policy_changed({}); // neither autoload nor a server-delivered file
     REQUIRE(h.plugins->consent());
+    CHECK(h.plugins->consent()->files[0].required_addon); // the player's own add-on, which the server requires
     CHECK_FALSE(h.plugins->loaded("MQ2Example"));
     std::string problem;
     CHECK_FALSE(h.plugins->required_addons_ready(&problem));

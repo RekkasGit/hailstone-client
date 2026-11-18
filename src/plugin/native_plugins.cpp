@@ -194,6 +194,10 @@ struct NativePlugins::Impl {
     // A file from the server's plugins/ folder (set_server_dir): it loads only with the player's word.
     bool asks(const fs::path& file, const Sha256Digest& hash) const {
         if (env.policy && env.policy->required_file(FileKind::Plugin, hash)) return true;
+        return in_server_dir(file);
+    }
+    // A library the server sent (servers/<profile>/plugins/), not one of the player's.
+    bool in_server_dir(const fs::path& file) const {
         if (server_dir.empty()) return false;
         const fs::path rel = file.lexically_relative(server_dir);
         return !rel.empty() && *rel.begin() != "..";
@@ -2850,7 +2854,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
                 return refuse(name + " is not loaded: this server's compiled plugins load only once you allow them, "
                               "and only you can ask for that");
             if (c == Consent::Unasked || asker == Asker::Player) {
-                const bool fresh = m.ask({name, *file, bytes->size(), hash});
+                const bool fresh = m.ask({name, *file, bytes->size(), hash, !m.in_server_dir(*file)});
                 return refuse(name + " waits for your answer: this server's compiled plugins load only once you allow them",
                               fresh);
             }
