@@ -262,6 +262,29 @@ HorizonLand horizon_land(std::span<const HorizonTriangle> triangles, float seed)
     return out;
 }
 
+std::vector<glm::vec3> horizon_lawn_ground(const HorizonField& field, const HorizonMesh& mesh, float reach) {
+    std::vector<glm::vec3> out;
+    if (!field.valid()) return out;
+    for (std::size_t i = 0; i + 2 < mesh.ground.size(); i += 3) {
+        const std::uint32_t a = mesh.ground[i], b = mesh.ground[i + 1], c = mesh.ground[i + 2];
+        if (a >= mesh.positions.size() || b >= mesh.positions.size() || c >= mesh.positions.size()) continue;
+        const glm::vec3 mid = (mesh.positions[a] + mesh.positions[b] + mesh.positions[c]) / 3.0f;
+        float extra = 0.0f;
+        const std::size_t sq = field.square(glm::vec2(mid), extra);
+        if (extra > 0.0f || !field.open[sq]) continue;
+        if (field.dist[sq] * field.cell > reach + 0.5f * field.cell) continue;
+        if (sq < field.sea.size() && field.sea[sq] > 0.5f) continue;
+        if (!mesh.splat.empty()) {
+            const glm::vec2 s = (mesh.splat[a] + mesh.splat[b] + mesh.splat[c]) / 3.0f;
+            if (s.x > 0.5f || s.y > 0.5f) continue;
+        }
+        out.push_back(mesh.positions[a]);
+        out.push_back(mesh.positions[b]);
+        out.push_back(mesh.positions[c]);
+    }
+    return out;
+}
+
 bool horizon_open_below(std::string_view zone) {
     static constexpr std::string_view kZones[] = {"airplane", "poair"};
     for (std::string_view z : kZones) {

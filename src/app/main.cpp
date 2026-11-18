@@ -1499,6 +1499,12 @@ int main(int argc, char** argv) {
                                   field.floor_lo + field.floor_range, field.distance_at(glm::vec2(camera.position)),
                                   field.floor_at(glm::vec2(camera.position)));
                     vk.set_zone_fog_field(field);
+                    if (zone_fog_build && !zone_fog_build->lawn.empty() &&
+                        assets::add_zone_flora_ground(zone_fx_game, *zone, platform::flora_dir(), outdoor,
+                                                      {zone_fog_build->lawn, zone_fog_build->ground.frames.front(),
+                                                       zone_fog_build->ground.density}) &&
+                        flora_renderer)
+                        flora_renderer->restart();
                 }
                 if (zone_fog) vk.set_zone_fog(*zone_fog);
                 const render::Daylight day = render::daylight(sky_hour, outdoor, moon_phase, blood_moon);

@@ -784,6 +784,15 @@ overhang. The outdoor zones' invisible collision ceiling and cloud layers do not
 objects, so grass grows under the trees. Each plant takes the colour of the ground texel it stands on (the classic
 outdoor vertices carry none).
 
+**Past the zone's edge.** In the modern lighting the land round an outdoor zone (Horizon hills) grows the zone's
+flora too, out to 300 units past the zone's terrain (`render::horizon_lawn_ground`: its ground there, not rock, sand,
+the sea, nor what lies tucked under the zone), so the lawn does not stop in a line where the zone's ground ends; the
+fog past the edge takes it from there. Its triangles are the zone's ground of the land's ground texture, their
+texture coordinates the land's own (`assets::FloraExtraGround`). The land is built after the zone has loaded, so when
+it is ready the zone's flora is set up again with it (`assets::add_zone_flora_ground`, some 25 ms on the frame's
+thread once a zone) and the grass renderer lets go of the tiles it has grown (`FloraRenderer::restart`); only a zone
+whose flora Hailstone's rules grow, not an EQG zone's own.
+
 **When.** The zone keeps the ground triangles that may grow plants, split into pieces of at most a quarter tile, binned
 by 128-unit tile (`assets::ZoneFloraGrower`); the renderer grows the tiles within reach as they come into it, nearest
 first and for at most 3 ms a frame, and lets go of those well past it. Each piece's plants come from its own seeded
@@ -1718,6 +1727,8 @@ general rule fixed across the game's zones, and they were removed).
   2,610 trees, Butcherblock 4,823, South Karana 13,949; placing
   them takes 16 to 58 ms of the zone's build; in South Karana at 2560 x 1440 the frame took 1.29 ms with them and
   1.22 without (178 more draw calls).
+
+Out to 300 units past the zone's terrain it grows the zone's grass (Zone flora, "Past the zone's edge").
 
 `display.horizon_hills` (Options, Horizon Hills) turns it off, its trees with it; the viewer takes `--no-horizon`, and
 `--no-land-trees` for the land without its trees.
