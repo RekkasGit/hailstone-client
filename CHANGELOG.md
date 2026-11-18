@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Tradeskills: clicking a recipe in a tradeskill container shows its components again on an EQEmu server built since June 2026, so Combine, Combine N and Combine All work there. The server now adds the recipe's trivial after the components, and the client threw the whole reply away, leaving the window "Waiting for the components..." for good
 - Grass: it now grows where a zone line's region lies over the ground. Some classic zone lines are boxes the size of a field: the whole field north of North Qeynos, by the gate to Qeynos Hills, had none
 - Modern lighting: the grass goes on for about 300 units past the edge of an outdoor zone onto the distant land, so it no longer stops in a line where the zone's ground ends
 - Modern lighting: Plane of Sky and Plane of Air show the sky under them again, its clouds going on below the islands, instead of grey or black, and their far islands fade into the sky's haze, not black. No distant land or edge fog is drawn round them
