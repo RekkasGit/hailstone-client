@@ -1148,8 +1148,13 @@ namespace hailstone::game {
 		float speed_run = 0.0f;      // the update's animation field x 0.025
 		// Hailstone, a deliberate difference: the spawn has stayed within WorldState::kStallReach of one place for
 		// kStallSeconds (WorldState::smooth). Its velocity and speed_run are kept as the update left them, but the
-		// movement clip and its footsteps take it as standing: a spawn no longer stepped (12 s after its last
-		// update) or held by a wall would otherwise walk in place. Never set for the local or controlled player.
+		// movement clip and its footsteps take it as standing. The original walks in place here: its clip reads
+		// only these speeds, AdvanceSpawn @0x4877e0 stops stepping 12 s after the last update without clearing
+		// them, and Handle_OP_ClientUpdate @0x4b3d00 clears them only on a stop (animation 66). So an NPC whose
+		// EQEmu stop update is missed (sent only to clients in range, unreliably, and not when that client was
+		// last sent the same position) would walk in place, and so would any spawn a future change holds while it
+		// is stepped. A stepped spawn now always moves (remote collision only reports contact), so in practice
+		// this is a spawn past the 12 s mark. Never set for the local or controlled player.
 		bool stalled = false;
 		glm::vec3 stall_anchor{ std::numeric_limits<float>::quiet_NaN() }; // where it last moved to
 		double stall_since = 0.0;    // when it got there (smooth's clock)

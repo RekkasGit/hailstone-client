@@ -1231,8 +1231,15 @@ asking for speed while the player cannot move.
 Stalled spawns (a deliberate difference, Hailstone): a spawn other than the local player and its mount that has
 stayed within 0.25 of one place for a second (`Spawn::stalled`, worked out in `WorldState::smooth`) plays its standing
 and idle clips and makes no footsteps, whatever its last update's velocity and SpeedRun say. Those are kept as they
-were, for the physics. Without it a walking NPC or pet whose updates stop (it is no longer stepped 12 s after the last
-one, so its speeds never settle) or that a wall holds walks in place with its steps sounding.
+were, for the physics. The original walks in place there: its clip choice reads only those speeds, AdvanceSpawn
+@0x4877e0 stops stepping a spawn 12 s after its last update without clearing them, and Handle_OP_ClientUpdate @0x4b3d00
+clears them only on a stop (animation 66). On EQEmu a moving NPC's updates carry its speed and no deltas, and the stop
+is one update with animation 0, sent only to clients within MobCloseScanDistance, unreliably, and not to a client that
+was last sent the same position; a client that misses it walks the NPC on for 12 s and then in place, its steps
+sounding. Hailstone's remote spawns are not held by walls (the collision sweep only reports contact), so a stepped spawn
+with any SpeedRun keeps moving and in practice the flag marks a spawn past the 12 s mark; the position test would also
+cover any future case where a stepped spawn is held. A rider stalls with its mount. It changes only how the spawn
+looks and sounds, not where it is or what the server is told, so it has no option to turn it off.
 
 Stuns (OP_Stun, the case @0x4c7093: StunMe(duration, 0, 0, the byte at +4)). StunMe does nothing under stun immunity
 (TotalEffect(40) > 0) or while a stun's timer runs; a duration below 1000 ms is 1000 ms for a player, so EQEmu's
