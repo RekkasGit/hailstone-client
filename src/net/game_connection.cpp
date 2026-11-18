@@ -851,7 +851,7 @@ void GameConnection::enter_world(const std::string& name, bool return_home) {
     load_chat_filters(); // the character's chat.ini over eqclient.ini's
     load_client_options(); // and options.ini
     load_kept_items();     // Hailstone: the Keep marks (kept_items.txt)
-    load_blocked_buffs();
+    blocked_buffs_ = {};   // the character's own come from its ini at the zone-in (restore_blocked_buffs)
     load_bank_snapshot();  // Hailstone: the bank as last seen (bank.dat)
     EnterWorld e;
     e.name = name;
@@ -1156,7 +1156,9 @@ void GameConnection::finish_zone_in() {
         death_tip_pending_ = false;
         window_toggle_ = "tip:31";
     }
-    resend_blocked_buffs();
+    // ProcessLocalPCIni sends the lists from the character ini after each zone-in (restore_blocked_buffs, which the
+    // app calls once it has given the ini); without one, the lists this session has.
+    if (!char_ini_get_) resend_blocked_buffs();
     // CEverQuest's zone-in (before "Initialization complete."): with /hidecorpses looted on, OP_HideCorpse action 3
     // again (the second word is a stack value in the original).
     if (hide_looted_corpses_) send_zone(encode_hide_corpse(kHideCorpseLooted));
