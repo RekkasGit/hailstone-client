@@ -693,9 +693,9 @@ after thirty seconds, a Hailstone recovery choice. See `docs/unknowns.md` for th
 | ShroudRespondAbility / ShroudRespondItem | Z→C | 0x006e / 0x2507 | u32 selection ID, u32 detail ID, followed by the item instance for the item response. Ability definitions are provided by `OP_SendAATable`. |
 | ShroudProgress / ShroudProgress2 | Z→C | 0x541d / 0x3823 | u32 row count followed by BEL-separated progression records |
 | Shroud | Z→C | 0x6562 | u32 spawn ID, u16 profile offset, ZoneEntry spawn body. For the local player the offset begins a fixed 0x4ff8-byte base profile followed by a CharInventory body for the new form's possessions. |
-| ShroudRemove | Z→C | 0x67e8 | empty. In the EQEmu draft, precedes the local transition back to the original form. |
-| AltStorage | both | 0x7b71 | u32 action. Open (0) adds u32 entity ID. Withdraw (2) adds a reserved u32 and u64 storage key. Item inspection (5) adds a preview flag and a reserved u32 to the key fields. |
-| AltStorageList / AltStorageNoItems | Z→C | 0x1115 / 0x0728 | u32 retention seconds, u32 count, {name, u32 icon, u64 key, u32 quantity} per row. NoItems is empty. |
+| ShroudRemove | Z→C | 0x67e8 | empty. The RoF2 handler (dispatch case at 0x4d2645) shows eqstr 5191, "please wait" for the transformation, in a 45 s dialog (id 0x83); Hailstone shows no dialog. Hailstone takes it to mean the next `Shroud` restores the original form, as the EQEmu draft sends it (docs/unknowns.md). |
+| AltStorage | both | 0x7b71 | u32 action. Open (0) adds u32 entity ID. Withdraw (2) adds a reserved u32 and u64 storage key. Item inspection (5) adds a preview flag and a reserved u32 to the key fields. From the server (CAltStorageWnd_HandleMessage 0x61da10): 1 closes the window, 2 acknowledges a withdrawal (all-ones key: refused), 3 clears the list, 4 removes the row with an i32 key, 6 carries {u32 platinum, gold, silver, copper} handed back from the shroud and prints eqstr 6188 in colour 0xf. |
+| AltStorageList / AltStorageNoItems | Z→C | 0x1115 / 0x0728 | u32 retention seconds, u32 count, {name, u32 icon, u64 key, u32 quantity} per row. NoItems is empty: 0x4136f0 prints eqstr 4558 in colour 0xf. A nonzero `ShroudSelectionWindow` status prints eqstr 4557 in colour 0xd (0x414320). |
 
 | Native Monster Mission opcode | Direction | RoF2 | Body |
 | --- | --- | --- | --- |

@@ -155,8 +155,6 @@ ui.window("Shroud Bank", function()
     local x0, y0, x1, y1, width = W.area()
     local wx, wy = ui.GetWindowPos()
     ui.SetCursorPos(x0 - wx, y0 - wy)
-    local coins = API.windows.Text(BANK, "Coins") or ""
-    if coins ~= "" then ui.TextWrapped(coins) end
     local status = API.windows.Text(BANK, "Status") or ""
     if status ~= "" then ui.TextWrapped(status) end
     local _, y = ui.GetCursorScreenPos()

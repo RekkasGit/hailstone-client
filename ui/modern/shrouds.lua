@@ -96,8 +96,6 @@ ui.window("Shroud Bank", function()
       if count ~= "" then ui.SameLine(0, 12 * s) end
       K.Muted("Time remaining: " .. timer)
     end
-    local coins = W.Text(BANK, "Coins")
-    if coins ~= "" then K.Muted(coins) end
     local status = W.Text(BANK, "Status")
     if status ~= "" then ui.TextWrapped(status) end
     W.List(BANK, "ItemList", 0, -44 * s, { columns = { { "Item", 0 }, { "Quantity", 65 } } })

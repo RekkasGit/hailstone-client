@@ -973,10 +973,6 @@ public:
             if (!bank.loaded) out.text = "Waiting for the Shroud Bank inventory…";
             else if (bank.pending_key) out.text = "Withdrawing item…";
             else if (bank.entries.empty()) out.text = "The Shroud Bank is empty.";
-        } else if (id == "Coins") {
-            const auto& coins = bank.coins;
-            if (coins.platinum || coins.gold || coins.silver || coins.copper)
-                out.text = std::format("{} pp  {} gp  {} sp  {} cp", coins.platinum, coins.gold, coins.silver, coins.copper);
         }
     }
     bool click(UiHost& host, std::string_view id, std::string_view button, bool) override {

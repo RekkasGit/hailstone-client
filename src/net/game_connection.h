@@ -135,7 +135,6 @@ struct ShroudBankState {
     std::uint32_t entity_id = 0;
     std::uint32_t retention_seconds = 0;
     std::vector<AltStorageEntry> entries;
-    Coins coins;
     std::optional<std::uint64_t> pending_key;
     std::uint64_t revision = 0;
     bool loaded = false;

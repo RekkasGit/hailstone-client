@@ -295,3 +295,39 @@ TEST_CASE("mock server: Shroud Bank withdrawals wait for the matching acknowledg
     REQUIRE(rig.until([&] { return conn.shroud_bank()->entries.empty(); }));
     CHECK_FALSE(conn.inspect_shroud_bank(revision, key, false));
 }
+
+TEST_CASE("mock server: the Shroud Bank notices read the game's strings in the original's colours") {
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    auto& conn = rig.conn;
+    auto& zone = rig.server.zone;
+    std::vector<ChatEvent> lines;
+    const auto drain = [&] { while (auto e = conn.poll_chat()) lines.push_back(std::move(*e)); };
+    const auto has = [&](std::string_view text, std::uint32_t color) {
+        drain();
+        return std::any_of(lines.begin(), lines.end(),
+                           [&](const ChatEvent& e) { return e.text == text && e.color == color; });
+    };
+
+    // 0x414320: a nonzero status is the "empty your Shroud Bank first" line, eqstr 4557 in colour 0xd.
+    ByteWriter refused;
+    refused.le<std::uint32_t>(0);
+    refused.le<std::uint32_t>(1);
+    refused.le<std::uint32_t>(0);
+    zone.send_reliable(make_packet(Op::ShroudSelectionWindow, std::move(refused)));
+    REQUIRE(rig.until([&] { return has("SHROUD BANK NOT EMPTY", 0xd); }));
+    CHECK_FALSE(conn.shroud_selection());
+
+    // 0x4136f0: the empty message is eqstr 4558 in colour 0xf.
+    zone.send_reliable(make_empty(Op::AltStorageNoItems));
+    REQUIRE(rig.until([&] { return has("SHROUD BANK NOTHING TO MOVE", 0xf); }));
+
+    // CAltStorageWnd_HandleMessage case 6: coin handed back is a line (eqstr 6188), with or without the window.
+    ByteWriter coin;
+    coin.le<std::uint32_t>(6);
+    coin.le<std::uint32_t>(3);
+    coin.zeros(12);
+    zone.send_reliable(make_packet(Op::AltStorage, std::move(coin)));
+    REQUIRE(rig.until([&] { return has("SHROUD COIN 3 platinum", 0xf); }));
+    CHECK_FALSE(conn.shroud_bank());
+}

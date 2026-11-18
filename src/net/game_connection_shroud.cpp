@@ -348,7 +348,8 @@ void GameConnection::handle_shroud(Op op, const AppPacket& p) {
             reset_shroud_selection();
             if (offer->status != 0) {
                 shroud_bank_available_ = true;
-                chat(ChatEvent::Kind::System, "You must empty your Shroud Bank before you can polymorph again.");
+                // 0x414320: a nonzero status prints eqstr 4557 (empty the Shroud Bank first) in colour 0xd.
+                system(4557, {}, 0xd);
                 break;
             }
             // RoF2 names the shroudkeeper. The EQEmu draft reuses the same field for an active shared task.
@@ -464,7 +465,8 @@ void GameConnection::handle_shroud_bank(Op op, const AppPacket& p) {
         if (p.data.empty()) {
             shroud_bank_available_ = true;
             close_shroud_bank();
-            chat(ChatEvent::Kind::System, "Your Shroud Bank is empty.");
+            // 0x4136f0 (routed by 0x414a90): eqstr 4558, the Shroud Bank not opened for want of items, colour 0xf.
+            system(4558, {}, 0xf);
         }
         return;
     }
@@ -486,6 +488,13 @@ void GameConnection::handle_shroud_bank(Op op, const AppPacket& p) {
     }
     const auto control = decode_alt_storage(p);
     if (!control) return;
+    if (control->action == AltStorageAction::Currency) {
+        // CAltStorageWnd_HandleMessage @0x61da10 case 6: the coin handed back from the shroud, as eqstr 6188 with
+        // FormatCoinAmountsText's phrase, in colour 0xf. Nothing is kept in the window.
+        system(6188, {game::coin_amounts_text(control->platinum, control->gold, control->silver, control->copper)},
+               0xf);
+        return;
+    }
     if (control->action == AltStorageAction::Open && control->entity_id != 0) {
         shroud_bank_available_ = true;
         if (shrouded() || player_down() || zone_change_pending_ || !shroud_npc_in_range(control->entity_id)) return;
@@ -518,9 +527,6 @@ void GameConnection::handle_shroud_bank(Op op, const AppPacket& p) {
         shroud_bank_->entries.clear();
         shroud_bank_->pending_key.reset();
         shroud_bank_->revision = core::next_process_identity();
-        break;
-    case AltStorageAction::Currency:
-        shroud_bank_->coins = {control->platinum, control->gold, control->silver, control->copper};
         break;
     default:
         break;
