@@ -778,8 +778,9 @@ widest a third of the way up, and comes to a point. In South Karana, on the AMD 
 costs about 0.4 ms a frame at the default reach.
 
 **Where.** On level ground (45 degrees by default) of a drawn, opaque or cut-out surface: not the invisible collision
-surfaces, nor the translucent water. Not in water, lava or a zone line, nor on the water's surface (the region just
-under the foot). Not where the zone's own drawn terrain lies overhead: a dungeon's ceiling, a roof, a bridge, an
+surfaces, nor the translucent water. Not in water or lava, nor on the water's surface (the region just under the
+foot); in a zone line's region it grows (up to 0.7 it did not, and North Qeynos's line to Qeynos Hills is a box over
+the whole field north of the city, which was left bare). Not where the zone's own drawn terrain lies overhead: a dungeon's ceiling, a roof, a bridge, an
 overhang. The outdoor zones' invisible collision ceiling and cloud layers do not count, and neither do the placed
 objects, so grass grows under the trees. Each plant takes the colour of the ground texel it stands on (the classic
 outdoor vertices carry none).

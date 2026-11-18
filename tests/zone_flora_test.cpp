@@ -826,3 +826,19 @@ TEST_CASE("zone flora: extra ground past the zone (the land by its edge) grows a
     ZoneFloraGrower bare(zone, rules, {}, {}, &extra);
     CHECK(bare.tiles().size() == plain.tiles().size());
 }
+
+TEST_CASE("zone flora: grass grows in a zone line's region (a classic zone's can be a field's size)") {
+    // North Qeynos's line to Qeynos Hills is a box over the whole field north of the city: no grass grew there.
+    Zone zone;
+    zone.name = "test";
+    zone.terrain.push_back(square("grass.bmp", 128.0f));
+    zone.regions = ZoneRegions::from_boxes({{"ATP_00001", {64, 64, 0}, {0, 0, 0}, {200, 200, 100}}});
+    REQUIRE(zone.regions.lookup({64, 64, 1}).is_zone_line());
+    ZoneFlora flora;
+    place_zone_flora(zone, parse_zone_flora_rules("ground grass* 0 lawn\n"), {}, flora);
+    CHECK(flora.instances.size() == 1600);
+    // Water still keeps it out.
+    zone.regions = ZoneRegions::from_boxes({{"AWT_pond", {64, 64, 0}, {0, 0, 0}, {200, 200, 100}}});
+    place_zone_flora(zone, parse_zone_flora_rules("ground grass* 0 lawn\n"), {}, flora);
+    CHECK(flora.instances.empty());
+}
