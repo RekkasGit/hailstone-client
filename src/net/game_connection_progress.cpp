@@ -118,7 +118,9 @@ void GameConnection::handle_progress(Op op, const AppPacket& p) {
         if (auto r = decode_recipe_reply(p); r && tradeskill_.open) tradeskill_.add_recipe(*r);
         break;
     case Op::RecipeDetails:
-        if (auto d = decode_recipe_details(p); d && tradeskill_.open && d->recipe_id == tradeskill_.selected)
+        if (auto d = decode_recipe_details(p); !d)
+            log::warn("could not decode OP_RecipeDetails ({} bytes)", p.data.size());
+        else if (tradeskill_.open && d->recipe_id == tradeskill_.selected)
             tradeskill_.details = std::move(*d);
         break;
     case Op::RecipeAutoCombine:
