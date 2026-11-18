@@ -2438,6 +2438,9 @@ public:
     // The chat filters (eqclient.ini [Options] Channel00.., BadWord, Spam ...; game/chat_text.h).
     const game::ChatFilters& chat_filters() const { return chat_filters_; }
     void set_chat_filter(int filter, std::int32_t value) { chat_filters_.set(filter, value); }
+    // Hailstone: configurable combat reporting instead of RoF2's fixed 75-unit OP_Damage range.
+    static constexpr float kDefaultCombatReportRange = 200.0f;
+    void set_combat_report_range(float range);
     // The Options window's chat filters: the setting changed, kept in eqclient.ini [Options] and sent to the zone
     // (OP_SetServerFilter: EQEmu leaves out what the filters hide, Client::ServerFilter).
     void change_chat_filter(int filter, std::int32_t value);
@@ -2852,7 +2855,7 @@ private:
     game::TraineeView trainee() const;
     const game::mechanics::GameTables& tables() const;
     void melee_sound(std::uint32_t target, std::uint32_t source, std::int32_t damage);
-    // Handle_OP_Damage's report flag: the hit involves the player, or its target is within 75 units.
+    // Handle_OP_Damage's report flag: the hit involves the player, or its target is within combat_report_range_.
     bool hit_reported(std::uint32_t target, std::uint32_t source) const;
     // CEverQuest::ReportSuccessfulHit @0x52ee40 for a hit (OP_Damage, or the player's own environmental damage):
     // its chat line, sounds and the target's animation.
@@ -3534,6 +3537,7 @@ private:
     std::optional<std::string> window_toggle_;
     bool death_tip_pending_ = false;
     game::ChatFilters chat_filters_;
+    float combat_report_range_ = kDefaultCombatReportRange;
     game::ClientOptions client_options_;
     game::SeededChatRandom chat_random_;
     bool garbling_on_ = true;  // 0xddfd50, OP_LogServer +0x14 (EQEmu sends 1)

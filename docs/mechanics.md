@@ -621,9 +621,18 @@ lookup 1500, follow AI 3000):
   random helpers are a `ChatRandom`, replayed from the vectors' recorded calls).
 - Melee lines (`game::damage_report`, `hit_line_shown`; no vectors, unit tests in `tests/combat_test.cpp`):
   ReportSuccessfulHit's chat filters, a filter hiding when its mode is 1 (setting 0). A hit by somebody else on
-  somebody else under filter 15 shows exactly when the player's pet hit (even an unreported killing blow); an NPC
+  somebody else under filter 15 shows exactly when the player's pet hit; an NPC
   hitting itself is never reported; a miss on the player is hidden under 16, the player's own under 13, somebody
   else's on somebody else under 14 shows exactly when the player's pet missed. The pet's lines take colour 0x148.
+  **Deliberate Hailstone changes:** `combat.report_range = 200` in `hailstone.ini` sets the maximum distance
+  from the player to the victim for received melee hit/miss lines (pets and others) and their hit sounds,
+  including killing blows and the separate "X has been slain by Y" death text. Any finite positive distance is accepted; missing, invalid or nonpositive values
+  use 200. `75` restores the original OP_Damage range (RoF2 used a separate 50 for killing blows). Damage by
+  or on the player is not range-limited. The others' hit/miss pet exceptions no longer revive an unreported
+  line: hiding others cannot bypass the distance check. Only packets the server actually sends can be shown;
+  spell/server text messages keep their existing handling. This is a character setting, read on login; edit
+  `servers/<profile>/characters/<world>/<character>/hailstone.ini` for an existing character, or the main
+  `hailstone.ini` for new characters.
   Owned-pet classification matches ReportSuccessfulHit @0x52efd3: the focused pet (PetID), or an attacker with
   the spawn record's temporary-pet byte set and MasterID equal to the local player's SpawnID. The summoned bit
   alone does not qualify. The temporary flag is retained on every full spawn update and ownership changes apply

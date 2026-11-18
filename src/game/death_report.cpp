@@ -39,9 +39,9 @@ DeathResult report_death(const DeathInput& in) {
         if (in.group_member) r.dead_hp_minus_11 = true;
     }
     call(F::TrackingRemove);
-    // Reported unless neither side is us and it died more than 50 away (NaN reports).
+    // RoF2 uses 50 here; the live adapter supplies Hailstone's configurable combat range (NaN reports).
     bool report = true;
-    if (!in.killer_is_local && in.dead_id != in.local_id && in.distance > 50.0f) report = false;
+    if (!in.killer_is_local && in.dead_id != in.local_id && in.distance > in.report_range) report = false;
     r.hit = true;
     r.hit_target = static_cast<std::uint16_t>(in.dead_id);
     r.hit_source = static_cast<std::uint16_t>(in.killer_id);

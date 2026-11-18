@@ -318,6 +318,8 @@ std::optional<HitLine> damage_report(const EqStrings& strings, const WorldState&
 }
 
 bool hit_line_shown(const HitLine& line, bool by_my_pet, const ChatFilters& filters, bool report) {
+    // Deliberate fix: the pet exception to others' filters must not revive an out-of-range/unreported line.
+    if (!report) return false;
     auto hidden = [&filters](int filter) { return filters.mode(filter) == 1; };
     bool shown = report;
     if (line.damage > 0) {
