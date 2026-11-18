@@ -44,7 +44,7 @@ durations and cast time. They run on plain data (`CharacterSheet`) and are cover
 | `attack_rules.*` | who may attack whom and the same-deity rule (the PvP rules) through `AttackQueries`; the live spawns in `game/attack_check.*`, used by can-I-hit |
 | `spell_gems.*` | memorising, the memorise packet, the linked timers, the usable-slot rule and the gem readiness tests; see "Spell gems and buff stacking" |
 | `find_affect_slot.*` | buff slot choice and its stacking rules over the hit-by-spell structs and an `AffectQueries` interface; the live callees are `game/hit_landing.*` |
-| `sheet_builder.*` | the sheet from the live connection; its callers add the owned AA ranks' effects (`AltAdvState::sheet_abilities`: OP_SendAATable's ranks, OP_RespondAA's owned list). A buff's ticks left are the server's count less the 6 s ticks since it arrived, except for a permanent buff (kept at its negative count) and while the buff timers are on hold (the count as received) |
+| `sheet_builder.*` | the sheet from the live connection; its callers add the owned AA ranks' effects (`AltAdvState::sheet_abilities`: OP_SendAATable's ranks, OP_RespondAA's owned list). A buff's ticks left are the server's count less the 6 s ticks since it arrived, except for a permanent buff (kept at its negative count) and while the buff timers are on hold or the zone suspends buffs (the count as received) |
 
 Outside this directory, with vectors: `net/reliable_channel.*` (the session layer's reliable channel give-time, ack-one and
 ack-all: the resend timeout min(1.25 rtt + 300, 8000) ms), and the UI rules the windows call (`game/spell_book.h`,
@@ -588,7 +588,11 @@ lookup 1500, follow AI 3000):
   attack or CastNotStanding, and a sitting caster stands up (ChangePosition 100). Line of sight goes through the
   app's collision (eqstr 108). The target-type switch measures the 2D distance (the player distance with a z scale
   of 0) against Range + focus (at most 5 x Range), MinRange (4602), targeted AE's 39.99 height and the body types
-  (the spawn's body type).
+  (the spawn's body type). The focus is GetFocusRangeModifier @0x42cb80 (`Character::focus_range_modifier`,
+  SPA 129): the best eligible item, buff and AA focus, each giving Range x its scaled base x 0.01 truncated toward
+  zero, the three added. EQEmu's server check (Mob::GetActSpellRange) takes the same three best foci but applies
+  their sum untruncated, adds the target's size and measures in 3D: it accepts what the client lets out, unless
+  the height difference puts the target past its 3D reach.
 - Combat abilities (`game/mechanics/combat_ability.h`): doCombatAbility refuses an ability whose reuse timer (ids
   0..19, the profile's timers at zone-in, then OP_DisciplineTimer; the client never stamps them itself) still runs
   and a duration self discipline while one is active (5821); the server's timer packet is the only thing that
@@ -621,9 +625,22 @@ lookup 1500, follow AI 3000):
   random helpers are a `ChatRandom`, replayed from the vectors' recorded calls).
 - Melee lines (`game::damage_report`, `hit_line_shown`; no vectors, unit tests in `tests/combat_test.cpp`):
   ReportSuccessfulHit's chat filters, a filter hiding when its mode is 1 (setting 0). A hit by somebody else on
-  somebody else under filter 15 shows exactly when the player's pet hit (even an unreported killing blow); an NPC
+  somebody else under filter 15 shows exactly when the player's pet hit (and was reported, see below); an NPC
   hitting itself is never reported; a miss on the player is hidden under 16, the player's own under 13, somebody
   else's on somebody else under 14 shows exactly when the player's pet missed. The pet's lines take colour 0x148.
+  Which lines are reported at all follows the original's distances: Handle_OP_Damage reports a hit between two
+  others only when the victim is within 75 units of the player (@0x4b5a8a), and OP_Death reports the killing
+  blow and the death text only within 50 (`game::report_death`); damage by or on the player always reports.
+  **Extension** (hailstone.ini `combat.report_range`, unset by default): one distance from the player to the
+  victim in place of both, for others' melee hit and miss lines (the pet's included), their hit sounds, killing
+  blows and the "X has been slain by Y" text. Unset, not a number or not above 0 keeps RoF2's 75 and 50. It
+  can only show what the server sends: stock EQEmu sends OP_Damage only within its `Range:DamageMessages`
+  (50 by default) of the attacker, so a larger value helps only where the server raises that rule. Spell and
+  server text messages are not affected. It is a character setting (`servers/<profile>/characters/<world>/
+  <character>/hailstone.ini`, or the main `hailstone.ini` as the default for every character).
+  **Deliberate change from RoF2 (a fix):** with filter 15 or 14 hiding others' lines, the original replaces
+  the report flag with the pet flag (@0x53092c, @0x53078b), so the pet's lines beyond the report range showed
+  only while others' were hidden. Here an unreported line stays hidden whatever the filters.
   Owned-pet classification matches ReportSuccessfulHit @0x52efd3: the focused pet (PetID), or an attacker with
   the spawn record's temporary-pet byte set and MasterID equal to the local player's SpawnID. The summoned bit
   alone does not qualify. The temporary flag is retained on every full spawn update and ownership changes apply
@@ -921,9 +938,10 @@ constructor: SetCheck(1), and PurchasePageHandler +0x60 cleared). While it is ti
 whose class mask lacks the character's class or whose race mask lacks the race's bit (0x6f7160: races below 13 as they
 are, Iksar 13, Vah Shir 14, Froglok 15, Drakkin 16, any other 17), and a spell scroll whose spell is in the book, or
 whose group has a higher rank in the book (from the top rank down while above the scroll's). Bags and books always
-show. Level, deity and lore are not looked at. A click on the box flips +0x60 and rebuilds the list; the state lasts
-for the session. The modern pack's box is "Usable only" beside "Affordable only"; the gamepad pack's Buy page switches
-it with X.
+show. As a Hailstone extension, if the server supplies a multiclass mask, any class in that mask can match instead
+of the profile's class. Level, deity and lore are not looked at. A click on the box flips +0x60 and rebuilds the
+list; the state lasts for the session. The modern pack's box is "Usable only" beside "Affordable only"; the
+gamepad pack's Buy page switches it with X.
 
 ## Kept items: Hailstone's Keep mark
 
@@ -1227,6 +1245,19 @@ clears both (PlayerZoneClient::ChangePosition @0x5a0bc0's StopMoving), so the sp
 it had instead of running on. The local player's body loses them the same way, and its SpeedRun when a stun starts
 (CharacterZoneClient::StunMe @0x4432c0, the mount's too; `GameConnection::speed_stops`): ProcessControls only stops
 asking for speed while the player cannot move.
+
+Stalled spawns (a deliberate difference, Hailstone): a spawn other than the local player and its mount that has
+stayed within 0.25 of one place for a second (`Spawn::stalled`, worked out in `WorldState::smooth`) plays its standing
+and idle clips and makes no footsteps, whatever its last update's velocity and SpeedRun say. Those are kept as they
+were, for the physics. The original walks in place there: its clip choice reads only those speeds, AdvanceSpawn
+@0x4877e0 stops stepping a spawn 12 s after its last update without clearing them, and Handle_OP_ClientUpdate @0x4b3d00
+clears them only on a stop (animation 66). On EQEmu a moving NPC's updates carry its speed and no deltas, and the stop
+is one update with animation 0, sent only to clients within MobCloseScanDistance, unreliably, and not to a client that
+was last sent the same position; a client that misses it walks the NPC on for 12 s and then in place, its steps
+sounding. Hailstone's remote spawns are not held by walls (the collision sweep only reports contact), so a stepped spawn
+with any SpeedRun keeps moving and in practice the flag marks a spawn past the 12 s mark; the position test would also
+cover any future case where a stepped spawn is held. A rider stalls with its mount. It changes only how the spawn
+looks and sounds, not where it is or what the server is told, so it has no option to turn it off.
 
 Stuns (OP_Stun, the case @0x4c7093: StunMe(duration, 0, 0, the byte at +4)). StunMe does nothing under stun immunity
 (TotalEffect(40) > 0) or while a stun's timer runs; a duration below 1000 ms is 1000 ms for a player, so EQEmu's
@@ -1671,11 +1702,18 @@ The periodic update drives the timed mechanics. It and UseSkill send uninitialis
   0x318d when its flag says so; ModifyCurHP), and dead or alive the endurance regen onto the stored endurance
   (Cur_Endurance(1) clamps it) and ApplyManaRegenTick (the mana regen when Cur_Mana is below the maximum). A
   countdown is held while any buff has SPA 0x1b4 before its first blank slot (GetPCSpellAffect), or
-  (Spell_IsBuffCountdownHeld @0x4dcf20) for a suspendable spell (column 200, +0x279) without SPA 0x1b4 while the
-  buff timers are on hold (the spawn's +0x22d: set by a SPA 0x1b4 buff landing or ticking and by
-  OP_SpawnAppearance 38 with a non-zero value, cleared by 38 with 0 and with a new spawn at zone-in); a held buff
-  costs no endurance upkeep. The server's own HP, mana and endurance updates overwrite the pools whenever they come;
-  the ticks move them on in between, as in the original. Without the game folder's BaseData.txt row for the
+  (Spell_IsBuffCountdownHeld @0x4dcf20) for a suspendable spell (column 200, +0x279) in a zone that suspends buffs
+  (OP_NewZone +876: CEverQuest::HandleWorldMessage copies the whole packet to 0xddf8f0 at 0x4c9edf, so +0x36c is
+  0xddfc5c; EQEmu's `zone.suspendbuffs`, where the server stops ticking those buffs too and sends nothing else), or
+  without SPA 0x1b4 while the buff timers are on hold (the spawn's +0x22d: set by a SPA 0x1b4 buff landing or
+  ticking and by OP_SpawnAppearance 38 with a non-zero value, cleared by 38 with 0 and with a new spawn at zone-in;
+  stock EQEmu never sends 38). The SPA 0x1b4 exception covers only the spawn's hold: with 0xddfc5c set the function
+  returns true for any suspendable spell. A held buff costs no endurance upkeep, and the buff, pet and target
+  windows, the Buff TLOs and the plugins' target buff read show its time as received. The windows hand the function
+  the hold of the spawn whose buffs they show (CTargetWnd @0x76b1b4 and CPetInfoWnd @0x7105e4 that spawn's +0x2cc):
+  the client knows only the player's, so the player's hold also holds the target list while the player is its own
+  target, and no other spawn's. The server's own HP, mana and endurance updates overwrite the pools whenever they
+  come; the ticks move them on in between, as in the original. Without the game folder's BaseData.txt row for the
   character the ticks wait (nothing to compute the regen or the maxima with);
 - more than 18 s: the profile+0x3408 countdown;
 - more than 60 s: stats marked dirty.

@@ -11,6 +11,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [ ] Letting a required add-on run above `player_caps` (PR #93 asked for it) needs a load-time check that its files are the ones a signed manifest named; the client keeps neither the signed manifest nor per-file signed hashes, so naming a repository grants no capabilities for now.
 - [x] Minimum versions on required add-ons (`required = owner/repo:1.0.0-preview.4`, SemVer order, highest minimum wins, malformed = invalid policy). From fryguy503's PR #93.
 - [x] Decided at the zone-in by its own rules (the cached copy only informs the login screen); before the world shows a problem refuses entry, once in it a failure warns once in chat and never disconnects; readiness and approvals cached by the rules, approvals and running set; package hashes remembered by size and time.
+- [x] Keep native plugin permission requests above the loading screen, with tests for drawing, mouse input and both answers in Modern and Gamepad.
 - [ ] Live acceptance of a first visit and a return visit, a policy fixed by the server, missing/refused/failed requirements at the zone-in and mid-session, both UI packs and controller input, and an upscaler allowed/blocked/updated followed by restart.
 
 ## Launcher login
@@ -81,6 +82,8 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Item recast on cast items (already in 789134d).
 - [x] The distance modifier of effect values, and the extra long-buff slots from level 72 and 75.
 - [x] Buff tick timers held by SPA 0x1b4 and suspendable spells.
+- [x] Buff countdowns held in zones that suspend buffs (OP_NewZone +876, 0xddfc5c); the order of the zone flag and the SPA 0x1b4 exception read again at @0x4dcf20; unit and connection tests, and live on a stock PEQ server (the player's own buffs held in poknowledge, the server's count the same on leaving).
+- [ ] `get_pet_buff_data_bulk`: hold a suspendable pet buff in a zone that suspends buffs, as the pet windows do (unknowns.md; the method's author).
 - [x] DoPassageOfTime's 6 s tick runs whole in the client (ProcessAffects' buff HP, mana and endurance, local expiry at 0, the mesmerize break; HP, endurance and mana regen) and its 1 s endurance upkeep; unit and connection tests, not tried live.
 - [x] Passage-of-time owner status/bleeding, live running endurance penalty, flag-1 cast interruption, drunkenness decay/sway/camera and Eye summon control are implemented with regression coverage. Live acceptance remains open.
 - [x] Combat line filters 13 to 16.
