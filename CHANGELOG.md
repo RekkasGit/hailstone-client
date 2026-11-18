@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Modern lighting: the grass goes on for about 300 units past the edge of an outdoor zone onto the distant land, so it no longer stops in a line where the zone's ground ends
 - Modern lighting: Plane of Sky and Plane of Air show the sky under them again, its clouds going on below the islands, instead of grey or black, and their far islands fade into the sky's haze, not black. No distant land or edge fog is drawn round them
 - Modern lighting: the distant land past a zone's edge rises gently: it stays near the edge's height for a few hundred units, its hills grow over the next few thousand and the mountains stand far off, no longer climbing steeply right at the zone line
 - Modern lighting: shadows from the sun and from torches and other lights cost less GPU time and look the same. A light's shadow is now only read where the light reaches, and the soft shadow edge takes four texture reads instead of nine

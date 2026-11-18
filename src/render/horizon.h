@@ -184,6 +184,14 @@ struct HorizonMesh {
 
 // The land round the zone; empty when the field is not valid.
 HorizonMesh horizon_mesh(const HorizonField& field);
+
+// The land's ground near the zone's edge that grows the zone's grass (assets::FloraExtraGround; Hailstone's own), so
+// the lawn does not stop in a line where the zone's ground ends: its ground triangles whose middle lies in an open
+// square at most kHorizonLawnReach past the zone's terrain (not those tucked under it, nor in a pocket it closes
+// round), mostly neither rock nor sand, and not on the sea. Three corners each.
+inline constexpr float kHorizonLawnReach = 300.0f;
+std::vector<glm::vec3> horizon_lawn_ground(const HorizonField& field, const HorizonMesh& mesh,
+                                           float reach = kHorizonLawnReach);
 // The land round the zone from its terrain alone.
 HorizonMesh horizon_mesh(std::span<const HorizonTriangle> triangles, const HorizonLand& land);
 

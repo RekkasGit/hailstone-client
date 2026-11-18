@@ -415,3 +415,27 @@ TEST_CASE("horizon: past the zone's edge the land rises gently; the mountains st
     CHECK(near1000 < 20.0f + 120.0f);
     CHECK(far > 20.0f + 400.0f);
 }
+
+TEST_CASE("horizon: the land's ground that grows the zone's grass lies just past its edge") {
+    std::vector<HorizonTriangle> tris;
+    add_grid(tris, 0.0f, 0.0f, 2000.0f, 2000.0f, 100.0f, [](float, float) { return 20.0f; });
+    const auto field = render::horizon_field(tris, render::horizon_land(tris, 0.0f));
+    REQUIRE(field.valid());
+    const auto mesh = render::horizon_mesh(field);
+    const auto lawn = render::horizon_lawn_ground(field, mesh);
+    REQUIRE(lawn.size() >= 3);
+    CHECK(lawn.size() % 3 == 0);
+    bool outside_only = true, near_only = true;
+    float farthest = 0.0f;
+    for (std::size_t i = 0; i < lawn.size(); i += 3) {
+        const glm::vec3 mid = (lawn[i] + lawn[i + 1] + lawn[i + 2]) / 3.0f;
+        // Past the zone's ground (0..2000), not tucked under it.
+        if (mid.x > 1.0f && mid.x < 1999.0f && mid.y > 1.0f && mid.y < 1999.0f) outside_only = false;
+        const float past = std::max({0.0f - mid.x, mid.x - 2000.0f, 0.0f - mid.y, mid.y - 2000.0f});
+        farthest = std::max(farthest, past);
+        if (past > render::kHorizonLawnReach + 2.0f * render::kHorizonCell) near_only = false;
+    }
+    CHECK(outside_only);
+    CHECK(near_only);
+    CHECK(farthest > 0.5f * render::kHorizonLawnReach); // it does reach out
+}

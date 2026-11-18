@@ -3,6 +3,7 @@
 #include "app/client_app_internal.h"
 #include "app/ui_visibility.h"
 #include "app/frame_pace.h"
+#include "assets/zone_flora.h"
 #include "platform/precise_sleep.h"
 #include "core/build_info.h"
 #include "core/frame_sections.h"
@@ -770,6 +771,12 @@ int ClientApp::run() {
                 zone_fog_build_ = build;
                 zone_fog_field_ = build ? render::zone_fog_field(build->field) : render::ZoneFogField{};
                 vk_.set_zone_fog_field(zone_fog_field_);
+                // The zone's grass goes on over the land near its edge (render::horizon_lawn_ground).
+                if (build && zone_ && !build->lawn.empty() &&
+                    assets::add_zone_flora_ground(game_, *zone_, platform::flora_dir(), outdoor,
+                                                  {build->lawn, build->ground.frames.front(), build->ground.density}) &&
+                    flora_renderer_)
+                    flora_renderer_->restart();
             }
             if (zone_fog) vk_.set_zone_fog(*zone_fog);
             // The colour grade: the time of day, the weather and the zone's fog hue (render/atmosphere.h).

@@ -1489,6 +1489,7 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
                 land_triangles += add_land(water_key, looks.at(*pick.water), water, land, land.water);
             }
             if (options.land_trees) add_land_trees(field, land);
+            build->lawn = horizon_lawn_ground(field, land);
             build->field = std::move(field);
             prep.horizon_build = std::move(build);
         }
