@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- AA window: an ability whose name the strings file does not have (with a live game folder and no server strings, about 690 of a stock PEQ server's AA titles) is listed by its spell's name, else as "Ability <number>", instead of a blank line. Sorted by name, those blank rows came first, so the whole Ability column looked empty. The training question and the stock window use the same names
 - Modern interface: the quantity dialog opened again for a new request while it was still up (Sell with the Buy quantity left open) kept the old amount in its number box, such as "100" beside a slider at "5 of 5"; the box now shows the new request's amount
 - Keys: the alerts key (Shift+H by default, as in the original) shows and hides the Alert History window again, in both interfaces, and is back in the key list. It did nothing before. A stock server sends no alerts, so the window stays empty there
 - Loot All: two quick clicks on Loot All, before "Loot all, are you sure?" came up, asked the question twice and needed two answers; a second click while the question is up or waiting now asks nothing more
