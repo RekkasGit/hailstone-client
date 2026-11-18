@@ -4,6 +4,7 @@
 
 - Tradeskills: clicking a recipe in a tradeskill container shows its components again on an EQEmu server built since June 2026, so Combine, Combine N and Combine All work there. The server now adds the recipe's trivial after the components, and the client threw the whole reply away, leaving the window "Waiting for the components..." for good
 - Chat channels: a chat server link that stops answering is now noticed after 60 seconds with nothing heard from the server and reconnected (as a dropped link already was), instead of staying dead for the rest of the session with channel text going nowhere. After a reconnect the client joins your auto-join channels again; it does not rejoin channels you joined by hand
+- GM commands: after `#gm on` the GM-only slash commands (`/goto`, `/summon`, `/find` and the rest) work at once, as in the original client; they no longer stay refused as "not a valid command" until the next zone change
 - Grass: it now grows where a zone line's region lies over the ground. Some classic zone lines are boxes the size of a field: the whole field north of North Qeynos, by the gate to Qeynos Hills, had none
 - Modern lighting: the grass goes on for about 300 units past the edge of an outdoor zone onto the distant land, so it no longer stops in a line where the zone's ground ends
 - Modern lighting: Plane of Sky and Plane of Air show the sky under them again, its clouds going on below the islands, instead of grey or black, and their far islands fade into the sky's haze, not black. No distant land or edge fog is drawn round them
