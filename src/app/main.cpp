@@ -133,6 +133,7 @@ struct Options {
     std::optional<hailstone::app::DemoScreen> ui_demo; // show the developer UI demo
     float ui_scale = 0.0f;                        // > 0 overrides the display scale
     int window_width = 1280, window_height = 720;  // the client window (--window-size)
+    bool window_size_given = false;
     std::string user, password, character;        // client auto-login (testing)
     hailstone::app::LoginLaunch login_launch;
     std::string host;                              // --host for the auto-login
@@ -231,7 +232,8 @@ void usage() {
         "  --input-script S   after zoning in, play made-up input: ';'-separated \"<seconds> <step>\" (pad <button>,\n"
         "                     axis <stick> <value>, key <name>, text <text>, click <x> <y>, wheel <x> <y> <n>,\n"
         "                     shot <file>, state, close, droplink; app/input_script.h; a virtual pad is attached; testing)\n"
-        "  --window-size WxH  the window's size in pixels (default 1280x720)\n"
+        "  --window-size WxH  the window's size in pixels (default: the client's window as it last closed, else\n"
+        "                     1280x720; a --window-size run does not save its window)\n"
         "  --auto-accept      accept group invitations (testing)\n"
         "  --max-fps N|auto   cap the frame rate (the original's MaxFPS; movement physics runs per frame); auto: just\n"
         "                     under the display's refresh rate\n"
@@ -568,6 +570,7 @@ Options parse_args(int argc, char** argv) {
         } else if (arg("--window-size")) {
             need(1);
             std::sscanf(argv[++i], "%dx%d", &o.window_width, &o.window_height);
+            o.window_size_given = true;
         } else if (arg("--ui-scale")) {
             need(1);
             o.ui_scale = std::strtof(argv[++i], nullptr);
@@ -855,6 +858,7 @@ int main(int argc, char** argv) {
             c.ui_scale = opts.ui_scale;
             c.window_width = opts.window_width;
             c.window_height = opts.window_height;
+            c.window_size_given = opts.window_size_given;
             c.clip_plane = opts.clip_plane;
             c.auto_user = opts.user;
             c.auto_password = opts.password;

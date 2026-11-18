@@ -17,6 +17,7 @@
 #include "app/addon_suggest.h"
 #include "app/ability_bulk.h"
 #include "app/window_icon.h"
+#include "app/window_desc.h"
 #include "app/automation.h"
 #include "app/progress_ui.h"
 #include "app/market_ui.h"
@@ -179,19 +180,10 @@ constexpr int kMinCameraZoomSetting = 10;
 constexpr int kMaxCameraZoomSetting = 150;
 
 
-// The game window as it was when the client last closed (hailstone.ini window.*), unless --window-size asked for
-// a size: the UI's places are kept for that screen, so starting it smaller piles the windows up.
+// The game window at start (app/window_desc.h), from hailstone.ini as it is now.
 inline platform::WindowDesc window_desc(const ClientOptions& o) {
-    platform::WindowDesc d{.width = o.window_width, .height = o.window_height};
-    d.pad_input_in_background = !o.input_script.empty();
-    if (o.window_width != 1280 || o.window_height != 720) return d; // --window-size
     Config c;
-    if (!c.load(default_config_path())) return d;
-    d.width = std::max(320, c.get_int("window.width", d.width));
-    d.height = std::max(240, c.get_int("window.height", d.height));
-    if (c.get("window.x") && c.get("window.y")) d.position = {{c.get_int("window.x", 0), c.get_int("window.y", 0)}};
-    d.maximized = c.get_bool("window.maximized", false);
-    return d;
+    return window_desc(o, c.load(default_config_path()) ? &c : nullptr);
 }
 
 // The UI scale: --ui-scale, else hailstone.ini ui.scale (percent; 0 or none: the display's own scale). The fonts

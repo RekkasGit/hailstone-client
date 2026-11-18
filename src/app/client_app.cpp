@@ -1045,7 +1045,7 @@ int ClientApp::run() {
     }
     if (ui_api_) ui_api_->save_layout();
     save_chat_history(true);
-    if (opts_.window_width == 1280 && opts_.window_height == 720) {
+    if (!opts_.window_size_given) {
         // The game window's place for the next start (window_desc); not a --window-size run's.
         platform::WindowGeometry g = window_.geometry();
         config_.set_int("window.x", g.x);
