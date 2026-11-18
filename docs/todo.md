@@ -308,6 +308,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] `mq.TLO` values' metatable locked, so a script cannot swap in a `__gc` (tests/mq_lua_test.cpp).
 - [x] MQ's `Math` TLO (its Calculate arithmetic), `If` and `Range`, and the rest of MQ's int, float and string members, with MQ's edge cases (`mq/calc.h`; tests/mq_calc_test.cpp, tests/mq_tlo_test.cpp).
 - [x] Spawn searches follow MacroQuest's words and matching rules: spawn types, pets, 3D radius, named test, group, raid, guild, xtarget, light, player state (`mq/spawn_search.h`; tests/mq_tlo_test.cpp).
+- [x] The alerts key (CMD_HISTORIC_ALERTS, __ExecuteCmd case 168) toggles AlertHistoryWnd in both packs, listed with its Shift+H default (unit tests; seen live in the Modern pack on the stock PEQ test server).
 - [ ] MacroQuest's alert lists (`/alert`, and the spawn search's `alert`, `noalert`, `nearalert`, `notnearalert`): none kept yet, so those words act as with an empty list.
 - [ ] The spawn search's `next` / `prev` (MacroQuest's `/target next`, cycling from the current target through the matching spawns): accepted and ignored.
 - [x] `mq.event` patterns match as MacroQuest's Lua events do (Blech): case-insensitive, every `#...#` up to the first place the next literal is, `#name#`, `|${...}|`, `##` / `||`, arguments by number with gaps, item links shown as their text unless `keepLinks` (`mq/event_pattern.h`; tests/mq_event_pattern_test.cpp).
