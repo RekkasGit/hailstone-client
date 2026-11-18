@@ -1476,6 +1476,10 @@ public:
     const std::vector<std::int32_t>& blocked_buffs(bool pet) const { return blocked_buffs_[pet ? 1 : 0]; }
     void block_buff(bool pet, std::int32_t spell);
     void unblock_buff(bool pet, std::int32_t spell);
+    // CEverQuest::ProcessLocalPCIni's blocked buffs, after each zone-in: the lists read from the character ini
+    // (set_character_ini; every change is written there) and sent to the server as initialise packets. Without a
+    // character ini, the lists this session has are sent.
+    void restore_blocked_buffs();
     // ---- using items (net/game_connection_item_use.cpp)
     // A right click on an item slot (CInvSlot::HandleRButtonUp @0x697250): a book is read, a common item in the
     // possessions is used (use_item), a corpse slot looted; what is left to the windows comes back. The server
@@ -3642,6 +3646,8 @@ private:
     std::map<std::uint32_t, AltCurrency> alt_currencies_;
     PointMerchant point_merchant_;
     std::array<std::vector<std::int32_t>, 2> blocked_buffs_; // player, pet
+    void save_blocked_buffs(bool pet) const;
+    void remove_newly_blocked(bool pet, std::int32_t spell_id);
     void resend_blocked_buffs();
     Tribute tribute_;
     GuildTribute guild_tribute_;

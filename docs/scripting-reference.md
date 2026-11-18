@@ -271,6 +271,7 @@ An item in a slot. Its plain value is the item's name.
 | `Stackable` | bool | |
 | `StackSize` | int | the largest stack |
 | `Charges` | int | -1 for unlimited |
+| `TimerReady` | int | seconds left on its click reuse (the later of its own timer and its recast type's), 0 when ready; NULL for an item without a click effect |
 | `Weight` | float | |
 | `Value` | int | in copper |
 | `Type` | string | `Container`, `1H Slashing`, `Armor`, `Food`, `Scroll`, `Augmentation`, ... |
