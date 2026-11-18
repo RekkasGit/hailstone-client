@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Giving to an NPC: hiding the player trade window (a saved layout, a script) no longer cancels a hand-in that is open in the Give window
 - Server add-on policies: the permission question for one of your own compiled add-ons that the server requires no longer calls it the server's plugin. It reads "Allow your add-on this server requires?" and asks you to trust the add-on's author; a plugin the server sent still asks "Allow this server's plugin?"
 - A Lua script that ends with an error writes it to the client's log once, with its traceback; the error's first line was written twice
 - Server add-on policies: why entry was refused (an add-on missing, too old, changed, or needing capabilities the server does not allow) is now in the client's log too, one line for each, not only on the login screen

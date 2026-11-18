@@ -914,7 +914,8 @@ print no line. The chat lines come from the server's OP_CancelTrade (Handle_OP_C
 forwards the cancel to the partner, with the partner's own id. So whoever's client cancels first (the one that
 walked out of reach, or closed the window) gets no line, and the other reads 1450 when its client takes the
 forwarded cancel: walking away from a trade closes it silently, while being teleported away usually shows the line,
-because the partner's client noticed the distance first. Both are the original's behaviour.
+because the partner's client noticed the distance first. Both are the original's behaviour. Hiding the trade window or the Give
+window cancels the trade it shows (CTradeWnd::AboutToHide); hiding the one that is not shown leaves the trade alone.
 
 A late open reply cannot show a window out of reach: the tribute master's (CTributeMasterWnd::AboutToShow @0x7878b0)
 and the trainer's (Handle_OP_GMTraining @0x4b49c0) apply the same 20-unit check to the answer. A training request or
