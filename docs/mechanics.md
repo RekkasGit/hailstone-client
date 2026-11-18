@@ -907,6 +907,14 @@ their partner dies (Handle_OP_Death @0x532b50 closes the training window and can
 Player trades use the same 3D distance check as hand-ins, whether the local player or partner moves. Only an open
 trade is checked; a request still waiting for its answer is not. Cancellation clears the offer without crediting
 items or coin locally; the server's item packets and OP_MoneyUpdate return them.
+The client that cancels says nothing itself: CTradeWnd_CancelAndClose @0x780af0 and Send_OP_CancelTrade @0x780550
+print no line. The chat lines come from the server's OP_CancelTrade (Handle_OP_CancelTrade @0x4b7710: 1448
+"<name> has cancelled the trade.", 1450 "You have cancelled the trade." for the receiver's own id). A stock EQEmu
+(`Client::Handle_OP_CancelTrade`) answers a hand-in's cancel with the NPC's id, but for a player trade it only
+forwards the cancel to the partner, with the partner's own id. So whoever's client cancels first (the one that
+walked out of reach, or closed the window) gets no line, and the other reads 1450 when its client takes the
+forwarded cancel: walking away from a trade closes it silently, while being teleported away usually shows the line,
+because the partner's client noticed the distance first. Both are the original's behaviour.
 
 A late open reply cannot show a window out of reach: the tribute master's (CTributeMasterWnd::AboutToShow @0x7878b0)
 and the trainer's (Handle_OP_GMTraining @0x4b49c0) apply the same 20-unit check to the answer. A training request or
