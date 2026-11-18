@@ -293,12 +293,16 @@ The windows are Lua scripts drawn with ImGui, grouped into user interfaces: ever
   the per-pass rows again. The timestamps are written only while the window is open, and are read back a frame or two
   late, when that frame's fence has been waited for, so nothing waits on the GPU. The zone viewer's `--gpu-timing`
   (with `--frames`) logs each pass's mean over the timed frames as `gpu pass: ...`.
-- The Lua UI's garbage collector runs in Lua's generational mode (minor collections at 20 %, major at 100 %), on its
-  own: once the scripts have loaded, `LuaUi::frame`'s first collection switches it over and promotes the scripts'
-  state to the old generation. The Modern UI's windows make a few hundred KB of garbage a frame, nearly all of it dead
-  by the next frame, which the minor collections take as the allocations run. `LuaUi::frame` also forces a full
-  collection when the heap reaches six times what was live after the last one (`kGcMajorTrigger`), timed as the
-  "Lua GC major" frame section and logged when it takes 8 ms or more. "What was live" is Lua's `GCestimate`, read in
+- The Lua UI's garbage collector runs in Lua's generational mode: once the scripts have loaded, `LuaUi::frame`'s
+  first collection switches it over and makes the scripts' state the old generation. The Modern UI's windows make a
+  few hundred KB of garbage a frame, nearly all of it dead by the next frame, which the minor collections (each 20 %
+  the heap grows) take as the allocations run. Major collections are still atomic (a whole mark and sweep at once),
+  but the host runs them: `LuaUi::frame`, between the windows' draws, collects in full when the heap reaches three
+  times what was live after the last one (`kGcMajorTrigger`), timed as the "Lua GC major" frame section and logged
+  when it takes 8 ms or more. Lua's own majors, which would come inside whichever window's allocation crossed the
+  line, untimed, are pushed to eleven times the live heap (genmajormul 1000 %, the most `setgcparam` holds), and
+  should Lua take its majors over after a "bad collection" of its own (lgc.c `genstep`, `stepgenfull`), the next frame
+  collects and puts it back in generational mode. "What was live" is Lua's `GCestimate`, read in
   `ui/lua/lua_gc_live.cpp`, the one file that includes Lua's internals. Before, the incremental collector was stopped
   between 1 ms slices at the end of each frame, and its catch-up finished a cycle in one frame when the slices fell
   behind (pauses of up to 40 ms).

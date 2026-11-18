@@ -32,7 +32,7 @@
 - Options: the explanation that shows when you hover a setting is now a block of text with a fixed width that wraps, instead of one long line that ran off the screen; the notes under a setting wrap too
 - A short stutter about once a second, on the login screen as well as in game, is gone: the interface's check for edited script files now costs a fraction of a millisecond instead of up to 10 ms
 - The spell gem bar and the hot button bars no longer make new garbage for the interface's script collector every frame, so its occasional long pauses come less often
-- The interface's script garbage collector now works in small steps as the windows run, instead of catching up all at once, which could pause the game for up to 40 ms
+- The interface's script garbage collector frees the windows' short-lived garbage in small steps as they run. Its full collections, which could pause the game for up to 40 ms when they fell behind, now come less often, between the windows' draws, and show as "Lua GC major" in the Frame sections table
 - The Modern interface makes much less garbage every frame: its settings cache, the hot bars, resizable windows, chat and the hidden achievement, reward and evolving item transfer windows reuse what they built the frame before
 - NPCs, pets and other players that have stopped no longer walk in place with their footsteps sounding: a spawn that has not moved for a second plays its standing and idle animations
 - Permission requests for required plugins appear above the loading screen, where players can allow or refuse them.
