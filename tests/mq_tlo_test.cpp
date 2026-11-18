@@ -447,7 +447,7 @@ TEST_CASE("TLO: Group, items, Zone and the rest") {
     CHECK(f.p("${Heading[0].ShortName}") == "N");
 }
 
-TEST_CASE("TLO: an item's TimerReady includes its own and shared click reuse") {
+TEST_CASE("TLO: an item's TimerReady, its own and its recast type's click reuse, as MQ's") {
     Fixture f;
     auto& conn = *f.world.conn;
     auto& inventory = net::GameConnectionTestAccess::inventory(conn);
@@ -460,9 +460,15 @@ TEST_CASE("TLO: an item's TimerReady includes its own and shared click reuse") {
 
     CHECK(f.p("${FindItem[=Missing Clicky].TimerReady}") == "NULL");
     CHECK(f.p("${FindItem[=Fixture Clicky].TimerReady}") == "0");
+    // MQ's: NULL for an item without a click effect.
+    click.effect = 0;
+    CHECK(f.p("${FindItem[=Fixture Clicky].TimerReady}") == "NULL");
+    click.effect = 1;
 
     conn.set_item_recast_timer(item, 120, -1);
-    CHECK(std::stoi(f.p("${FindItem[=Fixture Clicky].TimerReady}")) > 0);
+    const int left = std::stoi(f.p("${FindItem[=Fixture Clicky].TimerReady}"));
+    CHECK(left > 0);
+    CHECK(left <= 120);
 
     conn.reset_all_item_recast_timers();
     conn.set_item_recast_timer(nullptr, 120, 17);

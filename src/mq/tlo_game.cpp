@@ -1002,8 +1002,10 @@ void register_item() {
         return V::integer(it.charges == 0xffffffffu ? -1 : static_cast<std::int64_t>(it.charges));
     });
     m("TimerReady", [](const Context& c, const Value&, const net::Item& it, std::string_view) -> V {
-        if (!c.conn) return V::nil();
-        // Use the same later-of-item-and-group recast as the inventory UI.
+        // MQ2ItemType's TimerReady: an int, the seconds left (GetItemTimer: GetItemRecastTimer less the fast time,
+        // 0 once passed), NULL for an item without a click effect. MQ gives 0 for a click without a recast type
+        // (TimerID -1); here the item's own timer still counts, as GetItemRecastTimer reads it.
+        if (!c.conn || !it.effects[net::kEffectClick].present()) return V::nil();
         const auto ready_at = static_cast<std::int64_t>(c.conn->item_recast_timer(&it));
         const auto now = static_cast<std::int64_t>(std::time(nullptr));
         return V::integer(ready_at > now ? ready_at - now : 0);

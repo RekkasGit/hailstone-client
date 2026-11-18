@@ -278,7 +278,7 @@ For a script that fights:
   its reuse timer has run out; its endurance and mana are the script's to check.
 - Item click reuse, for example `FindItem[=Clicky].TimerReady` or `Me.Inventory[mainhand].TimerReady`, gives
   seconds left on the later of the item's own reuse timer and its shared recast timer. It gives 0 when both
-  timers have elapsed and NULL when the item is missing.
+  timers have elapsed and NULL for an item without a click effect (or no item).
 - A spawn's buffs: the player's own, or the target's as OP_TargetBuffs gave them. A server sends those only to some
   players (stock EQEmu: GMs, the Inspect Buffs AA or leadership, or its `AlwaysSendTargetsBuffs` rule), so ask
   `Target.BuffsPopulated` first. `Target.Buff[n|name]` (a buff: `.Duration`, `.Caster`, `.ID` the slot ...),
