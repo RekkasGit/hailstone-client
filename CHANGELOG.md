@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- NPCs, pets and other players that have stopped no longer walk in place with their footsteps sounding: a spawn that has not moved for a second plays its standing and idle animations
 - Permission requests for required plugins appear above the loading screen, where players can allow or refuse them.
 - Buffs: in a zone where the server suspends buffs (EQEmu's `suspendbuffs`, such as the Plane of Knowledge), a suspendable buff's time no longer counts down in the buff, pet and target windows, MacroQuest TLOs and the plugins' target buff read, and the client no longer drops a short buff when its local count runs out while the server still has it. The flag comes from OP_NewZone, which the client read but never used
 - Modern lighting: shadows from the sun and from torches and other lights cost less GPU time and look the same. A light's shadow is now only read where the light reaches, and the soft shadow edge takes four texture reads instead of nine
