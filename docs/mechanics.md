@@ -44,7 +44,7 @@ durations and cast time. They run on plain data (`CharacterSheet`) and are cover
 | `attack_rules.*` | who may attack whom and the same-deity rule (the PvP rules) through `AttackQueries`; the live spawns in `game/attack_check.*`, used by can-I-hit |
 | `spell_gems.*` | memorising, the memorise packet, the linked timers, the usable-slot rule and the gem readiness tests; see "Spell gems and buff stacking" |
 | `find_affect_slot.*` | buff slot choice and its stacking rules over the hit-by-spell structs and an `AffectQueries` interface; the live callees are `game/hit_landing.*` |
-| `sheet_builder.*` | the sheet from the live connection; its callers add the owned AA ranks' effects (`AltAdvState::sheet_abilities`: OP_SendAATable's ranks, OP_RespondAA's owned list). A buff's ticks left are the server's count less the 6 s ticks since it arrived, except for a permanent buff (kept at its negative count) and while the buff timers are on hold (the count as received) |
+| `sheet_builder.*` | the sheet from the live connection; its callers add the owned AA ranks' effects (`AltAdvState::sheet_abilities`: OP_SendAATable's ranks, OP_RespondAA's owned list). A buff's ticks left are the server's count less the 6 s ticks since it arrived, except for a permanent buff (kept at its negative count) and while the buff timers are on hold or the zone suspends buffs (the count as received) |
 
 Outside this directory, with vectors: `net/reliable_channel.*` (the session layer's reliable channel give-time, ack-one and
 ack-all: the resend timeout min(1.25 rtt + 300, 8000) ms), and the UI rules the windows call (`game/spell_book.h`,
@@ -1671,11 +1671,18 @@ The periodic update drives the timed mechanics. It and UseSkill send uninitialis
   0x318d when its flag says so; ModifyCurHP), and dead or alive the endurance regen onto the stored endurance
   (Cur_Endurance(1) clamps it) and ApplyManaRegenTick (the mana regen when Cur_Mana is below the maximum). A
   countdown is held while any buff has SPA 0x1b4 before its first blank slot (GetPCSpellAffect), or
-  (Spell_IsBuffCountdownHeld @0x4dcf20) for a suspendable spell (column 200, +0x279) without SPA 0x1b4 while the
-  buff timers are on hold (the spawn's +0x22d: set by a SPA 0x1b4 buff landing or ticking and by
-  OP_SpawnAppearance 38 with a non-zero value, cleared by 38 with 0 and with a new spawn at zone-in); a held buff
-  costs no endurance upkeep. The server's own HP, mana and endurance updates overwrite the pools whenever they come;
-  the ticks move them on in between, as in the original. Without the game folder's BaseData.txt row for the
+  (Spell_IsBuffCountdownHeld @0x4dcf20) for a suspendable spell (column 200, +0x279) in a zone that suspends buffs
+  (OP_NewZone +876: CEverQuest::HandleWorldMessage copies the whole packet to 0xddf8f0 at 0x4c9edf, so +0x36c is
+  0xddfc5c; EQEmu's `zone.suspendbuffs`, where the server stops ticking those buffs too and sends nothing else), or
+  without SPA 0x1b4 while the buff timers are on hold (the spawn's +0x22d: set by a SPA 0x1b4 buff landing or
+  ticking and by OP_SpawnAppearance 38 with a non-zero value, cleared by 38 with 0 and with a new spawn at zone-in;
+  stock EQEmu never sends 38). The SPA 0x1b4 exception covers only the spawn's hold: with 0xddfc5c set the function
+  returns true for any suspendable spell. A held buff costs no endurance upkeep, and the buff, pet and target
+  windows, the Buff TLOs and the plugins' target buff read show its time as received. The windows hand the function
+  the hold of the spawn whose buffs they show (CTargetWnd @0x76b1b4 and CPetInfoWnd @0x7105e4 that spawn's +0x2cc):
+  the client knows only the player's, so the player's hold also holds the target list while the player is its own
+  target, and no other spawn's. The server's own HP, mana and endurance updates overwrite the pools whenever they
+  come; the ticks move them on in between, as in the original. Without the game folder's BaseData.txt row for the
   character the ticks wait (nothing to compute the regen or the maxima with);
 - more than 18 s: the profile+0x3408 countdown;
 - more than 60 s: stats marked dirty.
