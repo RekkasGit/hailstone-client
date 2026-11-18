@@ -942,11 +942,13 @@ u32 checksum (eq_crc32 of bytes [8, size−1)), u32 size−9, 2×u32; u8 gender,
 
 ### Guild banners
 
-These are zone-session application messages. REA on the RoF2 executable (`2a8702ad…`) identified the Guild
-window's kit request and readers at `0x684ad0`, `0x6836c0`, `0x685670` and `0x6830c0`. M5's zone dispatch
-shows that the corresponding receive selectors are the wire opcodes. M5's profile installation trace maps
-the guild and unique player IDs to the existing profile fields and the character expansion getter to the profile's
-expansion mask. The native actions use The Buried Sea bit `0x1000` and guild permission 1 Change, 2 Plant or 3 Remove.
+These are zone-session application messages. REA on the RoF2 executable (`2a8702ad…`) identified the Guild window's
+kit request and readers at `0x684ad0`, `0x6836c0`, `0x685670` and `0x6830c0`. M5's zone dispatch shows that the
+corresponding receive selectors are the wire opcodes. M5's profile installation trace maps the guild and unique
+player IDs to the existing profile fields (the profile reader stores the u32 EQEmu writes as `char_id`, after the
+343-byte block, at `0x57ead6`; the installer copies it to PcBase +0x20a8 at `0x579c71`) and the character expansion
+getter to the profile's expansion mask. The native actions use The Buried Sea bit `0x1000` and guild permission 1
+Change, 2 Plant or 3 Remove.
 
 | Message | Direction | Wire | Payload |
 | --- | --- | --- | --- |
