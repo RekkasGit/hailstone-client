@@ -273,11 +273,11 @@ int DisplayItemData(lua_State* L) {
         const auto& effect = item.effects[kind];
         return effect.present() ? effect.effect : 0;
     };
-    set_int(L, "scroll_spell", spell_id(net::kEffectScroll));
-    set_int(L, "focus_spell", spell_id(net::kEffectFocus));
-    set_int(L, "proc_spell", spell_id(net::kEffectProc));
-    set_int(L, "worn_spell", spell_id(net::kEffectWorn));
-    set_int(L, "click_spell", spell_id(net::kEffectClick));
+    set_int(L, "scrollSpell", spell_id(net::kEffectScroll));
+    set_int(L, "focusSpell", spell_id(net::kEffectFocus));
+    set_int(L, "procSpell", spell_id(net::kEffectProc));
+    set_int(L, "wornSpell", spell_id(net::kEffectWorn));
+    set_int(L, "clickSpell", spell_id(net::kEffectClick));
     return 1;
 }
 
