@@ -1755,8 +1755,9 @@ showed walls, filler and seams there.
   hundreds of units over the open ground and into the sky; walls and cliff tops stand out of it instead. On the zone's
   own squares and in a pocket its terrain closes round there is none. Packed into an RGBA8 texture (distance in steps
   of 16 units, floor over the zone's range of floors); past the grid the distance goes on growing.
-- **How thick**: density 0.006 a unit (1000 units of it leave 0.25 % of the light) times a ramp from 0 at the zone's
-  terrain to 1 at 1000 units past it, smooth, up to a top 250 units over its floor, thinning out over 100 either
+- **How thick**: density 0.0025 a unit (1000 units of it leave 8 % of the light; 0.006 until it was found a little
+  strong) times a ramp from 0 at the zone's
+  terrain to 1 at 1400 units past it, smooth, up to a top 250 units over its floor, thinning out over 100 either
   side of it. So across open ground at a zone line it thickens until nothing shows, looking up the sky is clear (30
   degrees up, under 10 % of it is hidden), and from a hill one looks down on the bank's top.
 - **Never round the player** (the camera is always in the zone, whatever the field says): none within 300 units of the
@@ -1772,7 +1773,8 @@ showed walls, filler and seams there.
   the AO, the bloom and the upscalers, so they all see the fogged picture. Each pixel's line of sight is marched from
   the camera to the depth (the sky's to 16000 units, at most the far plane) in 40 steps, closer together near the
   camera (t = length s^2), with a 4 x 4 ordered dither, stopping where under 0.1 % shows through; the fog's colour is
-  the haze's with its sun glow (as `apply_haze`), blended over the scene by what shows through. The field is uploaded
+  the haze's 1.35 times as bright (`kZoneFogLift`: the haze's own read a little dark as a mist close by) with its sun
+  glow (as `apply_haze`), blended over the scene by what shows through. The field is uploaded
   when the zone's land is built (a new zone), the old one retired with the frames that use it. In North Karana at
   1280 x 720 on an RX 9060 XT the pass took 0.21 ms of the GPU (the AO 0.26).
 
