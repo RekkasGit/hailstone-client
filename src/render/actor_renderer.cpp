@@ -561,6 +561,8 @@ const ActorRenderer::GpuModel* ActorRenderer::gpu_model(const assets::CharacterM
         it->second.last_ms = now_ms_;
         return &it->second;
     }
+    // A bare body-less skeleton (race 127's IVM holding nothing) has nothing to install: not planned every frame.
+    if (model.parts.empty()) return nullptr;
     MeshPlan plan = plan_mesh(model);
     return install(model, plan, upload);
 }
@@ -574,8 +576,9 @@ const ActorRenderer::GpuModel* ActorRenderer::install(const assets::CharacterMes
         return &it->second;
     }
     // A skeletal actor with no mesh of its own (race 127's IVM) dresses to an empty mesh when it holds no item.
-    // Nothing to put on the GPU: no buffers, no draw calls. Its spawn is still an actor's (drawn_ includes it).
-    if (model.parts.empty() || plan.parts.empty()) return nullptr;
+    // Nothing to put on the GPU: no buffers, no draw calls. Its spawn is still an actor's (drawn_ includes it). A mesh
+    // whose parts all have invisible materials is still installed (with no draws), so it stays cached.
+    if (model.parts.empty()) return nullptr;
     GpuModel g;
     const auto resolve = [&](const TextureRef& ref) {
         const auto slot = slot_for(ref, plan, upload);
