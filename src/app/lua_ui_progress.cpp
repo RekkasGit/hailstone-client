@@ -773,7 +773,7 @@ private:
         return form.maximum_players && form.assigned_players >= form.maximum_players;
     }
 
-    static const auto& branch(const net::GameConnection& c, const FormRow& index) {
+    static const net::ShroudBranch& branch(const net::GameConnection& c, const FormRow& index) {
         return c.shroud_selection()->categories[index.category].branches[index.branch];
     }
     const net::ShroudForm* selected(const net::GameConnection& c) const {
