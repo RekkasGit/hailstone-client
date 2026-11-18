@@ -1424,7 +1424,8 @@ When it is decided:
   more than the server allows, or fails to start returns to the login screen with the add-on panel open on what is
   missing. Reviewing it fetches its manifest and opens the usual install card; nothing is fetched before that click,
   and installing keeps every usual check (signatures, pinned keys, platform, capabilities, approval of native code).
-  An invalid policy refuses entry the same way, with the reason.
+  An invalid policy refuses entry the same way, with the reason. Every reason is written to the client's log as
+  well (`Add-ons: entry refused by this server's add-on policy: ...`), one line for each requirement not met.
 - **Once the character is in the world**, nothing disconnects: a required add-on that fails (a required plugin
   whose code lets an exception out counts as failed, though it stays loaded), or the next zone's rules that the
   installed add-ons do not meet, is a warning in chat (`[Add-ons] Required add-on owner/repo did not remain
