@@ -588,7 +588,8 @@ lookup 1500, follow AI 3000):
   attack or CastNotStanding, and a sitting caster stands up (ChangePosition 100). Line of sight goes through the
   app's collision (eqstr 108). The target-type switch measures the 2D distance (the player distance with a z scale
   of 0) against Range + focus (at most 5 x Range), MinRange (4602), targeted AE's 39.99 height and the body types
-  (the spawn's body type).
+  (the spawn's body type). Range focus (SPA 129) uses the best eligible item, buff and AA. Each source's
+  percentage of the base range is truncated toward zero before the three contributions are added.
 - Combat abilities (`game/mechanics/combat_ability.h`): doCombatAbility refuses an ability whose reuse timer (ids
   0..19, the profile's timers at zone-in, then OP_DisciplineTimer; the client never stamps them itself) still runs
   and a duration self discipline while one is active (5821); the server's timer packet is the only thing that

@@ -83,7 +83,7 @@ struct FocusFound {
     bool found = false;
     std::int32_t percent = 100;
     std::int32_t extra = 0; // items: the item's spell slot holding the focus (3 or 5)
-    std::int32_t value = 0; // buffs: the focus spell's first base (+0x2c); AAs: the effect's base (+4)
+    std::int32_t value = 0; // items/buffs: the focus spell's first base (+0x2c); AAs: the effect's base (+4)
 };
 
 class Character {
@@ -250,6 +250,7 @@ public:
     // GetFocusCastingTimeModifier @0x42c9a0 (focus type 127: item, buff and AA; negative = faster). The buff
     // argument (the original's 4th) lets the buff focus apply to the classes that otherwise get none.
     std::int32_t focus_casting_time_modifier(const SpellData& spell, bool buff_arg = false) const;
+    std::int32_t focus_range_modifier(const SpellData& spell) const;
     // CharacterZoneClient::GetFocusReuseMod @0x42cec0 (focus type 310 ReduceReuseTimer: the item's focus spell's
     // first base, the buff's and the AA's, each scaled by its percent; at most the spell's recast time). What the
     // spell gem, hot button and combat ability cool-downs take off the recast time they show.
