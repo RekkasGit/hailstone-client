@@ -201,6 +201,15 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 - AllowedToAttack's newbie-zone rule reads the target's Zone (+0x210); the client fills it for every spawn with the current zone's id and instance (`AttackCheckInput::zone`), as a spawn is only known in the player's own zone. Where the original writes a spawn's +0x210 (the spawn packet or the zone-in) was not traced; tracing those writes would settle it.
 
 - Buffs in a zone that suspends them (OP_NewZone +876, 0xddfc5c), what is still open. The plugin bulk reads of the player's own buffs (`get_buff_data_bulk`, `get_buff_name_data_bulk`) take no zone flag: they stay right only because the held buff tick sets `received_ms` every 6 s, so without the game folder's BaseData.txt row for the character (the tick then waits) they count a held buff down by the time since it arrived. `get_pet_buff_data_bulk` takes no zone flag either, so it counts a pet's suspendable buff down while the pet windows hold it; the method is its author's to change (its comment asks for that). Pet and target buffs are not ticked by the client: when a quest clears the flag in the middle of a zone (EQEmu's `set_zone_header("suspendbuffs", 0)` sends OP_NewZone again), the ones that came before it count down by all the time since they came until the server sends them again. A live session with a pet in a suspendbuffs zone, and one where a script clears the flag, would show how far they drift.
+- Spell descriptions with a live game folder and no server `eqstr_us.txt`: the spell display and the item display put
+  a description in RoF2's eqstr 8507 ("Spell Effect:  %1"); a live `eqstr_us.txt` has another sentence under that id
+  ("Your %1 equipment set failed to load due to an error. (%2)"), so Courage's description reads "Your Provides your
+  target with ... equipment set failed to load due to an error. ()". The description itself (dbstr type 6, its `#` /
+  `$` / `@` / `%` codes) is filled correctly; the wrapper id is RoF2's. This is docs/layout.md's "Files the server must
+  match": the stock PEQ test server's `client_files` (export_client_files) bring `dbstr_us.txt` and `spells_us.txt` but
+  no `eqstr_us.txt`, so the live file is read and every one of its reworded ids can show such text. Not worked around in
+  the client (it would mean carrying RoF2's string table). Settled by the server's assets bringing RoF2's
+  `eqstr_us.txt`; whether to refuse a live file's reworded ids instead is open.
 
 ## Items, inventory and commerce
 
