@@ -69,18 +69,19 @@ AppPacket encode_guild_banner_remove(std::uint32_t guild_id) {
 }
 
 std::optional<GuildBannerKitList> decode_guild_banner_kits(const AppPacket& p) {
-    // Guild window receive @0x6836c0. Every record has a fixed 128-byte name.
+    // Guild window receive @0x6836c0. Every record has a fixed 128-byte name. The original reads fixed offsets
+    // whatever the message's length and adds at most 1023 rows (0x3ff), stepping over the rest.
     constexpr std::size_t header_size = 16, record_size = 137;
     if (p.data.size() < header_size) return std::nullopt;
     ByteReader r(p.data);
     r.skip(4);
-    const auto count = r.le<std::uint32_t>();
-    if (count > kMaxGuildBannerKits || r.remaining() != 8 + count * record_size) return std::nullopt;
+    const auto count = std::min<std::size_t>(r.le<std::uint32_t>(), kMaxGuildBannerKits);
+    if (r.remaining() < 8 + count * record_size) return std::nullopt;
     GuildBannerKitList list;
     list.background_count = r.le<std::uint32_t>();
     list.emblem_count = r.le<std::uint32_t>();
     list.kits.reserve(count);
-    for (std::uint32_t i = 0; i < count; ++i) {
+    for (std::size_t i = 0; i < count; ++i) {
         GuildBannerKit kit;
         kit.id = r.le<std::uint32_t>();
         kit.name = r.fixed_string(128);
@@ -93,9 +94,10 @@ std::optional<GuildBannerKitList> decode_guild_banner_kits(const AppPacket& p) {
 
 std::optional<GuildBannerStatus> decode_guild_banner_status(const AppPacket& p) {
     // Guild window receive @0x685670, preview @0x680c00 and countdown @0x686b2f.
-    // Status mode 1 leaves the previous snapshot in place.
+    // Status mode 1 leaves the previous snapshot in place. The original copies 188 bytes (0x2f dwords) and
+    // ignores anything after them.
     constexpr std::size_t status_size = 188;
-    if (p.data.size() != status_size) return std::nullopt;
+    if (p.data.size() < status_size) return std::nullopt;
     ByteReader r(p.data);
     r.skip(4);
     GuildBannerStatus status;

@@ -189,11 +189,38 @@ TEST_CASE("guild banners: kit replies decode each fixed record and reject incons
         CAPTURE(size);
         CHECK_FALSE(decode_guild_banner_kits(prefix(packet, size)));
     }
-    CHECK_FALSE(decode_guild_banner_kits(kit_list(1)));
-    CHECK_FALSE(decode_guild_banner_kits(kit_list(0xffffffffu)));
+    // The original reads fixed offsets: rows past the count and trailing bytes are ignored.
+    const auto shorter = decode_guild_banner_kits(kit_list(1));
+    REQUIRE(shorter);
+    REQUIRE(shorter->kits.size() == 1);
+    CHECK(shorter->kits[0].id == 50021);
     auto extra = packet;
     extra.data.push_back(std::byte{});
-    CHECK_FALSE(decode_guild_banner_kits(extra));
+    const auto padded = decode_guild_banner_kits(extra);
+    REQUIRE(padded);
+    CHECK(padded->kits.size() == 2);
+    CHECK_FALSE(decode_guild_banner_kits(kit_list(3)));
+    CHECK_FALSE(decode_guild_banner_kits(kit_list(0xffffffffu)));
+}
+
+TEST_CASE("guild banners: a kit reply keeps the original's first 1023 rows") {
+    ByteWriter w;
+    w.le<std::uint32_t>(0);
+    w.le<std::uint32_t>(1500);
+    w.le<std::uint32_t>(1);
+    w.le<std::uint32_t>(1);
+    for (std::uint32_t i = 0; i < kMaxGuildBannerKits; ++i) {
+        w.le(i + 1);
+        w.fixed_string("Kit", 128);
+        w.le<std::uint8_t>(1);
+        w.le<std::uint32_t>(0);
+    }
+    const AppPacket full{0x0001, w.take()};
+    const auto list = decode_guild_banner_kits(full);
+    REQUIRE(list);
+    REQUIRE(list->kits.size() == kMaxGuildBannerKits);
+    CHECK(list->kits.back().id == kMaxGuildBannerKits);
+    CHECK_FALSE(decode_guild_banner_kits(prefix(full, full.data.size() - 1)));
 }
 
 TEST_CASE("guild banners: status decodes selection, remaining time and opaque tints") {
@@ -222,7 +249,9 @@ TEST_CASE("guild banners: status decodes selection, remaining time and opaque ti
     }
     auto extra = packet;
     extra.data.push_back(std::byte{});
-    CHECK_FALSE(decode_guild_banner_status(extra));
+    const auto padded = decode_guild_banner_status(extra);
+    REQUIRE(padded);
+    CHECK(padded->kit_id == 50021);
 }
 
 TEST_CASE("guild banners: server token controls saving and its name stays bounded") {
