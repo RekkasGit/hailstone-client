@@ -140,6 +140,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [ ] Trades with players: live separation with outstanding items and coin; the merchant page-handler-2 exception (docs/mechanics.md "Leaving an NPC interaction").
 - [x] Partial-stack looting asks the quantity (EQEmu ignores it); Link All; the loot music (entry 5 has no asset).
 - [x] Loot All preserves an active queue on repeated activation (an individual request in flight does not block it), and retains the first NO DROP question when a later confirmation aborts the queue (planner and mock-server regressions; docs/mechanics.md "Loot All").
+- [x] Loot All: a second click while its "are you sure" question is up or queued asks nothing more (mock-server regression).
 - [ ] Loot All: live rapid activation with delayed replies and recovery from several NO DROP items requiring confirmation.
 - [ ] Loot All: trace native auto-close timing when an accepted NO DROP question overlaps the last automatic request (docs/unknowns.md).
 - [x] Ctrl + right-click bag swapping; Ctrl+click bag contents' slot order and refusal text (game/bag_move).

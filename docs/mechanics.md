@@ -865,8 +865,10 @@ it nor the button (WndNotification @0x6be180) looks at an individual loot reques
 until the reply that exhausts it (Handle_OP_LootItem @0x6bd414). Every OP_LootItem reply advances the list by one,
 an individual loot's reply too, and the list is not checked against what is still on the corpse, so an item asked for
 on its own just before Loot All is asked for again. Hailstone does the same. Its own additions: while a Loot All is
-active the button does not open the "are you sure" question, whose yes would be ignored; and a request that cannot be
-sent (any loot request) cancels the automatic queue so the player can retry.
+active the button does not open the "are you sure" question, whose yes would be ignored; while that question is up or
+waiting its turn a second click does not ask it again, so two quick clicks need one yes (whether the original's
+ConfirmationDialog would show a second one is not traced); and a request that cannot be sent (any loot request)
+cancels the automatic queue so the player can retry.
 
 A NO DROP item requiring confirmation is left out of the queue and opens the first question during the scan
 (@0x6bdf93). Another item requiring confirmation aborts the queue but leaves that first question alive; answering it
