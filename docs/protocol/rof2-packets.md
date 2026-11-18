@@ -957,7 +957,7 @@ Change, 2 Plant or 3 Remove.
 | Kit list | Z→C | `0x0001` | 16 B header with count at +4 and the background and emblem counts at +8/+12. Rows of 137 B with kit ID, 128 B name, u8 availability and u32 description ID; the first 1023 are kept, as the original's list holds no more, and bytes past the rows are ignored |
 | Request banner status | C→Z | `0x4924` | 80 B. Character ID, guild ID, 72 reserved bytes |
 | Banner status | Z→C | `0x56c9` | 188 B (anything after is ignored). Mode +4, active kit ID +12, description ID +16, signed ms remaining +20, name +24, planted kit ID +168, two u32 pattern IDs and two RGB values in four-byte slots starting +172. Kit ID `0xffffffff` means absent. Mode 1 is ignored. Any other mode is stored and then asks again (`0x684ad0`, both requests), except mode 2 with the design editor closed (`0x685670`) |
-| Modification token | Z→C | `0x1e50` | Item ID +8 and item name +16 (up to 63 characters). ID `0xffffffff` names the requirement when the item is unavailable |
+| Modification token | Z→C | `0x1e50` | Item ID +8 and item name +16 (up to 63 characters). ID `0xffffffff` names the requirement when the item is unavailable; Save is refused only for that ID (`0x6833a0`), with "You must have a: <item> to save change to banner settings." |
 | Save design | C→Z | `0x4377` | 24 B. Character ID, background and emblem pattern IDs, two RGB fields each with one padding byte, server-supplied modification token ID |
 | Plant or reapply style | C→Z | `0x765b` | 87 B. Kit ID +0, native actor position Y/X/Z +68/+72/+76, u8 list-row flag +80, u8 reapply flag +81. Saving reapplies an active kit using a zero vector when the native floor-distance check passes |
 | Remove | C→Z | `0x9e18` | 12 B. `0xffffffff`, guild ID, reserved u32 |

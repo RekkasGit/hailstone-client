@@ -177,8 +177,9 @@ void GameConnection::guild_banner_remove() {
 bool GameConnection::guild_banner_save(const GuildBannerStyle& style) {
     if (!guild_banner_can_edit() || style.background >= guild_banner_.background_count ||
         style.emblem >= guild_banner_.emblem_count) return false;
+    // SaveBannerSettings @0x6833a0 refuses only an item ID of -1 (the window's +0x384); any other ID is sent.
     const auto token = guild_banner_.modification_token.item_id;
-    if (!token || token == kNoBannerKit) {
+    if (token == kNoBannerKit) {
         Confirmation notice;
         notice.id = kBannerMissingTokenNotice;
         const auto& item = guild_banner_.modification_token.item_name;

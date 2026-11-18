@@ -326,12 +326,21 @@ TEST_CASE("mock server: guild banner page selects kits, edits a draft, and saves
         REQUIRE(rig.conn.confirmation());
         CHECK(rig.conn.confirmation()->text ==
               "You must have a: guild banner modification item to save change to banner settings.");
-        ByteWriter token;
-        token.zeros(8);
-        token.le<std::uint32_t>(4001);
-        token.zeros(4);
-        token.fixed_string("Fixture modification token", 64);
-        rig.conn.receive_zone_packet_for_test({net::to_wire(net::Op::GuildBannerModificationToken), token.take()});
+        const auto token_packet = [](std::uint32_t id) {
+            ByteWriter token;
+            token.zeros(8);
+            token.le(id);
+            token.zeros(4);
+            token.fixed_string("Fixture modification token", 64);
+            return net::AppPacket{net::to_wire(net::Op::GuildBannerModificationToken), token.take()};
+        };
+        // SaveBannerSettings @0x6833a0 refuses only item ID -1, naming the item; ID 0 is sent like any other.
+        rig.conn.receive_zone_packet_for_test(token_packet(net::kNoBannerKit));
+        CHECK(run(L, "click('SaveBannerSettings'); return hs.ChildShown(g, 'SaveBannerSettings')") == "true");
+        REQUIRE(rig.conn.confirmation());
+        CHECK(rig.conn.confirmation()->text ==
+              "You must have a: Fixture modification token to save change to banner settings.");
+        rig.conn.receive_zone_packet_for_test(token_packet(0));
         CHECK(run(L, "click('SaveBannerSettings'); return hs.ChildShown(g, 'SaveBannerSettings')") == "false");
         CHECK(run(L, "return value('BannerEmblemPattern')") == "1"); // saved draft yields to server-authoritative preview
         REQUIRE(rig.until([&] {
@@ -348,7 +357,7 @@ TEST_CASE("mock server: guild banner page selects kits, edits a draft, and saves
         CHECK(style.le<std::uint32_t>() == 2);
         CHECK(style.le<std::uint32_t>() == 0x304050u);
         CHECK(style.le<std::uint32_t>() == 0xabcdefu);
-        CHECK(style.le<std::uint32_t>() == 4001);
+        CHECK(style.le<std::uint32_t>() == 0);
         REQUIRE(rig.until([&] {
             clock.advance(2ms);
             return MockEqServer::count(rig.server.zone_log, net::Op::GuildBannerPlant) == 2;

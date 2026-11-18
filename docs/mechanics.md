@@ -2049,7 +2049,7 @@ The Guild window's Banner page requests the guild's current design, the active b
 kit list filtered by category and inventory. Categories come from the player's `Resources/BannerCategories.txt`.
 Both UI packs show the active banner and available kits. The original's two design layers are previewed using
 the textures in the player's game folder, with separate pattern and colour controls. Cancel discards the draft.
-Saving requires a modification item reported by the server. The next received design replaces the saved preview.
+Saving requires a modification item reported by the server (only an item ID of -1 refuses it). The next received design replaces the saved preview.
 A status update asks for the kit list and status again, as does a status reply while the design editor is open.
 
 Change, Plant and Remove require separate guild permissions and ownership of The Buried Sea. Plant also checks
