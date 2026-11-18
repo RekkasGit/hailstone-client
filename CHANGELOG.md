@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Modern interface: the quantity dialog opened again for a new request while it was still up (Sell with the Buy quantity left open) kept the old amount in its number box, such as "100" beside a slider at "5 of 5"; the box now shows the new request's amount
 - Keys: the alerts key (Shift+H by default, as in the original) shows and hides the Alert History window again, in both interfaces, and is back in the key list. It did nothing before. A stock server sends no alerts, so the window stays empty there
 - Loot All: two quick clicks on Loot All, before "Loot all, are you sure?" came up, asked the question twice and needed two answers; a second click while the question is up or waiting now asks nothing more
 - Grass: it now grows where a zone line's region lies over the ground. Some classic zone lines are boxes the size of a field: the whole field north of North Qeynos, by the gate to Qeynos Hills, had none

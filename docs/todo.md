@@ -415,6 +415,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 ## 4. Check live (implemented, not confirmed)
 
 - [x] Shift-click / Ctrl-click quantity flags (checked live).
+- [x] Modern quantity dialog: opened again for another request while its box has the keyboard, the box shows the new amount (headless ImGui test).
 - [x] Equip slot availability (the profile's slot mask) and auto-inventory's use check, ported.
 - [x] Guilds tried live with a GM-made guild (2026-10-29): invites across zones, chat, MOTD, ranks and permissions, notes, alts, leader change, the guild bank; the join, leave and rank lines and the nameplate's show-guild flag fixed. Open: a second member's view of the guild bank; /guildwar and /guildpeace are only logged by EQEmu.
 - [x] The guild window's Tribute page (each member's tribute and trophy states, donations, last donation; the opt-out buttons) and Banner page (as the original shows it without banner messages, which EQEmu never sends). Checked live on the NMS dev server (2026-10-31) with a GM-made guild of two: the leader's OptOut for the member (`guild_tribute_opt_out`) came back as OP_GuildOptInOut to both and updated the member's row (tribute on to off, `guild_members.tribute_enable` 0), and the Tribute Benefit window's button (`guild_tribute_opt`) opted the member in, out and in again (playprobe `--tribute-opt-out`, `--tribute-cycle`). The Banner page was not tried live. Open: the banner requests and editing (docs/unknowns.md).
