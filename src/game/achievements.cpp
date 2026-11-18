@@ -126,10 +126,14 @@ bool Achievements::receive_progress(const std::vector<net::AchievementProgress>&
     auto requirements = requirements_;
     bool difference = !progress_ready_;
     for (const auto& entry : progress) {
+        // RoF2's 0x2b42 handler (0x403020) stores every record and updates only the components it finds by
+        // id in buckets 0..2; a record for an unknown achievement or a component outside them changes nothing
+        // on screen and does not cost the packet's other records. Such a record can never be shown here (a new
+        // catalog clears the records), so it is skipped rather than kept.
         const auto found = catalog_->definition_indices.find(entry.achievement_id);
-        if (found == catalog_->definition_indices.end()) return false;
+        if (found == catalog_->definition_indices.end()) continue;
         const auto& definition = catalog_->definitions[found->second];
-        if (!shown_in(definition, entry.component_id)) return false;
+        if (!shown_in(definition, entry.component_id)) continue;
         const RequirementKey key{entry.achievement_id, entry.component_id, entry.requirement_id, entry.requirement_type};
         const auto old = requirements.find(key);
         difference = difference || old == requirements.end() || old->second != entry.current_count;
