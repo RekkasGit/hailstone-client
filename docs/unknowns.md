@@ -17,6 +17,15 @@ What the client does not implement yet, or implements with an approximation it c
 - The draft server's Spirit Shroud request decoders count two extra bytes. Those bytes are the application
   opcode in the stock RoF2 sends. A server using the draft needs to correct those decoders before form
   requests work. It also needs to resend the role offer when a player rejoins a mission before selecting a role.
+- `OP_ShroudRemove` (0x67e8): the RoF2 handler only shows eqstr 5191 (wait for the transformation) in a 45-second
+  dialog; it does not say which way the form changes. Hailstone shows no dialog and treats the next `OP_Shroud` as
+  the return to the original form, which is how the EQEmu draft uses it. A capture from a server with shrouds, or
+  a trace of what the original does with the profile type on that `OP_Shroud`, would settle it.
+- Draft-only paths: a `ShroudSelectionWindow` whose spawn field names the active shared task opens the forms as
+  Monster Mission roles, a roster template id of 16 or less without a catalog is shown as a class name, and a
+  character-list `ShroudClass`/`ShroudRace` unlike the base class/race marks the character as shrouded when the
+  profile type is 0. RoF2 does none of these (0x414320 keeps the field as the shroudkeeper's id); stock EQEmu sends
+  ShroudClass/ShroudRace equal to the base values and no shroud packets, so none of them fires there.
 
 ## Legacy environmental particles
 
