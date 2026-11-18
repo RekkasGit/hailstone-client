@@ -588,7 +588,11 @@ lookup 1500, follow AI 3000):
   attack or CastNotStanding, and a sitting caster stands up (ChangePosition 100). Line of sight goes through the
   app's collision (eqstr 108). The target-type switch measures the 2D distance (the player distance with a z scale
   of 0) against Range + focus (at most 5 x Range), MinRange (4602), targeted AE's 39.99 height and the body types
-  (the spawn's body type).
+  (the spawn's body type). The focus is GetFocusRangeModifier @0x42cb80 (`Character::focus_range_modifier`,
+  SPA 129): the best eligible item, buff and AA focus, each giving Range x its scaled base x 0.01 truncated toward
+  zero, the three added. EQEmu's server check (Mob::GetActSpellRange) takes the same three best foci but applies
+  their sum untruncated, adds the target's size and measures in 3D: it accepts what the client lets out, unless
+  the height difference puts the target past its 3D reach.
 - Combat abilities (`game/mechanics/combat_ability.h`): doCombatAbility refuses an ability whose reuse timer (ids
   0..19, the profile's timers at zone-in, then OP_DisciplineTimer; the client never stamps them itself) still runs
   and a duration self discipline while one is active (5821); the server's timer packet is the only thing that
