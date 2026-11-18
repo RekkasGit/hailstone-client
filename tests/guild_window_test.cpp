@@ -292,6 +292,9 @@ TEST_CASE("mock server: guild banner page selects kits, edits a draft, and saves
         host.color_pick.reset();
         choose(0xff304050u);
         CHECK(run(L, "click('SaveBannerSettings'); return hs.ChildShown(g, 'SaveBannerSettings')") == "true");
+        REQUIRE(rig.conn.confirmation());
+        CHECK(rig.conn.confirmation()->text ==
+              "You must have a: guild banner modification item to save change to banner settings.");
         ByteWriter token;
         token.zeros(8);
         token.le<std::uint32_t>(4001);

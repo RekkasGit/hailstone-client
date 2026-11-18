@@ -177,8 +177,10 @@ bool GameConnection::guild_banner_save(const GuildBannerStyle& style) {
         Confirmation notice;
         notice.id = kBannerMissingTokenNotice;
         const auto& item = guild_banner_.modification_token.item_name;
-        notice.text = item.empty() ? "You need a guild banner modification item to save changes."
-                                   : "You need " + item + " to save changes to the banner.";
+        // CGuildMgmtWnd_SaveBannerSettings @0x6833a0 builds this text around the item's name (in colour there).
+        // Before any modification-item message the original's name is empty too; the fallback only names it.
+        notice.text = "You must have a: " + (item.empty() ? std::string("guild banner modification item") : item) +
+                      " to save change to banner settings.";
         notice.ok_only = true;
         notice.plain_text = true;
         discard_questions([](const Confirmation& question) { return question.id == kBannerMissingTokenNotice; });
