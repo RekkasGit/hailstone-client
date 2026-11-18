@@ -132,16 +132,16 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
         if (glm::distance(glm::vec2(base), glm::vec2(camera_.position)) > kNameplateRange) continue;
         // Just above the model's head: its rest-pose top at the actor's scale above the model origin (the
         // spawn's z, lowered for EQG models). Without a model: the eye (ViewHeight above the feet).
-        float top = s.heights.view_height - s.heights.avatar_height;
-        if (actor_renderer_) {
-            if (auto model = actor_renderer_->model_for(s))
-                top = model->bounds_max.z * s.heights.model_scale +
-                      render::ActorRenderer::model_z_offset(*model, s.heights.model_scale, world.height_tables.get());
-        }
-        glm::vec3 head = base + glm::vec3(0, 0, top + 1.5f);
+        std::optional<float> body_top;
+        if (actor_renderer_)
+            // A meshless skeleton (bare IVM) has empty body bounds: no top, so the eye stands in.
+            if (auto model = actor_renderer_->model_for(s); model && model->bounds_max.z > model->bounds_min.z)
+                body_top = model->bounds_max.z * s.heights.model_scale +
+                           render::ActorRenderer::model_z_offset(*model, s.heights.model_scale, world.height_tables.get());
         // A rider sits on its mount's seat bone, well above its spawn's place: its head from there.
-        if (glm::vec3 seated; actor_renderer_ && actor_renderer_->drawn_rider_top(id, seated))
-            head = seated + glm::vec3(0, 0, 1.5f);
+        std::optional<glm::vec3> seat;
+        if (glm::vec3 seated; actor_renderer_ && actor_renderer_->drawn_rider_top(id, seated)) seat = seated;
+        const glm::vec3 head = nameplate_head(base, body_top, s.heights.view_height - s.heights.avatar_height, seat);
         const float head_distance = glm::distance(head, camera_.position);
         if (!std::isfinite(head_distance) || head_distance > kNameplateRange) continue;
         glm::vec4 clip = view_proj * glm::vec4(head, 1.0f);

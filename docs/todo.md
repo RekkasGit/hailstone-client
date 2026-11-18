@@ -125,6 +125,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Position history (PositionTracker, OP_FloatListThing), the retried and the 30-minute saves, closing on loading screens (60069a0). Missing samples are listed in unknowns.md.
 - [x] The live folder's revamped bazaar, lavastorm and highpasshold load when the server's safe point (OP_NewZone) stands on their floor (game/revamped_zone.h): PEQ's Bazaar and Lava Storm version 1 (expansion 9 on) and its only High Pass Hold row. Version 0's safe points have no floor there, so those stay refused.
 - [ ] Arena and Nektulos with a live folder: its arena.s3d and nektulos.s3d win over the revamped .eqg, but PEQ's Arena (its only row) and Nektulos version 1 (expansion 10 on) run the revamp: their spawns stand on the live .eqg, not the .s3d (unknowns.md, Movement and collision).
+- [x] IVM's animation (race 127/600, the enchanter pet): it has no named clips, and GetAlternateAnimTag @0x406a60 sends its code, like the rest of its wood-elf prefix group, to the wood elf's (ELM), so it plays ELM's clips and holds its weapons as an elf does, not spread in its T-shaped rest pose (game::animation_source).
 
 ### Items and commerce
 - [x] Evolving-item Final Result inspection: native action-4 request, ordinary read-only item reply, received instance progress updates and a focusable gamepad action; packet, bridge, mock-server and Lua-pack coverage.

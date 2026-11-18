@@ -64,6 +64,7 @@
 #include "core/wipe.h"
 #include "app/nameplate_layer.h"
 #include "app/nameplate_input.h"
+#include "app/spawn_pick.h"
 #include "game/nameplate_overlap.h"
 #include "game/sky_colours.h"
 #include "game/option_commands.h"
@@ -1035,6 +1036,8 @@ private:
     bool plate_input_blocked(bool ignore_right_button = false) const;
     bool nameplate_spawn_clickable(const game::Spawn& spawn) const;
     std::optional<float> nameplate_pixel_depth(glm::vec2 at) const;
+    // A spawn as the click tests see it (app/spawn_pick.h), its pose left to the caller.
+    SpawnPickSource spawn_pick_source(std::uint32_t id, const game::Spawn& spawn) const;
     std::optional<std::uint32_t> nameplate_at(glm::vec2 at) const;
     bool activate_nameplate(std::uint32_t id);
     // CEverQuest::LeftClickedOnPlayer.

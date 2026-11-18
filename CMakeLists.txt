@@ -404,6 +404,7 @@ add_library(hailstone_engine STATIC
   src/app/nameplate_canvas_context.cpp
   src/app/nameplate_canvas_painter.cpp
   src/app/nameplate_input.cpp
+  src/app/spawn_pick.cpp
   src/game/nameplate_canvas.cpp
   src/ui/lua/lua_nameplate_canvas.cpp
   src/render/gpu_requirements.cpp
@@ -1325,6 +1326,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/nameplate_canvas_painter_test.cpp
     tests/nameplate_canvas_context_test.cpp
     tests/nameplate_input_test.cpp
+    tests/spawn_pick_test.cpp
     tests/spells_test.cpp
     tests/spell_hit_modes_test.cpp
     tests/proc_cast_stage_test.cpp

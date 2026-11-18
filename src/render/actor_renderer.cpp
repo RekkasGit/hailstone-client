@@ -573,6 +573,9 @@ const ActorRenderer::GpuModel* ActorRenderer::install(const assets::CharacterMes
         it->second.last_ms = now_ms_;
         return &it->second;
     }
+    // A skeletal actor with no mesh of its own (race 127's IVM) dresses to an empty mesh when it holds no item.
+    // Nothing to put on the GPU: no buffers, no draw calls. Its spawn is still an actor's (drawn_ includes it).
+    if (model.parts.empty() || plan.parts.empty()) return nullptr;
     GpuModel g;
     const auto resolve = [&](const TextureRef& ref) {
         const auto slot = slot_for(ref, plan, upload);
@@ -845,13 +848,40 @@ glm::mat4 ActorRenderer::instance_matrix(const ActorDraw& a) {
     return glm::scale(instance, glm::vec3(a.scale));
 }
 
+float ActorRenderer::bound_radius(const assets::CharacterModel& model, const assets::CharacterMesh* mesh) {
+    const float r = std::max(model.bounding_radius,
+                             glm::length(glm::max(glm::abs(model.bounds_min), glm::abs(model.bounds_max))));
+    return mesh ? std::max(r, mesh->held_reach) : r;
+}
+
+float ActorRenderer::inside_radius(const ActorDraw& a) {
+    return a.model ? bound_radius(*a.model, nullptr) * a.scale : 0.0f;
+}
+
+bool ActorRenderer::casts_point_shadow(const glm::vec3& light, float light_radius, const glm::vec3& center,
+                                       float radius, float inside, bool skip_around) {
+    const float gap = glm::length(center - light);
+    return gap < light_radius + radius && !(skip_around && gap < inside);
+}
+
+float ActorRenderer::draw_radius(const ActorDraw& a) {
+    if (!a.model) return 0.0f;
+    float scale = a.scale;
+    if (a.attached) {
+        // A rider is drawn in its mount's seat bone frame (instance_matrix), which may turn under a non-uniformly
+        // scaled parent (an EQG seat), so its columns need not be perpendicular: the Frobenius norm of the 3x3 part
+        // bounds how far it stretches any length (its largest singular value) from above.
+        const glm::mat3 frame(a.parent);
+        scale = std::sqrt(glm::dot(frame[0], frame[0]) + glm::dot(frame[1], frame[1]) + glm::dot(frame[2], frame[2]));
+    }
+    return bound_radius(*a.model, a.mesh) * scale;
+}
+
 bool ActorRenderer::spawn_bounds(std::uint32_t id, glm::vec3& origin, float& radius) const {
     auto it = last_draws_.find(id);
     if (it == last_draws_.end() || !it->second.model) return false;
     origin = it->second.position;
-    const auto& m = *it->second.model;
-    float r = std::max(m.bounding_radius, glm::length(glm::max(glm::abs(m.bounds_min), glm::abs(m.bounds_max))));
-    radius = r * it->second.scale;
+    radius = draw_radius(it->second);
     return true;
 }
 
@@ -1178,8 +1208,8 @@ void ActorRenderer::prepare(const FrameInfo& frame, std::span<const ActorDraw> a
         if (!prepared_[i].gpu) continue;
         const auto& m = *a.model;
         prepared_[i].center = a.position;
-        prepared_[i].radius =
-            std::max(m.bounding_radius, glm::length(glm::max(glm::abs(m.bounds_min), glm::abs(m.bounds_max)))) * a.scale;
+        prepared_[i].radius = draw_radius(a);
+        prepared_[i].inside_radius = inside_radius(a);
         // Posing (sampling, blending, composing every bone) was most of a busy zone's actor time; one that shows
         // nowhere is not posed, nor drawn.
         if (!actor_needs_pose(pose_view_ ? &*pose_view_ : nullptr, prepared_[i].center, prepared_[i].radius,
@@ -1320,11 +1350,9 @@ void ActorRenderer::draw_point_shadow(const FrameInfo& frame, const glm::vec3& l
     const bool ids = prepared_ids_.size() == prepared_.size();
     for (std::size_t i = 0; i < prepared_.size(); ++i) {
         const Prepared& p = prepared_[i];
-        float gap = glm::length(p.center - light);
-        if (!p.gpu || gap >= radius + p.radius) continue;
+        if (!p.gpu || !casts_point_shadow(light, radius, p.center, p.radius, p.inside_radius, skip_around)) continue;
         if (shadow_reach_ > 0.0f && glm::length(p.center - shadow_from_) - p.radius > shadow_reach_) continue;
         if (skip_spawn != 0 && ids && prepared_ids_[i] == skip_spawn) continue;
-        if (skip_around && gap < p.radius) continue;
         glm::vec3 r(p.radius);
         if (!box_reaches_face(light, face, p.center - r, p.center + r)) continue;
         bool bound = false;
