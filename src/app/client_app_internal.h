@@ -22,6 +22,7 @@
 #include "app/progress_ui.h"
 #include "app/market_ui.h"
 #include "app/client_app.h"
+#include "app/close_camp.h"
 #include "app/login_token_session.h"
 #include "app/input_script.h"
 #include "app/zone_settle.h"
@@ -1120,6 +1121,7 @@ private:
     ui::ImGuiLayer ui_;
     bool quit_ = false;
     bool close_pending_ = false; // a window close request held through a loading screen
+    CloseCamp close_camp_;       // a window close request's camp, made again when a zone change ended it
 
     Screen screen_ = Screen::Login;
     ui::LoginView login_view_;

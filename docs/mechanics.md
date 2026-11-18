@@ -1187,6 +1187,12 @@ teleport index request and wait 300, do-teleport-B 2000, zone player to bind 120
   moving forward while sitting) cancels it (12290), any other
   stand 12683; it never looks at an open trade. At the end the position history goes (when not riding), then
   OP_Logout.
+  A zone change ends a camp silently: the next zone's EnterZone runs ResetClientStateForZone(1) @0x5319f0, which
+  clears the camp's time (0xddf8a0) and its kind (0xdd2664), so the client stays in the new zone.
+  The window's close button in game is a /camp desktop (HandleWindowCloseRequest). Deliberate difference (always on,
+  `app/close_camp.h`): when a zone change ends that camp (a `#zone`, a gate, a zone line taken meanwhile), the
+  client camps to the desktop again once the next zone shows, so closing the window still ends it. A camp the
+  player ended (standing, a second /camp) is not made again.
   Enhancement (option `fast_camp`, hailstone.ini `game.fast_camp`, Options > General "Fast Camp", off by default):
   OP_Logout follows OP_Camp at once instead of after the 30 s. A stock EQEmu zone ends a camp cleanly only once its
   own 29 s camp timer has run (a GM's at once); a logout before that is a disconnect, and the character stays in the

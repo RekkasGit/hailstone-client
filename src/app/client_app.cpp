@@ -72,6 +72,13 @@ int ClientApp::run() {
             close_pending_ = false;
             window_close_request();
         }
+        // A close request's camp that a zone change ended: camped again once the next zone shows (a deliberate
+        // difference: the original's EnterZone ends it and stays open, app/close_camp.h).
+        if (!conn_) close_camp_.reset();
+        else if (close_camp_.update(conn_->state(), screen_ == Screen::InGame && player_ready_)) {
+            log::info("window close request: a zone change ended its camp; camping again in this zone");
+            window_close_request();
+        }
         if (quit_) break;
         auto now = Clock::now();
         float dt = std::min(std::chrono::duration<float>(now - last).count(), 0.1f);

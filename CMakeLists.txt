@@ -1169,6 +1169,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/item_options_test.cpp
     tests/option_commands_test.cpp
     tests/client_flags_test.cpp
+    tests/close_camp_test.cpp
     tests/font_faces_test.cpp
     tests/process_test.cpp
     tests/flora_test.cpp
