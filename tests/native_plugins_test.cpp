@@ -910,7 +910,7 @@ TEST_CASE("native plugins: a required plugin that throws in the world is a warni
     h.run("/probethrow"); // the command's callback lets an exception out
     std::string problem;
     CHECK_FALSE(h.plugins->required_addons_ready(&problem)); // seen although nothing else changed
-    CHECK(problem == "Required add-on hostprobe failed with an error in a command");
+    CHECK(problem == "Required add-on owner/probe failed with an error in a command");
     auto r = frame();
     CHECK(r.step == app::AddonAdmission::Step::Play); // never a disconnect or a hold
     CHECK(r.warning == problem);
@@ -952,7 +952,7 @@ TEST_CASE("native plugins: Retry reloads a required plugin that threw, once, and
 
     h.run("/probethrow");
     CHECK_FALSE(frame().warning.empty());
-    CHECK(admission.failure() == "Required add-on hostprobe failed with an error in a command");
+    CHECK(admission.failure() == "Required add-on owner/probe failed with an error in a command");
     CHECK(admission.failure_retriable()); // the running add-ons said so: Retry may help
     CHECK(admission.failure_serial() != quiet);
     const auto failed = admission.failure_serial();
@@ -970,7 +970,7 @@ TEST_CASE("native plugins: Retry reloads a required plugin that threw, once, and
     CHECK(h.plugins->retry_required_addons() == 0); // once: nothing failed now
 
     h.run("/probethrow"); // a new failure after the retry is warned about again
-    CHECK(frame().warning == "Required add-on hostprobe failed with an error in a command");
+    CHECK(frame().warning == "Required add-on owner/probe failed with an error in a command");
     CHECK(admission.admitted());
 }
 

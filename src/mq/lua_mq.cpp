@@ -2071,15 +2071,18 @@ bool ScriptHost::Impl::check_required_addons(std::string* problem) const {
                 return fail(s->name + " is still running a module not allowed by this server");
     }
     for (const auto& entry : m.required) {
+        // Named by its repository, as the server's add-on policy names it (docs/plugins.md).
+        const std::string who =
+            "Required add-on " + m.env.policy->required_label(plugin::FileKind::Script, entry.second, entry.first);
         if (m.env.policy->caps(plugin::FileKind::Script, entry.second, entry.first) == 0)
-            return fail("Required add-on " + entry.first + " is not permitted by this server's rules");
+            return fail(who + " is not permitted by this server's rules");
         const Script* s = m.find(entry.first);
         if (s && s->hash != entry.second)
-            return fail("Required add-on " + entry.first + " is shadowed by a different script");
+            return fail(who + " is shadowed by a different script");
         if (!s || s->stop_requested)
-            return fail("Required add-on " + entry.first + " did not remain running");
+            return fail(who + " did not remain running");
         if (s->status != Script::Status::Running)
-            return fail("Required add-on " + entry.first + (s->error.empty() ? " is not running" : ": " + s->error));
+            return fail(who + (s->error.empty() ? " is not running" : ": " + s->error));
         if (!s->started) return false;
     }
     return true;

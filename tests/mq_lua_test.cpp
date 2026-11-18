@@ -357,7 +357,8 @@ TEST_CASE("MQ Lua: required script startup failures prevent readiness") {
     h.pulses(1);
     std::string problem;
     CHECK_FALSE(h.scripts->required_addons_ready(&problem));
-    CHECK(problem.find("Required add-on needed") != std::string::npos);
+    // Named by its repository, as the server's policy names it, not by its folder.
+    CHECK(problem.find("Required add-on owner/needed") != std::string::npos);
 }
 
 TEST_CASE("MQ Lua: Retry starts a required script that failed again, once, and only its recorded bytes") {

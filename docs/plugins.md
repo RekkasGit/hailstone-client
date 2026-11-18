@@ -1428,7 +1428,8 @@ When it is decided:
 - **Once the character is in the world**, nothing disconnects: a required add-on that fails (a required plugin
   whose code lets an exception out counts as failed, though it stays loaded), or the next zone's rules that the
   installed add-ons do not meet, is a warning in chat (`[Add-ons] Required add-on owner/repo did not remain
-  running. You can keep playing on this server.`), said once for each failure. Leaving to character select starts the
+  running. You can keep playing on this server.`), said once for each failure. The add-on is named by its
+  repository, as the server's list names it, not by its folder or plugin name. Leaving to character select starts the
   check over for the next entry.
 - **Server add-ons warning and Retry.** While such a failure lasts, a small Server add-ons window (Modern, Gamepad,
   and the client's own when the interface has none) says what failed and that the player can keep playing. When the
