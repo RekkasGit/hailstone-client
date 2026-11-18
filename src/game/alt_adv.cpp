@@ -73,7 +73,9 @@ bool AltAdvState::can_train(const AltAbility& a, const AATrainer& who) const {
     if (static_cast<std::int32_t>(points) < a.cost) return false;
     if (who.spend_limit != -1 && static_cast<std::int32_t>(spent) + a.cost > who.spend_limit) return false;
     if (!who.ignore_level && who.level < a.level_req) return false;
-    if (a.monster_only() != who.monster_profile) return false;
+    // CanTrainAbility @0x4a44c0 refuses a monster-only rank outside a shroud (0x4a4960: profile type 1 or 2); unlike
+    // CanSeeAbility it does not refuse an ordinary rank inside one.
+    if (a.monster_only() && !who.monster_profile) return false;
     if (!a.class_allowed(who.class_id)) return false;
     if (a.grant_only) return false;
     if (!meets_prerequisites(a)) return false;

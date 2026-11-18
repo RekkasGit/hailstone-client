@@ -327,7 +327,8 @@ TEST_CASE("aa: the active form controls which ranks can be listed or trained") {
 
     who.monster_profile = true;
     CHECK(state.visible(1, who.class_id, filter, who) == std::vector{state.get(200)});
-    CHECK_FALSE(state.can_train(*state.get(100), who));
+    // CanTrainAbility @0x4a44c0 does not refuse an ordinary rank in a shroud; only CanSeeAbility hides it.
+    CHECK(state.can_train(*state.get(100), who));
     state.owned = {{200, 2, 0}};
     CHECK(state.visible(1, who.class_id, filter, who) == std::vector{state.get(201)});
 }
