@@ -1929,7 +1929,8 @@ for race 0x3c or for the local player in first person nothing plays), an actor t
 for an idle request (0x4b1b97: the packet's P01, P03, P08, O01, O02 or 0xc..0xf), and the play state from before the movement choice decides P01 or P08. A corpse's D05 is not
 0x4afc90's: 0x490366 asks the animation object's slot
 0x20 (0x4afd50), which calls 0x4096c0 directly with speed 0, so it bypasses the factor and holds the end pose.
-Hailstone plays D05 once at rate 1 and holds its last frame, which shows the same end pose.
+Hailstone plays D05 once at rate 1 and holds its last frame, which shows the same end pose; a spawn already dead
+when its state is made starts at that frame (the corpse bullet below).
 
 **Bone groups** (`game/anim_layers.*`, `render/actor_layers.*`). Each actor splits its bones into two CBoneGroups when
 its animations are set up (0x4090f0 / 0x409260 by HasNewStyleHierarchicalModel; EnumerateBones @0x10040f80
@@ -1991,10 +1992,15 @@ it does nothing). The old track keeps running through the blend; a one-shot that
 - Corpses (is_corpse, or stand state 115: feign death) play the death clip D05 (D04, else P01) on both groups, once,
   and drop any action. A spawn that dies while drawn plays it from its start, even when its model changes in the same
   frame; one that is already dead when the renderer first draws it (a fresh state after a zone change, or one that
-  comes into view dead) shows the clip's last frame at once, so the fall is not played again. A corpse that already
-  lies keeps that end pose when its clip changes (a held variant, a new model) or when it is hidden and drawn again;
-  that is a safe render choice, not confirmed RoF2 behaviour. The cross-fade out of the death clip samples it as the
-  one-shot it was, so it starts from the lying pose rather than the fall's first frame.
+  comes into view dead) shows the clip's last frame at once, so the fall is not played again. That is the original's
+  actor build: BuildActorForSpawn @0x48f4b0, for a spawn of Type 2+ or stand state 115, calls the animation object's
+  slot 0x20 at 0x490366 with D05 (0x10), reverse 1 and speed 0, with Death_SoundID (+0x1110) cleared around it so
+  no death sound plays; the classic object (0x4afd50, via 0x4096c0) hands that to each group's
+  CBoneGroup::SetCurrentAnimation @0x1003ff10, which puts a reversed clip at its length, so the end pose shows at
+  once and stays. OP_Illusion rebuilds the actor (do_change_form @0x596b20 calls BuildActorForSpawn), so a corpse
+  that already lies keeps that end pose when its model changes; it does when its held variant changes or when it is
+  hidden and drawn again too (`docs/unknowns.md`). The cross-fade out of the death clip samples it as the one-shot it
+  was, as any one-shot, so it starts from the lying pose rather than the fall's first frame.
 - Climbing: CollidingType (+0x24, 6 on a ladder) reaches 0x4afe60 / SelectMovementAnim, which plays L07 / CLMB
   forward going up and reversed going down. Fresh moving remote spawns probe the same world sweep for ladder and
   switch contacts; a stationary spawn retains its contact, while riders, corpses and NoCollide actors do not probe.

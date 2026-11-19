@@ -23,8 +23,6 @@ struct GroupTrack {
     float rate = 1.0f;
     bool loop = true;
     bool reverse = false;
-    // Plays the corpse death clip: fading out of it holds its last frame (a living one-shot keeps the old sampling).
-    bool corpse = false;
     float elapsed = 0.0f;     // display seconds since it started (HasCompletedCycle)
     const assets::AnimationClip* previous = nullptr;
     float previous_time = 0.0f;

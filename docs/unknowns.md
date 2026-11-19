@@ -355,6 +355,7 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 - weather.ini clouds: at most 256 patches per cloud (`kMaxCloudPatches`, a limit of ours; stock files ask for at most 80). The original's limit is not known.
 - JPEG UI art: at most 16384 a side and 8192 x 8192 texels, as PNG and DDS (a limit of ours).
 - EQG models: one model's clips together get at most 8M resampled bone poses (`kMaxModelPoses`, a limit of ours; the most a stock model has is about 400,000); a clip past it is left out.
+- A corpse (or a spawn in stand state 115) that already lies keeps its death clip's end pose when the clip changes for a held variant (an item put in or taken from its hands) or when it was hidden on purpose (first person, a market-hidden spawn) and is drawn again. The original rebuilds the actor, and so poses the end at once, on a new spawn and on OP_Illusion (BuildActorForSpawn @0x48f4b0, docs/mechanics.md); whether PlayerClient_UpdateHoldingAnimation or a hidden actor's return restarts D05 was not traced. Settled by reading those two paths for a call to the animation object's slot 3 with 0x10.
 
 ## World rendering
 

@@ -863,19 +863,18 @@ TEST_CASE("standing up from a corpse cross-fades from its last frame") {
     CHECK_FALSE(l.group[kLowerBones].previous_loop);
 }
 
-TEST_CASE("a corpse's shared P01 fallback still marks the track as the death clip") {
+TEST_CASE("a corpse's shared P01 fallback fades out as the one-shot it became") {
     auto p01 = clip(10), walk = clip(10);
     ActorLayers l;
     LayerRequest req;
     req.base = &p01;
     req.base_anim = anim(AnimationType::Stand);
     l.step(req, 0.1f);
-    REQUIRE_FALSE(l.group[kLowerBones].corpse);
-    // A model without D05/D04 plays P01 as its death clip: the same clip, not restarted, but now the corpse's.
+    // A model without D05/D04 plays P01 as its death clip: the same clip, not restarted, but now played once.
     render::corpse_request(req, p01, render::corpse_starts_at_end(false, true, true));
     l.step(req, 0.1f);
     CHECK(l.group[kLowerBones].clip == &p01);
-    CHECK(l.group[kLowerBones].corpse);
+    CHECK_FALSE(l.group[kLowerBones].loop);
     // A later clip change fades out of the death clip as the one-shot it was.
     req = LayerRequest{};
     req.base = &walk;

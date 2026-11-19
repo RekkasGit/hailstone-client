@@ -271,8 +271,6 @@ bool ActorLayers::step(const LayerRequest& req, float dt) {
     if (legs_free) {
         started = lo.start(req.base, req.base_anim, req.rate, req.loop, req.reverse,
                            blend_seconds(req, lo.anim, req.base_anim, req.blend_ms), req.restart, req.base_column);
-        // Also when the same clip is reused without a restart (a model without D05/D04 plays P01 as its death clip).
-        lo.corpse = req.corpse;
     }
     if (!action) {
         // Back on the base clip, the upper body takes the legs' position when they play the same
@@ -282,13 +280,12 @@ bool ActorLayers::step(const LayerRequest& req, float dt) {
             up.sync_to(lo);
             started = true;
         }
-        up.corpse = req.corpse;
     }
     up.advance(dt);
     lo.advance(dt);
-    // A spawn already dead when this state first drew it shows the death clip's last frame at once: the fall is not
-    // played again (a fresh state after a zone change has no memory of the death). One that dies while drawn starts
-    // the clip normally.
+    // A spawn already dead when this state first drew it shows the death clip's last frame at once, as the original's
+    // actor build does (BuildActorForSpawn's slot 0x20 call at 0x490366: D05 reversed at speed 0, held at its end):
+    // the fall is not played again. One that dies while drawn starts the clip normally.
     if (started && req.corpse && (req.corpse_at_end || settled)) {
         lo.finish();
         up.finish();
