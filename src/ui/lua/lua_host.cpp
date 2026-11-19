@@ -168,9 +168,6 @@ struct LuaUi::Impl {
             live_kb = live();
             return;
         }
-
-        // Minor collections happen automatically during Lua allocations (sub-millisecond).
-        // Only intervene here if long-lived/old objects grow past kGcMajorTrigger.
         const int kb = lua_gc(L, LUA_GCCOUNT);
         if (kb < live_kb * kGcMajorTrigger && !gc_left_generational(L)) return;
         const auto began = Clock::now();
