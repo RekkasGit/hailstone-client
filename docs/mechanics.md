@@ -1812,9 +1812,11 @@ the OP_Animation alike (`game::spell_cast_animation`). Off, such a spell plays n
 plays no cast stage here at all, and what its cast animation is for a spell without one is not confirmed
 (docs/unknowns.md).
 
-Bard songs animate again: a singing song always plays its cast animation, and an instrument song follows the
-classic/Luclin rule in the animation section above (an instrument in hand, not sitting; a new-style model has no
-such model block).
+A bard song's pulse lands the same way and plays its casting animation on the bard (it adds no cast stage): a
+singing song always plays it, and an instrument song follows the classic/Luclin rule in the animation section above
+(an instrument in hand, not sitting; a new-style model has no such model block). An area spell or a group song lands
+on each target with OP_Actions of its own; the local player's OP_Animation is sent once for one spell's landings
+within 500 ms.
 
 Missiles (`game/missiles.h`): an item missile with a target does not sweep the zone; spell missiles sweep and
 also check the target segment. Source despawn ends its missiles; target despawn removes homing. Item type 9 needs

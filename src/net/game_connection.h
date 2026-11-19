@@ -3338,6 +3338,11 @@ private:
     bool attack_until_xtarget_clear_ = false;
     bool fast_camp_ = false;
     bool cast_animation_fallback_ = true; // set_cast_animation_fallback
+    // The spell whose landing animation the zone was last told of (OP_Animation), and until when (now_ms()) a landing
+    // of it on another target sends none: an area spell or a group song lands on each target with an OP_Action of its
+    // own, and the animation is one.
+    std::uint32_t landing_animation_spell_ = 0;
+    std::int64_t landing_animation_until_ = 0;
     bool attack_held_for_xtarget_ = false; // kept on at the target's death (attack_until_xtarget_clear)
     bool auto_target_xtarget_ = true;
     bool face_on_attack_ = true;

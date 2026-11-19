@@ -47,6 +47,8 @@ constexpr std::uint8_t kSecondActionFlag = 4;
 constexpr std::uint8_t kAnimationSpeed = 10;
 // SpellEffectCue::stage: 0 the cast stage, 2 the impact stage.
 constexpr int kCastStage = 0, kImpactStage = 2;
+// How long one spell's landings on several targets share the local player's OP_Animation.
+constexpr std::int64_t kLandingAnimationMs = 500;
 
 // A bard song's skill: brass, singing, stringed, percussion and wind. Its pulses land without a cast of their own.
 constexpr std::uint8_t kSkillBrass = 12, kSkillSinging = 41, kSkillStringed = 49, kSkillPercussion = 54,
@@ -882,8 +884,12 @@ void GameConnection::handle_spell_action(const Action& a, std::int64_t now, bool
         const std::uint8_t anim = spell_cast_animation(sp->casting_anim, sp->spell_type, cast_animation_fallback_);
         play_animation(a.source, anim);
         // Our own: the zone is told of the animation too, as the server does not pass it on to players with
-        // some chat filters on; a second one does not interrupt a playing animation and is range limited.
-        if (a.source == world_.player_id) {
+        // some chat filters on; a second one does not interrupt a playing animation and is range limited. The
+        // landings of one spell on several targets (an area spell, a group song's pulse) send one.
+        if (a.source == world_.player_id &&
+            (landing_animation_spell_ != a.spell_id || now > landing_animation_until_)) {
+            landing_animation_spell_ = a.spell_id;
+            landing_animation_until_ = now + kLandingAnimationMs;
             Animation animation;
             animation.spawn_id = static_cast<std::uint16_t>(world_.player_id);
             animation.action = anim;
