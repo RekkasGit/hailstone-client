@@ -1614,6 +1614,7 @@ public:
         if (!profile_ || n < 0 || n >= static_cast<std::int32_t>(profile_->disciplines.size())) return 0;
         return profile_->disciplines[static_cast<std::size_t>(n)];
     }
+    bool knows_discipline(std::uint32_t id) const;
     // PlayerBase::CanSee's zone test (the app's collision): true when nothing blocks the segment (world coordinates).
     void set_line_of_sight(std::function<bool(const glm::vec3&, const glm::vec3&)> los) { line_of_sight_ = std::move(los); }
     // True once the app has given this connection its hooks (line of sight, teleport, app commands): the app installs

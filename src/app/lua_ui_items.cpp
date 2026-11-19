@@ -830,11 +830,13 @@ private:
     void inspect_selected(UiHost& host) {
         if (const net::Item* it = considered(host); it && host.inspect_item) host.inspect_item(*it);
     }
-    // UpdateList's ScrollKnown: the scroll's spell is in the book (SpellBookInfo::IsSpellKnown), or, for a spell of a
-    // group with a rank, one of a higher rank is: from the group's top rank down while above the scroll's.
+    // UpdateList checks the given ID and higher ranks of its group and subgroup. On EQEmu, learned disciplines
+    // are in the profile's discipline list rather than the spell book, but tomes use the same scroll effect.
     static bool scroll_known(UiHost& host, const net::Item& item) {
         const auto& book = host.conn->spell_state().book;
-        auto known = [&](std::uint32_t id) { return std::find(book.begin(), book.end(), id) != book.end(); };
+        auto known = [&](std::uint32_t id) {
+            return std::find(book.begin(), book.end(), id) != book.end() || host.conn->knows_discipline(id);
+        };
         const std::int32_t id = item.effects[net::kEffectScroll].effect;
         if (id <= 0) return false;
         if (known(static_cast<std::uint32_t>(id))) return true;

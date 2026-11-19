@@ -83,6 +83,12 @@ std::uint32_t GameConnection::player_class_mask() const {
     return mask;
 }
 
+bool GameConnection::knows_discipline(std::uint32_t id) const {
+    if (!profile_ || id == 0 || id == game::kNoSpell) return false;
+    const auto& disciplines = profile_->disciplines;
+    return std::find(disciplines.begin(), disciplines.end(), id) != disciplines.end();
+}
+
 void GameConnection::spell_message(std::uint32_t eqstr, std::vector<std::string> args, std::uint32_t color) {
     chat(ChatEvent::Kind::Spell, strings_.format(eqstr, args), 0, color);
 }

@@ -947,9 +947,10 @@ The merchant window's purchase page has a check box, MW_UsableButton, ticked whe
 constructor: SetCheck(1), and PurchasePageHandler +0x60 cleared). While it is ticked, the list
 (PurchasePageHandler::UpdateList @0x6f0bb0, `game::merchant_usable_hides`) leaves out a common item (item class 0)
 whose class mask lacks the character's class or whose race mask lacks the race's bit (0x6f7160: races below 13 as they
-are, Iksar 13, Vah Shir 14, Froglok 15, Drakkin 16, any other 17), and a spell scroll whose spell is in the book, or
-whose group has a higher rank in the book (from the top rank down while above the scroll's). Bags and books always
-show. As a Hailstone extension, if the server supplies a multiclass mask, any class in that mask can match instead
+are, Iksar 13, Vah Shir 14, Froglok 15, Drakkin 16, any other 17), and a spell scroll or discipline tome whose
+effect is already learned. Hailstone checks the spell book and the server's separate discipline list, looking for
+the exact effect or a higher rank in the same group and subgroup. Bags and books always show.
+As a Hailstone extension, if the server supplies a multiclass mask, any class in that mask can match instead
 of the profile's class. Level, deity and lore are not looked at. A click on the box flips +0x60 and rebuilds the
 list; the state lasts for the session. The modern pack's box is "Usable only" beside "Affordable only"; the
 gamepad pack's Buy page switches it with X.
