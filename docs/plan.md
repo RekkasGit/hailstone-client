@@ -37,6 +37,7 @@ hailstone/
   src/mq/          MacroQuest-style scripts: the mq module, TLOs, commands (docs/plugins.md)
   src/app/         main loop, state machine (login → server select → char select
                    → zoning → in zone), loading screen, the hs.* API for the UI packs
+  src/texpack/     built texture packs (upscaling the player's textures), for tools/texpack only
   tools/           command-line utilities (pfs, wld, eqg, texture, chr and audio dumps, texpack,
                    net and play probes, hailstone_check, hailstone_sign), generators (gen_*.py),
                    make_update.py, make_addon.py
@@ -48,7 +49,7 @@ The client's own folder (the binary, shaders, UI packs, settings, saved servers 
 
 The layers depend only downward: `app` → `game`/`ui`/`render`/`audio` → `assets`/`net`/`web` → `core`/`platform`. `game` does not include Vulkan headers. `nav` (the navigation meshes, `docs/navigation.md`) sits above `game` and `assets` and below `app`; the MQ layer reaches it only through `nav/nav_control.h`. `render` and `ui` read game state through narrow interfaces, so the zone viewer and tests can run without a network connection.
 
-The main loop runs simulation and movement at a fixed step, polls the network on its own thread with a lock-free queue into the game thread, and renders with interpolation. Asset loading runs on worker threads behind a loading screen.
+The main loop runs simulation and movement at a fixed step and renders with interpolation. The network session has its own service thread, which hands complete packets to the game thread under the session's lock (`net/session.h`). Asset loading runs on worker threads behind a loading screen.
 
 ### Libraries
 
@@ -59,7 +60,7 @@ Each library is pinned by version and fetched by CMake (`FetchContent`), or foun
 | Window, input, audio device, Vulkan surface | SDL3 | portable, mature, has `SDL_Vulkan_*` |
 | Vulkan loader and headers | Vulkan-Headers + volk | no link-time loader dependency |
 | GPU memory | Vulkan Memory Allocator | standard |
-| Shaders | GLSL → SPIR-V with `glslc` (shaderc) at build time | simple |
+| Shaders | GLSL → SPIR-V with `glslc` (shaderc) or `glslangValidator` at build time | simple |
 | Maths | glm | header-only |
 | zlib | zlib-ng (compat mode) | PFS blocks and the session layer |
 | UI | Dear ImGui, Lua 5.5 (`third_party/lua`) | windows drawn by Lua scripts, hot reload (`docs/dev-ui.md`) |
@@ -69,6 +70,10 @@ Each library is pinned by version and fetched by CMake (`FetchContent`), or foun
 | Navigation meshes | Recast/Detour | the standard; zlib licence |
 | Tests | doctest | fast, header-only |
 | DES (login) | own small implementation | only ECB/CBC with a zero key is needed |
+| Signatures | Monocypher (Ed25519) | the update manifest's and add-ons' signatures (`docs/updater.md`) |
+| Images and models | bcdec, stb_image, cgltf | BC7 decoding without device support, JPEG pictures, glTF replacement models |
+| In-game browser | CEF (`HAILSTONE_BROWSER`) | a separate helper process (`docs/browser.md`) |
+| Vulkan on macOS | MoltenVK | shipped beside the client, as macOS has no Vulkan of its own |
 
 Vulkan baseline: 1.3 with dynamic rendering and synchronization2. MoltenVK and every current desktop driver support it. Block-compressed textures (BC1–3) are uploaded directly when the device supports them, and decoded on the CPU otherwise (some arm64 GPUs). The renderers' bindless texture arrays are sized from the device's descriptor limits (`render/descriptor_limits.h`) and their sets are update-after-bind where the device supports it: Intel's Windows driver allows only 64 samplers per shader stage in plain sets, against about a million in update-after-bind ones.
 
@@ -96,7 +101,7 @@ Each milestone ends with something you can run.
 
 Set 2026-11-18. The features are nearly all in; what 1.0 adds is a promise that the plugin ABI, the `hs.*` and `mq` script API, the add-on manifest and the folder layout (`docs/layout.md`) stop breaking. So every breaking change lands first, then the platforms, then live play. Each step below is one beta release, at the usual pace of a release every few days. The items of each step are listed in `docs/todo.md` "Road to 1.0".
 
-1. **0.8, freeze the surfaces.** Everything that breaks scripts, plugins or saved files lands here, and only here: Lua 5.5, a review of `hs.*` across both packs (what is not wanted for good is renamed or removed before it is frozen), the last plugin ABI change, the `nmsc` compatibility layer and the older builds' fallbacks removed, the add-on safety items and the layer order fixed. At the end the stable API is written down (`docs/ui-api.md`, `docs/plugins.md`) with the rules for growing it after 1.0.
+1. **0.8, freeze the surfaces.** Everything that breaks scripts, plugins or saved files lands here, and only here: Lua 5.5 (already in, with 0.7.2), a review of `hs.*` across both packs (what is not wanted for good is renamed or removed before it is frozen), the last plugin ABI change, the `nmsc` compatibility layer and the older builds' fallbacks removed, the add-on safety items and the layer order fixed. At the end the stable API is written down (`docs/ui-api.md`, `docs/plugins.md`) with the rules for growing it after 1.0.
 2. **0.9, platforms and releases.** Windows run end to end (the updater, add-ons, the Lua fixes under MSVC, UTF-8 paths) and a scripted release. macOS is on hold until someone can test and maintain its releases; until then it stays a test build and does not block 1.0.
 3. **0.10, live play on stock EQEmu.** A written checklist played on the stock PEQ test server in both packs and with a controller, covering everything a stock server can exercise, and the bugs it finds fixed.
 4. **0.11, real estate.** Player housing and guild halls are an original RoF2 feature, so they are part of 1.0: the placement and item-move gaps closed, then played live on a server with housing.

@@ -44,6 +44,7 @@ durations and cast time. They run on plain data (`CharacterSheet`) and are cover
 | `attack_rules.*` | who may attack whom and the same-deity rule (the PvP rules) through `AttackQueries`; the live spawns in `game/attack_check.*`, used by can-I-hit |
 | `spell_gems.*` | memorising, the memorise packet, the linked timers, the usable-slot rule and the gem readiness tests; see "Spell gems and buff stacking" |
 | `find_affect_slot.*` | buff slot choice and its stacking rules over the hit-by-spell structs and an `AffectQueries` interface; the live callees are `game/hit_landing.*` |
+| `shown_stats.*` | the AC and ATK the inventory window shows (its label cases 0x15 / 0x16), shared by the stock labels and the item comparison (docs/item-compare.md) |
 | `sheet_builder.*` | the sheet from the live connection; its callers add the owned AA ranks' effects (`AltAdvState::sheet_abilities`: OP_SendAATable's ranks, OP_RespondAA's owned list). A buff's ticks left are the server's count less the 6 s ticks since it arrived, except for a permanent buff (kept at its negative count) and while the buff timers are on hold or the zone suspends buffs (the count as received) |
 
 Outside this directory, with vectors: `net/reliable_channel.*` (the session layer's reliable channel give-time, ack-one and
@@ -106,7 +107,7 @@ unmocked callee's inner calls; the port's queries are named after what the recor
 The melee vectors (`tests/melee_vectors_test.cpp`: melee range 3000, attack speed 4000 with the bag search replayed
 from `out.calls`, hand-to-hand delay 3000, double attack 4000, dual wield 4000 with Random() from `in.rand`)
 compare the result bit for bit. Melee range's NaN results are the positive quiet NaN (0x7fc00000), which the
-exporter writes as `"nan"` (`tools/re/export_vectors.py`) rather than the x87 default 0xffc00000; `vector_files.h`
+exporter writes as `"nan"` (`tools/re/export_vectors.py` in the analysis repository, not this one) rather than the x87 default 0xffc00000; `vector_files.h`
 reads it so. The attack (1200 records alternating x87 24- and 53-bit precision) is replayed call by call: every
 callee is an `AttackQueries` call, `RecordedAttack` takes the next record of `out.calls`, checks its name and
 arguments (can-I-hit's range as float bits, the combat ability attack's target, item, slot and skill, the weapon
@@ -270,7 +271,8 @@ already bindable through those keys.
 
 `game/cameras.h` ports the original's cameras (EverQuest::Cameras, CDisplay::cameraType): first person (0), overhead
 (1), chase (2), user 1 and 2 (3, 4) and tether (5), plus the wheel-follow camera (6), which is this client's own camera
-behind the player (its distance the mouse wheel's, the gamepad's stick its own). It stops against scenery as the
+behind the player (its distance the mouse wheel's, the gamepad's stick its own), and the isometric camera (7, also
+this client's own: docs/isometric.md). The camera behind the player stops against scenery as the
 cameras 1..5 do, where the 0.25 sphere swept from the eye stops (`wheel_follow_position`); it used to step its
 distance down by a fifth until the line behind was clear, which in a small room jumped between the steps as the
 player walked. The player's model is drawn in every camera but first person.
@@ -285,7 +287,7 @@ player walked. The player's model is drawn in every camera but first person.
 The distance is clamped to 2..200 (overhead and chase: at most 200) and the height to 0..30. Each camera stands where a
 0.25 sphere swept from the player's eye toward the point stops (unk_EQCamera_SetPosition, against the zone and its
 objects). TOGGLECAM (CDisplay::ToggleView, also the hot button's) cycles 0 -> 1 -> .. -> 5 -> 0, and from the camera
-behind the player to the overhead; FIRST_PERSON_CAMERA .. TETHER_CAMERA pick one. The mouse wheel zooms only between
+behind the player or the isometric one to the overhead; FIRST_PERSON_CAMERA .. TETHER_CAMERA pick one. The mouse wheel zooms only between
 first person and the camera behind the player; any other camera puts that camera's distance to 0. The zoom and camera
 turn keys act only in the chase and user cameras (their virtual +0x2c); the pan and pitch keys in any but first person
 (the camera behind the player takes neither: a deliberate difference, it is this client's). CENTERVIEW levels the
@@ -597,9 +599,8 @@ lookup 1500, follow AI 3000):
   0..19, the profile's timers at zone-in, then OP_DisciplineTimer; the client never stamps them itself) still runs
   and a duration self discipline while one is active (5821); the server's timer packet is the only thing that
   starts a stock timer. /discipline, the combat abilities window and hot buttons all call doCombatAbility through
-  its address, so a server patch's detour runs for each (NMS: the timer ids from 20 up in the patch's own map,
-  stamped now + RecastTime / 1000 on use and set by OP_DisciplineTimer; the map lives for the session and nothing
-  fills it at zone-in, as the profile has 20 timers).
+  its address, so a server extension's hooks around it (`before_combat_ability` / `after_combat_ability`, which a
+  server plugin can use for reuse timers past the profile's 20) run for each.
 - Ability reuse is shared by timer id, including id 0. A profile timer or OP_DisciplineTimer marks every ability
   using that id, independently of which ability started it or whether a discipline is currently active. The combat
   ability tiles and discipline hot buttons derive their cooldown state from that shared deadline. A shorter
@@ -833,7 +834,7 @@ find affect slot 1600). Each record is replayed call for call against the record
   index outside 0..96.
 - A book spell dropped or clicked onto a gem (HandleSpellLeftClick, StartSpellMemorization(slot, gem, bReplace 0)
   @0x75bf30): the original memorizes only into an empty gem and refuses one that holds a spell. Enhancement (option
-  `replace_gem_spell`, hailstone.ini `spells.replace_gem`, Options > Interface "Drop Replaces a Memorized Spell", on
+  `replace_gem_spell`, hailstone.ini `spells.replace_gem`, Options > Display "Drop Replaces a Memorized Spell", on
   by default; `UiHost::gem_takes_book_spell`): a usable gem that holds another spell takes it too, and the memorize
   runs as into an empty one. At 0 ticks OP_MemorizeSpell goes out for that gem; a stock EQEmu server's
   `Client::MemSpell` forgets the old spell (OP_MemorizeSpell 2, no "You forget" since the gem is being replaced)
@@ -848,7 +849,8 @@ find affect slot 1600). Each record is replayed call for call against the record
 - Locally placed buffs carry their effect slot data into the buff window, including counters. The numbers are
   client-local: the server sends `slot_data` as zeros (EQEmu's OP_Buff refresh has no counter data), so the
   client spends them itself; an all-zero refresh or a full list that keeps the spell in its slot keeps them,
-  a real value overwrites them. A cure (SPA 35/36/116/369) touches only the first matching debuff and never
+  a real value overwrites them. A cure (SPA 35/36/116/369) touches only the first matching debuff, spends its
+  own counter type first and then that buff's other counter effects (EQEmu keeps one pool per buff), and never
   removes it locally: a weak or partial cure leaves the icon standing until the server's fade clears it, while
   a strong or over-cure leaves the server to decide, so a mispredicted cure cannot hide a buff the server kept.
   Surplus is not carried on; counters unknown from zone-in stop the scan (docs/unknowns.md). This is a deliberate
@@ -1145,7 +1147,7 @@ Vectors in `tests/picking_vectors_test.cpp` (pick actor at point 2000, left-clic
   in chat; `/invite` and `/raidinvite` on the target, with their checks and messages; the trade request a click
   without an item sends, an item on the cursor going into the trade; `/inspect`'s request, whatever /toggleinspect
   says), and do nothing once the player has left. Invite to Group is greyed while we have a group invitation of our
-  own (`/invite` would accept it). Options > Interface "Player Right-Click Menu" (hailstone.ini `mouse.player_menu`,
+  own (`/invite` would accept it). Options > General "Player Right-Click Menu" (hailstone.ini `mouse.player_menu`,
   on by default) switches it off; with context menus off (the ContextMenus option, or the player down) the
   original's right click happens instead. The gamepad's Interact keeps the original's.
 - Clicked switch: trap types use the adjusted Disarm Traps (17) with key -1; a common item of type 12 is the key with
@@ -1701,14 +1703,14 @@ Actor drawing, nameplates, mouse picking and PC/NPC target cycling share viewer 
   `tab_skip_pets`, hailstone.ini `target.skip_pets`, Options > Display "Tab Skips Pets", on by default): the NPC
   cycle (and the pad's backward cycle) leaves out a spawn whose MasterID is the local player or another player, and
   mercenaries; an NPC's own pet stays. Enhancement (option `tab_line_of_sight`, hailstone.ini `target.line_of_sight`,
-  Options > Interface "Tab Needs Line of Sight", on by default): the NPC cycle (and the pad's backward cycle) takes
+  Options > Display "Tab Needs Line of Sight", on by default): the NPC cycle (and the pad's backward cycle) takes
   only the NPCs the player can see, a clear segment through the zone's collision from the player's eyes to a point 1
   over the spawn (the abilities' and Spawn.LineOfSight's test); without the zone's collision every NPC counts as seen.
   The PC and corpse cycles are not filtered.
 - The target's death (OP_Death, DeathReport) clears the target and turns auto attack and auto fire off. Enhancement
   (option `attack_until_xtarget_clear`, hailstone.ini `combat.attack_until_xtarget_clear`, Options > General
   "Attack Until XTarget Is Clear", off by default): auto attack stays on while the extended target list still holds
-  a living spawn (slots a server extension hides, such as the NMS pets, left out), and goes off once it holds none.
+  a living spawn (slots a server extension hides left out), and goes off once it holds none.
   Taking a new target first ends the hold: from then on the usual rules apply. Auto fire still goes off.
 - The original never picks a target by itself. Enhancement (option `auto_target_xtarget`, hailstone.ini
   `combat.auto_target_xtarget`, Options > General "Auto Target XTarget Attackers", on by default): with no target,
@@ -1771,7 +1773,7 @@ does not apply to a mounted rider. Damage below 1 HP can set the owner status to
 lie down and select the overhead camera; its six-second HP tick bleeds and prints the bleeding message. Positive
 HP recovers consciousness on the tick, stands and restores the camera. Server death remains authoritative.
 SPA 343's flag-1 interruption stops any local cast without an extra interrupt packet, including the bard restart
-path. StopSpellCast (stop_spell_cast.cpp:84-101): a bard's non-song only resets the cast (kept outright with
+path. StopSpellCast (`GameConnection::stop_spell_cast`): a bard's non-song only resets the cast (kept outright with
 recovery at most 100 ms when it is not an item cast), with no interrupt packet and no twist restart for any reason;
 anything else sends the empty OP_ManaChange for reason 0 only (feign death's StopCastAndFeignDeath, /stopsong) and
 resets the cast; a bard song then also restarts the twist for a reason other than 0. See `tests/passage_of_time_test.cpp`, `tests/ability_commands_test.cpp` and `tests/movement_test.cpp`.

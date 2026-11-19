@@ -33,7 +33,7 @@ trusting a bogus length). A call over 2 s also fails.
 
 | Area | What is run | Must |
 |---|---|---|
-| 296 typed decoders `decode_*(const AppPacket&)`, and the game-side decoders of server data (`tests/fuzz_decoders.inc`; a test checks the list covers every such declaration in `src/net/*.h` and `src/game/*.h`) | 5 patterns (zeros, 0xff, counting, random, text) of 24 KB cut at ~900 lengths each, 300 mutations, and an opcode sweep for the decoders that look at the opcode | never throw, never over-allocate |
+| 338 typed decoders `decode_*(const AppPacket&)`, and the game-side decoders of server data (`tests/fuzz_decoders.inc`; a test checks the list covers every such declaration in `src/net/*.h` and `src/game/*.h`) | 5 patterns (zeros, 0xff, counting, random, text) of 24 KB cut at ~900 lengths each, 300 mutations, and an opcode sweep for the decoders that look at the opcode | never throw, never over-allocate |
 | Session codec | `decode_datagram` for all pass/CRC combinations (also mutated plain packets re-encoded with a valid CRC), `decompress_body` (including a zlib bomb), `split_combined`/`split_app_combined`, `decode_app`, `parse_session_response`, `InboundStream` (fragments, out-of-order, wraparound, 20 000 random packets) | never throw |
 | Live `Session` | a real session over loopback UDP receiving 3 000 corrupt datagrams | keep running |
 | Login replies | `parse_handshake_reply`, `parse_login_reply`, `parse_server_list`, `parse_play_reply`, `reply_body`, with compressed/bomb seeds | error by exception only (the caller catches `std::exception`) |

@@ -283,6 +283,7 @@ new paths with no corner reached it stops with "Navigation stuck going to ...".
 | `/nav loc <y> <x> <z>` (`locyxz`) / `locxyz <x> <y> <z>` / `locyx <y> <x>` | to a point (`/loc` order, or x y z); done within 2 |
 | `/nav door <name> [click]` / `door id <#> [click]` | to the nearest door whose name contains the text; `click` uses it on arrival |
 | `distance=<n>` (`dist=<n>`) | anywhere on the line: stop this close, measured along the path (a goal behind a wall is not near through it), however many corners are left; in height the end may be as far off as the distance (at least 8) |
+| `/nav help` (also `/nav` alone) | the commands |
 | `/nav stop` / `pause` | stop; pause or go on |
 | `/nav status` | the mesh's tiles and the walk |
 | `/nav ui` (`overlay`) | the mesh (green ground, blue water, red lava, purple zone lines, yellow PvP), its links (orange drops, light blue swims) and the path, over the 3D view |
@@ -434,7 +435,7 @@ server, which EQEmu does not send (`docs/unknowns.md`). The World view draws the
   name (prefix and word matches first), or the zones of the page shown when nothing is typed; each with its region
   and expansion. The selected zone's card shows how many zones away it is and the way there, with **On atlas**,
   **Its map** and **Go here**.
-- **A route followed** (`ui/settings/modern.txt` `atlas.route`): a banner over your zone's map with the next zone
+- **A route followed** (`atlas.route` in `ui/settings/modern.txt` under the data folder): a banner over your zone's map with the next zone
   and **Walk there**, which runs `/nav locxyz` to the nearest part of the zone line to that zone (2 units inside it,
   so the walk goes through rather than stopping at it; "Zone lines on the way" above). It needs the 'move'
   permission like any `/nav`. Your zone's exits are marked on its map (the next one stands out); the map's right-click

@@ -112,12 +112,15 @@ manifest's `caps` (docs/addons.md).
 | `Bool` | text | bool | false for empty, `false`, `null` or `0`; true otherwise |
 | `String` | text | string | the text |
 | `Select` | `x,a,b,c,...` | int | the 1-based position of `x` among the rest (not case sensitive), 0 when absent |
+| `If` | `cond,whentrue,whenfalse` (or `~` as the separator when there are exactly two) | string | the text of one branch; NULL when the condition does not calculate |
+| `Math` | | `math` | MQ's Math (below); `${Math}` alone is NULL |
+| `Range` | | `range` | `Between[a,b:n]` (a ≤ n ≤ b) and `Inside[a,b:n]` (a < n < b) |
 
 `LineOfSight` is NULL before the zone's collision is loaded, and for a coordinate that is not a finite number below
 1 000 000 in size.
 
 A compiled plugin can add TLOs (`AddTopLevelObject`). It cannot replace one that exists. MQ TLOs that are missing:
-`Raid`, `Mercenary`, `Corpse`, `Merchant`, `Ground`, `Macro`, `Math`, and other MQ plugins' TLOs (`Navigation` and
+`Raid`, `Mercenary`, `Corpse`, `Merchant`, `Ground`, `Macro`, and other MQ plugins' TLOs (`Navigation` and
 `Stick` are built in).
 
 ## Data types
@@ -326,6 +329,7 @@ name.
 | `gametime` | `hh:mm` | `Hour`, `Minute`, `Day`, `Month`, `Year`, `Night`, `Time24` |
 | `navigation` | `Active` | `Active`, `Paused`, `MeshLoaded`, `MeshComplete`, `TilesBuilt`, `TilesTotal`, `Destination`, `Remaining`, `PathExists[dest]`, `PathLength[dest]` (-1 for no path); docs/navigation.md "The Navigation TLO" |
 | `stick` | `ON` or `OFF` | `Active`, `Status` (`ON`, `PAUSED` or `OFF`), `Distance`, `StickTarget` (spawn id, 0 none), `StickTargetName` |
+| `math` | NULL | `Calc[expr]`, `Sqrt`, `Abs`, `Sin`, `Cos`, `Tan`, `Asin`, `Acos`, `Atan` (degrees), `Rand[max]` or `Rand[min,max]`, `Not`, `Hex`, `Dec[hex]`, `Clamp[n,min,max]`, `Distance[y,x,z:y,x,z]` (a missing point or coordinate is the player's) |
 
 `Window[name]` asks the UI whether a window of that name is open. The names are the game's own window names, which
 the UI packs use too (`InventoryWindow`, `LootWnd`, `BankWnd`, `GroupWindow`, ...).
@@ -336,9 +340,9 @@ Every number, string and boolean has these members, as in MQ.
 
 | Type | Members |
 |---|---|
-| `int` | `Float`, `Hex` (`0x1f`), `Reverse` (byte order of the low 32 bits) |
-| `float` | `Int` (cut toward zero; NULL for NaN, infinity or beyond 64 bits), `Deci`, `Centi`, `Milli` (1, 2 or 3 decimals, as text), `Precision[n]` (n decimals, 0..12), `Raw` (the 32-bit float's bits) |
-| `string` | `Length`, `Upper`, `Lower`, `Left[n]`, `Right[n]` (a negative n counts from the other end), `Mid[start,n]` (1-based), `Find[text]` (1-based, not case sensitive; NULL when absent), `Equal[text]`, `NotEqual[text]` (not case sensitive), `EqualCS[text]`, `Arg[n,sep]` (the nth word, `sep` a space by default), `Token[n,sep]` (like `Arg`, but empty fields count), `Count[c]` (how many times character c appears) |
+| `int` | `Float`, `Double`, `Hex` (`0x1f`), `Reverse` (byte order of the low 32 bits), `LowPart`, `HighPart` (the 16-bit halves; the 32-bit halves for a value past 32 bits), `Prettify[n]` (thousands grouped, n decimals) |
+| `float` | `Int` (cut toward zero; NULL for NaN, infinity or beyond 64 bits), `Deci`, `Centi`, `Milli` (1, 2 or 3 decimals, as text), `Precision[n]` (n decimals, 0..12), `Raw` (the 32-bit float's bits), `Prettify[n]` (thousands grouped, 2 decimals by default; MQ groups the value's bits instead) |
+| `string` | `Length`, `Upper`, `Lower`, `Left[n]`, `Right[n]` (a negative n counts from the other end), `Mid[start,n]` (1-based), `Find[text]` (1-based, not case sensitive; NULL when absent), `Equal[text]`, `NotEqual[text]` (not case sensitive), `EqualCS[text]`, `NotEqualCS[text]`, `Compare[text]`, `CompareCS[text]` (-1, 0 or 1 as it sorts before, with or after), `Arg[n,sep]` (the nth word, `sep` a space by default), `Token[n,sep]` (like `Arg`, but empty fields count), `Count[c]` (how many times character c appears), `Replace[search,replacement]` (case sensitive), `StripLinks` |
 | `bool` | none |
 
 ## Spawn searches
@@ -404,11 +408,11 @@ them. These commands come from MacroQuest rather than the game:
 | `/squelch <cmd>` | runs the command without its chat output |
 | `/docommand <cmd>` | runs the command (useful after `${...}` builds it) |
 | `/noparse <cmd>` | runs the command without expanding `${...}` |
-
-`/squelch`, `/docommand` and `/noparse` nest at most 16 deep in one line; past that the rest of the line is dropped.
 | `/lua run <name> [args]` \| `stop [name]` \| `pause [name]` \| `list` | scripts |
 | `/plugin list` \| `/plugin <name> [load\|unload]` | compiled plugins |
 | `/nav`, `/moveto`, `/stick` | navigation (docs/navigation.md "Commands") |
+
+`/squelch`, `/docommand` and `/noparse` nest at most 16 deep in one line; past that the rest of the line is dropped.
 
 `${...}` is expanded in every command line, whether typed or sent by a script, except `/noparse` lines and the lines
 the client's own windows send for a button.
@@ -541,6 +545,7 @@ code. A script that registers any of these stays loaded after its main chunk ret
 | `set_class_name(class_id, name [, short_name])` | the server's name for a player class (1-16) and its short name ("Vanguard", "VAN"), shown wherever the client names the class; nil or `""` the stock one. Display only. At most 32 bytes and 4, no control characters, else an error. The names go when the script stops, loses `extend`, or the session leaves the server; the latest caller wins ([plugins.md "Class names"](plugins.md#class-names)) |
 | `set_pet_list{{spawn = id, class = c}, ...}` | the player's pets, when the server allows several |
 | `set_vitals{max_hp, cur_hp, max_mana, cur_mana, max_endurance, cur_endurance}` | the server's vitals in place of the client's formulas (any subset); nil clears them |
+| `map_policy(fn)`, `map_visible(fn)` | shorthands for those two hooks (below); nil removes one. They need `ui` as well as `extend` |
 
 ### Hooks
 
@@ -578,6 +583,8 @@ the script's own Lua state and must finish within 50 ms. An error in a hook ends
 | `reuse_focus_dropped` | (spell_id) → true: no reuse focus |
 | `map_spawn` | (spawn table) → true shows it as the defaults say, a table `{color, layer, label}` changes them, falsy leaves it off |
 | `nameplate` | (spawn table, text) → the text for its nameplate. Lua only. The spawn table is reused for every plate, so copy what you need |
+| `map_policy` | () → `{custom_spawns, stock_npcs, npc_find, revision, name}` (booleans, a whole number of 0 or more, at most 63 bytes): the map's policy (docs/plugins.md, `map_policy`). Needs `ui` too |
+| `map_visible` | (spawn table, `'map'` or `'find'`) → false leaves the spawn off the map or out of Find. Needs `ui` too |
 
 `command_line` is for compiled plugins only.
 
@@ -688,6 +695,8 @@ rectangle (`u0, v0, u1, v1`).
 | EndCombo | () → — | |
 | SetItemDefaultFocus | () → — | |
 | ProgressBar | (fraction [, w=-1, h [, overlay]]) → — | |
+| ColorButton | (label, r, g, b [, a [, flags [, w, h]]]) → bool | A colour swatch; flags from ui.ColorEditFlags |
+| ColorPicker3 / ColorEdit3 | (label, r, g, b [, flags]) → r, g, b, changed | Two functions. No alpha; components 0..1 |
 | CollapsingHeader | (label [, flags]) → bool | |
 | TreeNode | (label) → bool | |
 | TreePop | () → — | |
@@ -762,10 +771,11 @@ rectangle (`u0, v0, u1, v1`).
 | IsItemHovered | ([flags]) → bool | |
 | IsItemClicked | ([button=0]) → bool | |
 | IsItemActive | () → bool | |
+| IsItemDisabled | () → bool | The last item was drawn disabled |
 | IsItemFocused | () → bool | Gamepad nav cursor is on it |
 | IsItemDeactivatedAfterEdit | () → bool | |
 | GetItemID | () → int | |
-| GetItemRect | () → x0, y0, x1, y1 | |
+| GetItemRect | ([frame]) → x0, y0, x1, y1 | true: the control's own frame, without an outside label |
 | IsMouseClicked / IsMouseDoubleClicked / IsMouseReleased / IsMouseDown / IsMouseDragging | ([button=0]) → bool | Five functions. Button 0..4 |
 | IsMouseHoveringRect | (x0, y0, x1, y1) → bool | |
 | GetMousePos | () → x, y | |
@@ -797,6 +807,7 @@ rectangle (`u0, v0, u1, v1`).
 | PushStyleVar | (idx, x [, y]) → — | idx from ui.StyleVar |
 | PopStyleVar | ([n=1]) → — | Pops no more than the window's code pushed |
 | PushStyleVars | ({idx,x,y\|false, …}) → n | |
+| GetStyleAlpha | () → number | The style's opacity now, a disabled scope's included |
 | PushFont | ([fontIndex=3]) → — | EQ UI font 1..6 |
 | PushChatFont | ([index=2]) → — | Chat font 0..10. Pop with PopFont |
 | PopFont | () → — | Pops no more than the window's code pushed |
@@ -823,20 +834,25 @@ rectangle (`u0, v0, u1, v1`).
 #### Constant tables on `ui` (not functions)
 
 `WindowFlags`, `Cond`, `TableFlags`, `Col`, `StyleVar`, `TableColumnFlags`, `InputTextFlags`, `ComboFlags`,
-`SelectableFlags`, `Mouse` (Left/Right/Middle), `ButtonFlags`, `Key` (Escape, Enter, arrows, Space, A..Z, "0".."9"),
-`TabItemFlags`, `TabBarFlags`, `HoveredFlags`. Each holds a subset of ImGui's enum: see `register_ui_api`.
+`ColorEditFlags`, `SelectableFlags`, `Mouse` (Left/Right/Middle), `ButtonFlags`, `Key` (Escape, Enter, arrows, Space, A..Z, "0".."9"),
+`TabItemFlags`, `TabBarFlags`, `HoveredFlags`. Each holds a subset of ImGui's enum: see `register_ui_api` in `src/ui/lua/lua_imgui.cpp`.
 
 ### `hs`
 
 The tables below include `hs.gamepad.*`. The **Cap** column is what a plugin's code needs to call it; `—` means
 nothing beyond `ui`. A UI pack's own code may call everything. A refused call does nothing and gives `nil`, with one
-line in the log. The list is `src/app/lua_ui_caps.cpp`; a function missing from it is taken to act and needs
-`actions`. `self` means the function checks the caller itself, as each group's note says.
+line in the log. The list is the catalog in `src/app/lua_ui_api.inc` (applied by `src/app/lua_ui_caps.cpp`); a
+function missing from it is taken to act and needs `actions`. `self` means the function checks the caller itself, as each group's note says.
 
 Conventions: `[x]` is optional and `a | b` is one or the other. `name, child` is a stock window's name and a child's
 XML name (`"InventoryWindow", "IW_Money0"`). `slot` is a [possessions slot](#inventory-slots) and `bagSlot` a place
 in the bag at that slot, from 0. `hs.FirstWornSlot` (0), `LastWornSlot` (22), `FirstBagSlot` (23), `LastBagSlot` (32)
 and `CursorSlot` (33) are fields, not functions.
+
+The `hs.UI` services added since are documented in docs/ui-api.md only, with flat names of their own: `UiImage`
+(assets), `ItemExpTransfer*` and `ItemDisplay*Transfer` (evolving), `Extension*` (extensions), `UiHook*` (hooks),
+`Interface*` (interfaces), `MapPolicy` (map) and `Nameplate*` (nameplates). docs/ui-api-reference.md maps every
+flat name to its `hs.UI` one.
 
 The **item table** that `hs.Item`, `SlotItem`, `BagSlotItem`, `BankItem` and others return is `{name, id, icon,
 count, charges, stackSize, stackable, bagSlots, weight, magic, lore, type, size, ac, hp, mana, category, sellable}`,
@@ -919,6 +935,7 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | Function | Args → returns | What | Cap |
 |---|---|---|---|
 | Tasks | () → tasks | all authoritative active tasks, independent of journal visibility or selection | — |
+| TasksRevision | () → revision, selectedId | what `Tasks` would change by, without building it (cheap); both 0 out of game | — |
 | OpenTask | (taskId) → bool | selects and opens an existing active task in the journal; false for an unknown ID | `commands` |
 
 `Tasks` returns an array in native task/shared/quest and slot order, plus `selectedId` (0 if none), `revision`
@@ -1265,7 +1282,7 @@ The item against what the player wears (docs/item-compare.md). `c` = {usable, wh
 | gamepad.setting | (name) → number\|nil | gamepad.* setting | — |
 | gamepad.set_setting | (name, value) → ok | Set and save to hailstone.ini | commands |
 | gamepad.rumble | (low, high, ms) → ok | Rumble | — |
-| gamepad.request_focus | (window) → — | Menu mode, ImGui focus on that window | — |
+| gamepad.request_focus | (window) → — | Menu mode, ImGui focus on that window | commands |
 | gamepad.drop_cursor | () → ok | Drop the cursor item on the ground | actions |
 | gamepad.takes_b | () → — | A window closes itself on B this frame | — |
 
@@ -1438,6 +1455,11 @@ or -1 and say so in the chat window. Only call these on the client's thread, fro
 | `add_menu(label, command)` | `ui` | an entry in the EQ menu's Plugins submenu |
 | `tcp_open(address, port)`, `tcp_state`, `tcp_send`, `tcp_recv`, `tcp_error`, `tcp_close` | `net` | the plugin's own TCP connections (docs/plugins.md "Connections (ABI 2)") |
 | `web_open(url, w, h)`, `web_navigate`, `web_nav`, `web_close`, `web_eval`, `web_post`, `web_text`, `web_message`, `web_state`, `web_view` | `web` | browser tabs (docs/plugins.md "Web pages") |
+| `use_ability(kind, name)`, `ability_state(kind, name, remaining_ms, reuse_ms)`, `get_ability_data_bulk(out, size)` | `actions` (the other two `read`) | an Ability Book entry used as its row or hot button does, whether it is ready, and every entry at once. Added later in ABI 3: test `HAILSTONE_HOST_HAS` first |
+| `select_raid_member(spawn_id, incarnation)`, `raid_action(name, action, group)` | `read` and `target` / `actions` | targets a raid member; asks the server to move one, as the raid leader does. Added later in ABI 3 |
+| `decode_item_packet`, `inspect_item_packet`, `manual_follow`, `get_follow_status`, `get_memorized_spell`, `monotonic_ms`, `measure_binary`, `get_map_policy` | per function | docs/plugins.md "Server add-on services". Added later in ABI 3 |
+| `world_capabilities`, `world_floor_below`, `world_anchor`, `world_submit`, `world_surface_patch` | per function | docs/plugins.md "Transient world geometry". Added later in ABI 3 |
+| `nameplate_register`, `nameplate_unregister`, `nameplate_submit`, `nameplate_measure_text`, `nameplate_spell_icon` | `read`, `ui` and `extend` | a nameplate canvas provider (docs/plugins.md "Native world nameplate canvases"). Added later in ABI 3 |
 
 ### Hook table
 
@@ -1475,6 +1497,10 @@ the original client's functions that a hook stands in for.
 | `const char* command_line(const char* line)` | a typed or scripted line after `${...}` parsing: a replacement line, or NULL to keep it |
 | `int map_spawn(const HailstoneSpawn*, HailstoneMapSpawn* out)` | the game's maps show only the group by themselves: nonzero shows this spawn as `*out` says |
 
+Hooks added later in ABI 3 are described in docs/plugins.md: `map_policy`, `map_visible`, `merchant_right_click`,
+`item_flags`, `item_description_append`, `item_presentation_revision`, `loot_confirmation` and `zone_display_name`
+("Server add-on services"), and `world_frame` and `world_frame_result` ("Transient world geometry").
+
 When several plugins extend the client, it asks them in load order and the first answer wins
 (`src/game/server_ext_chain.h`).
 
@@ -1485,10 +1511,10 @@ so a plugin built against an older SDK keeps working. Names are copied in, cut t
 
 | Struct | Fields |
 |---|---|
-| `HailstonePlayer` | `spawn_id, name[64], level, race, class_id, visible_class, class_mask, cur_hp, max_hp (int64), cur_mana, max_mana, cur_endurance, max_endurance, target_id, zone_id, game_state, in_group, in_raid, spell_book_open, buff_slots, xtarget_slots, casting_spell_id, scribing_spell_id, stand_state, pet_id, filter_pc_spells, in_zone` |
-| `HailstoneSpawn` | `id, name[64], level, class_id, race, owner_id, guild_id, is_npc, is_corpse, x, y, z, heading (0..512), hp_percent, rider_id, is_mercenary, is_gm, in_group, con_color, body_types[4], body_type_count` |
+| `HailstonePlayer` | `spawn_id, name[64], level, race, class_id, visible_class, class_mask, cur_hp, max_hp (int64), cur_mana, max_mana, cur_endurance, max_endurance, target_id, zone_id, game_state, in_group, in_raid, spell_book_open, buff_slots, xtarget_slots, casting_spell_id, scribing_spell_id, stand_state, pet_id, filter_pc_spells, in_zone, zone_instance, observation_flags` |
+| `HailstoneSpawn` | `id, name[64], level, class_id, race, owner_id, guild_id, is_npc, is_corpse, x, y, z, heading (0..512), hp_percent, rider_id, is_mercenary, is_gm, in_group, con_color, body_types[4], body_type_count`; ABI 3 appends `incarnation, observation_flags, mana_percent, endurance_percent, social_flags, anon, last_name[64], guild_name[64], display_name[64]` (check `size`) |
 | `HailstoneSpell` | `id, name[64], class_level[16] (255 cannot use), timer_id, cast_time_ms, recovery_time_ms, recast_time_ms, mana, target_type, skill, is_skill, gem_icon` |
-| `HailstoneItem` | `id, name[64], item_type, item_class, classes, races, icon, stack_count, charges, click_spell, scroll_spell` |
+| `HailstoneItem` | `id, name[64], item_type, item_class, classes, races, icon, stack_count, charges, click_spell, scroll_spell, serial[17], instance_id, augment_ids[6], configuration_complete` |
 | `HailstoneItemSlot` | `type` (0 the player's possessions), `slot`, `sub` (-1 the slot itself), `aug` (-1 none); no `size` |
 | `HailstoneBuff` | `spell_id` (0 empty), `tics` (unsigned: a permanent buff's negative count as its bits, 0xffffffff for -1), `level, caster_id` |
 | `HailstoneXTarget` | `type, status, spawn_id, name[64]` |

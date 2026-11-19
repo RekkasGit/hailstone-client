@@ -1,7 +1,8 @@
 # Add-ons: scripts, plugins and tools from GitHub
 
 The add-on manager lets a player install a MacroQuest Lua script, a compiled plugin (docs/plugins.md), a tool (a
-program of its own, below) or an upscaler (a temporal upscaler from outside the client, below) by pasting a GitHub link on the login screen, without opening the Hailstone folder, and
+program of its own, below), an upscaler (a temporal upscaler from outside the client, below) or an interface (UI
+packs, below) by pasting a GitHub link on the login screen, without opening the Hailstone folder, and
 keeps it up to date. It is a Hailstone
 feature with no counterpart in the original client. It is built on the updater's parts (docs/updater.md): the HTTPS
 download (`platform/http_get`), the zip reader (`core/zip_read`), SHA-256 and Ed25519 (`core/ed25519`).
@@ -32,7 +33,7 @@ link. A pasted link (below the store in the Modern pack) still works for any add
 
 The client fetches the add-on's manifest and shows a card before it writes anything. The card holds:
 
-- the name, version, kind (script, plugin, tool or upscaler), author, description and repository;
+- the name, version, kind (script, plugin, tool, upscaler or ui), author, description and repository;
 - what the add-on asks to do, in plain words ("read the game state", "cast spells, use abilities, items and AAs, attack, loot, order your pet");
 - whether it is signed, and the start of its key;
 - for a plugin, a warning: it is a program, so its permissions limit what it does through Hailstone, not what it can
@@ -143,7 +144,7 @@ next start (docs/graphics.md "Upscaler providers"):
   policy can require, allow or block one by its repository; one it refuses keeps the character out of that server
   until another is picked and the client restarted (docs/plugins.md "Opt-in add-on policies").
 - **What its package holds** (`unpack_upscaler`): at its top its provider, a library for this platform named after it
-  (`xess.dll`, `xess.so`), and the libraries it loads beside it (`libxess.dll`, `libnvidia-ngx-dlss.so.310.9.16`);
+  (`xess.dll`, `xess.so`), and the libraries it loads beside it (`libxess.dll`, `libxess.so`);
   data anywhere (the vendor's licence and notices). No library in a folder or for another platform, and nothing that
   runs on its own (the names a tool may not hold). Every library's header is checked for this platform; none is
   loaded at the install.
@@ -223,7 +224,7 @@ real add-on. A server's suggestion of an add-on the index does not list is a pla
 link gives, signed or not.
 
 **Adding a server** is a pull request to the index's repository. A maintainer signs it with the release key
-(`tools/sign.sh` there, `hailstone_sign sign`; `hailstone_sign verify <key> hailstone-addon-index.txt` lists it, its
+(the index repository's own `tools/sign.sh`, `hailstone_sign sign`; `hailstone_sign verify <key> hailstone-addon-index.txt` lists it, its
 serial first). Sign it with a `hailstone_sign` that writes the serial (this client's), so that each publish raises it.
 
 ## Licence
@@ -256,7 +257,7 @@ signature <128 hex digits>
 |---|---|
 | `hailstone-addon 1` | the first line; another version needs a newer Hailstone |
 | `name` | 1 to 32 letters, digits, `-` and `_`, starting with a letter or digit: its folder, `scripts/<name>/` or `plugins/<name>/`; a plugin's library is named after it |
-| `kind` | `script`, `plugin`, `tool` or `upscaler` |
+| `kind` | `script`, `plugin`, `tool`, `upscaler` or `ui` (UI packs, below) |
 | `version`, `min_client` | SemVer (`core/version.h`); `min_client` is optional |
 | `author`, `description` | optional, one line each of at most 200 bytes |
 | `caps` | what it needs (docs/plugins.md "Capabilities"); required, and the ceiling below; a tool's and an upscaler's are `none` |
@@ -295,8 +296,8 @@ GitHub release.
 The repository has to be public: a private one answers 404. A plugin whose source must stay private can be released
 from a second, public repository that holds only a README and the releases (the manifest and the packages); players
 paste that one's link. The Project Triune plugin is released that way (projecthailstone/hailstone-projecttriune-addon),
-the NMS plugin and the Auto Combat script from their own repositories. Each has a `tools/release.sh` that builds,
-packs, signs and uploads.
+the NMS plugin and the Auto Combat script from their own repositories. Each of those repositories has a
+`tools/release.sh` of its own that builds, packs, signs and uploads (this repository has none).
 
 ## UI packs
 
@@ -450,6 +451,7 @@ scripts/<name>/   an installed script
 plugins/<name>/   an installed plugin
 tools/<name>/     an installed tool (its program, its libraries, its data)
 upscalers/<name>/ an installed upscaler (its provider, the libraries it loads, their notices)
+ui-addons/<addon>/ an installed interface add-on (its ui/<pack>/ folders, UI packs above)
 ```
 
 - **An update replaces only the files the add-on shipped.** A file the older version shipped and the newer one does
@@ -485,7 +487,7 @@ Nothing is fetched when the system has no HTTPS (Linux and macOS without libcurl
 `--screenshot`). The list still shows what is installed then, and a removal works. The ceilings apply whether or not
 anything is fetched. The client sends nothing but the `Hailstone/<version>` User-Agent.
 
-For screenshots: `test.login=addons` in `ui/settings/<pack>.txt` opens the panel as the login screen first appears;
+For screenshots: `test.login=addons` in `ui/settings/<pack>.txt` (in the Hailstone folder) opens the panel as the login screen first appears;
 in the Modern pack `test.addontab=store` (or `mine`) picks its tab.
 
 ## Code
@@ -499,10 +501,11 @@ in the Modern pack `test.addontab=store` (or `mine`) picks its tab.
 | `app/addon_suggest.*` | which suggestions the player sees, and the ones put away |
 | `app/addon_install.*` | what a package may hold, the Lua and library checks, `installed.txt`, the journaled install and removal, the ceilings |
 | `app/addon_manager.*` | the worker: fetch, check, download, unpack; `install_ready` on the main thread; the store's manifests (`browse`); the server's and the hand-installed lists |
-| `app/client_app_addons.cpp` | the client's part: the view, the actions, when files may move, starting a tool (`start_addon_tool`) |
+| `app/addon_requirements.*`, `app/addon_upscaler_policy.*` | the opted-in server add-on policy's entry check, and its check of the running upscaler (docs/plugins.md "Opt-in add-on policies") |
+| `app/client_app_addons.cpp`, `app/client_app_addon_upscaler.cpp` | the client's part: the view, the actions, when files may move, starting a tool (`start_addon_tool`), whether the running upscaler meets the server's policy |
 | `plugin/policy.*` | `Ceiling`, `parse_caps_strict`, `caps_described` |
-| `app/lua_ui_pregame.cpp` | `view.addons`, `hs.LoginSet("addonLink" \| "addonsOpen")`, `hs.LoginDo("addonInspect" \| "addonInstall" \| "addonCancel" \| "addonUpdate" \| "addonRemove" \| "addonAuto" \| "addonFolder" \| "addonPage" \| "addonCheck" \| "addonRevoke" \| "addonAskAgain" \| "addonSuggestLook" \| "addonSuggestLater" \| "addonSuggestNever" \| "addonBrowse" \| "addonStoreLook" \| "addonStart")`, `view.addons.suggestions`, `view.addons.store`; `hs.ServerSelect().addonHint` |
-| `ui/modern/login.lua`, `ui/gamepad/login.lua`, `ui/dev_screens.cpp` | the panel, and the suggestions under the login card |
+| `app/lua_ui_pregame.cpp` | `view.addons`, `hs.LoginSet("addonLink" \| "addonsOpen")`, `hs.LoginDo("addonInspect" \| "addonInstall" \| "addonCancel" \| "addonUpdate" \| "addonRemove" \| "addonAuto" \| "addonFolder" \| "addonPage" \| "addonCheck" \| "addonRevoke" \| "addonAskAgain" \| "addonSuggestLook" \| "addonSuggestLater" \| "addonSuggestNever" \| "addonBrowse" \| "addonStoreLook" \| "addonStart" \| "addonEnabled")`, `view.addons.suggestions`, `view.addons.store`; `hs.ServerSelect().addonHint` |
+| `ui/modern/login.lua`, `ui/gamepad/login.lua`, `src/ui/dev_screens.cpp` | the panel, and the suggestions under the login card |
 | `ui/modern/serverselect.lua`, `ui/gamepad/serverselect.lua` | the server select's line about a suggested add-on |
 
 A plugin's windows get none of this: `hs.LoginScreen` is nil for them, as for every pre-game screen, so a plugin
@@ -525,6 +528,9 @@ cannot install another.
   what keeps one from being installed, once a run unless refreshed, no index).
 - `tests/addon_upscaler_test.cpp`: an upscaler's manifest, what its package may hold, its install, the hand-put list,
   the manager installing one, and the copy the client loads.
+- `tests/addon_tool_test.cpp`: a tool's manifest, its program's header, what its package may hold, its install and
+  removal. `tests/addon_requirements_test.cpp` and `tests/addon_upscaler_policy_test.cpp`: the opted-in add-on
+  policy's entry check and its upscaler check.
 - `tests/plugin_policy_test.cpp` (the ceiling), `tests/lua_ui_pregame_test.cpp` (the Lua view and actions),
   `tests/ui_pack_windows_test.cpp` (both packs draw the panel and the store in each state), `tests/dev_ui_test.cpp`
   (the client's own window and store).
@@ -535,8 +541,8 @@ Not checked yet:
   been tried.
 - **Windows.** The WinHTTP final-address check only compiles; it has not run.
 - **The store live.** The store is checked against GitHub in memory and drawn in tests; it has not listed the real
-  index. The index lists Project Triune's add-on, Auto Combat and the DPS meter; the NMS plugin appears once its
-  repository is public and it has a line there.
+  index. The index lists Project Triune's add-on, the NMS plugin, Auto Combat, the DPS meter, Auto AA, Buffbot,
+  Texture Studio and the XeSS and FSR 4 upscalers.
 - **Suggested add-ons live.** The index and the suggestions are checked against GitHub in memory and the packs drawn
   in tests; a first login to a real server that lists a suggested world has not been tried.
 - **macOS.** No plugin add-on has been installed there.

@@ -144,7 +144,9 @@ helper and the plugins are gone:
    and `tools/make_update.py`'s copy of it) are:
    - the files `hailstone.ini`, `hailstone-windows.ini` and `notes.txt`;
    - the folders `update/`, `servers/`, `logs/`, `cache/`, `screenshots/`, `bug-reports/`, `maps/`, `scripts/`,
-     `textures/`, `web/`, `addons/` and `tools/` (the last two the add-ons', docs/addons.md);
+     `textures/`, `web/`, `addons/` and `tools/` (the last two the add-ons', docs/addons.md), and `ui-data/` and
+     `ui-addons/` (the player's interface data and the UI add-ons; the client's list only, `tools/make_update.py`'s
+     copy does not have these two yet);
    - `ui/settings/` and `ui/loadingbackgrounds/`.
 
    An update never writes or removes any of them. A plugin folder an add-on installed into (`plugins/<name>/`,
@@ -204,8 +206,8 @@ player's run.
    Windows by hand.
 
    Run each platform's `hailstone_tests` (Windows under Wine) before going on; the macOS workflow runs its own.
-2. Install each platform's client (without the server plugins, which are released as add-ons by their own
-   repositories' `tools/release.sh`):
+2. Install each platform's client (without the server plugins, which are released as add-ons, each by a
+   `tools/release.sh` in its own repository; this repository has none):
 
    ```sh
    cmake --install build --prefix dist/hailstone

@@ -10,12 +10,12 @@ The steps are in `docs/plan.md` "Road to 1.0". This section says which items bel
 
 ### 0.8, freeze the surfaces
 
-- [ ] Lua 5.4.7 to 5.5.1 (the `lua-5.5` branch): the packs and the add-on repositories fixed, the break in the changelog.
+- [x] Lua 5.4.7 to 5.5.1 (the `lua-5.5` branch): the packs and the add-on repositories fixed, the break in the changelog (8b43300, in 0.7.2-beta).
 - [ ] Review `hs.*` across both packs and the `mq` module: rename or remove what is not wanted for good, then write the stable set down (`docs/ui-api.md`, `docs/plugins.md`) with the rules for adding to it after 1.0.
 - [ ] Plugin ABI: make the last breaking change, if any, and declare `HAILSTONE_PLUGIN_ABI` stable; write down how it grows after 1.0 (new functions at the end of the tables, no changed layouts).
 - [ ] Remove the `nmsc` compatibility layer: `sdk/nmsc_*.h` and the `nmsc_*` exports, the `NMSC_*` environment variables (`core/env.h`) and CMake settings, the saved window names renamed at start (`core/old_ui_settings`), and the rule about them in AGENTS.md.
 - [ ] Remove the older builds' fallbacks: the chat filters and colours read from the asset folder's `eqclient.ini` under `chat.ini`, and the unsorted character folders adopted per world (docs/layout.md).
-- [ ] Add-on safety: wrap the plugin functions and tables passed to pack functions; the arming delay on the client's own consent prompt; the pack's consent window guarded from before its first draw; the core install skipping add-ons' folders; `server_file_destination` refusing `.so.N` as `make_addon.py` does (all under "Add-ons" and "Code health").
+- [ ] Add-on safety: wrap the plugin functions and tables passed to pack functions; the arming delay on the client's own consent prompt; the pack's consent window guarded from before its first draw; `server_file_destination` refusing `.so.N` as `make_addon.py` does (all under "Add-ons" and "Code health").
 - [ ] The layer order: `net` and `assets` stop including `game/` headers ("Code health").
 - [ ] The local-time calls outside `src/platform/` through `platform::local_time` ("UI").
 
@@ -24,7 +24,7 @@ The steps are in `docs/plan.md` "Road to 1.0". This section says which items bel
 - [ ] Windows: the updater run (WinHTTP, the renames of the running `hailstone.exe`), add-ons run, the Lua review fixes built with MSVC under Wine, the `path::string()` sweep or the manifest recorded as required ("Updates", "Add-ons", "Code health").
 - [ ] A scripted release (packages, manifest, signature, upload), local or in CI ("Updates").
 - [ ] Downloads that resume; the rollback's `kept-<time>/` folders cleaned up.
-- [ ] Add-ons against the real GitHub; XeSS and FSR 4 in the add-on index.
+- [ ] Add-ons against the real GitHub (XeSS and FSR 4 are in the add-on index already).
 - macOS is on hold until someone can test and maintain its releases; it stays a test build and does not block 1.0.
 
 ### 0.10, live play on stock EQEmu
@@ -45,7 +45,7 @@ The steps are in `docs/plan.md` "Road to 1.0". This section says which items bel
 ### 0.12, memory and soak
 
 - [ ] The character archives and the base cost ("Memory").
-- [ ] The texture slots of freed appearances freed; the session-long caches evicting ("Check live", "Code health").
+- [ ] The session-long caches evicting ("Code health"); the texture slots of freed appearances are freed already ("Check live").
 - [ ] An hour in a busy hub with zoning, and several clients on the shared asset cache.
 - [ ] Golden-image tests for a few zones (docs/plan.md section 5).
 
@@ -310,7 +310,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] Horizon hills (docs/graphics.md "Horizon hills"): land round an outdoor zone past its edges, a mesh built from the zone's own terrain and drawn with its own ground, rock and water materials, starting at the zone's edge and rising into hills and mountains; the sea past a shore (unit tests for the measuring and the mesh; viewer screenshots of qeytoqrg, with its neighbours, and butcher, modern lighting; not yet in a session). Trees on its woods, the zone's own drawn far as pictures on crossed cards (unit tests for the placement, the surface, the picture and the atlas's tree counts; viewer screenshots of qeytoqrg, northkarana, butcher and eastkarana; frame time measured in southkarana; not yet in a session). The land as a generated terrain: warped hills worn by water drops and slumping, held off the zone's ground and the sea, cached per zone; coasts following the ground; rock, ground and sand splatted in one draw, the rock blended from three axes and its repeat broken up (unit tests for the wear's determinism and constraints, the coast, the cache; a fuzz case for the cache; viewer screenshots of the five comparison views and two clear overviews; not yet in a session). Open: no snow on it; the wear's gullies are finer than the 64-unit grid shows; one ground and one rock texture (the zone's most used); an EQG zone's terrain-tile materials are not used (no land when the zone has no plain one); the lid over a pocket the zone closes round is flat.
 - [x] Zone edge fog (docs/graphics.md "Zone edge fog"): a fog bank on the ground past an outdoor zone's terrain, marched per pixel through a field from the land's, with a soft, swelling top and drifting patches (unit tests for the field and the mean density; viewer survey of 77 views across 17 zones; GPU time in North Karana; not yet in a session). Open: its colour is the haze's alone (no light from above on its top, no shadow under clouds); the depth it marches to is sample 0 of an MSAA scene, so an edge against the fog keeps that sample's depth; tuned by eye on the survey, not against a reference.
 - [x] Neighbour zones, the world atlas and the distant copies removed: drawn past the zone lines (live, then as copies of the zones visited on the server, the land shaped by their ground), they showed walls, filler and seams at the lines that no rule fixed across the game's zones. The land round a zone is its own again (docs/graphics.md "Horizon hills"); the map's zone exits keep the zone-line grouping (`game/zone_exits.h`).
-- [x] Smoothed ground (docs/graphics.md "Smoothed ground"): a classic zone's solid, opaque ground drawn with crease-aware smooth normals and curved PN triangles cut up to 8 segments a side, within 1 unit of the flat ground, without cracks; collision and everything the server measures keep the file's terrain; the zone flora stands on it (unit tests, qeytoqrg's crack count with the game folder, viewer screenshots and frame times of qeytoqrg; not yet in a session). Open: a larger offset (rounder outlines) would need feet and the server's spawns raised to the drawn ground; neighbour zones and EQG zones are drawn flat; no Options entry; the shadow cascades draw the refined triangles too.
+- [x] Smoothed ground (docs/graphics.md "Smoothed ground"): a classic zone's solid, opaque ground drawn with crease-aware smooth normals and curved PN triangles cut up to 8 segments a side, within 1 unit of the flat ground, without cracks; collision and everything the server measures keep the file's terrain; the zone flora stands on it (unit tests, qeytoqrg's crack count with the game folder, viewer screenshots and frame times of qeytoqrg; not yet in a session). Open: a larger offset (rounder outlines) would need feet and the server's spawns raised to the drawn ground; EQG zones are drawn flat; no Options entry; the shadow cascades draw the refined triangles too.
 - [x] Zone flora for classic zones (docs/graphics.md "Zone flora"): rules files of Hailstone's own, plants from a donor EQG archive, `+green` texel masks; East Commonlands first (unit tests and the zone files; seen in the zone viewer with the modern lighting, not yet in a session).
 - [x] Zone flora for every outdoor classic zone (flora/default.txt): no plants under the zone's own roofs, ceilings and bridges, nor on water, built surfaces or rock; grown tile by tile round the camera (unit tests; tools/florascan over the 148 outdoor classic zones of an NMS asset folder; viewer screenshots of a dozen zones, modern lighting; not yet in a session).
 - [x] Flora lit in the shaders (the sun's shadow per pixel, the sky, the place's light and the lamps per vertex), bending round the spawns standing in it, up to 262,144 plants a frame; climate families of donors for zone flora (unit tests; viewer screenshots and frame times, modern lighting; not yet in a session).
@@ -331,7 +331,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] Lighting: characters and doors take the light of their place (ambient probe), tinted baked light balanced (192ec47).
 - [x] EQG terrain: retain its baked RGB and sky-light alpha from a matching `<TER file basename>.lit` sidecar, without applying the terrain placement transform; synthetic asset regressions.
 - [x] EQG static `CBGG1` / `CBSG1` materials: decode packed RG normals, blue glow and alpha gloss; modern HDR glow for the authored self-illumination and additive zone rays, with shared shader-kernel and material regressions. The channel layout is not confirmed (docs/unknowns.md, EQG packed surface maps).
-- [ ] EQG packed surface maps on characters: the actor renderer ignores `EffectParams::packed_normal` and `glow`, so an EQG character or Hero's Forge piece on `CBSG1` reads its packed map as an RGB normal map and shows no glow.
+- [x] EQG packed surface maps on characters: the actor renderer takes `EffectParams::packed_normal` and `glow` (`render/actor_surface.h`), so an EQG character or Hero's Forge piece on `CBSG1` reads its packed map as RG normal, glow and gloss (ef55a2a; docs/graphics.md).
 - [ ] EQG `AddAlpha` HDR gain: decide whether the modern lighting's 2.5x applies to every EQG zone's additive surfaces or only where it was checked (Forgotten Halls).
 - [ ] Indoor lighting: tune Forgotten Halls' overall readability after restoring terrain lighting and packed material channels, then check other indoor and outdoor zones (docs/graphics.md "Modern lighting"). The terrain correction restores lamp pools and removes sunlit bands but leaves the room darker overall.
 - [x] Spell particles: the EDD billboard modes (flat and axis), animation-started actor emitters (look-surfaces; billboard meanings read from names, not traced).
@@ -395,7 +395,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] Suggested add-ons live: a first login to Project Triune from a fresh install, with the real index on GitHub.
 - [ ] Add-ons against the real GitHub: a public repository's release and branch, through GitHub's redirects to its asset hosts (unit tests and an in-memory GitHub only).
 - [ ] Add-ons on Windows (the WinHTTP final-address check compiles; not run) and a plugin add-on on macOS.
-- [ ] A Hailstone release whose `core` package ships a plugin folder an add-on already installed would write over it: the core install does not yet skip add-ons' folders (only the optional `plugin-<name>` packages are skipped).
+- [x] A Hailstone release whose `core` package ships a plugin folder an add-on already installed would write over it: the core package's files in such a folder are now left out of the install (5df5960; tests/updater_test.cpp, docs/addons.md).
 
 ## 3. UI
 
@@ -502,7 +502,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] OP_Weblink from a quest's `SendWebLink`, `/url` from a script, and the browser window (`/web`), in a live session (unit and window tests only).
 
 - [ ] Idle appearances freed during a zone (render/look_eviction.h, five minutes unworn): watch a busy hub for an hour (the log's "freed N idle appearances", the GPU memory), and a spawn coming back after its look went (dressed again on the worker). The rule is unit-tested; the renderer side was only built.
-- [ ] Free the texture slots of freed appearances too: a freed look keeps its textures (slots are shared between looks), so unique armour and illusion textures still build up over a long stay in a hub. Reference-count each slot by the GpuModels that read it and free one no live model reads, after kFramesInFlight.
+- [x] Free the texture slots of freed appearances too: a freed look's shared textures go once no remaining model reads their slot (`ActorRenderer::evict_unused_textures`; PR #27, 53b346a).
 - [ ] A GPU without a sampleable D32_SFLOAT depth attachment (the D32_SFLOAT_S8_UINT / D24_UNORM_S8_UINT fallback, now with `separateDepthStencilLayouts`) under the validation layers; and ObjectRenderer's instance flush on a driver with non-coherent host memory. Neither was run on such hardware.
 
 - [ ] The 60 Hz game clock in a live session: /follow and camera smoothness at each rate, strafing feel. Checked live (stock PEQ test server, 2026-11-18): jumps, falls and fall damage the same at 30, 60, 144 and uncapped, turning, a stalled zone load.

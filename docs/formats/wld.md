@@ -9,7 +9,7 @@ each string, preserving case-sensitive lookup and the first definition of a repe
 a WLD file is copied or moved. Storage and lookup regression tests are in `tests/wld_storage_test.cpp`.
 
 Sources:
-- **OpenEQ** (MIT OR Apache-2.0): `docs/ARCHITECTURE.md` (WLD section, coordinate system), `WLD_FRAGMENT_BOUNDARIES.md`, `WLD_STRING_OFFSETS.md`, `WLD_REFERENCE_RESOLUTION.md`, `WLD_PACKED_SCALE.md`, `WLD_PLACED_OBJECTS.md`, `WLD_OBJECT_ANIMATION.md`, and `crates/openeq-assets/src/wld.rs`.
+- **OpenEQ** (github.com/daeken/OpenEQ, MIT OR Apache-2.0), paths in its repository: `docs/ARCHITECTURE.md` (WLD section, coordinate system), `WLD_FRAGMENT_BOUNDARIES.md`, `WLD_STRING_OFFSETS.md`, `WLD_REFERENCE_RESOLUTION.md`, `WLD_PACKED_SCALE.md`, `WLD_PLACED_OBJECTS.md`, `WLD_OBJECT_ANIMATION.md`, and `crates/openeq-assets/src/wld.rs`.
 - **libeq** (github.com/cjab/libeq, MIT): `crates/libeq_wld/src/parser/fragments/*.rs`, the most detailed field-level docs (it quotes Windcatcher's WLD spec).
 - **LanternExtractor** (github.com/LanternEQ/LanternExtractor, MIT): `Wld/Fragments/*.cs`, `Wld/DataTypes/MaterialType.cs` (render-method table).
 - **EQEmu zone-utilities** (github.com/EQEmu/zone-utilities, GPL-2.0) and **EQEmu Server** `zone/map.cpp`: placement rotation order and signs only. No code was copied.
@@ -150,7 +150,7 @@ Coordinates stay in the file's right-handed Z-up frame. Angles are in 1/512 of a
 
 Implementation: `src/assets/object_animation.{h,cpp}` (the sampler), `wld::build_object_animation` and `add_actor_defs` in `src/assets/wld_zone.cpp` (`Zone::object_animations`), `src/game/animated_objects.{h,cpp}` (collision), `render::ZoneRenderer` (drawing). Tests: `tests/object_animation_test.cpp`.
 
-A skeletal object whose node tracks have more than one key plays them on its own, everywhere it is placed: Ssraeshza Temple's turning rings, swaying tree branches. The rules are those OpenEQ `docs/WLD_OBJECT_ANIMATION.md` established from a later EQGraphicsDX9.dll; the interval rules were checked again in RoF2's (SHA-256 164fc072…):
+A skeletal object whose node tracks have more than one key plays them on its own, everywhere it is placed: Ssraeshza Temple's turning rings, swaying tree branches. The rules are those OpenEQ's `docs/WLD_OBJECT_ANIMATION.md` (in its repository) established from a later EQGraphicsDX9.dll; the interval rules were checked again in RoF2's (SHA-256 164fc072…):
 
 - **Keys and interval:** key i of a track stands at i × interval ms. The interval is the 0x13 fragment's timing word when its flag 1 is set, else 100 (`0x1001b0bc`, `0x1001b116`). It is halved for a track of more than 15 keys only when the archive's loader byte +0x30 is 1 (`0x1001b26e`); `CS3DFile::Open` (`0x100c0470`) sets it from the load request's byte +0xe, which `CDisplay::StartWorldDisplay` leaves 0 for the zone and object archives, so a zone object never takes it. Character archives can: docs/formats/characters.md "Long tracks".
 - **Loop:** a track with more than one key gets a closing key, its first again, at keys × interval. The tracks of a definition are one set, whose period is its first animated track's keys × interval; time wraps by it, and a shorter track holds its closing key until the period ends.

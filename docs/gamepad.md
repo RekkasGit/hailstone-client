@@ -15,11 +15,11 @@ no window that needs typing to work.
 
 | Layer | Where | What it does |
 |---|---|---|
-| Device | `platform/window.*` (SDL_INIT_GAMEPAD) | opens and closes pads on hot-plug and fills `InputState::pad` (buttons, axes, type) once per frame |
-| Bindings | `game/gamepad_bindings.*` (pure, unit-tested) | maps pad buttons and chords to key commands, or to the pad's own actions (cross hotbar slot, mode switch, camera) |
-| App | `app/client_app_gamepad.cpp` | in game mode, turns the bindings into key events, movement and camera; in menu and cursor modes, hands the pad to the windows |
-| ImGui | `ui/imgui_layer.cpp` | `NavEnableGamepad`; menu mode lets the SDL3 backend drive ImGui navigation |
-| Lua | `app/lua_ui_gamepad.cpp` (`hs.gamepad`), `ui/lua/lua_imgui.cpp` (navigation calls) | gives the windows the pad's state, its mode and its glyphs |
+| Device | `src/platform/window.*` (SDL_INIT_GAMEPAD) | opens and closes pads on hot-plug and fills `InputState::pad` (buttons, axes, type) once per frame |
+| Bindings | `src/game/gamepad_bindings.*` (pure, unit-tested) | maps pad buttons and chords to key commands, or to the pad's own actions (cross hotbar slot, mode switch, camera) |
+| App | `src/app/client_app_gamepad.cpp` | in game mode, turns the bindings into key events, movement and camera; in menu and cursor modes, hands the pad to the windows |
+| ImGui | `src/ui/imgui_layer.cpp` | `NavEnableGamepad`; menu mode lets the SDL3 backend drive ImGui navigation |
+| Lua | `src/app/lua_ui_gamepad.cpp` (`hs.gamepad`), `src/ui/lua/lua_imgui.cpp` (navigation calls) | gives the windows the pad's state, its mode and its glyphs |
 | UI pack | `ui/gamepad/` | the HUD, the cross hotbar, the main menu and the gamepad windows |
 
 ## 2. Modes
@@ -272,7 +272,7 @@ of at least 20 px at 1080p, targets of at least 48 px, and every action reachabl
   Personal / Guild, X / Y upgrade / downgrade).
 - **Display, layout** (system.lua): Video Modes, Load Skin and Copy Layout. These windows draw over the stock windows'
   children through `lib/model.lua` (buttons, check boxes, lists in columns, a combo box's choices as a list A picks
-  from), as the Classic UI's `lib/sidl.lua` did for the stock layouts. Testing: `test.show=<screen>,...` in
+  from). Testing: `test.show=<screen>,...` in
   `ui/settings/gamepad.txt` shows those stock windows once, `test.show.after` seconds (default 6) after zoning in.
 - **More of the HUD** (hudextras.lua, hotbars.lua; none takes the pad's focus and B leaves them up): the air meter
   while short of air, the aggro meter under the target, the potion belt (bottom right), the cursor's item (at the
@@ -289,8 +289,8 @@ of at least 20 px at 1080p, targets of at least 48 px, and every action reachabl
   Hailstone's Lua social editor (the code as lines: A types one with a row of code keys, X adds, Y deletes; or the
   text editor for a real keyboard), the address book and the ignore list (X adds a name to an open message's To;
   the mail windows' Address Book opens it), raid options, the combat abilities list (Make Hotkey goes through the
-  slot picker), group search and its filters, the fellowship, the bandolier, blocked spells (yours and your pet's)
-  and the NMS plugin's waypoint window. Testing: `test.show = <ScreenID>,...` in ui/settings/gamepad.txt shows those stock
+  slot picker), group search and its filters, the fellowship, the bandolier and blocked spells (yours and your pet's).
+  Testing: `test.show = <ScreenID>,...` in ui/settings/gamepad.txt shows those stock
   windows 10 s after zoning in, `test.luasocial = <n>` opens the Lua social editor on social n.
 - **Markets and services** (bazaar.lua, barter.lua, pointmerchant.lua, mercenary.lua, guildbank.lua, train.lua,
   tracking.lua; shared pieces in `lib/markets.lua`): the bazaar trader (wares as slots, the price as coin buttons,
@@ -303,19 +303,10 @@ of at least 20 px at 1080p, targets of at least 48 px, and every action reachabl
   of its choices. The main menu's **Bazaar** tile opens the bazaar search. Testing: `test.show=<screen>,...`
   shows those stock windows ten seconds in; `test.draw=<screen>,...` draws the pack's window for windows only an
   NPC opens (empty), one at a time with `test.draw.every=<seconds>`.
-- **The NMS server's windows and the notes** (the NMS plugin's `ui/gamepad/`, in its own repository: nmsloot.lua, nmsvault.lua,
-  nmswaypoints.lua and a Pet window over the pack's lib/pet.lua, through
-  `hs.Plugin("nms")`, the plugin's docs/nms.md; and the
-  pack's playernotes.lua): Personal Loot, which takes the pad when loot
-  needs a decision, on the first drop (LB / RB its tabs: Loot, Rules, History, Settings; on a drop A keeps it, X
-  sells or destroys it, Y opens its menu: Always Keep / Always Sell now, a rule alone, inspect; RT loots all; the
-  decided drop's place goes to the next, so A A A goes down the list; beside the list the selected drop's facts and
-  the same actions as buttons, Sell All asked first; rules searched and added with the on-screen keys, A changes a
-  rule, X removes it); the Dimensional Vault (its nine pages on LB / RB, A deposits the held item or withdraws, X
-  withdraws one of a stack, Y opens a bag's contents below the page or inspects, your bags beside it to pick an
-  item up, Bank and Merchant); and the notes (/note: the notes scrolled with the right stick or LB / RB, Edit
-  on the keys, Add a dated note as /note does). The main menu's More opens the notes, and on the NMS server
-  Personal Loot.
+- **The notes** (playernotes.lua; /note): the notes scrolled with the right stick or LB / RB, Edit on the keys,
+  Add a dated note as /note does. The main menu's More opens them. A server plugin may bring gamepad windows of its
+  own (its `ui/gamepad/`, documented in its own repository); its entries join More through `hs.PluginMenu`
+  (docs/plugins.md "Plugin windows").
 - Windows the pack does not have yet fall back to the C++ windows, as every pack's do (`lua::replaces`). They
   are used in cursor mode.
 - **Colour palettes** (`lib/palettes.lua`, Options > Interface > Colour palette, the setting `palette` in

@@ -1,6 +1,6 @@
 # Web pages and the in-game browser
 
-What opens web pages, who may open them, and the plan for Hailstone's in-game browser.
+What opens web pages, who may open them, and Hailstone's in-game browser.
 
 ## The original
 
@@ -163,7 +163,7 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
   `hailstone_web_protocol`, built with the client's. MSVC uses the DLL runtime (`/MD`) for both.
 - `libcef.so` comes with its symbols (1.4 GB); the install strips it to about 264 MB.
 
-### The window (`ui/<pack>/browser.lua`, `app/lua_ui_web.cpp`, `ui/web_textures.h`)
+### The window (`ui/<pack>/browser.lua`, `app/lua_ui_web.cpp`, `src/ui/web_textures.h`)
 
 - **Modern:** tabs along the top (the newest comes to the front; x closes one, + opens an empty one), back,
   forward, reload / stop, the address (Enter goes; a refused address is said under it), "Your browser" (the page in
@@ -186,8 +186,8 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
 2. **Done:** the helper's messages, the platform pipes and `BrowserHost`, tested against an in-memory helper and
    the stand-in helper program (`tests/mock_web_helper.cpp`: a test pattern, clicks, messages echoed, crashes) over
    real pipes; the decoder fuzzed. None of it needs CEF, so all of it runs in every build's `hailstone_tests`.
-3. **Done for Linux (x64; arm64 and Windows were built by CI's build legs before they were dropped, docs/ci.md, not
-   run here):** `tools/hailstone-web` on CEF's pinned
+3. **Done for Linux x64 and Windows x64** (the Windows helper is built with MSVC under Wine, as releases are,
+   docs/ci.md; its browser tests do not run under Wine and are run on Windows by hand): `tools/hailstone-web` on CEF's pinned
    minimal builds, in `browser/` of the build and the install (below). Open: macOS (CEF needs an app bundle with
    its helper apps and framework: `HAILSTONE_BROWSER` is off there), and a moment for CEF to write its cookies at
    shutdown (done since: below).

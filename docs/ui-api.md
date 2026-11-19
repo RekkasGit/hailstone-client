@@ -558,7 +558,8 @@ the base interface's presentation when a derived interface has not overridden it
 
 ## Starting another UI
 
-Create `ui/my-interface/ui.ini`:
+Create `ui/my-interface/ui.ini` in the Hailstone folder ([layout](layout.md)), or ship the
+interface as a UI add-on ([add-ons](addons.md#ui-packs)):
 
 ```ini
 name=My Interface

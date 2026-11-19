@@ -14,8 +14,9 @@ separate library shipped beside the macOS binary, with its licence.
 | MoltenVK (github.com/KhronosGroup/MoltenVK, release v1.4.2, the prebuilt `MoltenVK-macos.tar`) | Apache-2.0 | Vulkan on Metal, macOS only: shipped beside the client as `libMoltenVK.dylib`, with `MoltenVK-LICENSE.txt` |
 | Vulkan Memory Allocator | MIT | GPU memory |
 | glm | MIT (Happy Bunny) | maths |
-| zlib | zlib | PFS inflate; PNG writer in tools |
+| zlib (the system's, else zlib-ng 2.2.4 built zlib-compatible: github.com/zlib-ng/zlib-ng) | zlib | PFS archives, the session layer's compression, PNG and zip reading and writing |
 | doctest | MIT | tests only |
+| Dear ImGui (github.com/ocornut/imgui, v1.91.9, with its SDL3 and Vulkan backends) | MIT | the immediate-mode UI the Lua UI packs and the developer screens draw with |
 | dr_wav, dr_mp3 (github.com/mackron/dr_libs, tag wav-0.14.5) | public domain or MIT No Attribution | WAV and MP3 decoding (`src/audio/pcm.cpp`) |
 | TinySoundFont (github.com/schellingb/TinySoundFont, commit 853a0a1) | MIT | SoundFont synthesis of the XMI music (`src/audio/xmi_player.cpp`) with a General MIDI SoundFont |
 | stb_image (github.com/nothings/stb, commit 2c980bb) | public domain / MIT | JPEG pictures on the pre-game and loading screens (`src/assets/jpeg_read.cpp`) |
@@ -55,18 +56,21 @@ original game.
 - **Housing and marketplace research headers** (`Housing.h`, `HousingNpc.h`, `Market.h` of NMS-Release-Extras, MacroQuest-derived, GPL-2.0): the real estate opcodes and layouts, used as a spec and checked against the original client (`docs/protocol/rof2-packets.md` "Real estate"). No code is copied.
 - **libeq** (github.com/cjab/libeq, MIT) and **LanternExtractor** (github.com/LanternEQ/LanternExtractor, MIT): WLD fragment layouts and the render-method table, used as a spec (`docs/formats/wld.md`). No code is copied.
 - **LanternExtractor** data: `tools/data/lantern_animationsources.txt` is an unchanged copy of `LanternExtractor/ClientData/animationsources.txt` (MIT, © 2024 LanternEQ), the table of which character models borrow animations; `tools/gen_race_models.py` turns it into `src/game/race_models.inc`.
-- **Placed-object animation**: the playback rules of `src/assets/object_animation.cpp` (key times, the closing key, the shared period, the blend and the shared controller) follow OpenEQ `docs/WLD_OBJECT_ANIMATION.md`, used as a spec, with the interval rules checked again in RoF2's EQGraphicsDX9.dll; no OpenEQ animation code was studied or ported. See `docs/formats/wld.md`.
+- **Placed-object animation**: the playback rules of `src/assets/object_animation.cpp` (key times, the closing key, the shared period, the blend and the shared controller) follow OpenEQ's `docs/WLD_OBJECT_ANIMATION.md` (in its repository), used as a spec, with the interval rules checked again in RoF2's EQGraphicsDX9.dll; no OpenEQ animation code was studied or ported. See `docs/formats/wld.md`.
 - **Volumetric clouds** (`shaders/clouds.comp`, `cloud_noise.comp`): techniques from published papers, used as a spec.
   These are Schneider's cloud shape and noise (SIGGRAPH 2015, Horizon Zero Dawn), Hillaire's energy-conserving
   integration (SIGGRAPH 2016, Frostbite), Wrenninge et al.'s multiple-scattering octaves (2013), Jarzynski and Olano's
   pcg3d hash (JCGT 2020) and Jimenez's interleaved gradient noise (2014). MMqd's godot-nishita-sky-with-volumetric-clouds
   (github.com/MMqd/godot-nishita-sky-with-volumetric-clouds, MIT) was read as an example of the same model. No code
   from it is ported, and nothing from its noise textures or its Shadertoy-derived hash is used.
-- **Sky**: the sky draw state (no fog, no culling, no depth write) follows OpenEQ `docs/SKY_DOME_DRAW_STATE.md`, used as a spec only; no OpenEQ sky code is ported. See `docs/formats/sky.md`.
-- **OpenEQ audio notes** (`docs/AUDIO_PLAN.md`, `AUDIO_RUNTIME.md`, `CLASSIC_AMBIENT_LEVELS.md`, `CLASSIC_AMBIENT_COOLDOWNS.md`, `CLASSIC_AMBIENT_CLOCK_LIFECYCLE.md`, `XMI_NATIVE_SELECTION.md`): read as a second source for the EFF/EMT layouts, the classic emitter levels and cooldowns and the Miles XMI sequencer (note slots, loop controllers). The audio code was written independently (`docs/formats/audio.md`); no OpenEQ audio code was studied or ported.
+- **Sky**: the sky draw state (no fog, no culling, no depth write) follows OpenEQ's `docs/SKY_DOME_DRAW_STATE.md` (in its repository), used as a spec only; no OpenEQ sky code is ported. See `docs/formats/sky.md`.
+- **OpenEQ audio notes** (in OpenEQ's repository: `docs/AUDIO_PLAN.md`, `AUDIO_RUNTIME.md`, `CLASSIC_AMBIENT_LEVELS.md`, `CLASSIC_AMBIENT_COOLDOWNS.md`, `CLASSIC_AMBIENT_CLOCK_LIFECYCLE.md`, `XMI_NATIVE_SELECTION.md`): read as a second source for the EFF/EMT layouts, the classic emitter levels and cooldowns and the Miles XMI sequencer (note slots, loop controllers). The audio code was written independently (`docs/formats/audio.md`); no OpenEQ audio code was studied or ported.
 
 
 ### Code derived from OpenEQ
+
+The `crates/...` and `docs/...` paths in this section are files in OpenEQ's repository (github.com/daeken/OpenEQ), not
+this one.
 
 - `src/assets/character.cpp`: the classic character clip assembly (clip codes found by bone-track name, donor clips used only when a model has no track of its own for a clip, rest-pose fallback per bone, 100 ms default frame time), rigid one-bone-per-vertex skinning and the bottom-up character BMP rows were written after studying `crates/openeq-assets/src/character.rs` and `docs/CHARACTER_RENDERING.md`.
 - `src/assets/wld.cpp`, `src/assets/wld_zone.cpp`: the WLD fragment parser and the skeletal rest-pose assembly were written after studying `crates/openeq-assets/src/wld.rs` and `docs/WLD_*.md` (bounded fragment readers, the 0x30 texture-reference position, positional material slots, the unsigned packed track scale, rest-pose composition).
@@ -76,13 +80,14 @@ original game.
 - `src/assets/eqg.cpp`, `src/assets/eqg_zone.cpp`, `src/assets/regions.cpp` (`from_boxes`): the EQG parsers (TER/MOD/ZON v1–2, the EQTZP heightmap DAT/ECO/TOG/water readers) and the zone assembly (terrain drawn untransformed, the first-same-name material rule, triangle flag bit 0 as passable and material -1 as invisible but solid, the light position swap, the SHORT2 terrain UV rule, the quad-diagonal flag, terrain-relative object Z, the tile texture bake by ecosystem layer and mask, the region box matrix) were written after studying `crates/openeq-assets/src/{zone.rs,terrain.rs,terrain/bake.rs,terrain/regions.rs,loader.rs,loader/eqg_collision.rs,loader/ter_uv.rs}` and `docs/{EQGZ_NATIVE_REGIONS,EQG_TER_UV_PACKING,EQG_MATERIAL_SURVEY,HEIGHTMAP_FORMAT}.md`. See `docs/formats/eqg.md`.
 - `src/net/item_packets.cpp`: written from EQEmu's `rof2.cpp` `SerializeItem` and `rof2_structs.h`; `crates/openeq-net/src/inventory.rs` was studied to cross-check the item block sizes (77-byte header, 255/74/76-byte bodies, 30-byte spell blocks, 171-byte tail) and the bag-content index rule. The drag-item icon grid in `src/ui/item_windows.cpp` (icon 500 = first cell of dragitem1.dds, vertical grid) agrees with `crates/openeq/src/gameplay_ui.rs` and `crates/openeq-ui/src/document.rs`.
 - `src/assets/character_dress.cpp`, `src/assets/eqg_character.cpp`: character appearance and EQG character models were written after studying `crates/openeq-assets/src/character/{appearance.rs,luclin.rs,modern.rs,equipment.rs}` and `docs/CHARACTER_RENDERING.md`: the classic texture naming (variant digits, the face as the head piece's tens digit, robes 10–16 → `<code>01` body mesh and CLK04–CLK10, helm meshes `<code>HE<nn>`), item models on R_POINT/L_POINT/SHIELD_POINT (shield chosen by texture name), the Luclin layered materials (`<code><part><selector><piece>_MDF`, layer compositing with clothing-only tint) and modular parts (part numbers, anchors and bone remapping), the EQGS/EQGM/EQGA layouts (conjugated quaternions, four bone weights, inverse bind matrices) and the EQG body/head piece choice.).
-- `src/game/combat.cpp` `animation_code()`: the OP_Animation action → clip code table is ported from `crates/openeq-render/src/actors.rs` (`animation_code`). The respawn-window layout in `src/net/zone_packets.cpp` (including EQEmu's zero padding) follows `docs/DEATH_RECOVERY_PLAN.md`, checked against the server's `SendRespawnBinds`; held-P02 sitting in `src/render/actor_renderer.cpp` follows `docs/CHARACTER_RENDERING.md`.
-- `src/net/game_connection_commerce.cpp`, `src/net/merchant_packets.cpp`, `src/net/trade_packets.cpp`: written from EQEmu's `rof2_structs.h`/`client_packet.cpp`; OpenEQ `docs/COMMERCE_PROTOCOL.md`, `docs/TRADE_PROTOCOL.md` and `docs/QUEST_HANDIN_PLAN.md` were read to cross-check the packet sizes, the buy flow without OP_MoneyUpdate, the trade-view slot numbering and the cursor queue. No OpenEQ code was studied or ported.
+- `src/game/combat.cpp` `animation_code()`: the OP_Animation action → clip code table is ported from `crates/openeq-render/src/actors.rs` (`animation_code`). The respawn-window layout in `src/net/zone_packets.cpp` (including EQEmu's zero padding) follows OpenEQ's `docs/DEATH_RECOVERY_PLAN.md`, checked against the server's `SendRespawnBinds`; held-P02 sitting in `src/render/actor_renderer.cpp` follows `docs/CHARACTER_RENDERING.md`.
+- `src/net/game_connection_commerce.cpp`, `src/net/merchant_packets.cpp`, `src/net/trade_packets.cpp`: written from EQEmu's `rof2_structs.h`/`client_packet.cpp`; OpenEQ's `docs/COMMERCE_PROTOCOL.md`, `docs/TRADE_PROTOCOL.md` and `docs/QUEST_HANDIN_PLAN.md` were read to cross-check the packet sizes, the buy flow without OP_MoneyUpdate, the trade-view slot numbering and the cursor queue. No OpenEQ code was studied or ported.
 
 ### Code copied from MacroQuest
 
 MacroQuest (github.com/macroquest/macroquest), Copyright (C) 2002-present MacroQuest Authors, GNU General Public
-License version 2.
+License version 2. The `src/eqlib/...`, `src/main/...` and `include/mq/...` paths in this and the next section are
+files in MacroQuest's repository.
 
 - `src/game/spa_ids.h`: the `eEQSPA` spell effect ids (0..526) and the `eEQSPELLCAT` spell categories (1..176) are
   copied from `src/eqlib/include/eqlib/game/Spells.h` (without its deprecated and alias names), and `SPA_NAMES` 0..520

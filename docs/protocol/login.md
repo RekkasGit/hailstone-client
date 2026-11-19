@@ -4,7 +4,7 @@ Implementation: `src/net/login.{h,cpp}` (`LoginClient`, `login_codec`), `src/net
 
 Server side: EQEmu `loginserver/client.cpp`, `login_types.h`, `world_server.cpp`, `encryption.cpp`, `login_util/login_opcodes_sod.conf` (read as a spec, nothing copied).
 
-EQEmu's login server listens on separate ports per client family; the RoF2 client uses the "SoD" port (`client_configuration.sod_port`, default 5999), whose opcodes come from `login_opcodes_sod.conf`. Encode passes are none, CRC 2 bytes (see `session.md`). The UDP session options (`LoginClient::Options::session`): max packet 512, no-data timeout 14.8 s, multi-buffer hold 0, no stat requests, resend adjust 2000 (T = min(1.25 rtt + 2000, 8000) ms), 100 reliable slots.
+EQEmu's login server listens on separate ports per client family; the RoF2 client uses the "SoD" port (`client_configuration.sod_port`, default 5999), whose opcodes come from `login_opcodes_sod.conf`. Encode passes are none, CRC 2 bytes (see `session.md`). The UDP session options (`LoginClient::Options::session`): max packet 512, a keepalive after 14.8 s without sending, link death after 14.8 s without receiving (eqmain sets no no-data timeout; this is the client's safety limit), multi-buffer hold 0, no stat requests, resend adjust 2000 (T = min(1.25 rtt + 2000, 8000) ms), 100 reliable slots.
 
 ## eqhost.txt
 

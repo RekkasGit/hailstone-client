@@ -157,7 +157,7 @@ mostly reached from the actor effects' step or a recording lane. What runs there
   (`VkContext::set_scene_secondary`). Each frame slot keeps a command pool per lane, reset when the slot comes round.
   Off (or without workers), the jobs run at once into the frame's own command buffer. A queued draw runs at the
   flush, so what it reads must not change between its `add` and the flush: the frame sets the zone renderer's distant
-  land (`set_distant`, `set_distant_hidden`) before it queues the first draw.
+  land (`set_distant`) before it queues the first draw.
 - The shadow layers' command recording (a second `render::SceneRecorder`, made without `scene`, under the same
   `display.parallel_record`): the sun's cascades, then the cover and water maps when they are drawn. Each layer is a
   target of its own (`VkContext::shadow_inheritance`, its viewport, scissor and depth bias from `set_shadow_state`),
@@ -439,7 +439,7 @@ more frame, as ImGui's draw lists are built before their frame begins). A `ZoneR
 does not stall the frame. A recreated swapchain is made with `oldSwapchain`, and the
 old one and its present semaphores are retired two frames on: `vkDeviceWaitIdle` does not cover a present's wait.
 
-The ImGui textures (`ui/imgui_vk_textures.h`: the UI art, icon sheets, browser tabs) come from descriptor pools of the
+The ImGui textures (`src/ui/imgui_vk_textures.h`: the UI art, icon sheets, browser tabs) come from descriptor pools of the
 client's own, a new one made when they fill, with a set layout defined as the backend's. `ui::UiTextures` keeps at
 most 1024 files (`kMaxFiles`); past that the one asked for least recently is retired.
 
@@ -1028,7 +1028,7 @@ the water colour/depth copy and all translucent draws. The client moves it after
 (including the distant land), but still before the objects: their single call includes
 blended parts. Its object/actor/silhouette order and the grass-after-copy rule stay unchanged, so those
 later opaque draws do not yet save sky shading. Classic lighting keeps the background first because
-the zone draws its opaque and blended parts together. A zone or active neighbour with WLD detail
+the zone draws its opaque and blended parts together. A zone with WLD detail
 layers also keeps the background first: these blend in the opaque group, potentially over a base
 that leaves depth clear. Painted skies keep their internal layer order;
 the model viewer has no sky/backdrop call and is unchanged.
@@ -2251,8 +2251,13 @@ them in the Options window takes over and is saved as usual.
 | `display.light_shadows` | 0 .. 8 | 8 | how many lights cast shadows (Light shadows: the zone's, the carried light, spells); 0 off; modern only |
 | `display.light_shadow_size` | 128 .. 1024 | 512 | texels per side of each face of a light's shadow cube |
 | `display.view_distance` | multiplier | 2.5 | the modern mode draws this many times further than the classic client (at most 12000 units), into haze; picking keeps the classic distance |
+| `display.clip_plane` | 0 .. 20 | 15 | the original's ClipPlane: the classic view distance (`game::compute_view_distance`), applied at once; `display.view_distance` multiplies it |
+| `display.actor_clip_plane` | 0 and up | 50 | the original's ActorClipPlane: spawns past min((n x 5 + 25) x 2, the far plane) are not drawn (`game::actor_clip_distance`) |
+| `display.shadow_clip_plane` | 0 .. 100 | 50 | the original's ShadowClipPlane (`/shadows on <n>`) |
+| `display.spell_effects` | 0, 1 | 1 | the spell particles (`/showspelleffects`) |
+| `display.dynamic_lights` | 0, 1 | 1 | the spawns' own lights (`/dynamiclights`); read as each zone loads |
 | `display.ao` | 0, 1 | 1 | screen-space ambient occlusion; modern only; viewer `--no-ao` |
-| `display.depth_prepass` | 0, 1 | 0 | draw the zone's opaque geometry depth-only first, then colour it with the depth test equal (Depth Pre-pass); switched from the next frame (`ZoneRenderer::set_depth_prepass`; a zone builds its two pipelines either way, a neighbour zone none); modern only; viewer `--depth-prepass` |
+| `display.depth_prepass` | 0, 1 | 0 | draw the zone's opaque geometry depth-only first, then colour it with the depth test equal (Depth Pre-pass); switched from the next frame (`ZoneRenderer::set_depth_prepass`; a zone builds its two pipelines either way); modern only; viewer `--depth-prepass` |
 | `display.distance_blur` | 0, 1 | 1 | the far distance's slight blur; modern only |
 | `display.horizon_hills` | 0, 1 | 1 | land round an outdoor zone past its edges (Horizon hills); modern only; viewer `--no-horizon` |
 | `display.zone_fog` | 0, 1 | 1 | the fog bank on the ground past an outdoor zone's edge (Zone edge fog, Zone Edge Fog); modern only; viewer `--no-zone-fog` |
@@ -2309,7 +2314,7 @@ them in the Options window takes over and is saved as usual.
    crust, waterfalls without dark curtains; next maybe planar reflections for what the screen does not hold.
 5. **Post and content**: (done) bloom; (done) foliage wind; (done) a texture override folder for upscaled packs;
    (done) built HD packs with normal and roughness maps (tools/texpack);
-   (done) colour grading; optional TAA.
+   (done) colour grading; (done) TAA (item 6).
 6. **Upscaling**: (done) a render scale with FSR 1 (EASU + RCAS); (done) the temporal groundwork: sub-pixel jitter
    on the projection, kept off picking and the nameplates; camera motion vectors from the depth; history reset on
    zone-in, camera cuts and resize; a TAA/TAAU of our own on it (`display.upscaler = taa`, Temporal upscaling);

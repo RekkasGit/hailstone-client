@@ -12,7 +12,7 @@ hailstone/
   icons/                     shipped: hailstone.png, the window and taskbar icon (hailstone-crest.png, the full crest;
                              on Windows the icon is built into hailstone.exe instead, cmake/windows/hailstone.ico)
   pictures/                  shipped: the default picture behind the pre-game and loading screens, shown when
-                             neither the server nor ui/loadingbackgrounds/ has any
+                             neither the server nor ui/loadingbackgrounds/ (below) has any
   flora/                     shipped: Hailstone's flora rules for zones without flora of their own (docs/graphics.md
                              "Zone flora"): default.txt for every outdoor classic zone, <zone>.txt for one, the
                              shared parts and climate families they include; replaced
@@ -23,9 +23,14 @@ hailstone/
                              never writes here
   ui-data/<pack-id>/         player-owned shared presentation Lua modules; LoadData reads only the selected ID and
                              approved base IDs. Updates and add-on removal leave these files for later reinstalls
-  ui/settings/<pack>.txt     each UI pack's script settings shared by every character, and the window layout a
-                             character starts from (no ui.ini, so not a pack: a build or update leaves it alone;
-                             ui-settings/ before 2026-11, moved here at start-up by move_old_ui_settings)
+  ui/settings/<pack>.txt     the player's, made at start (not shipped): each UI pack's script settings shared by
+                             every character, and the window layout a character starts from (no ui.ini, so not a
+                             pack: a build or update leaves it alone; ui-settings/ before 2026-11, moved here at
+                             start-up by move_old_ui_settings)
+  ui/loadingbackgrounds/     the player's, made empty at start (not shipped): pictures (PNG, JPEG, BMP, TGA, DDS) for
+                             the pre-game and loading screens, used unless the server's
+                             servers/<profile>/assets/loadingbackgrounds/ has any (src/ui/screen_pictures.h); made beside
+                             the UI packs, so under HAILSTONE_DATA_DIR it stays in the install's ui/
   browser/                   the in-game browser's helper and CEF's files (docs/browser.md); replaced by an update
   hailstone.ini              the client's settings (core/config.h); a character in the world has its own (below)
   hailstone-windows.ini      Dear ImGui's own window positions
@@ -60,6 +65,8 @@ hailstone/
                              UI.ini, hotbuttons.ini, BZR.ini, BART.ini (buy lines), btrlog.txt (barter
                              log), AddressBook.txt, IgnoreList.txt, GuildNotes.txt, chat.ini, options.ini,
                              scripts.ini (the Lua scripts started for this character: the Scripts window's Autorun);
+                             chat_history.txt (the chat windows' last lines, each its last 1000, put back at the
+                             next entry into the world);
                              hailstone.ini, the client's settings for this character ("A character's settings" below);
                              kept_items.txt (the items marked Keep in the Advanced Inventory window, one
                              "<item id> <name>" a line; game/kept_items.h);
@@ -205,9 +212,9 @@ takes `hailstone.ini`'s settings again and applies them.
 Some keys stay in `hailstone.ini` whoever plays (`Config::is_shared_key`): the client's own (`assets.*`, `addons.*`,
 `update.*`, `news.*`, `browser.*`, `plugins.*`, `scripts.*`), the login screen's (`login.*`, `audio.pregame_music`),
 the window's place and mode (`window.*`, `display.window_mode`, `display.resolution`: one window, so it does not jump
-when a character enters), and what is taken only at start (`display.msaa`, `display.upscaler`, `ui.name`, `ui.scale`, `ui.cpp_windows`,
+when a character enters), the computer's graphics tier (`display.gpu_tier`), and what is taken only at start (`display.msaa`, `display.upscaler`, `ui.name`, `ui.scale`, `ui.cpp_windows`,
 `ui.dev_windows`, `ui.perf_*`, `game.fixed_step`, `audio.enabled`, `audio.soundfont`, `audio.mix_ahead`,
-`nav.threads`, `nav.prebuild`). A shared key a character's file still holds from before it was shared (a
+`nav.threads`, `nav.prebuild`, `display.extra_shields`). A shared key a character's file still holds from before it was shared (a
 `display.upscaler` saved per character) moves into `hailstone.ini` when the character enters, if that has none. The UI packs' script settings (`ui/settings/<pack>.txt`) stay shared too; the window
 layout was the character's already (`ui-<pack>.txt`).
 
@@ -216,7 +223,7 @@ elsewhere (a macOS app bundle, `HAILSTONE_DATA_DIR`), so an install can ship som
 
 ## The asset folder
 
-The client asks for the game install (RoF2, or a current one) at the first start (`ui/asset_picker.h`). The picker shows when `hailstone.ini`
+The client asks for the game install (RoF2, or a current one) at the first start (`src/ui/asset_picker.h`). The picker shows when `hailstone.ini`
 has no `assets.path` that passes the check, or when `assets.pick=1` asks for it again (the Options window's Display
 tab, "Change Asset Folder"). It has a folder field, a "Choose folder..." button (the system's folder dialog,
 `SDL_ShowOpenFolderDialog`) and the folders used before (`assets.recent`, newest first, at most 8). Continue is
@@ -290,8 +297,7 @@ adds BC7 textures under a DX10 header, which the texture loader already reads. W
   (expansion 9 on) the revamp, and the zone-in packets do not say which. The original client loads the `.eqg` by name
   alone (`CDisplay::StartWorldDisplay` tries `.EQG` first), so this test is a deliberate difference. Measured on PEQ's
   rows against the live files: Bazaar and Lava Storm version 1 and High Pass Hold (one row) pass, and version 0's
-  safe points have no floor under them. The loaded zone and its collision mesh are kept, not built again. A neighbour
-  zone loaded ahead has no safe point yet and keeps the refusal. Live's arena.s3d and nektulos.s3d still win,
+  safe points have no floor under them. The loaded zone and its collision mesh are kept, not built again. Live's arena.s3d and nektulos.s3d still win,
   although PEQ runs the revamp there (docs/unknowns.md). Live's chapterhouse, clz, crescent, relic, tutoriala and tutorialb differ from RoF2's
   too (the classic-era client's clz and tutorials as well) and may not match the server's maps.
 - **`racedata.txt`.** Live has a line per race and gender: race, gender (0, 1, or 2 for both), the 44 sound ids in
@@ -352,7 +358,7 @@ these folders.
 
 ## Servers
 
-The login screen lists the saved servers (`core/server_profile.h`, `ui/dev_screens.h`). The last one used
+The login screen lists the saved servers (`core/server_profile.h`, `src/ui/dev_screens.h`). The last one used
 (`login.profile`) is picked; New, Save and Delete edit the list. A server has a name, an address and port, and the username when "Remember username" is ticked.
 The password is never saved. The folder id is made once from the name, so renaming a server keeps its folder. The
 Assets row shows the server's `assets/` folder, with a button that opens it. The server's files come by themselves

@@ -23,7 +23,7 @@ Security problems go through [SECURITY.md](SECURITY.md), not a public issue.
 
 ## Building and testing
 
-See the Quick start in the [README](README.md). Before sending a change:
+See "Building from source" in the [README](README.md). Before sending a change:
 
 ```sh
 cmake --build build
@@ -40,7 +40,7 @@ build/hailstone/hailstone --validation
 ## Code guidelines
 
 - C++20. Match the style of the surrounding code: naming, comment density and error handling. Comments say why, not what.
-- Read and write files and packets only through `core/byte_io.h`. Never cast a struct onto a buffer. (The plugin area, `src/plugin/`, is the exception: data it hands an in-process plugin, such as the bulk reads `get_*_data_bulk`, may be a `#pragma pack` struct copied into the plugin's buffer with `memcpy`, as docs/plugins.md describes.)
+- Read and write files and packets only through `core/byte_io.h`. Never cast a struct onto a buffer. (The plugin area, `src/plugin/`, is the exception: data it hands an in-process plugin, such as the bulk reads `get_*_data_bulk`, may be a `#pragma pack` struct written into the plugin's buffer, as [AGENTS.md](AGENTS.md) and docs/plugins.md describe.)
 - OS calls go only in `src/platform/`. Layers depend downward only (`app` -> `game` / `ui` / `render` / `audio` -> `assets` / `net` / `web` -> `core` / `platform`).
 - Make no assumptions about the size of `long` or `wchar_t`, path separators or byte order.
 - Add or update tests for new behavior, and register new source and test files in `CMakeLists.txt`.

@@ -43,7 +43,7 @@ and Apple Clang: the portability rules in AGENTS.md still hold.
 - With `EQ_GAME_DIR` unset or empty, the tests that need an installed RoF2 game (`tests/game_files.h`, `hailstone::test::game_dir()` returns null) return early, so they pass without checking anything. Run them with it set.
 - `HAILSTONE_TEST_TRACE` set makes each test case's name go to stderr as it starts (`tests/test_main.cpp`). A crash that ends the process at once loses doctest's buffered report on stdout, but the last `[test]` line names the case it happened in.
 - The browser test against the real CEF helper runs when the build has it (`HAILSTONE_BROWSER`); on Linux without a display it uses Chromium's headless platform.
-- The server plugins are kept in repositories of their own (projecthailstone/hailstone-nms and the private projecthailstone/hailstone-projecttriune) and reach players as add-ons (docs/addons.md), released by each repository's `tools/release.sh`. Cloned into `plugins/nms` or `plugins/projecttriune`, each is built with the client and its tests join `hailstone_tests`. The Actions secrets `NMS_DEPLOY_KEY` and `TRIUNE_DEPLOY_KEY`, which let the build legs check them out, are no longer used.
+- The server plugins are kept in repositories of their own (projecthailstone/hailstone-nms and the private projecthailstone/hailstone-projecttriune) and reach players as add-ons (docs/addons.md), released by the `tools/release.sh` in each of those repositories (there is none in this one). Cloned into `plugins/nms` or `plugins/projecttriune`, each is built with the client and its tests join `hailstone_tests`. The Actions secrets `NMS_DEPLOY_KEY` and `TRIUNE_DEPLOY_KEY`, which let the build legs check them out, are no longer used.
 
 ## Problems the first runs showed
 

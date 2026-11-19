@@ -35,7 +35,7 @@ Where:
 - Gamepad pack: the focused item's panel in the inventory, loot and merchant (buy and sell) screens, and the item
   details. A pair's other slot is named at the end ("Also fits your ...").
 - Options: Compare Items (`item_compare`, `items.compare` in hailstone.ini) and Upgrade Verdict
-  (`item_compare_verdict`, `items.compare_verdict`), both on by default; in the gamepad pack under Interface.
+  (`item_compare_verdict`, `items.compare_verdict`), both on by default; in the modern pack under Display, in the gamepad pack under Interface.
 
 ## How the numbers are found
 
@@ -45,7 +45,7 @@ Max_Mana, Max_Endurance, CalcAC with ComputeDefense, the ATK of label case 0x16,
 0x4a..0x4c, TotalEffect's haste. So the stat caps, the recommended-level scaling, item haste taking the best item's,
 and an item that does not count (a level, race, deity or prestige the player lacks: ProcessAllStats skips it) all
 show as they would in game. Both sides are computed from copies with a server extension's HP / mana / endurance
-answers left out (`CharacterSheet::vitals`, the NMS patch's), so the change is the formula's and not hidden by the
+answers left out (`CharacterSheet::vitals`, which a server plugin can fill), so the change is the formula's and not hidden by the
 server's number.
 
 The slot: every worn slot in the item's equip slots that the player has (`inv_slot_available`) and the item may go

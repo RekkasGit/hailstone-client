@@ -9,7 +9,7 @@ with the code, the code is right; fix this page.
 
 | Folder | What is in it |
 |---|---|
-| `src/` | The client: about 950 C++20 sources in layered folders (below). |
+| `src/` | The client: about 600 C++20 sources and their headers in layered folders (below). |
 | `ui/` | The Lua UI packs: `ui/modern/` (mouse and keyboard) and `ui/gamepad/`. One `.lua` file per window, shared helpers in each pack's `lib/`. Copied beside the executable at build time (`cmake/SyncUiPacks.cmake`). |
 | `shaders/` | GLSL, compiled to SPIR-V at build time (`cmake/Shaders.cmake`). Named after the renderer that uses them (`actor.*`, `sky.*`, `flora.*`, `post.frag`). |
 | `sdk/` | The compiled-plugin SDK: `hailstone_plugin.h` (the C ABI) and `hailstone_byte_io.h`. The `nmsc_*.h` files are the old names, kept for existing plugins. |
@@ -145,8 +145,8 @@ Both are described in docs/plugins.md. Add-ons themselves live in their own repo
   (`--zone`, with flags for sky, fog, weather, lighting and screenshots) and a model viewer (`model_viewer.*`).
 - `ClientApp` (`client_app.h`, its internals in `client_app_internal.h`): the playable client. The class is split by
   topic over `client_app_*.cpp`: `_login`, `_pregame` (server and character select), `_zone` (loading and zoning),
-  `_player`, `_input`, `_pick`, `_items`, `_draw`, `_ui`, `_commands`, `_options`, `_gamepad`, `_web`, `_update`,
-  `_addons`, `_bugreport`.
+  `_player`, `_input`, `_pick`, `_iso` (isometric camera and click-to-move), `_items`, `_draw`, `_ui`, `_commands`,
+  `_info`, `_options`, `_gamepad`, `_web`, `_update`, `_addons`, `_addon_upscaler`, `_bugreport`, `_testdrive`.
 - `lua_ui*.cpp`: the `hs` table the UI packs call, one file per area (`lua_ui_inventory_manager`, `lua_ui_spellbook`,
   `lua_ui_chat`, `lua_ui_map` ...). It answers from the client's state with the arguments and returns the original
   UI's code expected. Both packs and players' scripts depend on it, so change it with care.
@@ -158,7 +158,8 @@ Both are described in docs/plugins.md. Add-ons themselves live in their own repo
 ### `texpack/`
 
 Built texture packs: upscaling the player's own textures into a pack (`texpack` tool and the separate Texture
-Studio). docs/graphics.md "Built packs (tools/texpack)".
+Studio). docs/graphics.md "Built packs (tools/texpack)". It uses `assets/`, `core/` and `platform/`, and only the
+tools link it in; nothing else in `src/` includes it.
 
 ## How it runs
 
@@ -196,8 +197,8 @@ The other way, a click in a Lua window calls an `hs.*` function, which calls a `
 
 The client moves through login, server select, character select, zoning (behind a loading screen) and in zone. The
 login screen is `net/login` plus `client_app_login.cpp`; server and character select are `client_app_pregame.cpp`;
-zoning and the zone load are `client_app_zone.cpp`. In the UI packs these screens are `login.lua`, `charselect.lua`
-and `charcreate.lua`.
+zoning and the zone load are `client_app_zone.cpp`. In the UI packs these screens are `login.lua`, `serverselect.lua`,
+`charselect.lua` and `charcreate.lua` (their `hs.*` side is `app/lua_ui_pregame.cpp`).
 
 ## Where to look for...
 

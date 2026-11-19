@@ -42,8 +42,9 @@ at the first zone-in of a login (docs/layout.md "Server files"). Three things in
 - `hailstone.cfg`: the server's rules (below). They land in `servers/<profile>/hailstone.cfg`.
 - `scripts/`: the server's own Lua scripts, into `servers/<profile>/scripts/`.
 - `plugins/`: the server's own compiled plugins, into `servers/<profile>/plugins/`. Only this platform's libraries
-  come: `.dll` on Windows, `.so` on Linux, `.dylib` on macOS, and from a platform folder (`plugins/linux-x64/`,
-  `plugins/windows-x64/`, `plugins/macos-arm64/` ...) only this build's, with the folder taken out of the path.
+  come: `.dll` on Windows, `.so` on Linux, `.dylib` on macOS. The server may sort them into platform folders under
+  its `client_files/plugins/` (`linux-x64/`, `windows-x64/`, `macos-arm64/` ...): only this build's comes, with the
+  folder taken out of the path (`net::server_file_destination`).
 
 Then:
 
@@ -197,8 +198,8 @@ the ones that destroy or move items (`/destroy`, `/destroycursor`, `/stowcursor`
 
 Only Lua scripts are supported. MQ's old `.mac` macro language is not.
 
-A script is `lua/<name>.lua` or `lua/<name>/init.lua`, the same layout MacroQuest uses. Each script gets its own Lua
-5.4 state and runs as a coroutine that the client resumes once a frame. `mq.delay` yields to the next frame. A
+A script is `scripts/<name>.lua` or `scripts/<name>/init.lua`, the layout MacroQuest uses in its `lua/` folder. Each
+script gets its own Lua 5.5 state and runs as a coroutine that the client resumes once a frame. `mq.delay` yields to the next frame. A
 script that runs more than 3 ms without yielding is paused until the next frame, like MQ's turbo, so a busy loop
 cannot freeze the client. One that cannot pause for 5 s is stopped; an `mq.imgui` window's function, which cannot
 pause, is stopped the same way, and so is a long string match (a pattern that backtracks), which cannot pause either. Only the script's own run and its binds are paused: a coroutine the script made itself
@@ -246,8 +247,8 @@ Left out on purpose:
 
 `Me`, `Target`, `Spawn[...]`, `SpawnCount[...]`, `NearestSpawn[n, ...]`, `Group`, `Zone`, `Spell[id|name]`, `Cursor`,
 `FindItem[name|=exact]`, `FindItemCount[...]`, `Pet`, `Window[name]` (`.Open`), `Plugin[name]` (`.IsLoaded`), `Time`,
-`GameTime`, the game TLO (`.GameState`, `.Server`), `Heading[deg]`, `Int`, `Float`, `Bool`, `String`, `Select`, `Math`,
-`If`, `Range`. Compiled plugins can add more.
+`GameTime`, `EverQuest` (`.GameState`, `.Server`), `Heading[deg]`, `Int`, `Float`, `Bool`, `String`, `Select`, `Math`,
+`If`, `Range`, `LineOfSight[...]`, `Navigation` and `Stick` (below). Compiled plugins can add more.
 
 The data types use MQ's member names and inheritance:
 - `character` → `spawn`, `buff` → `spell`, `groupmember` → `spawn`.
@@ -325,7 +326,7 @@ loaded. `next` and `prev` (MQ's target cycling) are accepted and do nothing yet.
 Not yet:
 - TLOs: `Raid`, `Mercenary`, `Corpse`, `Merchant`, `Ground`, `Macro` and other MQ plugins' TLOs (`Navigation` is
   built in: `docs/navigation.md`)
-- `Math.Calc`, the `AltAbility` type (`Me.AltAbility[...]`)
+- the `AltAbility` type (`Me.AltAbility[...]`)
 
 ### MQ commands
 
@@ -381,7 +382,7 @@ everything it gave goes with it. Its hooks run on its own Lua state with its cap
 50 ms. While the script itself is running (a hook reached from its own command), they give the stock answer. An
 error in a hook ends the script, as an error in its main chunk does.
 
-A script in its own folder (`lua/<name>/init.lua`) with a `ui/<pack>/` beside it has windows for each UI pack, as
+A script in its own folder (`scripts/<name>/init.lua`) with a `ui/<pack>/` beside it has windows for each UI pack, as
 a compiled plugin has.
 
 To start one: the server lists it in its `hailstone.cfg` `[scripts] run`; the player lists theirs in
@@ -1167,7 +1168,7 @@ declared (docs/addons.md). Whatever its capabilities, a plugin's code:
 
 What plugin windows may do: reading the game and drawing need no capability beyond `ui`; an `hs` function that acts
 needs the plugin's capability for it, from the plugin's own code or from a pack function it calls (the list is
-`app/lua_ui_caps.cpp`, and a function missing from it is taken to act). Refused, it does nothing and returns nil, with
+the catalog `app/lua_ui_api.inc`, and a function missing from it is taken to act). Refused, it does nothing and returns nil, with
 a line in the log once.
 
 | Needs | `hs` functions |

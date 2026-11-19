@@ -30,6 +30,6 @@ cd ../hailstone-client.wiki && git add -A && git commit -m "Sync from hailstone-
 ```
 
 Sync after a merge to `main` that changes `docs/`, `CONTRIBUTING.md` or `server/README.md`. `tools/sync_wiki.py
---check` writes nothing and exits 1 when a document is not in `PAGES` or a markdown link points at a file that does
-not exist. A plain `docs/` mention of a file that is not here is left as text, since it is often another repository's
-(a plugin's `docs/nms.md`).
+--check` writes nothing and exits 1 when a document is not in `PAGES`, a `PAGES` entry names a file that is gone, or
+a markdown link points at a file that does not exist. A plain `docs/` mention of a file that is not here is left as
+text, since it is often another repository's (the NMS plugin's own `docs/nms.md`, which is not in this repository).
