@@ -1437,8 +1437,9 @@ TEST_CASE("the jump's crouch window and a missile's launch delay use the clip's 
     clip.frame_count = kGridFrameCount;
     clip.duration_ms = kClipDurationMs;
     CHECK(game::mechanics::jump_crouch_window(&clip) == kClipDurationMs + 1);
-    CHECK(game::missile_launch_delay(&clip, kRange) ==
-          static_cast<std::uint32_t>(static_cast<float>(kClipDurationMs) * game::kLaunchFraction));
+    // 400 x 0.699999988 = 279.99999 at the FPU's extended precision, truncated (0x58f5fe-0x58f622).
+    constexpr std::uint32_t kClipDelayMs = 279;
+    CHECK(game::missile_launch_delay(&clip, kRange) == kClipDelayMs);
     // Without a clip the crouch window is its 500 ms default and the launch delay 1500 ms.
     CHECK(game::mechanics::jump_crouch_window(nullptr) == game::mechanics::kJumpWindowMs);
     CHECK(game::missile_launch_delay(nullptr, kRange) == game::kDefaultLaunchMs);

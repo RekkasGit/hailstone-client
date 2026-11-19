@@ -1823,8 +1823,9 @@ one velocity step behind, at that point in the world with the source as caster a
 @0x501415), so it outlives the missile. Spell 859 can run a local hit presentation inside a strict 40-unit
 horizontal radius, at the local player's level (@0x501342); it sends no packet, applies no successful-landing flag,
 grants no buff and does not end the source's cast. The launch delay (0x58f540's CalcAnimLength) is 70 % of the
-animation's own length (the .ani's last key time, not the resampled grid's end), truncated (0x58f604-0x58f622), or
-1500 ms when that is below 1; without a range byte it is 0.
+animation's own length (the .ani's last key time, not the resampled grid's end), multiplied by the float 0.7
+(0.699999988) at the FPU's extended precision and truncated (0x58f5fe-0x58f622), so 1000 ms gives 699, or 1500 ms
+when that is below 1; without a range byte it is 0.
 
 Large-source launch placement uses the renderer's actual posed role-0/name anchor. Missing authored or posed data
 keeps the packet origin rather than inventing an attachment. Missile pulse timing uses a source's completed

@@ -102,7 +102,8 @@ TEST_CASE("missile launch animation and delay") {
     constexpr std::uint32_t kSecondMs = 1000, kWalkMs = 666, kTruncateMs = 668, kBelowOneMs = 1;
     constexpr std::uint8_t kRange = 7;
     constexpr std::uint32_t kDefaultDelayMs = 1500;
-    constexpr std::uint32_t kSecondDelayMs = 700, kWalkDelayMs = 466, kTruncateDelayMs = 467;
+    // 0x58f5fe multiplies by the float 0.7 (0.699999988) at extended precision before truncating: 1000 ms is 699.
+    constexpr std::uint32_t kSecondDelayMs = 699, kWalkDelayMs = 466, kTruncateDelayMs = 467;
     CHECK(missile_launch_delay(kSecondMs, kRange) == kSecondDelayMs);
     // An EQG clip's own period (a 666 ms walk): 70 % of it, not of the resampled grid's 693 ms.
     CHECK(missile_launch_delay(kWalkMs, kRange) == kWalkDelayMs);
