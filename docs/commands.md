@@ -98,7 +98,7 @@ follow the RoF2 client; the ones Hailstone adds are marked as Hailstone's. For t
 | `/stopcast` | Stop casting. |
 | `/melody <gems>`, `/stopsong` | Twist songs; stop singing. |
 | `/discipline <name>`, `/stopdisc` | Use a discipline; end the active one. |
-| `/doability <n \| name>` | Use an ability or skill: button 1-10 of the Actions window, as RoF2; or (Hailstone's) the player's skill, discipline or activated AA of that name, in any case, as its Ability Book row uses it. A name more than one kind has is the skill's first, then the discipline's, then the AA's; a discipline's name may leave out its rank. |
+| `/doability <n \| name>` | Use an ability or skill: button 1-10 of the Actions window, as RoF2, or (Hailstone's) a skill, discipline or activated AA by name (below). |
 | `/pet <command>` | Pet commands (attack, back off, follow, guard, sit and the rest). |
 | `/shield`, `/shieldgroup` | Shield your target. |
 | `/targetgroupbuff [on\|off]`, `/tgb` | Group spells land on the target's group. |
@@ -109,6 +109,10 @@ follow the RoF2 client; the ones Hailstone adds are marked as Hailstone's. For t
 | `/blockspell <display\|add\|remove\|clear> <me\|pet> [spell ids]` | Blocked buffs. The lists are kept in the character ini and sent to the server at each zone-in; a spell the server takes as newly blocked comes off the player (or the pet), with the effects of its spell group. |
 | `/sheathe` | Sheathe or draw your weapons. |
 | `/duel`, `/decline` | Challenge your target to a duel; decline one. |
+
+`/doability <name>` uses the player's skill, discipline or activated AA of that name, in any case, as its Ability
+Book row uses it. A name more than one kind has is the skill's first, then the discipline's, then the AA's. A
+discipline's name may leave out its rank.
 
 ## Movement and position
 

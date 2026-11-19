@@ -12,22 +12,27 @@ cmake --build build-asan --target hailstone_tests
 ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build-asan --output-on-failure
 ```
 
-`HAILSTONE_SANITIZE` adds `-fsanitize=address,undefined -fno-sanitize-recover=undefined` to every target (GCC or Clang), so
-a finding aborts the test with a stack trace. The whole existing suite (561 test cases, 44 skipped for missing
-`EQ_GAME_DIR` / vector files) ran clean under it before any fix; the findings below all came from the new fuzz tests.
+`HAILSTONE_SANITIZE` adds `-fsanitize=address,undefined -fno-sanitize-recover=undefined` to every target (GCC or
+Clang), so a finding aborts the test with a stack trace. The whole existing suite (561 test cases, 44 skipped for
+missing `EQ_GAME_DIR` / vector files) ran clean under it before any fix. The findings below all came from the new
+fuzz tests.
 
-The lookup collector's per-thread pointer is declared and defined `constinit thread_local`: every thread starts
-with a null collector, and other translation units need no dynamic initialization wrapper. This also avoids an
-observed GCC 13.3/ELF TLS-relaxation interaction that made an optimized sanitizer null check reuse flags from an
-ADD after the linker replaced it with LEA. Sanitizer checks remain enabled; lookup tests cover nested scopes and
-a fresh worker thread's independent state.
+The lookup collector's per-thread pointer is declared and defined `constinit thread_local`. Every thread starts with
+a null collector, and other translation units need no dynamic initialization wrapper. This also avoids an observed
+GCC 13.3/ELF TLS-relaxation interaction: an optimized sanitizer null check reused flags from an ADD after the linker
+replaced it with LEA. Sanitizer checks remain enabled. Lookup tests cover nested scopes and a fresh worker thread's
+independent state.
 
 ## Fuzz-style tests (always on, a few seconds)
 
-`tests/fuzz_net_test.cpp`, `tests/fuzz_assets_test.cpp`, `tests/fuzz_server_cfg_test.cpp`, helpers in `tests/fuzz_support.h`. Inputs are deterministic
-(SplitMix64 with fixed seeds): known-good synthetic fixtures cut at every length up to 700 bytes (sparser beyond),
-then seeded mutations (bit flips, boundary bytes, 32-bit fields overwritten with `0xffffffff`/`0x80000000`/small
-counts, deleted/duplicated runs, appended tails), then random data behind a valid magic.
+The tests are `tests/fuzz_net_test.cpp`, `tests/fuzz_assets_test.cpp` and `tests/fuzz_server_cfg_test.cpp`, with
+helpers in `tests/fuzz_support.h`. Inputs are deterministic (SplitMix64 with fixed seeds), in three stages:
+
+1. known-good synthetic fixtures cut at every length up to 700 bytes (sparser beyond);
+2. seeded mutations: bit flips, boundary bytes, 32-bit fields overwritten with `0xffffffff`/`0x80000000`/small
+   counts, deleted/duplicated runs, appended tails;
+3. random data behind a valid magic.
+
 `tests/fuzz_alloc_guard.cpp` replaces `operator new` so a single request over 64 MB fails the test (a parser
 trusting a bogus length). A call over 2 s also fails.
 
@@ -41,9 +46,21 @@ trusting a bogus length). A call over 2 s also fails.
 | Shared GPU textures | the transport's frame header (`gpu_ipc_wire::decode_header`), the broker's request parser (`gpu_cache::decode_request`, with the texture recipe it carries) and the recipe decoder (`gpu_cache::decode_texture`) | errors by `std::exception` |
 | Assets | PFS (multi-block), WLD (mesh fixtures plus every fragment type 0x03-0x37, `build_mesh` with its parts checked against its indices and vertices, `build_skeleton_pose`), EQG TER/MOD, ZON, heightmap ZON/DAT, ECO, TOG, water, EQGS/EQGM meshes, animations, EQGL layers, PTS/PRT points and emitters, texture animation lists, radial flora (ECO flora layers, RFD definitions), `Resources/OnDemandResources.txt`, DDS/BMP (all depths, RLE)/TGA, DDS cube maps made octahedral, WLD detail palette maps, JPEG, XMI, `_sounds.eff`, spellsnew, the old `spells.eff` (switch particles), EDD, sound-bank/asset/emt/race text, ini, zone-line tags | no crash/hang/huge allocation; errors by `std::exception` |
 
-Optional libFuzzer targets (`-DHAILSTONE_LIBFUZZER=ON`, Clang): `fuzz_pfs`, `fuzz_wld`, `fuzz_texture`, `fuzz_soe`, `fuzz_decoders` (every typed decoder of `tests/fuzz_decoders.inc`, byte 0 choosing it),
-`fuzz_packets`, `fuzz_zip` (the updater's package zip and manifest), `fuzz_server_cfg` (server configuration and opt-in policy invariants, up to 16 KiB of text), `fuzz_gpucache` (the shared GPU texture transport's frame header, broker requests and texture recipes), `fuzz_models` (EQGL layers, PTS, PRT, texture animations, ECO flora, RFD and the old `spells.eff`, byte 0 choosing; `fuzz_texture` also runs the cube map, palette map and JPEG decoders) from `tests/fuzz_libfuzzer.cpp`. These were only syntax-checked here (no Clang build of the
-dependencies was run); the deterministic tests are the verified part.
+#### libFuzzer targets
+
+Optional libFuzzer targets (`-DHAILSTONE_LIBFUZZER=ON`, Clang) come from `tests/fuzz_libfuzzer.cpp`:
+
+- `fuzz_pfs`, `fuzz_wld`, `fuzz_soe`, `fuzz_packets`;
+- `fuzz_texture`, which also runs the cube map, palette map and JPEG decoders;
+- `fuzz_decoders`: every typed decoder of `tests/fuzz_decoders.inc`, byte 0 choosing it;
+- `fuzz_zip`: the updater's package zip and manifest;
+- `fuzz_server_cfg`: server configuration and opt-in policy invariants, up to 16 KiB of text;
+- `fuzz_gpucache`: the shared GPU texture transport's frame header, broker requests and texture recipes;
+- `fuzz_models`: EQGL layers, PTS, PRT, texture animations, ECO flora, RFD and the old `spells.eff`, byte 0
+  choosing.
+
+These were only syntax-checked here (no Clang build of the dependencies was run). The deterministic tests are the
+verified part.
 
 ## Findings and fixes
 
@@ -85,30 +102,58 @@ model, DDS, TGA, XMI and table parsers produced no findings.
 
 ## Mapped game archives
 
-`PfsArchive::open` maps an archive read-only (`platform::MappedFile`) when the caller asks for it, which every caller
-that finds a file through `GameDir` does for a file in the asset folder or the classic folder
-(`PfsArchive::storage_for`). Those folders are never written by Hailstone. A file in a server's overlay
-(`servers/<id>/assets`, which the server files sync replaces while the client runs) is read into the heap once, as every
-archive was before: on Windows a rename over a file with a mapped view is typically refused, and the sync would fail.
-When a mapping cannot be made (no address space, a file system that cannot map, an empty file), the file is read into
-the heap instead.
+`PfsArchive::open` maps an archive read-only (`platform::MappedFile`) when the caller asks for it. Every caller that
+finds a file through `GameDir` asks for it for a file in the asset folder or the classic folder
+(`PfsArchive::storage_for`). Hailstone never writes those folders.
 
-The cost: bytes are no longer read once at open. A game file that another program truncates or rewrites in place while
-it is mapped (a patcher or launcher run alongside the client, a sync tool writing into the game folder) can crash the
-client with SIGBUS on Linux and macOS or `EXCEPTION_IN_PAGE_ERROR` on Windows when a member past the new end is read,
-or hand the parsers bytes that change under them. The parsers bound every read against the mapping's length as they did
-against a heap buffer, so changed bytes are treated like any malformed file; a fault from a shrunk file is not caught.
-It is accepted because Hailstone never writes the game folder (docs/layout.md) and nothing else is expected to while
-the client runs, a patcher that does is expected to replace files by rename (which leaves the old mapping intact on
-POSIX) rather than truncate them, and the gain is the archives' size in private memory. Overlay files, the ones that do
-change under a running client, are never mapped. A file replaced by rename is picked up the next time the archive is opened
-(another zone, `CharacterArchiveCache::clear()` after an asset-folder or overlay change).
+A file in a server's overlay (`servers/<id>/assets`) is read into the heap once, as every archive was before. The
+server files sync replaces overlay files while the client runs, and on Windows a rename over a file with a mapped
+view is typically refused, so the sync would fail. When a mapping cannot be made (no address space, a file system
+that cannot map, an empty file), the file is read into the heap instead.
+
+#### The cost of mapping
+
+Bytes are no longer read once at open. A game file that another program truncates or rewrites in place while it is
+mapped can:
+
+- crash the client with SIGBUS on Linux and macOS, or `EXCEPTION_IN_PAGE_ERROR` on Windows, when a member past the
+  new end is read;
+- hand the parsers bytes that change under them.
+
+Examples are a patcher or launcher run alongside the client, or a sync tool writing into the game folder. The parsers
+bound every read against the mapping's length as they did against a heap buffer, so changed bytes are treated like
+any malformed file. A fault from a shrunk file is not caught.
+
+It is accepted because:
+
+- Hailstone never writes the game folder (docs/layout.md), and nothing else is expected to while the client runs;
+- a patcher that does is expected to replace files by rename (which leaves the old mapping intact on POSIX) rather
+  than truncate them;
+- the gain is the archives' size in private memory.
+
+Overlay files, the ones that do change under a running client, are never mapped. A file replaced by rename is picked
+up the next time the archive is opened (another zone, `CharacterArchiveCache::clear()` after an asset-folder or
+overlay change).
 
 ## Windows allocation profiling
 
-The memory checkpoints distinguish resident memory, Windows private commit, GPU allocations and estimated character payloads. When the remaining private commit has no measured owner, use allocation stacks instead of assuming that freed objects leaked. WPR's Heap profile records heap allocation/free activity; VirtualAllocation records virtual allocation activity. The installed recorder's `wpr -profiles` and `wpr -help heap` show which commands it supports. See Microsoft's [Recording for Heap Analysis](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/recording-for-heap-analysis) and [WPR command-line options](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/wpr-command-line-options).
+The memory checkpoints distinguish resident memory, Windows private commit, GPU allocations and estimated character
+payloads. When the remaining private commit has no measured owner, use allocation stacks instead of assuming that
+freed objects leaked.
 
-Use one client, starting before login and ending after the repeated zoning route. Build with symbols first (`cmake --build build-msvc --config RelWithDebInfo --target hailstone` for a Visual Studio build), and retain its matching `hailstone.exe` and linker `hailstone.pdb`. A Release build without the matching PDB can identify modules but cannot reliably resolve Hailstone allocation stacks to functions. Put traces under the ignored `build-msvc/` folder.
+- WPR's Heap profile records heap allocation/free activity.
+- VirtualAllocation records virtual allocation activity.
+- The installed recorder's `wpr -profiles` and `wpr -help heap` show which commands it supports.
+
+See Microsoft's [Recording for Heap Analysis](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/recording-for-heap-analysis)
+and [WPR command-line options](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/wpr-command-line-options).
+
+#### Preparing the run
+
+Use one client, starting before login and ending after the repeated zoning route. Build with symbols first
+(`cmake --build build-msvc --config RelWithDebInfo --target hailstone` for a Visual Studio build). Keep its matching
+`hailstone.exe` and linker `hailstone.pdb`: a Release build without the matching PDB can identify modules but cannot
+reliably resolve Hailstone allocation stacks to functions. Put traces under the ignored `build-msvc/` folder.
 
 In an **elevated PowerShell** at the repository root, with Hailstone closed:
 
@@ -117,7 +162,9 @@ wpr -status
 wpr -HeapTracingConfig hailstone.exe
 ```
 
-If another recording is active, finish that recording before starting this one; do not cancel someone else's session. Note the current heap-tracing configuration so it can be restored afterward. When it was initially disabled:
+If another recording is active, finish that recording before starting this one; do not cancel someone else's
+session. Note the current heap-tracing configuration so it can be restored afterward. When it was initially
+disabled:
 
 ```powershell
 New-Item -ItemType Directory -Force .\build-msvc\memory-profile | Out-Null
@@ -126,13 +173,30 @@ wpr -HeapTracingConfig hailstone.exe enable
 wpr -start Heap -start VirtualAllocation -filemode
 ```
 
-Check each command succeeds. Then launch `build-msvc/hailstone/hailstone.exe`, log in, run the route and return to the first zone. Stop the recording **while the client remains in that zone**, so outstanding allocations can be examined before shutdown frees them:
+#### Recording the route
+
+Check each command succeeds. Then launch `build-msvc/hailstone/hailstone.exe`, log in, run the route and return to
+the first zone. Stop the recording **while the client remains in that zone**, so outstanding allocations can be
+examined before shutdown frees them:
 
 ```powershell
 wpr -stop $trace
 wpr -HeapTracingConfig hailstone.exe disable
 ```
 
-Always restore the initial tracing configuration after collecting or abandoning the run (leave it enabled if it was already enabled before this procedure). Heap tracing configuration affects newly launched clients, which is why the client must be restarted after enabling it. Trace-enabled measurements have instrumentation overhead; compare normal runtime memory using the client logs as well.
+Always restore the initial tracing configuration after collecting or abandoning the run. Leave it enabled if it was
+already enabled before this procedure. Heap tracing configuration affects newly launched clients, which is why the
+client must be restarted after enabling it. Trace-enabled measurements have instrumentation overhead, so compare
+normal runtime memory using the client logs as well.
 
-Open the ETL in Windows Performance Analyzer and load the matching executable/PDB symbols. Filter to the Hailstone PID. In Heap Allocations, compare outstanding allocations at first settled Kael and return-to-Kael, grouped by allocation stack. Inspect VirtualAlloc Commit LifeTimes for large committed regions outside those heap allocations. Keep the associated `hailstone.log` for the route; native heap allocations, allocator-retained commit and graphics-driver regions are distinct categories, and the same bytes must not be added twice. Trace collection itself does not establish which category explains a gap.
+#### Reading the trace
+
+1. Open the ETL in Windows Performance Analyzer and load the matching executable/PDB symbols.
+2. Filter to the Hailstone PID.
+3. In Heap Allocations, compare outstanding allocations at first settled Kael and return-to-Kael, grouped by
+   allocation stack.
+4. Inspect VirtualAlloc Commit LifeTimes for large committed regions outside those heap allocations.
+
+Keep the associated `hailstone.log` for the route. Native heap allocations, allocator-retained commit and
+graphics-driver regions are distinct categories, and the same bytes must not be added twice. Trace collection
+itself does not establish which category explains a gap.

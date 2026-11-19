@@ -1442,11 +1442,11 @@ or -1 and say so in the chat window. Only call these on the client's thread, fro
 | `close_spell_book`, `clear_spell_recovery`, `set_window_pet(id)`, `inspect_item(id, augments)` | `actions` | |
 | `max_camera_distance`, `set_max_camera_distance(d)` | `actions` | |
 | `open_bank(banker)` | `actions` | the bank window at a spawn (0 the player), without a banker's checks. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, open_bank)` first |
-| `get_buff_data_bulk(out, size)`, `get_pet_buff_data_bulk(out, size)`, `get_target_buff_data_bulk(out, size)`, `get_spawns_data_bulk(out, size)` | `read` | every buff slot of the player (`size` must hold every buff and song slot, RoF2's 1798 bytes, or 0 comes back; one record more, 1827, brings the discipline slot, the last), the pet window's buffs, the current target's buffs (an 8-byte `HS_Bulk_ListHeader`, i32 `count` of records written then i32 `total` the client holds, then as many records as fit, each followed by its caster's name; the header alone, 0 and 0, with no target or before the server sent the target's buffs; 0 bytes below 8), or every spawn in the zone (`size` at least 4096, or 0 comes back; 4112 for any record), as packed records in the machine's byte order (layout in docs/plugins.md "Buff, spawn, extended target and raid records"); returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, <field>)` first |
-| `get_buff_name_data_bulk(out, size)` | `read` | every buff slot of the player as `get_buff_data_bulk` gives them, with each caster's name in place of its spawn id: each 29-byte record followed by the name (`size` must hold every buff and song slot with their names, or 0 comes back; the discipline slot comes when its record and name fit too; layout in docs/plugins.md "Buff, spawn, extended target and raid records"); returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_buff_name_data_bulk)` first |
-| `get_avail_aa_data_bulk(out, size)`, `get_avail_disc_data_bulk(out, size)` | `read` | the owned alternate abilities by ability (group) id, or the combat abilities by spell id, each with its name: an 8-byte `HS_Bulk_ListHeader` (i32 `count` of records written, i32 `total` the client holds), then `count` records (i32 id, i32 name size, the name's bytes), as many whole records as fit, so `count < total` means the buffer was too small (layout in docs/plugins.md "Buff, spawn, extended target and raid records"); returns the bytes written, 0 below 8. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, <field>)` first |
-| `get_xtarget_data_bulk(out, size)` | `read` | every extended target slot: type, spawn id, aggro meter percent and HP percent, 16 bytes a slot, as many whole records as fit (layout in docs/plugins.md "Buff, spawn, extended target and raid records"); returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_xtarget_data_bulk)` first |
-| `get_raid_data_bulk(out, size)` | `read` | the raid roster: a 40-byte `HS_Bulk_RaidHeader`, then one `HS_Bulk_RaidData` per member, as many whole records as fit; the header says `active` 0 and `count` 0 outside a raid. Step records by the header's `recordSize` for `count` of them; `total` is the roster's member count, so `count < total` means the buffer was too small. Returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_raid_data_bulk)` first |
+| `get_buff_data_bulk(out, size)`, `get_pet_buff_data_bulk(out, size)`, `get_target_buff_data_bulk(out, size)`, `get_spawns_data_bulk(out, size)` | `read` | the player's buff slots, the pet window's buffs, the current target's buffs, or every spawn in the zone (bulk note 1) |
+| `get_buff_name_data_bulk(out, size)` | `read` | the player's buff slots with each caster's name in place of its spawn id (bulk note 2) |
+| `get_avail_aa_data_bulk(out, size)`, `get_avail_disc_data_bulk(out, size)` | `read` | the owned alternate abilities by ability (group) id, or the combat abilities by spell id, each with its name (bulk note 3) |
+| `get_xtarget_data_bulk(out, size)` | `read` | every extended target slot: type, spawn id, aggro meter percent and HP percent, 16 bytes a slot, as many whole records as fit |
+| `get_raid_data_bulk(out, size)` | `read` | the raid roster: a 40-byte `HS_Bulk_RaidHeader`, then one `HS_Bulk_RaidData` per member (bulk note 4) |
 | `cursor_origin()` | `read` | how the item on the cursor got there: `HAILSTONE_CURSOR_ORIGIN_UNKNOWN` (0, also empty), `_INVENTORY` (1, the player's pickup) or `_SERVER` (2, the server put it on the empty cursor); docs/plugins.md "The cursor item's origin". Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, cursor_origin)` first |
 | `add_ui_function(name, fn, user)`, `remove_ui_function` | `ui` | a function the plugin's windows call as `hs.Plugin("<name>").<name>(...)` |
 | `arg_count`, `arg(i, out)`, `arg_field(i, key, out)` | | a UI function's arguments |
@@ -1460,6 +1460,27 @@ or -1 and say so in the chat window. Only call these on the client's thread, fro
 | `decode_item_packet`, `inspect_item_packet`, `manual_follow`, `get_follow_status`, `get_memorized_spell`, `monotonic_ms`, `measure_binary`, `get_map_policy` | per function | docs/plugins.md "Server add-on services". Added later in ABI 3 |
 | `world_capabilities`, `world_floor_below`, `world_anchor`, `world_submit`, `world_surface_patch` | per function | docs/plugins.md "Transient world geometry". Added later in ABI 3 |
 | `nameplate_register`, `nameplate_unregister`, `nameplate_submit`, `nameplate_measure_text`, `nameplate_spell_icon` | `read`, `ui` and `extend` | a nameplate canvas provider (docs/plugins.md "Native world nameplate canvases"). Added later in ABI 3 |
+
+Bulk reads (layout in docs/plugins.md "Buff, spawn, extended target and raid records"): each returns the bytes
+written. Each was added later in ABI 3: test `HAILSTONE_HOST_HAS(host, <field>)` first (for example
+`HAILSTONE_HOST_HAS(host, get_buff_name_data_bulk)`, `HAILSTONE_HOST_HAS(host, get_xtarget_data_bulk)`,
+`HAILSTONE_HOST_HAS(host, get_raid_data_bulk)`).
+
+1. The records are packed, in the machine's byte order.
+   - Player buffs: `size` must hold every buff and song slot, RoF2's 1798 bytes, or 0 comes back. One record more,
+     1827, brings the discipline slot, the last.
+   - Target buffs: an 8-byte `HS_Bulk_ListHeader` (i32 `count` of records written, then i32 `total` the client
+     holds), then as many records as fit, each followed by its caster's name. The header alone, 0 and 0, comes with
+     no target or before the server sent the target's buffs; 0 bytes below 8.
+   - Spawns: `size` at least 4096, or 0 comes back; 4112 for any record.
+2. The records are as `get_buff_data_bulk` gives them, each 29-byte record followed by the name. `size` must hold every buff and song slot with their names, or 0
+   comes back. The discipline slot comes when its record and name fit too.
+3. An 8-byte `HS_Bulk_ListHeader` (i32 `count` of records written, i32 `total` the client holds), then `count`
+   records (i32 id, i32 name size, the name's bytes), as many whole records as fit. `count < total` means the buffer
+   was too small. 0 bytes below 8.
+4. As many whole records as fit. The header says `active` 0 and `count` 0 outside a raid. Step records by the
+   header's `recordSize` for `count` of them. `total` is the roster's member count, so `count < total` means the
+   buffer was too small.
 
 ### Hook table
 

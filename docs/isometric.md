@@ -1,22 +1,30 @@
 # Isometric camera
 
-Code: `src/game/iso_camera.{h,cpp}` (the camera and movement relative to it), `src/game/click_intent.{h,cpp}` (what a
-click does), `src/game/iso_occlusion.{h,cpp}` and `reveal_cut` in `shaders/lighting.glsl` (seeing the player through
-what is in front), `src/app/client_app_iso.cpp` (the clicks' walks and the keys), `ClientApp::update_iso_camera` and
-`ClientApp::camera_command` (`src/app/client_app_input.cpp`), `Navigator::walk_to_click` (`src/app/navigator.cpp`).
-Tests: `tests/iso_camera_test.cpp`, `tests/click_intent_test.cpp`, `tests/iso_occlusion_test.cpp`.
+A view from above and to one side, as in isometric RPGs: a Hailstone addition (the original has no such camera), off
+unless the player chooses it. It changes only where the scene is seen from. Movement, facing,
+speed, collision and every game rule stay the original's, and the server sees ordinary movement.
 
-The original client has no such camera. This is a Hailstone addition, off unless the player chooses it: a view from
-above and to one side, in the manner of isometric RPGs. It changes only where the scene is seen from. Movement,
-facing, speed, collision and every game rule stay the original's, and the server sees ordinary movement.
+Code:
+
+- `src/game/iso_camera.{h,cpp}`: the camera, and movement relative to it.
+- `src/game/click_intent.{h,cpp}`: what a click does.
+- `src/game/iso_occlusion.{h,cpp}` and `reveal_cut` in `shaders/lighting.glsl`: seeing the player through what is in
+  front.
+- `src/app/client_app_iso.cpp`: the clicks' walks and the keys.
+- `ClientApp::update_iso_camera` and `ClientApp::camera_command` (`src/app/client_app_input.cpp`),
+  `Navigator::walk_to_click` (`src/app/navigator.cpp`).
+
+Tests: `tests/iso_camera_test.cpp`, `tests/click_intent_test.cpp`, `tests/iso_occlusion_test.cpp`.
 
 ## The camera
 
-Camera type 7 (`game::kCameraIsometric`), Hailstone's own beside the camera behind the player (6). It looks down at a
-fixed pitch (45 degrees by default) from a distance (160 units at the start), through a perspective lens (63 degrees
-across by default, about the stock cameras' 63.3). It follows the player's body with a little easing (0.08 s) and
-jumps with a teleport or a zone-in. It does not stop at scenery: what stands between it and the player is cut away
-instead ("Seeing the player" below).
+Camera type 7 (`game::kCameraIsometric`), Hailstone's own beside the camera behind the player (6).
+
+- It looks down at a fixed pitch (45 degrees by default) from a distance (160 units at the start).
+- Its lens is a perspective one, 63 degrees across by default (the stock cameras' is about 63.3).
+- It follows the player's body with a little easing (0.08 s) and jumps with a teleport or a zone-in.
+- It does not stop at scenery: what stands between it and the player is cut away ("Seeing the player").
+
 
 - The right button held turns the camera freely about the player, never the player. A short right click still
   clicks.
@@ -30,11 +38,17 @@ To the movement controls it is the camera behind the player (6) with no mouse lo
 ## Movement keys
 
 With `camera.iso_wasd = camera` (the default) the movement keys point relative to the camera, as in isometric RPGs:
-forward runs up the screen, back down it toward the camera, the strafe keys left and right across it, and two
-together the diagonal between. The player turns at once to that way (as /follow and /nav set the heading) and the
-controls see only the forward key held, so the speed, the run and walk, collision and the position updates are the
-original's. The turn keys turn the camera (2 radians a second), not the player. Autorun runs the way the player
-faces. At a boat's helm the keys sail the boat as in the other cameras.
+
+- forward runs up the screen, back runs down it toward the camera;
+- the strafe keys run left and right across it;
+- two together run the diagonal between.
+
+The player turns at once to that way, as /follow and /nav set the heading. The controls see only the forward key
+held, so the speed, the run and walk, collision and the position updates are the original's.
+
+- The turn keys turn the camera (2 radians a second), not the player.
+- Autorun runs the way the player faces.
+- At a boat's helm the keys sail the boat as in the other cameras.
 
 The gamepad's left stick moves along its own angle, not eight ways; the right stick turns the camera (sideways) and
 zooms (up and down).
@@ -56,20 +70,26 @@ with its key or `/attack`, as everywhere (`game::iso_click_action`).
 | a player, right | their menu, where they stand |
 | anything, with an item on the cursor or while placing one | the other cameras' click (drop, place, a key on a door) |
 
-The walk is the navigator's, so it goes round walls, opens doors on the way and gets itself unstuck. Any movement key
-ends it, without a word in the chat (each click would say so). A walk that cannot be started says why ("Cannot walk
-there: ..."). A click that walks to the spot says nothing when the mesh goes only part of the way, and goes straight
-at the spot in a zone without a mesh. The click at the end is made only when the walk ended near enough; a walk
-stopped short (a key, no path, stuck) clicks nothing.
+The walk is the navigator's, so it goes round walls, opens doors on the way and gets itself unstuck.
+
+- Any movement key ends it, without a word in the chat (each click would say so).
+- A walk that cannot be started says why ("Cannot walk there: ...").
+- A click that walks to the spot says nothing when the mesh goes only part of the way. In a zone without a mesh it
+  goes straight at the spot.
+- The click at the end is made only when the walk ended near enough. A walk stopped short (a key, no path, stuck)
+  clicks nothing.
 
 ### Click to move in every camera
 
-The same clicks work in the other cameras when `mouse.click_move` is set (the `click_move` option, off by default:
-a Hailstone addition, so the other cameras click as the original does until it is switched on;
-`ClientApp::click_moves`). The table above holds as it is, the click marker included. What stays the other cameras'
-own: the movement keys (never relative to the camera there), the mouse look, and no see-through cut or hover ring. In
-first person and the camera behind the player, the walk turns the player and so the view, as `/nav`'s does. A
-left-button mouse look (MouseTurnZoom in the camera behind) clicks only at a short release, as it always has, and the
+The same clicks work in the other cameras when `mouse.click_move` is set (the `click_move` option;
+`ClientApp::click_moves`). It is a Hailstone addition, off by default, so until then the other cameras click as the
+original does. The table above holds as it is, the click marker included.
+
+What stays the other cameras' own: the movement keys (never relative to the camera there), the mouse look, and no
+see-through cut or hover ring.
+
+In first person and the camera behind the player, the walk turns the player and so the view, as `/nav`'s does. A
+left-button mouse look (MouseTurnZoom in the camera behind) clicks only at a short release, as it always has. The
 button held during the look does not steer the walk.
 
 ## Measured from the player
@@ -77,17 +97,19 @@ button held during the look does not steer the walk.
 The camera stands well back from the player, so what the other cameras measure from the camera is measured from the
 player here:
 
-- **Fog and far plane** (`game::iso_view`): the fog's start and end and the far plane are pushed out by the camera's
-  distance, so the fog starts at the player where it would in first person and as much of the zone shows round them.
+- **Fog and far plane** (`game::iso_view`): pushed out by the camera's distance, so the fog starts at the player where
+  it would in first person and as much of the zone shows round them.
 - **The region** the fog and the underwater tint read is the player's eye's, not the air's or the hillside's the
   camera hangs in.
 - **Shadow cascades** (`game::iso_shadow_near`) start 40 units short of the player rather than at the lens, and reach
   that much further, so the sharpest cascade covers the player.
 - **The sound listener** is the player's in every camera already.
 
-A click that walks to a spot or an item puts a gold ring on the ground there (drawn as the target ring is, a decal on
-the scene's depth): it lands wide and closes in with a flash, spins slowly while the walk goes on, follows the held
-button's aim, and fades when the walk ends. A walk to a spawn or a door shows none (the target ring, or the door
+#### The click marker
+
+A click that walks to a spot or an item puts a gold ring on the ground there. It is drawn as the target ring is (a
+decal on the scene's depth). It lands wide and closes in with a flash, spins slowly while the walk goes on, follows the
+held button's aim, and fades when the walk ends. A walk to a spawn or a door shows none (the target ring, or the door
 itself, is there).
 
 ## Seeing the player
@@ -97,8 +119,8 @@ hills, roofs and the floors above (`game::iso_reveal`, `shaders/lighting.glsl` `
 shapes, each eased in over 0.2 s and out over 0.5 s (`game::iso_ease`, `ClientApp::update_iso_reveal`).
 
 **The circle** comes while the line from the camera to the player's feet, middle or eyes is blocked by the zone or
-its objects (the camera's own sweep, radius 0.25), so a tree beside the player that hides nothing is left whole
-(`camera.iso_reveal_always` cuts all the time). A surface is cut where it is
+its objects (the camera's own sweep, radius 0.25). So a tree beside the player that hides nothing is left whole.
+`camera.iso_reveal_always` cuts all the time. A surface is cut where it is
 
 - nearer the camera than the player's middle by at least 3 units, fully from 9,
 - inside a cone round the line from the camera to the player, which shows as a circle on the screen: 20 units in
@@ -109,13 +131,17 @@ its objects (the camera's own sweep, radius 0.25), so a tree beside the player t
 So the floor the player stands on and the ground falling away in front stay, and a wall, a slope rising in front,
 a roof or an upper floor goes.
 
-**The roof** comes while something solid is within 60 units over the player's eyes (a ceiling, a roof, a bridge,
-an overhang; `camera.iso_roof`). Then everything above a height just under that cover (2 units under where the cover
-test hit, never lower than 1.5 over the eyes; `game::iso_roof_height`) goes round the player, in front or behind,
-out to 60 units or 1.25 times the camera's distance, the larger (flat; the outer quarter, at least 15, thinning out),
-so it clears what the view shows. A hall keeps its walls up to its ceiling and loses the ceiling; a low tunnel loses
-the whole hill over it; a house loses its roof. The height follows a changing cover (an arch, a sloping roof, a
-staircase) over a quarter second.
+**The roof** comes while something solid is within 60 units over the player's eyes: a ceiling, a roof, a bridge,
+an overhang (`camera.iso_roof`). Then everything above a height just under that cover goes, round the player, in
+front or behind:
+
+- The height is 2 units under where the cover test hit, never lower than 1.5 over the eyes (`game::iso_roof_height`).
+- The reach is 60 units or 1.25 times the camera's distance, the larger, so it clears what the view shows. It is
+  flat, and its outer quarter (at least 15) thins out.
+- The height follows a changing cover (an arch, a sloping roof, a staircase) over a quarter second.
+
+A hall keeps its walls up to its ceiling and loses the ceiling. A low tunnel loses the whole hill over it. A house
+loses its roof.
 
 The zone, its objects (doors, placed objects, ground items) and the grass are cut; the characters are not. The cut
 drops pixels against a 4x4 ordered dither rather than blending, so the passes stay opaque and nothing has to be
@@ -126,18 +152,21 @@ skipped (`ClientApp::pick_world`, `game::iso_pick_skips`, the shader's test on t
 or the ground behind a cut wall reaches it.
 
 **The silhouette.** Where the player is still hidden (by the edge of the cut, a character, an object the cut leaves) a
-pale blue outline of them, stronger toward their edge, shows through (`camera.iso_silhouette`;
-`ActorRenderer::draw_silhouette`, `shaders/actor_silhouette.frag`). It is drawn after the zone and its objects and
-before the characters, where the player's body lies behind what is drawn (a depth test, no depth write); the player
-drawn after covers it wherever they are in sight, so their own arms and legs never outline themselves. Their mount's
-outline shows with theirs.
+pale blue outline of them shows through, stronger toward their edge (`camera.iso_silhouette`;
+`ActorRenderer::draw_silhouette`, `shaders/actor_silhouette.frag`).
+
+It is drawn after the zone and its objects and before the characters, where the player's body lies behind what is
+drawn (a depth test, no depth write). The player, drawn after, covers it wherever they are in sight, so their own arms
+and legs never outline themselves. Their mount's outline shows with theirs.
 
 ## Under the cursor
 
-A pale ring lies under the spawn, door or ground item the mouse is over (`camera.iso_hover`; not the target, which
-has its own ring, nor the player), so it is clear what a click will do. The pick is made ten times a second, or when
-the mouse moves, without logging (`ClientApp::update_iso_hover`); it goes through the cut as the clicks do. A door's
-ring lies on the floor under it.
+A pale ring lies under the spawn, door or ground item the mouse is over, so it is clear what a click will do
+(`camera.iso_hover`). The target has its own ring and gets none; nor does the player. A door's ring lies on the floor
+under it.
+
+The pick is made ten times a second, or when the mouse moves, without logging (`ClientApp::update_iso_hover`). It goes
+through the cut as the clicks do.
 
 ## /camera
 

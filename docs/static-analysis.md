@@ -1,6 +1,6 @@
 # Static analysis
 
-`.clang-tidy` at the root configures clang-tidy; it is run by hand at present (docs/ci.md: the CI job that ran it on Linux was dropped to save Actions minutes). Findings of the enabled checks are errors (`WarningsAsErrors: '*'`). cppcheck was run once by hand; it is not in CI.
+`.clang-tidy` at the root configures clang-tidy. It is run by hand at present: the CI job that ran it on Linux was dropped to save Actions minutes (docs/ci.md). Findings of the enabled checks are errors (`WarningsAsErrors: '*'`). cppcheck was run once by hand; it is not in CI.
 
 ## Running it
 

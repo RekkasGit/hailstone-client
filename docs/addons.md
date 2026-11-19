@@ -1,25 +1,38 @@
 # Add-ons: scripts, plugins and tools from GitHub
 
-The add-on manager lets a player install a MacroQuest Lua script, a compiled plugin (docs/plugins.md), a tool (a
-program of its own, below), an upscaler (a temporal upscaler from outside the client, below) or an interface (UI
-packs, below) by pasting a GitHub link on the login screen, without opening the Hailstone folder, and
-keeps it up to date. It is a Hailstone
-feature with no counterpart in the original client. It is built on the updater's parts (docs/updater.md): the HTTPS
-download (`platform/http_get`), the zip reader (`core/zip_read`), SHA-256 and Ed25519 (`core/ed25519`).
+The add-on manager installs add-ons from a GitHub link pasted on the login screen, and keeps them up to date. The
+player never opens the Hailstone folder. It handles five kinds:
 
-A script manifest may opt into managed startup with `autoload 1`. Installation enables that script, and **Enabled**
-in **My add-ons** controls whether it starts when the server permits it. Other addon kinds do not use this flag.
-Updates preserve the installed management and the player's activation switch until removal/reinstallation, even
-if a later manifest drops `autoload`; an update cannot bypass a disabled switch through ordinary script autorun.
-An ordinary script that first opts in through an update waits for the player to enable it. Automatic updates remain
-a separate choice.
+- a MacroQuest Lua script;
+- a compiled plugin (docs/plugins.md);
+- a tool: a program of its own (below);
+- an upscaler: a temporal upscaler from outside the client (below);
+- an interface (UI packs, below).
+
+It is a Hailstone feature with no counterpart in the original client. It is built on the updater's parts
+(docs/updater.md): the HTTPS download (`platform/http_get`), the zip reader (`core/zip_read`), SHA-256 and Ed25519
+(`core/ed25519`).
+
+A script manifest may opt into managed startup with `autoload 1`. Other addon kinds do not use this flag.
+
+- Installation enables that script. **Enabled** in **My add-ons** controls whether it starts when the server permits
+  it.
+- Updates preserve the installed management and the player's activation switch until removal/reinstallation, even if
+  a later manifest drops `autoload`.
+- An update cannot bypass a disabled switch through ordinary script autorun.
+- An ordinary script that first opts in through an update waits for the player to enable it.
+- Automatic updates remain a separate choice.
 
 ## What the player sees
 
-**Add-ons** on the login screen opens a card in the Modern pack (beside the characters card, so Play stays in reach;
-it stays open until Close), a page under More in the Gamepad pack, and a window in the client's own ImGui screen. All
-three draw `ui::LoginView::addons` (`view.addons` in Lua, app/lua_ui_pregame.cpp), as the update notice is drawn. The
-Modern card has two tabs: **Find add-ons** (the store, below), where it opens, and **My add-ons** (the list).
+**Add-ons** on the login screen opens:
+
+- a card in the Modern pack, beside the characters card so Play stays in reach; it stays open until Close;
+- a page under More in the Gamepad pack;
+- a window in the client's own ImGui screen.
+
+All three draw `ui::LoginView::addons` (`view.addons` in Lua, app/lua_ui_pregame.cpp), as the update notice is drawn.
+The Modern card has two tabs: **Find add-ons** (the store, below), where it opens, and **My add-ons** (the list).
 
 **Find add-ons** lists every add-on of the add-on index (see Finding add-ons), so a player can find one without a
 link. A pasted link (below the store in the Modern pack) still works for any add-on.
@@ -40,9 +53,9 @@ The client fetches the add-on's manifest and shows a card before it writes anyth
   do on the computer;
 - why it cannot be installed, when it cannot: it needs a newer Hailstone, it has no build for this system, it asks for
   a permission this Hailstone does not know, or its name is taken;
-- when it is an older version than the one installed (a link to an older release's tag, or a release taken back),
-  a warning that installing it goes back to that version, and **Install the older version** in place of Install:
-  `hs.LoginDo("addonInstall")` alone does not take it, `hs.LoginDo("addonInstall", "older")` does
+- when it is older than the installed version (a link to an older release's tag, or a release taken back): a warning
+  that installing it goes back to that version, and **Install the older version** in place of Install.
+  `hs.LoginDo("addonInstall")` alone does not take it; `hs.LoginDo("addonInstall", "older")` does
   (`AddonOffer::older`, `AddonManager::install_offer(true)`);
 - **Install**, **Cancel** and **Repository**.
 
@@ -55,11 +68,12 @@ The client fetches the add-on's manifest and shows a card before it writes anyth
 | **From <server>** (the picked server's own, `servers/<profile>/scripts/` and `plugins/`) | name, kind; a script: "Provided by <server>: it always runs there, and cannot be removed or turned off"; a compiled plugin: whether you allowed it | open its folder; a plugin: **Don't allow it any more** (allowed) or **Ask me again** (refused) |
 
 The server's own are the files the picked server sent at its last login (its `server_files.txt`). They are listed so
-the player knows what runs there, but nothing in the list removes, stops or updates them. A compiled plugin of the
-server's runs only once the player allowed its bytes (docs/plugins.md "The server's compiled plugins ask first"), and
-its row is where that answer is changed. The server sends them again
-at each login, and the client keeps them running ("is this server's own script: it keeps running", docs/plugins.md).
-A server not visited yet, or one without Hailstone's script, has none.
+the player knows what runs there. Nothing in the list removes, stops or updates them. The server sends them again at
+each login, and the client keeps them running ("is this server's own script: it keeps running", docs/plugins.md). A
+server not visited yet, or one without Hailstone's script, has none.
+
+A compiled plugin of the server's runs only once the player allowed its bytes (docs/plugins.md "The server's compiled
+plugins ask first"). Its row is where that answer is changed.
 
 A row of the other two groups also says what the picked server does with it, from that server's `hailstone.cfg` as
 the last login left it:
@@ -68,19 +82,28 @@ the last login left it:
 - this server allows only part of what it may do;
 - this server has its own of that name, and that one runs there.
 
-**States** of an installed add-on: up to date; a newer version is out (auto-update off); downloading; downloaded (it
-is installed at the login screen); it asks to do more (approve to update); you changed files of it (Update anyway
-replaces them); not installed (another key, another add-on in the repository, a newer Hailstone needed); failed.
+**States** of an installed add-on:
+
+- up to date;
+- a newer version is out (auto-update off);
+- downloading;
+- downloaded (it is installed at the login screen);
+- it asks to do more (approve to update);
+- you changed files of it (Update anyway replaces them);
+- not installed (another key, another add-on in the repository, a newer Hailstone needed);
+- failed.
 
 **When files change.** A download is checked and unpacked on a worker thread. Its files move into place only while
-the login screen is up with no login under way and no box set window running, since those may run the same files.
+the login screen is up, with no login under way and no box set window running, since those may run the same files.
 Nothing runs at the login screen (docs/plugins.md), and plugins load from copies in `cache/plugins/`. So an install
-or an update never changes a file under a running script or plugin. One downloaded while in the world waits for the
-next login screen. A run that quits first finds it again at the next start, and the package is not downloaded twice.
+or an update never changes a file under a running script or plugin.
 
-**Auto-update is off** for every add-on until the player switches it on in its row: nothing updates unasked.
-Installed by a client up to 0.7.0-beta, whose installs switched it on without asking (`auto 1` in `installed.txt`), an
-add-on reads as off; the switch is now written as `autoupdate`.
+One downloaded while in the world waits for the next login screen. A run that quits first finds it again at the next
+start, and the package is not downloaded twice.
+
+**Auto-update is off** for every add-on until the player switches it on in its row: nothing updates unasked. Clients
+up to 0.7.0-beta switched it on without asking (`auto 1` in `installed.txt`); such an add-on now reads as off. The
+switch is now written as `autoupdate`.
 
 **Updates at start.** A worker thread looks for a newer version of each add-on with auto-update on, at most every
 `addons.check_hours`. A newer version is installed only when nothing stands in its way:
@@ -93,62 +116,84 @@ add-on reads as off; the switch is now written as `autoupdate`.
 without taking it.
 
 **The player's word wins over a check under way.** Each add-on is looked at with `installed.txt` as it is when its
-turn comes, not as the check found it at its start: an add-on removed meanwhile is left alone (not downloaded or
-installed again), and one whose auto-update was switched off is offered, not taken. Switched off while its update
-downloads, the update is not installed at the login screen either (the row offers it). An update keeps the add-on's
-auto-update switch as it is at install time.
+turn comes, not as it was when the check started:
+
+- an add-on removed meanwhile is left alone (not downloaded or installed again);
+- one whose auto-update was switched off is offered, not taken;
+- one switched off while its update downloads is not installed at the login screen either (the row offers it).
+
+An update keeps the add-on's auto-update switch as it is at install time.
 
 ## Tools
 
-A tool is a program of its own that works beside Hailstone, with its files: Hailstone Texture Studio
+A tool is a program of its own that works beside Hailstone, with its files. The first is Hailstone Texture Studio
 (projecthailstone/hailstone-texstudio), which builds HD texture packs from the player's game files on their graphics
-card, is the first. It installs, updates and is removed as any add-on, into `tools/<name>/`, and the client never
-loads or runs anything of it itself:
+card. A tool installs, updates and is removed as any add-on, into `tools/<name>/`. The client never loads or runs
+anything of it itself.
 
-- **Start** on its row (My add-ons; the gamepad pack's row menu; the client's own add-ons window) starts its program,
-  `tools/<name>/<name>` (`<name>.exe` on Windows), with `--data-dir <the data folder>`, so it reads and writes the
-  player's Hailstone folder (`hailstone.ini`, `textures/`, its own settings) wherever it was started from. It runs as a
-  program of its own and is left running when Hailstone quits (`ClientApp::start_addon_tool`). A server whose
-  opted-in add-on policy refuses the tool (docs/plugins.md "Opt-in add-on policies") refuses Start while that server
-  is picked or played on; a tool already running is its own program and goes on.
-- **Options** start the one tool it knows of: Graphics, Textures, **Texture Studio...** once the add-on `texstudio`
-  is installed; until then that row says to install it from Add-ons. The button starts it only when it is the real
-  one: installed from projecthailstone/hailstone-texstudio and signed with the project's add-on key (the key the
-  add-on index lists for the project's add-ons; `ClientApp::kTextureStudioRepo`, `kTextureStudioKey`,
-  `find_pinned_addon`). Another add-on that took the name, or an unsigned one, is not started from Options (the log
-  says why); its row's **Start** still starts it, where the player sees what it is. A new key for the studio needs a
-  client release.
-- **Its card** asks for no permissions, and says instead that a tool runs on the computer with the player's rights,
-  outside Hailstone: the capability ceiling means nothing to a program of its own, so a tool's manifest says
-  `caps none` and one that asks for any is refused.
-- **What its package holds** (What is checked, below): its program at the top, named after it and a program for this
-  platform by its header (never run at the install); this platform's shared libraries beside it (an SDL it was built
-  with, `libSDL3.so.0`); and data and Lua anywhere (the tool's own: the client runs none of it). Nothing else that runs:
-  no second program, no shell or system scripts, no libraries in folders or for another platform. On Linux and macOS
-  the program alone is made runnable.
+#### Starting a tool
+
+**Start** is on its row (My add-ons; the gamepad pack's row menu; the client's own add-ons window). It starts the
+tool's program, `tools/<name>/<name>` (`<name>.exe` on Windows), with `--data-dir <the data folder>`. So the tool
+reads and writes the player's Hailstone folder (`hailstone.ini`, `textures/`, its own settings) wherever it was
+started from.
+
+- It runs as a program of its own and is left running when Hailstone quits (`ClientApp::start_addon_tool`).
+- A server whose opted-in add-on policy refuses the tool (docs/plugins.md "Opt-in add-on policies") refuses Start
+  while that server is picked or played on. A tool already running is its own program and goes on.
+
+#### Texture Studio in Options
+
+**Options** start the one tool it knows of: Graphics, Textures, **Texture Studio...** once the add-on `texstudio` is
+installed. Until then that row says to install it from Add-ons.
+
+- The button starts it only when it is the real one: installed from projecthailstone/hailstone-texstudio and signed
+  with the project's add-on key (the key the add-on index lists for the project's add-ons; `ClientApp::kTextureStudioRepo`,
+  `kTextureStudioKey`, `find_pinned_addon`).
+- Another add-on that took the name, or an unsigned one, is not started from Options (the log says why). Its row's
+  **Start** still starts it, where the player sees what it is.
+- A new key for the studio needs a client release.
+
+#### A tool's card and package
+
+**Its card** asks for no permissions. It says instead that a tool runs on the computer with the player's rights,
+outside Hailstone. The capability ceiling means nothing to a program of its own, so a tool's manifest says
+`caps none`, and one that asks for any is refused.
+
+**What its package holds** (What is checked, below):
+
+- its program at the top, named after it and a program for this platform by its header (never run at the install);
+- this platform's shared libraries beside it (an SDL it was built with, `libSDL3.so.0`);
+- data and Lua anywhere (the tool's own: the client runs none of it).
+
+Nothing else that runs: no second program, no shell or system scripts, no libraries in folders or for another
+platform. On Linux and macOS the program alone is made runnable.
 
 An older Hailstone refuses a tool's manifest ("the kind is script or plugin"). A tool needs a release of Hailstone
 that has this section.
 
 ## Upscalers
 
-An upscaler is an upscaler provider (docs/plugins.md "Upscaler providers", `sdk/hailstone_upscaler.h`): a temporal
-upscaler the client cannot ship itself, such as Intel XeSS or AMD FSR 4, with the vendor's runtime it
-loads. It installs, updates and is removed as any add-on, into `upscalers/<name>/`, and appears in Options, Graphics,
-Upscaler after the client's own (both packs; `option_choices("upscaler_providers")`). Picked there, it loads at the
-next start (docs/graphics.md "Upscaler providers"):
+An upscaler is an upscaler provider (docs/plugins.md "Upscaler providers", `sdk/hailstone_upscaler.h`). It is a
+temporal upscaler the client cannot ship itself, such as Intel XeSS or AMD FSR 4, with the vendor's runtime it loads.
 
-- **Its card** asks for no permissions (an upscaler sees only the frames it upscales, so its manifest says
-  `caps none` and one that asks for any is refused), and warns that it is still a program running inside Hailstone
-  with the player's rights. Servers do not send providers or receive a provider report. A server's opted-in add-on
-  policy can require, allow or block one by its repository; one it refuses keeps the character out of that server
-  until another is picked and the client restarted (docs/plugins.md "Opt-in add-on policies").
-- **What its package holds** (`unpack_upscaler`): at its top its provider, a library for this platform named after it
-  (`xess.dll`, `xess.so`), and the libraries it loads beside it (`libxess.dll`, `libxess.so`);
-  data anywhere (the vendor's licence and notices). No library in a folder or for another platform, and nothing that
-  runs on its own (the names a tool may not hold). Every library's header is checked for this platform; none is
-  loaded at the install.
-- **While it runs** the client has a copy of its folder loaded (`cache/upscalers/`), so an update or a removal at the
+It installs, updates and is removed as any add-on, into `upscalers/<name>/`. It appears in Options, Graphics,
+Upscaler after the client's own (both packs; `option_choices("upscaler_providers")`). Picked there, it loads at the
+next start (docs/graphics.md "Upscaler providers").
+
+- **Its card** asks for no permissions: an upscaler sees only the frames it upscales, so its manifest says
+  `caps none`, and one that asks for any is refused. The card warns that it is still a program running inside
+  Hailstone with the player's rights.
+- **Servers** do not send providers or receive a provider report. A server's opted-in add-on policy can require,
+  allow or block one by its repository. One it refuses keeps the character out of that server until another is picked
+  and the client restarted (docs/plugins.md "Opt-in add-on policies").
+- **What its package holds** (`unpack_upscaler`):
+  - at its top, its provider: a library for this platform named after it (`xess.dll`, `xess.so`);
+  - the libraries it loads, beside it (`libxess.dll`, `libxess.so`);
+  - data anywhere (the vendor's licence and notices);
+  - nothing else: no library in a folder or for another platform, and nothing that runs on its own (the names a tool
+    may not hold). Every library's header is checked for this platform; none is loaded at the install.
+- **While it runs** the client has a copy of its folder loaded (`cache/upscalers/`). An update or a removal at the
   login screen goes through as for any add-on and takes effect at the next start.
 
 An older Hailstone refuses an upscaler's manifest ("the kind is script, plugin or tool").
@@ -157,30 +202,37 @@ An older Hailstone refuses an upscaler's manifest ("the kind is script, plugin o
 
 The store is the add-on index (Suggested add-ons, below) shown whole: each add-on it lists, whatever server it is for.
 The first time the store is shown in a run, the manager fetches each add-on's manifest (`AddonManager::browse`, after
-the index itself is read or fetched), the same plain downloads a pasted link makes. **Refresh the list** fetches them
-again. For each add-on the store shows:
+the index itself is read or fetched). These are the same plain downloads a pasted link makes. **Refresh the list**
+fetches them again.
+
+For each add-on the store shows:
 
 - its name, kind, version, author and description, from its manifest;
 - the worlds the index names it for ("for Project Triune"), or nothing when it is for any server;
 - **Install**, or **Update to <version>** when a newer version than the installed one is out, or that it is installed,
   or that one of its name is in the player's folders already;
-- why it cannot be installed, instead of the button: no manifest, a manifest of another name or not signed with the
-  index's key for it (the same check as a suggestion's card), or what a pasted link's card would refuse (a newer
-  Hailstone needed, no build for this system, an unknown permission, unsigned with `addons.allow_unsigned` off).
+- instead of the button, why it cannot be installed:
+  - no manifest;
+  - a manifest of another name, or not signed with the index's key for it (the same check as a suggestion's card);
+  - what a pasted link's card would refuse (a newer Hailstone needed, no build for this system, an unknown
+    permission, unsigned with `addons.allow_unsigned` off).
 
-**Install** opens the add-on's install card, held to the index's name and key as a suggestion's is: nothing is
-installed until the player presses Install there, after seeing what it asks to do. Only the index's add-ons are in
-the store, so an add-on reaches it by a pull request to the index's repository, as a server does (below); an `addon`
-record with no `world` record is for any server and is listed but never suggested.
+**Install** opens the add-on's install card, held to the index's name and key as a suggestion's is. Nothing is
+installed until the player presses Install there, after seeing what it asks to do.
+
+Only the index's add-ons are in the store. An add-on reaches it by a pull request to the index's repository, as a
+server does (below). An `addon` record with no `world` record is for any server: it is listed but never suggested.
 
 ## Suggested add-ons
 
 A server can also require, allow or block add-ons by their GitHub repository (docs/plugins.md "Opt-in add-on
-policies"), off unless its `hailstone.cfg` says `[addons] enforce = on`. A required add-on the player does not have
-shows on the login screen as "Required to play on this server", with one button, Review required add-on (no Not now
-or Don't ask again), and goes through the usual card and approvals. Missing at the zone-in, it keeps the character
-out, with the panel open on it. Suggestions below stay optional; under an enforced `default = deny` a suggested
-repository is also allowed (as if named in `allow`), but a suggestion never installs, starts or grants a capability.
+policies"). This is off unless its `hailstone.cfg` says `[addons] enforce = on`.
+
+- A required add-on the player does not have shows on the login screen as "Required to play on this server". It has
+  one button, Review required add-on (no Not now or Don't ask again), and goes through the usual card and approvals.
+- Missing at the zone-in, it keeps the character out, with the panel open on it.
+- Suggestions below stay optional. Under an enforced `default = deny` a suggested repository is also allowed (as if
+  named in `allow`). A suggestion never installs, starts or grants a capability.
 
 Some servers have an add-on of their own: a plugin with the server's windows and features, say Project Triune's. A
 player who logs in to such a server for the first time does not know it exists, so the login screen tells them.
@@ -188,20 +240,25 @@ player who logs in to such a server for the first time does not know it exists, 
 **Where the client learns of it.** Two places, and the client names no server in its own code:
 
 - **The add-on index**, `hailstone-addon-index.txt` in its own repository (projecthailstone/hailstone-addon-index;
-  `core/addon_index.h`). It lists each add-on (its manifest's name, its repository, the key its manifest is signed
-  with) and the worlds it is for (the login server's host, `*` for any, and the world's name as the login server
-  lists it). It is signed with the release key, the same as the update manifest, and an index that does not check
-  is not used. The client fetches it at start, at most every `addons.check_hours`, and keeps it in
-  `addons/index.txt` (checked again when it is read). The store lists the same index. Its `serial <n>` record (once,
-  after the first line; `hailstone_sign sign` writes the time it signs, in seconds since 1970, and always more than
-  the serial it had) keeps an older signed index from being served again: a fetched index with a lower serial than
-  the kept one, or with none once the kept one has one, is refused and the kept one stays (`addon_index_older`). An
-  index without a serial is still taken while the kept one has none, so the indexes signed before the serial work. Since it is known before any login, it reaches a player on
-  their first visit.
+  `core/addon_index.h`). See below.
 - **The server's own `hailstone.cfg`**: `[addons] suggest = owner/repo, ...` (docs/plugins.md). It comes only with
   the server's files at the first zone-in, so it is suggested from the next login screen on.
 
-**What the player sees.**
+#### The add-on index
+
+- **What it lists:** each add-on (its manifest's name, its repository, the key its manifest is signed with) and the
+  worlds it is for (the login server's host, `*` for any, and the world's name as the login server lists it).
+- **Signed:** with the release key, the same as the update manifest. An index that does not check is not used.
+- **Fetched:** at start, at most every `addons.check_hours`. It is kept in `addons/index.txt` and checked again when
+  it is read. Since it is known before any login, it reaches a player on their first visit. The store lists the same
+  index.
+- **Serial:** its `serial <n>` record comes once, after the first line. `hailstone_sign sign` writes the time it
+  signs, in seconds since 1970, and always more than the serial it had. It keeps an older signed index from being
+  served again: a fetched index with a lower serial than the kept one, or with none once the kept one has one, is
+  refused, and the kept one stays (`addon_index_older`).
+- An index without a serial is still taken while the kept one has none, so the indexes signed before the serial work.
+
+#### What the player sees of suggestions
 
 - **On the server select**, when a world the login server lists has an add-on the player does not have, a line under
   the status says so: go Back and open Add-ons to look at it before playing. Add-ons install only at the login
@@ -213,24 +270,28 @@ player who logs in to such a server for the first time does not know it exists, 
   - **Not now** puts it away until Hailstone starts again.
   - **Don't ask again** puts it away for good on this server (`addons.suggest_never.<profile>` in `hailstone.ini`).
 
-An add-on the player has is not suggested: one installed from the same repository (any tag or branch), or a script
-or plugin of the same name put in by hand, or the server's own.
+An add-on the player has is not suggested: one installed from the same repository (any tag or branch), a script or
+plugin of the same name put in by hand, or the server's own.
 
-**The index's word is held to.** A suggestion from the index opens a card held to the index's name and key: a
-manifest with another name, or not signed with that key (another key, or none), is blocked, whatever
-`addons.allow_unsigned` says. A server's own suggestion of an add-on the index lists is held the same way. Anyone can
-name a server "Project Triune", so a world's name proves nothing; the most it gets a stranger is a suggestion of the
-real add-on. A server's suggestion of an add-on the index does not list is a plain link: the card is what a pasted
-link gives, signed or not.
+**The index's word is held to.** A suggestion from the index opens a card held to the index's name and key.
 
-**Adding a server** is a pull request to the index's repository. A maintainer signs it with the release key
-(the index repository's own `tools/sign.sh`, `hailstone_sign sign`; `hailstone_sign verify <key> hailstone-addon-index.txt` lists it, its
-serial first). Sign it with a `hailstone_sign` that writes the serial (this client's), so that each publish raises it.
+- A manifest with another name, or not signed with that key (another key, or none), is blocked, whatever
+  `addons.allow_unsigned` says.
+- A server's own suggestion of an add-on the index lists is held the same way.
+- Anyone can name a server "Project Triune", so a world's name proves nothing. The most it gets a stranger is a
+  suggestion of the real add-on.
+- A server's suggestion of an add-on the index does not list is a plain link: the card is what a pasted link gives,
+  signed or not.
+
+**Adding a server** is a pull request to the index's repository. A maintainer signs it with the release key (the
+index repository's own `tools/sign.sh`, `hailstone_sign sign`). `hailstone_sign verify <key> hailstone-addon-index.txt`
+lists it, its serial first. Sign it with a `hailstone_sign` that writes the serial (this client's), so that each
+publish raises it.
 
 ## Licence
 
-An add-on may use any licence, closed ones included: the client is GPL-2.0-or-later, but its plugin SDK (`sdk/`) is
-MIT and NOTICE.md's plugin and add-on exception covers plugins built against it and scripts and UI packs that use the
+An add-on may use any licence, closed ones included. The client is GPL-2.0-or-later, but its plugin SDK (`sdk/`) is
+MIT. NOTICE.md's plugin and add-on exception covers plugins built against it, and scripts and UI packs that use the
 documented Lua interfaces. An add-on that copies the client's own code (outside `sdk/`) is covered by the GPL.
 
 ## The manifest
@@ -262,8 +323,11 @@ signature <128 hex digits>
 | `author`, `description` | optional, one line each of at most 200 bytes |
 | `caps` | what it needs (docs/plugins.md "Capabilities"); required, and the ceiling below; a tool's and an upscaler's are `none` |
 | `notes` | optional: its release notes |
-| `package <platform> <size> <sha256> <file>` | a script has one, for `any`; a plugin, a tool or an upscaler one for each platform it is built for (`linux-x64`, `windows-x64`, `macos-arm64` ...). The file is a name beside the manifest's address (the same release's asset, or the same branch's file) or an https address on GitHub |
+| `package <platform> <size> <sha256> <file>` | a script has one, for `any`; a plugin, a tool or an upscaler one per platform it is built for (`linux-x64`, `windows-x64`, `macos-arm64` ...); see the note below |
 | `key`, `signature` | optional, together: Ed25519 over every byte before the `signature` line, which ends the file |
+
+A `package` file is a name beside the manifest's address (the same release's asset, or the same branch's file) or an
+https address on GitHub.
 
 Unknown records are skipped, for later versions. A known record that does not parse refuses the whole manifest.
 
@@ -288,56 +352,67 @@ build/hailstone_sign keygen <secret-key-file>                  # once; keep it o
 build/hailstone_sign sign <secret-key-file> release/hailstone-addon.txt
 ```
 
-The script checks the client's rules for what a package may hold before it makes anything. It makes the zips the
-same way each time (sorted, dated 1980-01-01), so an unchanged package keeps its hash. `hailstone_sign sign` writes
-the key's line into an add-on's manifest and signs it; `verify` checks it. Upload everything in `release/` to a
-GitHub release.
+- The script checks the client's rules for what a package may hold before it makes anything.
+- It makes the zips the same way each time (sorted, dated 1980-01-01), so an unchanged package keeps its hash.
+- `hailstone_sign sign` writes the key's line into an add-on's manifest and signs it; `verify` checks it.
+- Upload everything in `release/` to a GitHub release.
 
 The repository has to be public: a private one answers 404. A plugin whose source must stay private can be released
-from a second, public repository that holds only a README and the releases (the manifest and the packages); players
-paste that one's link. The Project Triune plugin is released that way (projecthailstone/hailstone-projecttriune-addon),
-the NMS plugin and the Auto Combat script from their own repositories. Each of those repositories has a
-`tools/release.sh` of its own that builds, packs, signs and uploads (this repository has none).
+from a second, public repository that holds only a README and the releases (the manifest and the packages). Players
+paste that one's link.
+
+The Project Triune plugin is released that way (projecthailstone/hailstone-projecttriune-addon); the NMS plugin and
+the Auto Combat script from their own repositories. Each of those repositories has a `tools/release.sh` of its own
+that builds, packs, signs and uploads (this repository has none).
 
 ## UI packs
 
-A `kind ui` addon installs interfaces under
-`ui-addons/<addon>/ui/<pack>/ui.ini` in the Hailstone data folder. They appear
-automatically in **Interface** after installation; they do not use `/lua run`,
-Script Autorun or a script entrypoint. Each interface has the stable ID
-`addon.<addon>.<pack>`. Built-in IDs remain unchanged. Each addon and pack name
-uses letters, digits, underscores or hyphens, beginning with a letter or digit.
+A `kind ui` addon installs interfaces under `ui-addons/<addon>/ui/<pack>/ui.ini` in the Hailstone data folder.
 
-**What an interface may do:** an add-on interface draws the game's windows and
-acts in the game as the player does (casting, moving items, speaking,
-targeting), as the built-in ones do. It does not get what only the client's own
-interfaces (`ui/modern`, `ui/gamepad`) get: the login and server select screens
-are drawn by the built-in interface under it (its base, else Modern), so it never
-sees the typed or saved password nor the add-on manager's installs, removals
-and approvals; it cannot answer the server's compiled-plugin question, which
-the client draws itself under it. An interface put in `ui/` by hand is treated
-the same way. The install card says so; same-kind updates keep it, and an addon
-cannot change its kind in place.
+- They appear automatically in **Interface** after installation. They do not use `/lua run`, Script Autorun or a
+  script entrypoint.
+- Each interface has the stable ID `addon.<addon>.<pack>`. Built-in IDs remain unchanged.
+- Each addon and pack name uses letters, digits, underscores or hyphens, beginning with a letter or digit.
 
-A UI manifest uses `package any`; `caps` may be absent or `caps none`, and does
-not limit the full-interface trust grant. Archives contain one or more
-`ui/<pack>/ui.ini` entries, optional presentation Lua/assets below those folders,
-and optional top-level license/readme notices. They contain no programs or
-root-level startup script. Lua is compiled as text during installation and is
-only run through the selected interface's presentation lifecycle. ZIP path,
-case-collision, CRC and Lua size checks still apply. Nested directories must use
-consistent spelling and cannot also name a file, so a portable bundle behaves
-the same on case-sensitive and case-insensitive filesystems. UI bundles are limited to
-4,096 files and 64 MiB unpacked. Updates/removal preserve files the addon did
-not own, and use the existing transactional journal and pinned signing keys.
+**What an interface may do:** an add-on interface draws the game's windows and acts in the game as the player does
+(casting, moving items, speaking, targeting), as the built-in ones do. It does not get what only the client's own
+interfaces (`ui/modern`, `ui/gamepad`) get:
 
-Player-derived presentation modules belong outside those managed code files,
-under `ui-data/<stable-interface-id>/` in the data folder. Interfaces can import
-them with `hs.UI.interfaces.LoadData`; only selected and approved base IDs are
-searched. These are shared, non-secret styles/layouts, not credentials or private
-settings. Core and add-on updates preserve them, and removing the add-on leaves
-them available for a later reinstall. Portable UI packages contain the original
-presentation code and metadata; local presentation data is managed separately.
+- The login and server select screens are drawn by the built-in interface under it (its base, else Modern). So it
+  never sees the typed or saved password, nor the add-on manager's installs, removals and approvals.
+- It cannot answer the server's compiled-plugin question, which the client draws itself under it.
+
+An interface put in `ui/` by hand is treated the same way. The install card says so. Same-kind updates keep it, and
+an addon cannot change its kind in place.
+
+#### What a UI package holds
+
+A UI manifest uses `package any`. `caps` may be absent or `caps none`, and does not limit the full-interface trust
+grant.
+
+- Archives contain one or more `ui/<pack>/ui.ini` entries, optional presentation Lua/assets below those folders, and
+  optional top-level license/readme notices.
+- They contain no programs or root-level startup script.
+- Lua is compiled as text during installation, and is only run through the selected interface's presentation
+  lifecycle.
+- ZIP path, case-collision, CRC and Lua size checks still apply.
+- Nested directories must use consistent spelling and cannot also name a file, so a portable bundle behaves the same
+  on case-sensitive and case-insensitive filesystems.
+- UI bundles are limited to 4,096 files and 64 MiB unpacked.
+- Updates/removal preserve files the addon did not own, and use the existing transactional journal and pinned signing
+  keys.
+
+#### Local presentation data
+
+Player-derived presentation modules belong outside those managed code files, under
+`ui-data/<stable-interface-id>/` in the data folder.
+
+- Interfaces can import them with `hs.UI.interfaces.LoadData`; only selected and approved base IDs are searched.
+- These are shared, non-secret styles/layouts, not credentials or private settings.
+- Core and add-on updates preserve them. Removing the add-on leaves them available for a later reinstall.
+
+Portable UI packages contain the original presentation code and metadata; local presentation data is managed
+separately.
 
 Build a UI package with:
 
@@ -346,19 +421,26 @@ python tools/make_addon.py --name my-interface --kind ui --version 1.0.0 \
     --dir path/to/package --out release/
 ```
 
-Use `base=builtin:modern` to inherit the built-in Modern interface, or an
-installed qualified interface ID for an explicit cross-addon base. A runtime
-or game source that is unavailable is reported separately from installation;
+Use `base=builtin:modern` to inherit the built-in Modern interface, or an installed qualified interface ID for an
+explicit cross-addon base. A runtime or game source that is unavailable is reported separately from installation;
 installing metadata does not supply missing game resources.
 
 ## GitHub only
 
-Only `github.com` links are taken. A download may end only on GitHub's own hosts, whatever redirects it took:
-`github.com`, `raw.githubusercontent.com`, `codeload.github.com`, `objects.githubusercontent.com` and
-`release-assets.githubusercontent.com` (`addon_download_allowed`). The address a transfer ends on is checked before
-any of its body is used (`HttpGetOptions::allow_url`: libcurl's effective URL, WinHTTP's `WINHTTP_OPTION_URL`), and
-also when it has no body: an empty answer from an address off those hosts is a failure, not an empty file. The
-link parser (`core/addon_source.h`) keeps the hosts in one place, so others can be added later.
+Only `github.com` links are taken. A download may end only on GitHub's own hosts, whatever redirects it took
+(`addon_download_allowed`):
+
+- `github.com`
+- `raw.githubusercontent.com`
+- `codeload.github.com`
+- `objects.githubusercontent.com`
+- `release-assets.githubusercontent.com`
+
+The address a transfer ends on is checked before any of its body is used (`HttpGetOptions::allow_url`: libcurl's
+effective URL, WinHTTP's `WINHTTP_OPTION_URL`). It is also checked when there is no body: an empty answer from an
+address off those hosts is a failure, not an empty file.
+
+The link parser (`core/addon_source.h`) keeps the hosts in one place, so others can be added later.
 
 ## Capabilities: the manifest's `caps` are a ceiling
 
@@ -377,32 +459,37 @@ and the player accepted on its card:
 A script that goes past them gets the client's usual message (`[MQ] buffs: /tell needs the 'chat' permission`). One
 without `login` does not run before the zone-in, whatever the server allows.
 
-- **An update that asks for more** is not installed by itself: its row lists what it adds, and **Approve and update**
-  takes it. One that asks for less lowers the ceiling. The approval is for what the row showed: the manifest is
-  fetched again when the player clicks, and if it now asks for more than they saw, or is another version, nothing is
-  taken: the message says to review it again, and the row shows what it asks for now.
-- **Its windows** (a script's `ui/<pack>/`) run in the UI under the same ceiling (docs/plugins.md "Plugin windows"):
+- **An update that asks for more** is not installed by itself. Its row lists what it adds, and **Approve and update**
+  takes it. One that asks for less lowers the ceiling.
+- **The approval is for what the row showed.** The manifest is fetched again when the player clicks. If it now asks
+  for more than they saw, or is another version, nothing is taken: the message says to review it again, and the row
+  shows what it asks for now.
+- **Its windows** (a script's `ui/<pack>/`) run in the UI under the same ceiling (docs/plugins.md "Plugin windows").
   `read,ui` lets them draw and read, not speak, act or start scripts, and never reach the login screen's password.
-- **Its modules** serve only scripts that may do no more than they may: a full script's `require` refuses an
-  add-on's module (docs/plugins.md "The `mq` module"), so an add-on cannot get its code run with another script's
-  capabilities by naming a module after a common library.
+- **Its modules** serve only scripts that may do no more than they may. A full script's `require` refuses an add-on's
+  module (docs/plugins.md "The `mq` module"). So an add-on cannot get its code run with another script's capabilities
+  by naming a module after a common library.
 - **For scripts this is real protection:** everything a Lua script does goes through the client.
 - **For compiled plugins it is a declaration,** not a sandbox. The ceiling limits the host table, but native code can
   still call the system directly. The card says so.
 - **The ceiling is on the files' hashes** (`plugin::Policy::set_ceilings`, from `addons/installed.txt` at start and
   after each change). It covers a script's Lua files and a plugin's library. A file the player changes has another
   hash and gets the rules of a file put in by hand: the player's own edit is theirs.
-- **A record that cannot be read fails closed.** `installed.txt` is written with a copy, `installed.bak.txt`, and a
-  record of it that is lost or does not read is taken from that copy (`read_addon_registry`); at the next start a
-  lost or damaged `installed.txt` is written again from it. An add-on `installed.txt` (or its copy) still names whose
-  record neither has whole gets no capabilities: each Lua file of its folder and each library at its top, by its
-  bytes then, gets a ceiling of nothing, and the log says so. A newer Hailstone's `installed.txt` (another
-  `hailstone-addons <n>` header, after an update was rolled back) is read the same way, from its `addon <name> <kind>`
-  lines, and never written over. While any add-on does not read, nothing is installed, updated or removed (the
-  message says why), so that its record is not lost: the player puts the file right, or takes it out with those
-  add-ons' folders. A registry lost with its copy cannot be told from none, and its add-ons' files are then the
-  player's own.
+- **A record that cannot be read fails closed.** See below.
 - **The server's own** keep every capability, also when an add-on ships the same bytes.
+
+#### A record that cannot be read
+
+- `installed.txt` is written with a copy, `installed.bak.txt`. A record of it that is lost or does not read is taken
+  from that copy (`read_addon_registry`). At the next start a lost or damaged `installed.txt` is written again from it.
+- An add-on that `installed.txt` (or its copy) still names, but whose record neither has whole, gets no capabilities.
+  Each Lua file of its folder and each library at its top, by its bytes then, gets a ceiling of nothing, and the log
+  says so.
+- A newer Hailstone's `installed.txt` (another `hailstone-addons <n>` header, after an update was rolled back) is read
+  the same way, from its `addon <name> <kind>` lines, and never written over.
+- While any add-on does not read, nothing is installed, updated or removed (the message says why), so that its record
+  is not lost. The player puts the file right, or takes it out with those add-ons' folders.
+- A registry lost with its copy cannot be told from none. Its add-ons' files are then the player's own.
 
 ## What is checked
 
@@ -412,25 +499,45 @@ Everything is checked before anything is written; any failure refuses the whole 
 |---|---|
 | The manifest | a strict parse within 64 KiB; the parser is in the libFuzzer zip target and the random-input tests |
 | The capabilities | each word one this Hailstone knows, and at least one (`plugin::parse_caps_strict`); a tool or an upscaler none |
-| The name | not another add-on's (any case), not a folder or file already in `scripts/` or `plugins/` (installed by hand or with Hailstone), whichever kind the add-on is: a script never takes a compiled plugin's name, nor a plugin a script's (their windows run as different owners, docs/plugins.md "Plugin windows", but the player would not tell them apart), not `config` for a script. A `plugins/<name>/` that holds no library (only the settings a plugin left there, as after an update took out a plugin an older release shipped) is not taken: the install goes in beside those files |
+| The name | not another add-on's, not already in `scripts/` or `plugins/`, not `config` for a script; see the note below |
 | The client | `min_client` against `release_version()`; a plugin, a tool or an upscaler needs a package for `update_platform()` |
 | The signature | unsigned add-ons are refused when `addons.allow_unsigned` is off |
 | The package | its size and SHA-256 against the manifest (a larger download is cut off at once) |
 | The zip | `core/zip_read`: names that stay in the folder, the zip-bomb cut-off, CRC-32; at most 4096 files and 64 MiB (a script) or 512 MiB (a plugin, a tool or an upscaler) unpacked; no two names that differ only in case |
-| What it holds | what a server may send into the same folder (`net::server_file_destination`): no programs but a plugin's library, Lua only in a script or in a plugin's `ui/`, no hidden or device names. A script has `init.lua` at its top. A plugin has exactly one library at its top, named after it (`<name>.so`, `lib<name>.so` ...). A tool: see Tools (its own rules, `unpack_tool`; the names' shape as the server's files, `net::is_safe_file_path_shape`). An upscaler: see Upscalers (`unpack_upscaler`, the same shape) |
+| What it holds | what a server may send into the same folder (`net::server_file_destination`); see the note below |
 | The Lua | every `.lua` compiles as text (`luaL_loadbufferx(..., "t")`, not run): syntax errors and precompiled chunks are refused at the install, not at the first run |
 | The library | its header (ELF, PE or Mach-O, a universal file too; `core/binary_header.h`) is a shared library for this platform's system and architecture. It is never loaded at the install; its ABI is checked at load, as for any plugin |
 | A tool's program | its header is a program for this platform (`program_fits_platform`: ELF `ET_EXEC` or `ET_DYN`, as a position-independent program is; a PE executable image that is not a DLL; a Mach-O `MH_EXECUTE`). It is never run at the install |
 
+**The name.** It may not be another add-on's (any case), nor a folder or file already in `scripts/` or `plugins/`
+(installed by hand or with Hailstone), whichever kind the add-on is. A script never takes a compiled plugin's name,
+nor a plugin a script's: their windows run as different owners (docs/plugins.md "Plugin windows"), but the player
+would not tell them apart. A script may not be named `config`.
+
+A `plugins/<name>/` that holds no library is not taken (only the settings a plugin left there, as after an update took
+out a plugin an older release shipped): the install goes in beside those files.
+
+**What it holds.** No programs but a plugin's library, Lua only in a script or in a plugin's `ui/`, no hidden or
+device names.
+
+- A script has `init.lua` at its top.
+- A plugin has exactly one library at its top, named after it (`<name>.so`, `lib<name>.so` ...).
+- A tool: see Tools (its own rules, `unpack_tool`; the names' shape as the server's files,
+  `net::is_safe_file_path_shape`).
+- An upscaler: see Upscalers (`unpack_upscaler`, the same shape).
+
 ### Signatures
 
-An add-on's manifest may carry its author's key and a signature with it. The key is pinned at the first install. An
-update that is not signed with the pinned key is refused, whether it is signed with another key or not signed at
-all: the row says so, and neither auto-update nor the player's Update gets past it. Installing again from a link is
-refused the same way. To trust a new key, the player removes the add-on and installs it again.
+An add-on's manifest may carry its author's key and a signature with it. The key is pinned at the first install.
 
-An unsigned add-on that becomes signed takes the key from then on. The signature proves that each version comes from
-whoever holds the key, not merely from whoever can push to the repository.
+- An update not signed with the pinned key is refused, whether it is signed with another key or not signed at all.
+  The row says so, and neither auto-update nor the player's Update gets past it.
+- Installing again from a link is refused the same way.
+- To trust a new key, the player removes the add-on and installs it again.
+- An unsigned add-on that becomes signed takes the key from then on.
+
+The signature proves that each version comes from whoever holds the key, not merely from whoever can push to the
+repository.
 
 ## Files (docs/layout.md)
 
@@ -456,21 +563,27 @@ ui-addons/<addon>/ an installed interface add-on (its ui/<pack>/ folders, UI pac
 
 - **An update replaces only the files the add-on shipped.** A file the older version shipped and the newer one does
   not is taken out. The player's other files there stay: a plugin's settings beside it (`host->config_dir`), notes.
-  So do empty folders, other than those the update emptied and an empty folder where a file now goes (a folder that
-  still holds the player's files stops the update).
+  So do empty folders, other than those the update emptied and an empty folder where a file now goes. A folder that
+  still holds the player's files stops the update.
 - **A removal** takes out the add-on's files and its record. The player's files in its folder stay, and the folder
   goes once it is empty.
 - **A cut-off install or removal** (the client died between its moves) is undone at the next start from the journal.
-  `installed.txt` is saved as `installed.prev.txt` before it is rewritten, and put back with the old files, so the
-  list matches what is on disk. One that wrote `done` is left as it is. Each journal line is flushed to the disk
-  before the move it names (write-ahead), each move is on the disk before the next, and each unpacked file is
-  flushed before it moves, so a power cut leaves no empty file and no moved file without its line. Should a file
-  still be in `previous/` after an undo (a journal the disk lost or damaged, a move back that failed), it may be the
-  only copy of the player's old file: `previous/` is renamed `kept-<time>/` and a warning logged, not removed.
-- **The core updater** (docs/updater.md) never writes `addons/`, and skips its optional plugin package of a folder an
+  See below.
+- **The core updater** (docs/updater.md) never writes `addons/`. It skips its optional plugin package of a folder an
   add-on installed, both when it downloads and again when it installs (an add-on installed in between wins).
   `scripts/` and `tools/` are the player's to it already. Its `core` package's files in a plugin folder an add-on
   installed are left out of the install, and those it shipped there before are not taken out.
+
+#### Undoing a cut-off install
+
+- `installed.txt` is saved as `installed.prev.txt` before it is rewritten, and put back with the old files, so the
+  list matches what is on disk. One that wrote `done` is left as it is.
+- Each journal line is flushed to the disk before the move it names (write-ahead). Each move is on the disk before
+  the next, and each unpacked file is flushed before it moves. So a power cut leaves no empty file and no moved file
+  without its line.
+- A file may still be in `previous/` after an undo (a journal the disk lost or damaged, a move back that failed). It
+  may be the only copy of the player's old file, so `previous/` is renamed `kept-<time>/` and a warning logged, not
+  removed.
 
 ## Settings (`hailstone.ini`)
 
@@ -487,8 +600,8 @@ Nothing is fetched when the system has no HTTPS (Linux and macOS without libcurl
 `--screenshot`). The list still shows what is installed then, and a removal works. The ceilings apply whether or not
 anything is fetched. The client sends nothing but the `Hailstone/<version>` User-Agent.
 
-For screenshots: `test.login=addons` in `ui/settings/<pack>.txt` (in the Hailstone folder) opens the panel as the login screen first appears;
-in the Modern pack `test.addontab=store` (or `mine`) picks its tab.
+For screenshots: `test.login=addons` in `ui/settings/<pack>.txt` (in the Hailstone folder) opens the panel as the
+login screen first appears. In the Modern pack `test.addontab=store` (or `mine`) picks its tab.
 
 ## Code
 
@@ -522,15 +635,16 @@ cannot install another.
   link, a package changed or redirected off GitHub, updates that ask for more, that would overwrite the player's
   changes or that carry another key, auto-update off, the check interval.
 - `tests/addon_index_test.cpp`: the index's checks and signature, its serial and an older index refused, random and
-  cut-off input, which worlds match, which
-  suggestions the player sees, `[addons] suggest`, the manager fetching and caching the index, a suggestion's card
-  held to the index's name and key, and the store's list (each add-on's manifest held to the index's name and key,
-  what keeps one from being installed, once a run unless refreshed, no index).
+  cut-off input, which worlds match, which suggestions the player sees, `[addons] suggest`, the manager fetching and
+  caching the index, a suggestion's card held to the index's name and key, and the store's list (each add-on's
+  manifest held to the index's name and key, what keeps one from being installed, once a run unless refreshed, no
+  index).
 - `tests/addon_upscaler_test.cpp`: an upscaler's manifest, what its package may hold, its install, the hand-put list,
   the manager installing one, and the copy the client loads.
 - `tests/addon_tool_test.cpp`: a tool's manifest, its program's header, what its package may hold, its install and
-  removal. `tests/addon_requirements_test.cpp` and `tests/addon_upscaler_policy_test.cpp`: the opted-in add-on
-  policy's entry check and its upscaler check.
+  removal.
+- `tests/addon_requirements_test.cpp` and `tests/addon_upscaler_policy_test.cpp`: the opted-in add-on policy's entry
+  check and its upscaler check.
 - `tests/plugin_policy_test.cpp` (the ceiling), `tests/lua_ui_pregame_test.cpp` (the Lua view and actions),
   `tests/ui_pack_windows_test.cpp` (both packs draw the panel and the store in each state), `tests/dev_ui_test.cpp`
   (the client's own window and store).

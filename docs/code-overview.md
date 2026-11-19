@@ -1,9 +1,12 @@
 # Code overview
 
 A map of the repository for someone new to it: what each folder holds, how the pieces connect at run time, and where
-to look for a given feature. The goals and rules behind it are in [docs/plan.md](plan.md); where the built client
-keeps its files on disk is in [docs/layout.md](layout.md). This page names files only as examples. When it disagrees
-with the code, the code is right; fix this page.
+to look for a given feature.
+
+- The goals and rules behind it are in [docs/plan.md](plan.md).
+- Where the built client keeps its files on disk is in [docs/layout.md](layout.md).
+
+This page names files only as examples. When it disagrees with the code, the code is right; fix this page.
 
 ## The top level
 
@@ -74,10 +77,13 @@ folder dialogs and message boxes.
 
 ### `assets/`: reading the player's game files
 
-`pfs.*` (the `.s3d` / `.eqg` archives), `wld*` (classic zones, models and particles), `eqg*` (newer zones and models),
-`zone.*` (one loaded zone, whichever format), `character*` and `model*` (skeletal models), `texture*` (DDS, BMP,
-texture packs), `sky*`, `sound_files.*`, `xmi.*` (music), `spell_effects.*`, `regions.*` (water, lava, zone lines),
-`flora.*`. Every parser treats its input as hostile (docs/hardening.md). The formats are in docs/formats/.
+- `pfs.*`: the `.s3d` / `.eqg` archives.
+- `wld*`: classic zones, models and particles. `eqg*`: newer zones and models.
+- `zone.*`: one loaded zone, whichever format.
+- `character*` and `model*`: skeletal models. `texture*`: DDS, BMP, texture packs.
+- `sky*`, `sound_files.*`, `xmi.*` (music), `spell_effects.*`, `regions.*` (water, lava, zone lines), `flora.*`.
+
+Every parser treats its input as hostile (docs/hardening.md). The formats are in docs/formats/.
 
 ### `game/`: rules and state
 
@@ -144,12 +150,14 @@ Both are described in docs/plugins.md. Add-ons themselves live in their own repo
 - `main.cpp`: command-line parsing. It runs the client, or one of the developer viewers: a zone viewer
   (`--zone`, with flags for sky, fog, weather, lighting and screenshots) and a model viewer (`model_viewer.*`).
 - `ClientApp` (`client_app.h`, its internals in `client_app_internal.h`): the playable client. The class is split by
-  topic over `client_app_*.cpp`: `_login`, `_pregame` (server and character select), `_zone` (loading and zoning),
+  topic over `client_app_*.cpp`:
+  `_login`, `_pregame` (server and character select), `_zone` (loading and zoning),
   `_player`, `_input`, `_pick`, `_iso` (isometric camera and click-to-move), `_items`, `_draw`, `_ui`, `_commands`,
   `_info`, `_options`, `_gamepad`, `_web`, `_update`, `_addons`, `_addon_upscaler`, `_bugreport`, `_testdrive`.
 - `lua_ui*.cpp`: the `hs` table the UI packs call, one file per area (`lua_ui_inventory_manager`, `lua_ui_spellbook`,
-  `lua_ui_chat`, `lua_ui_map` ...). It answers from the client's state with the arguments and returns the original
-  UI's code expected. Both packs and players' scripts depend on it, so change it with care.
+  `lua_ui_chat`, `lua_ui_map` ...).
+  - It answers from the client's state with the arguments and returns the original UI's code expected.
+  - Both packs and players' scripts depend on it, so change it with care.
 - Per-feature glue between game state, the renderers and the UI: `player_movement`, `navigator`, `world_objects`,
   `spell_bolts`, `sound_events`, `nameplate_layer`, `*_ui.cpp` (state handed to windows).
 - `updater.*`, `update_install.*` (docs/updater.md), `addon_manager.*`, `addon_install.*` (docs/addons.md),
@@ -190,15 +198,18 @@ then loops once per frame until the window closes.
    the inventory, spells, group and so on.
 4. The renderers read that state when they draw, and the UI pack reads it through `hs.*` (`app/lua_ui*.cpp`).
 
-The other way, a click in a Lua window calls an `hs.*` function, which calls a `GameConnection` request (in its
+The other way, a click in a Lua window calls an `hs.*` function. That calls a `GameConnection` request (in its
 `game_connection_<area>.cpp`), which encodes the packet and hands it to the session.
 
 ### Screens
 
-The client moves through login, server select, character select, zoning (behind a loading screen) and in zone. The
-login screen is `net/login` plus `client_app_login.cpp`; server and character select are `client_app_pregame.cpp`;
-zoning and the zone load are `client_app_zone.cpp`. In the UI packs these screens are `login.lua`, `serverselect.lua`,
-`charselect.lua` and `charcreate.lua` (their `hs.*` side is `app/lua_ui_pregame.cpp`).
+The client moves through login, server select, character select, zoning (behind a loading screen) and in zone.
+
+- The login screen is `net/login` plus `client_app_login.cpp`.
+- Server and character select are `client_app_pregame.cpp`.
+- Zoning and the zone load are `client_app_zone.cpp`.
+- In the UI packs these screens are `login.lua`, `serverselect.lua`, `charselect.lua` and `charcreate.lua`. Their
+  `hs.*` side is `app/lua_ui_pregame.cpp`.
 
 ## Where to look for...
 
