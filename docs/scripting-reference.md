@@ -534,6 +534,7 @@ code. A script that registers any of these stays loaded after its main chunk ret
 | `set_flag(name [, on])` | a rule switch: `wide_item_links`, `items_any_class`, `hide_any_class`, `aa_any_level`, `aa_train_all`, `augment_classes`, `research_classes`, `focus_classes`, `backstab_either_hand`, `solo_adventure` (as [`HAILSTONE_FLAG_*`](#constants)) |
 | `set_player_classes(mask)` | the player's classes, bit c-1 for class c (multiclass) |
 | `set_character_classes(name, mask)` | a character's classes at character select; 0 removes them |
+| `set_class_name(class_id, name [, short_name])` | the server's name for a player class (1-16) and its short name ("Vanguard", "VAN"), shown wherever the client names the class; nil or `""` the stock one. Display only. At most 32 bytes and 4, no control characters, else an error. The names go when the script stops, loses `extend`, or the session leaves the server; the latest caller wins ([plugins.md "Class names"](plugins.md#class-names)) |
 | `set_pet_list{{spawn = id, class = c}, ...}` | the player's pets, when the server allows several |
 | `set_vitals{max_hp, cur_hp, max_mana, cur_mana, max_endurance, cur_endurance}` | the server's vitals in place of the client's formulas (any subset); nil clears them |
 
@@ -846,6 +847,8 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | GameState | () → int\|nil | 1 char select, 2 char create, 5 in game; nil before | — |
 | Name | () → string\|nil | Character name | — |
 | SlotName | (slot) → string | Possessions slot name ("Primary", …) | — |
+| ClassName | (id [, short]) → string | A class's name as the client shows it, or its short name: the server's where its plugin or script named the class (`set_class_name`), else the stock one | — |
+| ClassNamesRevision | () → int | Changes whenever ClassName's answers may have | — |
 | Money | () → pp, gp, sp, cp | Carried coin | — |
 | Label | (eqType) → text [, r, g, b] | Text a game label with that EQType shows | — |
 | Gauge | (eqType) → fraction\|nil, text, value [, r, g, b] | EQType gauge: fraction 0..1, raw value (0..1000 or special negatives), tint for special values | — |
@@ -1404,6 +1407,7 @@ or -1 and say so in the chat window. Only call these on the client's thread, fro
 | `server_config_dir`, `character_config_dir` | | `servers/<profile>/plugin-config/<name>/` and the character's; 0 before there is one |
 | `imgui_context()` | `ui` | for `ImGui::SetCurrentContext` (build with the client's Dear ImGui version) |
 | `set_active`, `set_flag`, `set_player_classes`, `set_character_classes`, `set_pet_list`, `set_vitals` | `extend` | as in the `hailstone` module |
+| `set_class_name(class_id, name, short_name)` | `extend` | as in the `hailstone` module; NULL or `""` the stock name; refused input changes nothing and logs a line (once). Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, set_class_name)` |
 | `get_player`, `get_spawn(id)`, `next_spawn(after_id)`, `get_spell(id)`, `get_item(slot)`, `get_buff(i)`, `get_xtarget(i)` | `read` | fill the [structs](#structs); `next_spawn` from 0 walks every spawn by id. Indexes are 0-based |
 | `eqstr(id, args, count, out, size)` | `read` | a game string with `%1`.. filled; -1 when there is none |
 | `zone_name(id, out, size)` | `read` | a zone's short name |

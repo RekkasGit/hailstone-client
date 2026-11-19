@@ -356,6 +356,15 @@ it). `PolicyAction("retry", serial)` tries the failed required add-ons again onc
 are the client's own interfaces' alone: an add-on or hand-placed interface, and plugin or script code, get nil and
 false, and cannot replace the client's "AddonPolicy" window (docs/plugins.md "Opt-in add-on policies").
 
+## Class names
+
+API 1.7 adds `character.ClassName(id[, short])` (flat `hs.ClassName`) and `character.ClassNamesRevision()`
+(`hs.ClassNamesRevision`). `ClassName` is the class's name as the client shows it, or its short name with `short`: a
+server's own where its plugin or script named the class (`set_class_name`, docs/plugins.md), else the stock one.
+Text the client hands an interface (labels, list rows, `className` at character select) already carries those names;
+an interface that maps such text back to a class, or has its own list of class names, asks `ClassName` by id and
+keys any cache on `ClassNamesRevision()`, which changes whenever the names may have.
+
 ## Discovering optional features
 
 ```lua

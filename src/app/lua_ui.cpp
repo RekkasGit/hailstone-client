@@ -44,6 +44,7 @@
 #include "core/ini_file.h"
 #include "core/log.h"
 #include "core/saturate.h"
+#include "game/eq_names.h"
 #include "game/hot_button_state.h"
 #include "game/item_sort.h"
 #include "game/merchant.h"
@@ -560,6 +561,22 @@ int Name(lua_State* L) {
     const game::Spawn* me = h.conn && h.in_game ? h.conn->world().player() : nullptr;
     if (me) lua_pushstring(L, me->name.c_str());
     else lua_pushnil(L);
+    return 1;
+}
+
+// hs.ClassName(id [, short]) -> a class's name as the client shows it, its short name with `short`: a server's own
+// where its plugin or script named the class (game/eq_names.h), else the stock one ("Warrior", "WAR").
+int ClassName(lua_State* L) {
+    const lua_Integer id = luaL_checkinteger(L, 1);
+    const auto c = static_cast<std::uint32_t>(std::clamp<lua_Integer>(id, 0, 0xffff));
+    const std::string name = lua_toboolean(L, 2) ? game::class_short_name(c) : game::class_name(c);
+    lua_pushlstring(L, name.data(), name.size());
+    return 1;
+}
+
+// hs.ClassNamesRevision() -> a number that changes whenever hs.ClassName's answers may have (a cache's key).
+int ClassNamesRevision(lua_State* L) {
+    lua_pushinteger(L, static_cast<lua_Integer>(game::class_names_revision() & 0x7fffffffffffffffull));
     return 1;
 }
 
@@ -3201,6 +3218,7 @@ void UiApi::register_functions(lua_State* L) {
     register_pregame_api(L, impl_->host, impl_->screens);
     static const luaL_Reg fns[] = {
         {"InGame", InGame}, {"UiReady", UiReady}, {"GameState", GameState}, {"Name", Name}, {"SlotName", SlotName},
+        {"ClassName", ClassName}, {"ClassNamesRevision", ClassNamesRevision},
         {"Item", Item}, {"ItemIcon", ItemIcon}, {"Money", Money}, {"Label", Label}, {"Gauge", Gauge},
         {"ClickSlot", ClickSlot}, {"HasSlot", HasSlot}, {"AltCurrencies", AltCurrencies}, {"UiTexture", UiTexture}, {"UiImage", UiImage}, {"UiAnimation", UiAnimation},
         {"ReplaceWindow", ReplaceWindow}, {"WindowPlaced", WindowPlaced}, {"ShowWindow", ShowWindow}, {"WindowButton", WindowButton},

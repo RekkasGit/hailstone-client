@@ -50,6 +50,8 @@ UI_METHOD("BuffSlot", "buffs", "Slot", 0)
 
 // character
 UI_METHOD("AltCurrencies", "character", "AltCurrencies", 0)
+UI_METHOD("ClassName", "character", "ClassName", 0)
+UI_METHOD("ClassNamesRevision", "character", "ClassNamesRevision", 0)
 UI_METHOD("Gauge", "character", "Gauge", 0)
 UI_METHOD("Label", "character", "Label", 0)
 UI_METHOD("Money", "character", "Money", 0)

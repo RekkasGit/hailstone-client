@@ -10,7 +10,7 @@ does not bypass a function's own caller, screen or server-state checks.
 `API.version`, `API.Supports(module[, member])` and `API.Describe([module[, member]])`
 provide contract version and structural discovery. They confer no permissions.
 
-Coverage: **340/340 method implementation links**, **218/340 adjacent binding comment excerpts**, and **6/6 constant implementation links**. Excerpts below are verbatim binding comments; they preserve any documented signatures and results, and do not invent omitted arguments or results. **See binding** marks an author documentation gap.
+Coverage: **342/342 method implementation links**, **220/342 adjacent binding comment excerpts**, and **6/6 constant implementation links**. Excerpts below are verbatim binding comments; they preserve any documented signatures and results, and do not invent omitted arguments or results. **See binding** marks an author documentation gap.
 
 Unresolved method implementations: none.
 Unresolved constant implementations: none.
@@ -72,6 +72,8 @@ Unresolved constant implementations: none.
 | Member | Documented signature / binding comment | Existing binding | Required capabilities | Hook policy |
 | --- | --- | --- | --- | --- |
 | `API.character.AltCurrencies` | `list = hs.AltCurrencies([showMissing])   -- { name, count, icon, maxStack } per alternate currency`<br>`(OP_AltCurrency; the name is dbstr type 0x12 of the currency id, as CInventoryWnd's Alt. Currency list reads it,`<br>`"Currency <n>" when the game folder has none); without showMissing only those held and shown. The order and filter are the InventoryWindow's AltCurr_PointList rows (hs.ListClick selects one there).` | `hs.AltCurrencies` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |
+| `API.character.ClassName` | ``hs.ClassName(id [, short]) -> a class's name as the client shows it, its short name with `short`: a server's own``<br>`where its plugin or script named the class (game/eq_names.h), else the stock one ("Warrior", "WAR").` | `hs.ClassName` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |
+| `API.character.ClassNamesRevision` | `hs.ClassNamesRevision() -> a number that changes whenever hs.ClassName's answers may have (a cache's key).` | `hs.ClassNamesRevision` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |
 | `API.character.Gauge` | `fraction, text, value [, r, g, b] = hs.Gauge(eqType [, markInvisibility])`<br>`fraction 0..1, nil when the gauge is empty/unavailable; markInvisibility (Hailstone) as hs.Label's, on the`<br>`name captions of gauges 1, 6 and 27.`<br>`value is __GetGaugeValueFromEQ's own (0..1000, -1 nothing drawn at all, -2 full in dark red, -3 empty: a corpse,`<br>`-110..-10 and -2000..-1000 the special bands); r, g, b the fill tint CGaugeWnd::Draw gives a special value`<br>`(gauge_fill), nil for a normal one.` | `hs.Gauge` · [source](../src/app/lua_ui.cpp) | none (outer gate) | plain-capabilities |
 | `API.character.Label` | `text [, r, g, b] = hs.Label(eqType [, markInvisibility])`<br>`The text a game label with this EQType shows. markInvisibility (Hailstone): the name plate's "(Name)" / "[Name]"`<br>`on the player's (1) and target's (28) names, for a spawn the player sees; the original's labels show them plain.` | `hs.Label` · [source](../src/app/lua_ui.cpp) | none (outer gate) | plain-capabilities |
 | `API.character.Money` | `plat, gold, silver, copper = hs.Money()` | `hs.Money` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |
