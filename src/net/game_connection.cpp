@@ -418,6 +418,9 @@ void GameConnection::update() {
         for (auto& entry : world_.spawns) refresh_new_armor_bits(entry.second);
     raise_hook_events();
     marketplace_frame(now_ms());
+    // A fade only suppresses the local cure prediction for the network update it arrived in. All of the update's
+    // packets have been handled above, so a fade can no longer affect a cure in a later update.
+    faded_counter_spas_ = 0;
 }
 
 void GameConnection::refresh_new_armor_bits(game::Spawn& s) const {

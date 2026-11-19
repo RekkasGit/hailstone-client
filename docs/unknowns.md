@@ -206,6 +206,12 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 
 ## Combat, abilities and spells
 
+- Counters at zone-in are unknown: `OP_BuffCreate` has no `slot_data` and `ProfileBuff.counters` is decoded
+  but not mapped to `BuffSlot.slot_data`. When a cure reaches such a buff, the client stops predicting and leaves
+  its removal to the server; it does not empty the icon or guess which other buff the cure removes. Locally placed
+  buffs and buffs with nonzero `OP_Buff` slot data have known counters. To support prediction from zone-in data,
+  confirm how the profile's count maps to per-effect slots (see "Spell gems and buff stacking" in
+  [mechanics.md](mechanics.md)).
 - Slam under an illusion: the client grants it for every race whose innate table has it (Barbarian, Troll, Ogre and their citizen models 90, 92, 93), but EQEmu bypasses the Bash skill check only for races 2, 9 and 10. Under a 90 / 92 / 93 illusion a class without Bash sends a Slam the server drops. Settled by trying it on a server, or by a server change that adds those races.
 - Leadership purchase costs: the client shows RoF2's native progression (constructor `0x55d8e0`, next-cost getter `0x561750`): group Mark NPC costs 3/4/5 and raid Delegate Main Assist (index 19) costs 6/7/8. Legacy EQEmu `zone/aa.h` charges 1/2/3 at index 0 and 6/6/6 at index 19. The purchase packet carries only the index; the server decides the actual charge and returned points. There is no cost-table packet. A server-provided cost table or an explicitly selected compatibility policy is needed to make the displayed estimate and white/grey training colours match every server; the current client keeps native costs.
 

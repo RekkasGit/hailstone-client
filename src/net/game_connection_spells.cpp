@@ -14,6 +14,7 @@
 #include "core/log.h"
 #include "game/appearance.h"
 #include "game/coords.h"
+#include "game/counter_spas.h"
 #include "net/game_connection.h"
 #include "game/hit_landing.h"
 #include "game/mechanics/character.h"
@@ -56,6 +57,17 @@ constexpr std::uint8_t kSkillBrass = 12, kSkillSinging = 41, kSkillStringed = 49
 bool is_song_skill(std::uint8_t skill) {
     return skill == kSkillBrass || skill == kSkillSinging || skill == kSkillStringed || skill == kSkillPercussion ||
            skill == kSkillWind;
+}
+
+// EQEmu fades a fully cured buff before the cure's OP_Action. Note which counter types the fading buff carried, so
+// the cure prediction can leave the still-standing buffs of those types alone: the server already applied the cure.
+void note_counter_spa_fade(std::uint8_t& mask, const game::SpellTable& table, std::uint32_t spell_id) {
+    const game::SpellData* spell = table.get(spell_id);
+    if (!spell) return;
+    for (std::int32_t effect : spell->effect) {
+        const int index = game::counter_spa_index(effect);
+        if (index >= 0) mask |= static_cast<std::uint8_t>(1u << index);
+    }
 }
 
 } // namespace
@@ -948,11 +960,13 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
     const std::uint32_t me = world_.player_id;
     const auto now = now_ms();
     auto set_buff = [&](game::BuffSlot& b, std::uint32_t spell, std::int32_t tics, std::uint32_t num_hits) {
-        if (b.spell != spell) { // another spell in the slot: its caster level and modifier are not known yet
+        if (b.spell != spell) { // another spell in the slot: its caster details are not known yet
             b.level = 0;
             b.modifier = 1.0f;
             b.effect_type = 2;
             b.slot_data = {};
+            b.counters_known = false;
+            b.caster_name.clear();
         }
         b.spell = spell;
         b.tics = tics;
@@ -1095,14 +1109,28 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
             log::debug("OP_Buff: slot {} held {}, now spell {} (fade {})", b->slot,
                        slot.empty() ? std::int64_t{-1} : std::int64_t{slot.spell}, b->buff.spell_id, b->fade);
             if (b->fade == 1 || b->buff.spell_id == 0xffffffffu) {
+                // The server fades the cured buff in the same update as the cure's OP_Action, before it. Remember
+                // the type so land_spell_on_me can skip predicting that cure against the next buff of that type.
+                note_counter_spa_fade(faded_counter_spas_, *spell_table_, slot.spell);
                 slot = {};
             } else {
+                // EQEmu's periodic refresh (fade 2) sends every slot_data as zero (rof2.cpp ENCODE(OP_Buff):
+                // "TODO: implement slot_data stuff"). RoF2 copies the whole record, zeros included. Hailstone
+                // tracks counters locally (a cure lowers them) and keeps them only when fade == 2, same spell
+                // and every slot_data is zero; a real value from the server, a different spell or a remove
+                // still overwrites them.
+                const bool same_spell = slot.spell == b->buff.spell_id;
+                const bool zeroed = std::all_of(std::begin(b->buff.slot_data), std::end(b->buff.slot_data),
+                                                [](std::int32_t v) { return v == 0; });
                 set_buff(slot, b->buff.spell_id, b->buff.duration, b->buff.num_hits);
                 slot.level = b->buff.level;
                 slot.caster_id = b->buff.caster_id;
                 slot.modifier = b->buff.bard_modifier;
                 if (b->buff.effect_type != 0) slot.effect_type = b->buff.effect_type;
-                std::copy(std::begin(b->buff.slot_data), std::end(b->buff.slot_data), slot.slot_data.begin());
+                if (!(b->fade == 2 && same_spell && zeroed)) {
+                    std::copy(std::begin(b->buff.slot_data), std::end(b->buff.slot_data), slot.slot_data.begin());
+                    slot.counters_known = !zeroed;
+                }
             }
         }
         break;
@@ -1110,18 +1138,25 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
     case Op::TargetBuffs:
         if (auto bi = decode_buff_icons(p)) {
             if (op == Op::BuffCreate && bi->entity_id == me) {
-                if (bi->all_buffs)
-                    for (auto& b : spells_.buffs) b = {};
+                // EQEmu also sends full lists when buffs change. They carry no slot_data, so keep
+                // the counters for a spell that is still in the same slot.
+                std::array<bool, game::kBuffSlots> listed{};
                 for (const auto& e : bi->entries) {
                     if (e.slot >= static_cast<std::uint32_t>(game::kBuffSlots)) continue;
                     auto& slot = spells_.buffs[e.slot];
                     if (e.spell_id == 0xffffffffu) {
+                        note_counter_spa_fade(faded_counter_spas_, *spell_table_, slot.spell);
                         slot = {};
                         continue;
                     }
+                    listed[e.slot] = true;
+                    if (bi->all_buffs && slot.spell != e.spell_id) slot = {};
                     set_buff(slot, e.spell_id, e.tics, e.num_hits);
                     slot.caster_name = e.caster;
                 }
+                if (bi->all_buffs)
+                    for (std::size_t i = 0; i < listed.size(); ++i)
+                        if (!listed[i]) spells_.buffs[i] = {};
             } else if (bi->entity_id != me || op == Op::TargetBuffs) {
                 // The target window's buffs (OP_TargetBuffs is OP_BuffCreate's layout).
                 if (spells_.target_buffs_entity != bi->entity_id || bi->all_buffs) spells_.target_buffs.clear();
@@ -1232,6 +1267,7 @@ void GameConnection::land_spell_on_me(const Action& a, std::int64_t now) {
     ctx.velocity = velocity_;
     ctx.now_ms = static_cast<std::uint32_t>(now);
     ctx.pvp_rules = pvp_rules_;
+    ctx.faded_counter_spas = faded_counter_spas_;
     if (new_zone_) ctx.zone_type = new_zone_->time_type;
     game::HitLandingResult r = game::land_spell(
         game::hit_record(a.source, a.level, a.instrument_mod, a.hit_heading, a.damage, a.unknown31, a.spell_id,
@@ -1260,6 +1296,8 @@ void GameConnection::land_spell_on_me(const Action& a, std::int64_t now) {
         b.caster_id = pb.caster_id;
         b.modifier = pb.modifier;
         b.effect_type = pb.effect_type;
+        b.slot_data = pb.slot_data;
+        b.counters_known = pb.counters_known;
         log::debug("HitBySpell: spell {} placed in buff slot {}", pb.spell, pb.slot);
     }
     drunkenness_ = r.drunkenness;

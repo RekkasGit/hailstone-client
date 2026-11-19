@@ -7,6 +7,8 @@
 - Merchants: **Usable only** now also hides discipline tomes you have already learned, or whose higher rank you know. The original client lists them still; untick the box to see them
 - Graphics: particles cost less processor time where there are many of them (Actor and Spell Particle Density at High, crowded zones): their movement is worked out on all the worker threads instead of one, and their drawing is prepared on all of them too, so the frame no longer waits on a single core while the graphics card sits idle. They look and move exactly as before
 - Graphics: characters' and items' own particle effects (glowing weapons, auras, run dust) cost less while off screen: an actor out of view, or past 500 units in the classic lighting, no longer emits new particles, so its effects fill in over a moment as you turn towards it. `display.particle_offscreen_hold = 0` in hailstone.ini keeps them emitting everywhere. Changing Actor Particle Density no longer empties every effect at once (they thin out or fill in), and at Off the effects cost nothing
+- Cures no longer remove debuffs locally: a partial or too-weak cure leaves its icon standing until the server's buff fade clears it, instead of making the debuff vanish early
+- Buff icons now show the curse counters as soon as the buff lands and keep showing the remaining count after a partial cure, a server refresh without counter data, or a full buff list that leaves the spell in the same slot
 
 ## 0.7.2-beta (2026-11-19)
 

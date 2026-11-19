@@ -25,6 +25,7 @@
 // stop-turning of SPA 56 and the feign death of SPA 74 (reported; the
 // connection stops the cast and lies the player down).
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -33,12 +34,11 @@
 #include <glm/glm.hpp>
 
 #include "game/mechanics/hit_by_spell.h"
+#include "game/spells.h"
 
 namespace hailstone::game {
 
-class SpellTable;
 class EqStrings;
-struct SpellState;
 struct WorldState;
 namespace mechanics {
 class Character;
@@ -58,6 +58,9 @@ struct HitLandingContext {
     std::uint32_t now_ms = 0;
     std::int32_t pvp_rules = 0;  // 0xdcee70 (OP_LogServer +4): the group / bind rules of HitBySpell
     std::uint8_t zone_type = 0;  // __ZoneType (NewZone time_type)
+    // Bits of counter SPAs (35/36/116/369) EQEmu faded before this OP_Action: skip the local cure prediction for
+    // those types, the server has already applied the cure (game/counter_spas.h).
+    std::uint8_t faded_counter_spas = 0;
 };
 
 // A buff HitBySpell wrote into a slot (FindAffectSlot's choice).
@@ -67,6 +70,8 @@ struct PlacedBuff {
     std::int32_t tics = 0;
     std::uint8_t level = 0, effect_type = 2;
     float modifier = 1.0f;
+    std::array<std::int32_t, 12> slot_data{};
+    bool counters_known = false;
 };
 
 struct HitLandingResult {

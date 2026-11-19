@@ -3406,6 +3406,10 @@ private:
     game::HitModes hit_modes_{};
     game::SpellHitModes spell_hit_modes_{};
     game::SpellState spells_;
+    // Counter SPAs (35/36/116/369, see game/counter_spas.h) whose buff EQEmu faded in the current network update,
+    // before the cure's OP_Action. A 4-bit mask: a fade means the server already cured that type, so the client
+    // skips its local prediction for it. Reset at the end of every update.
+    std::uint8_t faded_counter_spas_ = 0;
 
     // Items.
     enum class CursorOrigin : std::uint8_t { Unknown = 0, Inventory = 1, Server = 2 };

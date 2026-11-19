@@ -1452,6 +1452,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/anim_vectors_test.cpp
     tests/anim_layers_test.cpp
     tests/hit_by_spell_vectors_test.cpp
+    tests/cure_counters_test.cpp
     tests/spell_gems_vectors_test.cpp
     tests/usable_gems_test.cpp
     tests/zone_change_request_test.cpp
@@ -1510,6 +1511,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mock_eqemu_compat_test.cpp
     tests/item_use_test.cpp
     tests/game_connection_cast_test.cpp
+    tests/game_connection_buff_test.cpp
     tests/spell_book_swap_test.cpp
     tests/feign_death_spell_test.cpp
     tests/loot_test.cpp

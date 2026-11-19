@@ -845,6 +845,13 @@ find affect slot 1600). Each record is replayed call for call against the record
   (`HitLandingResult::placed_buffs`); the spawn's slot query (vtable +0xdc) answers 0 there.
 - No stacking is checked before a cast: find_affect_slot's only caller is the hit-by-spell path, so the client
   predicts where a buff lands when OP_Action 231 arrives and the server's OP_Buff overwrites the slot.
+- Locally placed buffs carry their effect slot data into the buff window, including counters. The numbers are
+  client-local: the server sends `slot_data` as zeros (EQEmu's OP_Buff refresh has no counter data), so the
+  client spends them itself; an all-zero refresh or a full list that keeps the spell in its slot keeps them,
+  a real value overwrites them. A cure (SPA 35/36/116/369) touches only the first matching debuff and never
+  removes it locally: a weak or partial cure leaves the icon standing until the server's fade clears it, while
+  a strong or over-cure leaves the server to decide, so a mispredicted cure cannot hide a buff the server kept.
+  Surplus is not carried on; counters unknown from zone-in stop the scan (docs/unknowns.md).
 - Feign death by spell (SPA 74: Imitate Death, Death Peace): HitBySpell calls
   CharacterZoneClient_StopCastAndFeignDeath @0x433b80, which ignores the spell and its base. With the spawn it clears
   the bard twist, stops the cast (StopSpellCast(0, the casting spell)) and calls ChangePosition(0x73), which lies the
