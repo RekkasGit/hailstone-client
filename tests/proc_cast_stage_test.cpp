@@ -1,5 +1,5 @@
-// A spell landing's animation at its source and its impact stage at the struck target (GameConnection::handle_spell,
-// OP_Action 231): no cast stage is added, and the animation is the spell's own or the heal/nuke fallback.
+// The cast stage a spell landing without an OP_BeginCast (an item, weapon or augment proc) gets at its source, as a
+// cast's (GameConnection::handle_spell, OP_Action 231).
 
 #include <doctest/doctest.h>
 
@@ -19,8 +19,6 @@ using namespace hailstone;
 namespace {
 
 constexpr std::uint32_t kNuke = 21, kSong = 22;
-constexpr int kCastStage = 0, kImpactStage = 2; // SpellEffectCue::stage
-constexpr std::uint8_t kSecondActionFlag = 4; // a landing's second OP_Action
 
 std::string spell_line(int id, int skill) {
     std::vector<std::string> fl(237, "0");
@@ -44,16 +42,16 @@ net::AppPacket landing(std::uint32_t spell, std::uint16_t source, std::uint16_t 
     return net::encode(a);
 }
 
-int cast_stages(const std::vector<net::SpellEffectCue>& cues, std::uint32_t caster) {
+int cast_stages(const std::vector<net::SpellEffectCue>& cues, std::uint32_t caster, bool proc) {
     int n = 0;
     for (const auto& c : cues)
-        if (c.stage == kCastStage && c.caster == caster) ++n;
+        if (c.stage == 0 && c.caster == caster && c.proc == proc) ++n;
     return n;
 }
 
 } // namespace
 
-TEST_CASE("A proc's landing plays only the impact stage; a cast's landing and a song's pulse add no cast stage") {
+TEST_CASE("A proc's landing plays the cast stage at its source; a cast's landing and a song's pulse do not") {
     test::Rig rig;
     REQUIRE(rig.to_zone());
     auto& conn = rig.conn;
@@ -63,50 +61,40 @@ TEST_CASE("A proc's landing plays only the impact stage; a cast's landing and a 
     const auto me = static_cast<std::uint16_t>(conn.world().player_id);
     REQUIRE(me != 0);
     const std::uint16_t mob = 900;
-    const std::uint16_t second = mob + 1;
-    constexpr std::uint32_t kCastTimeMs = 2000;
-    constexpr std::size_t kLandingActions = 2; // a landing's two OP_Actions (flag 4 marks the second)
     (void)conn.take_spell_effect_cues();
 
-    SUBCASE("a weapon proc: the landing's two OP_Actions give two impact stages and no cast stage") {
+    SUBCASE("a weapon proc: one cast stage at the source for the landing's two OP_Actions, then the impacts") {
         conn.receive_zone_packet_for_test(landing(kNuke, me, mob, 0));
-        conn.receive_zone_packet_for_test(landing(kNuke, me, mob, kSecondActionFlag));
+        conn.receive_zone_packet_for_test(landing(kNuke, me, mob, 4));
         auto cues = conn.take_spell_effect_cues();
-        REQUIRE(cues.size() == kLandingActions);
-        CHECK(cues[0].stage == kImpactStage);
-        CHECK(cues[0].source == me);
-        CHECK(cues[0].target == mob);
-        CHECK(cues[1].stage == kImpactStage);
-        CHECK(cues[1].source == me);
-        CHECK(cues[1].target == mob);
-        CHECK(cast_stages(cues, me) == 0);
+        REQUIRE(cues.size() == 3);
+        CHECK(cues[0].stage == 0);
+        CHECK(cues[0].proc);
+        CHECK(cues[0].caster == me);
+        CHECK(cues[0].spell == kNuke);
+        CHECK(cues[1].stage == 2);
+        CHECK(cues[2].stage == 2);
     }
-    SUBCASE("a proc landing on a second target adds no cast stage either") {
+    SUBCASE("a proc landing on a second target with it shares the cast stage") {
         conn.receive_zone_packet_for_test(landing(kNuke, mob, me, 0));
-        conn.receive_zone_packet_for_test(landing(kNuke, mob, second, 0));
-        auto cues = conn.take_spell_effect_cues();
-        REQUIRE(cues.size() == kLandingActions);
-        CHECK(cues[0].stage == kImpactStage);
-        CHECK(cues[0].source == mob);
-        CHECK(cues[0].target == me);
-        CHECK(cues[1].stage == kImpactStage);
-        CHECK(cues[1].source == mob);
-        CHECK(cues[1].target == second);
-        CHECK(cast_stages(cues, mob) == 0);
+        conn.receive_zone_packet_for_test(landing(kNuke, mob, mob + 1, 0));
+        CHECK(cast_stages(conn.take_spell_effect_cues(), mob, true) == 1);
     }
     SUBCASE("a cast (or a buff's proc, which EQEmu begins with OP_BeginCast) has its cast stage already") {
         net::BeginCast b;
         b.caster_id = mob;
         b.spell_id = kNuke;
-        b.cast_time = kCastTimeMs;
+        b.cast_time = 2000;
         conn.receive_zone_packet_for_test(net::encode(b));
         conn.receive_zone_packet_for_test(landing(kNuke, mob, me, 0));
-        conn.receive_zone_packet_for_test(landing(kNuke, mob, me, kSecondActionFlag));
-        CHECK(cast_stages(conn.take_spell_effect_cues(), mob) == 1);
+        conn.receive_zone_packet_for_test(landing(kNuke, mob, me, 4));
+        auto cues = conn.take_spell_effect_cues();
+        CHECK(cast_stages(cues, mob, false) == 1);
+        CHECK(cast_stages(cues, mob, true) == 0);
     }
     SUBCASE("a bard song's pulse") {
         conn.receive_zone_packet_for_test(landing(kSong, mob, me, 0));
-        CHECK(cast_stages(conn.take_spell_effect_cues(), mob) == 0);
+        CHECK(cast_stages(conn.take_spell_effect_cues(), mob, true) == 0);
     }
 }
 

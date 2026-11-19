@@ -643,13 +643,13 @@ does not see it, on the original client either.
 A timed entry's elapsed time stops at 2^32 − 1 ms and the entry is then dropped (a deliberate change: the original's
 32-bit sum wraps, so an entry whose last stage starts near 2^32 stays for good).
 
-Hailstone's own: a spell landing plays the spell's casting animation at its source when its first OP_Action arrives
-(not a bard song's pulse). Stock EQEmu begins a buff's proc with an OP_BeginCast (cast time 0) but not an item,
-weapon or augment proc (`Mob::TryWeaponProc`), so those get the animation here too; the original passes the landing's
-animation value to the source under its own conditions (`EQPlayer::TriggerSpellEffect`) but adds no cast set. The
-source plays the spell's casting animation, or for a spell without one the heal or nuke cast (docs/mechanics.md,
-option `cast_animation_fallback`). The proc's bolt or comet, in the modern lighting, leaves at the landing as
-another's spell's does.
+Hailstone's own: a spell that lands with no OP_BeginCast before it also gets the cast stage at its source, when its
+first OP_Action arrives, so an item, weapon or augment proc looks like a cast of the same spell. Stock EQEmu begins
+a buff's proc with an OP_BeginCast (cast time 0) but not those (`Mob::TryWeaponProc`); the original plays only the
+impact for them (`EQPlayer::TriggerSpellEffect`). An OP_Action counts as a cast's landing for 3 s after its
+OP_BeginCast's cast time; a bard song's pulses get no cast stage. Its source plays the spell's casting animation,
+or for a spell without one the heal or nuke cast (docs/mechanics.md, option `cast_animation_fallback`). The proc's bolt or comet, in the modern lighting,
+leaves at the landing as another's spell's does.
 
 Hailstone's own (the original has one spell density and an "On For" filter, SpellParticleCastFilter, which this client
 does not read): the Options window's Particles section has three more Off / Low / Medium / High choices, each scaling

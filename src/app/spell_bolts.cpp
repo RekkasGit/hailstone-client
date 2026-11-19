@@ -159,6 +159,7 @@ void SpellBolts::take_cues(const net::GameConnection& conn, std::span<net::Spell
         game::ProjectileStyle style = game::projectile_style(*sp);
         if (style.form == ProjectileForm::None) continue;
         if (cue.stage == 0) {
+            if (cue.proc) continue; // a proc's bolt leaves at its landing (SpellProjectiles::landed)
             projectiles_.cast_begun(cue.spell, style, cue.caster, now);
             if (cue.caster == me)
                 projectiles_.own_cast(cue.spell, style, me, conn.spell_state().casting.target, now,

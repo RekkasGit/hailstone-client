@@ -282,6 +282,9 @@ struct SpellEffectCue {
     std::int32_t duration_ms = 0; // the requested duration (the cast time for stage 0)
     std::uint32_t source = 0;     // the impact stage's caster (OP_Action's source)
     double delay = 0.0;           // seconds to hold it back (app/spell_bolts.h: a projectile still on its way)
+    // Hailstone: a cast stage the client adds for a spell that landed without an OP_BeginCast (an item, weapon or
+    // augment proc; GameConnection::handle_spell). Not a cast the player is making: no held projectile for it.
+    bool proc = false;
 };
 
 // An effect the server plays by number (a spellsnew.eff index, not a spell): OP_SpellEffect's add and remove
@@ -454,8 +457,8 @@ public:
     void set_ground_npcs(bool on) { world_.ground_npcs = on; }
     // Hailstone (option illusion_mounts): a rider under an illusion still rides (WorldState::illusion_mounts).
     void set_illusion_mounts(bool on) { world_.illusion_mounts = on; }
-    // Hailstone (option cast_animation_fallback): the landing animation for a spell without a casting animation
-    // (game::spell_cast_animation).
+    // Hailstone (option cast_animation_fallback): the added proc cast stage's animation for a spell without a
+    // casting animation (game::spell_cast_animation).
     void set_cast_animation_fallback(bool on) { cast_animation_fallback_ = on; }
     void reground() { world_.reground(); }
     // The player's BodyWet (+0xa2) from this frame's movement, on its spawn.
@@ -3502,6 +3505,9 @@ private:
     std::vector<SpellEffectCue> effect_cues_;
     std::vector<EffectPacketCue> effect_packets_;
     std::vector<std::uint32_t> blood_spurts_; // local player landed sharp-weapon hit target IDs
+    // Per caster, the spell whose cast stage has played (its OP_BeginCast, or the one added for a proc) and until when
+    // (now_ms) an OP_Action of it counts as that cast's landing rather than a proc.
+    std::unordered_map<std::uint32_t, std::pair<std::uint32_t, std::int64_t>> cast_stage_shown_;
     std::vector<game::MissilePacket> missiles_;
     LandingEffects landing_;
     std::int32_t drunkenness_ = 0; // PcBase's drunkenness as HitBySpell's SPA 160 sets it

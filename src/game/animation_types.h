@@ -92,10 +92,11 @@ enum class AnimationType : std::uint8_t {
     End = 79,      // 0x4f: one past the last old-style number (old_anim_clip is empty from it)
 };
 
-// The animation a spell landing plays on its source (GameConnection's landing animation): the spell's casting_anim.
-// Hailstone (option cast_animation_fallback, on by default; docs/mechanics.md): a spell without one (0) plays
-// CastHeals for a beneficial spell (spell_type above 0) and CastNuke for a detrimental one; off, the 0 as before
-// (nothing plays). What the original plays for such a spell is not confirmed (docs/unknowns.md).
+// The animation a spell landing without an OP_BeginCast plays on its source (GameConnection's added proc cast
+// stage): the spell's casting_anim. Hailstone (option cast_animation_fallback, on by default; docs/mechanics.md):
+// a spell without one (0) plays CastHeals for a beneficial spell (spell_type above 0) and CastNuke for a
+// detrimental one; off, the 0 as before (nothing plays). What the original plays for such a spell is not confirmed
+// (docs/unknowns.md).
 inline std::uint8_t spell_cast_animation(std::uint8_t casting_anim, std::uint8_t spell_type, bool fallback) {
     if (casting_anim != 0 || !fallback) return casting_anim;
     return static_cast<std::uint8_t>(spell_type > 0 ? AnimationType::CastHeals : AnimationType::CastNuke);
