@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Lua is now 5.5.1 (was 5.4.7), for the interface packs, plugin windows and MQ-style scripts. A script or add-on that assigns to a `for` loop's variable no longer loads and must copy it into a `local` first; most other 5.4 code runs unchanged
 - Guilds: the Banner page in Modern and Gamepad shows available kits, the active banner and its remaining time. On a server with RoF2 guild banners, members with the appropriate permissions can plant, remove or customise the banner. Planted banners display their guild's patterns and colours.
 - Enchanter pets and other invisible-body spawns (race 127's IVM, also race 600) show the weapon they hold again. The body stays invisible, but the primary and secondary items are drawn in its hands, which move as a wood elf's, as in the original; an aura with nothing held still shows nothing
 - Erudite ghosts (race 118, GEM / GEF in Paineel's models) take the wood elf's animations for the clips they lack, as the original gives every model of that prefix group: they had only the 9 clips of their own (walk, run, one swing, two deaths and a few more); now they have 71
