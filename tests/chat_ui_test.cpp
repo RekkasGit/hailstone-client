@@ -333,3 +333,54 @@ TEST_CASE("Native chat tabs keep their identity, routing and flash settings acro
     CHECK(tabs::tab(2).highlight_color == 0x123456);
     CHECK_FALSE(tabs::tab(2).highlight);
 }
+
+TEST_CASE("Native chat tabs: a layout saved with _Dock and _Up loads its frames, tabs and the tab that was up") {
+    namespace tabs = app::chat_tabs;
+    test::ScratchDir scratch("native_chat_tab_legacy");
+    const auto dir = scratch.path();
+    const auto layout = dir / "UI.ini";
+    fs::create_directories(dir / "game");
+    // Main (0) with Guild (3) docked and up; Combat (1) a window of its own with Loot (2) docked and up; window 4
+    // closed (no language key) and window 5 docked in it, so a window of its own.
+    std::ofstream(layout) << "[ChatManager]\nNumWindows=5\nChatWindow0_Up=3\n"
+                             "ChatWindow1_LanguageId=0\nChatWindow1_Name=Combat\nChatWindow1_Dock=-1\nChatWindow1_Up=2\n"
+                             "ChatWindow2_LanguageId=0\nChatWindow2_Name=Loot\nChatWindow2_Dock=1\n"
+                             "ChatWindow3_LanguageId=0\nChatWindow3_Name=Guild\nChatWindow3_Dock=0\n"
+                             "ChatWindow5_LanguageId=0\nChatWindow5_Name=Raid\nChatWindow5_Dock=4\n";
+
+    std::unique_ptr<ImGuiContext, decltype(&ImGui::DestroyContext)> ctx(ImGui::CreateContext(), ImGui::DestroyContext);
+    GameDir game(dir / "game");
+    net::GameConnection conn(game);
+    ui::ChatView view;
+    app::UiHost host;
+    host.in_game = host.ui_ready = true;
+    host.game = &game;
+    host.conn = &conn;
+    host.chat = &view;
+    app::UiApi api(host);
+    api.load_layout({}, layout, {});
+    auto check = [&] {
+        const auto main = tabs::group(1);
+        REQUIRE(main.tabs.size() == 2);
+        CHECK(main.main);
+        CHECK(main.tabs[0] == 1);
+        CHECK(main.tabs[1] == 4);
+        CHECK(main.selected == 4);
+        const auto combat = tabs::group(2);
+        REQUIRE(combat.tabs.size() == 2);
+        CHECK(combat.title == "Combat");
+        CHECK(combat.tabs[0] == 2);
+        CHECK(combat.tabs[1] == 3);
+        CHECK(combat.selected == 3);
+        CHECK(tabs::group(3).slot == 0);
+        CHECK(tabs::group(4).slot == 0);
+        const auto raid = tabs::group(6);
+        REQUIRE(raid.tabs.size() == 1);
+        CHECK(raid.tabs[0] == 6);
+    };
+    check();
+    // Saved in the new keys, it loads the same.
+    api.save_layout();
+    api.load_layout({}, layout, {});
+    check();
+}
