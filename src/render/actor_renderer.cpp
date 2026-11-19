@@ -1781,12 +1781,13 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
             st.action_seq_known = true;
         } else if (s.action_seq != st.action_seq) {
             st.action_seq = s.action_seq;
+            game::ActionGate gate{s.class_id, in.stand_state, game::holds_instrument(s)};
             game::NewStyleTrackInput track_in{s.player_state, st.anim.anim, -1, mount != nullptr};
             std::uint8_t playing = s.action;
             std::uint8_t normalized = s.action;
             bool stand_request = false;
             std::string code = game::action_clip(s.action, has_clip, new_style, track_in, rand_int, &playing,
-                                                 &stand_request, &normalized);
+                                                 &stand_request, &normalized, &gate);
             req.action_column = game::new_style_clip_column(code);
             const assets::AnimationClip* c = code.empty() ? nullptr : model->clip(code, holding);
             // 0x4b15b0 runs the action's rate through 0x4afc90 too (the packet's speed / 10 is its input), so a

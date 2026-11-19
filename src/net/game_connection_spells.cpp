@@ -41,9 +41,19 @@ std::string spell_name(const game::SpellTable& table, std::uint32_t id) {
 constexpr std::int64_t kCastLandingSlackMs = 3000;
 constexpr std::int64_t kProcLandingMs = 500;
 
-// A bard song's skill (brass, singing, stringed, percussion, wind): its pulses land without a cast of their own.
+// OP_Action's effect flag 4 marks the second of a landing's two actions.
+constexpr std::uint8_t kSecondActionFlag = 4;
+// The speed an OP_Animation carries (the original's 10).
+constexpr std::uint8_t kAnimationSpeed = 10;
+// SpellEffectCue::stage: 0 the cast stage, 2 the impact stage.
+constexpr int kCastStage = 0, kImpactStage = 2;
+
+// A bard song's skill: brass, singing, stringed, percussion and wind. Its pulses land without a cast of their own.
+constexpr std::uint8_t kSkillBrass = 12, kSkillSinging = 41, kSkillStringed = 49, kSkillPercussion = 54,
+                         kSkillWind = 70;
 bool is_song_skill(std::uint8_t skill) {
-    return skill == 12 || skill == 41 || skill == 49 || skill == 54 || skill == 70;
+    return skill == kSkillBrass || skill == kSkillSinging || skill == kSkillStringed || skill == kSkillPercussion ||
+           skill == kSkillWind;
 }
 
 } // namespace
@@ -860,13 +870,13 @@ void GameConnection::handle_spell_action(const Action& a, std::int64_t now, bool
     c.target = a.target;
     c.spell = a.spell_id;
     sound_cues_.push_back(c);
-    // Hailstone: a spell landing with no OP_BeginCast before it (EQEmu sends one for a buff's proc but not for an
-    // item, weapon or augment proc, Mob::TryWeaponProc) gets the cast stage at its source as a cast would. The
-    // original plays only the impact here (EQPlayer::TriggerSpellEffect @0x593d10). Only the first of a landing's
-    // two OP_Actions (flag 4 marks the second), not a bard song's pulse, and only for one the server sent: spell
-    // 859's local landing plays only the impact, and never sends an animation.
+    // Hailstone: a spell landing plays the spell's casting animation at its source, at the first of its two
+    // OP_Actions (flag 4 marks the second), and only for one the server sent: spell 859's local landing plays only
+    // the impact, and never sends an animation. The renderer applies the classic/Luclin instrument-song rule where
+    // it chooses the clip, so a received OP_Animation follows it too. The cast stage stays for a spell that is not a
+    // bard song's pulse.
     if (const game::SpellData* sp = spell_table_->get(a.spell_id);
-        from_server && sp && a.source != 0 && (a.effect_flag & 4) == 0 && !is_song_skill(sp->skill)) {
+        from_server && sp && a.source != 0 && (a.effect_flag & kSecondActionFlag) == 0) {
         // Hailstone: a spell without a casting animation plays CastHeals or CastNuke (option
         // cast_animation_fallback, game::spell_cast_animation).
         const std::uint8_t anim = spell_cast_animation(sp->casting_anim, sp->spell_type, cast_animation_fallback_);
@@ -877,23 +887,25 @@ void GameConnection::handle_spell_action(const Action& a, std::int64_t now, bool
             Animation animation;
             animation.spawn_id = static_cast<std::uint16_t>(world_.player_id);
             animation.action = anim;
-            animation.speed = 10;
+            animation.speed = kAnimationSpeed;
             send_zone(encode(animation));
         }
-        auto shown = cast_stage_shown_.find(a.source);
-        if (shown == cast_stage_shown_.end() || shown->second.first != a.spell_id || now > shown->second.second) {
-            SpellEffectCue cue{0, a.source, 0, a.spell_id, 0};
-            cue.proc = true;
-            effect_cues_.push_back(cue);
-            // An area proc's other targets, landing with it, share this one.
-            cast_stage_shown_[a.source] = {a.spell_id, now + kProcLandingMs};
+        if (!is_song_skill(sp->skill)) {
+            auto shown = cast_stage_shown_.find(a.source);
+            if (shown == cast_stage_shown_.end() || shown->second.first != a.spell_id || now > shown->second.second) {
+                SpellEffectCue cue{kCastStage, a.source, 0, a.spell_id, 0};
+                cue.proc = true;
+                effect_cues_.push_back(cue);
+                // An area proc's other targets, landing with it, share this one.
+                cast_stage_shown_[a.source] = {a.spell_id, now + kProcLandingMs};
+            }
         }
     }
     // The impact stage: the source as its caster, the struck spawn as its target (app/spell_particles.h).
-    effect_cues_.push_back({2, a.target, a.target, a.spell_id, 0, a.source});
+    effect_cues_.push_back({kImpactStage, a.target, a.target, a.spell_id, 0, a.source});
     // PlayerZoneClient::IWasHit @0x5a07b0: a spell on us with packet flag 4 goes through EQ_Character::HitBySpell
     // (game/hit_landing.h).
-    if (a.target == world_.player_id && (a.effect_flag & 4) != 0 && profile_ && spell_table_)
+    if (a.target == world_.player_id && (a.effect_flag & kSecondActionFlag) != 0 && profile_ && spell_table_)
         land_spell_on_me(a, now);
 }
 

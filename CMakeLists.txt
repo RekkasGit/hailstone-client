@@ -1081,6 +1081,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/world_geometry_queries_test.cpp
     tests/visual_surface_patch_test.cpp
     tests/bag_move_test.cpp
+    tests/bard_song_animation_test.cpp
     tests/byte_io_test.cpp
     tests/env_test.cpp
     tests/sdk_old_names_test.cpp

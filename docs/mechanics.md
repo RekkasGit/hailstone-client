@@ -1812,6 +1812,10 @@ the OP_Animation alike (`game::spell_cast_animation`). Off, such a spell plays n
 plays no cast stage here at all, and what its cast animation is for a spell without one is not confirmed
 (docs/unknowns.md).
 
+Bard songs animate again: a singing song always plays its cast animation, and an instrument song follows the
+classic/Luclin rule in the animation section above (an instrument in hand, not sitting; a new-style model has no
+such model block).
+
 Missiles (`game/missiles.h`): an item missile with a target does not sweep the zone; spell missiles sweep and
 also check the target segment. Source despawn ends its missiles; target despawn removes homing. Item type 9 needs
 a loaded spell id in 1..45000. Duration uses normalized AE duration (capped at 14 s except first-slot SPA 76),
@@ -1953,6 +1957,15 @@ it does nothing). The old track keeps running through the blend; a one-shot that
   to the legs while the unfinished action keeps the upper body (0x5890a0, 0x58ac90's modes); another
   sequence (stand, idle) starts on both groups when either group's mode is 2, cutting the action (0x589410).
   Each group's cross-fade is (new.blendIn + that group's old blendOut) / 2.
+- Bard songs (0x4b15b0's bard test): an instrument song's animation (0x27 drum, 0x28 lute, 0x29 horn) plays on a
+  classic or Luclin model only when the spawn is not sitting (StandState 110) and, for a bard (class 8), holds an
+  instrument in the primary or secondary hand (PlayerState bit 0x10, item types 23..26); without either, nothing
+  plays. A singing song (0x2a..0x2c, the ordinary cast animations) always plays. A new-style (EQG) model has no such
+  model block (0x58afa0), so the instrument animation is not suppressed there; the original's landing path
+  (0x593d10) still checks the posture and, for a bard, the instrument modifier before it reaches the model routine,
+  so "no model block" is not a promise that every native landing plays. The local player's bit is set from the
+  inventory (0x5923f0) and its transition is sent as OP_PlayerStateAdd / OP_PlayerStateRemove once the zone is ready
+  (OP_ClientReady; stock EQEmu ignores those packets before then); the server relays it for other players.
 - New-style riders select movement and idle sequences from mounted style column 5, using the mount's motion.
   The layer groups retain the requested style column as part of sequence identity, so the same sequence in a
   different column can start without restarting a repeated request for the same column.

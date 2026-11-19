@@ -3010,6 +3010,9 @@ private:
     void forget_pet_spawn(std::uint32_t spawn_id);
     void move_item(const ItemSlot& from, const ItemSlot& to, std::uint32_t count);
     void refresh_worn_slot(int slot);
+    // PcClient_RefreshWornSlotVisual's instrument bit (0x5923f0): the local player's PlayerState bit 0x10, set when
+    // the primary or secondary hand holds an instrument (item types 23..26).
+    void refresh_instrument_state();
     void init_spells_from_profile();
     void update_spells();
     void update_spells_at(std::int64_t now); // one step of update_spells, at `now` (now_ms()'s clock)
@@ -3294,6 +3297,9 @@ private:
     std::vector<Weather> weather_messages_;
     bool client_spawn_requested_ = false;
     bool zone_ready_ = false;
+    // The instrument bit as last published to the zone (OP_PlayerStateAdd / Remove). The local bit may be set before
+    // OP_ClientReady, when the server would ignore the packet; it is published once the zone is ready.
+    bool instrument_published_ = false;
     std::optional<std::string> zone_to_load_;
     // The server's client files (net/server_files.h): asked at the first zone-in; the zone-in waits for them.
     std::unique_ptr<ServerFileSync> server_files_;
