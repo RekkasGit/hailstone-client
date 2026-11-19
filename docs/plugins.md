@@ -1284,7 +1284,12 @@ flags are in `sdk/hailstone_nameplates.h`.
 - Register one callback with `nameplate_register(host, fn, userdata)`. Unregister before registering a replacement.
 - Each callback sees the actors eligible for a normal world caption, with the target first and remaining candidates
   in depth order. Presence flags distinguish an unknown reading from a known zero. Treat the frame, candidates and
-  counted UTF-8 strings as borrowed until the callback returns.
+  counted UTF-8 strings as borrowed until the callback returns. `HAILSTONE_NAMEPLATE_CONCEALED`, `_INVISIBLE` and
+  `_INVISIBLE_UNDEAD` are the Lua context's `concealed`, `invisible` and `invisible_undead` (docs/ui-api.md): only
+  what the player could see (the spawn's own HideMode, the player's own buffs and the target's buff list), and a
+  clear flag means "not known", not "visible".
+- The candidate and command records have no size field: their layout is fixed for ABI 3, and a larger record would
+  come with a new call.
 - `nameplate_measure_text` and `nameplate_spell_icon` are available during the callback. An image can use a texture
   returned to that provider during the current callback.
 - To claim a caption, call `nameplate_submit` with the current frame serial and zero-based candidate index. The host

@@ -214,7 +214,18 @@ TEST_CASE("native plugins: nameplate frame lease and canvas ownership") {
     const auto next = h.canvas.frame(frame);
     REQUIRE(next.size() == 1);
     CHECK(next[0].owner != native[0].owner);
+    // set_active(0) retires the provider; set_active(1) does not bring it back, so the plugin registers again.
+    h.run("/probemapcycle");
+    CHECK_FALSE(h.canvas.owner_valid(next[0].owner));
+    CHECK(h.canvas.empty());
+    CHECK(h.canvas.frame(frame).empty());
+    h.printed.clear();
+    h.run("/probenameplate on");
+    CHECK(h.printed_line("[Probe] nameplate register 1"));
+    const auto again = h.canvas.frame(frame);
+    REQUIRE(again.size() == 1);
     REQUIRE(h.plugins->unload("HostProbe"));
+    CHECK_FALSE(h.canvas.owner_valid(again[0].owner));
     CHECK_FALSE(h.canvas.owner_valid(next[0].owner));
     CHECK(h.canvas.frame(frame).empty());
 }
