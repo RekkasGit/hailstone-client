@@ -117,6 +117,10 @@ void slot_add(Affect* a, std::uint32_t index, std::int32_t v) {
 // (zone/spell_effects.cpp), so all the counter effects of that buff count towards the total, with the
 // cure's own type drained first. Like RoF2's HitBySpell, only the first matching buff is touched; any
 // surplus is lost rather than carried to a later buff.
+// A deliberate change to a RoF2 rule: HitBySpell @0x43e8c0 spends only the first counter slot of the first buff
+// GetPCSpellAffect @0x433fd0 finds and removes that buff itself (RemovePCAffectex) once the slot drops below 1.
+// Against EQEmu, whose OP_Buff carries no slot_data, that removed debuffs the server kept. The original rule stays
+// behind HitState::rof2_single_slot_cures (the recorded-vector replay).
 void cure_buff_counters(Character* self, HitQueries& q, std::int32_t spa, std::int32_t val,
                         std::uint8_t faded_counter_spas) {
     // EQEmu sends OP_Buff fade=1 for the cured buff before the cure's OP_Action, in the same network update. The

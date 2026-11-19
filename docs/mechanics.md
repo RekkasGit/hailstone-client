@@ -851,7 +851,13 @@ find affect slot 1600). Each record is replayed call for call against the record
   a real value overwrites them. A cure (SPA 35/36/116/369) touches only the first matching debuff and never
   removes it locally: a weak or partial cure leaves the icon standing until the server's fade clears it, while
   a strong or over-cure leaves the server to decide, so a mispredicted cure cannot hide a buff the server kept.
-  Surplus is not carried on; counters unknown from zone-in stop the scan (docs/unknowns.md).
+  Surplus is not carried on; counters unknown from zone-in stop the scan (docs/unknowns.md). This is a deliberate
+  change to a RoF2 rule: HitBySpell @0x43e8c0 spends the first counter slot of the first buff GetPCSpellAffect
+  @0x433fd0 finds and removes that buff itself (RemovePCAffectex) when the slot drops below 1, which against
+  EQEmu's zeroed `slot_data` removed debuffs the server kept. The original rule is kept for the recorded-vector
+  replay (`HitState::rof2_single_slot_cures`). EQEmu fades a fully cured buff (OP_Buff fade 1) before the cure's
+  landing OP_Action (`Mob::SpellOnTarget`: `SpellEffect` runs before the flag-4 action), so a fade of a counter
+  type in the same network update skips the prediction for that type.
 - Feign death by spell (SPA 74: Imitate Death, Death Peace): HitBySpell calls
   CharacterZoneClient_StopCastAndFeignDeath @0x433b80, which ignores the spell and its base. With the spawn it clears
   the bard twist, stops the cast (StopSpellCast(0, the casting spell)) and calls ChangePosition(0x73), which lies the

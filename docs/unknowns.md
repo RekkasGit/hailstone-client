@@ -206,6 +206,12 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 
 ## Combat, abilities and spells
 
+- A cure's counters after a fade: EQEmu fades a fully cured buff before the cure's landing OP_Action, and the client
+  skips its counter prediction for that type only when both arrive in the same network update (one
+  `GameConnection::update`). If they arrive in different updates, the next debuff of that type shows fewer counters
+  than the server holds (its icon stays; EQEmu sends no `slot_data` to correct it). A natural fade of the same type
+  in the same update also skips a real partial cure's display. Settled by EQEmu sending `slot_data` in
+  `ENCODE(OP_Buff)`, or by a live capture showing the two never split.
 - Counters at zone-in are unknown: `OP_BuffCreate` has no `slot_data` and `ProfileBuff.counters` is decoded
   but not mapped to `BuffSlot.slot_data`. When a cure reaches such a buff, the client stops predicting and leaves
   its removal to the server; it does not empty the icon or guess which other buff the cure removes. Locally placed

@@ -23,7 +23,8 @@
 // the messages (immunity 0x30a0, bind refusals, books, identify),
 // buffs removed (the invisibility removal), drunkenness, the push, the
 // stop-turning of SPA 56 and the feign death of SPA 74 (reported; the
-// connection stops the cast and lies the player down).
+// connection stops the cast and lies the player down). The one change made in
+// place: the counters a cure spends are written back into the SpellState's buffs.
 
 #include <array>
 #include <cstdint>
