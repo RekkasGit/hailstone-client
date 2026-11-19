@@ -152,9 +152,11 @@ TEST_CASE("zone flora: a zone's own rules, else default.txt when it is outdoor")
     REQUIRE(own);
     CHECK(source == "ecommons");
     CHECK(own->ground.size() == 2);
+    CHECK(std::isinf(own->terrain_cover)); // indoor: the terrain covers at any height
     auto shared = load_zone_flora_rules(dir.path(), "gfaydark", true, &source);
     REQUIRE(shared);
     CHECK(source == "default");
+    CHECK(shared->terrain_cover == kOutdoorTerrainCover); // outdoor: grass under an overhang, the tools' too
     CHECK_FALSE(load_zone_flora_rules(dir.path(), "guktop", false)); // indoor: only a file of its own
     // A name that is not a zone's never reads a path of its own: indoor nothing, outdoor the default.
     CHECK(load_zone_flora_rules(dir.path(), "../ecommons", false) == std::nullopt);

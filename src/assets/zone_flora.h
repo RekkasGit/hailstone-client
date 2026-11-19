@@ -82,7 +82,7 @@ struct ZoneFloraRules {
     float lawn_min = 1.8f, lawn_max = 3.0f; // the lawn's blade height, units
     std::vector<Ground> ground;
     // How far over a spot the zone's terrain still covers it (no plants under it): any height, or in an outdoor zone
-    // kOutdoorTerrainCover (add_zone_flora). Not a rules-file directive.
+    // kOutdoorTerrainCover (load_zone_flora_rules). Not a rules-file directive.
     float terrain_cover = std::numeric_limits<float>::infinity();
 };
 // In an outdoor zone the terrain covers the ground only this far over it (Hailstone's own choice): a hut's roof or a
@@ -99,7 +99,8 @@ ZoneFloraRules parse_zone_flora_rules(std::string_view text, std::vector<std::st
                                       const ZoneFloraInclude& include = {});
 
 // The rules for `zone`: <rules_dir>/<zone>.txt, else (when `outdoor`) <rules_dir>/default.txt, includes resolved in
-// `rules_dir`; nullopt when neither applies. `source` gets the file's name ("ecommons", "default").
+// `rules_dir`; nullopt when neither applies. `source` gets the file's name ("ecommons", "default"). When `outdoor`, the
+// terrain covers only within kOutdoorTerrainCover (ZoneFloraRules::terrain_cover), for the client and tools alike.
 std::optional<ZoneFloraRules> load_zone_flora_rules(const std::filesystem::path& rules_dir, std::string_view zone,
                                                     bool outdoor, std::string* source = nullptr);
 

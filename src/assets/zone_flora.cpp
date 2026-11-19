@@ -1139,6 +1139,7 @@ std::optional<ZoneFloraRules> load_zone_flora_rules(const std::filesystem::path&
     ZoneFloraRules rules = parse_zone_flora_rules(*text, &errors,
                                                   [&](std::string_view other) { return read_rules(rules_dir, other); });
     for (const auto& e : errors) log::warn("flora/{}.txt: {}", name, e);
+    if (outdoor) rules.terrain_cover = kOutdoorTerrainCover; // grass under a cliff's overhang, not under a roof
     return rules;
 }
 
@@ -1201,7 +1202,6 @@ std::size_t add_zone_flora(const GameDir& game, Zone& zone, const std::filesyste
     std::string source;
     auto rules = load_zone_flora_rules(rules_dir, zone.name, outdoor, &source);
     if (!rules) return 0;
-    if (outdoor) rules->terrain_cover = kOutdoorTerrainCover; // grass under a cliff's overhang, not under a roof
     // The lawn needs no donor; the other kinds do, and are left out (logged) when theirs is missing.
     FloraDonors donor;
     if (!rules->donors.empty()) {
