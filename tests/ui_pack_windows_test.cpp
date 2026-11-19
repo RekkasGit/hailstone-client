@@ -5402,7 +5402,7 @@ TEST_CASE("UI packs: Options changes the Find trail style and invisibility brack
                 end
                 ui.DrawText = function(...)
                     local label = select(7, ...)
-                    if label == "Interface" or label == "Find trail" or label == "Display"
+                    if label == "Interface" or label == "Find trail"
                         or label == "Bracket Invis vs. Undead" then
                         local x, y = ...
                         local w, h = ui.CalcTextSize(label)
@@ -5457,7 +5457,6 @@ TEST_CASE("UI packs: Options changes the Find trail style and invisibility brack
                 click(point("Find trail"));
                 REQUIRE(selected == 1);
                 click(point("Find trail"));
-                click(point("Display"));
             }
             CHECK(selected == 0);
             REQUIRE(changes.size() == 2);

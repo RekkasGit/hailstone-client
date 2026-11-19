@@ -222,7 +222,7 @@ local PAGES = {
       { 0, 75, 100, 125, 150, 175, 200, 250 })
     if r then rows[#rows + 1] = r end
     for _, o in ipairs({ { "Player names", "pc_names" }, { "My name", "own_name" }, { "NPC names", "npc_names" },
-        { "Con-coloured NPC names", "con_name_colour" }, { "Highlight target name", "target_plate_highlight" }, { "Target name through walls", "target_plate_through_walls" }, { "Fade overlapping names", "plate_overlap_fade" }, { "Target ring", "show_target_ring" },
+        { "Con-coloured NPC names", "con_name_colour" }, { "Bracket Invis vs. Undead", "show_invis_undead" }, { "Highlight target name", "target_plate_highlight" }, { "Target name through walls", "target_plate_through_walls" }, { "Fade overlapping names", "plate_overlap_fade" }, { "Target ring", "show_target_ring" },
         { "Target ring cues", "target_ring_cues" }, { "Target ring through models", "target_ring_xray" },
         { "Target skips pets", "tab_skip_pets" }, { "Target needs sight", "tab_line_of_sight" }, { "Gem replaces spell", "replace_gem_spell" }, { "Buff timers", "show_buff_timer" }, { "Song timers", "show_song_timer" },
         { "Compare items with what you wear", "item_compare" }, { "Upgrade / downgrade verdict", "item_compare_verdict" },
@@ -287,7 +287,6 @@ local PAGES = {
     local rows = {}
     local list = table.pack(
       optionRow("Display mode", "window_mode", { "Windowed", "Borderless", "Fullscreen" }),
-      optionRow("Bracket Invis vs. Undead", "show_invis_undead", "bool"),
       optionRow("Vertical sync", "vsync", { "Off", "On", "Adaptive" }),
       detectGraphicsRow(),
       optionRow("Shadows", "shadows", { "Off", "Low", "Medium", "High" }),
