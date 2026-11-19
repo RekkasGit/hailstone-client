@@ -14,6 +14,7 @@
 #include "lua_ui_api_mock.h"
 
 #include "app/chat_context_menu.h"
+#include "app/chat_tab_bar.h"
 #include "app/chat_tabs.h"
 #include "app/lua_ui.h"
 #include "core/game_dir.h"
@@ -383,4 +384,78 @@ TEST_CASE("Native chat tabs: a layout saved with _Dock and _Up loads its frames,
     api.save_layout();
     api.load_layout({}, layout, {});
     check();
+}
+
+// With Highlight New Messages off, a background tab with unseen lines shows the dot after its label, as the Lua
+// strip did; with it on, the tab is drawn in its highlight colour instead and gets no dot.
+TEST_CASE("Chat window script: a tab that does not flash shows an unread dot") {
+    namespace tabs = app::chat_tabs;
+    tabs::Tab quiet;
+    quiet.unread = true;
+    quiet.highlight = false;
+    CHECK(app::unread_dot(quiet, false));
+    CHECK_FALSE(app::unread_dot(quiet, true)); // (the tab that is up)
+    tabs::Tab flashing = quiet;
+    flashing.highlight = true;
+    CHECK_FALSE(app::unread_dot(flashing, false));
+    tabs::Tab seen = quiet;
+    seen.unread = false;
+    CHECK_FALSE(app::unread_dot(seen, false));
+
+    fs::path src = ui_dir() / "modern";
+    hailstone::test::ScratchDir dir_scratch("chat_ui_unread_dot");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(src, dir / "modern", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        GameDir game(dir / "game");
+        net::GameConnection conn(game);
+        ui::ChatView view;
+        app::UiHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game;
+        host.conn = &conn;
+        host.chat = &view;
+        app::UiApi api(host);
+        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        ui::lua::LuaUi lua(dir / "modern", dir / "modern.txt");
+        lua.add_ui_api([&](lua_State* L) {
+            api.register_functions(L);
+            lua_pushcfunction(L, [](lua_State* S) { lua_pushboolean(S, 1); return 1; });
+            lua_setfield(L, -2, "InGame");
+            hailstone::test::sync_ui_api_aliases(L);
+        });
+        lua_State* L = lua.state();
+        auto step = [&] {
+            api.begin_frame();
+            frame(lua);
+        };
+        ImGui::GetIO().AddMousePosEvent(-1000, -1000);
+        const int social = tabs::new_tab(1, "Social");
+        REQUIRE(social > 1);
+        REQUIRE(luaL_dostring(L, "hs.ChatSetFilter(1, 5, true)") == LUA_OK); // OOC to Social (the tab up)
+        REQUIRE(tabs::select(1, 1));
+        REQUIRE(tabs::set_highlight(social, false));
+        for (int i = 0; i < 3; ++i) step();
+        ImGuiWindow* chat = ImGui::FindWindowByName("###modern.Chat1");
+        REQUIRE(chat);
+        const int before = chat->DrawList->VtxBuffer.Size;
+        view.add(ui::ChatChannel::OOC, "to the background tab");
+        step();
+        step();
+        REQUIRE(tabs::tab(social).unread);
+        CHECK(chat->DrawList->VtxBuffer.Size > before); // the dot
+        // Flashing on: the label takes the highlight colour, and there is no dot.
+        REQUIRE(tabs::set_highlight(social, true));
+        step();
+        step();
+        CHECK(chat->DrawList->VtxBuffer.Size == before);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
 }

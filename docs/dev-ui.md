@@ -73,7 +73,7 @@ button lists all tabs when the strip fills.
 
 Moving a tab keeps its filters, output and scroll position. Background tabs flash in their chosen
 colour every half second for five seconds, then stay highlighted until selected. Highlighting
-defaults to on in red. Each tab can also hide its scrollbar. Chat groups, names, order, selection
+defaults to on in red; with it off, a tab with unseen lines shows a dot after its label instead. Each tab can also hide its scrollbar. Chat groups, names, order, selection
 and tab settings are saved per character. The native model is shared by the Modern controls,
 [`hs.UI.chat`](ui-api.md#chat-tabs-and-windows) and [`/chattabs`](commands.md).
 
