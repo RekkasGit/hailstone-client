@@ -251,8 +251,9 @@ TEST_CASE("Name marks use the spawn rank, own buffs and current target buffs") {
     CHECK_FALSE(visitor_marks(true).undead);
     rig.conn.receive_zone_packet_for_test(net::encode(target_buffs, true));
     CHECK_FALSE(visitor_marks(true).undead);
+    // The list is the visitor's (as MQ's Spawn.Buff keeps it): it counts again once the visitor is the target.
     rig.conn.set_target(visitor.spawn_id);
-    CHECK_FALSE(visitor_marks(true).undead);
+    CHECK(visitor_marks(true).undead);
 
     rig.conn.receive_zone_packet_for_test(net::encode(target_buffs, true));
     CHECK(visitor_marks(true).undead);

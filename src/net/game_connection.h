@@ -2882,7 +2882,6 @@ private:
     void finish_zone_in();
     void send_position(bool force);
     void apply_spawn(const Spawn& s);
-    void assign_target(std::uint32_t spawn_id);
     void set_spawn_motion(game::Spawn& s, const Motion& m);
     void connect_world(bool zoning);
     void chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0,
