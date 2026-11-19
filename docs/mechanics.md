@@ -594,6 +594,14 @@ opcodes 0x57da / 0x4d09, which EQEmu never sends.
 
 `game/chat_text.*`: the new-text filters, bad word filter, broken speech and language garbling (`ChatRandom`).
 
+Outgoing chat expands case-insensitive percent codes when the line runs, chat lines in socials included:
+
+- `%T` is the target's display name and `%M` the focused pet's name, with `Target` and `Pet` as fallbacks.
+- `%S`, `%O` and `%P` are the target's pronouns, with `it`, `it` and `its` when there is no target.
+- `%R` is the player target's current race, with `NPC`, `Corpse` and `Race` for an NPC, a corpse and no target.
+- The outgoing message and the local echo use the same expansion. Tell recipients are parsed separately. Item and
+  achievement links and literal percent signs are preserved.
+
 Melee lines (`game::damage_report`, `hit_line_shown`; tests `tests/combat_test.cpp`) follow ReportSuccessfulHit's
 chat filters; a filter hides when its mode is 1 (setting 0):
 
