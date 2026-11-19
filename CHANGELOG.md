@@ -4,6 +4,10 @@
 
 - Corpses no longer play their death animation again when a zone loads: an NPC corpse, or a feign-death spawn, that is already dead when it is first drawn shows its final pose at once, as on the original client, and standing up from feign death blends from that pose instead of the start of the fall. A spawn that dies in front of you still falls as before
 - Bard songs animate again: a singing song always plays its cast animation, and an instrument song plays its drum, lute or horn animation when the bard holds an instrument and is not sitting. On the newer (EQG) models the model does not suppress it, as in the original
+- Item, weapon and augment procs no longer show the spell's casting glow on whoever procs it: they show only the impact on the target, as the original client does. The proc's casting animation stays
+- Corpses no longer play their death animation again when a zone loads: an NPC corpse, or a feign-death spawn, that is already dead when it is first drawn shows its final pose at once, and standing up from feign death blends from that pose instead of the start of the fall. A spawn that dies in front of you still falls as before
+- Corpses no longer play their death animation again when a zone loads: an NPC corpse, or a feign-death spawn, that is already dead when it is first drawn lies in its final pose at once, as on the original client. A spawn that dies in front of you still falls as before
+- Graphics: particles cost less processor time where there are many of them (Actor and Spell Particle Density at High, crowded zones): their movement is worked out on all the worker threads instead of one, and their drawing is prepared on all of them too, so the frame no longer waits on a single core while the graphics card sits idle. They look and move exactly as before
 
 ## 0.7.2-beta (2026-11-19)
 
