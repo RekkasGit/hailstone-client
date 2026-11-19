@@ -1233,6 +1233,8 @@ The item against what the player wears (docs/item-compare.md). `c` = {usable, wh
 | CompareSlotItem | (window, child) → c\|nil | The item in a window's item slot (as SlotItem) | — |
 | CompareBagSlotItem | (bagWindow, index) → c\|nil | The item in a bag window's slot | — |
 
+An item display's stat rows name the stat each shows: `hs.Text("ItemDisplayWindow", "IDW_Row<r>Col<c>Key")` (Hailstone's child; the stock window has none) is the row's `key` in `changes` (`"ac"`, `"str"`, `"svFire"`, ...), `""` for a row with no such stat (size, weight, damage). The packs draw each change beside its row's value with it.
+
 #### Find window (lua_ui_find.cpp)
 
 | Function | Args → returns | What | Cap |
