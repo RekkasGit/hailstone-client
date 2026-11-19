@@ -681,8 +681,9 @@ the distance (`render::flora_keep`: a quarter at 800, a ninth at 1,200), the sam
 far ring costs about what the near circle does. How thick the lawn grows is Hailstone's Grass Density
 (`display.grass_density`, the Options window's slider, the gamepad pack's Grass density): 25 to 300 %, 100 by
 default. It scales the blades each of the lawn's three draws gives a patch (`render::lawn_lod_blades`: 49, 16 and 9
-at 100 %, at least one), the blades keeping their width, so less is sparser and cheaper and more thicker and dearer;
-the other plants are not thinned. The tiles are filled nearest first, so when a frame reaches
+at 100 %, 147, 48 and 27 at 300 %; at least one), the blades keeping their width, so less is sparser and cheaper and
+more thicker and dearer: the blades are made in the vertex shader, so the plants' memory is the same at any density
+and the lawn's GPU time grows with it (the flora pass in South Karana at 1280 x 720 on a Radeon RX 9060 XT, RADV: 0.54 ms at 100 %, 1.11 ms at 300 %); the other plants are not thinned. The tiles are filled nearest first, so when a frame reaches
 `FloraRenderer::kMaxPlants` (262,144) it is far plants that are left out. A plant is 40 bytes to the GPU a frame.
 
 ## Zone flora
@@ -780,10 +781,30 @@ costs about 0.4 ms a frame at the default reach.
 **Where.** On level ground (45 degrees by default) of a drawn, opaque or cut-out surface: not the invisible collision
 surfaces, nor the translucent water. Not in water or lava, nor on the water's surface (the region just under the
 foot); in a zone line's region it grows (up to 0.7 it did not, and North Qeynos's line to Qeynos Hills is a box over
-the whole field north of the city, which was left bare). Not where the zone's own drawn terrain lies overhead: a dungeon's ceiling, a roof, a bridge, an
-overhang. The outdoor zones' invisible collision ceiling and cloud layers do not count, and neither do the placed
-objects, so grass grows under the trees. Each plant takes the colour of the ground texel it stands on (the classic
-outdoor vertices carry none).
+the whole field north of the city, which was left bare). Not where the zone's own drawn terrain lies more than a
+quarter unit overhead (a dungeon's ceiling, a roof, a bridge, a path's tiles laid over the grass; the ground's own
+triangle is not cover); the outdoor zones' invisible collision ceiling and cloud layers do not count. In a zone the
+server calls outdoor the terrain covers only within 20 units overhead (`assets::kOutdoorTerrainCover`, set with the
+rules by `load_zone_flora_rules`, so florascan places grass as the client does): a hut's roof or a low bridge keeps
+the ground bare, a cliff's overhang, an arch or Kelethin's platforms high over Greater Faydark do not. A known cost
+of that: the classic towns' thick walls are hollow boxes over the ground, so grass grows unseen inside them where
+their tops lie over 20 units up (North Qeynos's city wall some 21 units, the wall in Misty Thicket some 33), and
+under raised floors 20 to 40 units up (the Plane of Knowledge). A lawn square asks about the terrain at its spot off
+the centre (above) and also at its centre for a floor lower than its blades are tall (`lawn_max`), so a floor laid a
+unit over the grass (the Plane of Knowledge's brick tiles over its grass texture) does not show blades through it.
+
+Placed objects keep the grass off the ground under them, the zone's own and the server's alike: its doors, ground
+objects (dropped items, tradeskill containers) and placed real estate items (`WorldObjects::flora_cover`), and the
+campfire spawns (race 567). An object covers a spot with its opaque surfaces 0.25 to 16 units over it
+(`assets::kObjectCoverClearance`, `kObjectCoverReach`), so grass grows up to a boulder's base, under a tree's crown
+and its cut-out leaves; a plant (`assets::is_plant`: cut-out leaves and a plant's name) covers nothing. A fire (a
+flame material, or fire, camp or coal in its name; `assets::is_fire_object`) small and low enough (within 12 units
+of its middle and 16 tall) covers a disc over its whole footprint and half a lawn square round it, so the middle of
+a ring of logs is bare too; a campfire spawn covers a disc of its size (3 to 10 units, and the half square) round its feet. A lawn square
+asks about objects at its centre, not the spot off it, so a small object's bare patch is not scattered. The server's
+objects are asked as each tile grows (`FloraRenderer::set_cover`), and the tiles round one that came, went or moved
+grow again (`FloraRenderer::regrow`; a door swinging is not counted). Each plant takes the colour of the ground texel
+it stands on (the classic outdoor vertices carry none).
 
 **Past the zone's edge.** In the modern lighting the land round an outdoor zone (Horizon hills) grows the zone's
 flora too, out to 300 units past the zone's terrain (`render::horizon_lawn_ground`: its ground there, not rock, sand,
@@ -796,8 +817,9 @@ whose flora Hailstone's rules grow, not an EQG zone's own.
 
 **When.** The zone keeps the ground triangles that may grow plants, split into pieces of at most a quarter tile,
 binned by 128-unit tile (`assets::ZoneFloraGrower`); the renderer grows the tiles within reach as they come into it,
-nearest first, on a background thread of its own (a few tiles queued at a time, so the queue follows the camera; a
-tile keeps its old plants while it grows again), and lets go of those well past it. Each piece's plants come from its
+nearest first, on a background thread of its own (`render::FloraGrowth`: a few tiles queued at a time, so the queue
+follows the camera; a tile keeps its old plants while it grows again; a tile whose growing fails is logged once and
+not tried again until the cover there changes or it leaves reach), and lets go of those well past it. Each piece's plants come from its
 own seeded sequence, so a tile grows the same plants every time and a zone costs memory by the reach, not by its size
 (South Karana would hold some 6.5 million plants at once). Setting a zone up takes some 10 to 30 ms at load. A damaged
 mesh is bounded: a triangle with a non-finite vertex or one over 100,000 units out (the zones lie within some 20,000)
