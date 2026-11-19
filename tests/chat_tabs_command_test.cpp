@@ -87,7 +87,7 @@ TEST_CASE("Chat tabs command: navigation, moving and regrouping use the native l
     CHECK(tabs::group(target).tabs.size() == 2);
 }
 
-TEST_CASE("Chat tabs context menu: Citadel order, tab actions and stable window destinations") {
+TEST_CASE("Chat tabs context menu: the original's order first, tab actions and stable window destinations") {
     std::unique_ptr<ImGuiContext, decltype(&ImGui::DestroyContext)> ctx(ImGui::CreateContext(), ImGui::DestroyContext);
     test::ScratchDir dir("chat_tabs_context_menu");
     GameDir game_dir(dir.path());
@@ -124,11 +124,14 @@ TEST_CASE("Chat tabs context menu: Citadel order, tab actions and stable window 
 
     const auto menu = app::chat_context_rows(loot);
     auto next_row = menu.begin();
-    for (std::string_view name : {"Window", "Scroll bar", "Highlight New Messages", "Tab Highlight Color",
-                                  "New Chat Window", "Rename Window", "Always Chat Here", "New Tab", "Close Tab",
-                                  "Rename Tab", "Move Tab Left", "Move Tab Right", "Move Tab to Window", "Detach Tab",
-                                  "Clear Tab Text", "Reply to...", "Tell a friend...", "Tell a raidmember...", "Filters",
-                                  "Channel", "Language", "Hit Modes"}) {
+    // The original's rows first (InitContextMenu @0x6513c0), then Hailstone's.
+    for (std::string_view name : {"Window", "Scroll bar", "New Chat Window", "Rename Window", "Always Chat Here",
+                                  "Reply to...", "Tell a friend...", "Tell a raidmember...", "Filters", "Channel",
+                                  "Language", "Hit Modes", "New Tab", "Close Tab", "Rename Tab", "Move Tab Left",
+                                  "Move Tab Right", "Move Tab to Window", "Detach Tab", "Clear Tab Text",
+                                  "Highlight New Messages", "Tab Highlight Color", "Switch Tab", "Chat Windows",
+                                  "Combine Chat Windows", "Close Window", "Font Size", "Use Tell Windows",
+                                  "Timestamps"}) {
         CAPTURE(name);
         const auto match = std::find_if(next_row, menu.end(), [&](const auto& entry) { return entry.text == name; });
         REQUIRE(match != menu.end());

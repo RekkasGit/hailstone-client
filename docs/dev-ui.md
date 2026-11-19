@@ -77,14 +77,26 @@ defaults to on in red. Each tab can also hide its scrollbar. Chat groups, names,
 and tab settings are saved per character. The native model is shared by the Modern controls,
 [`hs.UI.chat`](ui-api.md#chat-tabs-and-windows) and [`/chattabs`](commands.md).
 
+The menu's first rows are the original's (CChatWindowManager::InitContextMenu @0x6513c0, in its order: Window,
+Scrollbar, New Chat Window, Rename Window, Always Chat Here, the tell menus, Filters, Channel, Language, Hit Modes);
+the tab rows, the highlight settings, Font Size, Use Tell Windows and Timestamps are Hailstone's and come after them.
+Rename Window renames the frame, Rename Tab the chat window it shows (RoF2's window name); both dialogs take 15
+characters, as the original's does.
+
+Tabs are kept in the character's `UI.ini` under `[ChatManager]`, beside the original's keys: `ChatWindow<n>_Group`
+(the frame, 1..32), `_TabOrder`, `_Highlight` and `_HighlightColor` per chat window, and `ChatGroup<g>_Selected`
+and `_Name` per frame. A file written before them (`ChatWindow<n>_Dock` and `_Up`) loads as it was: a docked window
+becomes a tab of its host's frame, with the tab that was up selected, and the new keys are written at the next
+save. Tell tabs are not saved, as in the original.
+
 ### Extended chat channels
 
 The chat windows' channels 57..107 and user colours 355..408 (docs/mechanics.md "Extended chat routing") are
 Hailstone's, used only when a server sends those colours. `hs.ChatFilterGroups()` gives the Filters menu's submenus
 as `{id, parent, name}` (parent 0 is the Filters menu): Chat Channel, Melee and Spells, then Extended (server) and
 its submenus. `hs.ChatFilters(slot)` keeps `id`, `group`, `name` and `on` and adds `menu` and `parent` (the item's
-menu and the menu that holds it). `hs.ChatSetFilter` takes a channel or a menu's name. The native chat menu's
-**Show All** and **Hide All** apply only to the current submenu's channels. The gamepad pack has no filter menu. The channels are
+menu and the menu that holds it). `hs.ChatSetFilter` takes a channel or a menu's name. Each filter menu ends in the
+original's **ALL** and Hailstone's **Hide All**, which apply only to that menu's own channels. The gamepad pack has no filter menu. The channels are
 kept as `ChannelMap0..107` in the character's UI ini and the colours as `User_1..153` in its `chat.ini`; a file
 written before them (ChannelMap0..56, User_1..99) loads as it was, the new ones on the main window and at their
 defaults.

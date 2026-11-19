@@ -25,7 +25,6 @@
 #include "app/chat_context_menu.h"
 #include "app/chat_tab_bar.h"
 #include "app/chat_tabs.h"
-#include "app/chat_tabs.h"
 #include "app/lua_ui.h"
 #include "app/lua_ui_record.h"
 #include "core/character_files.h"
@@ -1114,9 +1113,6 @@ std::vector<Row> filter_menu(int w, game::ChatFilterMenu menu) {
     std::vector<Row> rows;
     auto joined = joined_channels();
     const ChatManager& m = manager();
-    rows.push_back(action("Show All", on_window(w, [menu](int win) { all_channels(win, menu); })));
-    rows.push_back(action("Hide All", on_window(w, [menu](int win) { hide_channels(win, menu); })));
-    rows.push_back(separator());
     auto add_items = [&](auto pred) {
         for (const auto& it : game::chat_filter_items()) {
             if (it.menu != menu || !pred(it)) continue;
@@ -1154,7 +1150,11 @@ std::vector<Row> filter_menu(int w, game::ChatFilterMenu menu) {
         add_submenus(menu); // (Hailstone's extended submenus)
         add_items([](const game::ChatFilterItem&) { return true; });
     }
-    // Hailstone's extended channels follow the original filters.
+    // ALL (0x9d..0xa0): the menu's last row, as InitContextMenu @0x6513c0 adds it.
+    rows.push_back(action(filter_label(game::kStrAll, "ALL"), on_window(w, [menu](int win) { all_channels(win, menu); })));
+    // Hailstone: Hide All, the menu's channels that are in this window back to the main window (the original has
+    // only ALL). Then the extended channels' submenu after the original menu, so the rows above are InitContextMenu's.
+    rows.push_back(action("Hide All", on_window(w, [menu](int win) { hide_channels(win, menu); })));
     if (menu == game::ChatFilterMenu::Filters) rows.push_back(submenu(game::ChatFilterMenu::Extended, true));
     return rows;
 }
@@ -1366,25 +1366,32 @@ std::vector<Row> chat_menu(int w) {
     logical(filter_label(game::kStrScrollbar, "Scroll bar"), [](int win) {
         chat_tabs::set_scrollbar(win + 1, !wnd(win).scrollbar);
     }, true, wnd(w).scrollbar);
-    logical("Highlight New Messages", [](int win) {
-        chat_tabs::set_highlight(win + 1, !wnd(win).flash);
-    }, true, wnd(w).flash);
-    logical("Tab Highlight Color", [](int win) {
-        if (UiHost* hh = chat_host()) {
-            const auto& c = wnd(win);
-            hh->pick_color(c.flash_color.value_or(chat_tabs::kDefaultHighlightColor), [win, serial = c.serial](std::uint32_t argb) {
-                if (used(win) && wnd(win).serial == serial) chat_tabs::set_color(win + 1, argb & 0xffffffu);
-            });
-        }
-    });
-    logical("Reset Tab Highlight Color", [](int win) { chat_tabs::set_color(win + 1, std::nullopt); },
-            wnd(w).flash_color.has_value());
     rows.push_back(separator());
     rows.push_back(action(filter_label(game::kStrNewChatWindow, "New Chat Window"), [] { chat_tabs::new_window(); }));
     frame(filter_label(game::kStrRenameWindow, "Rename Window"), [](int slot) { chat_tabs::prompt_rename_group(slot); });
     logical(filter_label(game::kStrAlwaysChatHere, "Always Chat Here"), [](int win) {
         set_locked(win, manager().locked != win);
     }, true, manager().locked == w);
+    rows.push_back(separator());
+    const net::GameConnection* conn = h ? h->conn : nullptr;
+    const std::vector<std::string> empty;
+    rows.push_back(tell_names_row(game::kStrReplyTo, "Reply to...", conn ? conn->social().last_tells : empty));
+    rows.push_back(tell_names_row(game::kStrTellFriend, "Tell a friend...", conn ? conn->social().friends : empty));
+    std::vector<std::string> raid;
+    if (conn) {
+        for (const auto& mem : conn->raid().members)
+            if (!mem.name.empty() && raid.size() < 0x48) raid.push_back(mem.name);
+    }
+    rows.push_back(tell_names_row(game::kStrTellRaidMember, "Tell a raidmember...", std::move(raid)));
+    rows.push_back(separator());
+    sub(filter_label(game::kStrFilters, "Filters"), [](int win) { return filter_menu(win, game::ChatFilterMenu::Filters); });
+    sub(filter_label(game::kStrChannel, "Channel"), channel_menu, !wnd(w).tell);
+    sub(filter_label(game::kStrLanguage, "Language"), language_menu);
+    sub(filter_label(game::kStrHitModes, "Hit Modes"), hit_modes_menu);
+
+    // Hailstone's rows from here on. RoF2 has no tabs, so the rows above stay InitContextMenu @0x6513c0's, in its
+    // order (Window, Scrollbar | New Chat Window, Rename Window, Always Chat Here | the tell menus | Filters, Channel,
+    // Language, Hit Modes).
     rows.push_back(separator());
     frame("New Tab", [](int slot) { chat_tabs::new_tab(slot); });
     logical("Close Tab", [](int win) { chat_tabs::close(win + 1); }, tab != 1);
@@ -1406,21 +1413,19 @@ std::vector<Row> chat_menu(int w) {
     logical("Detach Tab", [](int win) { chat_tabs::detach(win + 1); }, multiple_tabs);
     logical("Clear Tab Text", [](int win) { chat_tabs::clear(win + 1); });
     rows.push_back(separator());
-    const net::GameConnection* conn = h ? h->conn : nullptr;
-    const std::vector<std::string> empty;
-    rows.push_back(tell_names_row(game::kStrReplyTo, "Reply to...", conn ? conn->social().last_tells : empty));
-    rows.push_back(tell_names_row(game::kStrTellFriend, "Tell a friend...", conn ? conn->social().friends : empty));
-    std::vector<std::string> raid;
-    if (conn) {
-        for (const auto& mem : conn->raid().members)
-            if (!mem.name.empty() && raid.size() < 0x48) raid.push_back(mem.name);
-    }
-    rows.push_back(tell_names_row(game::kStrTellRaidMember, "Tell a raidmember...", std::move(raid)));
-    rows.push_back(separator());
-    sub(filter_label(game::kStrFilters, "Filters"), [](int win) { return filter_menu(win, game::ChatFilterMenu::Filters); });
-    sub(filter_label(game::kStrChannel, "Channel"), channel_menu, !wnd(w).tell);
-    sub(filter_label(game::kStrLanguage, "Language"), language_menu);
-    sub(filter_label(game::kStrHitModes, "Hit Modes"), hit_modes_menu);
+    logical("Highlight New Messages", [](int win) {
+        chat_tabs::set_highlight(win + 1, !wnd(win).flash);
+    }, true, wnd(w).flash);
+    logical("Tab Highlight Color", [](int win) {
+        if (UiHost* hh = chat_host()) {
+            const auto& c = wnd(win);
+            hh->pick_color(c.flash_color.value_or(chat_tabs::kDefaultHighlightColor), [win, serial = c.serial](std::uint32_t argb) {
+                if (used(win) && wnd(win).serial == serial) chat_tabs::set_color(win + 1, argb & 0xffffffu);
+            });
+        }
+    });
+    logical("Reset Tab Highlight Color", [](int win) { chat_tabs::set_color(win + 1, std::nullopt); },
+            wnd(w).flash_color.has_value());
 
     rows.push_back(separator());
     sub("Switch Tab", [tab_rows](int win) {
@@ -2151,12 +2156,15 @@ void move_tab(int tab, int source, int destination) {
     set_active(tab - 1);
 }
 
-bool prompt_title(std::string_view title, const char* prompt, std::function<void(const std::string&)> done) {
+// The menu's rename dialogs take 15 characters, as Rename Window's does in the original (0x2c:
+// CTextEntryWnd::Activate(this, 0, eqstr 3141, 1, 15, the name)). hs.ChatSetTitle / ChatSetWindowTitle and /chattabs
+// keep Hailstone's 64.
+bool prompt_title(std::string_view title, std::string prompt, std::function<void(const std::string&)> done) {
     UiHost* h = chat_host();
     if (!h) return false;
     UiHost::TextEntry entry;
-    entry.prompt = prompt;
-    entry.max_chars = 64;
+    entry.prompt = std::move(prompt);
+    entry.max_chars = 15;
     entry.text = title;
     entry.done = std::move(done);
     h->text_entry = std::move(entry);
@@ -2283,7 +2291,7 @@ bool rename_tab(int tab, std::string_view title) {
 bool prompt_rename_group(int host) {
     if (!group_used(host)) return false;
     const std::uint32_t serial = group_at(host).serial;
-    return prompt_title(group(host).title, "Window title:", [host, serial](const std::string& title) {
+    return prompt_title(group(host).title, eqstr(game::kStrRenamePrompt), [host, serial](const std::string& title) {
         if (group_used(host) && group_at(host).serial == serial) rename_group(host, title);
     });
 }

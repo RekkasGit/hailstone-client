@@ -668,7 +668,8 @@ TEST_CASE("Chat windows: extended channels take only the extended colours and ke
         CHECK(lua.run("return lines(2)") == "other direct damage");
         CHECK(conn.chat_filters().settings == original_server_settings);
 
-        // Keep RoF2's categories and the extended submenu, with the same bulk controls in every scope.
+        // The Filters menu is InitContextMenu's (Randoms, Other and the Melee and Spells items where they were, ALL
+        // last), then Hailstone's Hide All, then Extended (server). Every submenu ends in ALL and Hide All.
         lua.run("hs.ChatMenu(2)");
         REQUIRE(host.menus.size() == 1);
         auto find = [](const std::vector<app::UiHost::MenuRow>& rows, const char* name) {
@@ -679,25 +680,26 @@ TEST_CASE("Chat windows: extended channels take only the extended colours and ke
         REQUIRE(filters->submenu);
         auto filter_rows = filters->submenu();
         auto check_bulk_controls = [](const std::vector<app::UiHost::MenuRow>& rows) {
-            REQUIRE(rows.size() >= 3);
-            CHECK(rows[0].text == "Show All");
-            CHECK(rows[1].text == "Hide All");
-            CHECK(rows[2].separator);
+            REQUIRE(rows.size() >= 2);
+            CHECK(rows[rows.size() - 2].text == "ALL");
+            CHECK(rows.back().text == "Hide All");
         };
-        check_bulk_controls(filter_rows);
+        REQUIRE(filter_rows.size() >= 3);
+        CHECK(filter_rows[filter_rows.size() - 3].text == "ALL");
+        CHECK(filter_rows[filter_rows.size() - 2].text == "Hide All");
         CHECK(filter_rows.back().text == "Extended (server)");
         auto spells = find(filter_rows, "Spells");
         REQUIRE(spells != filter_rows.end());
         REQUIRE(spells->submenu);
         const auto spell_rows = spells->submenu();
         check_bulk_controls(spell_rows);
-        CHECK(spell_rows.size() == 11); // eight RoF2 items and three bulk control rows
+        CHECK(spell_rows.size() == 10); // the eight RoF2 items, ALL and Hide All
         auto melee = find(filter_rows, "Melee");
         REQUIRE(melee != filter_rows.end());
         REQUIRE(melee->submenu);
         const auto melee_rows = melee->submenu();
         check_bulk_controls(melee_rows);
-        CHECK(melee_rows.size() == 21); // 18 RoF2 items and three bulk control rows
+        CHECK(melee_rows.size() == 20); // the 18 RoF2 items, ALL and Hide All
         REQUIRE(filter_rows.back().submenu);
         auto extended_rows = filter_rows.back().submenu();
         auto healing = find(extended_rows, "Healing");
@@ -705,7 +707,7 @@ TEST_CASE("Chat windows: extended channels take only the extended colours and ke
         REQUIRE(healing->submenu);
         auto healing_rows = healing->submenu();
         check_bulk_controls(healing_rows);
-        CHECK(healing_rows.size() == 8); // five channels and three bulk control rows
+        CHECK(healing_rows.size() == 7); // five channels, ALL and Hide All
         api.save_layout();
     }
     {
