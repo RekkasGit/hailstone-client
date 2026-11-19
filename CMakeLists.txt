@@ -712,7 +712,7 @@ add_custom_target(hailstone_build_info
 add_dependencies(hailstone_engine hailstone_build_info)
 set_source_files_properties(src/core/build_info.cpp PROPERTIES OBJECT_DEPENDS ${PROJECT_BINARY_DIR}/generated/build_info.inc)
 target_include_directories(hailstone_engine PRIVATE ${PROJECT_BINARY_DIR}/generated)
-# Lua 5.4.7 (third_party/lua, MIT), for the Lua UI (src/ui/lua): compiled as C.
+# Lua 5.5.1 (third_party/lua, MIT), for the Lua UI (src/ui/lua): compiled as C.
 file(GLOB HAILSTONE_LUA_SOURCES CONFIGURE_DEPENDS third_party/lua/*.c)
 add_library(hailstone_lua STATIC ${HAILSTONE_LUA_SOURCES})
 target_include_directories(hailstone_lua PUBLIC third_party/lua)
