@@ -830,8 +830,10 @@ private:
     void inspect_selected(UiHost& host) {
         if (const net::Item* it = considered(host); it && host.inspect_item) host.inspect_item(*it);
     }
-    // UpdateList checks the given ID and higher ranks of its group and subgroup. On EQEmu, learned disciplines
-    // are in the profile's discipline list rather than the spell book, but tomes use the same scroll effect.
+    // UpdateList's ScrollKnown: the scroll's spell is known, or, for a spell of a group with a rank, one of a higher
+    // rank is: from the group's top rank down while above the scroll's. The original's SpellBookInfo::IsSpellKnown
+    // (@0x449cd0) reads only the spell book, so a learned discipline tome still shows. Deliberate change from RoF2:
+    // the profile's discipline list counts as well, so a tome already learned is left out too.
     static bool scroll_known(UiHost& host, const net::Item& item) {
         const auto& book = host.conn->spell_state().book;
         auto known = [&](std::uint32_t id) {

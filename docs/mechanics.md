@@ -947,10 +947,14 @@ The merchant window's purchase page has a check box, MW_UsableButton, ticked whe
 constructor: SetCheck(1), and PurchasePageHandler +0x60 cleared). While it is ticked, the list
 (PurchasePageHandler::UpdateList @0x6f0bb0, `game::merchant_usable_hides`) leaves out a common item (item class 0)
 whose class mask lacks the character's class or whose race mask lacks the race's bit (0x6f7160: races below 13 as they
-are, Iksar 13, Vah Shir 14, Froglok 15, Drakkin 16, any other 17), and a spell scroll or discipline tome whose
-effect is already learned. Hailstone checks the spell book and the server's separate discipline list, looking for
-the exact effect or a higher rank in the same group and subgroup. Bags and books always show.
-As a Hailstone extension, if the server supplies a multiclass mask, any class in that mask can match instead
+are, Iksar 13, Vah Shir 14, Froglok 15, Drakkin 16, any other 17), and a spell scroll (item type 20) whose spell is
+known, or whose group has a higher rank known (from the group's top rank down while above the scroll's). The original
+asks SpellBookInfo::IsSpellKnown @0x449cd0, which looks only through the 720 spell book slots (PcProfile +0x2520), so a
+discipline tome (also item type 20, its spell in the scroll effect) stays listed after it is learned, because a learned
+discipline goes to the profile's discipline list, not the book. A deliberate change from RoF2: Hailstone also counts
+the discipline list (the profile's, kept current by OP_DisciplineUpdate), so a learned tome, or one whose group has a
+higher rank learned, is left out too; unticking the box shows it again. Bags and books always show. As a Hailstone
+extension, if the server supplies a multiclass mask, any class in that mask can match instead
 of the profile's class. Level, deity and lore are not looked at. A click on the box flips +0x60 and rebuilds the
 list; the state lasts for the session. The modern pack's box is "Usable only" beside "Affordable only"; the
 gamepad pack's Buy page switches it with X.
