@@ -9,6 +9,8 @@
 - Graphics: characters' and items' own particle effects (glowing weapons, auras, run dust) cost less while off screen: an actor out of view, or past 500 units in the classic lighting, no longer emits new particles, so its effects fill in over a moment as you turn towards it. `display.particle_offscreen_hold = 0` in hailstone.ini keeps them emitting everywhere. Changing Actor Particle Density no longer empties every effect at once (they thin out or fill in), and at Off the effects cost nothing
 - Cures no longer remove debuffs locally: a partial or too-weak cure leaves its icon standing until the server's buff fade clears it, instead of making the debuff vanish early
 - Buff icons now show a debuff's curse, disease, poison or corruption counters as soon as the buff lands and keep showing the remaining count after a partial cure, a server refresh without counter data, or a full buff list that leaves the spell in the same slot
+- Plugins: `get_spells_data_bulk` reads many spells by id in one call, each with its spells_us.txt fields, its description, the names of its target type, resist type and categories, and its effect slots as text, in MacroQuest's `ParseSpellEffect` wording ("Slot 1: Increase HP by 11 (L1) to 20 (L10)"). For developers: docs/plugins.md "Buff and spawn records"
+- Scripts: `${Spell.TargetType}` now gives MacroQuest's text for every target type: `LifeTap` (was `Life Tap`), and `None`, `Special Muramites`, `Target_AE_No_Players_Pets` and `Single Friendly (or Target's Target` where it said `Unknown`
 
 ## 0.7.2-beta (2026-11-19)
 
