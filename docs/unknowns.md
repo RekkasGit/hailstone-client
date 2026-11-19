@@ -73,6 +73,9 @@ What the client does not implement yet, or implements with an approximation it c
 - Invisibility versus undead on another spawn (Hailstone's optional `[Name]`) is marked only while it is the target
   and its OP_TargetBuffs list holds the effect: EQEmu's spawn record and SpawnAppearance carry regular invisibility
   only, and the server decides whose buffs it sends. A server would have to send more to mark other spawns.
+- Native canvas providers use the same caption visibility and physical input checks. Live interoperability with a
+  compiled nameplate add-on and dense-scene performance remain open. Stock spawn appearance combines invisibility
+  and Hide, while exact invisibility types are known from received self or current-target spell effects.
 
 - The shared `hs.UI` contract and migrated Modern/Gamepad presentations require live acceptance of normal mouse,
   keyboard and controller workflows, zoning and interface changes. Declared base packs inherit presentations;
