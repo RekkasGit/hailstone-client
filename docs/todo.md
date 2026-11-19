@@ -4,6 +4,59 @@ What is left before the client is feature complete, in the order to work on it. 
 
 Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 
+## Road to 1.0
+
+The steps are in `docs/plan.md` "Road to 1.0". This section says which items belong to which step; most of them are written out in full in the sections below, so tick them there and here together.
+
+### 0.8, freeze the surfaces
+
+- [ ] Lua 5.4.7 to 5.5.1 (the `lua-5.5` branch): the packs and the add-on repositories fixed, the break in the changelog.
+- [ ] Review `hs.*` across both packs and the `mq` module: rename or remove what is not wanted for good, then write the stable set down (`docs/ui-api.md`, `docs/plugins.md`) with the rules for adding to it after 1.0.
+- [ ] Plugin ABI: make the last breaking change, if any, and declare `HAILSTONE_PLUGIN_ABI` stable; write down how it grows after 1.0 (new functions at the end of the tables, no changed layouts).
+- [ ] Remove the `nmsc` compatibility layer: `sdk/nmsc_*.h` and the `nmsc_*` exports, the `NMSC_*` environment variables (`core/env.h`) and CMake settings, the saved window names renamed at start (`core/old_ui_settings`), and the rule about them in AGENTS.md.
+- [ ] Remove the older builds' fallbacks: the chat filters and colours read from the asset folder's `eqclient.ini` under `chat.ini`, and the unsorted character folders adopted per world (docs/layout.md).
+- [ ] Add-on safety: wrap the plugin functions and tables passed to pack functions; the arming delay on the client's own consent prompt; the pack's consent window guarded from before its first draw; the core install skipping add-ons' folders; `server_file_destination` refusing `.so.N` as `make_addon.py` does (all under "Add-ons" and "Code health").
+- [ ] The layer order: `net` and `assets` stop including `game/` headers ("Code health").
+- [ ] The local-time calls outside `src/platform/` through `platform::local_time` ("UI").
+
+### 0.9, platforms and releases
+
+- [ ] Windows: the updater run (WinHTTP, the renames of the running `hailstone.exe`), add-ons run, the Lua review fixes built with MSVC under Wine, the `path::string()` sweep or the manifest recorded as required ("Updates", "Add-ons", "Code health").
+- [ ] A scripted release (packages, manifest, signature, upload), local or in CI ("Updates").
+- [ ] Downloads that resume; the rollback's `kept-<time>/` folders cleaned up.
+- [ ] Add-ons against the real GitHub; XeSS and FSR 4 in the add-on index.
+- macOS is on hold until someone can test and maintain its releases; it stays a test build and does not block 1.0.
+
+### 0.10, live play on stock EQEmu
+
+- [ ] Write the checklist (a doc of its own, played on the stock PEQ test server, both packs, a physical controller) from the live items of "Combat and spells", "Movement", "Items and commerce", "Social and friends", "Navigation", "Item comparison", "Isometric camera" and "Check live".
+- [ ] Play it and fix what it finds.
+- [ ] Shadow step (SPA 379): the zone collision `land_spell` needs ("Combat and spells").
+- [ ] The collision radius, too wide for doorways ("Movement").
+- [ ] Leaving an adventure clears the window ("Adventures").
+- [ ] UCS reconnection and a wrong chat key ("Items and commerce").
+
+### 0.11, real estate
+
+- [ ] Placement: the ghost's wall and surface fit, free mode's mouse moves, the flatness test.
+- [ ] The item-move pre-checks and button greying, alternate-currency deposits, the NPC-item binding, the item menu's unbuilt entries, the neighborhood polls and vote window.
+- [ ] Played live on a server with housing, and the real estate rows of `docs/unknowns.md` settled.
+
+### 0.12, memory and soak
+
+- [ ] The character archives and the base cost ("Memory").
+- [ ] The texture slots of freed appearances freed; the session-long caches evicting ("Check live", "Code health").
+- [ ] An hour in a busy hub with zoning, and several clients on the shared asset cache.
+- [ ] Golden-image tests for a few zones (docs/plan.md section 5).
+
+### 1.0 RC
+
+- [ ] Bug fixes only; a known-issues page from what is left in `docs/unknowns.md`; the wiki and changelog.
+
+### After 1.0
+
+Not blocking 1.0: `/gems`; `/travel`, waypoints and the mesh editor; levitation paths; tactical queries for bots; frame generation's pacing and 3x/4x; FSR's water mask; zone flora rules; an allocator of the client's own; shared GPU textures on Linux and past 16 clients; the MacroQuest alert lists and `/target next`; the "trace the original" rows that change nothing a player sees. The server-dependent systems stock EQEmu never sends (shrouds and missions, LDoN, fellowships, guild banners, achievements, reward selection, evolving items) keep their live checks open past 1.0.
+
 ## Spirit Shrouds and Monster Missions
 
 - [x] Server-supplied form catalogs, stats and detail requests, character and observer form updates, shared-task template rows, shroud progress and Shroud Bank item recovery in both UI packs.
