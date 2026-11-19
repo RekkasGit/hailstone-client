@@ -470,14 +470,27 @@ float classic_action_rate(std::uint8_t anim, float speed, std::uint16_t race, st
     return static_cast<float>(mech::old_model_anim_speed(anim, pre, race, gender, tunic_point, luclin_elementals));
 }
 
+bool classic_idle_request(std::uint8_t requested) {
+    // 0x4b1ba0: P01, P03, P08, O01, O02 and 0xc..0xf.
+    return requested == num(AnimationType::Stand) || requested == num(AnimationType::Turn) ||
+           requested == num(AnimationType::StandAfter) || requested == num(AnimationType::Idle) ||
+           requested == num(AnimationType::IdleAfter) || (requested >= 0xc && requested <= 0xf);
+}
+
 ClassicStand classic_stand_request(std::uint8_t normalized, std::uint8_t playing, std::uint8_t stand_state,
-                                   const std::function<bool(std::string_view)>& has_clip) {
+                                   const std::function<bool(std::string_view)>& has_clip,
+                                   const ClassicStandContext& ctx) {
     // 0x4b1917: a direct stand request from a sitting actor becomes the sit clip before the lookup. Without P07
     // nothing plays (0x4b1a06); with it the sit clip keeps the packet's speed, not the stand fallback's 1.0.
+    // Race 0x3c and the local player in first person (CDisplay::cameraType 0) play nothing (0x4b194b, 0x4b195b).
     if (stand_state == kStandStateSitting && normalized == num(AnimationType::Stand)) {
+        if (ctx.race == kRaceNoSitConversion || ctx.local_first_person) return {};
         if (!has_clip("P07")) return {};
         return {"P07", num(AnimationType::Sit), true};
     }
+    // 0x4b1b97: an actor that is not standing (+0x35c not 100) plays nothing for an idle request (the packet's
+    // own number), unless it became the sit clip above.
+    if (stand_state != kStandStateStanding && classic_idle_request(ctx.requested.value_or(normalized))) return {};
     const bool plain = classic_plain_stand_after(playing);
     std::uint8_t anim = plain ? num(AnimationType::Stand) : num(AnimationType::StandAfter);
     std::string_view c = mech::old_anim_clip(anim);

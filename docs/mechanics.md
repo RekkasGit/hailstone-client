@@ -1924,8 +1924,9 @@ also reads +0x38c (a pet's master: the fidget needs a roll above 99), the update
 spot) and the global auto attack switch (0xe635aa, read by 0x4b01dd without a local-player check: no fidget for any
 actor while it is on). A P01 request, or an action whose
 clip and 0x4b1210 replacement are both missing, is 0x4b15b0's stand request: P01 / P08 on the base, or the follow-up
-+0x10c4; a direct stand request from a sitting actor becomes the sit clip before the lookup (0x4b1917; without P07
-nothing plays), and the play state from before the movement choice decides P01 or P08. A corpse's D05 is not
++0x10c4; a direct stand request from a sitting actor becomes the sit clip before the lookup (0x4b1917; without P07,
+for race 0x3c or for the local player in first person nothing plays), an actor that is not standing plays nothing
+for an idle request (0x4b1b97: the packet's P01, P03, P08, O01, O02 or 0xc..0xf), and the play state from before the movement choice decides P01 or P08. A corpse's D05 is not
 0x4afc90's: 0x490366 asks the animation object's slot
 0x20 (0x4afd50), which calls 0x4096c0 directly with speed 0, so it bypasses the factor and holds the end pose.
 Hailstone plays D05 once at rate 1 and holds its last frame, which shows the same end pose.

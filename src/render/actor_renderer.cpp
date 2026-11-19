@@ -1799,7 +1799,8 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
             // and an unfinished action the stand may not interrupt keep what plays; the same clip keeps its phase.
             else if (stand_request && !st.anim.posture) {
                 const game::ClassicStand stand =
-                    game::classic_stand_request(normalized, playing_before, in.stand_state, has_clip);
+                    game::classic_stand_request(normalized, playing_before, in.stand_state, has_clip,
+                                                {s.action, s.race, in.local_player && in.first_person});
                 if (!stand.clip.empty()) {
                     const assets::AnimationClip* stand_clip = model->clip(stand.clip, holding);
                     // The sit clip keeps the packet's speed; the stand fallback is 1.0 (0x4b1a70).

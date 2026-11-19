@@ -243,6 +243,41 @@ TEST_CASE("classic: the stand path uses the posture and the play state before th
     CHECK(stand.clip == "P01");
 }
 
+TEST_CASE("classic: the stand path off its feet (0x4b1917, 0x4b1b97)") {
+    using hailstone::AnimationType;
+    using hailstone::game::ClassicStandContext;
+    using hailstone::game::classic_stand_request;
+    const auto anim = [](AnimationType a) { return static_cast<std::uint8_t>(a); };
+    constexpr std::uint8_t kDucking = hailstone::game::kStandStateDucking;
+    constexpr std::uint16_t kRace3c = 0x3c, kHuman = 1;
+    auto has = [](std::string_view c) { return c == "P01" || c == "P07" || c == "P08"; };
+    // Race 0x3c and the local player in first person never take the sit clip: nothing plays.
+    CHECK(classic_stand_request(anim(AnimationType::Stand), anim(AnimationType::Run), kSitting, has,
+                                ClassicStandContext{std::nullopt, kRace3c, false})
+              .clip.empty());
+    CHECK(classic_stand_request(anim(AnimationType::Stand), anim(AnimationType::Run), kSitting, has,
+                                ClassicStandContext{std::nullopt, kHuman, true})
+              .clip.empty());
+    CHECK(classic_stand_request(anim(AnimationType::Stand), anim(AnimationType::Run), kSitting, has,
+                                ClassicStandContext{std::nullopt, kHuman, false})
+              .clip == "P07");
+    // Ducking: a P01 request is an idle request, so nothing plays.
+    CHECK(classic_stand_request(anim(AnimationType::Stand), anim(AnimationType::Run), kDucking, has).clip.empty());
+    // An action whose clip and replacement are missing is not an idle request: the stand plays, ducking or not.
+    CHECK(classic_stand_request(anim(AnimationType::Stand), anim(AnimationType::Walk), kDucking, has,
+                                ClassicStandContext{anim(AnimationType::MainhandSlash), kHuman, false})
+              .clip == "P01");
+    // A sitting actor's missing action is not converted to the sit clip either.
+    CHECK(classic_stand_request(anim(AnimationType::MainhandSlash), anim(AnimationType::Walk), kSitting, has,
+                                ClassicStandContext{anim(AnimationType::MainhandSlash), kHuman, false})
+              .clip == "P01");
+    CHECK(hailstone::game::classic_idle_request(anim(AnimationType::Turn)));
+    CHECK(hailstone::game::classic_idle_request(0xc));
+    CHECK(hailstone::game::classic_idle_request(0xf));
+    CHECK_FALSE(hailstone::game::classic_idle_request(0x10));
+    CHECK_FALSE(hailstone::game::classic_idle_request(anim(AnimationType::Sit)));
+}
+
 TEST_CASE("classic: a sitting actor's P07 plays as the packet action, not the stand queue") {
     using hailstone::AnimationType;
     const auto anim = [](AnimationType a) { return static_cast<std::uint8_t>(a); };

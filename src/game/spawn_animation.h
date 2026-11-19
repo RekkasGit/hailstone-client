@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -162,7 +163,8 @@ float classic_action_rate(std::uint8_t anim, float speed, std::uint16_t race, st
 
 // 0x4b15b0's stand path: P01, or P08 after an animation 0x4b0860 does not name (classic_plain_stand_after). A
 // direct stand request from a sitting actor becomes the sit clip before the lookup (0x4b1917); without P07 nothing
-// plays, and with it the sit clip keeps the packet's speed (it is not the stand fallback). `normalized` is the
+// plays, and with it the sit clip keeps the packet's speed (it is not the stand fallback); an actor that is not
+// standing plays nothing for an idle request (0x4b1b97). `normalized` is the
 // request after the new-to-old map (a new-style STND is P01 too). A model without P08 plays P01's clip and code,
 // and one without P01 too plays nothing (an empty clip).
 struct ClassicStand {
@@ -170,8 +172,21 @@ struct ClassicStand {
     std::uint8_t anim = static_cast<std::uint8_t>(AnimationType::Stand);
     bool sit = false;   // the sitting conversion: the packet's speed, not the stand's 1.0
 };
+// What else 0x4b15b0's stand path reads: the packet's own number (0x4b1b97's idle-request test reads it before the
+// new-to-old map; nullopt: the normalized one), the race (0x4b194b: race 0x3c never takes the sit clip) and whether
+// this is the local player in first person (0x4b195b: neither).
+struct ClassicStandContext {
+    std::optional<std::uint8_t> requested;
+    std::uint16_t race = 0;
+    bool local_first_person = false;
+};
+inline constexpr std::uint16_t kRaceNoSitConversion = 0x3c;
+// 0x4b1ba0's idle requests: P01, P03, P08, O01, O02 and 0xc..0xf. An actor that is not standing plays nothing
+// for one of them unless it became the sit clip.
+bool classic_idle_request(std::uint8_t requested);
 ClassicStand classic_stand_request(std::uint8_t normalized, std::uint8_t playing, std::uint8_t stand_state,
-                                   const std::function<bool(std::string_view)>& has_clip);
+                                   const std::function<bool(std::string_view)>& has_clip,
+                                   const ClassicStandContext& ctx = {});
 
 // 0x4b1a7e: after a stand request plays the follow-up, +0x10c4 becomes P01 or P08 from the animation playing
 // (+0x10c0), never the action just played.
