@@ -33,7 +33,7 @@ struct SlashCommand {
     std::uint8_t flags;       // bit 0: usable while dead
 };
 
-// The table in the original's order, followed by Hailstone additions.
+// The table in the original's order.
 std::span<const SlashCommand> slash_commands();
 
 // GetNextCmdArg: skips spaces, then reads one word. A word that starts with

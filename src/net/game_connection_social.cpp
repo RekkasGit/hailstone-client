@@ -163,6 +163,8 @@ void GameConnection::send_command(const std::string& typed) {
         if (word == "/abilitybook" && client_commands_ && client_commands_("Hailstone_abilitybook", std::string(rest)))
             return;
         if (word == "/camera" && client_commands_ && client_commands_("Hailstone_camera", std::string(rest))) return;
+        if (word == "/chattabs" && client_commands_ && client_commands_("Hailstone_chattabs", std::string(rest)))
+            return;
         if ((word == "/finditem" || word == "/advi") && client_commands_ &&
             client_commands_("Hailstone_finditem", std::string(rest)))
             return;

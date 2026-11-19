@@ -14,7 +14,6 @@
 #include "app/chat_tabs_command.h"
 #include "app/lua_ui.h"
 #include "core/game_dir.h"
-#include "game/slash_commands.h"
 #include "net/game_connection.h"
 #include "scratch_dir.h"
 #include "ui/dev_screens.h"
@@ -23,11 +22,6 @@ using namespace hailstone;
 namespace tabs = app::chat_tabs;
 
 TEST_CASE("Chat tabs command: navigation, moving and regrouping use the native layout") {
-    const auto parsed = game::parse_command_line("/ChatTabs status", false);
-    REQUIRE(parsed.kind == game::CommandLine::Kind::Command);
-    CHECK(std::string_view(game::slash_commands()[parsed.index].handler) == "Hailstone_chattabs");
-    CHECK(parsed.args == "status");
-
     std::unique_ptr<ImGuiContext, decltype(&ImGui::DestroyContext)> ctx(ImGui::CreateContext(), ImGui::DestroyContext);
     test::ScratchDir dir("chat_tabs_command");
     GameDir game_dir(dir.path());

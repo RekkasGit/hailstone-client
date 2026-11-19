@@ -98,8 +98,7 @@ game::EqStrings test_strings() {
 
 TEST_CASE("slash commands: the original's table and prefix matching") {
     auto table = game::slash_commands();
-    // The original's 391 without four voice macro commands, two card-game names and /mp3, plus /chattabs.
-    CHECK(table.size() == 385);
+    CHECK(table.size() == 384); // the original's 391 without four voice macro commands, two card-game names and /mp3
     // The card game is left out. Achievements, the Marketplace and real estate stay (a
     // server that runs them answers their packets).
     CHECK(command_name("/marketplace") == "/marketplace");
