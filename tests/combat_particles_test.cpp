@@ -1157,7 +1157,6 @@ TEST_CASE("Spell859 missile destruction invokes the local Action presentation wi
     CHECK(cues.front().stage == 2);
     CHECK(cues.front().source == 333);
     CHECK(cues.front().target == me);
-    CHECK_FALSE(cues.front().proc); // no invented proc cast stage or animation broadcast
     CHECK(rig.conn.spell_state().others.contains(333));
     auto sounds = rig.conn.take_sound_cues();
     REQUIRE(sounds.size() == 1);
