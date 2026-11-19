@@ -444,7 +444,8 @@ void cover_triangles(const Mesh& mesh, const glm::mat4* transform, bool opaque_o
         if (part.material >= mesh.materials.size()) continue;
         const Material& m = mesh.materials[part.material];
         if (!casts_cover(m) || (opaque_only && m.blend != BlendMode::Opaque)) continue;
-        const std::size_t end = std::min<std::size_t>(std::size_t{part.first_index} + part.index_count, mesh.indices.size());
+        const std::size_t end =
+            std::min<std::size_t>(std::size_t{part.first_index} + part.index_count, mesh.indices.size());
         for (std::size_t i = part.first_index; i + 3 <= end; i += 3) {
             const std::uint32_t a = mesh.indices[i], b = mesh.indices[i + 1], c = mesh.indices[i + 2];
             if (a >= mesh.vertices.size() || b >= mesh.vertices.size() || c >= mesh.vertices.size()) continue;
@@ -569,7 +570,8 @@ ObjectCoverTris::ObjectCoverTris(const std::vector<glm::vec3>& tris, glm::vec2 l
         const glm::vec2 thi = glm::max(glm::max(glm::vec2(a), glm::vec2(b)), glm::vec2(c));
         if (thi.x < lo.x || thi.y < lo.y || tlo.x > hi.x || tlo.y > hi.y) continue;
         tris_.insert(tris_.end(), {a, b, c});
-        spans.push_back({cell(tlo.x - lo.x, nx_), cell(thi.x - lo.x, nx_), cell(tlo.y - lo.y, ny_), cell(thi.y - lo.y, ny_)});
+        spans.push_back(
+            {cell(tlo.x - lo.x, nx_), cell(thi.x - lo.x, nx_), cell(tlo.y - lo.y, ny_), cell(thi.y - lo.y, ny_)});
     }
     std::vector<std::uint32_t> counts(static_cast<std::size_t>(nx_) * static_cast<std::size_t>(ny_) + 1, 0);
     const auto at = [&](std::int32_t x, std::int32_t y) {

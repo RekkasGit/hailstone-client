@@ -1223,9 +1223,11 @@ void ClientApp::update_flora_cover() {
     if (conn_)
         for (const auto& [id, s] : conn_->world().spawns)
             if (s.race == game::Race::Campfire)
-                fires.push_back(assets::campfire_cover(s.position - glm::vec3(0.0f, 0.0f, s.heights.avatar_height), s.size));
+                fires.push_back(
+                    assets::campfire_cover(s.position - glm::vec3(0.0f, 0.0f, s.heights.avatar_height), s.size));
     if (fires == flora_campfires_) return;
-    const auto regrow_missing = [&](const std::vector<assets::CoverDisc>& from, const std::vector<assets::CoverDisc>& in) {
+    const auto regrow_missing = [&](const std::vector<assets::CoverDisc>& from,
+                                    const std::vector<assets::CoverDisc>& in) {
         for (const auto& d : from)
             if (std::find(in.begin(), in.end(), d) == in.end())
                 flora_renderer_->regrow(glm::vec2(d.feet) - d.radius, glm::vec2(d.feet) + d.radius);

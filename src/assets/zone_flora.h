@@ -33,10 +33,11 @@
 // Lines apply in order: a later max_slope or scale replaces an earlier one, and the first matching ground line
 // wins, so a zone's own exceptions go before its include.
 // A zone without a file of its own takes flora/default.txt when the server calls it outdoor (time type 1, 2 or 5).
-// Plants grow only on opaque or cut-out surfaces (not the translucent water) and keep off water, lava and zone-line
-// regions and the water's surface, and off ground with the zone's terrain over it (a dungeon's ceiling, a roof, a
-// bridge; outdoors only within kOutdoorTerrainCover, so not under a cliff's overhang) or a placed object's opaque surface low over it (a crate, a tent; not a tree's crown or its leaves), and
-// off what the server places when the caller says so (FloraCover: its doors and objects, a campfire spawn).
+// Plants grow only on opaque or cut-out surfaces (not the translucent water) and keep off water and lava regions and
+// the water's surface (a zone line's region grows them), and off ground with the zone's terrain over it (a dungeon's
+// ceiling, a roof, a bridge; outdoors only within kOutdoorTerrainCover, so not under a cliff's overhang) or a placed
+// object's opaque surface low over it (a crate, a tent; not a tree's crown or its leaves), and off what the server
+// places when the caller says so (FloraCover: its doors and objects, a campfire spawn).
 
 #include <cstdint>
 #include <filesystem>
@@ -250,7 +251,7 @@ public:
     std::size_t triangles() const;
     // Tile `tile`'s plants (an index into tiles()), appended to `out`, at most kMaxTileFlora. `by_texture`
     // (tools/florascan) counts them by ground texture (lower case). `extra`: more cover, as the zone's own is tested.
-    // Not thread-safe (the texel lookup caches).
+    // Reads the grower only (render::FloraRenderer calls it on a thread of its own).
     void grow(std::size_t tile, std::vector<FloraInstance>& out,
               std::unordered_map<std::string, std::size_t>* by_texture = nullptr, const FloraCover& extra = {}) const;
 

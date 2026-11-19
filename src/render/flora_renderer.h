@@ -128,7 +128,7 @@ public:
     using CoverSource = std::function<CoverTest(glm::vec2 lo, glm::vec2 hi)>;
     void set_cover(CoverSource source) { cover_ = std::move(source); }
     // Grows again the grown tiles whose square, with assets::kFloraCoverMargin round it, touches [lo, hi] (cover
-    // there came or went). Each keeps its plants until its new ones have grown, nearest first within the grow budget.
+    // there came or went). Each keeps its plants until its new ones have grown, nearest first.
     void regrow(glm::vec2 lo, glm::vec2 hi);
 
     // Who the plants bend away from (Hailstone's own): xyz a foot, w how far round it (the player, the spawns walking

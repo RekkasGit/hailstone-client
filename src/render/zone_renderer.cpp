@@ -71,8 +71,6 @@ void mark(const char* phase, std::chrono::steady_clock::time_point start) {
 }
 } // namespace
 
-// Whether a placed object is a plant the wind moves (the modern look's sway, zone.vert): it has see-through leaves or
-// blades (a masked material) and its name, or one of its materials' or textures', says what it is.
 float mesh_height(const assets::Mesh& mesh) {
     float lo = std::numeric_limits<float>::max(), hi = -lo;
     for (const auto& v : mesh.vertices) {
