@@ -70,6 +70,7 @@
 - Add-on authors: `tools/make_addon.py` refuses what the client would refuse at install
   - A version with leading zeros, names such as `aux.lua` or ending in a dot, and an `--out` folder inside the package's folder
   - It no longer packs a link that leads out of the folder; `tools/make_update.py` does the same and leaves dotfiles out
+- Spell memorization now speeds up with your trained Meditate skill, as it does in RoF2
 
 ## 0.7.2-beta (2026-11-19)
 
