@@ -796,6 +796,9 @@ rectangle (`u0, v0, u1, v1`).
 | PushChatFont | ([index=2]) → — | Chat font 0..10. Pop with PopFont |
 | PopFont | () → — | Pops no more than the window's code pushed |
 | ChatFontSize | ([index=2]) → px | |
+| ChatTabStrip | (slot, x, y, width, height, scale, text, muted, accent, shadow [, rolled]) → bool | The modern chat's tab strip (colours as {r,g,b,a}); true when it took a right click. A pack's own chat window `Chat <slot>` only |
+| ChatTabMenu | (slot) → — | The chat context menu's rows inside an open popup. A pack's own chat window only |
+| ScrollChatTab | (slot, tabSlot, page, pageHeight, follow) → — | Keeps each tab's scroll place in the output child. A pack's own chat window only |
 
 #### Drawing (window draw list, or foreground)
 
@@ -1105,7 +1108,7 @@ achievement and reward-selection APIs.
 
 | Function | Args → returns | What | Cap |
 |---|---|---|---|
-| ChatWindows | () → {{slot, title, main, tells, tab, select, tellsIn, tabs={{title, unread, tell}}}} | Shown chat windows | — |
+| ChatWindows | ([into]) → {{slot, title, windowTitle, main, tells, tab, select, tellsIn, tabs={{slot, title, unread, tell, scrollbar, flash, flashColor, highlighted}}}} | Shown chat windows. `into` is refilled in place (its records are reused at the next call) | — |
 | ChatText | (slot [, version [, names [, stamps [, incremental]]]]) → version [, lines [, reset, count]] | STML lines of the tab that is up. The incremental form gives only the new lines | — |
 | ChatInfo | (slot) → font, active, default, scrollbar, here | Tab font, active, default channel, scrollbar, Always Chat Here | — |
 | ChatSubmit | (slot, text) → — | Send a typed line (goes through the command filter, so the caller's caps apply) | — |
@@ -1118,18 +1121,26 @@ achievement and reward-selection APIs.
 | ChatMenu | (slot) → — | The window's context menu at the mouse | — |
 | ChatSetAlwaysHere | (slot, on) → — | Always Chat Here | commands |
 | ChatNewWindow | ([title]) → slot\|nil | New chat window | commands |
-| ChatCloseWindow | (slot) → — | Close a window and its tabs | commands |
+| ChatCloseWindow | (slot) → — | Close a window and its tabs (not the one holding Main Chat) | commands |
 | ChatNewTab | (slot [, title]) → tab\|nil | New tab in this window | commands |
-| ChatCloseTab | (slot, tab) → — | Close a tab | commands |
+| ChatCloseTab | (slot, tab) → — | Close one tab; its channels go back to Main Chat (Main Chat itself stays) | commands |
+| ChatSplitTab | (slot, tab) → slot\|nil | Give a tab a window of its own | commands |
+| ChatJoinTab | (slot, tab, targetSlot) → bool | Move a tab to another window | commands |
+| ChatReorderTab | (slot, tab, delta) → bool | Move a tab left (negative) or right | commands |
+| ChatCombineTabs | (targetSlot) → count | Move every other window's tabs into this one | commands |
+| ChatSetWindowTitle | (slot, title) → bool | Rename the window (apart from its tabs) | commands |
+| ChatSetTabFlash | (slot, tab, on) → bool | A background tab flashes for new lines | commands |
+| ChatSetTabFlashColor | (slot, tab [, rgb]) → bool | Its colour, 0xRRGGBB; nil for red | commands |
+| ChatSetTabScrollbar | (slot, tab, on) → bool | The tab's output scrollbar | commands |
 | ChatSelectTab | (slot, tab) → — | Bring a tab up | commands |
-| ChatSetTitle | (slot, title) → — | Rename the tab | commands |
+| ChatSetTitle | (slot, title [, tab]) → — | Rename the tab that is up, or the given one | commands |
 | ChatFilters | (slot) → {{id, group, name, on, menu, parent}} | Route rows for the tab; menu and parent are stable group IDs | — |
 | ChatFilterGroups | () → {{id, parent, name}} | Filter menu hierarchy; parent 0 is the root | — |
 | ChatSetFilter | (slot, id\|groupName, on) → — | Route a channel here or back to main | commands |
 | ChatSetFont | (slot, font) → — | Tab font index | commands |
 | ChatDefaultChannels | () → {names} | Channel menu items (0-based order) | — |
 | ChatSetDefault | (slot, index) → — | Default channel for the tab | commands |
-| ChatClear | (slot) → — | Empty the tab | commands |
+| ChatClear | (slot [, tab]) → — | Empty the tab that is up, or the given one | commands |
 | ChatTellWindows | () → bool | Tells open a window per player | — |
 | ChatSetTellWindows | (on) → — | Set that | commands |
 | ChatHitModes | () → {{id, name, mode, modes={names}}} | 1..6 melee, 7 ALL, 8 direct spell damage, 9 DoT damage, 10 healing, 11 HoT healing; ALL mode is -1 when mixed | — |
