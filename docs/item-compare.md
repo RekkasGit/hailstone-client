@@ -2,9 +2,11 @@
 
 Code: `src/game/item_compare.{h,cpp}` (the comparison and the verdict), `src/game/mechanics/shown_stats.{h,cpp}` (the
 AC and ATK the inventory window shows, shared with its labels), `src/app/lua_ui_compare.cpp` (`hs.CompareItem`,
-`hs.CompareSlotItem`, `hs.CompareBagSlotItem`), `ui/<pack>/lib/compare_lines.lua` (the lines both packs show; the
-gamepad pack's is a copy of the modern pack's), and the slots, tooltips and item displays of both packs.
-Tests: `tests/item_compare_test.cpp`, and "the item display compares the item with what you wear" in
+`hs.CompareSlotItem`, `hs.CompareBagSlotItem`), `ui/<pack>/lib/compare_lines.lua` (the pieces and lines both packs
+show; the gamepad pack's is a copy of the modern pack's), the stat rows' keys (`ItemDisplayCell::key` in
+`src/game/item_display.cpp`, the window's `IDW_Row<r>Col<c>Key` child), and the slots, tooltips and item displays of
+both packs. Tests: `tests/item_compare_test.cpp`, "the stat rows carry the item comparison's keys" in
+`tests/item_display_test.cpp`, and "the item display compares the item with what you wear" in
 `tests/ui_pack_windows_test.cpp`.
 
 The original client has no such thing. This is a Hailstone addition for players who cannot yet tell at a glance
@@ -28,12 +30,20 @@ For an item that can be worn (an equip slot among the worn slots 0..22), and tha
 
 Where:
 
-- Modern pack: the tooltip of every item slot (inventory, bags, the bank, loot, trade, give and the other windows'
-  item slots) and of the merchant's rows, at most eight changes; the item display window (a linked item too) under
-  the stats, every change, with a button per slot for an item that fits two (ears, wrists, rings). In a tooltip,
-  Shift shows the other slot of a pair.
-- Gamepad pack: the focused item's panel in the inventory, loot and merchant (buy and sell) screens, and the item
-  details. A pair's other slot is named at the end ("Also fits your ...").
+- Item display window (a linked item too), both packs: each change sits beside the stat it belongs to in the stat
+  grid, signed and coloured (green better, red worse, dimmed when it does not count for the class), so the grid
+  reads as the item's value and what it does for you: `AC  20  +12`. The modern pack puts the verdict (as a chip)
+  and "vs your X (Slot)" at the top of the Stats section, with a button per slot for an item that fits two (ears,
+  wrists, rings), and a row's tooltip gives the before and after. Below the grid come only the changes it has no row
+  for (a stat the worn item has and this one lacks, HP from STA), as "+5 STR", then the weapon, the effects and the
+  notes. A stat on several rows (haste from augments) carries its change on the first.
+- Modern pack tooltips: every item slot (inventory, bags, the bank, loot, trade, give and the other windows' item
+  slots) and the merchant's rows. The verdict under the name, the change beside the tooltip's AC, HP and mana, the
+  other changes side by side as "+5 STR" (at most eight), and what it is compared with. Shift shows the other slot
+  of a pair.
+- Gamepad pack: the focused item's panel in the inventory, loot and merchant (buy and sell) screens lists the
+  changes; the item details put them beside the stats as above. A pair's other slot is named at the end ("Also fits
+  your ...").
 - Options: Compare Items (`item_compare`, `items.compare` in hailstone.ini) and Upgrade Verdict
   (`item_compare_verdict`, `items.compare_verdict`), both on by default; in the gamepad pack under Interface.
 
