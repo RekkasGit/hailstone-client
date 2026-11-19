@@ -342,8 +342,9 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
     o.flag = in.turning;
     o.speed_heading = in.speed_heading;
     o.attacking = in.attacking;
-    // +0x1229, the spell book's slot 0x94, the mount fields beyond GetMount's motion and the jump / fall / boot
-    // fields stay at their defaults: their origin is not confirmed (docs/unknowns.md "Animation fields not traced").
+    // +0x1229, the spell book's slot 0x94, the mount fields beyond GetMount's motion, +0x1198 and the jump / fall
+    // fields (+0x10, +0x163, +0x180) stay at their defaults: their origin is not confirmed (docs/unknowns.md
+    // "Animation fields not traced").
     mech::OldStyleAnimResult r = mech::select_old_style_anim(o, fpu);
     if (r.set_still_since) st.still_since = r.still_since;
     if (!r.start.played) return keep;
