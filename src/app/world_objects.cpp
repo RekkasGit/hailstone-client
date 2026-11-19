@@ -236,7 +236,13 @@ const WorldObjects::Model* WorldObjects::model_for(const std::string& raw) {
     model->gpu = renderer_->add_model(*mesh, read);
     model->shape = game::ObjectShape::from_mesh(*mesh);
     model->plant = assets::is_plant(base, *mesh);
-    model->fire = assets::is_fire_object(base, *mesh);
+    model->fire = !model->plant && assets::is_fire_object(base, *mesh);
+    if (!model->plant) {
+        // The grass's cover as the zone's own objects give it (assets::append_object_cover): its opaque surfaces,
+        // and for a fire everything it draws, for its size.
+        assets::cover_triangles(*mesh, nullptr, true, model->cover_surfaces);
+        if (model->fire) assets::cover_triangles(*mesh, nullptr, false, model->cover_drawn);
+    }
     if (!node_emitters.empty()) {
         model->emitters = std::make_unique<assets::CharacterMesh>();
         model->emitters->emitters = std::move(node_emitters);
@@ -487,7 +493,7 @@ void WorldObjects::note_flora(const Placed& p) {
 }
 
 std::function<bool(const glm::vec3&)> WorldObjects::flora_cover(glm::vec2 lo, glm::vec2 hi) const {
-    std::vector<glm::vec3> tris, drawn; // 3 a triangle, in the world
+    std::vector<glm::vec3> tris, drawn, surfaces; // 3 a triangle, in the world
     const auto gather = [&](const auto& objects) {
         for (const auto& [id, p] : objects) {
             if (!p.model || !p.visible || p.center.x + p.bound < lo.x || p.center.y + p.bound < lo.y ||
@@ -496,12 +502,13 @@ std::function<bool(const glm::vec3&)> WorldObjects::flora_cover(glm::vec2 lo, gl
             if (p.model->plant) continue; // the grass grows under a bush
             if (p.flora_model != p.model || p.flora_at != p.transform) {
                 drawn.clear();
-                for (const auto& tri : p.model->shape.visual)
-                    for (const glm::vec3& v : {tri.v0, tri.v1, tri.v2})
-                        drawn.emplace_back(p.transform * glm::vec4(v, 1.0f));
-                // A small, low fire (a campfire) covers its footprint; anything else its surfaces.
+                surfaces.clear();
+                for (const glm::vec3& v : p.model->cover_drawn) drawn.emplace_back(p.transform * glm::vec4(v, 1.0f));
+                for (const glm::vec3& v : p.model->cover_surfaces)
+                    surfaces.emplace_back(p.transform * glm::vec4(v, 1.0f));
+                // A small, low fire (a campfire) covers its footprint; anything else its opaque surfaces.
                 p.flora_tris.clear();
-                assets::append_object_cover(drawn, drawn, p.model->fire, p.flora_tris);
+                assets::append_object_cover(drawn, surfaces, p.model->fire, p.flora_tris);
                 p.flora_model = p.model;
                 p.flora_at = p.transform;
             }

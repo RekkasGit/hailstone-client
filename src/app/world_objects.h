@@ -103,7 +103,8 @@ public:
     bool visual_surfaces(const glm::vec2& low,const glm::vec2& high,
                          const std::function<bool(const game::CollisionTriangle&)>& visit,std::uint32_t& work) const;
     // Hailstone's grass (render::FloraRenderer::set_cover): the drawn doors, ground objects and placed items whose
-    // bounds touch [lo, hi], their drawn triangles copied into the world; the test is true where one lies over a spot
+    // bounds touch [lo, hi], their opaque triangles copied into the world (a fire's footprint; as the zone's own
+    // objects, assets::append_object_cover); the test is true where one lies over a spot
     // as assets::covers_from_above takes a placed object's (kObjectCoverClearance, kObjectCoverReach). Empty when none
     // touches. The test holds no reference to this.
     std::function<bool(const glm::vec3&)> flora_cover(glm::vec2 lo, glm::vec2 hi) const;
@@ -179,6 +180,9 @@ private:
         game::ObjectShape shape;   // solid triangles in model space
         bool plant = false;        // assets::is_plant: the grass grows under it (flora_cover)
         bool fire = false;         // assets::is_fire_object: a campfire covers its footprint (flora_cover)
+        // Its grass cover in model space (assets::cover_triangles, 3 a triangle): the opaque surfaces, and for a fire
+        // all it draws; empty for a plant.
+        std::vector<glm::vec3> cover_surfaces, cover_drawn;
         // Model emitters (EQG point records or WLD node clouds), bone 0 = the model's own space; null without.
         std::unique_ptr<assets::CharacterMesh> emitters;
     };
