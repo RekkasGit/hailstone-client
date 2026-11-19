@@ -1180,6 +1180,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/font_faces_test.cpp
     tests/process_test.cpp
     tests/flora_test.cpp
+    tests/flora_growth_test.cpp
     tests/ground_refine_test.cpp
     tests/zone_flora_test.cpp
     tests/client_info_commands_test.cpp

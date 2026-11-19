@@ -286,37 +286,16 @@ void FloraRenderer::grow_tiles(const glm::vec3& camera) {
         const glm::vec2 nearest = glm::clamp(c, tile.min, tile.min + glm::vec2(flora.tile_size));
         return glm::dot(nearest - c, nearest - c) <= keep * keep;
     };
-    for (auto it = grown_.begin(); it != grown_.end();) {
-        if (!in_keep(it->first)) it = grown_.erase(it);
-        else ++it;
-    }
-    // The tiles grown on the background thread since the last frame, kept while still in reach; a job that ended
-    // without a result (it threw) no longer counts as growing.
-    for (auto& [t, g] : jobs_.take())
-        if (growing_.erase(t) > 0 && in_keep(t)) grown_.insert_or_assign(t, std::move(g));
-    for (auto it = growing_.begin(); it != growing_.end();) {
-        if (!in_keep(*it)) jobs_.cancel(*it);
-        if (!in_keep(*it) || !jobs_.pending(*it)) it = growing_.erase(it);
-        else ++it;
-    }
     // Queue the missing and stale ones nearest first, a few at a time, so the queue follows the camera. Growing a
     // tile takes milliseconds (its lawn's squares, their cover, the edge softening): on the frame it stalled the
     // scene's recording each time a new tile came into reach. The cover test is made here, on the frame's side,
     // since it reads the world objects; it holds no reference to them.
-    for (const auto& [d2, t] : near_tiles_) {
-        if (growing_.size() >= kGrowInFlight) break;
-        if (growing_.contains(t)) continue;
-        if (auto it = grown_.find(t); it != grown_.end() && !it->second.stale) continue;
-        const glm::vec2 lo = flora.tiles[t].min, hi = lo + glm::vec2(flora.tile_size);
+    growth_.update(near_tiles_, in_keep, [&](std::uint32_t tile) -> FloraGrowth<Grown>::Job {
+        const glm::vec2 lo = flora.tiles[tile].min, hi = lo + glm::vec2(flora.tile_size);
         CoverTest extra = cover_ ? cover_(lo - assets::kFloraCoverMargin, hi + assets::kFloraCoverMargin)
                                  : CoverTest{};
-        // A copy of the tile's number: Apple Clang rejects a lambda capturing a structured binding.
-        const std::uint32_t tile = t;
-        jobs_.submit(tile, [grower = flora.grower, tile, extra = std::move(extra)] {
-            return grow_tile(*grower, tile, extra);
-        });
-        growing_.insert(t);
-    }
+        return [grower = flora.grower, tile, extra = std::move(extra)] { return grow_tile(*grower, tile, extra); };
+    });
 }
 
 FloraRenderer::Grown FloraRenderer::grow_tile(const assets::ZoneFloraGrower& grower, std::uint32_t t,
@@ -340,22 +319,11 @@ FloraRenderer::Grown FloraRenderer::grow_tile(const assets::ZoneFloraGrower& gro
 
 void FloraRenderer::regrow(glm::vec2 lo, glm::vec2 hi) {
     const auto& flora = zone_.flora;
-    for (auto& [t, g] : grown_) {
+    growth_.regrow([&](std::uint32_t t) {
         const glm::vec2 tile_lo = flora.tiles[t].min - assets::kFloraCoverMargin;
         const glm::vec2 tile_hi = flora.tiles[t].min + glm::vec2(flora.tile_size) + assets::kFloraCoverMargin;
-        if (tile_lo.x <= hi.x && tile_lo.y <= hi.y && tile_hi.x >= lo.x && tile_hi.y >= lo.y) g.stale = true;
-    }
-    // A tile growing with the cover as it was grows again, once its job is dropped.
-    for (auto it = growing_.begin(); it != growing_.end();) {
-        const glm::vec2 tile_lo = flora.tiles[*it].min - assets::kFloraCoverMargin;
-        const glm::vec2 tile_hi = flora.tiles[*it].min + glm::vec2(flora.tile_size) + assets::kFloraCoverMargin;
-        if (tile_lo.x <= hi.x && tile_lo.y <= hi.y && tile_hi.x >= lo.x && tile_hi.y >= lo.y) {
-            jobs_.cancel(*it);
-            it = growing_.erase(it);
-        } else {
-            ++it;
-        }
-    }
+        return tile_lo.x <= hi.x && tile_lo.y <= hi.y && tile_hi.x >= lo.x && tile_hi.y >= lo.y;
+    });
 }
 
 std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, const glm::vec3& camera,
@@ -395,8 +363,8 @@ std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_
         // The lawn's patches a far tile may skip: [skip_from, skip_to), those no stride at its nearest point keeps.
         std::uint32_t skip_from = 0, skip_to = 0;
         if (flora.grower) {
-            auto it = grown_.find(t);
-            if (it == grown_.end()) continue; // not grown yet: next frame
+            auto it = growth_.grown().find(t);
+            if (it == growth_.grown().end()) continue; // not grown yet: next frame
             plants = it->second.plants;
             const std::uint32_t stride = lawn_stride(std::sqrt(tile_d2));
             const auto& ends = it->second.lawn_end;
