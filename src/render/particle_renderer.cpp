@@ -450,13 +450,17 @@ void ParticleRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, 
             firsts[ei] = static_cast<std::uint32_t>(total);
             total += counts[ei];
         }
-        order.resize(total);
+        // The two passes test each particle apart, maybe on different threads: an emitter writes no more than its
+        // count, and a slot it leaves (a test that came out the other way) is dropped below.
+        constexpr std::uint32_t kUnwritten = 0xffffffffu;
+        order.assign(total, OrderItem{0.0f, kUnwritten, 0});
         core::parallel_for_nested(emitters.size(), kEmitterGrain, [&](std::size_t begin, std::size_t end) {
             for (std::size_t ei = begin; ei < end; ++ei) {
                 if (counts[ei] == 0) continue;
                 const auto& ps = emitters[ei].particles;
                 OrderItem* dst = order.data() + firsts[ei];
-                for (std::size_t pi = 0; pi < ps.size(); ++pi) {
+                OrderItem* const dst_end = dst + counts[ei];
+                for (std::size_t pi = 0; pi < ps.size() && dst != dst_end; ++pi) {
                     const auto& p = ps[pi];
                     if (!modern_shows(p)) continue;
                     glm::vec3 d = p.position - camera;
@@ -464,6 +468,7 @@ void ParticleRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, 
                 }
             }
         });
+        std::erase_if(order, [](const OrderItem& item) { return item.emitter == kUnwritten; });
         keep_nearest_back_to_front(order, kMaxVertices / 6);
         // Light sources stay unlit; the haze takes away their light. Smoke and dust are lit and hazed. Each
         // definition's look and lit flag first, here; then every item's quad at its own place, on the workers.

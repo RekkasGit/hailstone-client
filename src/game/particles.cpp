@@ -505,7 +505,12 @@ void ParticleSystem::update(float dt, const AttachmentFn& attachment) {
         float size_scale = d.actor_scales_size == 1 && e.actor == 0 ? e.scale : 1.0f;
         float offset_scale = d.actor_scales_offsets == 1 ? e.scale : 1.0f;
         float actor_alpha = 1.0f;
-        if (e.actor != 0 && attachment)
+        if (e.held) {
+            // Hailstone: out of view its pose is not asked for; what it emitted keeps the scales and alpha it had.
+            size_scale = e.held_size_scale;
+            offset_scale = e.held_offset_scale;
+            actor_alpha = e.held_alpha;
+        } else if (e.actor != 0 && attachment)
             if (auto at = attachment(e.actor, e.point)) {
                 actor_alpha = std::isfinite(at->alpha) ? std::clamp(at->alpha, 0.0f, 1.0f) : 0.0f;
                 if (!e.point_only) {
@@ -526,6 +531,11 @@ void ParticleSystem::update(float dt, const AttachmentFn& attachment) {
                 if (!e.point_only && at->actor_axes) e.axes = emitter_axes(*at->actor_axes, 0.0f, 0.0f);
                 else if (e.point_only && d.bone_orientation == 1 && at->axes) e.axes = emitter_axes(*at->axes, 0.0f, 0.0f);
             }
+        if (!e.held) {
+            e.held_size_scale = size_scale;
+            e.held_offset_scale = offset_scale;
+            e.held_alpha = actor_alpha;
+        }
         // Emission (0x10072aa7..0x10072c47): while time is left, the initial burst once its delay has passed, then
         // the ticks since, each batch scaled by the distance factor (at least the batch floors). The counts are the
         // definition's own: the density set the rate and the ring's size.
@@ -534,15 +544,18 @@ void ParticleSystem::update(float dt, const AttachmentFn& attachment) {
             const double elapsed = e.age - d.delay;
             if (elapsed >= 0.0 && e.held) {
                 // Hailstone: out of view it emits nothing, and the ticks pass unspent, so it does not make them all
-                // up in one burst at one place when it comes back into view.
-                e.emitted = std::max(e.emitted, trunc_int(elapsed * e.counts.rate));
+                // up in one burst at one place when it comes back into view. One held before its initial burst
+                // keeps it for when it first comes into view.
+                if (e.emitted < 0) e.burst_held = true;
+                else e.emitted = std::max(e.emitted, trunc_int(elapsed * e.counts.rate));
             } else if (elapsed >= 0.0) {
                 const std::int32_t target = trunc_int(elapsed * e.counts.rate);
                 const float distance = viewer_ ? glm::distance(*viewer_, e.origin) : 0.0f;
                 if (e.emitted < 0) {
                     const float f = emission_distance_factor(d.reduce_distance, e.counts.floor_initial, distance);
                     spawn(e, trunc_int(static_cast<double>(d.initial_count) * f), offset_scale);
-                    e.emitted = 0;
+                    e.emitted = e.burst_held ? target : 0;
+                    e.burst_held = false;
                 }
                 if (e.emitted < target) {
                     const float f = emission_distance_factor(d.reduce_distance, e.counts.floor_tick, distance);

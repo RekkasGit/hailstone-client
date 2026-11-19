@@ -870,3 +870,54 @@ TEST_CASE("stop_keys and stop_actors take many emitters in one pass; set_held ma
     CHECK(ps.emitters()[0].key == 4);
     CHECK(ps.emitters()[1].key == 6);
 }
+
+TEST_CASE("A held emitter keeps its actor's scale and alpha, and one held when made keeps its burst for the view") {
+    auto make = [](game::ParticleSystem& ps) {
+        game::SpellEmitterRequest r;
+        r.emitter = 1;
+        r.key = 1;
+        r.duration_ms = 60000;
+        r.actor = 11;
+        REQUIRE(ps.create(r) > 0);
+    };
+    {
+        assets::EmitterDefinition d = rising_flame(5.0f, 0.0f);
+        d.actor_scales_size = 1;
+        game::ParticleSystem ps({assets::EmitterDefinition{}, d});
+        make(ps);
+        int asked = 0;
+        auto attachment = [&](std::uint32_t, std::int32_t) {
+            ++asked;
+            game::EmitterAttachment a;
+            a.alpha = 0.5f;
+            a.actor_scale = 2.0f;
+            return std::optional<game::EmitterAttachment>(a);
+        };
+        ps.update(0.2f, attachment);
+        REQUIRE_FALSE(ps.emitters()[0].particles.empty());
+        const float size = ps.emitters()[0].particles[0].size_factor;
+        CHECK(ps.emitters()[0].particles[0].color.a == doctest::Approx(0.5f));
+        ps.set_held([](std::uint32_t actor) { return actor == 11; });
+        asked = 0;
+        ps.update(0.1f, attachment);
+        CHECK(asked == 0); // its pose is not asked for
+        CHECK(ps.emitters()[0].particles[0].color.a == doctest::Approx(0.5f));
+        CHECK(ps.emitters()[0].particles[0].size_factor == doctest::Approx(size));
+    }
+    {
+        assets::EmitterDefinition d = rising_flame(5.0f, 0.0f);
+        d.initial_count = 5;
+        d.per_tick = 1;
+        game::ParticleSystem ps({assets::EmitterDefinition{}, d});
+        make(ps);
+        ps.set_held([](std::uint32_t) { return true; });
+        for (int i = 0; i < 10; ++i) ps.update(0.1f, {}); // a second out of view: ten ticks
+        CHECK(ps.emitters()[0].particles.empty());
+        CHECK(ps.emitters()[0].emitted < 0);
+        ps.set_held([](std::uint32_t) { return false; });
+        ps.update(0.1f, {});
+        // The burst, and the ticks from now on, not the second's ten at once.
+        CHECK(ps.emitters()[0].particles.size() >= 5u);
+        CHECK(ps.emitters()[0].particles.size() <= 6u);
+    }
+}

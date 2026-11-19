@@ -208,6 +208,10 @@ struct Emitter {
     // Hailstone (not in the original): its owner is out of view, so it emits nothing and its ticks pass unspent
     // (ParticleSystem::set_held); what it has already emitted lives on.
     bool held = false;
+    // Held before its initial burst: the burst plays when it comes into view, and the ticks before it stay unspent.
+    bool burst_held = false;
+    // The last scales and alpha its attachment gave, kept while held so what it emitted keeps its look.
+    float held_size_scale = 1.0f, held_offset_scale = 1.0f, held_alpha = 1.0f;
     std::uint32_t spawn_index = 0; // +0x14
     std::vector<Particle> particles;
 };

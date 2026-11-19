@@ -638,7 +638,9 @@ what its particles drift (a guess: no effect's reach was measured), are tested a
 through last frame; in the classic lighting an actor past 500 units along the view is out too. Its emitters keep
 running, but emit nothing (their ticks pass unspent, so coming back into view does not bring a burst at one place),
 are not placed (its skeleton is not posed for them) and start no animation entries; what they emitted already ages
-and fades as before. Turning towards such an actor, its effects fill in over their particles' lifetime rather than
+and fades as before, at the size and opacity the actor last gave it. An emitter made while its actor is out of view
+keeps its initial burst for when the actor first comes into view. Zoning forgets the last view, so every actor counts
+as in view until the new zone's first frame is drawn. Turning towards such an actor, its effects fill in over their particles' lifetime rather than
 being there at once. `display.particle_offscreen_hold = 0` makes every actor emit wherever it is, as the original.
 The Actor Particle Density setting changes the running emitters' counts in place (`ParticleSystem::set_persistent_density`),
 keeping their particles; Off stops them and makes none until it is turned on again, when they are made afresh.
