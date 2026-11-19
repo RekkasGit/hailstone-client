@@ -135,6 +135,9 @@ NewStyleTrack new_style_track(std::uint8_t code, const NewStyleTrackInput& in,
                               const std::function<int()>& rand);
 // A resolved EQG track or clip's style column; 0 for a classic/unknown name.
 std::int32_t new_style_clip_column(std::string_view clip);
+// The base style's column (BA): what a classic alias resolves to (assets/eqg_character.h classic_aliases), and the
+// column of a sequence without a weapon style.
+inline constexpr std::int32_t kBaseStyleColumn = 0;
 
 // The clip an OP_Animation action (or any animation the client starts: an
 // old-style number below 0x4f, else a new-style code) plays, or empty for

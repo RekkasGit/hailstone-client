@@ -1988,6 +1988,13 @@ it does nothing). The old track keeps running through the blend; a one-shot that
   a new-style model) once, unless it or the duck walk 0x16 (L06 / CWLK) is playing; 'd' (100) from 'o' plays it
   backward. A plain play, not a held posture: a walk or a jump replaces it, and a still ducking spawn asks for
   nothing more, so the crouch shows without moving (`game::choose_spawn_animation`).
+- Corpses (is_corpse, or stand state 115: feign death) play the death clip D05 (D04, else P01) on both groups, once,
+  and drop any action. A spawn that dies while drawn plays it from its start, even when its model changes in the same
+  frame; one that is already dead when the renderer first draws it (a fresh state after a zone change, or one that
+  comes into view dead) shows the clip's last frame at once, so the fall is not played again. A corpse that already
+  lies keeps that end pose when its clip changes (a held variant, a new model) or when it is hidden and drawn again;
+  that is a safe render choice, not confirmed RoF2 behaviour. The cross-fade out of the death clip samples it as the
+  one-shot it was, so it starts from the lying pose rather than the fall's first frame.
 - Climbing: CollidingType (+0x24, 6 on a ladder) reaches 0x4afe60 / SelectMovementAnim, which plays L07 / CLMB
   forward going up and reversed going down. Fresh moving remote spawns probe the same world sweep for ladder and
   switch contacts; a stationary spawn retains its contact, while riders, corpses and NoCollide actors do not probe.
