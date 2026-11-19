@@ -171,6 +171,9 @@ bool is_fire_object(std::string_view actor, const Mesh& mesh);
 // surfaces, so the grass grows up to a rock's foot (what grows inside a solid one is hidden). Hailstone's own choices.
 inline constexpr float kSmallObjectRadius = 12.0f, kFootprintMargin = kLawnCell * 0.5f;
 inline constexpr int kFootprintSides = 16;
+// A mesh's triangles that may cover (not invisible or additive; only the opaque ones when `opaque_only`), through
+// `transform` when given, appended to `out` (3 a triangle). A triangle with an index out of range is left out.
+void cover_triangles(const Mesh& mesh, const glm::mat4* transform, bool opaque_only, std::vector<glm::vec3>& out);
 // A placed object's cover from its triangles in the world (3 a triangle): `drawn` all it draws, for its size;
 // `surfaces` those that cover from above (a zone object's opaque ones; none for a plant), walls left out. Appended to
 // `out`: its footprint disc when `fire` and it is small and low, else its surfaces. Test them with

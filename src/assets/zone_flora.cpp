@@ -9,6 +9,7 @@
 #include <numbers>
 #include <sstream>
 #include <span>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -83,24 +84,6 @@ const std::vector<Mesh>& drawn_terrain(const Zone& zone) {
     return zone.draw_terrain.size() == zone.terrain.size() ? zone.draw_terrain : zone.terrain;
 }
 
-// A mesh's triangles that may cover (casts_cover; only the opaque ones when `opaque_only`), through `transform`,
-// appended to `out` (3 a triangle). A triangle with an index out of range is left out.
-void world_triangles(const Mesh& mesh, const glm::mat4* transform, bool opaque_only, std::vector<glm::vec3>& out) {
-    for (const auto& part : mesh.parts) {
-        if (part.material >= mesh.materials.size()) continue;
-        const Material& m = mesh.materials[part.material];
-        if (!casts_cover(m) || (opaque_only && m.blend != BlendMode::Opaque)) continue;
-        const std::size_t end = std::min<std::size_t>(std::size_t{part.first_index} + part.index_count, mesh.indices.size());
-        for (std::size_t i = part.first_index; i + 3 <= end; i += 3) {
-            const std::uint32_t a = mesh.indices[i], b = mesh.indices[i + 1], c = mesh.indices[i + 2];
-            if (a >= mesh.vertices.size() || b >= mesh.vertices.size() || c >= mesh.vertices.size()) continue;
-            for (const std::uint32_t v : {a, b, c}) {
-                const glm::vec3& at = mesh.vertices[v].position;
-                out.push_back(transform ? glm::vec3(*transform * glm::vec4(at, 1.0f)) : at);
-            }
-        }
-    }
-}
 
 class CoverGrid {
 public:
@@ -130,26 +113,39 @@ public:
         std::vector<glm::vec3> drawn, surfaces, cover;
         for (const auto& mesh : drawn_terrain(zone)) {
             drawn.clear();
-            world_triangles(mesh, nullptr, false, drawn);
+            cover_triangles(mesh, nullptr, false, drawn);
             for (std::size_t i = 0; i + 3 <= drawn.size(); i += 3)
                 push(drawn[i], drawn[i + 1], drawn[i + 2], kClearance, terrain_reach, false);
         }
         // The placed objects as drawn (append_object_cover): a small, low fire its whole footprint, anything else its
         // opaque surfaces within kObjectReach over the ground, so a tree's canopy and its cut-out leaves leave the
         // grass under it; a plant none.
-        for (const auto& placement : zone.placements) {
-            auto found = zone.draw_objects.find(placement.actor);
+        // Each actor's mesh and kind, looked up once: a zone places the same tree or rock hundreds of times.
+        struct Actor {
             const Mesh* mesh = nullptr;
-            if (found != zone.draw_objects.end()) mesh = &found->second;
-            else if (auto obj = zone.objects.find(placement.actor); obj != zone.objects.end()) mesh = &obj->second;
-            if (!mesh) continue;
+            bool plant = false, fire = false;
+        };
+        std::unordered_map<std::string_view, Actor> actors;
+        for (const auto& placement : zone.placements) {
+            auto [known, fresh] = actors.try_emplace(placement.actor);
+            Actor& actor = known->second;
+            if (fresh) {
+                if (auto found = zone.draw_objects.find(placement.actor); found != zone.draw_objects.end())
+                    actor.mesh = &found->second;
+                else if (auto obj = zone.objects.find(placement.actor); obj != zone.objects.end())
+                    actor.mesh = &obj->second;
+                if (actor.mesh) {
+                    actor.plant = is_plant(placement.actor, *actor.mesh);
+                    actor.fire = !actor.plant && is_fire_object(placement.actor, *actor.mesh);
+                }
+            }
+            if (!actor.mesh || actor.plant) continue; // the grass grows under a bush, a sapling
             drawn.clear();
             surfaces.clear();
             cover.clear();
-            world_triangles(*mesh, &placement.transform, false, drawn);
-            world_triangles(*mesh, &placement.transform, true, surfaces);
-            if (is_plant(placement.actor, *mesh)) continue; // the grass grows under a bush, a sapling
-            append_object_cover(drawn, surfaces, is_fire_object(placement.actor, *mesh), cover);
+            if (actor.fire) cover_triangles(*actor.mesh, &placement.transform, false, drawn); // only for its size
+            cover_triangles(*actor.mesh, &placement.transform, true, surfaces);
+            append_object_cover(drawn, surfaces, actor.fire, cover);
             for (std::size_t i = 0; i + 3 <= cover.size(); i += 3)
                 push(cover[i], cover[i + 1], cover[i + 2], kObjectClearance, kObjectReach, true);
         }
@@ -442,6 +438,23 @@ void add_split(std::vector<ZoneFloraGrower::Piece>& out, const ZoneFloraGrower::
 }
 
 } // namespace
+
+void cover_triangles(const Mesh& mesh, const glm::mat4* transform, bool opaque_only, std::vector<glm::vec3>& out) {
+    for (const auto& part : mesh.parts) {
+        if (part.material >= mesh.materials.size()) continue;
+        const Material& m = mesh.materials[part.material];
+        if (!casts_cover(m) || (opaque_only && m.blend != BlendMode::Opaque)) continue;
+        const std::size_t end = std::min<std::size_t>(std::size_t{part.first_index} + part.index_count, mesh.indices.size());
+        for (std::size_t i = part.first_index; i + 3 <= end; i += 3) {
+            const std::uint32_t a = mesh.indices[i], b = mesh.indices[i + 1], c = mesh.indices[i + 2];
+            if (a >= mesh.vertices.size() || b >= mesh.vertices.size() || c >= mesh.vertices.size()) continue;
+            for (const std::uint32_t v : {a, b, c}) {
+                const glm::vec3& at = mesh.vertices[v].position;
+                out.push_back(transform ? glm::vec3(*transform * glm::vec4(at, 1.0f)) : at);
+            }
+        }
+    }
+}
 
 bool covers_from_above(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& at, float clearance,
                        float reach) {
