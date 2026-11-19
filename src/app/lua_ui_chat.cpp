@@ -1464,6 +1464,7 @@ std::vector<Row> chat_menu(int w) {
     frame("Close Window", [](int slot) { chat_tabs::close_group(slot); }, !group.main);
 
     rows.push_back(separator());
+    // Hailstone: the chat font list, 0..10, as Cmd_chatfontsize @0x4e9a10 takes it (the original menu has no Font Size).
     sub("Font Size", [](int win) {
         std::vector<Row> out;
         for (int font = 0; font <= 10; ++font) {
@@ -2522,7 +2523,11 @@ void chat_layout_loaded(ui::UiIni& ini, UiHost& host, const std::filesystem::pat
     main.tell_target = text("ChatWindow0_TellTarget", "").substr(0, 0x3f);
     main.chat_index = num("ChatWindow0_ChatChannel", 0);
     main.scrollbar = num("ChatWindow0_Scrollbar", 1) != 0;
-    main.font = num("ChatWindow0_FontStyle", 3);
+    // CChatWindowManager::CChatWindowManager @0x654c80 reads ChatWindow0_FontStyle (default 3) with no range check
+    // and hands it to CChatWindow::SetChatFont @0x656370, which throws for an index outside the chat font list. The
+    // safest reading: the font list (0..10, as Cmd_chatfontsize @0x4e9a10 allows), else the default 3.
+    const int main_font = num("ChatWindow0_FontStyle", 3);
+    main.font = main_font < 0 || main_font > 10 ? 3 : main_font;
     // Hailstone (a deliberate change from RoF2): a character whose file keeps no chat windows of its own yet (no
     // NumWindows) takes defaults.ini's, as tabs of the main window; the game's defaults.ini makes "Other Chat"
     // (ChatWindow1) a window of its own. Once the file has its own (save_manager writes them at every change), only
@@ -2547,6 +2552,9 @@ void chat_layout_loaded(ui::UiIni& ini, UiHost& host, const std::filesystem::pat
         c.tell_target = text(k + "TellTarget", "").substr(0, 0x3f);
         c.name = text(k + "Name", std::format("ChatWindow{}", w));
         c.scrollbar = num(k + "Scrollbar", 1) != 0;
+        // The constructor @0x654c80 (as RoF2): another window's font below 0 or above 7 is the default 3, though
+        // /chatfontsize (Cmd_chatfontsize @0x4e9a10) and the Font Size menu set 0..10, so 8..10 on a window other
+        // than the main one is 3 again at the next start.
         int font = num(k + "FontStyle", 3);
         c.font = font < 0 || font > 7 ? 3 : font;
     }

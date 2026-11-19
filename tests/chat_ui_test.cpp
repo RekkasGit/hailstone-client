@@ -21,6 +21,7 @@
 #include "net/game_connection.h"
 #include "ui/dev_screens.h"
 #include "ui/lua/lua_host.h"
+#include "ui/ui_ini.h"
 #include "scratch_dir.h"
 
 using namespace hailstone;
@@ -458,4 +459,46 @@ TEST_CASE("Chat window script: a tab that does not flash shows an unread dot") {
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
     }
     ImGui::DestroyContext(ctx);
+}
+
+// CChatWindowManager::CChatWindowManager @0x654c80: another window's FontStyle outside 0..7 loads as 3 (RoF2's own
+// range there, though /chatfontsize sets 0..10); the main window's is not checked by the original, whose SetChatFont
+// @0x656370 throws outside the font list: Hailstone takes 0..10 and otherwise 3.
+TEST_CASE("Chat windows: saved font sizes load over RoF2's ranges") {
+    auto fonts = [](const std::string& main_font) {
+        test::ScratchDir scratch("chat_font_load");
+        const auto dir = scratch.path();
+        const auto layout = dir / "UI.ini";
+        fs::create_directories(dir / "game");
+        std::ofstream(layout) << "[ChatManager]\nNumWindows=4\nChatWindow0_FontStyle=" << main_font << "\n"
+                                 "ChatWindow1_LanguageId=0\nChatWindow1_Dock=-1\nChatWindow1_FontStyle=9\n"
+                                 "ChatWindow2_LanguageId=0\nChatWindow2_Dock=-1\nChatWindow2_FontStyle=7\n"
+                                 "ChatWindow3_LanguageId=0\nChatWindow3_Dock=-1\nChatWindow3_FontStyle=-1\n"
+                                 "ChatWindow4_LanguageId=0\nChatWindow4_Dock=-1\nChatWindow4_FontStyle=0\n";
+        std::unique_ptr<ImGuiContext, decltype(&ImGui::DestroyContext)> ctx(ImGui::CreateContext(),
+                                                                             ImGui::DestroyContext);
+        GameDir game(dir / "game");
+        net::GameConnection conn(game);
+        ui::ChatView view;
+        app::UiHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game;
+        host.conn = &conn;
+        host.chat = &view;
+        app::UiApi api(host);
+        api.load_layout({}, layout, {});
+        REQUIRE(app::chat_tabs::rename_tab(1, "Main")); // (writes every window's settings back)
+        const auto* ini = app::chat_ui_ini();
+        REQUIRE(ini);
+        std::string out;
+        for (int w = 0; w <= 4; ++w) {
+            if (w) out += ',';
+            out += ini->get("ChatManager", "ChatWindow" + std::to_string(w) + "_FontStyle").value_or("?");
+        }
+        return out;
+    };
+    CHECK(fonts("9") == "9,3,7,3,0");
+    CHECK(fonts("10") == "10,3,7,3,0");
+    CHECK(fonts("11") == "3,3,7,3,0");
+    CHECK(fonts("-2") == "3,3,7,3,0");
 }
