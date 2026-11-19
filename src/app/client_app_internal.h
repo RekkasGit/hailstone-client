@@ -1415,6 +1415,7 @@ private:
     // (WorldObjects::flora_cover) and the campfire spawns standing now (assets::campfire_cover), kept by
     // update_flora_cover, which grows again the grass where any came or went.
     std::vector<assets::CoverDisc> flora_campfires_;
+    std::vector<assets::CoverDisc> flora_campfires_now_; // update_flora_cover's this frame (capacity kept)
     void update_flora_cover();
     std::function<bool(const glm::vec3&)> flora_cover(glm::vec2 lo, glm::vec2 hi) const;
     render::SceneLighting frame_lighting_{}; // this frame's lighting, for the flames' haze and depth terms

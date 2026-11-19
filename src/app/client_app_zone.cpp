@@ -1219,7 +1219,8 @@ void ClientApp::update_flora_cover() {
         for (const auto& [lo, hi] : world_objects_->take_flora_changes()) flora_renderer_->regrow(lo, hi);
     // The campfire spawns (race 567) standing now, by their feet; they do not move, so a list that differs from the
     // last frame's means one came or went.
-    std::vector<assets::CoverDisc> fires;
+    std::vector<assets::CoverDisc>& fires = flora_campfires_now_; // capacity kept
+    fires.clear();
     if (conn_)
         for (const auto& [id, s] : conn_->world().spawns)
             if (s.race == game::Race::Campfire)
@@ -1234,7 +1235,7 @@ void ClientApp::update_flora_cover() {
     };
     regrow_missing(flora_campfires_, fires); // gone
     regrow_missing(fires, flora_campfires_); // came
-    flora_campfires_ = std::move(fires);
+    std::swap(flora_campfires_, fires);
 }
 
 std::function<bool(const glm::vec3&)> ClientApp::flora_cover(glm::vec2 lo, glm::vec2 hi) const {
