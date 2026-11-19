@@ -18,6 +18,7 @@
 #include "mq/lua_mq.h"
 #include "mq/parse.h"
 #include "platform/tcp_socket.h"
+#include "plugin/native_nameplates.h"
 #include "plugin/native_plugins.h"
 #include "mq_test_world.h"
 #include "plugin_consent_helper.h"
@@ -185,6 +186,7 @@ TEST_CASE("native plugins: nameplate frame lease and canvas ownership") {
     const auto native = h.canvas.frame(frame);
     REQUIRE(native.size() == 1);
     CHECK(h.printed_line("[Probe] nameplate data 1 measure 1 width 60 icon 1 no_image 0 wrong_frame 0 accepted 1 duplicate 0"));
+    CHECK(h.printed_line("[Probe] nameplate stride 1 narrow -1 zero -1 wider -1"));
     CHECK(native[0].candidate_index == 0);
     CHECK(native[0].frame_serial == frame.serial);
     CHECK(native[0].model.clickable);
@@ -228,6 +230,47 @@ TEST_CASE("native plugins: nameplate frame lease and canvas ownership") {
     CHECK_FALSE(h.canvas.owner_valid(again[0].owner));
     CHECK_FALSE(h.canvas.owner_valid(next[0].owner));
     CHECK(h.canvas.frame(frame).empty());
+}
+
+TEST_CASE("native plugins: nameplate records are read by their stride") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    nameplate_test_metrics(h.canvas);
+    REQUIRE(h.plugins->load("HostProbe"));
+    h.run("/probenameplate stride");
+    REQUIRE(h.printed_line("[Probe] nameplate register 1"));
+    auto frame = sample_nameplate_frame();
+    const auto native = h.canvas.frame(frame);
+    // The candidates are found by the host's stride; a command stride shorter than the host's record (or none) is
+    // refused, and a longer one (a newer SDK's record, with bytes this host does not know) is read field by field.
+    CHECK(h.printed_line("[Probe] nameplate stride 1 narrow 0 zero 0 wider 1"));
+    REQUIRE(native.size() == 2);
+    CHECK(native[1].candidate_index == 1);
+    REQUIRE(native[1].model.commands.size() == 2);
+    CHECK(native[1].model.commands[0].text == "wide");
+    CHECK(native[1].model.commands[0].color == 0x654321);
+    CHECK(native[1].model.commands[1].text == "wide");
+    CHECK(native[1].model.commands[1].color == 0x0000ff);
+}
+
+TEST_CASE("native plugins: nameplate frame view steps candidates by its stride") {
+    game::NameplateCanvasRegistry registry;
+    auto frame = sample_nameplate_frame();
+    frame.serial = 9;
+    plugin::NativeNameplateFrame lease(registry, frame);
+    const auto& view = lease.view();
+    CHECK(view.size == sizeof(HailstoneNameplateFrame));
+    CHECK(view.candidate_size == sizeof(HailstoneNameplateCandidate));
+    CHECK(view.reserved == 0);
+    REQUIRE(view.candidate_count == 2);
+    for (std::uint32_t i = 0; i < view.candidate_count; ++i) {
+        const auto* by_stride = reinterpret_cast<const HailstoneNameplateCandidate*>(
+            static_cast<const unsigned char*>(view.candidates) + std::size_t{i} * view.candidate_size);
+        CHECK(hailstone_nameplate_candidate(&view, i) == by_stride);
+        CHECK(by_stride->spawn_id == frame.candidates[i].spawn.id);
+    }
+    CHECK(hailstone_nameplate_candidate(&view, 2) == nullptr);
+    CHECK(HAILSTONE_NAMEPLATE_CANDIDATE_HAS(&view, cast_name));
 }
 
 TEST_CASE("native plugins: native and Lua nameplates share candidate claims") {

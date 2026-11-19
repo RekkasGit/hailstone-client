@@ -2,6 +2,7 @@
 #ifndef HAILSTONE_NAMEPLATES_H
 #define HAILSTONE_NAMEPLATES_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -11,7 +12,10 @@ extern "C" {
 /* Generic world nameplate canvas. Borrowed text and frame records survive only
  * until the callback returns. Positions and bounds use window pixels. Candidate
  * indexes are zero-based drawing claims scoped to the frame and callback.
- * Candidate and command array element layouts are fixed for this API. */
+ * The candidate and command arrays carry their element size (stride), so either
+ * record may grow at its end within ABI 3: step through candidates by the
+ * host's candidate_size (hailstone_nameplate_candidate), and tell the host the
+ * size of the command records you pass in command_size. */
 typedef struct HailstoneNameplateBounds {
     float x, y, width, height;
 } HailstoneNameplateBounds;
@@ -58,13 +62,27 @@ typedef struct HailstoneNameplateCandidate {
 typedef struct HailstoneNameplateFrame {
     uint32_t size;
     uint32_t candidate_count;
+    uint32_t candidate_size;      /* the host's sizeof(HailstoneNameplateCandidate): the array's stride */
+    uint32_t reserved;            /* 0 */
     uint64_t frame;
     double now_ms, dt_ms;
     float font_size;
     int32_t font;
     HailstoneNameplateBounds viewport;
-    const HailstoneNameplateCandidate* candidates; /* target first, then increasing depth */
+    const void* candidates;       /* candidate_count records candidate_size apart: target first, then increasing depth */
 } HailstoneNameplateFrame;
+
+/* Candidate `index` of the frame, stepping by the host's stride; NULL past the end. A field this SDK has and an
+ * older client lacks is there only when HAILSTONE_NAMEPLATE_CANDIDATE_HAS(frame, field) says so. */
+static inline const HailstoneNameplateCandidate* hailstone_nameplate_candidate(const HailstoneNameplateFrame* frame,
+                                                                               uint32_t index) {
+    if (!frame || !frame->candidates || index >= frame->candidate_count) return NULL;
+    return (const HailstoneNameplateCandidate*)((const unsigned char*)frame->candidates +
+                                                (size_t)index * frame->candidate_size);
+}
+#define HAILSTONE_NAMEPLATE_CANDIDATE_HAS(frame, field)                                                             \
+    ((frame)->candidate_size >= offsetof(HailstoneNameplateCandidate, field) +                                      \
+                                    sizeof(hailstone_nameplate_candidate((frame), 0)->field))
 
 typedef void (*HailstoneNameplateFn)(void* userdata, const HailstoneNameplateFrame* frame);
 
@@ -84,7 +102,9 @@ enum HailstoneNameplateCommandKind {
 /* Set unused fields to zero. Coordinates are relative to the candidate head.
  * Color is 0xRRGGBB with separate alpha in [0,1]. A gradient uses both colors
  * and alpha values. Images take an opaque texture returned by spell_icon in
- * the current callback. Text takes counted UTF-8 without control characters. */
+ * the current callback. Text takes counted UTF-8 without control characters.
+ * A host reads the fields it knows from a larger record (a newer SDK's) and
+ * refuses a model whose command_size is smaller than its own record. */
 typedef struct HailstoneNameplateCommand {
     uint32_t kind;
     uint32_t color, color2;
@@ -110,9 +130,11 @@ typedef struct HailstoneNameplateModel {
     uint64_t frame;
     uint32_t candidate_index;
     uint32_t command_count;
+    uint32_t command_size;        /* sizeof(HailstoneNameplateCommand): the commands array's stride */
+    uint32_t reserved;            /* 0 */
     HailstoneNameplateBounds bounds;
     float offset_x, offset_y;
-    const HailstoneNameplateCommand* commands; /* copied during submit */
+    const void* commands;         /* command_count records command_size apart; copied during submit */
 } HailstoneNameplateModel;
 
 typedef struct HailstoneNameplateTextMetrics {

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <string_view>
 #include <utility>
 
@@ -112,7 +113,8 @@ NativeNameplateFrame::NativeNameplateFrame(game::NameplateCanvasRegistry& regist
     : registry_(registry), frame_(frame) {
     candidates_.reserve(frame.candidates.size());
     for (const auto& candidate : frame.candidates) candidates_.push_back(candidate_view(candidate));
-    view_ = {sizeof(view_), static_cast<std::uint32_t>(candidates_.size()), frame.serial,
+    view_ = {sizeof(view_), static_cast<std::uint32_t>(candidates_.size()),
+             static_cast<std::uint32_t>(sizeof(HailstoneNameplateCandidate)), 0, frame.serial,
              frame.now_ms, frame.dt_ms, frame.font_size, frame.font,
              {frame.viewport.x, frame.viewport.y, frame.viewport.w, frame.viewport.h}, candidates_.data()};
 }
@@ -123,6 +125,7 @@ int NativeNameplateFrame::submit(const HailstoneNameplateModel* source) {
     if (!source || source->size < sizeof(*source) || !source->frame || source->frame != frame_.serial ||
         source->candidate_index >= candidates_.size() || source->candidate_index >= claimed_.size() ||
         claimed_.test(source->candidate_index) || (source->flags & ~allowed) != 0 ||
+        (source->command_count && source->command_size < sizeof(HailstoneNameplateCommand)) ||
         source->command_count > game::kCanvasMaxCommands ||
         source->command_count > game::kCanvasMaxFrameCommands - command_count_ ||
         (source->command_count && !source->commands)) return 0;
@@ -136,8 +139,12 @@ int NativeNameplateFrame::submit(const HailstoneNameplateModel* source) {
     model.clickable = (source->flags & HAILSTONE_NAMEPLATE_CLICKABLE) != 0;
     model.through_walls = (source->flags & HAILSTONE_NAMEPLATE_THROUGH_WALLS) != 0;
     model.commands.reserve(source->command_count);
+    // By the plugin's stride: a newer SDK's larger record keeps the fields this host knows at their offsets, and
+    // only those are copied (memcpy: a stride need not keep the record aligned).
+    const auto* records = static_cast<const unsigned char*>(source->commands);
     for (std::uint32_t i = 0; i < source->command_count; ++i) {
-        const auto& input = source->commands[i];
+        HailstoneNameplateCommand input;
+        std::memcpy(&input, records + static_cast<std::size_t>(i) * source->command_size, sizeof(input));
         if (input.kind == HAILSTONE_NAMEPLATE_IMAGE &&
             std::find(textures_.begin(), textures_.end(), input.texture) == textures_.end()) return 0;
         game::CanvasCommand command;

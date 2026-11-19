@@ -559,10 +559,16 @@ void probe_map_thread(void*, const char*) {
 }
 
 bool unregister_in_nameplate = false;
+bool nameplate_strides = false; // /probenameplate stride: also claim the second candidate with other command strides
 
 void probe_nameplate_frame(void* userdata, const HailstoneNameplateFrame* frame) {
     if (!frame || frame->size < sizeof(*frame) || !frame->candidate_count) return;
-    const auto& actor = frame->candidates[0];
+    const auto& actor = *hailstone_nameplate_candidate(frame, 0);
+    // The second candidate, found by the host's stride rather than by this SDK's sizeof.
+    const auto* second = hailstone_nameplate_candidate(frame, 1);
+    const bool stride = frame->candidate_size >= sizeof(HailstoneNameplateCandidate) &&
+        HAILSTONE_NAMEPLATE_CANDIDATE_HAS(frame, cast_name) && second && second->spawn_id == 11 &&
+        !(second->flags & HAILSTONE_NAMEPLATE_TARGET) && !hailstone_nameplate_candidate(frame, frame->candidate_count);
     const bool snapshot = actor.spawn_id == 10 && actor.incarnation == 17 &&
         (actor.flags & HAILSTONE_NAMEPLATE_TARGET) && (actor.flags & HAILSTONE_NAMEPLATE_INVISIBLE_UNDEAD) &&
         (actor.flags & HAILSTONE_NAMEPLATE_MANA_KNOWN) && !(actor.flags & HAILSTONE_NAMEPLATE_ENDURANCE_KNOWN) &&
@@ -592,6 +598,7 @@ void probe_nameplate_frame(void* userdata, const HailstoneNameplateFrame* frame)
     model.bounds = {-20, -10, 40, 20};
     model.commands = commands;
     model.command_count = 2;
+    model.command_size = sizeof(commands[0]);
     const int no_image = host->nameplate_submit(host->host, &model);
     const int icon = host->nameplate_spell_icon(host->host, 37, &image);
     commands[1].texture = image.texture;
@@ -605,8 +612,44 @@ void probe_nameplate_frame(void* userdata, const HailstoneNameplateFrame* frame)
     const int accepted = host->nameplate_submit(host->host, &model);
     const int duplicate = host->nameplate_submit(host->host, &model);
     label[0] = 'X'; // the host must own its copy at the time of submit
+    // A newer SDK's command record (extra bytes at its end, an unaligned stride) for the second candidate: the host
+    // reads the fields it knows. A stride shorter than the host's record is refused.
+    struct Wider {
+        HailstoneNameplateCommand command;
+        unsigned char extra[13];
+    };
+    unsigned char wide_bytes[2 * sizeof(Wider)]{};
+    std::memset(wide_bytes, 0xa5, sizeof(wide_bytes));
+    char wide_label[] = "wide";
+    HailstoneNameplateCommand wide_command{};
+    wide_command.kind = HAILSTONE_NAMEPLATE_TEXT;
+    wide_command.color = 0x654321;
+    wide_command.alpha = 1;
+    wide_command.font_size = 12;
+    wide_command.text = {wide_label, sizeof(wide_label) - 1};
+    const std::uint32_t wide_stride = sizeof(HailstoneNameplateCommand) + 13;
+    std::memcpy(wide_bytes, &wide_command, sizeof(wide_command));
+    wide_command.color = 0x0000ff;
+    std::memcpy(wide_bytes + wide_stride, &wide_command, sizeof(wide_command));
+    HailstoneNameplateModel wide{};
+    wide.size = sizeof(wide);
+    wide.frame = frame->frame;
+    wide.candidate_index = 1;
+    wide.bounds = {-20, -10, 40, 20};
+    wide.commands = wide_bytes;
+    wide.command_count = 2;
+    wide.command_size = sizeof(HailstoneNameplateCommand) - 4;
+    int narrow = -1, zero = -1, wider = -1;
+    if (nameplate_strides) {
+        narrow = host->nameplate_submit(host->host, &wide);
+        wide.command_size = 0;
+        zero = host->nameplate_submit(host->host, &wide);
+        wide.command_size = wide_stride;
+        wider = host->nameplate_submit(host->host, &wide);
+    }
     WriteChatf("[Probe] nameplate data %d measure %d width %.0f icon %d no_image %d wrong_frame %d accepted %d duplicate %d",
                snapshot, measured, static_cast<double>(metrics.width), icon, no_image, stale, accepted, duplicate);
+    WriteChatf("[Probe] nameplate stride %d narrow %d zero %d wider %d", stride, narrow, zero, wider);
     if (*static_cast<const bool*>(userdata)) host->nameplate_unregister(host->host);
 }
 
@@ -629,6 +672,7 @@ void probe_nameplate(void*, const char* args) {
         return;
     }
     unregister_in_nameplate = std::strcmp(args, "self-retire") == 0;
+    nameplate_strides = std::strcmp(args, "stride") == 0;
     const int registered = host->nameplate_register(host->host, probe_nameplate_frame, &unregister_in_nameplate);
     WriteChatf("[Probe] nameplate register %d", registered);
 }

@@ -1288,8 +1288,13 @@ flags are in `sdk/hailstone_nameplates.h`.
   `_INVISIBLE_UNDEAD` are the Lua context's `concealed`, `invisible` and `invisible_undead` (docs/ui-api.md): only
   what the player could see (the spawn's own HideMode, the player's own buffs and the target's buff list), and a
   clear flag means "not known", not "visible".
-- The candidate and command records have no size field: their layout is fixed for ABI 3, and a larger record would
-  come with a new call.
+- Both arrays carry their element size, so either record can grow at its end within ABI 3. The frame's
+  `candidate_size` is the host's `sizeof(HailstoneNameplateCandidate)`: step through `candidates` by it with
+  `hailstone_nameplate_candidate(frame, i)`, never by the plugin's own `sizeof`, and test
+  `HAILSTONE_NAMEPLATE_CANDIDATE_HAS(frame, field)` before reading a field newer than the client may be. A model's
+  `command_size` is the stride of the `commands` the plugin passes, normally `sizeof(HailstoneNameplateCommand)`. The
+  host refuses a model whose `command_size` is smaller than its own command record, and from a larger one (a newer
+  SDK's) reads only the fields it knows. The `reserved` fields are 0.
 - `nameplate_measure_text` and `nameplate_spell_icon` are available during the callback. An image can use a texture
   returned to that provider during the current callback.
 - To claim a caption, call `nameplate_submit` with the current frame serial and zero-based candidate index. The host
