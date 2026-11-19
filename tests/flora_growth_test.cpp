@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <mutex>
 #include <set>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -174,4 +175,43 @@ TEST_CASE("flora growth: restart lets go of every tile") {
     growth.wait_idle();
     growth.update(Near{}, kAll, make);
     CHECK(growth.grown().empty()); // what grew from the old flora is dropped
+}
+
+TEST_CASE("flora growth: a tile whose growing throws waits for a change instead of being queued every frame") {
+    Growth growth(3);
+    int jobs = 0;
+    bool fail = true;
+    const auto make = [&](std::uint32_t) -> Growth::Job {
+        ++jobs;
+        return [fail]() -> Tile {
+            if (fail) throw std::runtime_error("bad tile");
+            return Tile{1};
+        };
+    };
+    const Near near = near_of({4});
+    growth.update(near, kAll, make);
+    growth.wait_idle();
+    growth.update(near, kAll, make);
+    CHECK(growth.failed(4));
+    CHECK_FALSE(growth.growing(4));
+    for (int frame = 0; frame < 5; ++frame) growth.update(near, kAll, make);
+    CHECK(jobs == 1); // not queued again
+    // The cover there changes: tried again.
+    fail = false;
+    growth.regrow([](std::uint32_t) { return true; });
+    CHECK_FALSE(growth.failed(4));
+    growth.update(near, kAll, make);
+    growth.wait_idle();
+    growth.update(near, kAll, make);
+    CHECK(jobs == 2);
+    CHECK(growth.grown().contains(4));
+    // Failing again, then leaving reach and coming back: tried again.
+    fail = true;
+    growth.restart();
+    growth.update(near, kAll, make);
+    growth.wait_idle();
+    growth.update(near, kAll, make);
+    REQUIRE(growth.failed(4));
+    growth.update(Near{}, [](std::uint32_t) { return false; }, make);
+    CHECK_FALSE(growth.failed(4));
 }
