@@ -1658,7 +1658,8 @@ public:
     // cycling. Compute the effect rank once for a batch of spawns.
     std::int32_t see_invisible_rank() const;
     bool spawn_invisible(const game::Spawn& spawn, std::int32_t see_invisible_rank) const;
-    // Marks for an already visible spawn. Remote invisibility versus undead requires current target buffs.
+    // The marks round a spawn's name (SetNameSpriteState's parentheses; Hailstone's brackets with include_undead,
+    // known for another spawn only from its OP_TargetBuffs list while it is the target). Visibility is the caller's.
     game::NameInvisibility name_invisibility(const game::Spawn& spawn, bool include_undead = false) const;
     // /stopcast: asks the server to interrupt (empty OP_ManaChange).
     void stop_cast();

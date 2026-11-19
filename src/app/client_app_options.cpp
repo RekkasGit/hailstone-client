@@ -413,6 +413,7 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (o == "npc_names") return npc_names_ ? 1 : 0;
     // Hailstone: NPC names in their consider colour, on by default (draw_nameplates).
     if (o == "con_name_colour") return con_name_colour_ ? 1 : 0;
+    // Hailstone: "[Name]" for invisibility versus undead the client knows of, off by default (name_invisibility).
     if (o == "show_invis_undead") return show_invis_undead_ ? 1 : 0;
     // Hailstone: the item comparison in the item tooltips and displays (docs/item-compare.md), and its verdict; on by
     // default. Read by the UI packs only.

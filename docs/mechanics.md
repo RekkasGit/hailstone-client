@@ -1336,11 +1336,19 @@ and `npc_owner_line`
   takes the title's place (`game::name_sprite_market_words`). An offline trader reads "Offline Trader Name". Only a
   player's (spawn type 0): an NPC the server marks as a trader keeps its plain name, as in the original. Stock EQEmu
   sets neither offline flag, so its traders and buyers show only "Trader " / "Buyer ".
-- A living spawn under regular invisibility is shown as `(Name)` when the viewer can see it. The nameplate and
-  player, target and target-of-target HUD captions use the same visibility rules as the actors. Options > Display
-  **Bracket Invis vs. Undead** (`display.show_invis_undead`, off by default) adds `[Name]` for a confirmed invisibility
-  versus undead buff and shows `([Name])` when both apply. The client checks its own buffs and the current target's
-  buff list when the server supplies one. The RoF2 spawn invisibility rank only carries regular invisibility.
+- An invisible player or live NPC that the viewer can see has its name in parentheses, `(Name)`, as in the original
+  (PlayerClient::SetNameSpriteState @0x58e2d0: "(" round the name alone, inside the title, last name and leadership
+  marks, when the spawn's HideMode +0x338 is above 0; never on a corpse or a race from 0x8cd up;
+  `GameConnection::name_invisibility`). Another spawn's HideMode is the server's (the spawn record, then
+  SpawnAppearance type 3), so regular invisibility and a hider seen by others count. The player's own comes from its
+  effects (EQ_Character::UpdateMyVisibleStatus @0x459510, by CalcInvisLevel @0x442770): above 0 for regular
+  invisibility (SPAs 12 and 314), -2 and -1 for invisibility versus undead and versus animals, which get no
+  parentheses. The Hide skill is not among them, and stock EQEmu sends the hider nothing for it, so a hidden player's
+  own name stays plain (others see "(Name)"). The marks follow the spawn's state every frame. A Hailstone addition, off by default: Options > Display **Bracket Invis vs. Undead**
+  (`display.show_invis_undead`) shows `[Name]` for invisibility versus undead the client knows of (SPAs 28 and 315 in
+  the player's own buffs, or in the target's OP_TargetBuffs list while it is the target), `([Name])` with both. A
+  deliberate difference, which a UI pack asks for: the player, target and target-of-target captions show the same
+  marks (the original's captions are plain names, __GetLabelFromEQ @0x763640 and __GetGaugeValueFromEQ @0x762410).
 - A GM's name is green (`#1da64b`) as in the original (PlayerClient::SetNameSpriteTint @0x58bf00,
   `game::gm_name_colour`): the gm flag, not a live NPC (type 1), and Anon 0, so an anonymous or roleplaying GM shows
   the ordinary colour. A deliberate difference: the original keeps the green on a corpse that carries the gm flag,

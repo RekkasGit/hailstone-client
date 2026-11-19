@@ -178,6 +178,23 @@ TEST_CASE("HUD invisibility captions use viewer awareness and the undead display
     check_captions("[Visitor]");
     target.is_corpse = true;
     check_captions("Visitor");
+
+    // The player's own caption: the marks round the name, before the last name's line.
+    auto& me = world.spawns[10];
+    me.name = "Hero";
+    me.last_name = "Smith";
+    me.invis_rank = 1;
+    lua_settop(lua.get(), 0);
+    REQUIRE(luaL_dostring(lua.get(), R"lua(
+        local character = hs.UI.character
+        local _, plain = character.Gauge(1)
+        local _, marked = character.Gauge(1, true)
+        return plain, marked
+    )lua") == LUA_OK);
+    REQUIRE(lua_isstring(lua.get(), 1));
+    REQUIRE(lua_isstring(lua.get(), 2));
+    CHECK(std::string_view(lua_tostring(lua.get(), 1)) == "Hero\nSmith");
+    CHECK(std::string_view(lua_tostring(lua.get(), 2)) == "(Hero)\nSmith");
 }
 
 TEST_CASE("Group role menus: self, member rows, permissions and confirmed role checks") {

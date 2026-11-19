@@ -158,6 +158,9 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
         entry.canvas_owner = 0;
         std::string& label = plate.name; // (built in place: the string keeps its capacity from frame to frame)
         label = game::display_name(s.name);
+        // SetNameSpriteState's "(name)" for an invisible spawn the player sees (an unseen one has no plate): round
+        // the name alone, before the title, last name and marks are added. Hailstone's "[name]" too, by the option.
+        game::apply_name_invisibility(label, conn_->name_invisibility(s, show_invis_undead_));
         // An NPC's last name is its owner line under the name (below); a player's follows the name.
         const bool npc = s.is_npc && !s.is_corpse;
         // PlayerClient::SetNameSpriteState @0x58e2d0 by __ShowNames (/shownames): a player's title and suffix above
@@ -171,7 +174,6 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
         if (!s.title.empty() && (!player || level > 3) && !market.replaces_title) label = s.title + " " + label;
         if (!s.suffix.empty() && (!player || level > 3)) label += " " + s.suffix;
         if (!market.prefix.empty()) label.insert(0, market.prefix);
-        game::apply_name_invisibility(label, conn_->name_invisibility(s, show_invis_undead_));
         if (!player) label = game::name_sprite_with_marks(s, label, marks);
         conn_->server_ext().nameplate_text(*conn_, s, label);
         plate.pos = glm::vec2(px, py);

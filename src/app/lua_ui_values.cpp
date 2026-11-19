@@ -563,6 +563,9 @@ LabelValue stock_label(const UiHost& host, int type) {
 
 namespace {
 
+// Hailstone (a deliberate difference, asked for by the caller): the name plate's invisibility marks on a name
+// caption. The original's captions are plain names: __GetLabelFromEQ @0x763640 cases 0 and 0x1b, and
+// __GetGaugeValueFromEQ @0x762410 cases 1, 6 and 0x1b. Only for a spawn the player sees.
 void mark_visible_name(const UiHost& host, const net::GameConnection& conn,
                        const game::Spawn& spawn, std::string& name) {
     const bool show_undead = host.get_option && host.get_option("show_invis_undead") != 0;

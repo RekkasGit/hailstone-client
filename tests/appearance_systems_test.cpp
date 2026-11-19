@@ -208,6 +208,11 @@ TEST_CASE("Name marks use the spawn rank, own buffs and current target buffs") {
     };
     CHECK_FALSE(local_marks(true).normal);
     CHECK_FALSE(local_marks(true).undead);
+    // Hide is not among UpdateMyVisibleStatus's effects, and stock EQEmu tells the hider nothing: the own name
+    // stays plain.
+    rig.conn.note_hide_state(true, false);
+    CHECK_FALSE(local_marks(true).normal);
+    rig.conn.note_hide_state(false, false);
 
     net::BuffIcons own_buffs;
     own_buffs.entity_id = own;
@@ -255,8 +260,15 @@ TEST_CASE("Name marks use the spawn rank, own buffs and current target buffs") {
     rig.conn.set_target(visitor.spawn_id);
     CHECK(visitor_marks(true).undead);
 
-    rig.conn.receive_zone_packet_for_test(net::encode(target_buffs, true));
-    CHECK(visitor_marks(true).undead);
+    // SetNameSpriteState marks by HideMode alone: a living spawn the server shows at 0 % still has it; a race from
+    // 0x8cd up keeps its plain name.
+    rig.conn.world_for_test().spawns.at(visitor.spawn_id).hp_percent = 0;
+    CHECK(visitor_marks(false).normal);
+    rig.conn.world_for_test().spawns.at(visitor.spawn_id).race = 0x8cd;
+    CHECK_FALSE(visitor_marks(true).normal);
+    CHECK_FALSE(visitor_marks(true).undead);
+    rig.conn.world_for_test().spawns.at(visitor.spawn_id).race = 1;
+    rig.conn.world_for_test().spawns.at(visitor.spawn_id).hp_percent = 100;
     visitor.name = "New_Visitor";
     rig.conn.receive_zone_packet_for_test(net::encode(visitor));
     CHECK_FALSE(visitor_marks(true).normal);

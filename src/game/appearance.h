@@ -32,6 +32,8 @@ bool is_pc_model_race(std::uint32_t race);
 // Remote signed HP is unavailable; the server percentage gates living targets.
 bool spawn_invisible(const Spawn& viewer, const Spawn& target, std::int32_t see_invisible_rank, bool group_member);
 
+// The marks round an invisible spawn's name (GameConnection::name_invisibility): normal is the original's "(Name)"
+// (PlayerClient::SetNameSpriteState @0x58e2d0), undead Hailstone's "[Name]"; both make "([Name])".
 struct NameInvisibility {
     bool normal = false;
     bool undead = false;
