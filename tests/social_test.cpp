@@ -367,12 +367,36 @@ TEST_CASE("outgoing chat variables handle missing targets and pets and preserve 
     CHECK(expand("%t's pet is %m. %S thanked %O for %p help. %R.", &npc, &pet) ==
           "a gnoll's pet is a wolf. it thanked it for its help. NPC.");
     CHECK(expand("'%t' item%t 100% %X %%T %", &npc) == "'a gnoll' item%t 100% %X %%T %");
-    CHECK(expand("%T%S", &npc) == "a gnollit");
-    CHECK(expand("%O %O %O %O %O %O %O %O %O %O %O %O") == "it it it it it it it it it it it it");
+    CHECK(expand("%S%S") == "itit");
 
     game::Spawn corpse;
     corpse.is_corpse = true;
     CHECK(expand("%R", &corpse) == "Corpse");
+}
+
+TEST_CASE("outgoing chat variables follow DoPercentConvert's positions and limit") {
+    const game::EqStrings strings;
+    auto expand = [&](std::string_view text, const game::Spawn* target = nullptr, bool sending = true) {
+        return game::expand_chat_variables(text, strings, target, nullptr, sending);
+    };
+    // A code within the first two bytes, or after a space or an apostrophe.
+    CHECK(expand("a%t") == "aTarget");
+    CHECK(expand("ab%t") == "ab%t");
+    CHECK(expand("x %t, x'%t") == "x Target, x'Target");
+    // After a code the next search is measured from two bytes past it, so a code straight after a long expansion
+    // is not one.
+    game::Spawn npc;
+    npc.name = "#a_gnoll012";
+    npc.is_npc = true;
+    CHECK(expand("%T%S", &npc) == "a gnoll%S");
+    CHECK(expand("%T %S", &npc) == "a gnoll he");
+    // A '%' that is no code is "&PCT;" in sent text (sent as '%'), which moves the measure past it; a shown line
+    // leaves it, so the next '%' can be a code there.
+    CHECK(expand("%%t") == "%%t");
+    CHECK(expand("%%t", nullptr, false) == "%Target");
+    CHECK(expand("100%") == "100%");
+    // After eleven expansions every further code position gets '@'; a '%' elsewhere is left.
+    CHECK(expand("%O %O %O %O %O %O %O %O %O %O %O %O %X x%O") == "it it it it it it it it it it it @O @X x%O");
 }
 
 TEST_CASE("chat templates per channel (msg_new_text)") {

@@ -1288,6 +1288,8 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     290, 348, 349). Those keep RoF2's channels here, and are in no menu.
   - Settle: a capture of an EQEmu server that sends these colours.
 
+- Chat codes (docs/mechanics.md "Chat codes"): where the original sends `&PCT;` for a `%` that is no code, Hailstone sends the `%` itself, as it did before, because it shows received chat as it comes and would print `&PCT;` from another Hailstone player. That an original client shows a received bare `%` as `%` is not checked. `%M` names the pet window's pet (the player's one pet on a stock server); the original takes the first spawn in its spawn list whose MasterID is the player, temporary pets included, and that list's order is not modelled, so with a swarm pet out the two may name different pets. A capture of what an original client shows for a received `%`, and its pick with a pet and a swarm pet out, would settle them.
+
 ## Real estate
 
 Real estate is built to the original (docs/protocol/rof2-packets.md "Real estate") and tested with unit tests and against the mock server, not yet live against a server with housing (Project Triune).

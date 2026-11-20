@@ -419,11 +419,11 @@ bool GameConnection::run_slash_command(std::size_t index, const std::string& arg
 
 // ---------------------------------------------------------------- chat out
 
-std::string GameConnection::expand_chat_text(std::string_view text) const {
+std::string GameConnection::expand_chat_text(std::string_view text, bool sending) const {
     const auto target = world_.spawns.find(world_.target_id);
     const auto pet = world_.spawns.find(pets_.focused);
     return game::expand_chat_variables(text, strings_, target == world_.spawns.end() ? nullptr : &target->second,
-                                       pet == world_.spawns.end() ? nullptr : &pet->second);
+                                       pet == world_.spawns.end() ? nullptr : &pet->second, sending);
 }
 
 void GameConnection::send_channel(std::uint32_t channel, const std::string& target, const std::string& text) {
@@ -538,13 +538,13 @@ void GameConnection::emote_command(const std::string& args) {
         system(13068);
         return;
     }
+    std::string text = args;
     if (chat_blocked_) return; // CEverQuest::Emote @0x51f406
-    std::string text = expand_chat_text(args);
-    if (text.empty()) return;
     if (std::isalnum(static_cast<unsigned char>(text.back()))) text += '.';
-    // CEverQuest::Emote @0x51f400: channel 22, echoed as "<name> <text>" (colour 0x13a).
-    send_channel(22, {}, text);
-    chat(ChatEvent::Kind::Emote, character_ + " " + text, 0, 0x13a);
+    // CEverQuest::Emote @0x51f400: channel 22 (SendNewText converts the codes), echoed as "<name> <text>" (colour
+    // 0x13a), which dsp_chat converts as a whole line.
+    send_channel(22, {}, expand_chat_text(text));
+    chat(ChatEvent::Kind::Emote, expand_chat_text(character_ + " " + text, false), 0, 0x13a);
 }
 
 void GameConnection::social_emote(const game::SocialEmote& e, const std::string& args) {
@@ -576,7 +576,11 @@ void GameConnection::social_emote(const game::SocialEmote& e, const std::string&
     if (target && glm::distance(target->position, position_) > 100.0f) return system(12321);
     std::string target_name = target ? game::display_name(target->name) : std::string();
     auto text = game::build_social(strings_, e, target ? &target_name : nullptr, me ? me->gender : 0,
-                                   target ? target->gender : 0, expand_chat_text(rest));
+                                   target ? target->gender : 0, std::string(rest));
+    // send_social converts the codes of the whole line it sends, after its period (@0x528cf2); the echo is a shown
+    // line.
+    text.others = expand_chat_text(text.others);
+    text.echo = expand_chat_text(text.echo, false);
     if (!text.others.empty()) send_zone(encode_social_emote(text.others));
     // The animation, when standing still (OP_Animation, speed 10).
     if (e.animation >= 0 && pstatus_.stand_state == 100 && !moving_ && world_.player_id) {

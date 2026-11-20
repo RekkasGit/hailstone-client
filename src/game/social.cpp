@@ -4,6 +4,7 @@
 #include <array>
 #include <cctype>
 #include <chrono>
+#include <cstddef>
 #include <cstdlib>
 #include <format>
 #include <string_view>
@@ -460,8 +461,11 @@ std::string with_period(std::string s) {
 
 } // namespace
 
+// CEverQuest::DoPercentConvert @0x51b600, without its 0x800-byte buffer. It works on the text in place: `current`
+// is where the original's next search for a code is measured from (two bytes past a code it expanded, one past a
+// '%' it turned into "&PCT;"), which is why a code straight after a long expansion is not one.
 std::string expand_chat_variables(std::string_view text, const EqStrings& strings, const Spawn* target,
-                                  const Spawn* pet) {
+                                  const Spawn* pet, bool sending) {
     if (text.find('%') == std::string_view::npos) return std::string(text);
     auto localized = [&](std::uint32_t id, const char* fallback) {
         return strings.has(id) ? strings.format(id, {}) : std::string(fallback);
@@ -469,16 +473,20 @@ std::string expand_chat_variables(std::string_view text, const EqStrings& string
     const auto forms = pronouns(target ? target->gender : 2, 6766);
     auto replacement = [&](char code) -> std::optional<std::string> {
         switch (code) {
-        case 't': return target ? display_name(target->name) : "Target";
+        case 't': return target ? display_name(target->name) : "Target"; // the name at +0xe4
+        // The original takes the first spawn in its list whose MasterID is the player, temporary pets included;
+        // this is the pet window's pet (docs/unknowns.md).
         case 'm': return pet ? display_name(pet->name) : "Pet";
         case 's': return localized(forms[0].id, forms[0].fallback);
         case 'o': return localized(forms[1].id, forms[1].fallback);
         case 'p': return localized(forms[2].id, forms[2].fallback);
         case 'r': {
             if (!target) return localized(6769, "Race");
+            // Type 2 is the corpse text, any other non-player type the NPC text. Every corpse is type 2: EQEmu
+            // sends them so (Corpse::FillSpawnStruct) and IDied sets it (@0x5a3e5f).
             if (target->is_corpse) return localized(6767, "Corpse");
             if (target->is_npc) return localized(6768, "NPC");
-            auto race = strings.db_string(target->race, eRaceName);
+            auto race = strings.db_string(target->race, eRaceName); // GetRaceDesc @0x515ce0
             return race.empty() ? race_name(target->race) : race;
         }
         default: return std::nullopt;
@@ -486,10 +494,12 @@ std::string expand_chat_variables(std::string_view text, const EqStrings& string
     };
 
     std::string out;
-    out.reserve(text.size());
-    std::size_t suffix_start = 0;
+    out.reserve(text.size() + 16);
+    std::vector<std::size_t> entities; // where "&PCT;" stands in for a '%'
+    std::size_t current = 0;
+    int expansions = 0;
     for (std::size_t i = 0; i < text.size();) {
-        // Preserve item and achievement link envelopes, including their labels.
+        // Not in the original: an item or achievement link is copied whole, so a '%' in its label never breaks it.
         if (text[i] == '\x12') {
             const auto end = text.find('\x12', i + 1);
             if (end != std::string_view::npos) {
@@ -498,24 +508,53 @@ std::string expand_chat_variables(std::string_view text, const EqStrings& string
                 continue;
             }
         }
-        // A code can start within the first two bytes of the remaining suffix or after a space or apostrophe.
-        if (text[i] == '%' && i + 1 < text.size() &&
-            (i - suffix_start <= 1 || text[i - 1] == ' ' || text[i - 1] == '\'')) {
-            if (text[i + 1] == '%') {
-                out += "%%";
-                i += 2;
+        if (text[i] != '%') {
+            out += text[i++];
+            continue;
+        }
+        // A code is a '%' less than two bytes past `current`, or after a space or an apostrophe.
+        const std::size_t at = out.size();
+        const auto length = static_cast<std::ptrdiff_t>(at) - static_cast<std::ptrdiff_t>(current);
+        if (length < 2 || out[at - 1] == ' ' || out[at - 1] == '\'') {
+            if (expansions > 10) { // after eleven expansions such a '%' becomes '@'
+                out += '@';
+                ++i;
                 continue;
             }
-            if (auto value = replacement(ascii_lower(text[i + 1]))) {
-                out += *value;
-                i += 2;
-                suffix_start = i;
-                continue;
+            if (i + 1 < text.size()) {
+                if (auto value = replacement(ascii_lower(text[i + 1]))) {
+                    out += *value;
+                    current = at + 2;
+                    ++expansions;
+                    i += 2;
+                    continue;
+                }
             }
         }
-        out += text[i++];
+        // Any other '%': sent text (keepUnknown 1) gets "&PCT;" in its place, which moves `current`; a shown line
+        // (keepUnknown 0, dsp_chat) keeps it.
+        if (sending) {
+            entities.push_back(at);
+            out += "&PCT;";
+            current = at + 1;
+        } else {
+            out += '%';
+        }
+        ++i;
     }
-    return out;
+    if (entities.empty()) return out;
+    // The original sends "&PCT;", which its chat window shows as '%'. A plain '%' is sent instead, as before this
+    // expansion existed: this client shows received text as it comes (docs/unknowns.md).
+    std::string sent;
+    sent.reserve(out.size());
+    std::size_t from = 0;
+    for (std::size_t at : entities) {
+        sent.append(out, from, at - from);
+        sent += '%';
+        from = at + 5;
+    }
+    sent.append(out, from, std::string::npos);
+    return sent;
 }
 
 const SocialEmote* social_for_handler(std::string_view handler) {

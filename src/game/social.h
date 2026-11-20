@@ -107,9 +107,11 @@ std::string format_game_time(const EqStrings& strings, int year, int month, int 
 
 // ---------------------------------------------------------------- chat
 
-// Outgoing chat codes (%T, %M, %S, %O, %P, %R), resolved when a message is sent.
+// The chat codes %T, %M, %S, %O, %P and %R in either case (DoPercentConvert @0x51b600), resolved when the line runs.
+// `sending` is text that goes to the server (SendNewText, the chat server, a social's line); otherwise it is a line
+// shown locally (dsp_chat), where a '%' that is no code leaves the next one's position alone.
 std::string expand_chat_variables(std::string_view text, const EqStrings& strings, const Spawn* target,
-                                  const Spawn* pet);
+                                  const Spawn* pet, bool sending = true);
 
 // msg_new_text @0x4c0080: the eqstr template and the dev chat kind for an
 // OP_ChannelMessage channel. Language is shown as eqstr 1411 " in %1,".

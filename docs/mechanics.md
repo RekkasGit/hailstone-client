@@ -594,13 +594,29 @@ opcodes 0x57da / 0x4d09, which EQEmu never sends.
 
 `game/chat_text.*`: the new-text filters, bad word filter, broken speech and language garbling (`ChatRandom`).
 
-Outgoing chat expands case-insensitive percent codes when the line runs, chat lines in socials included:
+Chat codes (`game::expand_chat_variables`, CEverQuest::DoPercentConvert @0x51b600; unit tests in
+`tests/social_test.cpp`, mock-server test in `tests/mock_game_test.cpp`), in either case:
 
-- `%T` is the target's display name and `%M` the focused pet's name, with `Target` and `Pet` as fallbacks.
-- `%S`, `%O` and `%P` are the target's pronouns, with `it`, `it` and `its` when there is no target.
-- `%R` is the player target's current race, with `NPC`, `Corpse` and `Race` for an NPC, a corpse and no target.
-- The outgoing message and the local echo use the same expansion. Tell recipients are parsed separately. Item and
-  achievement links and literal percent signs are preserved.
+- `%T` the target's name (`Target` without one), `%M` the pet's name (`Pet`).
+- `%S` / `%O` / `%P` the target's pronoun (eqstr 12209-12211 / 12297, 12298, 6766 / 12301, 12299, 12300, the third of
+  each also without a target).
+- `%R` a player target's race (dbstr type 11, GetRaceDesc), eqstr 6767 for a corpse, 6768 for an NPC and 6769 without
+  a target.
+- A code is a `%` less than two bytes past where the last conversion left off, or after a space or an apostrophe. That
+  point is two bytes past the start of the last expansion, so a code straight after a long expansion is not one
+  (`%T%S` with a target "a gnoll" sends "a gnoll%S"). After eleven expansions every further code position gets `@`.
+- They are converted when the line runs, in text the client sends: SendNewText's channels (say, a targeted say,
+  group, guild, raid, fellowship, shout, auction, OOC, tell, emote), the chat-server lines (`;` and `[` lines,
+  `/1`..`/10` after the bad word filter, a chat-server `/reply`), the whole line a social emote sends, after its period
+  (send_social @0x528cf2), and the names of `/assist` and `/shield`. Social hot buttons run their lines as typed, each
+  when it runs.
+- The local echoes show the converted text: the channel echoes show the sent text; the emote echo and a social's own
+  line are converted as shown lines (dsp_chat, where a `%` that is no code is left as it is). Received chat is never
+  converted (msg_new_text shows it with dsp_chat's conversion off, @0x4c0e02).
+
+Differences: the original sends `&PCT;` for a `%` that is no code and its chat window shows it as `%`; Hailstone sends
+the `%` itself (docs/unknowns.md), and copies an item or achievement link whole, so a `%` in its label is never a code.
+`%M` is the pet window's pet, where the original takes the first spawn in its list whose owner is the player.
 
 Melee lines (`game::damage_report`, `hit_line_shown`; tests `tests/combat_test.cpp`) follow ReportSuccessfulHit's
 chat filters; a filter hides when its mode is 1 (setting 0):
