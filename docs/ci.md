@@ -6,27 +6,25 @@ on pull requests to `main`:
 - `core-names`: `tools/check_core_names.py` checks that the client's sources name no server outside comments. Lua
   long strings count as code.
   - The old names pass only in their own spellings (`nmsc`, `nmsc_`, `nmsc::`, `NMSC_`, the SDK's `Nmsc<Word>`,
-    `nms-client`). So `NMSChat` or `kNmsCombatOp` fails; tests/server_tools_test.cpp checks both.
-  - The one exception is the updater's table of files old releases shipped under `plugins/nms/` (path, size,
-    SHA-256; `retired_release_files()` in `src/app/update_install.cpp`). It is let through by file and exact line
-    shape.
+    `nms-client`), so `NMSChat` or `kNmsCombatOp` fails (tests/server_tools_test.cpp).
+  - The one exception, let through by file and exact line shape: the updater's table of files old releases shipped
+    under `plugins/nms/` (`retired_release_files()` in `src/app/update_install.cpp`).
 - `wiki`: `tools/sync_wiki.py --check`. Every document of `docs/`, `CONTRIBUTING.md` and `server/README.md` has a
   wiki page, and no link points at a missing file (docs/wiki.md).
 - `ui-api`: the shared UI contract's generated files are fresh.
   - `tools/migrate_ui_api.py --check` (the shipped packs call `hs.UI`) and its `--mock-adapter --check`
     (`tests/lua_ui_api_mock.lua`).
-  - `tools/gen_ui_api_docs.py --check` (`docs/ui-api-reference.md`). The page links each binding's file, not a
-    line, so an edit elsewhere in the file does not make it stale.
-  - Then the Python tests of those tools and of `tools/make_addon.py`'s UI and autoload packages
+  - `tools/gen_ui_api_docs.py --check` (`docs/ui-api-reference.md`; it links each binding's file, not a line, so
+    unrelated edits do not make it stale).
+  - The Python tests of those tools and of `tools/make_addon.py`'s UI and autoload packages
     (`tests/test_migrate_ui_api.py`, `test_gen_ui_api_docs.py`, `test_make_addon_ui.py`,
     `test_make_addon_autoload.py`).
 
-One workflow builds: `.github/workflows/macos.yml` ("macOS arm64" below), for the one platform the developer's Linux
-machine cannot build. It runs only when started by hand or on a push to a `macos/**` branch.
+One workflow builds: `.github/workflows/macos.yml` ("macOS arm64" below), for the platform Linux cannot build,
+started by hand or by a push to a `macos/**` branch.
 
-Builds and tests run on the developer's machine, to save Actions minutes. The build legs were dropped on 2026-11-02:
-linux-gcc and windows-msvc, and before them Linux Clang, macOS arm64, Linux arm64, a sanitizer leg and clang-tidy.
-They are in the workflow's history. Before a merge to `main`:
+Everything else is built and tested on the developer's machine, to save Actions minutes (the old build legs are in
+the workflow's history). Before a merge to `main`:
 
 | Platform | How | When |
 |---|---|---|
@@ -39,43 +37,34 @@ Releases are built the same way (docs/updater.md "Making a release"):
 - Linux in the `hailstone-linux-build` container (Ubuntu 24.04, so the client runs on 24.04 and newer).
 - Windows with MSVC under Wine.
 
-Run the sanitizer build (`-DHAILSTONE_SANITIZE=ON`, docs/hardening.md) and clang-tidy (below) by hand too. Keep the
-code building with Clang and Apple Clang: the portability rules in AGENTS.md still hold.
+Run the sanitizer build (`-DHAILSTONE_SANITIZE=ON`, docs/hardening.md) and clang-tidy (below) by hand too, and keep
+the code building with Clang and Apple Clang (AGENTS.md's portability rules).
 
 ## The tests
 
-- No window, Vulkan device or audio device is needed. Vulkan is reached through volk, and the unit tests use only
-  the headless parts. The window, GPU and audio-device code (`platform/window.cpp`, `render/`,
-  `platform/audio_device.cpp`) is compiled and linked, but not run by the tests.
+- No window, Vulkan device or audio device is needed (Vulkan is reached through volk). The window, GPU and
+  audio-device code (`platform/window.cpp`, `render/`, `platform/audio_device.cpp`) is compiled and linked, not run.
 - `tests/mock_*_test.cpp` run `LoginClient`, `GameConnection` and `Session` against an in-process mock EQEmu on
-  loopback (`tests/mock_server/README.md`). They take about 4 s, with no game files and no network.
-  - They use real time on `127.0.0.1` only, on ephemeral ports.
+  loopback (`tests/mock_server/README.md`): about 4 s, on `127.0.0.1` ephemeral ports, with no game files.
   - A test that asserts a timeout or a hold runs its sessions on `tests/manual_clock.h` (`SessionOptions::clock`)
-    and advances the time itself. A stalled test thread then cannot fire or skip a timer.
-- Several `hailstone_tests` run at once on a shared machine (several checkouts, or parallel ctest). A test writes
-  files in `tests/scratch_dir.h`'s `ScratchDir` (or `unique_temp_path`), never a fixed name under the
-  temp folder. With fixed names, eight parallel runs failed 36 of 48 times: one run's `remove_all` emptied another's
-  window-places, Lua and texture folders mid-test.
-- With `EQ_GAME_DIR` unset or empty, the tests that need an installed RoF2 game return early
-  (`tests/game_files.h`; `hailstone::test::game_dir()` returns null). They pass without checking anything. Run them
-  with it set.
-- With `HAILSTONE_TEST_TRACE` set, each test case's name goes to stderr as it starts (`tests/test_main.cpp`). A
-  crash that ends the process at once loses doctest's buffered report on stdout, but the last `[test]` line names
-  the case.
+    and advances the time itself, so a stalled thread cannot fire or skip a timer.
+- Several `hailstone_tests` run at once on a shared machine, so a test writes files in `tests/scratch_dir.h`'s
+  `ScratchDir` (or `unique_temp_path`), never a fixed name under the temp folder: one run's `remove_all` would empty
+  another's folders mid-test.
+- With `EQ_GAME_DIR` unset or empty, the tests that need an installed RoF2 game return early and pass without
+  checking anything (`tests/game_files.h`, `hailstone::test::game_dir()`). Run them with it set.
+- With `HAILSTONE_TEST_TRACE` set, each case's name goes to stderr as it starts (`tests/test_main.cpp`), so the last
+  `[test]` line names a case that crashed the process before doctest's report.
 - The browser test against the real CEF helper runs when the build has it (`HAILSTONE_BROWSER`). On Linux without
   a display it uses Chromium's headless platform.
-- The server plugins live in repositories of their own: projecthailstone/hailstone-nms and the private
-  projecthailstone/hailstone-projecttriune.
-  - They reach players as add-ons (docs/addons.md), released by the `tools/release.sh` in each of those
-    repositories (there is none in this one).
-  - Cloned into `plugins/nms` or `plugins/projecttriune`, each is built with the client and its tests join
-    `hailstone_tests`.
-  - The Actions secrets `NMS_DEPLOY_KEY` and `TRIUNE_DEPLOY_KEY`, which let the build legs check them out, are no
-    longer used.
+- The server plugins live in repositories of their own (projecthailstone/hailstone-nms and the private
+  projecthailstone/hailstone-projecttriune) and are released as add-ons by each one's `tools/release.sh`
+  (docs/addons.md). Cloned into `plugins/nms` or `plugins/projecttriune`, each is built with the client and its tests
+  join `hailstone_tests`. The Actions secrets `NMS_DEPLOY_KEY` and `TRIUNE_DEPLOY_KEY` are no longer used.
 
 ## Problems the first runs showed
 
-Behaviour is unchanged by all of these.
+Each fix left behaviour unchanged; they explain rules in AGENTS.md.
 
 | Leg | Failure | Fix |
 |---|---|---|
@@ -92,36 +81,32 @@ Behaviour is unchanged by all of these.
 
 Notes:
 
-1. The pattern is `static_cast<std::int32_t>(a * b) / k`. `wrapped_div` goes at every such division (game mechanics,
-   option commands, the reliable channel), `wrapped_mul_div` where a helper (`mul`, `wrap_mul`) made the product:
-   once inlined, `mul(a, b) / k` is the same pattern.
-2. Wine's WinHTTP does not end a synchronous call when another thread closes the request handle, as Windows does.
-   Under Wine the test's time is a doctest WARN, not a failure, and the cancel still reports "cancelled". Only a run
-   on Windows checks that the close ends the call at once.
-3. `lib.exe` never starts, and the wrapper waits on its output pipes. The archive command, with every engine object
-   on it, passed the 32,767 characters a Windows command line holds.
-4. `prepare_private_cache_directory` refused the folder it had just made. Wine reports every DACL with a
-   full-access entry for LocalSystem (S-1-5-18) added, so the protected DACL that grants only the user looked
-   shared. SYSTEM passes file ACLs anyway. A Windows case in `shared_file_test.cpp` checks
-   that a leaf granting Everyone is still refused. Wine also reports a DACL set on an existing folder from its Unix
-   mode, so a test that needs one sets it when it creates the folder.
+1. The pattern is `static_cast<std::int32_t>(a * b) / k`. Use `wrapped_div` at every such division,
+   `wrapped_mul_div` where a helper (`mul`, `wrap_mul`) made the product: inlined, `mul(a, b) / k` is the same
+   pattern.
+2. Wine's WinHTTP does not end a synchronous call when another thread closes the request handle. Under Wine the
+   test's time is a doctest WARN, not a failure; only a run on Windows checks that the close ends the call at once.
+3. The archive command, with every engine object on it, passed a Windows command line's 32,767 characters, and
+   `lib.exe` never started.
+4. Wine adds a full-access LocalSystem (S-1-5-18) entry to every DACL it reports, so `prepare_private_cache_directory`
+   saw its own user-only folder as shared. SYSTEM passes file ACLs anyway; a Windows case in `shared_file_test.cpp`
+   checks that a leaf granting Everyone is still refused. Wine also reports a DACL set on an existing folder from
+   its Unix mode, so a test that needs one sets it when it creates the folder.
 
 ## Not covered
 
-- Nothing runs on GitHub's machines but the checks. A change merged without the builds above is not built anywhere.
+- A change merged without the builds above is not built anywhere.
 - Linux arm64 is built only by hand, under QEMU on an x64 machine (`tools/docker/build.sh linux-arm64`, "Builds in
   containers" below). Windows arm64 is not built. macOS arm64 is built only when its workflow is started.
-- No macOS build has been run on a Mac with a display. The runner has no usable GPU, so the window, MoltenVK and the
-  rendering are compiled and linked only.
-- Nothing runs against a real game install or a server unless run by hand. Vulkan and audio device code is only
-  compiled.
+- No macOS build has been run on a Mac with a display; on the runner the window, MoltenVK and the rendering are
+  compiled and linked only.
+- Nothing runs against a real game install or a server unless run by hand.
 
 ## Windows builds from Linux
 
-A Windows x64 build can be made without Windows. `cmake/toolchains/clang-cl-xwin.cmake` compiles with LLVM's
-clang-cl and links with lld-link against the MSVC C runtime and the Windows SDK.
-[xwin](https://github.com/Jake-Shadle/xwin) downloads those from Microsoft; running it means accepting Microsoft's
-license for those files.
+`cmake/toolchains/clang-cl-xwin.cmake` builds Windows x64 on Linux with clang-cl and lld-link against the MSVC C
+runtime and the Windows SDK, which [xwin](https://github.com/Jake-Shadle/xwin) downloads from Microsoft (accepting
+Microsoft's license).
 
 ```sh
 xwin --accept-license --arch x86_64 splat --output ~/.xwin      # once, about 1 GB; HAILSTONE_XWIN_DIR names another folder
@@ -133,26 +118,21 @@ cmake --install build-windows --prefix dist/hailstone            # the client's 
 
 - It needs clang-cl, lld-link, llvm-lib, llvm-rc and llvm-mt (an LLVM install has them) and the build machine's
   glslang for the shaders.
-- RelWithDebInfo writes `hailstone.pdb`. Kept beside `hailstone.exe`, it lets a crash report name the function.
+- RelWithDebInfo writes `hailstone.pdb`; beside `hailstone.exe` it lets a crash report name the function.
 - The tests run under Wine (`wine build-windows/hailstone_tests.exe`, with a `WINEPREFIX` of its own).
 
-The compiler is `clang-cl-xwin.sh`. It puts the target and the SDK's headers on every compile, since CEF's CMake
-files (the browser helper) set `CMAKE_CXX_FLAGS` themselves. It also turns off three warnings that CEF's `/WX` would
-make errors and that MSVC does not give: `/MP` unused, missing field initializers, an undefined variable template.
-`xwin-include/` forwards a header CEF names in another case than the SDK.
+The compiler wrapper `clang-cl-xwin.sh` puts the target and the SDK's headers on every compile (CEF's CMake files set
+`CMAKE_CXX_FLAGS` themselves) and turns off three warnings CEF's `/WX` would make errors and MSVC does not give:
+`/MP` unused, missing field initializers, an undefined variable template. `xwin-include/` forwards a header CEF names
+in another case than the SDK.
 
-This is not MSVC: clang-cl warns about some code MSVC accepts. The release and the Windows check use MSVC under Wine
-(below).
+This is not MSVC: the release and the Windows check use MSVC under Wine (below).
 
 ### MSVC under Wine
 
-CI's own compiler (MSVC 19.44 from Visual Studio 2022, as on the `windows-2022` runner) also runs on Linux, under
-Wine, with [msvc-wine](https://github.com/mstorsjo/msvc-wine). A crash or a warning that only MSVC's build shows can
-then be found without spending CI minutes. The Windows leg's `0xc0000409` in "hs API: bad arguments are Lua errors"
-was found this way (`/EHs`, CMakeLists.txt).
-
-The download means accepting Microsoft's license. Everything runs in containers, so msvc-wine's scripts never run on
-the host:
+MSVC 19.44 (Visual Studio 2022, as on the old `windows-2022` runner) runs on Linux under Wine with
+[msvc-wine](https://github.com/mstorsjo/msvc-wine), to find crashes and warnings only MSVC shows. The download means
+accepting Microsoft's license. Everything runs in containers, so msvc-wine's scripts never run on the host:
 
 ```sh
 docker build -t hailstone-linux-build:24.04 -f tools/docker/linux.Dockerfile tools/docker   # also the Linux release image
@@ -180,9 +160,8 @@ This is the build the Windows release is made from (docs/updater.md "Making a re
 
 ### Builds in containers
 
-`tools/docker/build.sh` builds, tests and installs a platform in one command, through `compose.yaml` and the
-Dockerfiles above. It is a shortcut for the commands above, not another way of building: the same images, Release,
-the same `msvc_build.sh`.
+`tools/docker/build.sh` builds, tests and installs a platform in one command (`compose.yaml`): a shortcut for the
+commands above, with the same Dockerfiles, Release, and `msvc_build.sh`.
 
 ```sh
 tools/docker/build.sh linux-x64      # build-linux-x64/, then dist/linux-x64/hailstone
@@ -195,8 +174,8 @@ tools/docker/build.sh all            # the three; --no-test after the platform s
 
 - `CPUS` is the containers' CPU limit (default 8). `JOBS`, ninja's `-j`, follows it unless set. Keep the sum of
   every build running on the machine within its cores.
-- `CMAKE_ARGS` adds configure options, split at whitespace (an option cannot hold a space). An existing build folder
-  takes the options given now too.
+- `CMAKE_ARGS` adds configure options, split at whitespace (an option cannot hold a space), also to an existing
+  build folder.
 
 #### Images and containers
 
@@ -205,10 +184,9 @@ tools/docker/build.sh all            # the three; --no-test after the platform s
 - The Linux image has ccache, kept per platform in `.docker/ccache/<platform>` (ignored by git).
 - The MSVC image adds `wine32`. Without it `wineboot` can stop before Wine has a `TEMP` folder, and `cl` fails with
   D8037.
-- The containers run as the checkout's owner, so nothing in it ends up owned by root, and Chromium (which refuses
-  root) can run the browser tests.
-- The checkout is mounted at its own path, and git's folder read-only for the version line. Nothing else outside
-  the checkout is visible.
+- The containers run as the checkout's owner, so nothing ends up owned by root and Chromium (which refuses root)
+  can run the browser tests.
+- Only the checkout is mounted, at its own path, with git's folder read-only for the version line.
   - A plugin clone that is a symbolic link to another folder (a worktree's `plugins/nms`) is left out of the build.
   - A plugin cloned into `plugins/` is built and tested as usual. The install leaves it out, as a release does.
 - Only the Linux test runs drop Docker's seccomp and AppArmor profiles. Chromium's sandbox makes user namespaces,
@@ -228,17 +206,15 @@ tools/docker/build.sh all            # the three; --no-test after the platform s
   - "allow_url refuses an empty..." (Wine's WinHTTP reports another address to the check);
   - "File time" (MSVC's time zones need Windows' `icu.dll`).
 
-  Nothing runs them for you, CI included. Run them on Windows by hand when a change touches the browser, `web/` or
-  file times, and for a release.
+  Run them on Windows by hand when a change touches the browser, `web/` or file times, and for a release.
 - The script does not register QEMU for linux-arm64, since that changes the host's kernel settings. It prints the
   pinned `tonistiigi/binfmt` command to run once per boot.
 - macOS is not built here: Apple's compiler and SDK run only on a Mac ("macOS arm64" below).
 
 ## clang-tidy
 
-Not in CI at present (see above). By hand: configure the tree with Clang (no build needed) and run
-`run-clang-tidy -p build -quiet -header-filter='.*/src/.*' '.*/src/.*\.cpp$'` with the root `.clang-tidy`. The CI
-job that did this is in the workflow's history.
+Not in CI. By hand: configure the tree with Clang (no build needed) and run
+`run-clang-tidy -p build -quiet -header-filter='.*/src/.*' '.*/src/.*\.cpp$'` with the root `.clang-tidy`.
 
 ## macOS arm64
 
@@ -247,15 +223,15 @@ job that did this is in the workflow's history.
 1. a Release build;
 2. `hailstone_tests` (without game files or vectors);
 3. `cmake --install`;
-4. an ad hoc signature on every Mach-O file of the install. Apple Silicon runs no unsigned code, and the install's
-   rpath edits can leave the linker's signature stale.
+4. an ad hoc signature on every Mach-O file of the install (Apple Silicon runs no unsigned code, and rpath edits can
+   leave the linker's signature stale).
 
-It fails when the binary needs a library outside the system's and its own folder. The run's artifact,
-`hailstone-macos-arm64`, is the installed folder as a tar, which keeps the executable bits an artifact's zip drops.
+It fails when the binary needs a library outside the system's and its own folder. The artifact,
+`hailstone-macos-arm64`, is the installed folder as a tar (which keeps the executable bits a zip drops).
 
-Start it from the Actions tab or with `gh workflow run macos.yml -f ref=<commit or tag>`. A push to a branch named
-`macos/<topic>` starts it too. Then `gh run download <run> -n hailstone-macos-arm64` and `tar xf` it. The repository
-is public, so its minutes are free.
+Start it from the Actions tab, with `gh workflow run macos.yml -f ref=<commit or tag>`, or by pushing a
+`macos/<topic>` branch; then `gh run download <run> -n hailstone-macos-arm64` and `tar xf` it. The repository is
+public, so its minutes are free.
 
 The build:
 

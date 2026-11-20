@@ -3,31 +3,30 @@
 Hailstone works on any EQEmu server as is. A server can add five things:
 
 - **sending the server's client files**: Hailstone downloads what the owner puts in `client_files/` at the first
-  zone-in of a login, with no web server (below). That covers spells, strings, zones, models, and the server's own
-  plugins and Lua scripts with the `hailstone.cfg` that sets the rules for plugins, scripts and assets;
+  zone-in of a login, with no web server (below): spells, strings, zones, models, and the server's own plugins and
+  Lua scripts with the `hailstone.cfg` that sets their rules;
 - **guild invitations across zones**: EQEmu's `/guildinvite` only reaches a player in the inviter's zone (anyone
-  else gets "Prospective guild member ... must be in zone"). With the script it reaches the player in any zone;
+  else gets "Prospective guild member ... must be in zone"); with the script it reaches any zone;
 - **declined group invitations reaching the inviter**: see [below](#declined-group-invitations);
-- **quest givers in the Find window**: Hailstone's Find window lists the zone's merchants, bankers and trainers on
-  any server. With the script it also lists the NPCs that have quests (below);
+- **quest givers in the Find window**: besides the merchants, bankers and trainers it lists on any server, the
+  Find window lists the NPCs that have quests (below);
 - **zone connections for the map's zone finder**: every zone point the server's expansion and content flags allow,
   so the World view can route between zones the player has not visited (below).
 
-This folder does all five with a Lua quest script. It needs no C++ changes, no rebuild and no opcode edits. It runs
-next to the server's own quests (Perl or Lua) without replacing any of them. Tested on EQEmu 23.10.3 with the PEQ
-quests.
+This folder does all five with a Lua quest script: no C++ changes, rebuild or opcode edits. It runs next to the
+server's own quests (Perl or Lua) without replacing any. Tested on EQEmu 23.10.3 with the PEQ quests.
 
 #### Declined group invitations
 
-A RoF2 client that declines sends OP_CancelInvite (0x2a50). Stock EQEmu maps it to nothing, so the inviter is never
-told. The script passes it on (`group_declines`):
+A RoF2 client that declines sends OP_CancelInvite (0x2a50), which stock EQEmu maps to nothing, so the inviter is
+never told. The script passes it on (`group_declines`):
 
 - to an inviter in the same zone, the packet itself (the client prints "%1 rejects your offer to join the group."
   and the other refusals);
 - otherwise, the same line as text.
 
-It works for any RoF2 client, Hailstone or not. EQEmu's Lua cannot tell whether the named player really invited the
-sender, so at most 5 declines a sender in 10 s are passed on.
+It works for any RoF2 client. EQEmu's Lua cannot tell whether the named player really invited the sender, so at
+most 5 declines a sender in 10 s are passed on.
 
 ## Install
 
@@ -44,8 +43,7 @@ Then restart the zones (or `#reloadquest`).
   root, its owner.
 
 **By hand**, or on servers too old for `quest_paths`: copy `quests/global/encounters/hailstone.lua` into the
-server's `quests/global/encounters/`. Then add this line to its `quests/global/script_init.lua` (create the file if
-there is none):
+server's `quests/global/encounters/`, and add this line to its `quests/global/script_init.lua` (create it if needed):
 
 ```lua
 eq.load_encounter("hailstone")
@@ -71,14 +69,14 @@ client_files/
 
 Everything the file can say is in docs/plugins.md and `hailstone.cfg.example`. Players get changes at their next login.
 
-Check a folder with `hailstone_check client_files/` (built with the client). It shows what the cfg says, warns about
+Check a folder with `hailstone_check client_files/` (built with the client): it shows what the cfg says, warns about
 what it does not understand, and names the files a client will refuse.
 
 ## Settings
 
-The settings are at the top of `hailstone.lua`. Any of them can also be overridden live with a data bucket
-`hailstone:<name>` (`#databuckets`). Each zone reads a bucket at most every 10 seconds, and at once after
-`#reloadquest`. (EQEmu caches no bucket without a character, so each read is a database query.)
+The settings are at the top of `hailstone.lua`. Any can be overridden live with a data bucket `hailstone:<name>`
+(`#databuckets`). Each zone reads a bucket at most every 10 seconds (each read is a database query), and at once
+after `#reloadquest`.
 
 | Setting | Default | |
 |---|---|---|
@@ -103,8 +101,8 @@ Run EQEmu's `export_client_files` for `spells_us.txt`, `dbstr_us.txt`, `SkillCap
 two go in `Resources/`), so they match the database.
 
 - Names starting with `.` are not sent.
-- On a Windows server, names with characters outside ASCII are not sent either. EQEmu's Lua cannot open them there;
-  the zone's log names each one.
+- On a Windows server, names with characters outside ASCII are not sent (EQEmu's Lua cannot open them); the zone's
+  log names each one.
 - `client_files` may be a link to a folder elsewhere.
 - When a zone lists no files at all (the folder is missing, empty or cannot be read), its log says so once, until
   files are listed again.
@@ -113,29 +111,27 @@ two go in `Resources/`), so they match the database.
 
 #### Hashing and rescans
 
-A zone hashes the folder (SHA-256) when it starts. It keeps the hashes in `client_files/.hailstone-cache` by size and
-time, so only new or changed files are hashed again.
+A zone hashes the folder (SHA-256) when it starts, keeping the hashes in `client_files/.hailstone-cache` by size and
+time so only new or changed files are hashed again.
 
 When a client asks and the list is older than `files_rescan` (5 minutes), the zone looks again. Looking runs `find`
-and `sha256sum` and holds the zone while they run. So a player's request can make it happen at most that often, and
-never more than every 30 s whatever the setting says.
+and `sha256sum` and holds the zone while they run, so it happens at most that often and never more than every 30 s.
 
-Adding or changing files needs no restart. Players who zone in get them within five minutes, or at once after
-`#reloadquest`, which hashes the folder again. The first start after adding a large folder takes a few seconds per
-gigabyte in that zone.
+Adding or changing files needs no restart: players who zone in get them within five minutes, or at once after
+`#reloadquest`. The first start after adding a large folder takes a few seconds per gigabyte.
 
 #### Files changed in place
 
 A file changed in place within those five minutes is not sent with its old hash:
 
 - The first time any player asks for a file's first piece, the zone looks at its size and modification time (one
-  `find` for that file). On Windows it looks at the size only, as a PowerShell start per file would be too slow.
+  `find`; on Windows the size only, as a PowerShell start per file would be too slow).
 - At every piece, it checks the size of the file it has open.
-- That first look is made once per file until the zone next makes the list (`files_rescan`), for all players
-  together. So a rewrite that keeps the size after it goes unnoticed until then.
+- That first look is made once per file, for all players, until the zone next makes the list (`files_rescan`), so a
+  later rewrite that keeps the size goes unnoticed until then.
 
-A change makes the zone hash the folder again (at most every 30 s) and tells the client, which lists the files again.
-Until the folder is hashed again, every request for that file is told the same.
+A change makes the zone hash the folder again (at most every 30 s) and tells the client, which lists the files again;
+until then every request for that file is told the same.
 
 A file changed on Windows without changing its size can still go with its old hash until the next listing. The client
 then finds the hash wrong and keeps its old files until the next login.
@@ -143,35 +139,33 @@ then finds the hash wrong and keeps its old files until the next login.
 #### Commands the hashing uses
 
 The hashing uses `find`, `xargs` and `sha256sum` (GNU, as on any Linux server or the Docker images), and on Windows
-PowerShell's `Get-FileHash`. The Windows commands are not tested yet. EQEmu's Lua has no `os.remove` or `os.rename`,
-so the script removes and renames its scratch files through those commands too.
+PowerShell's `Get-FileHash`. The Windows commands are not tested yet. The script also removes and renames its
+scratch files through them (EQEmu's Lua has no `os.remove` or `os.rename`).
 
 #### Downloading
 
-Hailstone asks at the first zone-in of each login. It holds the zone-in, with "Downloading server files" on the
-loading screen, until what changed has come; then it reads the files again and the zone loads.
+Hailstone asks at the first zone-in of each login and holds the zone-in ("Downloading server files" on the loading
+screen) until what changed has come.
 
-Players are sent the files from the zone they enter, a 32 KB piece at a time as the client asks (`OP_HsFilesRequest`
-0x1434, `OP_HsFiles` 0x1435; the layout is in the client's `src/net/server_files_packets.h`). The zone keeps up to
-eight files open for this, so players fetching different files do not make it reopen them at every piece.
+The zone they enter sends the files a 32 KB piece at a time as the client asks (`OP_HsFilesRequest` 0x1434,
+`OP_HsFiles` 0x1435; layout in the client's `src/net/server_files_packets.h`). It keeps up to eight files open, so
+players fetching different files do not make it reopen them at every piece.
 
 Rate limits:
 
-- One player may ask for `files_chunks_per_second` pieces a second (768, 24 MB/s). One download was measured at about
-  16 MB/s, so this leaves it room.
-- All of a zone's players together may ask for `files_chunks_per_second_zone` (1024, 32 MB/s). Two first downloads at
-  once each get about the measured rate; three or more share it and are slower.
+- One player may ask for `files_chunks_per_second` pieces a second (768, 24 MB/s), above the about 16 MB/s one
+  download was measured at.
+- All of a zone's players together may ask for `files_chunks_per_second_zone` (1024, 32 MB/s): two first downloads at
+  once each get about the measured rate; three or more share it.
 - A client asking faster than that has its requests wait, up to 64 of them.
-- While any wait, every player's are served a player at a time in turn, so no one is left with nothing. They are
-  served as requests come (while the zone's limit has room that second) and on a 100 ms timer (`eq.set_timer` on the
-  script's encounter) as the limits allow.
-- What waits for a player who leaves the zone is dropped. The client asks again for a piece that does not come.
+- While any wait, players are served in turn, as requests come (while the zone's limit has room that second) and on
+  a 100 ms timer (`eq.set_timer` on the script's encounter).
+- What waits for a player who leaves the zone is dropped; the client asks again for a piece that does not come.
 
 EQEmu keeps every piece it sent until the client acknowledges it, for up to 30 seconds, and a quest script cannot see
-those acknowledgements. So a modified client that asks and never acknowledges makes the zone hold what the limits let
-through in 30 seconds. At the defaults that is at most about 1 GB however many characters it uses (about 0.7 GB for
-one). This is bounded, not gone: on a small host, lower `files_chunks_per_second_zone` to hold less, at the cost of
-slower first downloads.
+those acknowledgements. A modified client that never acknowledges makes the zone hold what the limits let through in
+30 seconds: at the defaults at most about 1 GB however many characters it uses (about 0.7 GB for one). On a small
+host, lower `files_chunks_per_second_zone` to hold less, at the cost of slower first downloads.
 
 #### Request limits
 
@@ -185,19 +179,18 @@ Every Hailstone request is limited per character before the zone does any work f
 | group declines | five in 10 seconds |
 | file piece requests | twice what the two limits above let a player be sent in a second, plus the 64 that may wait (at least 2112 a second) |
 
-Counting malformed guild and settings requests means a flood of them is not logged line by line. An honest client
-asks once a piece, and again for a lost one. An honest client asks for each once a zone-in. What is over the limit is
-dropped, with one line in the zone's log.
+Counting malformed requests keeps a flood of them out of the log. An honest client asks once a piece (again for a
+lost one), and for the others once a zone-in. What is over the limit is dropped, with one line in the zone's log.
 
-A first download of a gigabyte took about 70 seconds on one machine; a player who has the files only gets the list.
-Compressing the files would not help: EQEmu already compresses the zone stream (`Network:CompressZoneStream`), and
-zone and model archives are compressed inside.
+A first download of a gigabyte took about 70 seconds in a test; a player who has the files only gets the list. Compressing
+the files would not help: EQEmu already compresses the zone stream (`Network:CompressZoneStream`), and zone and model
+archives are compressed inside.
 
 ## Quest givers in the Find window
 
-Hailstone's Find window asks once a zone, the first time a player opens it there (`OP_HsQuestNpcsRequest` 0x1436).
-The script answers with the names of the zone's NPCs that have quests (`OP_HsQuestNpcs` 0x1437; the layout is in the
-client's `src/net/quest_npc_packets.h`).
+The Find window asks once a zone, the first time a player opens it there (`OP_HsQuestNpcsRequest` 0x1436). The
+script answers with the names of the zone's NPCs that have quests (`OP_HsQuestNpcs` 0x1437; layout in the client's
+`src/net/quest_npc_packets.h`).
 
 An NPC has quests when its own quest file handles `EVENT_ITEM` / `event_trade` (it takes hand-ins) or `EVENT_SAY` /
 `event_say` (it talks). The file is found as EQEmu finds it:
@@ -211,9 +204,8 @@ The `default` scripts and `global_npc` are left out, since they run for every NP
 an encounter adds at run time. The NPCs are those in the zone's spawn tables for its version (one query) and those
 alive when the list is made (spawned by scripts).
 
-The list is made once per zone process, at the first request, and kept. Later requests, from any player, get the kept
-list (a few KB). The zone's log has a line with how many NPCs it looked at and how long it took. `#reloadquest` makes
-it again with the quest files as they are then.
+The list is made once per zone process, at the first request, and kept (a few KB); the zone's log says how many NPCs
+it looked at and how long it took. `#reloadquest` makes it again.
 
 Each character may ask three times in 10 seconds; more are dropped. Set `quest_npcs` to 0 to keep which NPCs are
 scripted to yourself.
@@ -232,19 +224,18 @@ The client sends its requests on custom opcodes that no server's opcode table li
 
 So the zone passes them to the `event_unhandled_opcode` quest event, and the script replies with raw packets.
 
-Hailstone 0.7.0 and older send the same requests 0x0e lower (last column). The script answers those on the
-old numbers too, so updating the script first leaves older clients working. (On Project Triune's server 0x1422 is its
-own opcode and never reaches the script, so those older clients get no cross-zone guild invitations there.)
+Hailstone 0.7.0 and older send the same requests 0x0e lower (last column); the script answers those too, so
+updating the script first leaves older clients working. (On Project Triune's server 0x1422 is its own opcode, so
+those older clients get no cross-zone guild invitations there.)
 
 The script registers that event through an encounter loaded from `global/script_init.lua`, which EQEmu runs from
-every quest folder. So the server's own `global_player` scripts keep running.
+every quest folder, so the server's own `global_player` scripts keep running.
 
 ## Zone links
 
-The map window's zone finder shows the way from one zone to another (docs/navigation.md "Zone atlas"). With the
-script, the client asks once a session, the first time a player opens the map's World view (`OP_HsZoneLinksRequest`
-0x1438). It gets every pair of zones a zone point joins (`OP_HsZoneLinks` 0x1439; the layout is in the client's
-`src/net/zone_link_packets.h`).
+The map window's zone finder shows the way from one zone to another (docs/navigation.md "Zone atlas"). The client
+asks once a session, the first time a player opens the map's World view (`OP_HsZoneLinksRequest` 0x1438), and gets
+every pair of zones a zone point joins (`OP_HsZoneLinks` 0x1439; layout in the client's `src/net/zone_link_packets.h`).
 
 The list is:
 
@@ -253,11 +244,11 @@ The list is:
    loads its zone points;
 2. then the current expansion and the zones (version 0) the expansion and content flags allow.
 
-The finder lists and routes through only those zones, so players see only the zones of the server's expansion.
+The finder lists and routes through only those zones, so players see only the server's expansion.
 
-It is built at the first request in each zone process with one query of the content database and one of
-`content_flags`, then kept in memory. `#reloadquest` builds it again. A character is answered at most twice a minute.
-A stock database gives a reply of about 7 KB.
+It is built at the first request in each zone process (one query of the content database, one of `content_flags`)
+and kept; `#reloadquest` builds it again. A character is answered at most twice a minute. A stock database gives
+about 7 KB.
 
 ## Guild invitations across zones
 
@@ -274,14 +265,13 @@ The script then:
 2. leaves the invitation in the data bucket `hailstone:guildinvite:<character id>` (20 s) and signals the
    character (`eq.cross_zone_signal_client_by_char_id`);
 3. in the invitee's zone, sends the client the invitation (wire opcode 0x1431), which asks the usual
-   question ("%1 is interested in having you join %2.", 10 s). A client that is not Hailstone could only answer
-   EQEmu's same-zone invitation, so the inviter gets EQEmu's "must be in zone" instead. If no zone takes the
-   invitation within 3 s the invitee is not online, and the inviter is told so;
+   question ("%1 is interested in having you join %2.", 10 s). A non-Hailstone invitee gets no invitation and the
+   inviter gets EQEmu's "must be in zone". If no zone takes the invitation within 3 s the invitee is not online, and
+   the inviter is told so;
 4. on the answer (again the guild packet, in whatever zone the invitee is then), declines with EQEmu's words or puts
-   the invitee in the guild with `eq.set_guild`. It then sends the client the guild's rank permissions, rank names
-   and roster as EQEmu does for a new member. EQEmu only forwards a new member's join to zones where world already
-   sees a member of the guild, which leaves out an invitee alone in its zone. Without this the new member would not
-   see guild chat until it zoned.
+   the invitee in the guild with `eq.set_guild`, then sends the client the guild's rank permissions, rank names and
+   roster as EQEmu does for a new member. (EQEmu forwards a join only to zones where world sees a guild member, so
+   without this an invitee alone in its zone would not see guild chat until it zoned.)
 
 Other clients, and Hailstone on a server without the script (or with `guild_invites_world` 0), keep EQEmu's
 same-zone invitation. Both packets are 80 bytes: `{u32 magic; u16 version 1; u16 action; char name[64];

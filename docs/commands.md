@@ -106,7 +106,7 @@ follow the RoF2 client; the ones Hailstone adds are marked as Hailstone's. For t
 | `/aggrometer`, `/aggrolock` | The aggro meter and its lock. |
 | `/marknpc <1..3>`, `/gmarknpc`, `/rmarknpc`, `/clearmarks` | Group and raid NPC marks. |
 | `/indicator [on\|off]` | The target indicator, for this session. |
-| `/blockspell <display\|add\|remove\|clear> <me\|pet> [spell ids]` | Blocked buffs. The lists are kept in the character ini and sent to the server at each zone-in; a spell the server takes as newly blocked comes off the player (or the pet), with the effects of its spell group. |
+| `/blockspell <display\|add\|remove\|clear> <me\|pet> [spell ids]` | Blocked buffs, kept in the character ini and sent at each zone-in; a newly blocked spell comes off the player (or pet) with its spell group's effects. |
 | `/sheathe` | Sheathe or draw your weapons. |
 | `/duel`, `/decline` | Challenge your target to a duel; decline one. |
 
@@ -191,7 +191,7 @@ discipline's name may leave out its rank.
 | `/filter` | Chat filters. |
 | `/hotbutton <name> [colour] <text>` | Make a hot button from a line and put it on the cursor. |
 | `/loadskin <name> [keep]` | Load a UI skin. |
-| `/copylayout` | Copy another character's layout. An ini no character or defaults file names is looked for beside the current layout file by its bare name; a path is not found. |
+| `/copylayout` | Copy another character's layout. Another ini is looked for by bare name beside the current layout file; paths are not accepted. |
 | `/fontface <name>` | The UI font. |
 | `/viewport reset`, `/viewport <x> <y> <w> <h> [scale]` | The 3D view's area on screen. |
 | `/fullscreen [on \| off \| toggle]` | Full screen or windowed. |

@@ -77,7 +77,7 @@ build/hailstone/hailstone          # the client; the dev tree is build/hailstone
 ```
 
 - Run the whole `hailstone_tests` before you call something done. Run one case with `build/hailstone_tests -tc="<name>"`.
-- **GitHub CI builds nothing; it runs checks only** (docs/ci.md). A merge is only as tested as your own run.
+- **GitHub CI builds nothing; it runs checks only** (docs/ci.md). The one exception is the macOS workflow, which builds only when started by hand or pushed to a `macos/**` branch. A merge is only as tested as your own run.
 - For a change to `src/platform/`, the build files, the Lua bridge (`app/lua_ui*`) or anything a compiler may treat differently, also build with MSVC under Wine and run its tests (docs/ci.md "MSVC under Wine").
 - Releases are built locally (docs/updater.md "Making a release").
 - A sanitizer build is `-DHAILSTONE_SANITIZE=ON` (docs/hardening.md). Use it for anything that parses bytes.

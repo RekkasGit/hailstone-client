@@ -21,8 +21,6 @@ Credits:
 - Which models borrow clips comes from LanternExtractor's (MIT) `animationsources.txt`, copied to
   `tools/data/lantern_animationsources.txt`.
 
-The numbers below come from a RoF2 install (2026-10-20).
-
 ## Archives and load order
 
 `global_character_archives()` follows the client's start-up order:
@@ -38,83 +36,25 @@ The numbers below come from a RoF2 install (2026-10-20).
 Per zone, `zone_character_archives()` adds `<zone>_chr2`, `<zone>2_chr`, `<zone>_chr` and the S3D entries of
 `<zone>_chr.txt`.
 
-- Every WLD in each archive is validated, but only a compact resource index is retained until first use.
-- The first definition of an actor or track name wins.
-- Shipped: 52 global archives with 182 actor definitions, parsed in about 0.4 s. The app keeps them between zones
-  (`CharacterArchiveCache`).
+The first definition of an actor or track name wins. The app keeps the global archives between zones
+(`CharacterArchiveCache`).
 
-#### Archive storage
+#### Memory and caches
 
-A character archive in the asset folder (or the classic folder) is mapped read-only (`PfsArchive::open` with
-`PfsArchive::Storage::Mapped`, decided by `PfsArchive::storage_for`; `platform::MappedFile`), not copied into the
-heap. Only the archive index (`names_` and `by_name_`) is private memory. The bytes live in the file cache, shared
-with other readers and evictable under pressure.
-
-An archive from a server's overlay (`servers/<id>/assets`) is read into the heap as before. The server files sync
-replaces those files while the client runs, which Windows refuses for a file with a mapped view (docs/hardening.md
-"Mapped game archives", also for what a game file truncated under the client does now).
-
-- `from_memory` keeps its owned buffer, and both parse through `ByteReader` over the same span.
-- `CharacterArchiveCache::clear()` lets the old archives go on an asset-folder or overlay change.
-- Character tables store WLD objects and positive fragment references, and copy the small track-reference records
-  needed for clip lookup.
-
-#### Deferred WLD payloads
-
-`WldFile::deferred` validates one complete WLD at a time. It retains only successfully decoded named actors, meshes,
-materials and track references in original order, and drops the decoded payload. First payload access inflates and
-parses that WLD again from the same archive.
-
-Decoding is synchronized and shared across copies. Public character build/dress/material operations acquire
-`WldFile::ReadScope` leases. Nested calls share the outer lease, and exceptions end leases too.
-
-When the last concurrent lease ends, the decoded payload is not dropped at once. It is kept in a process-wide
-retained set, least recently released first out, while the estimated decoded bytes (`retained_bytes()`) of all
-retained WLDs stay within `WldFile::kDefaultRetainBudget` (128 MiB; `WldFile::set_retain_budget`, 0 drops payloads
-as the last lease ends).
-
-- The next lease takes a retained payload back without decoding. Building one model after another from
-  `global_chr.wld` (each a cache miss of its own, on the frame thread or the dresser's) decodes it once, not once per
-  model.
-- The set is not emptied on a zone change: the global archives stay loaded between zones and the budget bounds it.
-  A zone's own archives leave it when they are destroyed.
-- An unscoped raw WLD access pins its decoded data for the WLD lifetime, preserving direct callers that hold fragment
-  pointers.
-- Ordinary zone WLDs remain eager and are not reclaimed this way.
-- The validation pass still incurs one WLD's transient decode cost. This reduces retained memory, not the amount of
-  initial validation work.
-- Model enumeration in tools may intentionally materialize every actor's WLD.
-
-`CharacterArchive::archive_bytes()` / `owned_bytes()` / `parsed_bytes()` (and `wld::WldFile::retained_bytes()`)
-count the two separately. The historical 926 MB archive increment is not re-measured here and is not all archive
-bytes, so the mapping alone does not claim it back.
-
-#### Shared caches across zones
-
-The app also keeps what was built from the global archives alone (`SharedCharacterCache`): models, appearances and
-item models. Each entry keeps the names its build looked up in the library's tables (`CharacterLookups`: actors,
-tracks, clip lists, meshes, files, Luclin materials and parts).
-
-- A zone's library takes an entry only when its own archives define none of those names. A zone's override of a
-  global model, track, mesh or texture never comes from the cache, and what a zone's archives changed never goes into
-  it.
-- Appearances are keyed by the shared model object they dress.
-- The renderer keeps the meshes and textures it put on the GPU for those across a zone change
-  (`ActorRenderer::release_kept`). A texture is read again when the new zone's archives define a name it looked up.
-- Both keep only what was used in the zone just left.
-
-Measured with the live asset folder: building and dressing every global model in The Bazaar took 1.0 s the first
-time and nothing the second. After The Bazaar, The Plane of Knowledge shared 177 of its 204 models and built the rest
-in 0.12 s.
-
-The global archives' name tables are built once too (`CharacterArchiveIndex`, again after `clear()`: another asset
-folder or server overlay), and every zone's library shares them. A zone's library indexes only its own archives, on
-top. A name its archives define goes on from the global tables' state (resource levels, clip lists), so it resolves
-exactly as one library over all the archives would.
-
-A zone's library took 0.65–1.0 s to make with the live asset folder and Luclin models (the global archives indexed
-again each time). With the shared index it takes 20–45 ms (The Plane of Knowledge 50–100 ms), reading and indexing
-the zone's own archives.
+- Character archives in the asset folder are memory-mapped read-only (`PfsArchive::storage_for`,
+  `platform::MappedFile`); a server overlay's (`servers/<id>/assets`) are read into the heap, since the server files
+  sync replaces them while the client runs, which Windows refuses for a mapped file (docs/hardening.md "Mapped game
+  archives").
+- Each WLD is validated at load but kept only as a compact index; its payload is decoded on first use
+  (`WldFile::deferred`, under `WldFile::ReadScope` leases). Decoded payloads are kept after the last lease in a
+  least-recently-released set within `WldFile::kDefaultRetainBudget` (128 MiB; `WldFile::set_retain_budget`, 0 drops
+  them at once), which is not emptied on a zone change. Ordinary zone WLDs stay eager.
+- What was built from the global archives alone (models, appearances, item models) is shared across zones
+  (`SharedCharacterCache`). Each entry records the names its build looked up (`CharacterLookups`), and a zone's library
+  takes an entry only when its own archives define none of them, so a zone's override never comes from, or goes into,
+  the cache. The renderer keeps those meshes and textures on the GPU across a zone change (`ActorRenderer::release_kept`).
+- The global archives' name tables are built once (`CharacterArchiveIndex`, again after `clear()`); a zone's library
+  indexes only its own archives on top, and resolves exactly as one library over all the archives would.
 
 #### Equipment and Luclin archives
 
@@ -130,7 +70,7 @@ With Luclin models on (the app always asks; eqclient.ini decides), `luclin_chara
 
 It loads `global<code>_chr2.s3d`, `global<code>_chr.s3d` for each enabled code, plus the part archives `lgequip`,
 `lgequip2`, `lgequip_amr`, `lgequip_amr2`, between GlobalLoad phases 2 and 3. Since the first definition wins, the
-Luclin `HUM_ACTORDEF` then replaces global_chr's. With all of them, 122 global archives parse in about 0.75 s.
+Luclin `HUM_ACTORDEF` then replaces global_chr's.
 
 EQG models are not in these archives: see "EQG models" below.
 
@@ -170,35 +110,18 @@ A static (non-skeletal) actor without a mesh is a build error. A skeleton with n
 
 #### A skeleton with no drawable body: IVM
 
-Race 127's `IVM` (the enchanter pet; race 600 uses it too) has 26 bones and no named clips. Its meshes (the
-skeleton's mesh list and the `IVMHE00` node's sprite, through 0x2d references) are 0x2c fragments such as
-`IVM_DMSPRITEDEF`, which this client does not support. So it has no drawable body (no vertices).
+Race 127's `IVM` (the enchanter pet; race 600 uses it too) has 26 bones and no named clips. Its meshes are 0x2c
+fragments (`IVM_DMSPRITEDEF`), which this client does not support, so it has no drawable body. Nothing would show in
+the original either: their only material, `IVM_MDF`, is masked (0x80000013) with an 8 x 8 texture all of palette index
+0, the masked colour.
 
-Nothing of that body would show in the original either. In `global_chr.s3d` the meshes (506 and 73 vertices) take
-their only material, `IVM_MDF`, from `IVM_MP`. It is masked (render method 0x80000013) with the texture
-`IVMHE0001.BMP`, 8 x 8 pixels all of palette index 0, the masked colour.
-
-Dressing skins the primary and secondary items onto its `R_POINT` / `L_POINT` bones, so the held weapon shows with
-an invisible body. With no item held its mesh is empty and nothing is drawn.
-
-IVM borrows the clips of ELM, so the weapons hang in its hands as an elf holds them:
-
-- The donor's tracks are matched to its bones by name, so the skeletons need not be identical. Both have 26 bones
-  and share 25 track names: IVM has `HE00` where ELM has `GUILD_POINT`.
-- GetAlternateAnimTag @0x406a60 gives every code under its wood-elf prefixes, IV among them, the wood elf's two
-  letters and keeps its last (`game::animation_source`).
-- Its own rest pose is the T-pose, arms spread, with the hand points 5.7 units apart (1.86 in ELM's P01).
-
-How it is placed and picked:
-
-- Its culling and shadow radius is the farthest its clips' keys can carry the dressed items (found once when
-  dressed).
-- The item preview frames the items where the idle it plays (ELM's P01) holds them.
-- A world click takes it, armed or not, through the selection sphere a spawn without a model has, as before it was
-  built, not through its weapon's triangles (app/spawn_pick.h).
-- Only the nameplate's depth test uses the new radius, to pre-select it before its posed items, the one part of it
-  that may hide a plate. Bare, past the actor clip or not yet posed it hides none.
-- Its nameplate stands at its eye height.
+- Dressing skins the primary and secondary items onto its `R_POINT` / `L_POINT` bones, so the held weapon shows with
+  an invisible body; with no item held nothing is drawn.
+- It borrows ELM's clips (the prefix rule below), matched by bone name: both have 26 bones and share 25 track names
+  (IVM has `HE00` where ELM has `GUILD_POINT`).
+- Its culling and shadow radius is the farthest its clips can carry the dressed items. A world click takes it through
+  the selection sphere of a spawn without a model, not its weapon's triangles (app/spawn_pick.h). Its nameplate stands
+  at its eye height.
 
 #### Orientation and BMP rows
 
@@ -224,8 +147,8 @@ letter and two digits:
 | S01–S28 | social emotes; T02–T09 spell casting |
 
 The library indexes every track whose name starts with a clip code by the rest of its name (the bone track), so a
-model's clips are found from its bone names. For HUM, `global_chr.wld` holds only L01, L02 and P01 (24 of the 25
-bones each; the root is not animated). Everything else is borrowed.
+model's clips are found from its bone names. For HUM, `global_chr.wld` holds only L01, L02 and P01; everything else is
+borrowed.
 
 #### Donors
 
@@ -233,9 +156,9 @@ A model borrows from a donor model listed in LanternExtractor's `animationsource
 ... → ELM; HUF ... → ELF; TRM, TRF, OGM → OGF; HOM, GNM → DWM; ...). The donor's bone track is the model's with the
 code replaced (`HUMPE_TRACK` → `ELMPE_TRACK`).
 
-The RoF2 client's own list (`ActorAnimation::GetAlternateAnimTag` @0x406a60) names some donors Lantern's leaves out.
-Its unconditional three-letter ones are added from `tools/data/rof2_animation_sources.txt`: the female froglok FRF →
-FRM (whose archive holds FRM's tracks only), SHF → SHM, WAF → WAL, KES → KEM and others.
+The RoF2 client's own list (`ActorAnimation::GetAlternateAnimTag` @0x406a60) names some donors Lantern's leaves out;
+its unconditional three-letter ones are added from `tools/data/rof2_animation_sources.txt` (FRF → FRM, SHF → SHM,
+WAF → WAL, KES → KEM and others).
 
 `game::animation_source` asks in this order:
 
@@ -246,8 +169,7 @@ FRM (whose archive holds FRM's tracks only), SHF → SHM, WAF → WAL, KES → K
    the wood elf's two letters and keeps its last (`0x4077f0`: race 127's IVM → ELM).
 
 The codes the original tests before that group (ERO, SIR, HAG, ABH, BRI, COK, DR2, CCD, BWD, PRI) are all in the
-table, and the table answers first. Apart from those early codes (BRI takes DWM and HAG takes ELF, not the prefix
-rule's ELI and ELG), every table donor under those prefixes agrees with the rule.
+table, which answers first.
 
 #### Own tracks and borrowed clips
 
@@ -256,9 +178,8 @@ borrowed (OpenEQ). Bones without a track keep their rest pose.
 
 #### Luclin player model donors
 
-A Luclin player model is one with a `TUNIC_POINT` bone. The original's InitAnimationTracks @0x407800 asks for the
-`TUNIC_POINT_DAG` and passes whether the actor has it to `GetAlternateAnimTag` as its `flag`. Such a model takes other
-donors for some codes (`game::animation_source`):
+A Luclin player model is one with a `TUNIC_POINT` bone (passed to `GetAlternateAnimTag` as its `flag`;
+InitAnimationTracks @0x407800). Such a model takes other donors for some codes (`game::animation_source`):
 
 - HU* and ER* take the human's clips (ERM → HUM, ERF → HUF; HUM and HUF none but their own).
 - BA* none but its own.
@@ -266,34 +187,25 @@ donors for some codes (`game::animation_source`):
 - Every other code takes its donor from the table or the prefix rule as without the flag (HIM, DAM, HAM, IVM ... →
   ELM).
 
-With the wood elf's clips a Luclin erudite's face bones took the elf's places (lips parted over the teeth, brows in a
-frown). Its `BEARD_POINT`, for which the elf has no track, stayed at its rest place in front of the mouth, so the
-beard part hung there. The human's clips key both where the erudite's own face has them.
+(With the wood elf's clips a Luclin erudite's face and beard bones go wrong; the human's key them correctly.)
 
 #### Skeleton matching
 
-A track lends only to its own skeleton. A track in another WLD that defines the same code with a different skeleton
-is not the model's: live's `wol_v2_chr` WOL shares the root and point names with the classic WOL.
+A track lends only to its own skeleton: a track in another WLD that defines the same code with a different skeleton
+is not the model's (live's `wol_v2_chr` WOL shares the root and point names with the classic WOL).
 
 A borrowed clip is lent only when at least one of its tracks is in a WLD whose own donor skeleton has an equivalent of
-at least half of the model's bones (or that does not define the donor).
-
-- global_chr's classic ELF shares only the root, PE, CH, NE and HE with the Luclin ELF. Without this rule a Luclin
-  human, high elf, erudite and others got C10, C11 and T07..T09 from it, with every other bone in the rest pose, and
-  threw or kicked in a T-pose.
-- Zone models with a classic skeleton (Coldain, Kerran, Iksar skeletons and others) likewise lose the clips they took
-  from a Luclin donor's few shared bones.
-- Among the global and Luclin models only such clips go (every one of them left at least 80% of the bones at rest).
-  No clip that stays changes.
+at least half of the model's bones (or that does not define the donor). Otherwise a Luclin model borrowing from the
+classic ELF (which shares only the root, PE, CH, NE and HE) would throw or kick in a T-pose.
 
 #### Frame time
 
 The 0x13 frame time (flag 1) of the first multi-frame track, otherwise 100 ms. All classic clips use 100 ms except
 T08/T09 (50 ms). The clip length is the longest track. Shorter tracks wrap.
 
-Long tracks of some archives play at half their frame time. That is a track of more than 15 keys from an archive the
-original opens with the loader byte +0x30 set (EQGraphicsDX9 `0x1001b26e`, `CS3DFile::Open` `0x100c0470` copying the
-load request's byte +0xe). `CDisplay::InitWorld` sets that byte for:
+**Long tracks** of some archives play at half their frame time: a track of more than 15 keys from an archive the
+original opens with the loader byte +0x30 set (EQGraphicsDX9 `0x1001b26e`, `CS3DFile::Open` `0x100c0470`).
+`CDisplay::InitWorld` sets that byte for:
 
 - the Luclin player models' `global<code>_chr2` and `global<code>_chr` (`0x492507`, `0x492597`);
 - a GlobalLoad.txt line whose fourth FLAGS letter is `T` (`0x492063`; stock: `GlobalPCFroglok_chr`,
@@ -301,41 +213,25 @@ load request's byte +0xe). `CDisplay::InitWorld` sets that byte for:
 
 The classic `global_chr`, the armor, Global NPC Models and zone `_chr` loads leave it 0 (`assets::long_track_archives`).
 
-The Luclin clips are keyed about twice as densely as the classic ones (the Luclin dark elf female's C01 has 16 keys,
-the classic one's 8). At 100 ms their swings, casts and socials took about twice as long. The original halves per
-track. A clip here has one frame time, taken from the track named above, so a track of 15 keys or fewer in a halved
-clip plays at the halved time too.
+(The Luclin clips are keyed about twice as densely as the classic ones.) The original halves per track; a clip here
+has one frame time, taken from the track named above, so a track of 15 keys or fewer in a halved clip plays at the
+halved time too.
 
 #### Sampling
 
 Sampling interpolates between frames: slerp for rotations (shortest path), lerp for translation and scale. Looping
 clips wrap; the corpse pose (D05) holds its last frame.
 
-HUM with all global archives has 71 clips: L01 12 frames, L02 12, P01 9, O01 49 (borrowed), and so on. Newer models use
-a fallback race for missing tracks (`<anim>_<CODE>` retried with HUM → 522). That is for the newer, Luclin-style track
-names and is not used for the classic clips.
+Newer models use a fallback race for missing tracks (`<anim>_<CODE>` retried with HUM → 522); the classic clips do
+not.
 
 ### Animation key storage
 
-`AnimationTrack` shares key arrays between copied clips and models; builder mutation detaches before changing keys.
-Luclin base/take aliases keep their existing clip entries, precedence, frame count, frame time and borrowed flags,
-while their key arrays are shared. WLD and EQG builders reserve their known frame counts instead of growing each key
-array geometrically.
-
-After construction, `CharacterModel::compact_animations` interns bit-identical tracks within that model. There is no
-global interning table retaining entries across zones.
-
-- A constant track stores one physical key but keeps its original logical length. Sampling still applies the original
-  loop period and the multi-key interpolation/normalization path.
-- Float components are compared by bits, including quaternion signs and signed zero. No approximate pose merging or
-  precision reduction is used.
-- Copies of compacted tracks expand their repeated keys before mutation.
-- This affects storage only, with the original clip lookup and sampling rules retained.
-
-Model memory estimates count physical key arrays once within a model, and cache snapshots count them once across all
-visited models. Per-model estimates therefore cannot simply be summed when copied models share key storage. Track
-wrapper arrays and heap vector objects are counted. Reference-count control blocks, capacities and allocator overhead
-remain outside the estimate. Runtime savings and loading costs still need a fresh build and route comparison.
+Key arrays are shared between copied clips and models (`AnimationTrack`; a builder detaches before changing keys).
+`CharacterModel::compact_animations` interns bit-identical tracks within a model (no cross-zone table), and stores a
+constant track as one key with its original logical length. This affects storage only: lookup and sampling are
+unchanged. Model memory estimates count shared key arrays once per model, so per-model estimates cannot simply be
+summed.
 
 ## Luclin models
 
@@ -356,8 +252,7 @@ The take is the holding column (`InitAnimationTracks` @0x407800 binds a tunic-po
 - `0x4b1210` takes column 1 (B) for a column the model has no take of. No model ships C..H.
 
 So a Luclin model holding something plays its B takes (`CharacterModel::held_aliases`, `clip(code, holding)`,
-`game::holds_item`). The Dark Elf female's P01B carries the shield arm about 0.36 units higher than P01A, where it
-hangs.
+`game::holds_item`).
 
 #### Layered materials
 
@@ -422,28 +317,21 @@ deep).
 
 #### Hero's Forge armour lookup
 
-Hero's Forge attachments use `EqgCharacterStore::armor_part_mesh`. Its alias lookup takes precedence over a direct
-item model or WLD actor of the same name. The requested name and the race/sex adjustment remain the attachment's;
-only its geometry and layer are resolved.
-
-Its cache is separate from `part_mesh`, so ordinary held items, hair and NPC parts retain their direct-first lookup,
-even when a modern armor mapping reuses their IT number.
+Hero's Forge attachments use `EqgCharacterStore::armor_part_mesh`, whose layer-row alias takes precedence over a
+direct item model or WLD actor of the same name (only geometry and layer are resolved; the name and race/sex
+adjustment stay the attachment's). Ordinary held items, hair and NPC parts keep their direct-first lookup
+(`part_mesh`), even when a modern armour mapping reuses their IT number.
 
 - **Base mesh missing.** The row cannot be followed (`EqgCharacterStore::armor_alias` is false), so the piece resolves
-  as it would with no row at all: the direct EQG model, or on a Luclin model the WLD actor, plainly lit. This is a
-  Hailstone policy for mixed installs, as RoF2 itself reads no layer rows.
-- **Base present, layer unavailable.** A pre-existing direct model with matching bone, piece, vertex and triangle
-  counts keeps its legacy rendering. This conservative compatibility fallback preserves working armor in
-  installations with incomplete layer catalogs, and rejects direct models with a different layout.
+  as with no row: the direct EQG model, or on a Luclin model the WLD actor, plainly lit. A Hailstone policy for mixed
+  installs (RoF2 reads no layer rows).
+- **Base present, layer unavailable.** A direct model with matching bone, piece, vertex and triangle counts keeps its
+  legacy rendering; one with a different layout is rejected.
 - A usable modern mapping always takes precedence.
 
-No game files are changed or supplied. The modern/v2 armor revision uses the existing EQGM/EQGL formats, not a new
-wire format.
-
-Whether a piece's materials draw their surface maps travels beside the mesh (`eqg_character::ArmorPart`, the
-`surface_maps` argument of `append_pieces`). A direct piece therefore shares `part_mesh`'s cached mesh rather than a
-copy. `append_pieces` gives two materials of the same name and diffuse one slot only when their surface maps and
-parameters agree, so a plain part never takes an armor part's maps, whichever is appended first.
+The modern/v2 armour revision uses the existing EQGM/EQGL formats; no game files are changed or supplied. Two materials
+of the same name and diffuse share a slot only when their surface maps and parameters agree (`append_pieces`), so a
+plain part never takes an armour part's maps.
 
 #### Layered armour
 
@@ -465,8 +353,8 @@ Races whose code has no WLD actor load from EQG archives (`assets::EqgCharacterS
 entry `<CODE>_ACTORDEF` of `Resources/OnDemandResources.txt` (`archive^member^name^type`, e.g.
 `hnm.eqg^HNM.MDS^HNM_ACTORDEF^EQGS`), else `<code>.eqg` with `<code>.mds` / `<code>.mod`.
 
-Rodents (race 415, `RTN`, from `qeynos_chr.txt` `rtn,rtn`) and Qeynos guards (566, `HNM`/`HNF`, new-style flag 0x08)
-are the first users.
+Examples: rodents (race 415, `RTN`, from `qeynos_chr.txt` `rtn,rtn`) and Qeynos guards (566, `HNM`/`HNF`, new-style
+flag 0x08).
 
 #### Mesh layouts
 
@@ -488,12 +376,9 @@ Stored rotations are the conjugate of the usual convention.
 
 The v direction depends on bones:
 
-- A file with bones stores v running up from the bottom of the texture, so the reader turns v into 1 − v. Read as
-  stored, every EQG creature's and skinned hero's forge piece's texture lands upside down (teeth and paw pads on the
-  puma's back, chainmail across a breastplate).
+- A file with bones stores v running up from the bottom of the texture, so the reader turns v into 1 − v.
 - A file without bones (a held item, a hero's forge helm or bracer) stores v from the top, as the zones' `.mod`
-  objects do, and is read as stored. Turned, the 10th anniversary shield IT14000's lettering is upside down and the
-  Haunting Nightmares ornament IT101064 shows the inside of its pumpkin.
+  objects do, and is read as stored.
 
 Vertices are in bind (model) space, so the renderer multiplies each bone's animated matrix by the inverse bind
 matrix. Vertices blend up to four bones.
@@ -506,13 +391,11 @@ matrix. Vertices blend up to four bones.
 
 Resampling:
 
-- Clips are resampled to fixed frames at the longest track's mean key spacing (RTN walk 11 ms, HNM clips 66 ms),
-  clamped to 10..200 ms.
+- Clips are resampled to fixed frames at the longest track's mean key spacing, clamped to 10..200 ms.
 - The last frame sits at the .ani's last key time (`AnimationClip::frame_times_ms`, `duration_ms`), not on the
-  resampled grid. A 666 ms walk plays in 666 ms rather than the 693 ms that `frame_count x frame_ms` would give, a
-  one-shot shows its end pose and a loop wraps there.
-- A clip is cut at 4096 frames (`eqg_character::kMaxClipFrames`, 13.6 minutes at 200 ms; stock clips run seconds), so
-  a broken file's key times cannot ask for millions of poses.
+  resampled grid, so a clip keeps its exact length and a one-shot shows its end pose.
+- A clip is cut at 4096 frames (`eqg_character::kMaxClipFrames`; stock clips run seconds), so a broken file's key
+  times cannot ask for millions of poses.
 
 Names are `<ANIM>_<take>_<n>_<CODE>`. Only `_BA_` takes are used, `_1` (IDLE `_2`, `_3` become O02, O03), mapped by
 `eqg_character::clip_code`:
@@ -581,11 +464,11 @@ Armour records keep all five words of RoF2's ArmorProperties:
 | newArmorID | HeroForgeModel | `hero_forge` |
 | newArmorType | Material2 | `new_armor_type` |
 
-RefreshEquipSlot (@00594e50) stores the wire's record unchanged as the ActorClient's ArmorProperties (+0x8c,
-PlayerClient_SetActorEquipmentSlot @0042e6f0). UpdateNewArmorSlot then names a new-style model's texture
-`<code>_<material>_<variation>_<part>`, and overlays `A_<code>_<material>_<variation>_S<elite material>` when the third
+The wire's record is stored unchanged (ArmorProperties, +0x8c). A new-style model's texture is
+`<code>_<material>_<variation>_<part>`, overlaid with `A_<code>_<material>_<variation>_S<elite material>` when the third
 word is set. Spawns, wear changes, character selection, item previews, appearance cache keys and saves carry the
-complete record.
+complete record. Checked: RefreshEquipSlot @00594e50, PlayerClient_SetActorEquipmentSlot @0042e6f0,
+UpdateNewArmorSlot.
 
 #### Hero's forge filter bits
 
@@ -596,8 +479,8 @@ complete record.
 - for a player 8, plus 1 for the local player, 2 for the local player or a group member, 4 for a raid member;
 - none for a corpse (EQEmu sends NPC 2 for every corpse; RoF2 takes any Type above 1 as one).
 
-They are made when the spawn arrives and again when the group or raid changes. The renderer collapses them to shown or
-hidden for the active filter, so a membership change the filter does not see rebuilds nothing.
+They are made when the spawn arrives and again when the group or raid changes; a change the active filter does not
+see rebuilds nothing.
 
 `OP_Illusion` applies decoded Drakkin heritage, tattoo and detail changes. Zero resets a feature and the omitted-value
 sentinel keeps it.
@@ -648,9 +531,9 @@ Texture names are `<code(3)><part(2)><variant(2)><piece(2)>` (parts HE CH UA FA 
 - Robe body textures `CLK<vv><nn>` take chest − 6.
 
 Each material gets its slot's tint when the slot's material is not 0 and, for materials 1–99, that variant's texture
-exists. SwapBodyMaterial's ReplaceMaterial fails, colour and all, when the new material is not loaded: SKE has chest
-variants 00–04 only, so material 5 leaves its chest as it was, untinted. Heads are tinted only when the variant is not
-00, so bare skin stays untinted. Tints whose colour is black or white count as none.
+exists: as SwapBodyMaterial's ReplaceMaterial, a missing variant leaves the part as it was, untinted (SKE has chest
+variants 00–04 only). Heads are tinted only when the variant is not 00, so bare skin stays untinted. Tints whose colour
+is black or white count as none.
 
 #### Held items
 
@@ -661,8 +544,7 @@ grip space; skeletal ones are baked in their rest pose.
 - A secondary goes on `SHIELD_POINT` when its model number is a shield to `CDisplay::IsShield` @0x489d70
   (`game::is_shield_model`: IT200..228, 10530..10544, 10664..10671, 11001..11020, 11496..11497 and 25 single numbers
   such as 14000). The original asks `Resources\ActorTagInfo.txt` first when it loaded, and RoF2 ships none.
-- Texture names do not count. The Haunting Nightmares Shield Ornament (IT101064, `shield_round_halloween_c.dds`) is
-  held in the hand on `L_POINT`, which is how its face comes to point outward.
+- Texture names do not count.
 - Matching is exact (`find_bone`, so `HAIR_POINT` is not `R_POINT`).
 - EQG models use `ARMR_WEAP`, `ARML_WEAP`, `ARML_SHLD` and the bone's bind matrix.
 - Items are not tinted (`itmt.ini[Primary/SecondaryTintIndex]` is not read).
@@ -672,18 +554,14 @@ grip space; skeletal ones are baked in their rest pose.
 Hailstone adds, as a deliberate difference (`display.extra_shields`, on by default), 336 later shield models that RoF2
 does not list and so holds in the hand like a weapon: `src/game/shield_models.inc`.
 
-- `tools/gen_shield_models.py` made 271 of them from an EQEmu items table and the game folders.
-  - 154 are models that shield items, type 8, make up most of the non-augment uses of (not the placeholder IT63 or the
-    weapon models a few shields borrow).
-  - The other 117 are shield ornaments' models that no other item uses. The items table does not say what an ornament
-    fits, so the generator measures each such model's EQG mesh. It takes the model when it is flat and covers most of
-    its box seen from the broad side, as every listed shield does and the weapon ornaments (axes, swords, hammers) do
-    not. Plus seven shields the measure misses (`SEEN_SHIELDS`).
-- The rest were added to the file by hand from an items-table query for shields and shield ornaments, less the weapon
-  models some shields share (IT0, IT7, IT63, IT10201, IT10650). Running the generator again would drop them.
+- `tools/gen_shield_models.py` made most of them from an EQEmu items table and the game folders: models mostly used
+  by shield items (type 8), and shield ornaments' models whose EQG mesh is flat and covers most of its box seen from
+  the broad side (as shields do and weapon ornaments do not), plus shields the measure misses (`SEEN_SHIELDS`).
+- The rest were added by hand from an items-table query, less the weapon models some shields share (IT0, IT7, IT63,
+  IT10201, IT10650). Running the generator again would drop them.
 
-With them, the Haunting Nightmares ornament (IT101064, and IT101068 in its second colours) is worn on the forearm like
-the other shield ornaments, its iron back outward. RoF2 holds it in the hand face outward (`SEEN_SHIELDS`).
+So the Haunting Nightmares ornament (IT101064, IT101068) is worn on the forearm like other shield ornaments, where RoF2
+holds it in the hand.
 
 #### Tints
 
@@ -736,38 +614,23 @@ Index 0 or past the table does nothing. The index comes from the spawn packet's 
 `OP_SpawnAppearance` 39; 43 sets show_helm.
 
 `npct.ini` and `itmt.ini` hold `[Data] Number` entries, `Value1..ValueN` (default 0xffffff), alpha forced to 0xff
-(ColorTable_LoadFromIni @0x574b60). Deliberate difference: the original takes any positive Number; the client reads
-at most 65536 entries, so a forged file in a server's asset folder cannot make it fill billions.
+(ColorTable_LoadFromIni @0x574b60). Deliberate difference: the client reads at most 65536 entries (the original any
+positive Number), so a forged file in a server's asset folder cannot make it fill billions.
 
 #### Building appearances off the main thread
 
-Appearances are cached per model and appearance key in the library (geometry) and per mesh on the GPU.
+Appearances are cached per model and appearance key in the library (geometry) and per mesh on the GPU. A new one is
+built on the renderer's worker thread (`core::LatestJobs`: the dress, vertices, textures decoded, Luclin layers
+composited, mips), and applied on the main thread in `prepare_spawns` within a frame budget (`set_build_budget_ms`:
+4 ms in the open, 100 ms behind the loading screen; the first of a frame is always applied).
 
-The renderer builds a new appearance on a worker thread (`core::LatestJobs`, one per renderer, started on first use):
-the dress, then the new mesh's CPU side. That is its vertices for the GPU, its textures read, decoded, composited for
-Luclin layers and their mips built; each texture is read once (`TextureClaims`).
-
-The main thread applies the finished ones in `prepare_spawns` while a frame's time for them lasts
-(`set_build_budget_ms`: 4 ms in the open, 100 ms behind the loading screen; the first of a frame is always applied).
-Their buffers and new textures are staged and the descriptors written.
-
-- Meanwhile the spawn is drawn in its previous mesh, or the model's default one. A look the renderer has applied
-  before for the same model (a spawn coming back past the actor clip, a crowd in one uniform) is taken at once.
-- Only a spawn's latest request counts. A newer appearance supersedes the one being built, a spawn that leaves (or
-  goes past the actor clip) drops its request, and a result is applied only for the model and look its spawn still
-  asks for.
-- The worker is stopped (the appearance it is building finished, the rest dropped) before the renderer goes or hands
-  its meshes to the next zone (`release_kept`).
-- The library is safe to use from both threads. Every call that reads or fills its caches, the shared cache or the EQG
-  and model-archive stores holds one mutex, shared by the libraries of one `CharacterArchiveCache`. Texture decoding
-  runs outside it.
-- A spawn's default mesh put up for the first time is still made on the main thread, and charged to the budget.
-- All of a frame's new meshes and textures go to the GPU in one submission, with one fence wait, before the frame's
-  commands are submitted (`stats().upload_ms`; the perf window's frame sections "actors new appearances" and "actors
-  upload").
-
-Live in South Qeynos (170 spawns): 0.1–2 ms per frame for 4 appearances while the zone fills, about 100 appearance
-meshes and 770 textures after a minute, 6 frames whose texture uploads took 9–14 ms, then nothing.
+- Meanwhile the spawn is drawn in its previous mesh, or the model's default one; a look applied before for the same
+  model is taken at once.
+- Only a spawn's latest request counts; a spawn that leaves (or goes past the actor clip) drops its request.
+- The library's caches, the shared cache and the EQG and model-archive stores are guarded by one mutex per
+  `CharacterArchiveCache`; texture decoding runs outside it.
+- A frame's new meshes and textures go to the GPU in one submission (`stats().upload_ms`; the perf window's "actors new
+  appearances" and "actors upload").
 
 ## Race → model
 
@@ -778,13 +641,11 @@ male, 1 female, 2 neutral.
 - `find_race_model` instead tries the exact gender, then 2, 0 and 1, because EQEmu sends single-model NPC races with
   any gender.
 - Codes without a WLD actor try the EQG store; races with neither fall back to the box.
-- With the global archives, 148 of the 731 race ids have a classic model (`chrdump --sweep`); a zone's own archives add
-  more.
+- `chrdump --sweep` lists which race ids have a classic model.
 
 #### Elemental swap
 
-Before the lookup, CreatePlayerActor swaps elementals (`luclin_elemental_swap` in `game/world_state.h`, run by
-`WorldState::make_actors`). eqclient.ini `[Defaults] UseLuclinElementals` (CDisplay +0x129, default TRUE, read as
+Before the lookup, CreatePlayerActor swaps elementals (`luclin_elemental_swap` in `game/world_state.h`). eqclient.ini `[Defaults] UseLuclinElementals` (CDisplay +0x129, default TRUE, read as
 GetEQClientIniBool reads: T, t or 1) decides the direction.
 
 - **On.** Race 75 (`ELE`, one body with four skins: 0 earth, 1 fire, 2 water, 3 air) becomes the typed Luclin
@@ -801,10 +662,9 @@ the element in the texture) are drawn with the Luclin models by default.
 For a classic model the drawing scale is Height × 0.2 (Height ≤ 0 → 6, so a size-6 human is drawn at 1.2). The avatar
 height is moddat.ini `ROffset` (default 3.125) × scale = 3.75 for a size-6 human.
 
-That matches the 3.75 units the live server puts a standing human above the floor, and a size-3.5 halfling standing
-2.125 above the same floor (3.125 × 0.7 = 2.19). The renderer therefore draws the model origin at the spawn's z,
-scaled by size × 0.2, with no per-model offset. The rest-pose soles of the classic player models are 2.5–3.2 units
-below the origin (dwarves 2.53, so they may float slightly).
+That matches the height a live server puts a standing human above the floor, so the renderer draws the model origin
+at the spawn's z, scaled by size × 0.2, with no per-model offset. The rest-pose soles of the classic player models are
+2.5–3.2 units below the origin (dwarves may float slightly).
 
 - New-style races (flag 0x08) scale by Height / 6 × 1.3, and classic ones by Height × 0.2 (both / 1.3 until the first
   OP_NewZone).
@@ -817,21 +677,15 @@ The rules are in `game/spawn_heights.h`.
 
 #### Held-item effects
 
-WLD held-item meshes retain their skeleton particle nodes even when an item contains no triangles. The baked node
-transform follows the selected holding bone, and the particle definitions are shared across dressed appearances.
-
-EQG held items retain normal and reflection maps alongside their `.pts`/`.prt` metadata. These effects use the same
-item-loading route in world, character selection and item previews (docs/formats/particles.md).
+WLD held-item meshes keep their skeleton particle nodes (even with no triangles), following the holding bone. EQG
+held items keep normal and reflection maps and their `.pts`/`.prt` data. The same route serves world, character
+selection and item previews (docs/formats/particles.md).
 
 #### EQG armour on WLD bodies
 
-An EQG armor piece attached to a WLD body keeps its bind-space vertices and up to four weights.
-
-- Each influence gets a mesh-local palette entry containing the matched host bone and its adjustment/inverse-bind
-  correction. Missing named bones keep the existing nearest-ancestor rule.
-- The same palette is evaluated for scene/shadow rendering and CPU picking.
-- Boneless pieces keep a rigid anchor/adjustment binding.
-- Analytical fixtures check the multi-joint result and invalid-palette handling.
+An EQG armour piece on a WLD body keeps its bind-space vertices and up to four weights. Each influence gets a palette
+entry of the matched host bone (else the nearest named ancestor) with its adjustment/inverse-bind correction, used for
+drawing, shadows and picking. Boneless pieces are bound rigidly.
 
 #### Skinning and upload
 
@@ -846,12 +700,8 @@ constant gives the instance's first bone, the texture slot and the part's tint, 
 
 Textures share one bindless array per renderer; each frame's descriptors update after its own fence.
 
-- Idle model eviction retires texture slots only after the GPU completion point, and only when no surviving model
-  reads them.
-- A texture rejected because the array was full retries after capacity is reclaimed (checked on the one-second look
-  sweep). A model no spawn wears is dropped at once. A worn one is rebuilt on the main thread at its next draw (its
-  textures read there), so only one worn model is retried a sweep.
-- Genuinely missing images remain cached.
+Idle models' texture slots are freed only after the GPU is done with them. A texture rejected because the array was
+full is retried once space is reclaimed (one worn model per one-second sweep). Missing images stay cached as missing.
 
 #### Passes and lighting
 
@@ -881,75 +731,22 @@ chooses as the original's two animation objects do (`game/mechanics/anim_select.
 
 Clip changes cross-fade as above. Corpses play D05 once and hold it.
 
-Live check (North Qeynos, 45 modelled spawns in view range): 553 draws, about 0.15 ms CPU per frame for sampling and
-recording.
-
 ### Memory diagnostics
 
-#### Archive totals
+Log lines for tracking memory (`logs/hailstone.log`; MiB):
 
-Loading global character archives logs one `memory archive:` line per archive (debug level) and a `memory archives:`
-total (info). Zone archives get the same breakdown on each load. Global totals are logged on first load or asset
-invalidation, not repeated on every zone change.
+| Line | Level | What |
+|---|---|---|
+| `memory archive:` / `memory archives:` | debug / info | per archive and total: mapped file length (not resident), owned heap, parsed WLD estimate |
+| `memory checkpoint:` | debug; info after appearances settle | process resident memory at start-up stages and zone loads; on Windows also `private commit` (`PrivateUsage`) |
+| `memory GPU:` | | VMA allocation bytes per heap (not driver budgets; do not add to RSS) |
+| `memory WLD materialized:` | debug | each deferred WLD decode |
+| `memory character WLDs:` | after zone settling | materialized/total WLDs, index and payload estimate, retained set against its budget |
+| `memory character WLD activity:` | | cumulative decodes and releases |
+| `memory character caches:` | | unique model and appearance payloads (shared objects once; item cache copies each) |
 
-Values are MiB: mapped file length, owned archive heap bytes, and an estimate of parsed WLD payloads.
-
-- Mapped length is not resident memory.
-- Parsed estimates exclude indices, allocator overhead and unused capacity.
-- Models, dressed meshes and EQG caches are outside these WLD totals.
-
-#### Process checkpoints
-
-The playable client's `memory checkpoint:` lines report process resident memory after startup stages, before
-unloading a zone and during zone loading (debug level), and after appearances settle (info, once per zone-in).
-
-- Adjacent `memory GPU:` lines report VMA allocation bytes per heap, not driver heap budgets. Do not add GPU
-  allocations to RSS, particularly on integrated GPUs.
-- Asynchronous sound, navigation and model loading can overlap checkpoints. Differences identify stages to
-  investigate, not exact ownership.
-- Capture a fresh start through a settled zone-in from `logs/hailstone.log`, then compare a second zone load.
-
-On Windows, the same checkpoints also log `private commit` from `PROCESS_MEMORY_COUNTERS_EX::PrivateUsage`; the
-performance window shows it alongside resident memory. Private commit measures private committed allocation,
-including pages outside the working set. It is not added to RSS or GPU totals. Other systems leave this measurement
-unavailable instead of substituting virtual size or resident memory.
-
-These diagnostics do not provide a complete heap census.
-
-#### Deferred character WLDs
-
-`memory WLD materialized:` records decodes at debug level. Normal logs use cumulative decode/release counters to avoid
-a line for every rebuild.
-
-After zone settling, `memory character WLDs:` reports materialized/total WLDs, the combined compact-index and
-decoded-payload estimate across unique archives in the current library, and the retained set's estimate against its
-budget. The earlier per-archive parsed estimate now includes compact indices for unloaded WLDs. Compare fresh-start
-and repeated-zone runs. This does not account for all character name-table, model, appearance-cache or allocator
-storage.
-
-- Source WLD payloads go to the retained set after the last scoped reader, and are released from it past its budget.
-  Their compact indices and completed model/appearance caches remain.
-- First use of another appearance reparses a source WLD only when it has left the retained set, trading decoding work
-  for a bounded retained baseline.
-- Cache hits do not need the source WLD.
-- Finer-grained fragment loading remains future work.
-
-#### Character caches
-
-`memory character WLD activity:` reports cumulative decodes and releases for the current library's unique archives.
-Counts can change when zone-only archives go away.
-
-`memory character caches:` estimates the unique model and appearance payloads reachable through the current library,
-the cross-zone shared cache, persistent EQG model stores and opened standalone libraries.
-
-- Shared objects count once; item cache entries own copies and each copy counts.
-- Estimates include object sizes, geometry, animation keys, material strings, points and emitters, using vector/string
-  sizes, not capacities.
-- They exclude cache keys/maps, lookup records, reference-count control blocks, parsed EQG source meshes/parts/layers,
-  renderer-owned copies and allocator overhead. Small inline strings can be overestimated.
-- This snapshot is serialized with construction but is not a process-wide heap census.
-- Freed WLD allocations return to the system allocator, which may retain pages, so release counts do not promise an
-  equal RSS or commit drop.
+None of these is a full heap census: they exclude allocator overhead, capacities, cache maps and renderer copies, and
+asynchronous loading overlaps checkpoints. Compare a fresh start through a settled zone-in with a second zone load.
 
 #### Model breakdown
 
@@ -959,8 +756,5 @@ the cross-zone shared cache, persistent EQG model stores and opened standalone l
 - geometry/materials: vertices, indices, parts and owned material payloads;
 - other: the model object, identifying strings, points and emitters.
 
-These categories sum to the model payload estimate and use the same object deduplication as the cache total. Geometry
-excludes image pixels and GPU allocations.
-
-Compare category growth with private commit at settled zone checkpoints. The remaining gap can include other live
-allocations, reserved allocator pages and driver allocations, and does not by itself prove a leak or fragmentation.
+They sum to the model payload estimate (geometry excludes image pixels and GPU allocations). A gap against private
+commit does not by itself prove a leak.

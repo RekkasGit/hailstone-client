@@ -1,6 +1,6 @@
 # Mock EQEmu server (offline integration tests)
 
-An in-process EQEmu stand-in for tests that drive a real `LoginClient`, `GameConnection` or `Session`. It is loopback-only: no game files, no server and no network beyond `127.0.0.1`. Everything runs in the normal `hailstone_tests` binary (`tests/mock_*_test.cpp`, about 4 s together).
+An in-process EQEmu stand-in for tests that drive a real `LoginClient`, `GameConnection` or `Session`. Loopback only: no game files, no server, no network beyond `127.0.0.1`. It runs in the normal `hailstone_tests` binary (`tests/mock_*_test.cpp`, about 4 s together).
 
 | File | What it is |
 |---|---|
@@ -24,7 +24,7 @@ It does nothing by itself; `poll()` receives.
 - zone: profile, own spawn, spawns, time, inventory, weather, new zone; then zone points, AA stats, the zone-in echoes;
 - triggers for gameplay traffic: chat, spawn add/remove/move, HP, items, zone requests.
 
-Packets are made with the client's own `encode()` where it has one ("server direction, for tests"). So a layout bug the client shares with its encoder would not show here. The layouts themselves are pinned byte for byte by `net_packets_test.cpp`. The rest are built from the documented layouts (`docs/protocol/rof2-packets.md`).
+Packets are made with the client's own `encode()` where it has one ("server direction, for tests"), so a layout bug shared with the encoder would not show here; `net_packets_test.cpp` pins those layouts byte for byte. The rest are built from `docs/protocol/rof2-packets.md`.
 
 ## Faults are scripted, not random
 
@@ -37,11 +37,11 @@ The server's own resends are explicit (`resend_unacked()`), as is every wait. Te
 
 ## Timers
 
-`GameConnection` reads `std::chrono::steady_clock` directly for most of its timers; a few follow `SessionOptions::clock` when it is set. `Session` reads it too unless `SessionOptions::clock` is set.
+`GameConnection` reads `std::chrono::steady_clock` directly for most timers; a few, and `Session`, follow `SessionOptions::clock` when it is set.
 
 `tests/manual_clock.h`'s `ManualClock` follows the steady clock until `hold()`, then moves only by `advance()`. The idle-timeout tests use it so a descheduled test thread cannot let the link die.
 
-`ConnectionOptions::session` (`SessionOptions`) shortens the session timers: multi-buffer hold, service pass, resend adjust, idle and connect timeouts. `harness.h`'s `quick_options()` does this; one test keeps the default timers.
+`ConnectionOptions::session` (`SessionOptions`) shortens the session timers (multi-buffer hold, service pass, resend adjust, idle and connect timeouts); `harness.h`'s `quick_options()` does this, and one test keeps the defaults.
 
 Still wall clock:
 
@@ -53,7 +53,7 @@ Not covered offline:
 - the camp's 30 s timer and its OP_Logout;
 - the 180 s zone-change wait;
 - the 30 s stat request;
-- the 180 s idle timeout of the default options at its real length. A held `ManualClock` covers it in `mock_session_test.cpp`, and the GameConnection tests run the same code with a shortened limit.
+- the default 180 s idle timeout at its real length (a held `ManualClock` covers it in `mock_session_test.cpp`; the GameConnection tests use a shortened limit).
 
 ## Not scripted
 

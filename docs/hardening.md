@@ -2,7 +2,7 @@
 
 The client parses untrusted bytes from the network (session, login, world and zone packets) and from game files
 (PFS/S3D/EQG archives, WLD, TER/MOD/ZON, heightmap DAT, DDS/BMP/TGA, XMI, sound and effect tables, ini). This page
-lists what is checked and what was found. Every input is synthetic.
+lists what is checked, with synthetic inputs only, and what was found.
 
 ## Sanitizer build
 
@@ -13,28 +13,25 @@ ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build-asan --output-on-failure
 ```
 
 `HAILSTONE_SANITIZE` adds `-fsanitize=address,undefined -fno-sanitize-recover=undefined` to every target (GCC or
-Clang), so a finding aborts the test with a stack trace. The whole existing suite (561 test cases, 44 skipped for
-missing `EQ_GAME_DIR` / vector files) ran clean under it before any fix. The findings below all came from the new
-fuzz tests.
+Clang), so a finding aborts the test with a stack trace. The findings below came from the fuzz tests; the rest of the
+suite ran clean.
 
-The lookup collector's per-thread pointer is declared and defined `constinit thread_local`. Every thread starts with
-a null collector, and other translation units need no dynamic initialization wrapper. This also avoids an observed
-GCC 13.3/ELF TLS-relaxation interaction: an optimized sanitizer null check reused flags from an ADD after the linker
-replaced it with LEA. Sanitizer checks remain enabled. Lookup tests cover nested scopes and a fresh worker thread's
-independent state.
+The lookup collector's per-thread pointer is `constinit thread_local` (null in every new thread, no dynamic
+initialization wrapper). Keep it so: it avoids a GCC 13.3/ELF TLS-relaxation bug where an optimized sanitizer null
+check reused flags from an ADD the linker had replaced with LEA.
 
 ## Fuzz-style tests (always on, a few seconds)
 
 The tests are `tests/fuzz_net_test.cpp`, `tests/fuzz_assets_test.cpp` and `tests/fuzz_server_cfg_test.cpp`, with
-helpers in `tests/fuzz_support.h`. Inputs are deterministic (SplitMix64 with fixed seeds), in three stages:
+helpers in `tests/fuzz_support.h`. Inputs are deterministic (SplitMix64, fixed seeds):
 
 1. known-good synthetic fixtures cut at every length up to 700 bytes (sparser beyond);
 2. seeded mutations: bit flips, boundary bytes, 32-bit fields overwritten with `0xffffffff`/`0x80000000`/small
    counts, deleted/duplicated runs, appended tails;
 3. random data behind a valid magic.
 
-`tests/fuzz_alloc_guard.cpp` replaces `operator new` so a single request over 64 MB fails the test (a parser
-trusting a bogus length). A call over 2 s also fails.
+`tests/fuzz_alloc_guard.cpp` replaces `operator new` so a single request over 64 MB (a parser trusting a bogus
+length) fails the test, as does a call over 2 s.
 
 | Area | What is run | Must |
 |---|---|---|
@@ -59,38 +56,38 @@ Optional libFuzzer targets (`-DHAILSTONE_LIBFUZZER=ON`, Clang) come from `tests/
 - `fuzz_models`: EQGL layers, PTS, PRT, texture animations, ECO flora, RFD and the old `spells.eff`, byte 0
   choosing.
 
-These were only syntax-checked here (no Clang build of the dependencies was run). The deterministic tests are the
+These are only syntax-checked (no Clang build of the dependencies has been run); the deterministic tests are the
 verified part.
 
 ## Findings and fixes
 
 | Where | Problem | Fix |
 |---|---|---|
-| `sdk/hailstone_byte_io.h` (`core/byte_io.h`) `ByteReader::strnlen_bounded` | `memchr(nullptr, 0, 0)` on an empty buffer: UB (null pointer passed to a nonnull parameter), hit by `fixed_string`/`cstring` on empty input | return 0 for a zero length |
-| `src/assets/pfs.cpp` `inflate_entry` | the directory's file size was used for `std::vector(size)` before any check: a 12-byte directory entry could request 4 GB | reject a size above 1032 x the archive size (zlib's maximum expansion) |
-| `src/assets/pfs.cpp` `inflate_entry` | within that ratio, ~4 MB of junk deflate could still declare 4 GB, zero-filled before zlib saw a byte | the output grows with what zlib writes (64 KB, then doubling) |
+| `sdk/hailstone_byte_io.h` (`core/byte_io.h`) `ByteReader::strnlen_bounded` | `memchr(nullptr, 0, 0)` on an empty buffer (UB), via `fixed_string`/`cstring` | return 0 for a zero length |
+| `src/assets/pfs.cpp` `inflate_entry` | the directory's file size sized a `std::vector` unchecked: a 12-byte entry could request 4 GB | reject a size above 1032 x the archive size (zlib's maximum expansion) |
+| `src/assets/pfs.cpp` `inflate_entry` | within that ratio, ~4 MB of junk could still declare 4 GB, zero-filled up front | the output grows with what zlib writes (64 KB, then doubling) |
 | `src/assets/eqg_character.cpp` `build_model` | EQGA key times 0 and 0xFFFFFFFF resampled to 21 million poses per bone | a clip is cut at 4096 frames (13.6 minutes at 200 ms) |
-| `src/assets/eqg_character.cpp` `EqgCharacterStore::part_mesh` | a Resources/Layers chain of distinct names recursed once per link (stack overflow at ~100k) | a layered part follows at most 8 rows to its base |
+| `src/assets/eqg_character.cpp` `EqgCharacterStore::part_mesh` | a long Resources/Layers chain recursed once per link (stack overflow) | a layered part follows at most 8 rows to its base |
 | `src/assets/zone_fires.cpp` `merge_fires` | a non-finite or absurdly scaled flame cast NaN to int64 or walked (1e14)^2 grid cells | drop non-finite flames and those over 1000 units; grid cells saturate |
 | `src/assets/eqg.cpp` `light_definition_color` | `*COLOR 1e400` in a light .def cast inf to int64 (UB) | `saturate_cast`; a non-finite `*INTENSITY` is 1 |
-| `src/assets/texture.cpp` `decode_bmp` | `biClrUsed` larger than the bit depth can index (e.g. 256 colours at 1 bit) wrote past the palette array: heap-buffer-overflow | clamp the entry count to `1 << bits` |
-| `src/assets/eqg.cpp` `parse_heightmap` | tile longitude/latitude `i32 - 100000` overflowed a signed int for values near `INT_MIN` | subtract as `uint32_t` and wrap |
-| `src/assets/eqg.cpp` `HeightmapTile::height_at` | a non-finite object position (corrupt record) reached float-to-unsigned casts | treat non-finite coordinates as 0 |
-| `src/net/movement_packets.cpp` `decode_find_person_reply`, `src/game/player_path.cpp` `handle_reply` | a reply whose points were all NaN left the path empty, then read its last point (UB) | non-finite points are dropped in the decoder; a reply that leaves no point is a failed find |
-| `src/game/player_path.cpp` `load_path_settings`, `trim`, `walk` | a `SegmentLength` or `ControlSegmentLength` of 0 or less, a negative or tiny `LODFactor`, or a NaN `MergeDistance` in Path.ini looped forever (or added points every frame without end) | such values take the defaults; trim adds at most the reply's 10000 points, and a drawn segment at most 256 |
-| `src/game/collision.cpp` `CollisionMesh::build`, `object_collision.cpp` `ObjectShape::from_mesh`, `zone_ladders.cpp` | a mesh part whose first index and count reach past the index list read out of bounds | the part ends at the list's end |
-| `src/assets/zone_flora.cpp` `CoverGrid` | ~256 zone-sized roof triangles wrapped the 32-bit cell totals, so the cell index was allocated too small and written past its end | a triangle over 1,024 cells goes to a list tested at every point (at most 256); the cells hold at most 2^24 references; the rest are no cover |
-| `src/assets/zone_flora.cpp` `ZoneFloraGrower`, `CoverGrid` | a NaN or infinite vertex reached float-to-int casts; a finite 1e9-unit triangle split into 4^10 pieces, each binned over millions of tiles | triangles with a non-finite vertex or one past 100,000 units are left out; at most 2^21 pieces; the cell lookup clamps as a float |
-| `src/assets/wld.cpp` `string_at`, `src/assets/eqg.cpp` `string_at`, `src/assets/eqg_character.cpp` `name_at` | every reference into one long run without a NUL copied all of it: a 5 MB run named by a million fragments is terabytes | a name ends after 256 bytes (the longest in the RoF2 files is 59); the EQGS/EQGA reader, which refuses an unterminated name, refuses a longer one |
-| `src/assets/eqg.cpp` `parse_heightmap` | the tile vector was reserved by a 12-byte-per-tile bound, for a ~160-byte record: 3.4 GB for a 256 MB DAT | reserved by the smallest record a tile can have (its vertices, flags and seven words) |
-| `src/assets/eqg.cpp` `nearest_painted_tile` | `lng + dx` overflowed a signed int for a tile index near the int32 limits | in 64 bits; a neighbour past the limits is none |
-| `src/assets/png_read.cpp` `decode_png` | the whole filtered stream (up to 1032 x the IDAT) was inflated, then unfiltered into a second copy, besides the image: 1.3 GB peak from 500 KB | inflated a row at a time into two row buffers, written straight into the image; the stream must still end where the image does |
-| `src/assets/texture.cpp` `decode_bmp` (RLE) | a 130 KB RLE8 could declare 8192 x 8192 (end of bitmap at once), decoded into a 64 MB index buffer and the 256 MB image | refused when the size is over 128 pixels per byte of data (+512 bytes), what runs can fill; decoded straight into the image |
-| `src/assets/character_dress.cpp` `layered_texture` | Luclin layers were composited at the widest layer's width by the tallest's height: a 16384 x 1 and a 1 x 16384 layer made 1 GiB | composited at the size of the layer with the most texels |
-| `src/assets/wld_zone.cpp`, `src/assets/eqg_zone.cpp` (lights) | a non-finite light position, colour or radius from `lights.wld`, an EQG zone's DAT or ZON reached the light grid | left out at load (`finite_light`) |
+| `src/assets/texture.cpp` `decode_bmp` | `biClrUsed` over what the bit depth indexes wrote past the palette (heap overflow) | clamp the entry count to `1 << bits` |
+| `src/assets/eqg.cpp` `parse_heightmap` | tile longitude/latitude `i32 - 100000` overflowed near `INT_MIN` | subtract as `uint32_t` and wrap |
+| `src/assets/eqg.cpp` `HeightmapTile::height_at` | a non-finite position reached float-to-unsigned casts | treat non-finite coordinates as 0 |
+| `src/net/movement_packets.cpp` `decode_find_person_reply`, `src/game/player_path.cpp` `handle_reply` | an all-NaN reply left the path empty, then read its last point (UB) | non-finite points are dropped in the decoder; a reply that leaves no point is a failed find |
+| `src/game/player_path.cpp` `load_path_settings`, `trim`, `walk` | a `SegmentLength` or `ControlSegmentLength` of 0 or less, a negative or tiny `LODFactor`, or a NaN `MergeDistance` in Path.ini looped forever or grew without end | such values take the defaults; trim adds at most the reply's 10000 points, and a drawn segment at most 256 |
+| `src/game/collision.cpp` `CollisionMesh::build`, `object_collision.cpp` `ObjectShape::from_mesh`, `zone_ladders.cpp` | a mesh part reaching past the index list read out of bounds | the part ends at the list's end |
+| `src/assets/zone_flora.cpp` `CoverGrid` | ~256 zone-sized roof triangles wrapped the 32-bit cell totals: the index was under-allocated and overrun | a triangle over 1,024 cells goes to a list tested at every point (at most 256); the cells hold at most 2^24 references; the rest are no cover |
+| `src/assets/zone_flora.cpp` `ZoneFloraGrower`, `CoverGrid` | a non-finite vertex reached float-to-int casts; a 1e9-unit triangle split into 4^10 pieces over millions of tiles | triangles with a non-finite vertex or one past 100,000 units are left out; at most 2^21 pieces; the cell lookup clamps as a float |
+| `src/assets/wld.cpp` `string_at`, `src/assets/eqg.cpp` `string_at`, `src/assets/eqg_character.cpp` `name_at` | each reference into a long run without a NUL copied all of it (terabytes for a 5 MB run and a million fragments) | a name ends after 256 bytes (the longest in the RoF2 files is 59); the EQGS/EQGA reader, which refuses an unterminated name, refuses a longer one |
+| `src/assets/eqg.cpp` `parse_heightmap` | tiles were reserved at 12 bytes per tile for a ~160-byte record: 3.4 GB for a 256 MB DAT | reserved by the smallest record a tile can have (its vertices, flags and seven words) |
+| `src/assets/eqg.cpp` `nearest_painted_tile` | `lng + dx` overflowed near the int32 limits | in 64 bits; a neighbour past the limits is none |
+| `src/assets/png_read.cpp` `decode_png` | the whole stream was inflated, then unfiltered into a second copy: 1.3 GB peak from 500 KB | inflated a row at a time into two row buffers, written straight into the image; the stream must still end where the image does |
+| `src/assets/texture.cpp` `decode_bmp` (RLE) | a 130 KB RLE8 could declare 8192 x 8192, decoded via a 64 MB index buffer into a 256 MB image | refused when the size is over 128 pixels per byte of data (+512 bytes), what runs can fill; decoded straight into the image |
+| `src/assets/character_dress.cpp` `layered_texture` | layers were composited at the widest width by the tallest height: 16384 x 1 plus 1 x 16384 made 1 GiB | composited at the size of the layer with the most texels |
+| `src/assets/wld_zone.cpp`, `src/assets/eqg_zone.cpp` (lights) | a non-finite light position, colour or radius (`lights.wld`, EQG DAT or ZON) reached the light grid | left out at load (`finite_light`) |
 
-Behaviour for valid input is unchanged. The typed packet decoders, the session layer, the login parsers and the WLD, ZON,
-model, DDS, TGA, XMI and table parsers produced no findings.
+Valid input behaves as before. The packet decoders, session layer, login parsers and the WLD, ZON, model, DDS, TGA,
+XMI and table parsers had no findings.
 
 ## Not covered
 
@@ -102,27 +99,24 @@ model, DDS, TGA, XMI and table parsers produced no findings.
 
 ## Mapped game archives
 
-`PfsArchive::open` maps an archive read-only (`platform::MappedFile`) when the caller asks for it. Every caller that
-finds a file through `GameDir` asks for it for a file in the asset folder or the classic folder
-(`PfsArchive::storage_for`). Hailstone never writes those folders.
+`PfsArchive::open` can map an archive read-only (`platform::MappedFile`). Callers going through `GameDir` map files
+in the asset folder or the classic folder (`PfsArchive::storage_for`), which Hailstone never writes.
 
-A file in a server's overlay (`servers/<id>/assets`) is read into the heap once, as every archive was before. The
-server files sync replaces overlay files while the client runs, and on Windows a rename over a file with a mapped
-view is typically refused, so the sync would fail. When a mapping cannot be made (no address space, a file system
-that cannot map, an empty file), the file is read into the heap instead.
+A file in a server's overlay (`servers/<id>/assets`) is read into the heap: the server files sync replaces overlay
+files while the client runs, and Windows refuses a rename over a mapped file. A file that cannot be mapped (no
+address space, a file system that cannot map, an empty file) is also read into the heap.
 
 #### The cost of mapping
 
-Bytes are no longer read once at open. A game file that another program truncates or rewrites in place while it is
-mapped can:
+A game file that another program truncates or rewrites in place while it is mapped can:
 
 - crash the client with SIGBUS on Linux and macOS, or `EXCEPTION_IN_PAGE_ERROR` on Windows, when a member past the
   new end is read;
 - hand the parsers bytes that change under them.
 
-Examples are a patcher or launcher run alongside the client, or a sync tool writing into the game folder. The parsers
-bound every read against the mapping's length as they did against a heap buffer, so changed bytes are treated like
-any malformed file. A fault from a shrunk file is not caught.
+(a patcher, launcher or sync tool writing into the game folder alongside the client). The parsers bound every read
+against the mapping's length, so changed bytes are treated like any malformed file; a fault from a shrunk file is
+not caught.
 
 It is accepted because:
 
@@ -131,29 +125,25 @@ It is accepted because:
   than truncate them;
 - the gain is the archives' size in private memory.
 
-Overlay files, the ones that do change under a running client, are never mapped. A file replaced by rename is picked
-up the next time the archive is opened (another zone, `CharacterArchiveCache::clear()` after an asset-folder or
-overlay change).
+A file replaced by rename is picked up the next time the archive is opened (another zone,
+`CharacterArchiveCache::clear()` after an asset-folder or overlay change).
 
 ## Windows allocation profiling
 
-The memory checkpoints distinguish resident memory, Windows private commit, GPU allocations and estimated character
-payloads. When the remaining private commit has no measured owner, use allocation stacks instead of assuming that
-freed objects leaked.
-
-- WPR's Heap profile records heap allocation/free activity.
-- VirtualAllocation records virtual allocation activity.
-- The installed recorder's `wpr -profiles` and `wpr -help heap` show which commands it supports.
+The memory checkpoints split resident memory, Windows private commit, GPU allocations and estimated character
+payloads. When private commit has no measured owner, record allocation stacks with WPR (its Heap and
+VirtualAllocation profiles) rather than assuming a leak. `wpr -profiles` and `wpr -help heap` show what the installed
+recorder supports.
 
 See Microsoft's [Recording for Heap Analysis](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/recording-for-heap-analysis)
 and [WPR command-line options](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/wpr-command-line-options).
 
 #### Preparing the run
 
-Use one client, starting before login and ending after the repeated zoning route. Build with symbols first
-(`cmake --build build-msvc --config RelWithDebInfo --target hailstone` for a Visual Studio build). Keep its matching
-`hailstone.exe` and linker `hailstone.pdb`: a Release build without the matching PDB can identify modules but cannot
-reliably resolve Hailstone allocation stacks to functions. Put traces under the ignored `build-msvc/` folder.
+Record one client from before login to after the repeated zoning route. Build with symbols
+(`cmake --build build-msvc --config RelWithDebInfo --target hailstone` for a Visual Studio build) and keep the
+matching `hailstone.exe` and `hailstone.pdb`: without the PDB, stacks do not resolve to functions. Put traces under
+the ignored `build-msvc/` folder.
 
 In an **elevated PowerShell** at the repository root, with Hailstone closed:
 
@@ -162,9 +152,8 @@ wpr -status
 wpr -HeapTracingConfig hailstone.exe
 ```
 
-If another recording is active, finish that recording before starting this one; do not cancel someone else's
-session. Note the current heap-tracing configuration so it can be restored afterward. When it was initially
-disabled:
+Do not cancel someone else's active recording. Note the heap-tracing configuration to restore it afterwards. When it
+was disabled:
 
 ```powershell
 New-Item -ItemType Directory -Force .\build-msvc\memory-profile | Out-Null
@@ -175,19 +164,16 @@ wpr -start Heap -start VirtualAllocation -filemode
 
 #### Recording the route
 
-Check each command succeeds. Then launch `build-msvc/hailstone/hailstone.exe`, log in, run the route and return to
-the first zone. Stop the recording **while the client remains in that zone**, so outstanding allocations can be
-examined before shutdown frees them:
+Check each command succeeds. Launch `build-msvc/hailstone/hailstone.exe`, log in, run the route and return to the
+first zone. Stop **while the client is still in that zone**, before shutdown frees the outstanding allocations:
 
 ```powershell
 wpr -stop $trace
 wpr -HeapTracingConfig hailstone.exe disable
 ```
 
-Always restore the initial tracing configuration after collecting or abandoning the run. Leave it enabled if it was
-already enabled before this procedure. Heap tracing configuration affects newly launched clients, which is why the
-client must be restarted after enabling it. Trace-enabled measurements have instrumentation overhead, so compare
-normal runtime memory using the client logs as well.
+Always restore the initial configuration afterwards (leave it enabled if it was). It affects only newly launched
+clients. Tracing adds overhead, so compare normal memory from the client logs too.
 
 #### Reading the trace
 
@@ -197,6 +183,5 @@ normal runtime memory using the client logs as well.
    allocation stack.
 4. Inspect VirtualAlloc Commit LifeTimes for large committed regions outside those heap allocations.
 
-Keep the associated `hailstone.log` for the route. Native heap allocations, allocator-retained commit and
-graphics-driver regions are distinct categories, and the same bytes must not be added twice. Trace collection
-itself does not establish which category explains a gap.
+Keep the route's `hailstone.log`. Native heap allocations, allocator-retained commit and graphics-driver regions are
+distinct categories: do not count the same bytes twice. The trace alone does not say which one explains a gap.
