@@ -407,8 +407,9 @@ once instead of holding them 150 ms to combine them (`Session::set_no_hold`; 2.6
 without), 32 pieces are asked ahead, and the socket's receive buffer is 2 MiB so their burst is not dropped.
 A piece that does not come is asked for again (`ServerFileSync::kChunkRetry`, `kChunkRetries`): at once when one
 asked after it has come (the script answers in order, so it skipped it, as an older script over its limit did), or
-after 3 s with nothing; after 5 requests for the same piece the sync fails and the zone-in goes on with the old
-files. When the server's files change during a download (its list id moves on), the script answers each piece asked
+after 3 s with nothing. A piece is asked for at most 5 times: skipped again after that, it fails the sync; when the
+server just goes quiet, the sync fails once 30 s pass with nothing from it (`kChunkTimeout`). Either way the zone-in
+goes on with the old files. When the server's files change during a download (its list id moves on), the script answers each piece asked
 for with a stale error: the first one lists the files again and the download goes on with the new list; the others,
 for the old list, are left (more than three such restarts in one sync fail it).
 

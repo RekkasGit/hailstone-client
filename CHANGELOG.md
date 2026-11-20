@@ -9,6 +9,7 @@
 - Graphics: characters' and items' own particle effects (glowing weapons, auras, run dust) cost less while off screen: an actor out of view, or past 500 units in the classic lighting, no longer emits new particles, so its effects fill in over a moment as you turn towards it. `display.particle_offscreen_hold = 0` in hailstone.ini keeps them emitting everywhere. Changing Actor Particle Density no longer empties every effect at once (they thin out or fill in), and at Off the effects cost nothing
 - Cures no longer remove debuffs locally: a partial or too-weak cure leaves its icon standing until the server's buff fade clears it, instead of making the debuff vanish early
 - Buff icons now show a debuff's curse, disease, poison or corruption counters as soon as the buff lands and keep showing the remaining count after a partial cure, a server refresh without counter data, or a full buff list that leaves the spell in the same slot
+- Server files: when the server goes quiet during the download, the client now keeps asking for the missing pieces until 30 s pass with nothing from it, instead of giving up after about 15 s
 - Connection: a failed world or zone connection stays failed; a packet the server had already sent behind the failure no longer starts a zone connection
 - Network: broken or hostile packets can no longer stall the client: barter lists whose names never end, mail with long runs of blanks, and target or pet buff windows with slot numbers past RoF2's 97 (those slots are ignored)
 
