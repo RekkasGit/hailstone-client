@@ -35,7 +35,8 @@ void load_hot_bar_settings(int bar, ui::UiIni& ini, std::string_view section);
 void register_hot_bar_window(int bar, StockWindow* window);
 void unregister_hot_bar_window(int bar, StockWindow* window);
 
-// The Modern bar's per-character layout lock, independent of the HUD's frame locks.
+// The Modern bar's per-character layout lock, independent of the HUD's frame locks. Hailstone's: the original's window
+// lock does not protect a bar's buttons (open_hot_bar_menu).
 bool hot_bar_layout_locked(const UiHost& host, int bar);
 
 // The bar's window menu (CHotButtonWnd's ContextMenuID) at x, y. `layout_lock` adds the Modern Lock layout row;

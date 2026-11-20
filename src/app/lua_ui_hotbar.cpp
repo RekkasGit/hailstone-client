@@ -432,7 +432,10 @@ void open_hot_bar_menu(UiHost& host, int bar, float x, float y, bool layout_lock
     });
     spinner.check = s.spinner;
     rows.push_back(locked ? disabled(std::move(spinner)) : std::move(spinner));
-    // The bar's own lock protects its buttons as well as its frame.
+    // Lock layout (hud.lockLayout.<screen>): Hailstone's row, not the original's, and past what the original's lock
+    // does. RoF2's window lock (CXWnd Locked, the ini's Locked) only stops a move or resize (CXWndManager::
+    // HandleLButtonDown, CXWnd::vf13 @0x862e10); a hotbutton's pickup (0x553340), drop (0x552e00), clear (0x550c50) and
+    // menu (0x5536b0) never read it. This lock also keeps the buttons in their slots; off, the bar is as the original's.
     if (layout_lock && host.set_layout_setting) {
         rows.push_back(separator());
         UiHost::MenuRow lock = row("Lock layout", [&host, bar] {
