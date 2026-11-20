@@ -258,6 +258,7 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 
 ## Items, inventory and commerce
 
+- A bag's contents past its own BagSlots: `game::Inventory::put` and `swap` accept any bag sub-slot below `net::kMaxBagContents` (1000), not only those below the bag's BagSlots, so an item the server puts at a sub-slot the bag does not have is kept (and shown nowhere). Whether the original drops such an item, keeps it, or refuses the packet is not traced; reading the RoF2 client's item placement (CharacterBase / ItemContainer's put for a bag) or sending such a packet from a test server would settle it.
 - Mercenary liaison window (docs/mechanics.md "Leaving an NPC interaction"): its range check is the window's
   observer 0x6eb560 (vftable 0x9f1ef8 slot 1; a liaison id set and the liaison missing or beyond 20 units, 3D, hides
   it), but what calls the observer, and how often, is not traced. Hailstone checks every connection update. Tracing

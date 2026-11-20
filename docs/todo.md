@@ -185,6 +185,7 @@ Not blocking 1.0: `/gems`; `/travel`, waypoints and the mesh editor; levitation 
 - [ ] IVM's click volume: whether the original's click meets its masked body mesh, a sphere or only its held items (unknowns.md, Characters and models).
 
 ### Items and commerce
+- [ ] A bag sub-slot past the bag's own BagSlots: settle what the original does with an item placed there (docs/unknowns.md "Items, inventory and commerce"); `game::Inventory` keeps it for now.
 - [x] Evolving-item Final Result inspection: native action-4 request, ordinary read-only item reply, received instance progress updates and a focusable gamepad action; packet, bridge, mock-server and Lua-pack coverage.
 - [ ] Evolving-item live acceptance: inspect Final Result from owned and linked items, receive progress through 100%, confirm the server's replacement level/template and use the gamepad action with a physical controller.
 - [x] Stock achievements: bounded compressed catalog, primary state and counters, categories/search/status filters, linked details, nearby-player comparisons, explicit reward views and refresh, both UI packs; codec/model/bridge/mock-server and actual Lua-pack fixtures. Live use reported generally working (2026-11-12); targeted acceptance remains below.
