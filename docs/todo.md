@@ -344,6 +344,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] The repository (or a public one for releases) has to be public: GitHub answers 404 to the client for a private one's releases. Public from 0.5.0-beta (AGENTS.md "Git workflow").
 - [x] A release key (`hailstone_sign keygen`, the public half in `update-key.pub`); until then builds have no updates.
 - [ ] The updater on Windows: WinHTTP and the install's renames of the running `hailstone.exe` and its DLLs (compiles; not run).
+- [ ] Windows: a power cut between moving the running `hailstone.exe` into `previous/` and moving the new one in leaves no program (docs/updater.md "Limits and open points"). Linux and macOS keep the old file until the new one replaces it in one rename (hard link into `previous/`); Windows cannot replace a running program's file, so an order without that moment is still to find (a launcher stub, or a staged name the next start swaps in).
 - [x] The box set's other windows (`--box-child`) have no updater and fetch no add-ons: only the first window downloads and installs (tests/updater_test.cpp).
 - [ ] A lock between Hailstone windows the client did not start (two copies opened by hand): each still has its own updater and add-on manager on the same `download/` and `addons/` files.
 - [ ] A release job in CI (packages, manifest, signature, upload).

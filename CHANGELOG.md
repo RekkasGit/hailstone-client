@@ -15,6 +15,7 @@
 - Login screen: the Add-ons list is no longer rebuilt every frame (copying the whole store, re-reading the installed list and looking for each tool's program); it follows the add-on manager's changes and refreshes every 3 seconds as before
 - `HAILSTONE_DATA_DIR` naming an EverQuest folder is refused at start, as an install inside one already is: Hailstone never writes into the game folder
 - Windows: DLLs are no longer looked for in the current folder or PATH, for Hailstone itself, its plugins and its upscaler providers; a plugin's or provider's own DLLs are found beside it
+- Updates on Linux and macOS: the old program stays in place until the new one replaces it in one step, so a power cut during an install never leaves the folder without it (Windows still has a short moment; see docs/updater.md)
 
 ## 0.7.2-beta (2026-11-19)
 

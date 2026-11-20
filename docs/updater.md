@@ -156,7 +156,9 @@ helper and the plugins are gone:
    Each unpacked file is flushed to the disk before it is renamed into `new/`.
 2. Each old file is moved into `previous/` and its new one into place. The move is written to the journal before
    it is made, and the journal's line is flushed to the disk first (write-ahead), so after a power cut every file in
-   `previous/` has its line. Both moves are renames on one volume, which Windows allows for a running program and its
+   `previous/` has its line. On Linux and macOS `previous/` gets a hard link to the old file, which stays in place
+   until the new one is renamed over it, so no moment leaves a name (the program itself among them) without a file;
+   on Windows, and on a file system without hard links, the old file is renamed away first (see "Limits and open points"). Both moves are renames on one volume, which Windows allows for a running program and its
    loaded libraries; each is on the disk before the next begins (the folder synced on Linux and macOS, a write-through
    move on Windows).
 3. The files a component shipped before and no longer does are moved into `previous/` as well.
@@ -279,6 +281,11 @@ file already there.
   downloads (libcurl) are not quarantined, and it installs into the folder as on Linux. An app bundle would need
   its own install step (the binary is in `Contents/MacOS/`, while `install_dir()` would be `Contents/Resources/`)
   and is not made. No macOS release has been run on a Mac yet, nor its update.
+- **Windows: a moment without the program.** Windows lets a running program's files be renamed but not replaced, so
+  there the old `hailstone.exe` (and each other file) is moved into `previous/` before the new one is moved in. Both
+  moves are on the disk before the next begins, but a power cut exactly between the two leaves the folder without
+  `hailstone.exe`: the player moves `update/previous/hailstone.exe` back into the folder by hand, and its next start
+  rolls the rest of the cut-off install back (a `moved` line with nothing in `previous/` leaves the file in place). Linux and macOS keep the old file in place until the new one replaces it in one rename.
 - **Downloads start over.** A broken-off download starts again from the beginning (no HTTP range requests). A
   package already downloaded whole is kept.
 - **Other Hailstone windows.** Windows the client did not start itself (not the box set's) are not seen; on Linux they
