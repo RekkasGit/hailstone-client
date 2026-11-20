@@ -20,6 +20,7 @@
   - The shake moves only the camera, never the player, and a zone change ends it
 - Modern hotbars: **Lock layout** keeps hotbuttons in their slots and blocks edits while leaving activation and page changes available.
   - A bar locked with the old row keeps its frame lock (**Lock this frame**); turn Lock layout on again to protect its buttons
+- Native nameplate add-ons can draw the same guild tags, NPC descriptions and pet owner names as stock nameplates.
 - Item comparison, in both interfaces: an item's tooltip and details window show what wearing it instead of what you wear would change
   - Tooltips cover the inventory, bags, bank, loot, trade and a merchant's goods; the details window covers a linked item too
   - In the details window each stat's change sits beside the item's value (+12 in green beside AC 20, say), with the verdict and what it is compared with above the stats
