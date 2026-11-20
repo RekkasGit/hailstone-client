@@ -463,7 +463,10 @@ upscalers/<name>/ an installed upscaler (its provider, the libraries it loads, t
 - **A cut-off install or removal** (the client died between its moves) is undone at the next start from the journal.
   `installed.txt` is saved as `installed.prev.txt` before it is rewritten, and put back with the old files, so the
   list matches what is on disk. One that wrote `done` is left as it is. Each journal line is flushed to the disk
-  before the move it names (write-ahead), each move is on the disk before the next, and each unpacked file is
+  before the move it names (write-ahead): the lines go in two batches of one synced write each, the old files' moves
+  out and then the new files' moves in, every place a batch moves to checked free before its lines are written (a
+  line for a move a cut-off install never made finds nothing there, and the undo skips it). Each move is on the disk
+  before the next, and each unpacked file is
   flushed before it moves, so a power cut leaves no empty file and no moved file without its line. Should a file
   still be in `previous/` after an undo (a journal the disk lost or damaged, a move back that failed), it may be the
   only copy of the player's old file: `previous/` is renamed `kept-<time>/` and a warning logged, not removed.

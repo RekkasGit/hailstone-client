@@ -11,6 +11,7 @@
 - Buff icons now show a debuff's curse, disease, poison or corruption counters as soon as the buff lands and keep showing the remaining count after a partial cure, a server refresh without counter data, or a full buff list that leaves the spell in the same slot
 - In-game browser: a page a server opens with a link can no longer reach your own computer or home network (a router's page, a NAS) later on, through a redirect, a link, a form or a request the page makes, not only at the link's own address. Your own tabs are unchanged
 - Box sets: only the window you logged in from checks for and downloads Hailstone and add-on updates. The other windows no longer download the same update at once (which could break the download) or install one while the rest of the set still runs
+- Add-ons install faster: the install journal is flushed to the disk once per batch of files instead of once per file, and stays as safe against a power cut
 
 ## 0.7.2-beta (2026-11-19)
 
