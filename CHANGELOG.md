@@ -12,6 +12,7 @@
 - In-game browser: a page a server opens with a link can no longer reach your own computer or home network (a router's page, a NAS) later on, through a redirect, a link, a form or a request the page makes, not only at the link's own address. Your own tabs are unchanged
 - Box sets: only the window you logged in from checks for and downloads Hailstone and add-on updates. The other windows no longer download the same update at once (which could break the download) or install one while the rest of the set still runs
 - Add-ons install faster: the install journal is flushed to the disk once per batch of files instead of once per file, and stays as safe against a power cut
+- Login screen: the Add-ons list is no longer rebuilt every frame (copying the whole store, re-reading the installed list and looking for each tool's program); it follows the add-on manager's changes and refreshes every 3 seconds as before
 
 ## 0.7.2-beta (2026-11-19)
 
