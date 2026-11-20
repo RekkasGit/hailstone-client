@@ -1513,7 +1513,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
     }
     case Op::DeleteSpawn:
         if (auto id = decode_delete_spawn(p)) {
-            duel_spawn_removed(*id, p.data.size() > 4 && p.data[4] != std::byte{0});
+            duel_spawn_removed(*id, decode_delete_spawn_decayed(p).value_or(false));
             // msgEQRmPlayer: the trade partner (pinstTradeTarget) leaving cancels and closes the trade
             // (CTradeWnd_CancelAndClose, which sends OP_CancelTrade). EQEmu tells only the player who left.
             if (trade_ && trade_->partner_id == *id) trade_cancel();

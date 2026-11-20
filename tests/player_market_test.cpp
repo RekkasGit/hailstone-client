@@ -467,6 +467,8 @@ TEST_CASE("bazaar inspect, trader list, search results and item removal") {
     CHECK(r->results[0].name == "Fine Steel Sword");
     CHECK(r->results[0].stat == 7);
     CHECK(bytes_of(encode(*r)) == res.b);
+    CHECK(decode_bazaar_voucher_cost(packet(Op::BazaarSearch, res.b)) == 151);
+    CHECK_FALSE(decode_bazaar_voucher_cost(packet(Op::BazaarSearch, Buf().u32(0).u8(1).b)));
     // The server's "done" (BazaarReturnDone_Struct) carries a count of -1: no results.
     Buf done;
     done.u32(12).u32(42).u32(0xffffffffu).u32(0xffffffffu).u32(0xffffffffu);

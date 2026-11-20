@@ -406,6 +406,13 @@ std::optional<BazaarResults> decode_bazaar_results(const AppPacket& p) {
     });
 }
 
+std::optional<std::uint16_t> decode_bazaar_voucher_cost(const AppPacket& p) {
+    return detail::decode_with(p, [](ByteReader& r) {
+        r.skip(4);
+        return r.le<std::uint16_t>();
+    });
+}
+
 AppPacket encode(const BazaarResults& v) {
     ByteWriter w;
     w.le(v.action);
@@ -617,13 +624,14 @@ AppPacket encode_buy_line(std::uint32_t action, const BuyLine& v) {
 
 std::optional<BuyerAppearance> decode_buyer_appearance(const AppPacket& p) {
     if (first_word(p) != kBuyerAppearance || p.data.size() < 73) return std::nullopt;
-    BuyerAppearance v;
-    v.spawn_id = static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(p.data[4])) |
-                 static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(p.data[5])) << 8 |
-                 static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(p.data[6])) << 16 |
-                 static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(p.data[7])) << 24;
-    v.enabled = p.data[72] != std::byte{0};
-    return v;
+    return detail::decode_with(p, [](ByteReader& r) {
+        r.skip(4);
+        BuyerAppearance v;
+        v.spawn_id = r.le<std::uint32_t>();
+        r.skip(64);
+        v.enabled = r.le<std::uint8_t>() != 0;
+        return v;
+    });
 }
 
 AppPacket encode_buyer_appearance(const BuyerAppearance& v) {
