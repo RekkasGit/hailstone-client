@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Windows: when the graphics device fails mid-game, the client no longer crashes while closing with a plugin loaded, so the device error itself reaches the log and an error box
 - Your own name is in parentheses while you are hidden, as in the original client (it was plain). Sneak alone adds none
 - The sample `hailstone.cfg` now includes the Ability Book's autoskill switch, and the server guide shows how to disable autoskill and Lua socials
 - Loot All takes NO DROP items from your own corpse without confirmation after a same-zone resurrection

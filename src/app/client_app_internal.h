@@ -255,8 +255,14 @@ public:
     }
 
     // The Lua UI goes first: its state's finalizers may still reach what the hs.* functions hold (ui_host_, ui_api_,
-    // the views), which members declared after it would already have destroyed.
-    ~ClientApp() { retire_world_geometry(); lua_ui_.reset(); }
+    // the views), which members declared after it would already have destroyed. Plugins and scripts stop here too, as
+    // run() stops them on a clean exit: when run() throws (a lost device), their ShutdownPlugin and the "[Plugin] ...
+    // unloaded" line would otherwise come from ~Automation, after conn_ and the rest declared later are gone.
+    ~ClientApp() {
+        retire_world_geometry();
+        if (automation_) automation_->shutdown();
+        lua_ui_.reset();
+    }
     ClientApp(const ClientApp&) = delete;
     ClientApp& operator=(const ClientApp&) = delete;
     explicit ClientApp(ClientOptions& options)
