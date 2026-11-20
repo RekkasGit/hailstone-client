@@ -216,7 +216,16 @@ TEST_CASE("level effects: the flag places the emitter once, on the floor below t
     const auto& e = rig.emitters.simulation().emitters()[0];
     CHECK(e.actor == 0);
     CHECK(e.origin.x == doctest::Approx(10.0f));
-    CHECK(e.origin.z == doctest::Approx(2.0f));
+    CHECK(e.origin.z == doctest::Approx(2.05f)); // vf126's raise of 0.05 above the hit
+}
+
+TEST_CASE("level effects: a floor more than 1000 below the point is not taken") {
+    // vf126 casts 1000 units down from the point (0x1013681c); farther, the point's own z stays.
+    EffectRig rig;
+    rig.emitters.set_floor([](const glm::vec3&) { return std::optional<float>(-2000.0f); });
+    CHECK(rig.emitters.start_effect({kDrawnSpawn, 2, kChest, true}));
+    REQUIRE(rig.emitters.emitters() == 1);
+    CHECK(rig.emitters.simulation().emitters()[0].origin.z == doctest::Approx(30.0f));
 }
 
 TEST_CASE("level effects: an unknown effect, spawn, or slot starts nothing") {

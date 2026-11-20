@@ -382,7 +382,9 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
 - [ ] Whether the original checks the address a SessionResponse comes from (the client takes any with its connect code, as multi-homed EQEmu hosts need; unknowns.md).
 - [ ] eqhost.txt: the port the original uses for a `Host` without one, and reading the `Host1`.. fallback entries eqmain's `LoginClient::ReadHosts` reads (unknowns.md).
 - [ ] The original CRT's atol on a number out of range: wrap or saturate (`/split`, `game::cmd_atol`; unknowns.md).
-- [ ] OP_MobRename's handler sends the empty 0x2b8e after the player's own rename when a window check passes (0x4c9a6b): identify the window and the failure path (unknowns.md, which also lists what still uses the login name).
+- [x] What OP_MobRename's handler sends after a rename, and when (0x4c9a6b): 0x2b8e alone, for the own spawn, while the server list window is up. Hailstone has no such window and sends nothing.
+- [ ] The player's own rename: the character name change (0x4d5a10) and which readers follow it (unknowns.md). The client renames the spawn only.
+- [ ] OP_LevelAppearance's flag-on emitter takes the actor's turn (vf126 @0x1003a950; unknowns.md). It takes the world's axes.
 
 ### Real estate (player housing, guild halls)
 - [x] The packets, the manager (catalog, records, access, item rows, owned lists, areas, placed objects, occupancy), result messages, upkeep time left.

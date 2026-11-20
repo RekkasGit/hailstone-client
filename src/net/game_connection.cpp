@@ -1451,9 +1451,9 @@ void GameConnection::handle_zone(const AppPacket& p) {
     case Op::MobRename: {
         auto rename = decode_mob_rename(p);
         if (!rename) break;
-        // GetSpawnByName @0x599b40 compares the full name, including a spawn's numeric suffix. The handler (0x4c9a6b)
-        // can also send a packet to world after a rename, on a condition not yet read (docs/unknowns.md); Hailstone
-        // renames the spawn only.
+        // GetSpawnByName @0x599b40 compares the full name, including a spawn's numeric suffix. For the player's own
+        // spawn the handler (0x4c9a6b) also sets the character's name (0x4d5a10, not made here: docs/unknowns.md) and
+        // sends 0x2b8e alone while the server list window is up, to refresh it; Hailstone has no such window.
         for (auto& [id, spawn] : world_.spawns) {
             if (!iequals(spawn.name, rename->old_name)) continue;
             if (spawn.name != rename->new_name) {

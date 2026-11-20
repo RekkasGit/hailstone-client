@@ -99,10 +99,9 @@ public:
     void set_floor(FloorFn floor) { floor_ = std::move(floor); }
     // An effect the server plays on a spawn by number (OP_LevelAppearance): the actor file's emitter `effect` on one
     // of the spawn's ten spell points, as CActor vf126 @0x1003a950 makes it. Without `flag` the emitter is attached
-    // to the point and follows it. With it the original places the emitter once, from the point's position taken
-    // down onto the floor, with the point's scale, instead of attaching it; here the point's position with the floor
-    // below it as z (the point's own z without a floor), the point's scale, the world's axes (docs/unknowns.md: the
-    // original's small raise and the actor's turn). Like every emitter of the actor file it is made at the actor
+    // to the point and follows it. With it the original places the emitter once, from the point's position cast
+    // down onto the floor and raised by 0.05, with the point's scale and the actor's turn, instead of attaching it;
+    // here the same with the world's axes for the turn (docs/unknowns.md), and the point's own z without a floor. Like every emitter of the actor file it is made at the actor
     // density and opacity and ends with its definition's own duration. Returns false, starting nothing, for an effect
     // not in the file, a slot the model has no point for, or a spawn not drawn.
     struct Effect {

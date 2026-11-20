@@ -294,12 +294,19 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     `[LoginServer]`'s first `Host` (its network API accepts a host list).
 - **Membership details.** The feature ids' names and the refusal lines are decoded (`game/feature_restrictions.h`);
   the other uses of the 22 entries are not.
-- **OP_MobRename's packet to world.**
-  - Now: the spawn with the old name is renamed in place and nothing is sent.
-  - Known: on the player's own rename path (HandleWorldMessage's 0x2c57 case @0x4c9a6b, after `PlayerManagerBase_RenamePlayer`) the original sends the empty opcode 0x2b8e (`kOpServerTransfer`, the `/servertransfer` request) when a window check passes (a global at `0xd1fd34`, a byte at `+0x196`); it checks its connection object first.
-  - Unknown: which window `0xd1fd34` is, and what the failure path at `0x462780` does.
-  - After the player's own rename only the spawn is renamed. The profile, group and raid leadership, the raid window, the Group Finder, the raid packets and the own-corpse checks (`/corpse`, loot, hide-looted, `/decaycorpse`) still use the login name. Which of these the original takes from the renamed name is not read.
-  - Settle: the window and the failure path read in the original, or a capture of a character rename on a live server.
+- **After the player's own rename** (OP_MobRename, HandleWorldMessage's 0x2c57 case @0x4c9a6b).
+  - Known: after `PlayerManagerBase_RenamePlayer` the handler compares the renamed spawn's id (+0x148) with the local
+    player's; for the player's own spawn it sets the character's name (0x4d5a10), then sends opcode 0x2b8e alone (the
+    server transfer's server list request, `kOpServerTransfer`) when the server list window (`pinstCServerListWnd`,
+    0xd1fd34) exists and its byte +0x196 is set: it asks again for that window's list. Hailstone has no server list
+    window, so sending nothing is the same. What the path at 0x462780 does when that send fails is not read.
+  - Now: only the spawn is renamed. The original's character name change (0x4d5a10) is not made here: the profile,
+    group and raid leadership, the raid window, the Group Finder, the raid packets and the own-corpse checks
+    (`/corpse`, loot, hide-looted, `/decaycorpse`) still use the login name, and a respawn record under the new name
+    is not taken as the own spawn.
+  - Unknown: which of those readers the original takes from the character's name.
+  - Settle: tracing the readers of the character's name in the original, or a capture of a character rename on a live
+    server (stock EQEmu notes its `Client::ChangeFirstName` does not work for RoF2).
 - **Spawn suffix in destructible form** (OtherData 0xe1).
   - Now: the client reads no suffix there. EQEmu writes one only when it is not empty.
   - Unknown: the original appears to read one whenever bit 0x20 is set (`EQPlayer::UnSerializeSpawn`), and to treat
@@ -1425,10 +1432,23 @@ Real estate is built to the original (docs/protocol/rof2-packets.md "Real estate
 
 ## Last names and the level-up effect
 
-- **OP_LevelAppearance: what is still open** (`net/rename_packets.h`, `app/actor_emitters.h` start_effect). Only the flag-on placement, the repeat rule and the setting rule below are open; the mapping itself is settled.
-  - Known: the effect id indexes the actor emitter file (`actoremittersnew.edd`; EQEmu's 0x4d..0x51 = 77..81, Lvl_UpB_01..05 in the shipped file), the slot is one of the model's ten spell points (`assets/model_points.h`; EQEmu uses 1 chest and 2 head); a group with an effect id of 0 or no point is skipped (`0x58fed0`, CActor vf126 @dxgfx `0x1003a950`).
-  - With the flag off the original attaches the emitter to the point (it follows the actor), scale 1; this is built.
-  - With the flag on it takes the point's position, asks a collision object (a global at `0x10179114`, vtable `+0x1c`) for a place below it, adds a small constant (`0x10132e6c`) to the first coordinate, attaches to no point, passes the actor's turn (the actor's vtable `+0x2c4`) and the point matrix's scale. Here: the point's x and y, the zone floor below it as z (the point's z without a floor), no raise, world axes, the point's scale. Open: what that query returns and the raise; settled by tracing `0x10179114`'s object and the constant.
-  - Duration: the original asks for 5,000,000 ms and the emitter definition decides (a negative duration is its own length; a positive one takes the asked time, the repo's reading of `CreateEmitter` @`0x1006c920`, reached through `0x10070440`). Lvl_UpB_01..05 (77..81) of the shipped file all have a negative duration (0.5 to 1 s), so they end by themselves; a positive-duration definition would run for the asked time, as it does for the always-on actor emitters.
-  - Not traced: the rest of `0x10070440` (it makes nothing when a definition's byte at `+4` is 0; the loaded definitions have no such flag here) (the emitter creation behind `0x10070640`) and what the original does with a repeated cue on the same spawn (here each cue is its own emitter, at most 64 running at once, a newer stopping the oldest).
-  - The cues follow the actor particle density (ActorParticleDensity), not `/showspelleffects`; the original's rule is not traced.
+- **OP_LevelAppearance: what is still open** (`net/rename_packets.h`, `app/actor_emitters.h` start_effect). The
+  mapping is settled; the flag-on emitter's axes and one branch of the creator are open.
+  - Known: 0x58fed0 calls the actor's vf126 (vtable +0x1f8, dxgfx `0x1003a950`) with the effect id, the spawn's
+    spell point (`spawn + 0xfec + slot * 4`, no bounds check; `assets/model_points.h`) and the flag byte, skipping a
+    group whose id is not above 0, a missing point or a spawn without an actor. vf126 passes the effect id to the
+    actor-emitter creator (CParticleSystem vtable +0x20, 0x10070640) as an index into `actoremittersnew.edd`
+    (EQEmu's 0x4d..0x51 = 77..81, Lvl_UpB_01..05 in the shipped file), for 5,000,000 ms, with the particle system's
+    actor density and opacity: the same call as an actor's own emitters (docs/formats/particles.md "Actor
+    emitters"), so ActorParticleDensity applies. Each call makes a new emitter.
+  - Flag off: the emitter is attached to the point (it follows it), scale 1. Built.
+  - Flag on: no point; the point's position is cast 1000 units straight down (0x1013681c = -1000) against the
+    collision object (`0x10179114`, vtable +0x1c), raised by 0.05 (`0x10132e6c`), with the point matrix's scale and
+    the actor's turn (actor vtable +0x2c4). Built, except the turn: the emitter takes the world's axes here. A
+    point with no floor within 1000 below keeps its own z (what the original's cast gives then is not read).
+  - Duration: a negative definition duration is its own length; a positive one runs for the asked time (the repo's
+    reading of `CreateEmitter` @`0x1006c920`, through `0x10070440`). Lvl_UpB_01..05 all have a negative duration
+    (0.5 to 1 s).
+  - Not traced: the rest of `0x10070440` (it makes nothing when a definition's byte at `+4` is 0; the loaded
+    definitions have no such flag here).
+  - Hailstone: at most 64 effects run at once, a newer stopping the oldest (the original sets no limit here).

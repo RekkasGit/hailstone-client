@@ -126,8 +126,9 @@ bool ActorEmitters::start_effect(const Effect& effect) {
     if (effect.flag) {
         const float scale = glm::length(glm::vec3(point[0]));
         r.scale = std::isfinite(scale) && scale > 0.0f ? scale : 1.0f;
+        // vf126 casts the point 1000 units straight down (0x1013681c) and raises the hit by 0.05 (0x10132e6c).
         if (floor_)
-            if (auto z = floor_(r.position)) r.position.z = *z;
+            if (auto z = floor_(r.position); z && r.position.z - *z <= 1000.0f) r.position.z = *z + 0.05f;
     } else {
         r.actor = effect.actor;
         r.bone_point = kEffectPointBase + static_cast<std::int32_t>(effect.slot);

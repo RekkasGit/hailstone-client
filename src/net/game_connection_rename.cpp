@@ -1,29 +1,16 @@
 // GameConnection: OP_GMLastName and OP_LevelAppearance (net/rename_packets.h).
 
-#include <algorithm>
-#include <cctype>
-
 #include "core/ascii_case.h"
 #include "core/log.h"
 #include "net/game_connection.h"
 
 namespace hailstone::net {
 
-namespace {
-
-bool same_name(std::string_view a, std::string_view b) {
-    // GetSpawnByName compares with a case-insensitive string compare (FUN_00809250 -> _stricmp).
-    return std::ranges::equal(a, b, [](char x, char y) {
-        return std::tolower(static_cast<unsigned char>(x)) == std::tolower(static_cast<unsigned char>(y));
-    });
-}
-
-} // namespace
-
 std::uint32_t GameConnection::find_spawn_by_name(std::string_view name) const {
-    if (name.empty()) return 0; // GetSpawnByName answers none for an empty name
+    // GetSpawnByName compares case-insensitively (FUN_00809250, _stricmp) and answers none for an empty name.
+    if (name.empty()) return 0;
     for (const auto& [id, spawn] : world_.spawns)
-        if (same_name(spawn.name, name)) return id;
+        if (iequals(spawn.name, name)) return id;
     return 0;
 }
 
@@ -42,8 +29,8 @@ bool GameConnection::handle_spawn_rename(const AppPacket& p) {
 
 void GameConnection::apply_gm_last_name(const GMLastName& r) {
     // Handle_OP_GMLastName @0x4bbcd0: the spawn is looked up by name; no spawn or apply (@196) 0 ignores the packet.
-    // The last name is copied to the spawn (+0x38), the profile's own too (0x4d5470) for the player, then the
-    // lists are rebuilt (0x58f050).
+    // The last name is copied to the spawn (+0x38), the profile's own too (0x4d5470) for the player, then the name
+    // sprite is redrawn (0x58f050; here the views keyed on WorldState::spawn_set_serial make their copies again).
     if (!r.apply) return;
     const std::uint32_t id = find_spawn_by_name(r.name);
     if (id == 0) return;
