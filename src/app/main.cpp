@@ -55,6 +55,7 @@
 #include "app/window_icon.h"
 #include "platform/message_box.h"
 #include "platform/paths.h"
+#include "platform/shared_library.h"
 #include "platform/process.h"
 #include "platform/window.h"
 #include "game/sky_clock.h"
@@ -776,6 +777,8 @@ void update_camera(hailstone::render::FlyCamera& cam, hailstone::platform::Windo
 
 int main(int argc, char** argv) {
     using namespace hailstone;
+    // Windows: no DLL from the current folder or PATH for what is loaded by name (platform/shared_library.h).
+    platform::restrict_dll_search();
     // An error that ends the run is shown in a dialog too (app/startup_error.h), but not in the test drives that stop
     // after some frames, which nobody is there to close.
     bool error_dialog = true;

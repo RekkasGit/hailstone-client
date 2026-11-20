@@ -17,7 +17,7 @@
 #include <tuple>
 #include <utility>
 
-#include <SDL3/SDL_loadso.h>
+#include "platform/shared_library.h"
 
 #include "core/ascii_case.h"
 #include "core/atomic_file.h"
@@ -247,7 +247,7 @@ struct Loaded {
     fs::path file, copy;
     Sha256Digest hash{};
     std::uint32_t caps = 0;
-    SDL_SharedObject* lib = nullptr;
+    void* lib = nullptr; // platform::load_library's
     PluginHostApi table{};
     Hooks::Owner owner = 0;
     std::vector<std::string> tlos;
@@ -2671,11 +2671,11 @@ template <typename R, typename... A, R (*F)(void*, A...), auto Off> struct MainO
 };
 template <auto F, auto Off> constexpr auto main_only_or = &MainOnlyOr<F, Off>::call;
 
-template <typename F> F symbol(SDL_SharedObject* lib, const char* name) {
-    return reinterpret_cast<F>(SDL_LoadFunction(lib, name));
+template <typename F> F symbol(void* lib, const char* name) {
+    return reinterpret_cast<F>(platform::library_symbol(lib, name));
 }
 // One of the SDK's own exports: hailstone_plugin_<what>, or nmsc_plugin_<what> as plugins built up to 0.6 name it.
-template <typename F> F sdk_symbol(SDL_SharedObject* lib, const std::string& what) {
+template <typename F> F sdk_symbol(void* lib, const std::string& what) {
     if (F f = symbol<F>(lib, ("hailstone_plugin_" + what).c_str())) return f;
     return symbol<F>(lib, ("nmsc_plugin_" + what).c_str());
 }
@@ -2895,7 +2895,7 @@ void discard(NativePlugins::Impl& m, std::unique_ptr<Loaded> l, bool shutdown) {
     }
     game::clear_class_name_overrides(l->class_names_owner);
     for (const auto& t : std::vector<std::string>(l->tlos)) h_remove_tlo(l.get(), t.c_str());
-    SDL_UnloadObject(l->lib);
+    platform::unload_library(l->lib);
 }
 } // namespace
 
@@ -2964,23 +2964,24 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.copy = copy;
     p.hash = hash;
     p.caps = caps;
-    p.lib = SDL_LoadObject(copy.string().c_str());
-    if (!p.lib) return refuse(std::format("{} did not load: {}", name, SDL_GetError()));
+    std::string load_error;
+    p.lib = platform::load_library(copy, &load_error);
+    if (!p.lib) return refuse(std::format("{} did not load: {}", name, load_error));
     auto abi = sdk_symbol<std::uint32_t (*)()>(p.lib, "abi");
     auto set_host = sdk_symbol<void (*)(const PluginHostApi*)>(p.lib, "set_host");
     if (!abi || !set_host) {
-        SDL_UnloadObject(p.lib);
+        platform::unload_library(p.lib);
         return refuse(name +
                       " is not a Hailstone plugin (no hailstone_plugin_abi / hailstone_plugin_set_host; use HAILSTONE_PLUGIN)");
     }
     // Older ABIs load (the tables only grow at their end); a newer one needs a newer client.
     std::uint32_t got = 0;
     if (!guarded(p, "hailstone_plugin_abi", [&] { got = abi(); return true; })) {
-        SDL_UnloadObject(p.lib);
+        platform::unload_library(p.lib);
         return refuse(name + " failed while reporting its SDK ABI");
     }
     if (got < 1 || got > HAILSTONE_PLUGIN_ABI) {
-        SDL_UnloadObject(p.lib);
+        platform::unload_library(p.lib);
         return refuse(std::format("{} was built for plugin ABI {}, this client has {}", name, got, HAILSTONE_PLUGIN_ABI));
     }
     p.initialize = symbol<void (*)()>(p.lib, "InitializePlugin");

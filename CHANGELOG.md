@@ -14,6 +14,7 @@
 - Add-ons install faster: the install journal is flushed to the disk once per batch of files instead of once per file, and stays as safe against a power cut
 - Login screen: the Add-ons list is no longer rebuilt every frame (copying the whole store, re-reading the installed list and looking for each tool's program); it follows the add-on manager's changes and refreshes every 3 seconds as before
 - `HAILSTONE_DATA_DIR` naming an EverQuest folder is refused at start, as an install inside one already is: Hailstone never writes into the game folder
+- Windows: DLLs are no longer looked for in the current folder or PATH, for Hailstone itself, its plugins and its upscaler providers; a plugin's or provider's own DLLs are found beside it
 
 ## 0.7.2-beta (2026-11-19)
 
