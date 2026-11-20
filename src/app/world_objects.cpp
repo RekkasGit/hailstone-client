@@ -709,10 +709,12 @@ void WorldObjects::touch_overlap(game::SphereSweep& sweep, std::vector<DoorHit>&
 }
 
 void WorldObjects::pick_actors(std::vector<game::PickActor>& actors, std::vector<PickRef>& refs,
-                               bool include_portal_proxies) const {
+                               bool include_passable_doors) const {
     auto add = [&](const Placed& p, bool is_door, std::uint32_t id) {
         if (!p.model) return;
-        const bool allow_proxy = include_portal_proxies && is_door && game::door_is_portal(p.type);
+        // The DLL's actor pick tests a model's passable triangles too, whatever the switch type (passes 1 and 2,
+        // docs/mechanics.md "The four passes"); here only for a door with no solid triangle (docs/unknowns.md).
+        const bool allow_proxy = include_passable_doors && is_door;
         const auto triangles = p.model->shape.pick_triangles(allow_proxy);
         if (triangles.empty()) return;
         game::PickActor a;

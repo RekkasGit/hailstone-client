@@ -105,8 +105,6 @@ bool is_floor_switch(const Door& door, std::int32_t zone_id);
 // actor is made invisible (PostInit: 0x36, 0x32, 0x39 with a door angle of 1).
 bool door_has_actor(const Door& door);
 bool door_is_invisible(const Door& door);
-// Switch types EQEmu uses for zone destinations.
-constexpr bool door_is_portal(std::uint8_t type) { return type == 57 || type == 58; }
 // Whether the movement sweep and the floor test collide with the door's
 // actor. The sweep's filter (CollisionFilter_Movement @0x4760c0) skips switch
 // types 0x32 and 0x33 and nothing else; neither the DLL's actor loop (only

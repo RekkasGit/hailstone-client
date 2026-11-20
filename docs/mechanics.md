@@ -1215,8 +1215,10 @@ required bit. In a pass:
 
 The client tests the zone mesh (CollisionMesh::for_each_on_segment), each spawn's last drawn pose
 (ActorRenderer::spawn_pose), a spawn drawn as a placeholder box as a sphere, and the doors' and objects' solid
-triangles. For a zone portal with only passable triangles, Hailstone uses those triangles for picking. This lets
-the Plane of Fire orb be clicked while remaining passable. Every pick is logged ("pick (left click) ...").
+triangles. The DLL's actor test also meets an actor's passable triangles (in passes 1 and 2 at least); the client
+gives the pick a door's passable triangles only when its model has no solid one (the Plane of Fire orb in Plane of
+Tranquility), and leaves them out of nameplate occlusion (docs/unknowns.md "Passable door triangles"). Every pick is
+logged ("pick (left click) ...").
 
 #### Left clicks and switches
 

@@ -823,20 +823,21 @@ TEST_CASE("UseSwitch measures a mouse click to the hit point in 3D") {
     CHECK_FALSE(game::door_within_reach(d, player, height, facade_radius, glm::vec3{54.0f, 0.0f, 3.0f}));
 }
 
-TEST_CASE("passable portal triangles are available for picking without collision") {
+TEST_CASE("a passable door model's triangles are available for picking without collision") {
     auto mesh = box_mesh({-1, -1, -1}, {1, 1, 1});
     mesh.materials.front().blend = assets::BlendMode::Additive;
     mesh.parts.front().solid = false;
     const auto shape = game::ObjectShape::from_mesh(mesh, true);
-    CHECK(shape.pick_triangles(game::door_is_portal(58)).size() == 12);
-    CHECK(shape.pick_triangles(game::door_is_portal(0x9c)).empty());
+    CHECK(shape.pick_triangles(true).size() == 12);
+    CHECK(shape.pick_triangles(false).empty());
+    CHECK(game::ObjectShape::from_mesh(mesh).pick_triangles(true).empty());
     CHECK(shape.records.empty());
     CHECK(shape.visual.empty());
     CHECK(shape.empty());
 
     mesh.parts.front().solid = true;
     const auto solid_shape = game::ObjectShape::from_mesh(mesh, true);
-    CHECK(solid_shape.pick_triangles(game::door_is_portal(58)).data() == solid_shape.records.data());
+    CHECK(solid_shape.pick_triangles(true).data() == solid_shape.records.data());
 }
 
 TEST_CASE("Plane of Fire's passable orb has a pick mesh" * doctest::skip(!test::game_dir())) {
@@ -847,7 +848,7 @@ TEST_CASE("Plane of Fire's passable orb has a pick mesh" * doctest::skip(!test::
     REQUIRE(model != zone.objects.end());
     const auto shape = game::ObjectShape::from_mesh(model->second, true);
     CHECK(shape.records.empty());
-    CHECK_FALSE(shape.pick_triangles(game::door_is_portal(58)).empty());
+    CHECK_FALSE(shape.pick_triangles(true).empty());
 }
 
 TEST_CASE("a mesh part that reaches past its index list is read up to the list's end") {
