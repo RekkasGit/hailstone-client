@@ -788,6 +788,28 @@ local function graphicsTab()
       "The overall scene brightness before the tone map, in stops.")
     check("color_grade", "Colour Grade",
       "A subtle grade by the time of day, the weather and the zone's mood (modern lighting).")
+    -- Hailstone's light presets: each sets the sliders below together; Custom once one is moved off them.
+    local tweaks = API.settings.OptionChoices("light_tweaks")
+    if tweaks ~= nil and #tweaks > 0 then
+      combo("light_tweaks", "Light Tweaks", tweaks,
+        "Sets the light sliders below together (modern lighting). Default puts them back to normal; the others are tuned looks. Moving a slider makes it Custom.")
+    end
+    slider("ambient_light", "Ambient Light", 0, 100, pct,
+      "The soft fill light that keeps nights and dungeons readable, and the glow of the haze in the dark (modern lighting). 100% is normal; at 0% only the sun, the moon, torches, lamps and spells light the world, so a moonless night or an unlit corridor is dark.")
+    slider("baked_lamp_light", "Baked Lamp Light", 0, 300, pct,
+      "How strong a zone's lamps are (modern lighting): the glow they leave on the walls at night and indoors, and the light they cast on characters walking past. 100% is normal; lower makes lamp-lit rooms darker; higher lets the lamps light them up to three times as much.")
+    slider("lamp_light_distance", "Lamp Light Distance", 100, 1500, function(v) return string.format("%d units", v) end,
+      "How far from the camera a zone's lamps light characters and objects (modern lighting). The walls are lit everywhere; past this, people walking under a lamp are not. Further is slower in zones with many lamps.")
+    slider("carried_light", "Carried Light", 0, 300, pct,
+      "How bright torches, lanterns and other carried lights are, yours and everyone else's (modern lighting). 100% is normal; 0% turns them off.")
+    slider("carried_light_reach", "Carried Light Reach", 25, 200, pct,
+      "How far carried lights reach, yours and everyone else's (modern lighting). 100% is normal: a torch about 65 units, the brightest lights about 135.")
+    slider("carried_light_stacking", "Carried Light Stacking", 0, 100, pct,
+      "Where several carried lights overlap, how much the others add to the brightest (modern lighting). At 0%, the default, a crowd of torches lights no more than the brightest one; at 100% they all add up.")
+    slider("infravision_strength", "Infravision Strength", 0, 100, pct,
+      "How much infravision brightens the dark. 100% is the original game's; 0% is as without it.")
+    slider("ultravision_strength", "Ultravision Strength", 0, 100, pct,
+      "How much ultravision brightens the dark. 100% is the original game's; 0% is as without it.")
   end)
   section("Camera", function()
     slider("max_camera_distance", "Max Camera Zoom", 10, 150, function(v) return string.format("%d units", v) end,

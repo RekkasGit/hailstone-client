@@ -7,6 +7,15 @@
 - Dropped items and ground spawns whose model has no solid surface can be clicked, as see-through doors such as the Plane of Fire orb already can
 - A key or lockpick on the cursor is no longer offered for dropping when a click in the world misses a door or the door refuses it, as in the original
 - Buying from or selling to a merchant, and buying from a trader, plays the cash register and prints the line in the Merchants chat colour, as in the original
+- **Ambient Light** and **Baked Lamp Light** sliders (Options, Lighting; modern lighting) for darker nights and dungeons
+  - Ambient Light at 0%: only the sun, the moon, torches, lamps and spells light the world, and the distance no longer glows grey in the dark
+  - Baked Lamp Light sets how strong a zone's lamps are, from 0% to 300%: the walls they light and the light they cast on characters walking past
+- **Carried Light** and **Carried Light Reach** sliders (Options, Lighting; modern lighting): how bright torches, lanterns and lightstones are and how far they reach, yours and everyone else's
+  - **Carried Light Stacking** sets how much overlapping carried lights add up: at 0%, the default, a crowd of torches lights no more than the brightest one
+- **Light Tweaks** (Options, Lighting): presets that set all the light sliders at once. **Default** puts them back to normal; **Option 1** is a darker look with brighter lamps
+- Lamps in busy cities and dungeons now light characters across the whole room, not only those near you; **Lamp Light Distance** (Options, Lighting) sets how far
+  - Daytime is unchanged
+- **Infravision Strength** and **Ultravision Strength** sliders (Options, Lighting): 100% is the original game's, 0% is as without it
 - Modern chat: select text in a chat window with the mouse and copy it with Ctrl+C or the right-click menu's **Copy**
   - Drag to select, double-click for a word, triple-click for a line, Shift+click to extend; links still open with a click
 - Modern chat: a word wider than the chat window (a long name or a run with no space) wraps onto the next rows instead of being cut off at the edge

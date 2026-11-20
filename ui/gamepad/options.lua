@@ -47,6 +47,20 @@ local function optionRow(label, name, choices, values)
   end
 end
 
+-- Hailstone's Light Tweaks presets (option_choices "light_tweaks": the presets, then Custom). Custom shows while the
+-- sliders match no preset but is never stepped onto, so left and right always land on a preset.
+local function lightTweaksRow()
+  local v = API.settings.Option("light_tweaks")
+  local choices = API.settings.OptionChoices("light_tweaks")
+  if v == nil or choices == nil or #choices < 2 then return nil end
+  local presets = #choices - 1
+  return { "Light tweaks", choices[v + 1] or "Custom", function(dir)
+    local n
+    if v < presets then n = (v + dir) % presets else n = dir > 0 and 0 or presets - 1 end
+    API.settings.SetOption("light_tweaks", n)
+  end }
+end
+
 -- The Upscaler row's choices: the client's four, then the upscaler add-ons installed (render/temporal.h
 -- upscaler_choice: 4 on).
 local function upscalerChoices()
@@ -302,6 +316,15 @@ local PAGES = {
       optionRow("Grass density", "grass_density", { 25, 300, 25, " %" }),
       optionRow("Tree detail distance", "tree_detail", { 50, 200, 10, " %" }),
       optionRow("Lighting", "lighting", { "Classic (Low)", "Smooth Classic (Medium)", "Modern (High)" }),
+      lightTweaksRow(),
+      optionRow("Ambient light", "ambient_light", { 0, 100, 10, " %" }),
+      optionRow("Baked lamp light", "baked_lamp_light", { 0, 300, 10, " %" }),
+      optionRow("Lamp light distance", "lamp_light_distance", { 100, 1500, 100, " units" }),
+      optionRow("Carried light", "carried_light", { 0, 300, 10, " %" }),
+      optionRow("Carried light reach", "carried_light_reach", { 25, 200, 25, " %" }),
+      optionRow("Carried light stacking", "carried_light_stacking", { 0, 100, 10, " %" }),
+      optionRow("Infravision strength", "infravision_strength", { 0, 100, 10, " %" }),
+      optionRow("Ultravision strength", "ultravision_strength", { 0, 100, 10, " %" }),
       optionRow("Max camera zoom", "max_camera_distance", { 10, 150, 10, " units" }),
       optionRow("Ground floating NPCs", "ground_npcs", "bool"),
       -- the texture pack (display.texture_folder, from the next start): Off, then each folder of textures/

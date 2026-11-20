@@ -341,8 +341,32 @@ void ClientApp::apply_plate_font() {
     ui_.set_plate_font(files.regular, files.bold, static_cast<float>(plate_style_.size), plate_style_.bold);
 }
 
+static_assert(LightTweaks{}.lamp_light_distance == static_cast<int>(render::kLampLightDistance));
+
+LightTweaks ClientApp::light_tweaks() const {
+    return {ambient_light_,       baked_lamp_light_,       lamp_light_distance_,  carried_light_,
+            carried_light_reach_, carried_light_stacking_, infravision_strength_, ultravision_strength_};
+}
+
+void ClientApp::apply_light_tweaks(const LightTweaks& v) {
+    // Through set_display_option, so each is held to its slider's range and saved as the slider saves it.
+    set_display_option("ambient_light", v.ambient_light);
+    set_display_option("baked_lamp_light", v.baked_lamp_light);
+    set_display_option("lamp_light_distance", v.lamp_light_distance);
+    set_display_option("carried_light", v.carried_light);
+    set_display_option("carried_light_reach", v.carried_light_reach);
+    set_display_option("carried_light_stacking", v.carried_light_stacking);
+    set_display_option("infravision_strength", v.infravision_strength);
+    set_display_option("ultravision_strength", v.ultravision_strength);
+}
+
 std::vector<std::string> ClientApp::option_choices(std::string_view name) const {
     std::vector<std::string> out;
+    // Light Tweaks (app/light_tweaks.h): each preset, then Custom (the sliders matching none).
+    if (name == "light_tweaks") {
+        for (const auto& p : kLightTweakPresets) out.emplace_back(p.name);
+        out.emplace_back("Custom");
+    }
     // The texture packs (display.texture_folder): "Off", then each folder of textures/.
     if (name == "texture_pack") {
         out.push_back("Off");
@@ -766,6 +790,22 @@ void ClientApp::apply_settings() {
     grass_density_ = render::grass_density_percent(config_.get_int("display.grass_density", 100));
     horizon_hills_ = config_.get_bool("display.horizon_hills", true);
     volumetric_clouds_ = config_.get_bool("display.volumetric_clouds", true);
+    ambient_light_ = std::clamp(config_.get_int("display.ambient_light", 100), 0, 100);
+    baked_lamp_light_ = std::clamp(config_.get_int("display.baked_lamp_light", 100), 0,
+                                   static_cast<int>(render::kMaxBakedLamps * 100.0f));
+    carried_light_ = std::clamp(config_.get_int("display.carried_light", 100), 0,
+                                static_cast<int>(game::kMaxCarriedLight * 100.0f));
+    carried_light_reach_ = std::clamp(config_.get_int("display.carried_light_reach", 100),
+                                      static_cast<int>(game::kMinCarriedReach * 100.0f),
+                                      static_cast<int>(game::kMaxCarriedReach * 100.0f));
+    carried_light_stacking_ = std::clamp(config_.get_int("display.carried_light_stacking",
+                                                         LightTweaks{}.carried_light_stacking), 0, 100);
+    lamp_light_distance_ = std::clamp(config_.get_int("display.lamp_light_distance",
+                                                      static_cast<int>(render::kLampLightDistance)),
+                                      static_cast<int>(render::kMinLampLightDistance),
+                                      static_cast<int>(render::kMaxLampLightDistance));
+    infravision_strength_ = std::clamp(config_.get_int("display.infravision_strength", 100), 0, 100);
+    ultravision_strength_ = std::clamp(config_.get_int("display.ultravision_strength", 100), 0, 100);
     edge_fog_ = config_.get_bool("display.zone_fog", true);
     tree_detail_ = std::clamp(config_.get_int("display.tree_detail", 100), 50, 200);
     ring_cues_ = config_.get_bool("display.target_ring_cues", true);
