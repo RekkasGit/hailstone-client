@@ -12,6 +12,7 @@
 - Scripts: a script that gives its name-plate table a metatable can no longer crash the game
 - Scripts: `/docommand` and `/squelch` no longer parse their line a second time, so a name holding `${...}` stays text there too
 - Scripts: a script whose `events` permission the server takes away stops getting chat lines at once, including the ones it had queued
+- Scripts and plugins: each now has at most 256 UI functions, 64 options and 32 menu entries, and a script at most 256 packet hooks, 256 binds and 64 windows (an error past them). A menu entry added again with the same label replaces the old one instead of showing twice
 
 ## 0.7.2-beta (2026-11-19)
 

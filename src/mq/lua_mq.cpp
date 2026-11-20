@@ -749,6 +749,10 @@ bool bind_command(Script& s, const char* given, int ref) {
         s.scratch = "mq.bind: " + cmd + " is " + hooks.owner_name(*o) + "'s command";
         return false;
     }
+    if (s.binds.size() >= kMaxBinds && !s.binds.contains(cmd)) {
+        s.scratch = std::format("mq.bind: a script has at most {} binds", kMaxBinds);
+        return false;
+    }
     if (auto it = s.binds.find(cmd); it != s.binds.end()) {
         luaL_unref(s.L, LUA_REGISTRYINDEX, it->second);
         s.binds.erase(it);
@@ -805,15 +809,18 @@ int l_imgui_init(lua_State* L) {
     const char* given = luaL_checkstring(L, 1);
     luaL_checktype(L, 2, LUA_TFUNCTION);
     lua_pushvalue(L, 2);
-    int ref = luaL_ref(L, LUA_REGISTRYINDEX); // before the name's string: it may raise (Lua is built as C)
-    std::string name = given;
+    int ref = luaL_ref(L, LUA_REGISTRYINDEX); // it may raise: no C++ object in this frame (Lua is built as C)
     for (auto& w : s.windows)
-        if (w.first == name) {
+        if (w.first == given) {
             luaL_unref(L, LUA_REGISTRYINDEX, w.second);
             w.second = ref;
             return 0;
         }
-    s.windows.emplace_back(name, ref);
+    if (s.windows.size() >= kMaxWindows) {
+        luaL_unref(L, LUA_REGISTRYINDEX, ref);
+        return luaL_error(L, "mq.imgui.init: a script has at most %d windows", static_cast<int>(kMaxWindows));
+    }
+    s.windows.emplace_back(given, ref);
     return 0;
 }
 

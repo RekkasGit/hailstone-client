@@ -829,8 +829,11 @@ int l_on_packet(lua_State* L) {
     luaL_checktype(L, 4, LUA_TFUNCTION);
     Script& s = Script::of(L);
     if (!s.host->env.hooks) return 0;
+    if (s.packet_hooks >= kMaxPacketHooks)
+        return luaL_error(L, "hailstone.on_packet: a script has at most %d packet hooks", static_cast<int>(kMaxPacketHooks));
     lua_pushvalue(L, 4);
     const int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    ++s.packet_hooks;
     Script* sp = &s;
     s.host->env.hooks->on_packet(s.owner, stream, d == "in" ? plugin::Direction::In : plugin::Direction::Out, opcode,
                                  [sp, ref](net::AppPacket& p) {
@@ -891,11 +894,11 @@ int l_ui_function(lua_State* L) {
     luaL_checktype(L, 2, LUA_TFUNCTION);
     Script& s = Script::of(L);
     if (!s.host->env.ui) return 0;
-    std::string name = given;
     lua_pushvalue(L, 2);
-    const int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    const int ref = luaL_ref(L, LUA_REGISTRYINDEX); // it may raise: no C++ object in this frame (Lua is built as C)
     Script* sp = &s;
-    s.host->env.ui->add_function(s.name, name, [sp, ref](const std::vector<plugin::UiValue>& args) {
+    // The name's std::string and the function are temporaries of this statement, gone before luaL_error below.
+    const bool added = s.host->env.ui->add_function(s.name, given, [sp, ref](const std::vector<plugin::UiValue>& args) {
         if (!usable(*sp) || !(sp->caps & plugin::kCapUi)) return plugin::UiValue{};
         lua_State* l = sp->L;
         // Room for the function and every argument: Lua is built without LUA_USE_APICHECK, so a push past the
@@ -909,8 +912,41 @@ int l_ui_function(lua_State* L) {
         lua_pop(l, 1);
         return r;
     }, plugin::UiBridge::Kind::Script);
+    if (!added) {
+        luaL_unref(L, LUA_REGISTRYINDEX, ref);
+        return luaL_error(L, "hailstone.ui_function: a script has at most %d UI functions",
+                          static_cast<int>(plugin::UiBridge::kMaxFunctions));
+    }
     s.registered = true;
     return 0;
+}
+
+// The option l_option read, given to the UI; false when the script has UiBridge::kMaxOptions others. A function of
+// its own so that the Option (strings, std::function) is gone before l_option can raise.
+bool add_option(Script& s, const char* name, const char* label, int min, int max, int get, int set) {
+    plugin::UiBridge::Option o;
+    o.plugin = s.name;
+    o.kind = plugin::UiBridge::Kind::Script;
+    o.name = name;
+    o.label = label;
+    o.min = min;
+    o.max = max;
+    Script* sp = &s;
+    o.get = [sp, get]() -> int {
+        if (!usable(*sp)) return 0;
+        lua_rawgeti(sp->L, LUA_REGISTRYINDEX, get);
+        if (!call_script(*sp, 0, 1)) return 0;
+        int v = lua_isboolean(sp->L, -1) ? (lua_toboolean(sp->L, -1) ? 1 : 0) : static_cast<int>(lua_tointeger(sp->L, -1));
+        lua_pop(sp->L, 1);
+        return v;
+    };
+    o.set = [sp, set](int v) {
+        if (!usable(*sp)) return;
+        lua_rawgeti(sp->L, LUA_REGISTRYINDEX, set);
+        lua_pushinteger(sp->L, v);
+        call_script(*sp, 1, 0);
+    };
+    return s.host->env.ui->add_option(std::move(o));
 }
 
 // hailstone.option{name =, label =, min = 0, max = 1, get = function() return v end, set = function(v) end}
@@ -936,42 +972,29 @@ int l_option(lua_State* L) {
     luaL_checktype(L, -1, LUA_TFUNCTION);
     const int set = luaL_ref(L, LUA_REGISTRYINDEX);
     const int get = luaL_ref(L, LUA_REGISTRYINDEX);
-    plugin::UiBridge::Option o;
-    o.plugin = s.name;
-    o.kind = plugin::UiBridge::Kind::Script;
-    o.name = name;
-    o.label = label;
-    o.min = min;
-    o.max = max;
+    const bool added = add_option(s, name, label, min, max, get, set);
     lua_pop(L, 4); // name, label, min, max: the strings are copied
-    Script* sp = &s;
-    o.get = [sp, get]() -> int {
-        if (!usable(*sp)) return 0;
-        lua_rawgeti(sp->L, LUA_REGISTRYINDEX, get);
-        if (!call_script(*sp, 0, 1)) return 0;
-        int v = lua_isboolean(sp->L, -1) ? (lua_toboolean(sp->L, -1) ? 1 : 0) : static_cast<int>(lua_tointeger(sp->L, -1));
-        lua_pop(sp->L, 1);
-        return v;
-    };
-    o.set = [sp, set](int v) {
-        if (!usable(*sp)) return;
-        lua_rawgeti(sp->L, LUA_REGISTRYINDEX, set);
-        lua_pushinteger(sp->L, v);
-        call_script(*sp, 1, 0);
-    };
-    s.host->env.ui->add_option(std::move(o));
+    if (!added) {
+        luaL_unref(L, LUA_REGISTRYINDEX, get);
+        luaL_unref(L, LUA_REGISTRYINDEX, set);
+        return luaL_error(L, "hailstone.option: a script has at most %d options",
+                          static_cast<int>(plugin::UiBridge::kMaxOptions));
+    }
     s.registered = true;
     return 0;
 }
 
-// hailstone.menu(label, command)
+// hailstone.menu(label, command): the same label again changes that entry's command.
 int l_menu(lua_State* L) {
     need_cap(L, plugin::kCapUi, "hailstone.menu");
     no_social(L, "hailstone.menu");
     Script& s = Script::of(L);
     const char* label = luaL_checkstring(L, 1);
     const char* command = luaL_checkstring(L, 2);
-    if (s.host->env.ui) s.host->env.ui->add_menu({s.name, label, command, plugin::UiBridge::Kind::Script});
+    // The entry's strings are temporaries of the condition, gone before luaL_error.
+    if (s.host->env.ui && !s.host->env.ui->add_menu({s.name, label, command, plugin::UiBridge::Kind::Script}))
+        return luaL_error(L, "hailstone.menu: a script has at most %d menu entries",
+                          static_cast<int>(plugin::UiBridge::kMaxMenuEntries));
     s.registered = true;
     return 0;
 }

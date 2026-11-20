@@ -1138,13 +1138,12 @@ int h_add_ui_function(void* h, const char* name, HailstoneUiFn fn, void* user) {
     Loaded& l = Loaded::of(h);
     if (!name || !*name || !fn || !l.host->env.ui || !may_ui(l, "add_ui_function")) return 0;
     Loaded* lp = &l;
-    l.host->env.ui->add_function(l.name, name, [lp, fn, user](const std::vector<UiValue>& args) {
+    return l.host->env.ui->add_function(l.name, name, [lp, fn, user](const std::vector<UiValue>& args) {
         HailstoneArgs a{&args};
         HailstoneOut out;
         const int ok = guarded(*lp, "a UI function", [&] { return fn(user, &a, &out); });
         return ok && out.has_root ? std::move(out.root) : UiValue{};
-    });
-    return 1;
+    }) ? 1 : 0;
 }
 
 void h_remove_ui_function(void* h, const char* name) {
@@ -1225,15 +1224,13 @@ int h_add_option(void* h, const char* name, const char* label, int min, int max,
     o.max = std::max(min, max);
     o.get = [lp, get, user] { return guarded(*lp, "an option", [&] { return get(user); }); };
     o.set = [lp, set, user](int v) { guarded(*lp, "an option", [&] { set(user, v); }); };
-    l.host->env.ui->add_option(std::move(o));
-    return 1;
+    return l.host->env.ui->add_option(std::move(o)) ? 1 : 0;
 }
 
 int h_add_menu(void* h, const char* label, const char* command) {
     Loaded& l = Loaded::of(h);
     if (!label || !*label || !command || !*command || !l.host->env.ui || !may_ui(l, "add_menu")) return 0;
-    l.host->env.ui->add_menu({l.name, label, command});
-    return 1;
+    return l.host->env.ui->add_menu({l.name, label, command}) ? 1 : 0;
 }
 
 // The plugin's folder: plugins/<name>/ when its binary is there, else plugins/<name>/ beside the binary.
