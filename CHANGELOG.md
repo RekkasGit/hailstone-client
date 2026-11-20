@@ -9,6 +9,8 @@
 - Modern chat: select text in a chat window with the mouse and copy it with Ctrl+C or the right-click menu's **Copy**
   - Drag to select, double-click for a word, triple-click for a line, Shift+click to extend; links still open with a click
 - Modern chat: a word wider than the chat window (a long name or a run with no space) wraps onto the next rows instead of being cut off at the edge
+- Item descriptions show personal and guild tribute values. Both Tribute Master layouts preview the favor for the held item or stack before you donate.
+- The direct Give prompt no longer appears for service NPCs that refuse item handoffs, including tribute masters.
 - Your own name is in parentheses while you are hidden, as in the original client (it was plain). Sneak alone adds none
 - The sample `hailstone.cfg` now includes the Ability Book's autoskill switch, and the server guide shows how to disable autoskill and Lua socials
 - Loot All takes NO DROP items from your own corpse without confirmation after a same-zone resurrection
