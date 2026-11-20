@@ -27,23 +27,41 @@ T = { now = 1000, finds = 0, stats = 0, gets = 0, opens = {}, open_now = 0, open
       sleeps = 0, mkdirs = 0 }
 os.time = function() return T.now end
 
+-- A packet's bytes: what the Write* calls put there, 0 elsewhere. A fixed-length string (a file piece) is kept whole
+-- and read a byte at a time only when asked, and the methods are shared: building every piece byte by byte, and 15
+-- closures per packet, made the rate-limit cases take 5 to 18 s.
+local Bytes = {}
+Bytes.__index = function(b, i)
+  local segs = rawget(b, "_segs")
+  for k = #segs, 1, -1 do
+    local seg = segs[k]
+    if i >= seg.o and i < seg.o + seg.n then return seg.s:byte(i - seg.o + 1) or 0 end
+  end
+  return 0
+end
+local P = {}
+P.__index = P
+local function put(p, off, v, n) v = math.floor(v) % (256 ^ n); for i = 0, n - 1 do p.b[off + i] = math.floor(v / 256 ^ i) % 256 end end
+local function get(p, off, n) local v = 0; for i = n - 1, 0, -1 do v = v * 256 + p.b[off + i] end; return v end
+function P:WriteInt32(o, v) put(self, o, v, 4) end
+function P:WriteInt16(o, v) put(self, o, v, 2) end
+function P:WriteInt8(o, v) put(self, o, v, 1) end
+function P:WriteString(o, s) for i = 1, #s do self.b[o + i - 1] = s:byte(i) end; self.b[o + #s] = 0 end
+function P:WriteFixedLengthString(o, s, n)
+  -- Bytes written before, inside the string's span, give way to it.
+  for k in pairs(self.b) do if type(k) == "number" and k >= o and k < o + n then rawset(self.b, k, nil) end end
+  local segs = rawget(self.b, "_segs")
+  segs[#segs + 1] = { o = o, n = n, s = s }
+end
+function P:ReadInt32(o) return get(self, o, 4) end
+function P:ReadInt16(o) return get(self, o, 2) end
+function P:ReadInt8(o) return get(self, o, 1) end
+function P:ReadString(o) local t = {}; while self.b[o] ~= 0 do t[#t + 1] = string.char(self.b[o]); o = o + 1 end; return table.concat(t) end
+function P:GetSize() return self.size end
+function P:GetProtocolOpcode() return self.op end
+
 local function bytes_packet(op, size)
-  local p = { op = op, size = size, b = {} }
-  for i = 0, size - 1 do p.b[i] = 0 end
-  local function put(off, v, n) v = math.floor(v) % (256 ^ n); for i = 0, n - 1 do p.b[off + i] = math.floor(v / 256 ^ i) % 256 end end
-  local function get(off, n) local v = 0; for i = n - 1, 0, -1 do v = v * 256 + (p.b[off + i] or 0) end; return v end
-  function p:WriteInt32(o, v) put(o, v, 4) end
-  function p:WriteInt16(o, v) put(o, v, 2) end
-  function p:WriteInt8(o, v) put(o, v, 1) end
-  function p:WriteString(o, s) for i = 1, #s do p.b[o + i - 1] = s:byte(i) end; p.b[o + #s] = 0 end
-  function p:WriteFixedLengthString(o, s, n) for i = 1, n do p.b[o + i - 1] = s:byte(i) or 0 end end
-  function p:ReadInt32(o) return get(o, 4) end
-  function p:ReadInt16(o) return get(o, 2) end
-  function p:ReadInt8(o) return get(o, 1) end
-  function p:ReadString(o) local t = {}; while (p.b[o] or 0) ~= 0 do t[#t + 1] = string.char(p.b[o]); o = o + 1 end; return table.concat(t) end
-  function p:GetSize() return p.size end
-  function p:GetProtocolOpcode() return p.op end
-  return p
+  return setmetatable({ op = op, size = size, b = setmetatable({ _segs = {} }, Bytes) }, P)
 end
 Packet = function(op, size) return bytes_packet(op, size) end
 

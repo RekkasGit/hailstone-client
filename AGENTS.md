@@ -72,7 +72,7 @@ Read before you change anything, in this order:
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build
-build/hailstone_tests                   # or: ctest --test-dir build --output-on-failure
+build/hailstone_tests                   # or, in 8 parts at once: ctest --test-dir build -j 8 --output-on-failure
 build/hailstone/hailstone          # the client; the dev tree is build/hailstone/
 ```
 

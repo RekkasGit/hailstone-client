@@ -34,7 +34,7 @@ the workflow's history). Before a merge to `main`:
 | Platform | How | When |
 |---|---|---|
 | Linux | `cmake --build build && build/hailstone_tests` (AGENTS.md "Build and test"), with `EQ_GAME_DIR` set when the change touches assets | every merge |
-| macOS arm64 | the macOS workflow (below): Apple Clang, `hailstone_tests` on GitHub's Apple Silicon runner | a change to `src/platform/`, the build files, or anything Apple Clang may treat differently; every release |
+| macOS arm64 | the macOS workflow (below): Apple Clang, `hailstone_tests` on GitHub's Apple Silicon runner | on hold until someone can test and maintain macOS (docs/plan.md, 0.9): not part of a release or a merge for now; run it by hand for a change to `src/platform/` or the build files when convenient |
 | Windows | MSVC, CI's old compiler, under Wine: `tools/docker/msvc_build.sh`, then `wine build-msvc/hailstone_tests.exe` ("MSVC under Wine" below) | a change to `src/platform/`, the build files, the Lua bridge (`app/lua_ui*`) or anything a compiler may treat differently; every release |
 
 Releases are built the same way (docs/updater.md "Making a release"):
@@ -56,8 +56,19 @@ the code building with Clang and Apple Clang (AGENTS.md's portability rules).
 - Several `hailstone_tests` run at once on a shared machine, so a test writes files in `tests/scratch_dir.h`'s
   `ScratchDir` (or `unique_temp_path`), never a fixed name under the temp folder: one run's `remove_all` would empty
   another's folders mid-test.
-- With `EQ_GAME_DIR` unset or empty, the tests that need an installed RoF2 game return early and pass without
-  checking anything (`tests/game_files.h`, `hailstone::test::game_dir()`). Run them with it set.
+- With `EQ_GAME_DIR` unset or empty, the tests that need an installed RoF2 game are skipped where they are marked
+  `doctest::skip`, and elsewhere return early and pass without checking anything (`tests/game_files.h`,
+  `hailstone::test::game_dir()`). Run them with it set.
+- `ctest --test-dir build -j <n>` runs `hailstone_tests` as 8 parts at once (`HAILSTONE_TEST_SHARDS`, a CMake
+  setting; 1 registers the single test it was before). Each part is the same executable with
+  `HAILSTONE_TEST_SHARD=<k>/<n>` set: it shuffles doctest's list with a fixed seed, so the slow UI pack cases spread
+  over the parts, and runs its range (`tests/test_shard.h`). A part's cases run in another order than a plain
+  `build/hailstone_tests`, which runs everything in one process in file order. The slowest case takes about 30 s,
+  so more parts than cores gains little.
+- The log's lines stay off the console during a run (`log::set_console`, `tests/test_main.cpp`): a run writes
+  thousands of expected warnings (stand-in game folders without `racedata.txt` or `spells_us.txt`, scripts refused
+  on purpose), which buried a real one. `HAILSTONE_TEST_LOG` set puts them back. The crash report's recent lines and
+  a log file a test opens get every line either way.
 - With `HAILSTONE_TEST_TRACE` set, each case's name goes to stderr as it starts (`tests/test_main.cpp`), so the last
   `[test]` line names a case that crashed the process before doctest's report.
 - The browser test against the real CEF helper runs when the build has it (`HAILSTONE_BROWSER`). On Linux without
@@ -204,14 +215,18 @@ tools/docker/build.sh all            # the three; --no-test after the platform s
   - With none there, `MSVC_ACCEPT_LICENSE=1` accepts Microsoft's license and downloads one into `MSVC_DIR`
     (`tools/docker/msvc_setup.sh`, msvc-wine pinned to a commit). Without it the script stops.
   - Wine's home is `.docker/wine-home`, one per checkout.
-- The Windows tests run under Wine with Microsoft's runtime DLLs copied beside them. They leave out four cases that
+- The Windows tests run under Wine with Microsoft's runtime DLLs copied beside them. They leave out the cases that
   fail only under Wine:
   - the browser tests (Chromium does not run under Wine);
   - "cancelled ends a transfer stalled waiting for the answer" (above);
   - "allow_url refuses an empty..." (Wine's WinHTTP reports another address to the check);
-  - "File time" (MSVC's time zones need Windows' `icu.dll`).
+  - "File time" and "Story window: a page's href links..." (MSVC's `clock_cast` from a file time needs Windows'
+    `icu.dll`, which every Windows the client supports has).
 
   Run them on Windows by hand when a change touches the browser, `web/` or file times, and for a release.
+- Under Wine, `create_symlink` reports success but makes something `is_symlink` does not take for a link, so the
+  tests of links that escape a folder (shared files, UI packs, UI data) skip their link checks there, as they do on
+  a Windows that cannot make links (no Developer Mode). Only a run on Windows with links allowed checks them.
 - The script does not register QEMU for linux-arm64, since that changes the host's kernel settings. It prints the
   pinned `tonistiigi/binfmt` command to run once per boot.
 - macOS is not built here: Apple's compiler and SDK run only on a Mac ("macOS arm64" below).
@@ -222,6 +237,9 @@ Not in CI. By hand: configure the tree with Clang (no build needed) and run
 `run-clang-tidy -p build -quiet -header-filter='.*/src/.*' '.*/src/.*\.cpp$'` with the root `.clang-tidy`.
 
 ## macOS arm64
+
+On hold until someone can test and maintain macOS (docs/plan.md, 0.9): a release does not wait for it, and no macOS
+build comes with one. The workflow is kept, so it can be started as below.
 
 `.github/workflows/macos.yml` runs on GitHub's `macos-15` runner (Apple Silicon, Apple Clang):
 
