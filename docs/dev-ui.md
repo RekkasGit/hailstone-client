@@ -292,7 +292,7 @@ Each entry names the window and what is particular to it; the `hs.*` calls behin
   - Timestamps (`chat.timestamps`) put each line's local arrival time first, `[hh:mm:ss]`.
   - Each window and tab keeps its own last 1000 lines (Hailstone's limit).
   - A tell window flashes once when another player's tell comes in (`hs.ChatWindows`' `tellsIn`).
-  - A window reads only the lines since its version (`hs.ChatText(slot, version, names, stamps, true)`), and everything again (`reset`) when its lines changed otherwise. Line wrap and height are cached until the width or font change.
+  - A window reads only the lines since its version (`hs.ChatText(slot, version, names, stamps, true)`), and everything again (`reset`) when its lines changed otherwise. Line wrap and height are cached until the width or font change. A word wider than the output (a long name or a run with no space) is broken where the row ends, at a character's start, as ImGui's own wrapped text breaks it.
 
 - **InventoryWindow**: the worn grid, numbers by EQType, carried slots, coins. Testing: `test.inv.page=character|stats|bandolier|currency`.
   - An item or coin dropped between the worn slots goes to `IW_CharacterView`: CInventoryWnd::HandleLButtonUp's auto-equip (eqstr 5290 when it stays), or the coin back to the purse.

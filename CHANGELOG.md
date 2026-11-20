@@ -5,6 +5,7 @@
 - Buying from or selling to a merchant, and buying from a trader, plays the cash register and prints the line in the Merchants chat colour, as in the original
 - Modern chat: select text in a chat window with the mouse and copy it with Ctrl+C or the right-click menu's **Copy**
   - Drag to select, double-click for a word, triple-click for a line, Shift+click to extend; links still open with a click
+- Modern chat: a word wider than the chat window (a long name or a run with no space) wraps onto the next rows instead of being cut off at the edge
 - Your own name is in parentheses while you are hidden, as in the original client (it was plain). Sneak alone adds none
 - The sample `hailstone.cfg` now includes the Ability Book's autoskill switch, and the server guide shows how to disable autoskill and Lua socials
 - Loot All takes NO DROP items from your own corpse without confirmation after a same-zone resurrection

@@ -86,7 +86,26 @@ end
 -- A line of several pieces word-wrapped to width, the way stml.DrawLine draws it: into `out`, six entries a piece
 -- (the text, its colour, its link, whether it starts a row, its byte offset in the line's text, its width). A row is started
 -- by the wrap (true) or by a new line in the text ("hard"): a chat line can hold several (a server's MOTD). An empty
--- line is an empty piece, a row of its own; a new line at the end adds nothing.
+-- line is an empty piece, a row of its own; a new line at the end adds nothing. A word wider than a whole row (a long
+-- name or a run with no space) is broken where the row ends, at a character's start, as ImGui's TextWrapped breaks it.
+
+-- How many bytes of `word` fit in `room` pixels, ending at a UTF-8 character's end; at least its first character.
+local function fit(word, room)
+  local ends, i, n = {}, 1, #word
+  while i <= n do
+    local b = word:byte(i)
+    local len = (b >= 0xF0 and 4) or (b >= 0xE0 and 3) or (b >= 0xC0 and 2) or 1
+    i = math.min(i + len, n + 1)
+    ends[#ends + 1] = i - 1
+  end
+  local lo, hi = 1, #ends
+  while lo < hi do
+    local mid = (lo + hi + 1) // 2
+    if ui.CalcTextSize(word:sub(1, ends[mid])) <= room then lo = mid else hi = mid - 1 end
+  end
+  return ends[lo]
+end
+
 local function wrap(segments, width, out)
   local n, x, first, broken, base = 0, 0, true, false, 0
   local function put(piece, seg, row, off, w)
@@ -101,10 +120,20 @@ local function wrap(segments, width, out)
       for at, word, space in text:sub(from, (nl or #text + 1) - 1):gmatch("()([^ ]*)( *)") do
         if word ~= "" or space ~= "" then
           local row = broken
-          if not first and not row and x + ui.CalcTextSize(word) > width and x > 0 then row = true end -- wrap: next row
+          local ww = ui.CalcTextSize(word)
+          if not first and not row and x + ww > width and x > 0 then row = true end -- wrap: next row
           if row then x = 0 end
+          local off, starts = base + from + at - 2, row and not first and (broken and "hard" or true)
+          while ww > width do -- (too wide for any row: a row's worth at a time, each next piece on a row of its own)
+            local k = fit(word, width)
+            if k >= #word then break end
+            local piece = word:sub(1, k)
+            put(piece, seg, starts, off, ui.CalcTextSize(piece))
+            word, off, starts, x = word:sub(k + 1), off + k, true, 0
+            ww = ui.CalcTextSize(word)
+          end
           local w = ui.CalcTextSize(word .. space)
-          put(word .. space, seg, row and not first and (broken and "hard" or true), base + from + at - 2, w)
+          put(word .. space, seg, starts, off, w)
           x = x + w
           broken = false
         end
