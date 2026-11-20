@@ -371,12 +371,19 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - the tether camera's eye drops to bone 0 while sitting, or for the actor animations 0x21 / 0x24 (+0x10c0); not modelled;
   - the camera sweep's filter (0x476410) for actor types 9 and 1 is not resolved: spawns are left out of the sweep.
 - **Placed objects** are triangles of the zone mesh, not separate actors, so actor-only filters do not apply to them.
-- **Passable door triangles in the mouse pick.**
-  - Unknown: whether the DLL tests an actor's static collision mesh (0x100bebb0, no flag test, every pass) or its
-    per-part mesh (0x100c66e0, passable triangles skipped in passes 3 and 4 unless bit 2), and which triangles each holds.
-  - Now: a door whose model has no solid triangle is picked by its passable triangles in every pass; other doors' and
-    ground objects' passable parts are not picked.
-  - Settle: tracing which path an S3D door model takes, or clicking through a door's passable part in the original.
+- **Passable triangles in the mouse pick.**
+  - Settled: the DLL's per-actor test (`CActorData::FindIntersectionLineSegment` 0x10046780) does not know what the
+    actor is; eqgame's LMouseUp (0x5384d0) maps the actor `GetClickedActor` (0x48b6b0) returned to a ground item
+    (`FUN_004dbba0`), a placed item or a switch only afterwards. A ground item's passable triangles therefore meet
+    the same test as a door's.
+  - Unknown: whether that test takes an actor's static collision mesh (0x100bebb0, no flag test, every pass) or its
+    per-part mesh (0x100c66e0, passable triangles skipped in passes 3 and 4 unless bit 2), and which triangles each
+    holds, for door and ground item models alike; so too what happens to the passable parts of a model that also has
+    solid ones.
+  - Now: a door or ground object whose model has no solid triangle is picked by its passable triangles in every
+    pass; passable parts of models with solid ones, and every placed real estate object's, are not picked.
+  - Settle: tracing which path an S3D or EQG actor model takes (vf4c / vf54 in 0x10046780), or clicking through a
+    passable part in the original.
 - **Touching switches.**
   - The hit callback runs for each door hit in the doors' order, not the DLL's quad tree order.
   - A switch moving into a player who stands still does nothing until the player moves (as the original's

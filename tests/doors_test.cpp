@@ -8,6 +8,7 @@
 #include <tuple>
 #include <vector>
 
+#include "app/world_objects.h"
 #include "assets/eqg_character.h"
 #include "assets/model.h"
 #include "assets/pfs.h"
@@ -838,6 +839,27 @@ TEST_CASE("a passable door model's triangles are available for picking without c
     mesh.parts.front().solid = true;
     const auto solid_shape = game::ObjectShape::from_mesh(mesh, true);
     CHECK(solid_shape.pick_triangles(true).data() == solid_shape.records.data());
+}
+
+TEST_CASE("a ground object made only of passable triangles is picked by them, a placed object is not") {
+    using Source = app::WorldObjects::PickSource;
+    CHECK(app::WorldObjects::picks_passable(Source::Door));
+    CHECK(app::WorldObjects::picks_passable(Source::GroundObject));
+    CHECK_FALSE(app::WorldObjects::picks_passable(Source::Placed));
+
+    // A dropped item's model drawn masked with every part passable: pickable, yet no collision triangle. The
+    // nameplate occlusion asks for the pick without passable triangles (pick_triangles(false)), so it meets none.
+    auto mesh = box_mesh({-0.5f, -0.5f, 0.0f}, {0.5f, 0.5f, 0.2f});
+    mesh.materials.front().blend = assets::BlendMode::Masked;
+    mesh.parts.front().solid = false;
+    const auto shape = game::ObjectShape::from_mesh(mesh, true);
+    const auto picked = shape.pick_triangles(app::WorldObjects::picks_passable(Source::GroundObject));
+    REQUIRE(picked.size() == 12);
+    for (const auto& t : picked) CHECK((t.flags & game::kTrianglePassable) != 0);
+    CHECK(shape.pick_triangles(app::WorldObjects::picks_passable(Source::Placed)).empty());
+    CHECK(shape.pick_triangles(false).empty());
+    CHECK(shape.records.empty());
+    CHECK(shape.tris.empty());
 }
 
 TEST_CASE("Plane of Fire's passable orb has a pick mesh" * doctest::skip(!test::game_dir())) {

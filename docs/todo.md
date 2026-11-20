@@ -766,6 +766,8 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
   - `/who`; camping to character select and back.
   - Logging in to another server with the plugin still loaded (the names must go).
   - Open: the stock-layout windows' own class labels (the XML's "WAR" check box labels in the group search and looking-for-guild windows) keep the stock names.
+- [ ] **Ground objects made only of passable triangles are clicked by them** (as the Plane of Fire orb door is).
+  Unit-tested only; open: a live dropped item or ground spawn whose model has no solid triangle.
 - [ ] OP_Weblink from a quest's `SendWebLink`, `/url` from a script, and the browser window (`/web`), in a live session (unit and window tests only).
 
 - [ ] **Idle appearances freed during a zone** (render/look_eviction.h, five minutes unworn). The rule is unit-tested; the renderer side was only built.

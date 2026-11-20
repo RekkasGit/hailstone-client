@@ -1224,10 +1224,12 @@ required bit. In a pass:
 
 The client tests the zone mesh (CollisionMesh::for_each_on_segment), each spawn's last drawn pose
 (ActorRenderer::spawn_pose), a spawn drawn as a placeholder box as a sphere, and the doors' and objects' solid
-triangles. The DLL's actor test also meets an actor's passable triangles (in passes 1 and 2 at least); the client
-gives the pick a door's passable triangles only when its model has no solid one (the Plane of Fire orb in Plane of
-Tranquility), and leaves them out of nameplate occlusion (docs/unknowns.md "Passable door triangles"). Every pick is
-logged ("pick (left click) ...").
+triangles. The DLL's actor test also meets an actor's passable triangles (in passes 1 and 2 at least); it is the same
+test for every actor (0x10046780), and LMouseUp only asks afterwards whether the actor it got is a ground item, a placed
+item or a switch. The client gives the pick a door's or ground object's (dropped item, ground spawn) passable triangles
+only when its model has no solid one (the Plane of Fire orb in Plane of Tranquility), keeps them out of movement and
+leaves them out of nameplate occlusion (docs/unknowns.md "Passable triangles in the mouse pick"). A placed real estate
+object never gets them. Every pick is logged ("pick (left click) ...").
 
 #### Left clicks and switches
 
