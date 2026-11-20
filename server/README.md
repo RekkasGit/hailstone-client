@@ -99,6 +99,15 @@ setting says. Adding or changing files needs no restart: players who zone in get
 once after `#reloadquest`, which hashes the folder again. The first start after adding a large folder takes a few
 seconds per gigabyte in that zone.
 
+One zone hashes at a time. A zone with files to hash first makes the folder `client_files/.hailstone-lock` (with
+its start time and name in `owner`); another zone that finds it there waits, a second at a time, then takes the
+hashes the first one wrote to the cache and hashes only what is still missing, so a server starting all its zones
+at once hashes a new folder once instead of in every zone side by side. A zone that already has a list keeps it
+while another hashes, rather than wait in the middle of a player's request. A lock older than 15 minutes, or one
+with no owner after 10 seconds, is a zone's that stopped: it is removed with a line in the log. After waiting five
+minutes a zone hashes anyway, as every zone did before. If the folder ever needs it, deleting
+`.hailstone-lock` by hand is safe.
+
 A file changed in place within those five minutes is not sent with its old hash: the first time any player asks
 for a file's first piece, the zone looks at its size and modification time (one `find` for that file; on Windows the
 size only, as a PowerShell start per file would be too slow), and at every piece at the size of the file it has
