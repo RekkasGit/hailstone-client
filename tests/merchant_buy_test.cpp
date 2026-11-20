@@ -19,7 +19,7 @@ TEST_CASE("merchant_buy: a price times quantity past 2^31 copper is not taken as
     auto& world = c.world_for_test();
     game::Spawn m = *world.player();
     m.id = 5001;
-    m.name = "Bob";
+    m.name = "Merchant00";
     m.class_id = 41;
     m.is_npc = true;
     world.spawns[m.id] = m;
@@ -116,7 +116,7 @@ TEST_CASE("merchant buy and sell: the cash register plays and the line is the Me
     CHECK(line->color == 276u);
     CHECK(c.take_sound_cues().empty());
 
-    // A sale: 25 copper is credited, 1361 names the amount and the item, then the wave.
+    // A sale: 25 copper is credited, 1361 names the amount and the item, one wave.
     net::Item sword;
     sword.id = 1300;
     sword.name = "Rusty Sword";
@@ -140,4 +140,64 @@ TEST_CASE("merchant buy and sell: the cash register plays and the line is the Me
     REQUIRE(cues.size() == 1);
     CHECK(cues[0].kind == net::SoundCue::Kind::Wave);
     CHECK(cues[0].spell == 0x8a);
+
+    // A refusal: 1364 in the refusal colour, no wave, and the empty purse stays empty.
+    A::coins(c) = net::Coins{};
+    while (c.poll_chat()) {}
+    c.take_sound_cues();
+    net::MerchantSell refused;
+    refused.npc_id = m.id;
+    refused.slot = -1;
+    c.receive_zone_packet_for_test(net::encode(refused));
+    line = c.poll_chat();
+    REQUIRE(line);
+    CHECK(line->text == "Bob tells you, 'I am not interested.'");
+    CHECK(line->color == 275u);
+    CHECK(c.take_sound_cues().empty());
+    CHECK(A::coins(c).platinum == 0u);
+    CHECK(A::coins(c).gold == 0u);
+    CHECK(A::coins(c).silver == 0u);
+    CHECK(A::coins(c).copper == 0u);
+
+    // A trader purchase (OP_TraderShop action 10, method 0) goes through the same FinishBuyingItem.
+    net::TraderBuy t;
+    t.action = net::kTraderBuyItem;
+    t.method = 0;
+    t.sub_action = 0;
+    t.trader_id = m.id;
+    t.seller_name = "Trader Sam";
+    t.item_name = "Rusty Sword";
+    t.item_id = 1300;
+    t.price = 100;
+    t.quantity = 1;
+    A::coins(c) = net::Coins{0, 0, 0, 500};
+    while (c.poll_chat()) {}
+    c.take_sound_cues();
+    c.receive_zone_packet_for_test(net::encode(t));
+    line = c.poll_chat();
+    REQUIRE(line);
+    CHECK(line->text == "You give 1 gold to Bob.");
+    CHECK(line->color == 276u);
+    CHECK(A::coins(c).platinum == 0u);
+    CHECK(A::coins(c).gold == 0u);
+    CHECK(A::coins(c).silver == 0u);
+    CHECK(A::coins(c).copper == 400u);
+    cues = c.take_sound_cues();
+    REQUIRE(cues.size() == 1);
+    CHECK(cues[0].kind == net::SoundCue::Kind::Wave);
+    CHECK(cues[0].spell == 0x8a);
+    while (c.poll_chat()) {} // the "You successfully purchased ..." line of the same reply
+
+    // The same purchase with an empty purse: the line still comes, the sound does not.
+    A::coins(c) = net::Coins{};
+    c.receive_zone_packet_for_test(net::encode(t));
+    line = c.poll_chat();
+    REQUIRE(line);
+    CHECK(line->color == 276u);
+    CHECK(c.take_sound_cues().empty());
+    CHECK(A::coins(c).platinum == 0u);
+    CHECK(A::coins(c).gold == 0u);
+    CHECK(A::coins(c).silver == 0u);
+    CHECK(A::coins(c).copper == 0u);
+    while (c.poll_chat()) {} // the "You successfully purchased ..." line of the same reply
 }

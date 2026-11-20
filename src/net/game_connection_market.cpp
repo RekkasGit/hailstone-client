@@ -28,9 +28,11 @@ namespace hailstone::net {
 
 namespace {
 
-// EqSoundManager::WavePlay(0x8a): BuyItem.wav, the cash register of a completed sale (the barter reports,
-// FinishBuyingItem @0x6ef220 for a trader's sale and FinishSellingItem @0x6f4200).
+// EqSoundManager::WavePlay(0x8a): BuyItem.wav, the cash register of a completed sale (Barter_ReportItemSold
+// @0x421230, Barter_ReportItemBought @0x421ae0; FinishBuyingItem @0x6ef220 for a merchant or a trader's purchase).
 constexpr std::uint32_t kCashRegisterSound = 0x8a;
+// The colour the original gives a merchant's line: 0x114 (276, the Merchants chat filter).
+constexpr std::uint32_t kMerchantsColour = 0x114;
 constexpr float kInteractRange = 20.0f; // PlayerClient_IsWithinInteractRange(.., 1, 20.0f)
 
 std::string eq(const game::EqStrings& s, std::uint32_t id, std::vector<std::string> args = {}) {
@@ -387,18 +389,17 @@ void GameConnection::handle_trader_purchase(const TraderBuy& in) {
     if (b.method == 0) {
         if (merchant_ && merchant_->pending > 0) --merchant_->pending;
         if (b.sub_action == 0) {
-            // CMerchantWnd::FinishBuyingItem: the price leaves the purse (1437).
+            // CMerchantWnd::FinishBuyingItem: the price leaves the purse, the wave, then the line (1437).
             std::int64_t total = static_cast<std::int64_t>(b.price) * b.quantity;
-            // A failed TakeMoney stays silent, as FinishBuyingItem's (all coin zeroed instead).
             const bool paid = game::take_money(coins_, total);
-            if (!paid) coins_ = {};
-            system(1437, {game::money_words(total), merchant_ ? merchant_->name : b.seller_name}, 276); // Merchants
+            if (!paid) coins_ = {}; // a failed TakeMoney zeroes the coin and stays silent, as the original's does
             if (paid) {
                 SoundCue c;
                 c.kind = SoundCue::Kind::Wave;
                 c.spell = kCashRegisterSound;
                 sound_cues_.push_back(c);
             }
+            system(1437, {game::money_words(total), merchant_ ? merchant_->name : b.seller_name}, kMerchantsColour);
         }
     } else {
         --search_pending_;
@@ -408,7 +409,7 @@ void GameConnection::handle_trader_purchase(const TraderBuy& in) {
             std::string money = game::money_words(total);
             if (std::uint16_t vouchers = static_cast<std::uint16_t>(b.unknown276); vouchers != 0)
                 money += std::format(" and {} vouchers", vouchers);
-            system(787, {money, b.seller_name}, 276); // You send%1 to %2.
+            system(787, {money, b.seller_name}, kMerchantsColour); // You send%1 to %2.
         }
     }
     if (b.sub_action == 2) return;

@@ -608,7 +608,7 @@ void GameConnection::handle_commerce(Op op, const AppPacket& p) {
             } else {
                 SoundCue cue;
                 cue.kind = SoundCue::Kind::Wave;
-                cue.spell = kMerchantSound; // the original's only, so a failed TakeMoney stays silent
+                cue.spell = kMerchantSound; // FinishBuyingItem plays it only when TakeMoney succeeded
                 sound_cues_.push_back(cue);
             }
             say_str(1437, {game::money_words(price), merchant_ ? merchant_->name : std::string("the merchant")},
@@ -629,12 +629,13 @@ void GameConnection::handle_commerce(Op op, const AppPacket& p) {
             ItemSlot at{kInvPossessions, s->slot, s->sub, -1, 0, 0};
             Item* item = inventory_.at(at);
             if (!item) break;
-            say_str(1361, {game::money_words(s->price), who, item->name}, kMerchantsColour);
+            // FinishSellingItem @0x6f4200: CreditCopper @0x4488c0, then the wave, then 1361.
+            game::credit_copper(coins_, static_cast<std::int64_t>(s->price));
             SoundCue cue;
             cue.kind = SoundCue::Kind::Wave;
             cue.spell = kMerchantSound;
             sound_cues_.push_back(cue);
-            game::credit_copper(coins_, static_cast<std::int64_t>(s->price));
+            say_str(1361, {game::money_words(s->price), who, item->name}, kMerchantsColour);
             if (item->stackable() && s->quantity < item->stack_count) {
                 item->stack_count -= s->quantity;
             } else {
