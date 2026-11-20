@@ -53,18 +53,18 @@ The player's own zone dword takes its instance from the player profile (`zoneIns
 
 #### Zone lines
 
-Client-initiated: `game/zone_lines.{h,cpp}`, `GameConnection::request_zone_change`.
+Client-initiated: `game/zone_lines.{h,cpp}`, `GameConnection::move_to_zone`.
 
 1. During zone-in the zone sends `OP_SendZonepoints`, its zone points' targets.
 2. When the player's feet enter a zone-line region of the zone WLD (`docs/formats/wld.md`, "Regions"), the region's tag gives the zone, instance and target position: a "zone 255" tag through the zone-point table by number, otherwise directly.
-3. The client sends C→Z `OP_ClientUpdate` with its current position, then C→Z `OP_ZoneChange` {zone, instance, target y, x, z, reason 0, success 0}.
+3. The client sends a reliable C→Z `OP_ClientUpdate` with its crossing position, including any legacy coordinate adjustment, then C→Z `OP_ZoneChange` {zone, instance, target y, x, z, reason 0, success 0}. Regular movement reports pause while the request is pending, including during a retry.
 
 The EQEmu server (`zone/zoning.cpp` `Handle_OP_ZoneChange`, zone_mode ZoneUnsolicited) checks only the zone:
 
 - It takes the zone point **nearest to the last reported position** among those leading to that zone (`zone/zone.cpp` `GetClosestZonePoint`, range 40000).
 - It refuses the current zone (`SendZoneCancel`).
-- It ignores the coordinates sent; the arrival point is that zone point's target.
-- If its water map does not put the reported position in a zone line, it reports `MQZoneUnknownDest` to its cheat manager but still zones the player.
+- It ignores the coordinates sent; the arrival point is that zone point's target, with each `999999` replaced by the corresponding reported coordinate.
+- If its water map does not put the reported position in a zone line, it logs "Closest zone point ... WARNING" and reports `MQZoneUnknownDest` to its cheat manager but still zones the player.
 
 #### The zone change
 

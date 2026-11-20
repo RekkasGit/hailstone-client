@@ -1271,7 +1271,9 @@ Code: `game/death_report.*`, `game/zoning.*`, `net/game_connection_death.cpp`; v
   atoi(name + 4), which reads back as zone point 10 x N.
 - The teleport index resolve reads the zone (5 digits), then each 6-character field only when the text is long enough.
 - For zone 255 it takes the first zone point row with that number; with none, a zeroed position and failure.
-- Four zone pairs nudge the player: 34 -> 10: y - 1044; 10 -> 34: y + 1044; 3 -> 4: z + 2; 2 -> 4: x + 10.
+- Four zone pairs adjust the destination: 34 -> 10: world y - 1044; 10 -> 34: world y + 1044; 3 -> 4: z + 2; 2 -> 4:
+  world x + 10. The first three also apply the offset to the position reported before zoning, which supplies any
+  coordinate EQEmu keeps across the line. The movement body stays at the crossing until normal movement or placement.
 
 #### Heightmap zones' ATP boxes
 

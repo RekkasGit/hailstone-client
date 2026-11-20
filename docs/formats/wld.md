@@ -408,7 +408,7 @@ Because tags apply in order, a later `DR...` tag clears an earlier water type. T
 
 Four hard-coded coordinate adjustments are applied as the original applies them (`game::resolve_teleport_index`,
 `game/zoning.cpp`): zones 34→10, 10→34 (x ± 1044 relative to the player), 3→4 (z + 2) and 2→4 (y + 10). The first
-three also move the player; EQEmu ignores the coordinates sent.
+three also adjust the position reported to the server before the zone-change request.
 
 **Corpus** (`wlddump --region-survey`): every classic zone but `sky` has a BSP tree. Tag prefixes found (up to the
 first `_` or digit):
