@@ -907,6 +907,29 @@ TEST_CASE("MQ commands: /target, ${} for typed lines, /noparse, /squelch") {
     CHECK(h.printed.back().rfind("Usage: /target", 0) == 0);
 }
 
+TEST_CASE("MQ commands: /docommand and /squelch parse their line once, a value's ${...} stays text") {
+    Host h;
+    net::GameConnectionTestAccess::world(*h.world.conn).spawns[11].name = "x${Me.PctHPs}";
+    h.run("/docommand /tell Groupie ${Spawn[id 11].CleanName} ${Me.PctHPs}");
+    CHECK(h.sent.back() == "/tell Groupie x${Me.PctHPs} 75");
+    h.run("/squelch /tell Groupie ${Spawn[id 11].CleanName}");
+    CHECK(h.sent.back() == "/tell Groupie x${Me.PctHPs}");
+    h.run("/docommand /squelch /docommand /tell Groupie ${Spawn[id 11].CleanName}");
+    CHECK(h.sent.back() == "/tell Groupie x${Me.PctHPs}");
+    // A script's line too, and a bind's own mq.cmd lines under /docommand are still parsed.
+    h.write("nested_parse.lua", R"(
+local mq = require('mq')
+mq.bind('/hpbind', function() mq.cmd('/tell Groupie bind ${Me.PctHPs}') end)
+mq.cmd('/docommand /tell Groupie ${Spawn[id 11].CleanName}')
+mq.cmd('/docommand /hpbind')
+)");
+    REQUIRE(h.scripts->run("nested_parse", {}));
+    h.pulses(2);
+    CHECK(std::find(h.sent.begin(), h.sent.end(), "/tell Groupie bind 75") != h.sent.end());
+    CHECK(std::find(h.sent.begin(), h.sent.end(), "/tell Groupie x${Me.PctHPs}") != h.sent.end());
+    CHECK(std::find(h.sent.begin(), h.sent.end(), "/tell Groupie x75") == h.sent.end());
+}
+
 // ---------------------------------------------------------------- Lua socials
 
 namespace {

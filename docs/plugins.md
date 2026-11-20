@@ -339,6 +339,8 @@ text is what other players and the server wrote, and the original has no `${...}
 
 `${...}` is expanded in one pass, innermost first (`${Me.Buff[${n}].Duration}` works as in MQ), and a value's text
 is never parsed again: a spawn named `${Me.Name}`, or a guild, title or item name holding `${`, stays that text.
+`/docommand` and `/squelch` run the rest of their line as it was parsed with them, not parsed again (`/docommand
+/echo ${Spawn[...].Name}` echoes the name as written).
 MQ2's `ParseMacroData` scans the line again after each replacement, so there such a value is evaluated too; here
 it is not, a deliberate difference, so that what other players and the server name things cannot read the game
 with the player's or a script's `read` permission (and send it on in a `/say`).

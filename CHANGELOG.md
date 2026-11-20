@@ -10,6 +10,7 @@
 - Cures no longer remove debuffs locally: a partial or too-weak cure leaves its icon standing until the server's buff fade clears it, instead of making the debuff vanish early
 - Buff icons now show a debuff's curse, disease, poison or corruption counters as soon as the buff lands and keep showing the remaining count after a partial cure, a server refresh without counter data, or a full buff list that leaves the spell in the same slot
 - Scripts: a script that gives its name-plate table a metatable can no longer crash the game
+- Scripts: `/docommand` and `/squelch` no longer parse their line a second time, so a name holding `${...}` stays text there too
 
 ## 0.7.2-beta (2026-11-19)
 
