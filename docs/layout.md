@@ -107,7 +107,9 @@ The paths come from `src/platform/paths.h`: `install_dir()` is the binary's fold
 read (`shaders_dir()`, `ui_packs_dir()`), and `data_dir()` is where everything written goes. `data_dir()` is
 `install_dir()` itself: every setting, server and character file stays in the Hailstone folder, so copying the folder
 takes all of it along, and nothing outside it is read for settings (no `~/.config`, no `%APPDATA%`). Hailstone never
-imports another folder's settings either. `HAILSTONE_DATA_DIR`, when the player sets it, names another folder.
+imports another folder's settings either. `HAILSTONE_DATA_DIR`, when the player sets it, names another folder; an
+EverQuest folder named there (or given to `platform::use_data_dir`) is refused at start as below
+(`platform::given_data_dir_problem`).
 
 `platform::choose_data_dir` decides, and the log's first lines say what it chose. When the Hailstone folder cannot hold
 the settings, the client stops at start with a message box saying so and asking for the folder to be moved somewhere
