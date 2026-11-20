@@ -709,13 +709,15 @@ game::NameInvisibility GameConnection::name_invisibility(const game::Spawn& s, b
     if (s.id == 0 || s.is_corpse || s.race >= 0x8cd) return {};
     game::NameInvisibility marks;
     // Another spawn's +0x338 is the server's (the spawn record, then SpawnAppearance 3). The player's own is set by
-    // EQ_Character::UpdateMyVisibleStatus @0x459510 from its own effects (CalcInvisLevel @0x442770, the character's
-    // virtual +0x20): above 0 for regular invisibility (SPAs 12 and 314), -2 and -1 for invisibility versus undead
-    // and versus animals, which get no parentheses.
+    // EQ_Character::UpdateMyVisibleStatus @0x459510 from the character's virtual +0x20, PcZoneClient's @0x5804e0:
+    // for regular invisibility the larger of the Hide level (PcClient virtual +0x74 @0x57f5f0: 0 unless the
+    // PcBase hide flag +0x990d is set, else 1 plus the SPA 256 total) and CalcInvisLevel @0x442770 (SPAs 12 and
+    // 314), so Hide counts. -2 and -1 for invisibility versus undead and versus animals get no parentheses. The
+    // client sets the hide flag itself when its own Hide check passes (CharacterZoneClient::UseSkill @0x45b2d0);
+    // stock EQEmu sends a successful hide's SpawnAppearance 3 to the others only, and nothing on a failed roll, so
+    // the original's own mark follows the local flag too.
     marks.normal = s.invis_rank > 0;
     if (s.id == world_.player_id) {
-        // Hailstone also marks active local Hide, including Shroud of Stealth. Stock EQEmu sends Hide's
-        // SpawnAppearance to other players only.
         marks.normal = marks.normal || hidden_ || own_effect_with(game::SPA_INVISIBILITY) >= 0 ||
                        own_effect_with(game::SPA_IMPROVED_INVIS) >= 0;
     }

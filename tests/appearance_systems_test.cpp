@@ -208,7 +208,8 @@ TEST_CASE("Name marks use the spawn rank, local Hide and invisibility buffs") {
     };
     CHECK_FALSE(local_marks(true).normal);
     CHECK_FALSE(local_marks(true).undead);
-    // Stock EQEmu sends Hide's spawn appearance to other players. The local mark follows the ability state.
+    // The own HideMode counts the local hide flag (PcZoneClient @0x5804e0, Hide level @0x57f5f0); stock EQEmu sends
+    // the hider no SpawnAppearance for it. Sneak alone adds nothing.
     CHECK(rig.conn.world().player()->invis_rank == 0);
     rig.conn.note_hide_state(true, false);
     CHECK(local_marks(true).normal);

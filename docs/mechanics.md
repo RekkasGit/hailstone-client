@@ -1528,11 +1528,13 @@ and leadership marks (`GameConnection::name_invisibility`), when HideMode +0x338
 race from 0x8cd up. Checked: PlayerClient::SetNameSpriteState @0x58e2d0.
 
 - Another spawn's HideMode is the server's (spawn record, then SpawnAppearance type 3).
-- The player's own comes from its effects: above 0 for regular invisibility (SPAs 12, 314); -2 / -1 for versus undead
-  / animals, no parentheses. Checked: EQ_Character::UpdateMyVisibleStatus @0x459510, CalcInvisLevel @0x442770.
-- Hailstone also shows parentheses on the player's own name while Hide is active, including a rogue using Shroud of
-  Stealth. Stock EQEmu sends Hide's appearance update to other players, so the player's own mark follows the local Hide
-  state. Sneak by itself adds no mark. The marks update every frame.
+- The player's own comes from Hide and its effects: above 0 while hidden (the local hide flag, Shroud of Stealth
+  included) or for regular invisibility (SPAs 12, 314); -2 / -1 for versus undead / animals, no parentheses. Sneak
+  alone adds no mark. Checked: EQ_Character::UpdateMyVisibleStatus @0x459510 by PcZoneClient's virtual @0x5804e0,
+  the Hide level @0x57f5f0 and CalcInvisLevel @0x442770.
+- The hide flag is the client's own, set when its Hide check passes (CharacterZoneClient::UseSkill @0x45b2d0).
+  Stock EQEmu sends the hider nothing (the others get SpawnAppearance 3), and nothing at all on a failed server roll,
+  so the mark shows then too, as in the original.
 
 A Hailstone addition, off by default: Options > Display **Bracket Invis vs. Undead** (`display.show_invis_undead`)
 shows `[Name]` for invisibility versus undead the client knows of (SPAs 28 and 315 in the own buffs, or the target's
