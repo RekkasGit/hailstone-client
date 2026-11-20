@@ -270,6 +270,7 @@ Each entry names the window and what is particular to it; the `hs.*` calls behin
 - **GroupWindow**: member cards and the invite / disband / accept / decline buttons. Solo it shows only with an invitation or a player to invite.
 
 - **BuffWindow** and **ShortDurationBuffWindow**: packed icon trays, the last ten seconds pulse. Right click: Spell Info, Add to Blocked Buffs, Remove.
+  - Icons fill each row from right to left. Alt-right-click an icon for the tray's layout menu. **Show empty slots** reserves space for gaps up to the last occupied slot; **Show slot numbers in tooltips** adds the slot number after the spell name, counted from 1 in each tray. Both are off by default and saved per tray and character (`hud.showEmptySlots.<window>`, `hud.showSlotNumbers.<window>`; `lib/bufftray.lua`).
 
 - **CastSpellWnd**: gem tiles in a row or column, refresh shading, the spell book.
 
