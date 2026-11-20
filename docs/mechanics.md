@@ -1530,7 +1530,9 @@ race from 0x8cd up. Checked: PlayerClient::SetNameSpriteState @0x58e2d0.
 - Another spawn's HideMode is the server's (spawn record, then SpawnAppearance type 3).
 - The player's own comes from its effects: above 0 for regular invisibility (SPAs 12, 314); -2 / -1 for versus undead
   / animals, no parentheses. Checked: EQ_Character::UpdateMyVisibleStatus @0x459510, CalcInvisLevel @0x442770.
-- Hide is not among them and stock EQEmu tells the hider nothing, so a hidden player's own name stays plain.
+- Hailstone also shows parentheses on the player's own name while Hide is active, including a rogue using Shroud of
+  Stealth. Stock EQEmu sends Hide's appearance update to other players, so the player's own mark follows the local Hide
+  state. Sneak by itself adds no mark. The marks update every frame.
 
 A Hailstone addition, off by default: Options > Display **Bracket Invis vs. Undead** (`display.show_invis_undead`)
 shows `[Name]` for invisibility versus undead the client knows of (SPAs 28 and 315 in the own buffs, or the target's
