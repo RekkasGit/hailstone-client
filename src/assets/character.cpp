@@ -378,6 +378,9 @@ void append_wld_mesh(const wld::WldFile& w, const wld::Fragment& mf, std::size_t
                      CharacterMesh& out) {
     const auto* md = mf.get<wld::MeshDef>();
     if (!md) return;
+    // A 0x2C mesh with no polygons draws nothing and is left out. RoF2's global_chr IVM_DMSPRITEDEF is one: 506
+    // vertices, no polygons and 17 skin pieces that each count 0, which cannot skin it.
+    if (mf.type == 0x2c && md->polygons.empty()) return;
     // The pieces' counts are checked against the vertices before any is expanded: a forged count must not make a
     // vector of billions of bone indices.
     std::uint64_t covered = 0;

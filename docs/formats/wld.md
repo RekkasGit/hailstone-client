@@ -148,9 +148,11 @@ radius (the farthest vertex as stored, before the centre). The arrays follow:
   material slot}, the render groups. With flag 0x1000: u32 count and the vertex material groups; flags 0x2000 and
   0x4000 add 12 and 24 bytes. These are not read.
 
-A skeleton whose body meshes are all 0x2C and can draw nothing (every material invisible, or masked with every texel
-of its game file at palette index 0) has its body dropped: IVM keeps the body-less skeleton it has always been built
-as (docs/formats/characters.md).
+A 0x2C mesh with no polygons is left out. RoF2's global_chr (the NMS folder's) has IVM's two that way: flags 0, the
+vertices but no polygons, and skin pieces that each count 0. A current EverQuest install's global_chr has the same
+two meshes with their polygons (360 and 80). A skeleton whose body meshes are all 0x2C and can draw nothing (every
+material invisible, or masked with every texel of its game file at palette index 0) has its body dropped: IVM keeps
+the body-less skeleton it has always been built as (docs/formats/characters.md).
 
 ## Render methods → BlendMode
 

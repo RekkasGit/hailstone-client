@@ -114,7 +114,8 @@ Race 127's `IVM` (the enchanter pet; race 600 uses it too) has 26 bones and no n
 fragments (`IVM_DMSPRITEDEF`; docs/formats/wld.md, "0x2C mesh"). Nothing of that body would show in the original:
 their only material, `IVM_MDF`, is masked (0x80000013) with an 8 x 8 texture all of palette index 0, the masked
 colour. Such a body (all 0x2c meshes, every material invisible or masked with no texel that draws) is dropped when
-the model is built, so IVM stays a body-less skeleton (`bodiless_skeleton`). A live folder's `ivm_chr.s3d` has an IVM
+the model is built, so IVM stays a body-less skeleton (`bodiless_skeleton`). RoF2's global_chr goes further: its
+two IVM meshes have no polygons at all (their skin pieces count 0), and a 0x2C mesh without polygons is left out. A live folder's `ivm_chr.s3d` has an IVM
 of its own, a 0x36 body that is kept.
 
 - Dressing skins the primary and secondary items onto its `R_POINT` / `L_POINT` bones, so the held weapon shows with

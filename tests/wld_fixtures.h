@@ -197,6 +197,22 @@ inline ByteWriter mesh_2c(std::int32_t material_list) {
     return w;
 }
 
+// A 0x2C mesh as RoF2's IVM_DMSPRITEDEF is: 4 vertices, no polygons, and two skin pieces that each count 0.
+inline ByteWriter mesh_2c_no_polygons(std::int32_t material_list) {
+    ByteWriter w;
+    w.le(std::uint32_t{0});                                // flags
+    for (std::uint32_t n : {4u, 4u, 4u, 0u, 0u}) w.le(n); // vertices, uvs, normals, colours, polygons
+    w.le(std::uint16_t{0});                                // mesh ops
+    w.le(std::uint16_t{0});
+    w.le(std::uint32_t{2}); // skin pieces
+    w.le(material_list);
+    w.zeros(12);
+    for (float f : {0.0f, 0.0f, 0.0f, 1.0f}) w.f32(f); // centre, radius
+    for (int i = 0; i < 4 * 3 + 4 * 2 + 4 * 3; ++i) w.f32(0.0f);
+    for (int n : {0, 0, 0, 0}) w.le(static_cast<std::uint16_t>(n)); // skin pieces {0 on bone 0} twice
+    return w;
+}
+
 // Bitmap → animated sprite → material chain, plus a material list of three
 // slots, the middle one empty, and a mesh using it.
 inline std::vector<std::byte> mesh_wld(bool new_format) {

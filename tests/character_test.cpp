@@ -928,7 +928,8 @@ TEST_CASE("a 0x2C body draws, unless every texel of its masked materials is tran
         return w;
     };
     // One model per material: the 0x2C fixture mesh skinned to bones 1 and 2 of a three-node skeleton.
-    auto add_model = [&](const std::string& code, const std::string& bitmap_file, std::uint32_t render_method) {
+    auto add_model = [&](const std::string& code, const std::string& bitmap_file, std::uint32_t render_method,
+                         ByteWriter (*make_mesh)(std::int32_t) = mesh_2c) {
         auto bitmap = b.add(kBitmapName, b.str(code + "_BMP"), bitmap_name(bitmap_file));
         ByteWriter info;
         info.le<std::uint32_t>(0);
@@ -937,7 +938,7 @@ TEST_CASE("a 0x2C body draws, unless every texel of its masked materials is tran
         auto sprite = b.add(kSimpleSprite, 0, reference(b.add(kBitmapInfo, 0, info)));
         auto mat = b.add(kMaterialDef, b.str(code + "_MDF"), material(render_method, sprite));
         auto palette = b.add(kMaterialPalette, b.str(code + "_MP"), refs({mat, mat, mat}));
-        auto body = b.add(kMeshRef, 0, reference(b.add(kOldMeshDef, b.str(code + "_DMSPRITEDEF"), mesh_2c(palette))));
+        auto body = b.add(kMeshRef, 0, reference(b.add(kOldMeshDef, b.str(code + "_DMSPRITEDEF"), make_mesh(palette))));
         ByteWriter skeleton;
         skeleton.le<std::uint32_t>(0);
         skeleton.le<std::uint32_t>(3);
@@ -962,6 +963,7 @@ TEST_CASE("a 0x2C body draws, unless every texel of its masked materials is tran
     add_model("IVM", "clear.bmp", kMaskedRenderMethod); // global_chr's case
     add_model("SPT", "spot.bmp", kMaskedRenderMethod);  // one texel shows
     add_model("OPQ", "clear.bmp", kOpaqueRenderMethod); // not masked: the colour of index 0 draws
+    add_model("NOP", "spot.bmp", kOpaqueRenderMethod, mesh_2c_no_polygons); // RoF2's IVM: no polygons, empty pieces
     auto archive = std::make_shared<CharacterArchive>();
     archive->archive = std::make_shared<PfsArchive>(PfsArchive::from_memory(
         test::pfs_fixtures::make_pfs({{"fixture.wld", b.build()}, {"clear.bmp", bmp8(-1)}, {"spot.bmp", bmp8(5)}}),
@@ -975,6 +977,12 @@ TEST_CASE("a 0x2C body draws, unless every texel of its masked materials is tran
     CHECK(hidden->indices.empty());
     CHECK(hidden->materials.empty());
     CHECK(bodiless_skeleton(*hidden));
+    // A 0x2C body with no polygons is left out, its empty skin pieces never checked.
+    auto empty = library.model("NOP");
+    REQUIRE(empty);
+    CHECK(empty->vertices.empty());
+    CHECK(empty->indices.empty());
+    CHECK(bodiless_skeleton(*empty));
     for (const char* code : {"SPT", "OPQ"}) {
         CAPTURE(code);
         auto shown = library.model(code);
@@ -994,8 +1002,8 @@ TEST_CASE("real IVM from the game folder loads with no body mesh and dresses IT1
     auto lib = CharacterLibrary::load(*hailstone::test::game_dir(), "");
     auto model = lib.model("IVM");
     REQUIRE(model);
-    // Its 0x2d mesh references name 0x2c fragments (IVM_DMSPRITEDEF) whose one masked material has no texel that
-    // draws: the body is dropped. (A live folder's ivm_chr.s3d has a 0x36 IVM with a body; this test is for RoF2's.)
+    // Its 0x2d mesh references name 0x2c fragments (IVM_DMSPRITEDEF, IVMHE00_DMSPRITEDEF) that in RoF2's
+    // global_chr have no polygons and skin pieces that count 0: they are left out, and the body is empty. (A live folder's ivm_chr.s3d has a 0x36 IVM with a body; this test is for RoF2's.)
     CHECK(model->vertices.empty());
     CHECK(model->indices.empty());
     // chrdump IVM: the right hand point's chain up to the root.
