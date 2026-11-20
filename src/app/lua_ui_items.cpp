@@ -365,6 +365,8 @@ void close_all_bags(UiHost& host) {
     containers().all_closed = true;
 }
 
+void reset_containers() { containers() = Containers{}; }
+
 void toggle_all_bags(UiHost& host) {
     if (containers().all_closed) open_all_bags(host);
     else close_all_bags(host);

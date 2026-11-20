@@ -11,6 +11,8 @@
 - Modern Player frame: right-click and select **Always show cast bar** to keep the frame the same height between casts and songs.
 - Halas citizen women (the South Karana and Halas model) no longer hold their left arm straight out: it now hangs and swings like the right one in every animation
 - `/debug_animinfo` prints your target's (or your own) model, the animations its upper and lower body are playing and which bones are left in their rest pose, to help report characters that animate wrongly
+- Bag windows close when the interface is reloaded with /loadskin
+  - A reload starts a new interface session: no bag is open and the next bag key press opens them again
 - Item comparison, in both interfaces: an item's tooltip and details window show what wearing it instead of what you wear would change
   - Tooltips cover the inventory, bags, bank, loot, trade and a merchant's goods; the details window covers a linked item too
   - In the details window each stat's change sits beside the item's value (+12 in green beside AC 20, say), with the verdict and what it is compared with above the stats

@@ -2814,7 +2814,10 @@ int DebugScreens(lua_State* L) {
 
 } // namespace
 
-UiApi::UiApi(UiHost& host) : impl_(std::make_unique<Impl>(host)) {}
+UiApi::UiApi(UiHost& host) : impl_(std::make_unique<Impl>(host)) {
+    // The open bags live in a process-wide table (lua_ui_items.cpp): a new UI session must not inherit the last one's.
+    reset_containers();
+}
 UiApi::~UiApi() {
     UiHost& h = impl_->host;
     chat_host_gone(h, impl_->layout);
