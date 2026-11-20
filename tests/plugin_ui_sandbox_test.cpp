@@ -212,6 +212,21 @@ TEST_CASE("Plugin UI: a plugin's menu list and clicks are its own entries") {
 // The player's one-shot keys and requests are the pack's windows' to take: a plugin's code that asks gets nil and
 // leaves them (a pending Link All is not sent from its call). Nor can it put away the client's dialogs that act when
 // answered, to draw a question of its own in their place.
+TEST_CASE("Plugin UI: a plugin's chat line is sent but stays out of the player's input history") {
+    SandboxUi s;
+    std::vector<std::string> sent;
+    s.host.submit_chat = [&](const std::string& line) { sent.push_back(line); };
+    s.caps["plugin:A"] = plugin::kCapAll;
+    s.add_folder("plugin:A");
+    s.frame();
+    s.run("", "hs.ChatSubmit(1, '/mine') return 1");
+    s.run("plugin:A", "hs.ChatSubmit(1, '/theirs') return 1");
+    REQUIRE(sent.size() == 2);
+    CHECK(sent[1] == "/theirs");
+    // The input's Up gives the player's own line, not the plugin's.
+    CHECK(s.run("", "return hs.ChatHistory(1, true)") == "/mine");
+}
+
 TEST_CASE("Plugin UI: a plugin cannot take the player's keys and requests, nor replace an acting dialog") {
     SandboxUi s;
     std::vector<std::string> sent;

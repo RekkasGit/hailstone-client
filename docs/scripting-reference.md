@@ -1118,7 +1118,7 @@ achievement and reward-selection APIs.
 | ChatWindows | ([into]) → {{slot, title, windowTitle, main, tells, tab, select, tellsIn, tabs={{slot, title, unread, tell, scrollbar, flash, flashColor, highlighted}}}} | Shown chat windows. `into` is refilled in place (its records are reused at the next call) | — |
 | ChatText | (slot [, version [, names [, stamps [, incremental]]]]) → version [, lines [, reset, count]] | STML lines of the tab that is up. The incremental form gives only the new lines | — |
 | ChatInfo | (slot) → font, active, default, scrollbar, here | Tab font, active, default channel, scrollbar, Always Chat Here | — |
-| ChatSubmit | (slot, text) → — | Send a typed line (goes through the command filter, so the caller's caps apply) | — |
+| ChatSubmit | (slot, text) → — | Send a typed line (goes through the command filter, so the caller's caps apply). Plugin code's line stays out of the input history and does not activate the window | — |
 | ChatTakeFocus | (slot [, typed]) → text, replace \| nil | Text for the input when a chat key fires (Link All too). Nil to plugin code | — |
 | ChatHistory | (slot, older) → text\|nil | Step through lines sent before. Nil to plugin code | — |
 | ChatCycleReply | (text, back) → text\|nil | Tab / Shift+Tab reply cycling | — |
