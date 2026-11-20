@@ -847,6 +847,23 @@ TEST_CASE("mock server: a wrong session key gets the world connection dropped") 
     CHECK(!rig.conn.link_death()->in_game);
 }
 
+TEST_CASE("mock server: a failure on the world link ends its queue; a packet behind it is not handled") {
+    Rig rig;
+    REQUIRE(rig.to_character_select());
+    // A short OP_ZoneServerInfo fails the connection; a good one in the same datagram behind it must not start a
+    // zone connection afterwards.
+    AppPacket good = encode(ZoneServerInfo{"127.0.0.1", rig.server.zone.port()});
+    AppPacket bad = good;
+    bad.data.resize(4);
+    rig.server.world.send_reliable_combined({bad, good});
+    REQUIRE(rig.until_state(ConnectionState::Disconnected));
+    CHECK(rig.conn.error() == "could not read the zone server address");
+    rig.run_for(100ms);
+    CHECK(rig.conn.state() == ConnectionState::Disconnected);
+    CHECK(MockEqServer::count(rig.server.world_log, Op::WorldComplete) == 0);
+    CHECK(rig.server.zone.sessions() == 0);
+}
+
 TEST_CASE("mock server: losing the zone connection ends the session, and start() connects again") {
     Rig rig;
     auto& conn = rig.conn;

@@ -234,9 +234,14 @@ void GameConnection::update() {
             }
             // Zoning keeps state_ == Zoning; the world's OP_EnterWorld reply moves it on.
         }
-        while (auto p = world_session_ ? world_session_->receive() : std::nullopt)
+        // A failure ends the session's queue: a packet behind it must not move the connection on again (an
+        // OP_ZoneServerInfo after a bad character list would start a zone connection).
+        while (state_ != ConnectionState::Disconnected) {
+            auto p = world_session_ ? world_session_->receive() : std::nullopt;
+            if (!p) break;
             if (!options_.hooks || options_.hooks->packet(plugin::Stream::World, plugin::Direction::In, *p) == plugin::Flow::Continue)
                 handle_world(*p);
+        }
         if (world_session_ && world_session_->state() == SessionState::Disconnected) {
             bool expected = state_ == ConnectionState::ZoneConnecting || state_ == ConnectionState::ZoneEntering ||
                             state_ == ConnectionState::InZone || state_ == ConnectionState::Disconnected;
@@ -288,9 +293,12 @@ void GameConnection::update() {
             server_files_->update(ServerFileSync::Clock::now());
             if (server_files_->finished()) finish_server_files();
         }
-        while (auto p = zone_session_ ? zone_session_->receive() : std::nullopt)
+        while (state_ != ConnectionState::Disconnected) { // as the world's: nothing is handled after a failure
+            auto p = zone_session_ ? zone_session_->receive() : std::nullopt;
+            if (!p) break;
             if (!options_.hooks || options_.hooks->packet(plugin::Stream::Zone, plugin::Direction::In, *p) == plugin::Flow::Continue)
                 handle_zone(*p);
+        }
         // CTaskWnd::OnProcessFrame: the task compass mark looked for again once marked (0x76ff70).
         if (task_compass_dirty_ && state_ == ConnectionState::InZone) update_task_compass();
         if (zone_session_ && zone_exit_ != ZoneExit::None && zone_session_->state() != SessionState::Disconnected &&
