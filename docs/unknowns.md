@@ -1410,6 +1410,9 @@ Real estate is built to the original (docs/protocol/rof2-packets.md "Real estate
   - Settle: running those two in MacroQuest on Windows.
 - **`String.Compare` and `CompareCS`** give -1, 0 or 1. MQ returns `_stricmp` / `strcmp` as they are, whose size (beyond
   the sign) on MSVC is not checked. Settle: `${String[abc].Compare[abz]}` in MacroQuest.
+- **`/target` at an equal distance.** RoF2's GetNearestSpawnMaybe (0x5a04e0) keeps the first of equally near matches
+  in its spawn list's order. Now: the lower spawn id. Settle: how the original orders its spawn list (insertion on
+  OP_NewSpawn or otherwise), from PlayerManagerClient's list code.
 
 ## Server-specific extensions
 

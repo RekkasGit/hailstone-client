@@ -30,7 +30,7 @@
   - The shake moves only the camera, never the player, and a zone change ends it
 - Modern hotbars: **Lock layout** keeps hotbuttons in their slots and blocks edits while leaving activation and page changes available.
   - A bar locked with the old row keeps its frame lock (**Lock this frame**); turn Lock layout on again to protect its buttons
-- `/target CharacterName` picks the named player when a mount would otherwise match first.
+- `/target <name>` picks as the original client does instead of taking the nearest match: a spawn's whole name wins (a player over the mount named after them), and otherwise a matching player is picked over anything less than 50 units nearer. Typed searches such as `/target npc orc` still take the nearest
 - Native nameplate add-ons can draw the same guild tags, NPC descriptions and pet owner names as stock nameplates.
 - The server can now change a spawn's last name while you watch
   - It shows wherever name plates and the target window show last names, following your name-plate settings, and your own is updated too
