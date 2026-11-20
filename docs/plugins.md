@@ -1644,7 +1644,7 @@ missing from it is taken to act. Refused, it does nothing and returns nil, with 
 | `target` | `hs.FindNpcTarget` (the Find window's row) |
 | `move` | `hs.FindNpcWalk` (the Find window's Walk there) and `hs.ZoneExitWalk` (the zone finder's), both `/nav` walks. (`/nav` itself needs `move`, and the doors a walk opens on its way come with it; `/nav door ... click`, which clicks the door on arrival, needs `actions` too) |
 | `actions` | a stock window's controls, the menus' rows, items and the cursor, hot buttons and gems, spells and abilities, socials; see the list below |
-| checked by the function | the plugins' (above), the scripts' (refused; `hs.Scripts` lists only a script of the plugin's own name, with no folders), the pre-game screens' (nil), the web's (`web`); `hs.ChatSubmit`'s line goes through the command filter, which holds it to the plugin's capabilities as any command it sends (plain text needs `chat`, `/cast` needs `actions`) |
+| checked by the function | the plugins' (above), the scripts' (refused; `hs.Scripts` lists only a script of the plugin's own name, with no folders), the pre-game screens' (nil), the web's (`web`); `hs.ChatSubmit`'s line goes through the command filter, which holds it to the plugin's capabilities as any command it sends (plain text needs `chat`, `/cast` needs `actions`); a plugin's line joins neither the chat input's history nor makes its window the active one |
 
 **Never.** The chat input's keys and requests (`hs.ChatTakeFocus`, with a pending Link All; `hs.ChatPage`,
 `hs.ChatHistory`) and the Lua social editor's (`hs.LuaSocialEditRequest`) give nil to a plugin's code. For a plugin,

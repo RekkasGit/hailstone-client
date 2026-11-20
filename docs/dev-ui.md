@@ -742,7 +742,7 @@ InspectWnd, ConfirmationDialogBox (the ground drop's, the connection's and windo
 
 #### `lua_ui_help.cpp`
 
-HelpWindow (help\\help.html, href links with Back history, Contents, the Tips button's tip of the day, Customer Service's /petition) and `load_stml_page`. An STML link goes to its window: `hs.StmlLink(window, child, message, data)`, `StockWindow::stml_link` (message -1 for an href; `lib/stml.lua`).
+HelpWindow (help\\help.html, href links with Back history (the last 64 pages), Contents, the Tips button's tip of the day, Customer Service's /petition) and `load_stml_page`. An STML link goes to its window: `hs.StmlLink(window, child, message, data)`, `StockWindow::stml_link` (message -1 for an href; `lib/stml.lua`).
 
 #### `lua_ui_login.cpp`
 

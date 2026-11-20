@@ -49,6 +49,9 @@
   - Each: 256 UI functions, 64 options and 32 menu entries
   - A script: 256 packet hooks, 256 binds and 64 windows
   - A menu entry added again with the same label replaces the old one instead of showing twice
+- A minimised game window no longer runs a processor core at full speed: while minimised the client runs at 10 frames a second, whatever the frame rate settings say
+- Spell book: a spell dropped on a gem while standing or casting stays on the cursor instead of vanishing without being memorized
+- Add-ons: a line a plugin sends with `hs.ChatSubmit` no longer lands in the chat input's history (Up arrow) or makes its chat window the active one
 
 ## 0.7.2-beta (2026-11-19)
 
