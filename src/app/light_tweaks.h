@@ -31,7 +31,7 @@ struct LightTweakPreset {
 // The presets, in the dropdown's order; the first is the defaults.
 inline constexpr std::array<LightTweakPreset, 2> kLightTweakPresets{{
     {"Default", LightTweaks{}},
-    {"Option 1", LightTweaks{40, 300, 700, 140, 80, 0, 50, 50}},
+    {"Option 1", LightTweaks{40, 300, 700, 140, 80, 0, 10, 10}},
 }};
 
 // The dropdown's entry for `values`: the first preset they match, else kLightTweakPresets.size() (Custom).
