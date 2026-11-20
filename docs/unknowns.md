@@ -371,6 +371,12 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - the tether camera's eye drops to bone 0 while sitting, or for the actor animations 0x21 / 0x24 (+0x10c0); not modelled;
   - the camera sweep's filter (0x476410) for actor types 9 and 1 is not resolved: spawns are left out of the sweep.
 - **Placed objects** are triangles of the zone mesh, not separate actors, so actor-only filters do not apply to them.
+- **Passable door triangles in the mouse pick.**
+  - Unknown: whether the DLL tests an actor's static collision mesh (0x100bebb0, no flag test, every pass) or its
+    per-part mesh (0x100c66e0, passable triangles skipped in passes 3 and 4 unless bit 2), and which triangles each holds.
+  - Now: a door whose model has no solid triangle is picked by its passable triangles in every pass; other doors' and
+    ground objects' passable parts are not picked.
+  - Settle: tracing which path an S3D door model takes, or clicking through a door's passable part in the original.
 - **Touching switches.**
   - The hit callback runs for each door hit in the doors' order, not the DLL's quad tree order.
   - A switch moving into a player who stands still does nothing until the player moves (as the original's
@@ -1203,12 +1209,6 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   giver when its spawn is known).
   - Unknown: which id goes with which of the four amounts in the code, and the lines' colour.
   - Settle: the arguments of the BuildStringFromEQSTR and dsp_chat calls between 0x4c7d39 and 0x4c7ff6.
-- **Struck down by the gods.** After the line and the wave, the original does its own death bookkeeping
-  (0x4c8aab onwards: two calls and the local player's RespawnTimer cleared); Hailstone leaves that to OP_Death. A stock
-  EQEmu server does not send OP_Death for it: its OP_GMKill handler forwards the GM's packet to the other clients
-  (`entity_list.QueueClients`) and leaves the kill to the named player's client, so here the player stays alive.
-  - Unknown: what the two calls after the wave do (0x45ffa0, 0x4423b0), and what the original sends the server.
-  - Settle: those two functions, or a capture of an original client being killed with /kill on a stock server.
 
 ## UI
 

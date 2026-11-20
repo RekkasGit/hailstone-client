@@ -78,6 +78,15 @@ like other items. Their stack count does not multiply them.
 
 Full tribute workflows are not tested live.
 
+## Tribute donation values
+
+The item description shows the item's positive personal and guild tribute values per copy (a Hailstone addition:
+the original's item display shows neither). The Donate area in Modern and Gamepad previews the total favor for the
+item on the cursor using the open master's tribute type. Stacks use the full quantity that Donate sends, as EQEmu
+multiplies by it; the original's TMW_ValueLabel shows the value of one copy (SetDonationItem @0x7862e0). Charges and
+augments add no favor. A bag that holds anything previews 0, as in the original. The preview returns to the last
+donation receipt when the cursor is empty. That receipt uses the server's reply.
+
 ## Exactness
 
 - Integer math wraps (explicit unsigned adds and multiplies).
@@ -1215,9 +1224,20 @@ required bit. In a pass:
 
 The client tests the zone mesh (CollisionMesh::for_each_on_segment), each spawn's last drawn pose
 (ActorRenderer::spawn_pose), a spawn drawn as a placeholder box as a sphere, and the doors' and objects' solid
-triangles. Every pick is logged ("pick (left click) ...").
+triangles. The DLL's actor test also meets an actor's passable triangles (in passes 1 and 2 at least); the client
+gives the pick a door's passable triangles only when its model has no solid one (the Plane of Fire orb in Plane of
+Tranquility), and leaves them out of nameplate occlusion (docs/unknowns.md "Passable door triangles"). Every pick is
+logged ("pick (left click) ...").
 
 #### Left clicks and switches
+
+`CEverQuest::ClickedSwitch` (0x51ecb0) passes the picked point to `EQSwitch::UseSwitch` (0x511d70).
+A click reaches up to the player's height plus 20 units in 3D from the player to that point. Activations without a
+pick point measure to the switch origin and add the model's radius to the reach.
+
+A left click in the world with a lockpick or key (item types 12, 0x21, 0x27) on the cursor goes to ClickedSwitch
+(`CEverQuest::LMouseUp` @0x5384d0), whatever is under it and whether or not the switch accepts it; the item stays on
+the cursor. Any other item is dropped (or placed).
 
 Left click on a player: the clicked spawn becomes the target unless its race is below 2253 and it is not targetable;
 then the "who is this" lines ([Defaults] LeftClickTargetHelp, default 1: 6780/6791, then class / gender); then the
@@ -1270,6 +1290,21 @@ Code: `game/death_report.*`, `game/zoning.*`, `net/game_connection_death.cpp`; v
 - A tracked dead spawn ends tracking with one OP_TrackTarget {u32 0} and message 12102 (colour 0x111).
 - Every death removes that spawn from the cached tracking list, the player's own entry included; an unrelated tracked
   spawn stays tracked.
+
+#### Struck down by the gods (OP_GMKill)
+
+The case at 0x4c8a23 runs only when the packet names the local player (without case). After the line (eqstr 1391,
+colour 10) and wave 0x8f it kills on the client alone (0x4c8ab0..0x4c8aec):
+
+- the profile's current HP (PcProfile +0x3394, set through 0x45ffa0) and the own spawn's HPCurrent (+0x2e4, through
+  0x4423b0) become -10000, so the HP shown is -10000 plus the items' HP;
+- the own spawn's RespawnTimer (+0x2bc, the time of death PlayerZoneClient::IDied stamps) is cleared.
+
+Nothing is sent to the server, and there is no OP_Death, knock-out or respawn window. Stock EQEmu forwards the GM's
+packet and never kills the player, and it sends OP_HPUpdate only when the server's HP changes, so the player stays at
+-10000 until then. Hailstone does the same (`pstatus_.hp`, the own spawn's percentage 0). Not reproduced: for a player
+already dead and hovering, the cleared RespawnTimer stops the original's respawn window auto-selecting
+(CRespawnWnd::OnProcessFrame @0x74e720) and lets IsOkToTransact pass; Hailstone keeps the hover state as it was.
 
 #### Zone lines
 

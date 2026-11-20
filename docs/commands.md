@@ -90,7 +90,7 @@ follow the RoF2 client; the ones Hailstone adds are marked as Hailstone's. For t
 
 | Command | What it does |
 |---|---|
-| `/target <name \| id <#> \| clear \| mycorpse \| spawn search>` | Target by name or MacroQuest's spawn search (Hailstone's script layer answers `/target`; a plain name skips you). |
+| `/target <name \| id <#> \| clear \| mycorpse \| spawn search>` | Target by name or MacroQuest's spawn search (Hailstone's script layer answers `/target`; a plain name skips you when something else matches). A player's full name wins over a mount named after them (``Name`s_Mount00``), as in RoF2's own `/target`; `/target mount Name` picks the mount. |
 | `/assist [name]` | Target what your target, or the named player, is fighting. |
 | `/attack [on\|off]` | Auto attack. |
 | `/autofire` | Auto fire (ranged). |

@@ -13,10 +13,15 @@
 - **Infravision Strength** and **Ultravision Strength** sliders (Options, Lighting): 100% is the original game's, 0% is as without it
 - Modern chat: select text in a chat window with the mouse and copy it with Ctrl+C or the right-click menu's **Copy**
   - Drag to select, double-click for a word, triple-click for a line, Shift+click to extend; links still open with a click
+- A GM's /kill now drops you to -10000 HP, as in the original client, until the server next updates your HP (it only played the sound and printed the line)
+- Door clicks use the distance to the spot you clicked, fixing long-range zoning through the Guild Lobby entrance. The Plane of Fire orb in Plane of Tranquility can also be clicked.
+- A key or lockpick on the cursor is no longer offered for dropping when a click in the world misses a door or the door refuses it, as in the original
 - Buying from or selling to a merchant, and buying from a trader, plays the cash register and prints the line in the Merchants chat colour, as in the original
 - Modern chat: select text in a chat window with the mouse and copy it with Ctrl+C or the right-click menu's **Copy**
   - Drag to select, double-click for a word, triple-click for a line, Shift+click to extend; links still open with a click
 - Modern chat: a word wider than the chat window (a long name or a run with no space) wraps onto the next rows instead of being cut off at the edge
+- Item descriptions show personal and guild tribute values. Both Tribute Master layouts preview the favor for the held item or stack before you donate.
+- The direct Give prompt no longer appears for service NPCs that refuse item handoffs, including tribute masters.
 - Your own name is in parentheses while you are hidden, as in the original client (it was plain). Sneak alone adds none
 - The sample `hailstone.cfg` now includes the Ability Book's autoskill switch, and the server guide shows how to disable autoskill and Lua socials
 - Loot All takes NO DROP items from your own corpse without confirmation after a same-zone resurrection
@@ -35,6 +40,7 @@
   - The shake moves only the camera, never the player, and a zone change ends it
 - Modern hotbars: **Lock layout** keeps hotbuttons in their slots and blocks edits while leaving activation and page changes available.
   - A bar locked with the old row keeps its frame lock (**Lock this frame**); turn Lock layout on again to protect its buttons
+- `/target CharacterName` picks the named player when a mount would otherwise match first.
 - Native nameplate add-ons can draw the same guild tags, NPC descriptions and pet owner names as stock nameplates.
 - The server can now change a spawn's last name while you watch
   - It shows wherever name plates and the target window show last names, following your name-plate settings, and your own is updated too

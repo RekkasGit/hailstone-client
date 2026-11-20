@@ -46,11 +46,6 @@ constexpr std::uint32_t kMerchantSound = 0x8a;
 // completed buy or sell, 0x113 (275) for a refusal.
 constexpr std::uint32_t kMerchantsColour = 0x114;
 constexpr std::uint32_t kMerchantRefusalColour = 0x113;
-// CEverQuest::DropItemOrMoneyOnPlayer refuses these service classes with eqstr 8505:
-// 40 banker, 63 ('?'), 64 ('@'), 66 ('B'), 74 ('J').
-bool refuses_items(std::uint8_t class_id) {
-    return class_id == 40 || class_id == 63 || class_id == 64 || class_id == 66 || class_id == 74;
-}
 
 ItemSlot trade_slot(std::int16_t n) { return {kInvTrade, n, -1, -1, 0, 0}; }
 
@@ -410,7 +405,7 @@ void GameConnection::give_to(std::uint32_t spawn_id) {
         return;
     }
     if (spawn_id == world_.player_id || trade_) return;
-    if (sp.is_npc && refuses_items(sp.class_id)) {
+    if (game::refuses_direct_items(sp)) {
         chat(ChatEvent::Kind::System, strings_.format(8505, std::vector<std::string>{}));
         return;
     }

@@ -1,5 +1,6 @@
 #include "mq/commands.h"
 
+#include <algorithm>
 #include <cmath>
 #include <format>
 #include <utility>
@@ -107,10 +108,26 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
                 say("There are no spawns matching: (" + mine + ")");
                 return;
             }
-            auto found = find_spawns(args, *ctx.conn, ctx.can_see);
-            // A plain name means someone else, not the player (MQ skips you unless asked for).
+            SearchSources sources = sources_of(*ctx.conn);
+            sources.can_see = ctx.can_see;
+            const SpawnSearch search = parse_spawn_search(args, sources.guild);
+            const auto found = search_spawns(search, world, sources);
             for (const game::Spawn* s : found) {
+                // MQ normally skips the local player when there is another match.
                 if (s->id == world.player_id && found.size() > 1) continue;
+                // EQEmu prefixes a mount's name with the rider's, so the mount can win a nearest-name search.
+                // Not MQ's rule (its Target takes the nearest match), but RoF2's own /target
+                // (Send_OP_TargetCommand_004e9790 -> GetNearestSpawnMaybe 0x5a04e0) asks
+                // PlayerManagerClient::GetSpawnByName 0x599b40 for an exact name first, which finds the rider.
+                if (search.kind == SpawnSearch::Kind::Any && !search.id && !search.name.empty() &&
+                    !s->is_corpse && game::Spawn::GetSpawnType(s) == game::eSpawnType::MOUNT) {
+                    const auto player = std::find_if(found.begin(), found.end(), [&search](const game::Spawn* candidate) {
+                        return !candidate->is_npc && !candidate->is_corpse &&
+                               (iequals(candidate->name, search.name) ||
+                                game::display_name_iequals(candidate->name, search.name));
+                    });
+                    if (player != found.end()) s = *player;
+                }
                 env_.set_target(s->id);
                 return;
             }

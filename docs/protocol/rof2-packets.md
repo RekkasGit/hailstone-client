@@ -616,7 +616,10 @@ Every door moves each frame by elapsed ms × 0.02 ticks (nothing moves on a fram
 
 A door not in its default state returns by itself after a repop time (10 s for types 0 and 5, 20 s for most). EQEmu's close timer resets only the server's state silently, so the client's return is what closes ordinary doors.
 
-The click range: the 3D distance from the player to the door must not exceed the player's height + 20 + the door actor's bounding radius. Else eqstr 1462 "You can't reach that, get closer." (EQEmu checks 100 units, `Range:MaxDistanceToClickDoors`).
+For a mouse pick, the 3D distance from the player to the hit point must be within the player's height + 20.
+Activations without a hit point measure to the door origin and add the scaled actor radius to the reach.
+An out-of-range activation shows eqstr 1462 "You can't reach that, get closer."
+EQEmu separately checks `Range:MaxDistanceToClickDoors` (100 units by default).
 
 Teleport doors (types 57/58 with a destination) are moved by the server with OP_RequestClientZoneChange.
 
@@ -1071,7 +1074,7 @@ Tried live against EQEmu with two clients (playprobe `--duel`, `--duel-wait`, `-
 | SharedTaskInvite / SharedTaskInviteResponse | Z→C / C→Z | 0x3444 / 0x7582 | 136 B {i32, i32 invite id, `char[64]` task, `char[64]` inviter} / 12 B {0, invite id, i8 accepted, 3} |
 | Stun / ItemRecastDelay / Bind_Wound | Z→C | 0x36a4 / 0x15a9 / 0x0386 | u32 duration ms (+2 B) / 12 B {delay s, recast type, bool} / 8 B {u16 target, u16, u16 type: 3 start, 1 done, 4 target dead, 5 gone, 7 no bandage} |
 | Sound (QuestReward_Struct) / CashReward | Z→C | 0x1a30 / 0x5f7a | 68 B {giver, our id, exp, faction, mod, copper +20, silver, gold, platinum} / 16 B {copper, silver, gold, platinum}: coin added without a coin update |
-| GMKill | Z→C | 0x51d3 | 132 B {`char[64]` the named player, `char[64]` the GM, u32} (EQEmu forwards the GM's own /kill packet to the zone's other clients and does not kill the player itself): the name is compared with our name without case, and on a match the struck-down line (eqstr 1391, colour 10) and wave 0x8f (in the original the zone message handler at `0x4c3250` takes 0x51d3 to the case at `0x4c8a23` through the byte and pointer tables at `0x4d4998` / `0x4d4980`) |
+| GMKill | Z→C | 0x51d3 | 132 B {`char[64]` the named player, `char[64]` the GM, u32} (EQEmu forwards the GM's own /kill packet to every client in the zone, the GM's included, and does not kill the player itself): the name is compared with our name without case, and on a match the struck-down line (eqstr 1391, colour 10), wave 0x8f and the client's own kill: the profile HP (`0x45ffa0`, PcProfile +0x3394) and the own spawn's HPCurrent (`0x4423b0`, +0x2e4) set to -10000 and the RespawnTimer (+0x2bc) cleared, with nothing sent back, no OP_Death and no respawn window, so the player lies at -10000 until the server's next OP_HPUpdate (in the original the zone message handler at `0x4c3250` takes 0x51d3 to the case at `0x4c8a23` through the byte and pointer tables at `0x4d4998` / `0x4d4980`) |
 | GuildMemberAdd / Delete / Level / PublicNote / SetGuildRank (= RankAltBanker) / Details | Z→C | 0x2925 / 0x3141 / 0x1bd3 / 0x01f9 / 0x0b9c / 0x69b9 | u32 guild first; see GameConnection::handle_world_social |
 | Charm / DisciplineUpdate / Untargetable / YellForHelp / GetGuildMOTDReply | Z→C | 0x5d92 / 0x759e / 0x053c / 0x4e56 / 0x4f1f | 12 B {owner, pet, 1 on / 0 off} / 300 × u32 / 8 B {spawn, targetable} / u32 yeller / the GuildMOTD struct |
 | Weblink | Z→C | 0x6f4b | the address, NUL-terminated (EQEmu `Weblink_Struct`); the case @0x4c5b5d opens it in an HTML window (docs/browser.md) |
