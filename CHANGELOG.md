@@ -42,6 +42,13 @@
 - Network: broken or hostile packets can no longer stall the client
   - Barter lists whose names never end, and mail with long runs of blanks
   - Target or pet buff windows with slot numbers past RoF2's 97 (those slots are ignored)
+- Scripts: a script that gives its name-plate table a metatable can no longer crash the game
+- Scripts: `/docommand` and `/squelch` no longer parse their line a second time, so a name holding `${...}` stays text there too
+- Scripts: a script whose `events` permission the server takes away stops getting chat lines at once, including the ones it had queued
+- Scripts and plugins: limits on what each may register (an error past them)
+  - Each: 256 UI functions, 64 options and 32 menu entries
+  - A script: 256 packet hooks, 256 binds and 64 windows
+  - A menu entry added again with the same label replaces the old one instead of showing twice
 
 ## 0.7.2-beta (2026-11-19)
 

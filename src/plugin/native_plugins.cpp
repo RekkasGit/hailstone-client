@@ -1141,13 +1141,12 @@ int h_add_ui_function(void* h, const char* name, HailstoneUiFn fn, void* user) {
     Loaded& l = Loaded::of(h);
     if (!name || !*name || !fn || !l.host->env.ui || !may_ui(l, "add_ui_function")) return 0;
     Loaded* lp = &l;
-    l.host->env.ui->add_function(l.name, name, [lp, fn, user](const std::vector<UiValue>& args) {
+    return l.host->env.ui->add_function(l.name, name, [lp, fn, user](const std::vector<UiValue>& args) {
         HailstoneArgs a{&args};
         HailstoneOut out;
         const int ok = guarded(*lp, "a UI function", [&] { return fn(user, &a, &out); });
         return ok && out.has_root ? std::move(out.root) : UiValue{};
-    });
-    return 1;
+    }) ? 1 : 0;
 }
 
 void h_remove_ui_function(void* h, const char* name) {
@@ -1228,15 +1227,13 @@ int h_add_option(void* h, const char* name, const char* label, int min, int max,
     o.max = std::max(min, max);
     o.get = [lp, get, user] { return guarded(*lp, "an option", [&] { return get(user); }); };
     o.set = [lp, set, user](int v) { guarded(*lp, "an option", [&] { set(user, v); }); };
-    l.host->env.ui->add_option(std::move(o));
-    return 1;
+    return l.host->env.ui->add_option(std::move(o)) ? 1 : 0;
 }
 
 int h_add_menu(void* h, const char* label, const char* command) {
     Loaded& l = Loaded::of(h);
     if (!label || !*label || !command || !*command || !l.host->env.ui || !may_ui(l, "add_menu")) return 0;
-    l.host->env.ui->add_menu({l.name, label, command});
-    return 1;
+    return l.host->env.ui->add_menu({l.name, label, command}) ? 1 : 0;
 }
 
 // The plugin's folder: plugins/<name>/ when its binary is there, else plugins/<name>/ beside the binary.
@@ -2436,7 +2433,10 @@ int32_t h_get_raid_data_bulk(void* h, unsigned char* data, int32_t datamax) {
         rec->y = m.y;
         rec->z = m.z;
         rec->distance = m.distance;
-        copy_name(rec->name, m.name);
+        // Through a local: no reference to a field of the packed record (AGENTS.md).
+        char name[sizeof rec->name];
+        copy_name(name, m.name);
+        std::memcpy(rec->name, name, sizeof name);
         pBuffer += sizeof(HS_BulkRaidData);
         written += static_cast<int32_t>(sizeof(HS_BulkRaidData));
         ++header.count;
@@ -2890,11 +2890,16 @@ template <auto F> constexpr auto main_only = &MainOnly<F>::call;
 template <auto F, auto Off> struct MainOnlyOr;
 template <typename R, typename... A, R (*F)(void*, A...), auto Off> struct MainOnlyOr<F, Off> {
     static R call(void* h, A... a) {
-        if (!on_main_thread()) {
-            off_thread(h);
+        try {
+            if (!on_main_thread()) {
+                off_thread(h);
+                return static_cast<R>(Off);
+            }
+            return F(h, a...);
+        } catch (...) {
+            host_threw(h); // as MainOnly: never through the plugin's frames; the call answers `off`, "unknown"
             return static_cast<R>(Off);
         }
-        return F(h, a...);
     }
 };
 template <auto F, auto Off> constexpr auto main_only_or = &MainOnlyOr<F, Off>::call;

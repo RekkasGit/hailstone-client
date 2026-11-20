@@ -228,7 +228,7 @@ Lua 5.5 state and runs as a coroutine resumed once a frame; `mq.delay` yields to
 | `mq.delay(ms \| '2s' \| '500ms' \| '1m' [, condition])` | wait, until the time passes or `condition()` is true. A wait beyond 9e15 ms (`math.huge`) is cut to that; NaN is an error |
 | `mq.event(name, pattern, fn [, {keepLinks = true}])`, `mq.unevent`, `mq.doevents([name])`, `mq.flushevents([name])` | chat events, matched as MacroQuest's Lua events match them; see "Chat events" below |
 | `mq.bind('/cmd', fn)`, `mq.unbind` | a command (needs `commands`); `fn` gets the words and may `mq.delay`; see "Binds" below |
-| `mq.imgui.init(name, fn)`, `mq.imgui.destroy`, `mq.imgui.exists` | a window drawn each frame with `ImGui` |
+| `mq.imgui.init(name, fn)`, `mq.imgui.destroy`, `mq.imgui.exists` | a window drawn each frame with `ImGui`; the same name replaces its function. At most 64 windows a script (an error past them) |
 | `mq.web.open(url [, w, h])`, `.navigate`, `.nav`, `.close`, `.eval`, `.post`, `.messages`, `.text`, `.state`, `.tabs`, `.view(tab, w, h)`, `.available` | the script's own tabs of the in-game browser ("Web pages" below); `view` in an `mq.imgui` window |
 | `mq.parse(text)`, `mq.gettime()`, `mq.exit()` | |
 | `mq.getAllSpawns()`, `mq.getFilteredSpawns(fn)` | spawn values |
@@ -262,6 +262,9 @@ Limits: at most 256 events a script, a pattern at most 1024 bytes and a name 256
 A line another script or plugin wrote (`print`, `/echo`, `WriteChatf`) raises events too, but the handler then runs as
 its own thread (as a bind) held to both scripts' capabilities; `doevents` does not wait for it.
 
+A script whose `events` permission the server takes away gets no more lines: those it had queued are dropped, and
+`mq.doevents` runs nothing (no error) until the permission comes back.
+
 #### Binds
 
 - The client's own commands cannot be bound: the game's (with their abbreviations, so not `/g` or `/r` either),
@@ -269,6 +272,7 @@ its own thread (as a bind) held to both scripts' capabilities; `doevents` does n
 - Nor can a name another script or plugin holds (an error naming it).
 - A bind runs with the script's capabilities and those of whoever ran the command (another script, a plugin, the
   player) together, at its start and after each `mq.delay`.
+- At most 256 binds a script; binding a command again replaces it (an error past them).
 
 #### Settings files
 
@@ -429,7 +433,8 @@ a search; `fast`), `/keypress <command> [hold|release]` (the game's key command 
 
 `${...}` is expanded in one pass, innermost first (`${Me.Buff[${n}].Duration}` works). A value's text is never parsed
 again (a spawn named `${Me.Name}` stays that text): a deliberate difference from MQ2's `ParseMacroData`, so names
-others choose cannot read the game with a script's `read`.
+others choose cannot read the game with a script's `read`. `/docommand` and `/squelch` run the rest of their line as
+it was parsed with them, not parsed again (`/docommand /echo ${Spawn[...].Name}` echoes the name as written).
 
 A line a script or plugin runs is checked against its permissions before and after the other line filters, so a
 compiled plugin's command-line rewrite (`command_line` in its hook table) cannot turn an allowed line into a forbidden
@@ -447,7 +452,7 @@ compiled plugin does. Each part needs the same capability as in a compiled plugi
 | `set_active(on)`, `set_flag(name, on)` | the switches: `wide_item_links`, `items_any_class`, `hide_any_class`, `aa_any_level`, `aa_train_all`, `augment_classes`, `research_classes`, `focus_classes`, `backstab_either_hand`, `solo_adventure` (`extend`) |
 | `set_player_classes(mask)`, `set_character_classes(name, mask)`, `set_pet_list{{spawn =, class =}}`, `set_vitals{max_hp =, ...}` | what the server knows (`extend`) |
 | `set_class_name(class_id, name [, short_name])` | the server's name and short name for a player class (1-16); see "Class names from Lua" below (`extend`) |
-| `on_packet(stream, direction, opcode, fn)` | `fn(opcode, data)` for each such packet (`'world'` / `'zone'`, `'in'` / `'out'`, opcode 0 all): `true` drops it, a string replaces its data. Use `string.pack` / `string.unpack` for layouts (`packets`) |
+| `on_packet(stream, direction, opcode, fn)` | `fn(opcode, data)` for each such packet (`'world'` / `'zone'`, `'in'` / `'out'`, opcode 0 all): `true` drops it, a string replaces its data. At most 256 a script (each call adds one until the script ends; an error past them). Use `string.pack` / `string.unpack` for layouts (`packets`) |
 | `send_packet(stream, opcode, data)` | a packet to the server (`packets`) |
 | `ui_function(name, fn)`, `option{name, label, min, max, get, set}`, `menu(label, command)` | for its windows, as a compiled plugin's (`ui`); `hs.UI.plugins.Get("<script name>")`. A Lua social cannot call them (an error) |
 | `player()`, `spawn(id)`, `spawns()`, `spell(id)`, `item(slot [, sub])`, `buff(i)`, `xtarget(i)`, `raid()`, `eqstr(id, ...)`, `zone_name(id)`, `server()` | the game state as tables (`read`); see "Game state tables", "The raid roster" and "Item fields" below |
@@ -1557,6 +1562,14 @@ It can also add:
 - **menu entries**: `add_menu(label, command)`. The EQ menu (a Plugins submenu) and the gamepad pack's More page list
   them (`hs.PluginMenu`, `hs.PluginMenuClick`). Choosing one runs the command with the plugin's capabilities, even
   though the player chose it: one that needs more than the plugin may do is refused.
+
+Limits per owner (a compiled plugin or a script): 256 UI functions, 64 options and 32 menu entries
+(`UiBridge::kMaxFunctions`, `kMaxOptions`, `kMaxMenuEntries`).
+
+- Past them `add_ui_function`, `add_option` and `add_menu` return 0, and the `hailstone` module's `ui_function`,
+  `option` and `menu` raise an error.
+- A function or option of a name the owner already has replaces it, and a menu entry of a label it already has
+  changes that entry's command, without counting twice: a plugin that adds its entry at each load or zone keeps one.
 
 #### Owners
 

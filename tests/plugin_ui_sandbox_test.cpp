@@ -97,8 +97,8 @@ TEST_CASE("Plugin UI: hs.PluginOptions with a get that adds and replaces options
     SandboxUi s;
     int added = 0;
     std::function<int()> get = [&]() -> int {
-        // Enough new options to move the list, and this very option replaced.
-        for (int i = 0; i < 64; ++i)
+        // Enough new options to move the list (up to the owner's UiBridge::kMaxOptions), and this very option replaced.
+        for (int i = 0; i < 62; ++i)
             s.bridge.add_option({"P", "extra" + std::to_string(added++), "Extra", 0, 1, [] { return 0; }, [](int) {}});
         s.bridge.add_option({"P", "first", "First again", 0, 1, [] { return 5; }, [](int) {}});
         return 1;
@@ -107,8 +107,8 @@ TEST_CASE("Plugin UI: hs.PluginOptions with a get that adds and replaces options
     s.bridge.add_option({"P", "second", "Second", 0, 1, [] { return 2; }, [](int) {}});
     s.frame();
     CHECK(s.run("", "local o = hs.PluginOptions() return #o .. ' ' .. o[1].value .. ' ' .. o[2].value") == "2 1 2");
-    CHECK(added == 64);
-    CHECK(s.bridge.options().size() == 66);
+    CHECK(added == 62);
+    CHECK(s.bridge.options().size() == 64);
 }
 
 // A plugin's menu entry runs its command with the plugin's capabilities, whoever chose it (the player in the EQ menu,
