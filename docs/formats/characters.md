@@ -159,6 +159,13 @@ A model borrows from a donor model listed in LanternExtractor's `animationsource
 ... → ELM; HUF ... → ELF; TRM, TRF, OGM → OGF; HOM, GNM → DWM; ...). The donor's bone track is the model's with the
 code replaced (`HUMPE_TRACK` → `ELMPE_TRACK`).
 
+The code is replaced by position: the bone name's first letters, as many as the model's code has, whatever they are.
+A few skeletons name a bone with another model's code. South Karana's Halas female (HLF) has `HUFBI_L_TRACK`,
+`HUFL_POINT_TRACK` and `HLMHEAD_POINT_TRACK`; matched by its own code alone, its left upper arm took no ELF track and
+stood out at its rest angle in every clip. LanternExtractor matches tracks to bones by position too and renames those
+three bones (`CharacterFixer.FixHalasFemale`). Among the global, Luclin, South Karana and Halas models this changes
+only HLF's clips; how the original names the borrowed track is not traced (docs/unknowns.md).
+
 The RoF2 client's own list (`ActorAnimation::GetAlternateAnimTag` @0x406a60) names some donors Lantern's leaves out;
 its unconditional three-letter ones are added from `tools/data/rof2_animation_sources.txt` (FRF → FRM, SHF → SHM,
 WAF → WAL, KES → KEM and others).

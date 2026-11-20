@@ -1046,6 +1046,14 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     (BuildActorForSpawn @0x48f4b0, docs/mechanics.md).
   - Unknown: whether PlayerClient_UpdateHoldingAnimation or a hidden actor's return restarts D05.
   - Settle: reading those two paths for a call to the animation object's slot 3 with 0x10.
+- **Borrowed tracks for a bone named with another model's code** (South Karana's HLF: `HUFBI_L_TRACK`,
+  `HUFL_POINT_TRACK`, `HLMHEAD_POINT_TRACK`).
+  - Now: Hailstone replaces the bone name's first letters by position, as many as the model's code has, so HLF's left
+    arm takes ELF's `<clip>ELFBI_L_TRACK` and hangs as the right one does (docs/formats/characters.md).
+  - Unknown: whether the original builds the borrowed name by position or by the model's code (which would leave that
+    arm at its rest angle there too).
+  - Settle: InitAnimationTracks @0x407800's track-name build, or watching a Halas citizen female idle in South Karana
+    on the original client.
 
 ## World rendering
 
