@@ -352,6 +352,29 @@ std::optional<AppPacket> decode_app(ByteSpan wire, int opcode_bytes) {
     return p;
 }
 
+std::optional<AppPacket> decode_app(Bytes&& wire, int opcode_bytes) {
+    std::size_t head = 0;
+    AppPacket p;
+    if (opcode_bytes == 1) {
+        if (wire.empty()) return std::nullopt;
+        p.opcode = u8(wire[0]);
+        head = 1;
+    } else {
+        if (wire.size() < 2) return std::nullopt;
+        if (u8(wire[0]) == 0) {
+            // 00 00 hi: the escaped form of an opcode whose low byte is zero.
+            if (wire.size() < 3 || u8(wire[1]) != 0) return std::nullopt;
+            head = 1;
+        }
+        ByteReader r(ByteSpan(wire).subspan(head));
+        p.opcode = r.le<std::uint16_t>();
+        head += 2;
+    }
+    wire.erase(wire.begin(), wire.begin() + static_cast<std::ptrdiff_t>(head));
+    p.data = std::move(wire);
+    return p;
+}
+
 std::vector<Bytes> make_reliable(ByteSpan payload, std::uint16_t& next_sequence, const SessionParams& params) {
     std::vector<Bytes> out;
     std::size_t budget = params.max_packet_size > params.overhead() + 16 ? params.max_packet_size - params.overhead() : 16;

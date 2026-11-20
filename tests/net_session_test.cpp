@@ -201,6 +201,21 @@ TEST_CASE("application opcodes: little-endian with a 0x00 escape when the low by
     CHECK_FALSE(soe::decode_app(b({0x00, 0x05, 1})));
 }
 
+TEST_CASE("application opcodes: decoding from a buffer given up reads the same as from a span") {
+    for (const Bytes& wire : {b({0x00, 0x00, 0x01, 2}), b({0x22, 0x00}), b({0x09, 0x7a, 1, 2, 3}), b({0x00, 0x05, 1}),
+                              b({0x00}), b({}), b({0x00, 0x00})}) {
+        for (int opcode_bytes : {1, 2}) {
+            CAPTURE(opcode_bytes);
+            auto from_span = soe::decode_app(ByteSpan(wire), opcode_bytes);
+            auto from_buffer = soe::decode_app(Bytes(wire), opcode_bytes);
+            REQUIRE(from_span.has_value() == from_buffer.has_value());
+            if (!from_span) continue;
+            CHECK(from_span->opcode == from_buffer->opcode);
+            CHECK(from_span->data == from_buffer->data);
+        }
+    }
+}
+
 TEST_CASE("sequence comparison wraps at 16 bits") {
     CHECK(soe::compare_sequence(5, 5) == soe::SeqOrder::Current);
     CHECK(soe::compare_sequence(65535, 0) == soe::SeqOrder::Future);
