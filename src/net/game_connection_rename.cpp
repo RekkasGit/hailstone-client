@@ -11,9 +11,6 @@ namespace hailstone::net {
 
 namespace {
 
-// The latest level-up effects kept for a later renderer (see apply_level_appearance).
-constexpr std::size_t kLevelAppearanceKept = 16;
-
 bool same_name(std::string_view a, std::string_view b) {
     // GetSpawnByName compares with a case-insensitive string compare (FUN_00809250 -> _stricmp).
     return std::ranges::equal(a, b, [](char x, char y) {
@@ -56,16 +53,19 @@ void GameConnection::apply_gm_last_name(const GMLastName& r) {
 }
 
 void GameConnection::apply_level_appearance(const LevelAppearance& r) {
-    // The case at 0x4d0053 / 0x58fed0: the spawn is found by id; each group with an effect id above 0 and an attach
-    // point in the spawn model's table hangs the effect there. How an effect id maps to a file in the game folder is
-    // not derived (docs/unknowns.md), so the packet is decoded, kept (the latest few) and logged, and nothing is drawn.
+    // The case at 0x4d0053 / 0x58fed0: the spawn is found by id; each group with an effect id above 0 is an effect
+    // for the spawn's model (CActor vf126): the effect id indexes the actor emitter file, the slot the model's spell
+    // points, the flag decides how it is placed. The model, the slot and the file are the app's to check
+    // (app/actor_emitters.h start_effect), which has the model; here only the packet and the spawn are.
     if (!world_.spawns.contains(r.spawn_id)) return;
     for (const auto& g : r.groups) {
         if (!level_appearance_group_used(g)) continue;
-        log::info("level appearance: spawn {} effect {:#x} slot {} flag {}", r.spawn_id, g.effect_id, g.slot, g.flag);
+        log::debug("level appearance: spawn {} effect {} slot {} flag {}", r.spawn_id, g.effect_id, g.slot, g.flag);
+        level_effect_cues_.push_back({r.spawn_id, g.effect_id, g.slot, g.flag != 0});
     }
-    level_appearances_.push_back(r);
-    while (level_appearances_.size() > kLevelAppearanceKept) level_appearances_.pop_front();
+    if (level_effect_cues_.size() > kLevelEffectCuesKept)
+        level_effect_cues_.erase(level_effect_cues_.begin(),
+                                 level_effect_cues_.end() - static_cast<std::ptrdiff_t>(kLevelEffectCuesKept));
 }
 
 } // namespace hailstone::net

@@ -1558,6 +1558,8 @@ private:
     GuidePath guide_;
     std::string guide_zone_; // the zone it was started in: zoning ends it (spawn ids are the zone's)
     void update_guide();
+    // The server's level-up effects (OP_LevelAppearance): started on the spawns' spell points.
+    void update_level_effects(net::GameConnection& conn);
     game::ZoneLineTrigger zone_line_;
     game::ViewDistance view_;
     // The per-frame fog and scene light (CDisplay_UpdateSkyWeatherAndFog and SetFog), the player's light level

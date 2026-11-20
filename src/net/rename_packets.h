@@ -41,6 +41,17 @@ inline constexpr std::size_t kLevelAppearanceSize = 64;
 std::optional<LevelAppearance> decode_level_appearance(const AppPacket& p);
 AppPacket encode(const LevelAppearance& v); // server direction, for tests
 
+// One effect to show, a used group of an OP_LevelAppearance on a spawn the client knows. Taken once a frame with
+// GameConnection::take_level_effect_cues().
+struct LevelEffectCue {
+    std::uint32_t spawn_id = 0;
+    std::uint32_t effect_id = 0; // an index into the actor emitter file (actoremittersnew.edd)
+    std::uint32_t slot = 0;      // one of the model's ten spell points (assets/model_points.h kSpellPointNames)
+    bool flag = false;           // see app/actor_emitters.h start_effect
+};
+// The most cues kept between two takes (a frame): an older one is dropped for a newer.
+inline constexpr std::size_t kLevelEffectCuesKept = 5 * 16;
+
 // The original treats the effect id as a signed int and skips a group whose id is not above 0.
 bool level_appearance_group_used(const LevelAppearanceGroup& g);
 

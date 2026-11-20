@@ -226,6 +226,7 @@ std::int32_t ParticleSystem::create(const SpellEmitterRequest& r) {
     e.actor = r.actor;
     e.point = r.actor != 0 ? r.bone_point : -1;
     e.point_only = r.point_only;
+    e.server_effect = r.server_effect;
     e.origin = r.position;
     e.scale = r.scale;
     e.density = r.density;
@@ -287,7 +288,7 @@ void ParticleSystem::stop_keys(std::span<const std::uint32_t> keys) {
 void ParticleSystem::stop_actors(std::span<const std::uint32_t> actors) {
     if (actors.empty()) return;
     std::erase_if(emitters_, [&](const Emitter& e) {
-        return e.actor != 0 && std::binary_search(actors.begin(), actors.end(), e.actor);
+        return e.actor != 0 && !e.server_effect && std::binary_search(actors.begin(), actors.end(), e.actor);
     });
 }
 

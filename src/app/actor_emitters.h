@@ -89,6 +89,34 @@ public:
     void draw(const render::FrameInfo& frame, const glm::mat4& view_proj, const glm::mat4& view, float glow = 1.0f,
               const render::SceneLighting* modern = nullptr);
     void clear();
+
+    // A model's spell point on a spawn as drawn: its world matrix (assets::SpellPoints; false: not drawn or no such
+    // point). Set by the app each frame; start_effect and the placing of its emitters read it.
+    using PointWorld = std::function<bool(std::uint32_t id, int point, glm::mat4& world)>;
+    // The floor below a point (the zone's collision), when it is loaded.
+    using FloorFn = std::function<std::optional<float>(const glm::vec3&)>;
+    void set_point_world(PointWorld point_world) { point_world_ = std::move(point_world); }
+    void set_floor(FloorFn floor) { floor_ = std::move(floor); }
+    // An effect the server plays on a spawn by number (OP_LevelAppearance): the actor file's emitter `effect` on one
+    // of the spawn's ten spell points, as CActor vf126 @0x1003a950 makes it. Without `flag` the emitter is attached
+    // to the point and follows it. With it the original places the emitter once, from the point's position taken
+    // down onto the floor, with the point's scale, instead of attaching it; here the point's position with the floor
+    // below it as z (the point's own z without a floor), the point's scale, the world's axes (docs/unknowns.md: the
+    // original's small raise and the actor's turn). Like every emitter of the actor file it is made at the actor
+    // density and opacity and ends with its definition's own duration. Returns false, starting nothing, for an effect
+    // not in the file, a slot the model has no point for, or a spawn not drawn.
+    struct Effect {
+        std::uint32_t actor = 0;
+        std::uint32_t effect = 0;
+        std::uint32_t slot = 0;
+        bool flag = false;
+    };
+    bool start_effect(const Effect& effect);
+    // Drops the effects of spawns `alive` no longer knows, and the records of those that ended. At most
+    // kMaxEffects run: a newer one stops the oldest.
+    void prune_effects(const std::function<bool(std::uint32_t id)>& alive);
+    static constexpr std::size_t kMaxEffects = 64;
+    std::size_t effect_count() const { return effects_.size(); }
     std::size_t emitters() const {
         finish();
         return particles_.emitters().size() + clouds_.emitters().size();
@@ -108,6 +136,9 @@ private:
         return std::uint64_t{actor} << 32 | static_cast<std::uint32_t>(point);
     }
     void finish() const; // waits for simulate_async's step
+    // An effect's attached emitter uses point numbers from here up: kEffectPointBase + the spell point (an ordinary
+    // actor emitter's point is its index in the mesh's emitter list).
+    static constexpr std::int32_t kEffectPointBase = 0x1000;
 
     struct Live {
         // The mesh drawn last frame, and which one it is: a mesh freed and another dressed at its address (the
@@ -159,6 +190,12 @@ private:
     std::vector<std::pair<std::size_t, bool>> restarts_;
     std::vector<Live*> lives_;
     std::uint32_t next_key_ = 1;
+    PointWorld point_world_;
+    FloorFn floor_;
+    struct RunningEffect {
+        std::uint32_t key = 0, actor = 0;
+    };
+    std::vector<RunningEffect> effects_; // oldest first
     bool async_ = false; // the scene's: simulate_async steps the systems
     // simulate_async's table of the attached emitters' places, by attachment_key; the step reads it alone.
     std::unordered_map<std::uint64_t, std::optional<game::EmitterAttachment>> attachments_;

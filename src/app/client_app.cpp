@@ -405,6 +405,7 @@ int ClientApp::run() {
                 if (id & WorldObjects::kObjectActorBit) return objects && bone == 0 && objects->object_transform(id, w);
                 return actors->drawn_bone(id, bone, w);
             };
+            if (in_world && conn_) update_level_effects(*conn_);
             actor_emitters_->update(dt, actor_emitter_list_, bones, camera_.position,
                                     [actors](std::uint32_t id, std::string_view code, float& time) {
                                         return actors->drawn_playing(id, code, time);
@@ -1275,6 +1276,27 @@ void ClientApp::report_world_geometry() {
     if (automation_)
         for (const auto& [index, vertices] : world_recorded_) automation_->world_recorded(index, vertices);
     world_recorded_.clear();
+}
+
+void ClientApp::update_level_effects(net::GameConnection& conn) {
+    // OP_LevelAppearance's effects (net/rename_packets.h): each cue starts the actor file's emitter on the spawn's
+    // spell point (ActorEmitters::start_effect). A cue for a spawn not drawn, a slot its model lacks or an effect
+    // not in the file starts nothing.
+    const auto cues = conn.take_level_effect_cues();
+    if (!actor_emitters_ || !actor_renderer_ || !spell_particles_) return;
+    const render::ActorRenderer* actors = actor_renderer_.get();
+    SpellParticles* points = spell_particles_.get();
+    actor_emitters_->set_point_world([actors, points](std::uint32_t id, int point, glm::mat4& world) {
+        const auto m = points->spell_point_world(*actors, id, point);
+        if (m) world = *m;
+        return m.has_value();
+    });
+    actor_emitters_->set_floor([this](const glm::vec3& p) -> std::optional<float> {
+        return collision_ ? collision_->floor_below(p, 0.0f) : std::nullopt;
+    });
+    for (const auto& cue : cues)
+        actor_emitters_->start_effect({cue.spawn_id, cue.effect_id, cue.slot, cue.flag});
+    actor_emitters_->prune_effects([&conn](std::uint32_t id) { return conn.world().spawns.contains(id); });
 }
 
 void ClientApp::update_guide() {

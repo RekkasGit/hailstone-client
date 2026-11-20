@@ -1033,7 +1033,7 @@ Tried live against EQEmu with two clients (playprobe `--duel`, `--duel-wait`, `-
 | InspectMessageUpdate | C→Z | 0x4d25 | 256 B: our inspect message |
 | Surname | C→Z | 0x0423 | 100 B: our name[64], u32 0, surname[32]; after ConfirmationDialog 0x6f (9050), prints 9051. No argument with a surname: dialog 0x75 (5155) → empty OP_ClearSurname 0x3fb0 |
 | GMLastName | Z→C | 0x46ce | 200 B: name[64] (the key), gmname[64], lastname[64], 4 × u16 (EQEmu sets all to 1; the client tests the dword at 196). The named spawn (and the profile, for the player) takes lastname; apply 0 or an unknown name is ignored |
-| LevelAppearance | Z→C | 0x3bc9 | 64 B: u32 spawn id, 5 × {u32 effect id, u32 attach slot, u32 flag}. EQEmu sends effects 0x4d..0x51 on a level-up. The original hangs each effect above 0 on the spawn model's attach point; here the packet is decoded, kept and logged, nothing is drawn (docs/unknowns.md) |
+| LevelAppearance | Z→C | 0x3bc9 | 64 B: u32 spawn id, 5 × {u32 effect id, u32 attach slot, u32 flag}. EQEmu sends effects 0x4d..0x51 (77..81, actoremittersnew.edd) on a level-up, on spell point 1 (chest) or 2 (head), flag 1 for two of them. A group with effect id 0 is skipped. Each used group becomes an emitter of the actor file on the spawn's spell point: flag 0 attached to the point, flag 1 placed once on the floor below it (docs/unknowns.md) |
 | GMSummon / CorpseDrag | C→Z | 0x486f / 0x0904 | 152 B (GMSummon_Struct): corpse name[64], our name[64], u32 0, u32 zone id, the corpse's y, x, z (float bits), u32 0; the corpse is the target, else our first corpse in the zone (13048 none); prints 13047 |
 | CorpseDrop | C→Z | 0x7037 | the target's name and NUL |
 | Shielding | C→Z | 0x52e5 | 4 B: target (warriors of level 30+; 4030/4031/4033/6826) |

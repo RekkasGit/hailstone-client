@@ -86,6 +86,10 @@ public:
     void set_floor(FloorFn floor) { floor_ = std::move(floor); }
     // Visible, upward-facing ground for Find trails; separate from spell attachment floors.
     void set_trail_floor(FloorFn floor) { trail_floor_ = std::move(floor); }
+    // A spawn's spell point (0..9) in the world as last drawn; nullopt when it is not drawn or has no such point.
+    std::optional<glm::mat4> spell_point_world(const render::ActorRenderer& actors, std::uint32_t id, int point) {
+        return point_world(actors, id, point);
+    }
     // The light the glowing effects give off (game::particle_lights), the `max` brightest.
     std::vector<game::LightSource> lights(std::size_t max) const;
     // The Find window's guide path (app/guide_path.h) to draw, the player first; empty: none.

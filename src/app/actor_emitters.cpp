@@ -6,6 +6,7 @@
 #include <optional>
 
 #include "assets/character.h"
+#include "assets/model_points.h"
 #include "assets/object_animation.h"
 #include "core/game_dir.h"
 #include "core/ini_file.h"
@@ -83,6 +84,15 @@ glm::mat4 ActorEmitters::local_matrix(Live& live, const assets::MeshEmitter& me)
 
 std::optional<game::EmitterAttachment> ActorEmitters::attach(std::uint32_t id, std::int32_t i,
                                                              const BoneWorld& bone_world) {
+    if (i >= kEffectPointBase) {
+        // A level-up effect's emitter: its spell point on the spawn as drawn.
+        glm::mat4 m;
+        if (!point_world_ || !point_world_(id, i - kEffectPointBase, m)) return std::nullopt;
+        game::EmitterAttachment at;
+        at.position = glm::vec3(m[3]);
+        at.axes = glm::mat3(m);
+        return at;
+    }
     auto it = live_.find(id);
     if (it == live_.end() || !it->second.mesh || i < 0 ||
         static_cast<std::size_t>(i) >= it->second.mesh->emitters.size())
@@ -97,6 +107,59 @@ std::optional<game::EmitterAttachment> ActorEmitters::attach(std::uint32_t id, s
     at.alpha = it->second.alpha;
     at.particle_scale = me.cloud ? 1.0f : heights_.pes_factor(me.model_code);
     return at;
+}
+
+bool ActorEmitters::start_effect(const Effect& effect) {
+    finish();
+    if (effect.slot >= assets::kSpellPointNames.size() || !point_world_) return false;
+    glm::mat4 point;
+    if (!point_world_(effect.actor, static_cast<int>(effect.slot), point)) return false;
+    game::SpellEmitterRequest r;
+    r.emitter = static_cast<std::int32_t>(effect.effect);
+    r.key = next_key_++;
+    // vf126 gives an actor's emitter 5,000,000 ms like the always-on ones; this one is not persistent, so it ends
+    // with the definition's own duration.
+    r.duration_ms = game::kActorEmitterDurationMs;
+    r.density = settings_.density;
+    r.opacity = settings_.opacity;
+    r.position = glm::vec3(point[3]);
+    if (effect.flag) {
+        const float scale = glm::length(glm::vec3(point[0]));
+        r.scale = std::isfinite(scale) && scale > 0.0f ? scale : 1.0f;
+        if (floor_)
+            if (auto z = floor_(r.position)) r.position.z = *z;
+    } else {
+        r.actor = effect.actor;
+        r.bone_point = kEffectPointBase + static_cast<std::int32_t>(effect.slot);
+        r.point_only = true;
+    }
+    r.server_effect = true;
+    // create() adds the emitter even when its particles last 0 ms, so whether one was made is told by the list.
+    const std::size_t before = particles_.emitters().size();
+    particles_.create(r);
+    if (particles_.emitters().size() == before) return false; // an effect not in the file, or density 0
+    while (effects_.size() >= kMaxEffects) {
+        const std::uint32_t oldest = effects_.front().key;
+        particles_.stop_keys(std::span(&oldest, 1));
+        effects_.erase(effects_.begin());
+    }
+    effects_.push_back({r.key, effect.actor});
+    return true;
+}
+
+void ActorEmitters::prune_effects(const std::function<bool(std::uint32_t id)>& alive) {
+    if (effects_.empty()) return;
+    finish();
+    std::vector<std::uint32_t> gone;
+    std::erase_if(effects_, [&](const RunningEffect& e) {
+        const bool running = particles_.has(e.key);
+        if (!running) return true; // ended on its own
+        if (alive && alive(e.actor)) return false;
+        gone.push_back(e.key);
+        return true;
+    });
+    std::sort(gone.begin(), gone.end());
+    particles_.stop_keys(gone);
 }
 
 void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWorld& bone_world,
@@ -350,6 +413,7 @@ void ActorEmitters::clear() {
     clouds_ = game::ParticleSystem({assets::EmitterDefinition{}});
     cloud_indexes_.clear();
     cloud_definitions_.clear();
+    effects_.clear();
     live_.clear();
 }
 

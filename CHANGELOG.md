@@ -23,6 +23,7 @@
 - Native nameplate add-ons can draw the same guild tags, NPC descriptions and pet owner names as stock nameplates.
 - The server can now change a spawn's last name while you watch
   - It shows wherever name plates and the target window show last names, following your name-plate settings, and your own is updated too
+- The level-up effect shows: when the server sends it, rings and sparkles play on your character (and on others who level up near you), at the actor particle density
 - Item comparison, in both interfaces: an item's tooltip and details window show what wearing it instead of what you wear would change
   - Tooltips cover the inventory, bags, bank, loot, trade and a merchant's goods; the details window covers a linked item too
   - In the details window each stat's change sits beside the item's value (+12 in green beside AC 20, say), with the verdict and what it is compared with above the stats

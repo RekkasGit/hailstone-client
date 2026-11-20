@@ -81,6 +81,9 @@ struct SpellEmitterRequest {
     // The DLL's actor-emitter creator (CParticleSystem vtable +0x20, 0x10070640) gives the emitter only the point,
     // not the actor (emitter +0x68 stays 0): its axes then follow the point (EDD +0x60), not the actor's turn.
     bool point_only = false;
+    // Hailstone: an effect the server plays on a spawn (app/actor_emitters.h start_effect). It belongs to the effect
+    // list, not to the actor's own mesh emitters, so rebuilding those (stop_actors) leaves it running.
+    bool server_effect = false;
 };
 
 // An actor a stage can place emitters on.
@@ -190,6 +193,7 @@ struct Emitter {
     std::uint32_t actor = 0;
     std::int32_t point = -1; // the actor's spell point it hangs from, or -1
     bool point_only = false;  // SpellEmitterRequest::point_only
+    bool server_effect = false; // SpellEmitterRequest::server_effect
     glm::vec3 origin{0.0f};
     // The emitter's basis, unturned (columns transverse 1, transverse 2, axial). Without a matrix the constructor's
     // (+X, +Y, +Z); a zone fixture's from its node (emitter_axes); a spell emitter on an actor takes the actor's
