@@ -5,9 +5,14 @@
 #include <cstdlib>
 
 #include "core/env.h"
+#include "core/log.h"
 
 namespace {
 
+// The log's lines stay off the console unless HAILSTONE_TEST_LOG is set: a run writes thousands of expected warnings
+// (stand-in game folders without racedata.txt or spells_us.txt, scripts refused on purpose), which buried a real
+// one. The log still keeps its recent lines, and a test that opens a log file still gets every line in it.
+//
 // With HAILSTONE_TEST_TRACE set, each test case's name goes to stderr as it starts. A crash that ends the process at once
 // (on Windows a fast fail, 0xc0000409) loses the buffered report on stdout, so without this a CI log cannot say which
 // test it was in. stderr is unbuffered, and the name is flushed before the test runs.
@@ -16,13 +21,16 @@ struct TraceListener : doctest::IReporter {
 
     explicit TraceListener(const doctest::ContextOptions&) {}
 
+    void test_run_start() override {
+        if (hailstone::core::env("TEST_LOG") == nullptr) hailstone::log::set_console(false);
+    }
+
     void test_case_start(const doctest::TestCaseData& tc) override {
         if (!on) return;
         std::fprintf(stderr, "[test] %s (%s:%d)\n", tc.m_name, tc.m_file.c_str(), tc.m_line);
         std::fflush(stderr);
     }
     void report_query(const doctest::QueryData&) override {}
-    void test_run_start() override {}
     void test_run_end(const doctest::TestRunStats&) override {}
     void test_case_reenter(const doctest::TestCaseData&) override {}
     void test_case_end(const doctest::CurrentTestCaseStats&) override {}
