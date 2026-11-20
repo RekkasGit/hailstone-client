@@ -80,7 +80,9 @@ function tray.Register(name, window, slots, opts)
       v, changed = ui.SliderInt("Icon size", icon, 18, 64)
       if changed then ui.SetSetting(iconKey, v) end
       if ui.MenuItem("Show empty slots", showEmptySlots) then ui.SetSetting(emptySlotsKey, not showEmptySlots) end
-      if ui.MenuItem("Show slot numbers in tooltips", showSlotNumbers) then ui.SetSetting(slotNumbersKey, not showSlotNumbers) end
+      if ui.MenuItem("Show slot numbers in tooltips", showSlotNumbers) then
+        ui.SetSetting(slotNumbersKey, not showSlotNumbers)
+      end
     end,
   }
   local function body(x, y, w, h, s)
