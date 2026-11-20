@@ -1348,6 +1348,12 @@ function ImGui.SetNextWindowSize(w, h, cond)
     if type(w) == 'table' then return ui.SetNextWindowSize(w.x or w[1], w.y or w[2], h) end
     return ui.SetNextWindowSize(w, h, cond)
 end
+function ImGui.SetNextWindowSizeConstraints(a, b, c, d)
+    if type(a) == 'table' then
+        return ui.SetNextWindowSizeConstraints(a.x or a[1], a.y or a[2], b.x or b[1], b.y or b[2])
+    end
+    return ui.SetNextWindowSizeConstraints(a, b, c, d)
+end
 function ImGui.SetNextWindowPos(x, y, cond)
     if type(x) == 'table' then return ui.SetNextWindowPos(x.x or x[1], x.y or x[2], y) end
     return ui.SetNextWindowPos(x, y, cond)

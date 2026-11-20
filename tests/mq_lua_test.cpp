@@ -1475,6 +1475,35 @@ mq.delay(100000)
     CHECK_FALSE(h.hooks.has_command("/early"));
 }
 
+TEST_CASE("MQ Lua: ImGui.SetNextWindowSizeConstraints takes MQ's two ImVec2 as well as four numbers") {
+    ImGuiFrame frame;
+    Host h;
+    h.write("sz.lua", R"(
+local mq = require('mq')
+mq.imgui.init('Sizes', function()
+    ImGui.SetNextWindowSizeConstraints(ImVec2(100, 50), ImVec2(400, 300))
+    ImGui.SetNextWindowSize(1000, 10, ImGuiCond.Always)
+    ImGui.Begin('Vec')
+    local w, h = ImGui.GetWindowSize()
+    print('vec ' .. math.floor(w) .. ' ' .. math.floor(h))
+    ImGui.End()
+    ImGui.SetNextWindowSizeConstraints(120, 60, 200, 90)
+    ImGui.SetNextWindowSize(10, 1000, ImGuiCond.Always)
+    ImGui.Begin('Num')
+    w, h = ImGui.GetWindowSize()
+    print('num ' .. math.floor(w) .. ' ' .. math.floor(h))
+    ImGui.End()
+end)
+mq.delay(100000)
+)");
+    REQUIRE(h.scripts->run("sz", {}));
+    h.pulses(1);
+    h.scripts->imgui();
+    CHECK(h.printed_line("vec 400 50"));
+    CHECK(h.printed_line("num 120 90"));
+    CHECK(h.scripts->running("sz"));
+}
+
 TEST_CASE("MQ Lua: a window that destroys itself and fails names itself; the others still draw") {
     ImGuiFrame frame;
     Host h;

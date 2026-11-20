@@ -605,8 +605,9 @@ to take MQ's argument and return order:
 - `ImGui.Begin(name, open, flags)` returns `still_open, visible` when `open` is given, else `visible`.
 - `ImGui.Text`, `TextWrapped`, `TextDisabled` and `BulletText` take `(fmt, ...)` and string.format it.
 - `ImGui.TextColored` takes `(r, g, b, a, fmt, ...)` or `(ImVec4, fmt, ...)`.
-- `ImGui.Button(label, w, h | ImVec2)`, `ImGui.SetNextWindowSize(w, h, cond | ImVec2, cond)` and
-  `ImGui.SetNextWindowPos(x, y, cond | ImVec2, cond)`.
+- `ImGui.Button(label, w, h | ImVec2)`, `ImGui.SetNextWindowSize(w, h, cond | ImVec2, cond)`,
+  `ImGui.SetNextWindowPos(x, y, cond | ImVec2, cond)` and
+  `ImGui.SetNextWindowSizeConstraints(min_w, min_h, max_w, max_h | ImVec2 min, ImVec2 max)`.
 - Globals: `ImVec2(x, y)` and `ImVec4(x, y, z, w)` (plain tables), plus `ImGuiWindowFlags`, `ImGuiCond`, `ImGuiCol`,
   `ImGuiStyleVar`, `ImGuiTableFlags`, `ImGuiTableColumnFlags`, `ImGuiInputTextFlags`, `ImGuiComboFlags`,
   `ImGuiSelectableFlags`, `ImGuiMouseButton` (= ui.Mouse) and `ImGuiHoveredFlags`. There are no aliases for
