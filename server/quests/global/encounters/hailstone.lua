@@ -228,6 +228,12 @@ local function has_guild_permission(guild_id, rank, permission)
 	return allowed
 end
 
+-- An invitation reaches any Hailstone player online, in any zone, as a prompt they must answer: at most
+-- INVITE_TARGETS_MAX different players an inviter in INVITE_TARGETS_SECONDS, so an officer cannot prompt the whole
+-- server. Counted by the inviter's zone (Hailstone's own limit; the stock handler reaches only its own zone).
+local INVITE_TARGETS_MAX, INVITE_TARGETS_SECONDS = 5, 60
+local invite_targets = limiter(INVITE_TARGETS_SECONDS)
+
 -- The inviter's zone: the stock handler's checks (Client::Handle_OP_GuildInvite), with its words, then the
 -- invitation goes to the invitee's zone.
 local function guild_invite(client, name)
@@ -256,6 +262,20 @@ local function guild_invite(client, name)
 	if read_invite(target_id) then
 		client:Message(CHAT_RED, "That person is already considering a guild invitation.")
 		return
+	end
+	local w = window(invite_targets, client:CharacterID())
+	w.targets = w.targets or {}
+	if not w.targets[target_id] then
+		if (w.distinct or 0) >= INVITE_TARGETS_MAX then
+			client:Message(CHAT_RED, string.format("You have invited %d players in the last minute; wait before inviting more.", INVITE_TARGETS_MAX))
+			if not w.logged then
+				log(string.format("%s invites too many players; more are refused for %d s", client:GetCleanName(), INVITE_TARGETS_SECONDS))
+				w.logged = true
+			end
+			return
+		end
+		w.targets[target_id] = true
+		w.distinct = (w.distinct or 0) + 1
 	end
 	write_invite(target_id, { inviter_id = client:CharacterID(), inviter = client:GetCleanName(), guild_id = guild_id, rank = GUILD_RECRUIT, state = "p" })
 	eq.set_timer(string.format("guildinvite:%d:%d", client:CharacterID(), target_id), DELIVER_MS, encounter)

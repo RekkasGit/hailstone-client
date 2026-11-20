@@ -10,6 +10,7 @@
 - Cures no longer remove debuffs locally: a partial or too-weak cure leaves its icon standing until the server's buff fade clears it, instead of making the debuff vanish early
 - Buff icons now show a debuff's curse, disease, poison or corruption counters as soon as the buff lands and keep showing the remaining count after a partial cure, a server refresh without counter data, or a full buff list that leaves the spell in the same slot
 - Server script (`server/`): a server starting many zones at once no longer has every zone hash the same new `client_files/` side by side: one zone hashes and the others wait for it and reuse its hashes (`client_files/.hailstone-lock`; a lock a stopped zone left is removed after 15 minutes). The zones' scratch file names now carry the zone, so two can never collide
+- Server script (`server/`): a guild officer can invite at most five different players a minute across zones, since each invitation pops up a question for a player anywhere on the server
 - A damaged zone or model archive, or navigation geometry with a vertex far out, can no longer make the client ask for gigabytes of memory while loading
 - Add-on authors: `tools/make_addon.py` now refuses what the client would refuse at install (a version with leading zeros, names such as `aux.lua` or ending in a dot), and an `--out` folder inside the package's folder, and no longer packs a link that leads out of the folder. `tools/make_update.py` does the same and leaves dotfiles out
 

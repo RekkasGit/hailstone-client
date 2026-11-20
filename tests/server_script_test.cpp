@@ -654,6 +654,52 @@ assert(#T.messages == 7, "the next 10 s")
 )lua");
 }
 
+TEST_CASE("Server script: an inviter reaches at most 5 different players a minute across zones") {
+    check_run(R"lua(
+Database = function()
+  return {
+    prepare = function()
+      return { execute = function() end, close = function() end,
+               fetch_hash = function() return { permission = "255" } end }
+    end,
+    close = function() end,
+  }
+end
+local ids = {}
+eq.get_char_id_by_name = function(name) ids[name] = ids[name] or 100 + #name; return ids[name] end
+eq.get_char_name_by_id = function(id) for n, v in pairs(ids) do if v == id then return n end end return "" end
+eq.get_guild_id_by_char_id = function() return 0 end
+local signals = {}
+eq.cross_zone_signal_client_by_char_id = function(id) signals[#signals + 1] = id end
+load_script()
+local officer = client(1, "Officer")
+local said = {}
+function officer:IsInAGuild() return true end
+function officer:GuildID() return 3 end
+function officer:GuildRank() return 1 end
+function officer:Message(_, text) said[#said + 1] = text end
+local function invite(name)
+  local p = Packet(0x1430, 80)
+  p:WriteInt32(0, 0x47534d4e); p:WriteInt16(4, 1); p:WriteInt16(6, 1); p:WriteString(8, name)
+  T.handlers[Event.unhandled_opcode]({ self = officer, packet = p })
+end
+local names = { "Aa", "Bbb", "Cccc", "Ddddd", "Eeeeee", "Fffffff" }
+for _, n in ipairs(names) do invite(n) end
+assert(#signals == 5, "five invitations sent: " .. #signals)
+assert(said[#said]:find("You have invited 5 players", 1, true), tostring(said[#said]))
+-- Asking one of the five again is not a new player (its own bucket answers that it is pending).
+T.data["hailstone:guildinvite:" .. ids.Aa] = nil
+invite("Aa")
+assert(#signals == 6, "the same player again is allowed")
+T.now = T.now + 60
+invite("Fffffff")
+assert(#signals == 7, "the next minute")
+local logged = 0
+for _, l in ipairs(T.logs) do if l:find("invites too many players", 1, true) then logged = logged + 1 end end
+assert(logged == 1, "logged once: " .. logged)
+)lua");
+}
+
 TEST_CASE("Server script: the settings' buckets are read at most every 10 s, not at every packet") {
     check_run(R"lua(
 add_files(1, 40000)

@@ -194,6 +194,8 @@ client's hello after the zone-in. The script then:
 
 1. in the inviter's zone, makes EQEmu's checks with EQEmu's words: in a guild, the rank's invite permission
    (`guild_permissions`), the name is a character ("could not be found"), not in a guild, no invitation pending;
+   then its own: an inviter invites at most five different players a minute (counted by the inviter's zone), since
+   an invitation reaches any Hailstone player online as a prompt, and EQEmu's only reached the inviter's zone;
 2. leaves the invitation in the data bucket `hailstone:guildinvite:<character id>` (20 s) and signals the
    character (`eq.cross_zone_signal_client_by_char_id`);
 3. in the invitee's zone, sends the client the invitation (wire opcode 0x1431), which asks the usual
