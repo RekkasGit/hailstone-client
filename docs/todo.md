@@ -383,7 +383,7 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
 - [ ] eqhost.txt: the port the original uses for a `Host` without one, and reading the `Host1`.. fallback entries eqmain's `LoginClient::ReadHosts` reads (unknowns.md).
 - [ ] The original CRT's atol on a number out of range: wrap or saturate (`/split`, `game::cmd_atol`; unknowns.md).
 - [x] What OP_MobRename's handler sends after a rename, and when (0x4c9a6b): 0x2b8e alone, for the own spawn, while the server list window is up. Hailstone has no such window and sends nothing.
-- [ ] The player's own rename: the character name change (0x4d5a10) and which readers follow it (unknowns.md). The client renames the spawn only.
+- [x] The player's own rename: the character name change (0x4d5a10). The connection's character name and the profile's take the new name, so every reader follows it.
 - [ ] OP_LevelAppearance's flag-on emitter takes the actor's turn (vf126 @0x1003a950; unknowns.md). It takes the world's axes.
 
 ### Real estate (player housing, guild halls)
@@ -751,6 +751,10 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
   - Open: zoning in, the leader printed "<name> joined the raid." for each of the 17 members (docs/unknowns.md).
 - [x] **Gamepad pack: the window under a closed one takes the pad back.** Two windows asking for the pad in one frame kept only the last request; every request is kept now. Checked live 2026-10-31.
 - [x] Melee sounds (the cues fire with the right waves; not listened to).
+- [ ] **The six RoF2 sound triggers added together:** an item moved by a click (0x92), bags and containers
+  (0x85/0x86/0x91), an adventure's loss and win (0x8c/0x8d), a quest reward (0x8d), struck down by the gods (0x8f),
+  water in and out (0x64/0x63). Each cue and its condition is unit-tested, the water path end to end through
+  `app::PlayerMovement`; none listened to live.
 - [x] **Augment appearance-slot gating.** With game feature 0x15 on (the client's setting for EQEmu accounts) a type-21 ornament into a type-21 socket is not refused; seen live 2026-10-31 (stored in `inventory.augment_six`). The refusal with the feature off is unit-tested only (docs/unknowns.md).
 - [ ] **A server's class names in a live session** (`set_class_name`, docs/plugins.md "Class names"). Unit, plugin and script tests only.
   - A plugin that names classes on its server's hello, then every window that names a class (both UI packs).

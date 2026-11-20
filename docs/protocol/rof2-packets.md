@@ -218,7 +218,9 @@ Allocation 58: base STR 85, DEX 75, AGI 80, STA 85, INT 75, WIS 75, CHA 75, defa
 3. ChannelMessage: the server ignores everything after the message. Sent names are at most 63 characters and the message 2047 (EQEmu's DECODE strcpy's the names into `char[64]`). Checked: SendNewText (0x40, 0x800).
 
 With a nonzero apply flag, MobRename looks up the first old name case-insensitively, including its spawn suffix.
-It replaces the name on the same spawn, preserving the spawn ID and target selection.
+It replaces the name on the same spawn, preserving the spawn ID and target selection. For the player's own spawn it also
+renames the character (0x4d5a10): the connection's character name and the profile's take the new name, so the
+own-corpse and leadership checks and the next zone's entry use it.
 
 ### Combat (`net/zone_packets.h` "combat", `GameConnection::handle_combat`, rules in `game/combat.{h,cpp}`)
 
@@ -355,7 +357,7 @@ Only OP_ShopPlayerBuy/Sell (field copies) and OP_CancelTrade have a RoF2 transla
 | ShopPlayerBuy | C→Z | 0x0ddd | 32 B Merchant_Sell_Struct: u32 merchant, u32 me, u32 item slot (the item's instance id) + u32 high dword (0), u32 quantity, 12 bytes unset (0). Refused locally with an item on the cursor (8548) or too little money (12060/12061) |
 | ShopPlayerBuy | Z→C | 0x0ddd | same, quantity bought, u32 total price at +24. See note 2 |
 | ShopPlayerSell | C→Z | 0x791b | 20 B Merchant_Purchase_Struct: u32 merchant, TypelessInventorySlot {i16 slot, i16 bag sub-slot, i16 augment, i16}, u32 quantity, u32 price (unset by the client; 0). Refused locally: not droppable 12062, a non-empty bag 12064, augmented 5360, a sale pending 12063 |
-| ShopPlayerSell | Z→C | 0x791b | same with the copper paid; slot -1 = refused (1364). The sold count leaves the stack (no item packet), 1361 "You receive%1 from %2 for the %3(s).", then OP_MoneyUpdate with the new coin |
+| ShopPlayerSell | Z→C | 0x791b | same with the copper paid; slot -1 = refused (1364, colour 0x113). The sold count leaves the stack (no item packet); the copper is credited, wave 0x8a (the cash register) plays and 1361 "You receive%1 from %2 for the %3(s)." prints in the Merchants colour 0x114 (FinishSellingItem @0x6f4200), then OP_MoneyUpdate with the new coin |
 | ShopEnd | C→Z | 0x30a8 | 8 B: u32 merchant, u32 me; answered by an empty OP_ShopEndConfirm (0x3196) |
 | ShopDelItem | Z→C | 0x724f | 12 B: u32 merchant, u32 player, u32 merchant slot (sold out) |
 | TradeRequest | both | 0x77b5 | 8 B: u32 the other side, u32 the sender. See note 3 |
@@ -369,7 +371,7 @@ Only OP_ShopPlayerBuy/Sell (field copies) and OP_CancelTrade have a RoF2 transla
 | ItemLinkClick (say link) | C→Z | 0x4cef | the ordinary OP_ItemLinkClick; the server says the phrase. See note 6 |
 
 1. ShopRequest stock: item packets type 0x64 (header slot type 9, slot = instance id = merchant slot, price = per-unit copper, merchant_slot = stock, -1 unlimited).
-2. ShopPlayerBuy reply: the item arrives first as an item packet type 0x67. There is **no** OP_MoneyUpdate: the client takes the price itself (smallest coins first; the split may differ from the server's, the total agrees) and prints 1437 "You give%1 to %2.".
+2. ShopPlayerBuy reply: the item arrives first as an item packet type 0x67. There is **no** OP_MoneyUpdate: the client takes the price itself (smallest coins first; the split may differ from the server's, the total agrees) and prints 1437 "You give%1 to %2." in the Merchants colour 0x114. Wave 0x8a (the cash register) plays only when the purse could pay; otherwise the coin is zeroed silently (FinishBuyingItem @0x6ef220, also a trader purchase, TraderShop 10 method 0).
 3. TradeRequest C→Z is sent on a left click on a spawn while holding an item (within AvatarHeight + 20, 12294). Banker-type classes 40/63/64/66/74 refuse (8505). Z→C (a player asks): the client opens its trade window at once and answers the Ack.
 4. TradeRequestAck: for an NPC the server answers itself ({me, NPC}); the cursor item then goes into the trade (OP_MoveItem cursor → {3, slot}, count 0; a stack merges first) and the 4-slot give window opens. Players get the 8-slot trade window.
 5. CancelTrade: the client prints 1448/1450 and sends its own cancel back while a partner is set. Refunds come as item packets and OP_MoneyUpdate, then OP_FinishWindow/2 (empty).
@@ -1069,6 +1071,7 @@ Tried live against EQEmu with two clients (playprobe `--duel`, `--duel-wait`, `-
 | SharedTaskInvite / SharedTaskInviteResponse | Z→C / C→Z | 0x3444 / 0x7582 | 136 B {i32, i32 invite id, `char[64]` task, `char[64]` inviter} / 12 B {0, invite id, i8 accepted, 3} |
 | Stun / ItemRecastDelay / Bind_Wound | Z→C | 0x36a4 / 0x15a9 / 0x0386 | u32 duration ms (+2 B) / 12 B {delay s, recast type, bool} / 8 B {u16 target, u16, u16 type: 3 start, 1 done, 4 target dead, 5 gone, 7 no bandage} |
 | Sound (QuestReward_Struct) / CashReward | Z→C | 0x1a30 / 0x5f7a | 68 B {giver, our id, exp, faction, mod, copper +20, silver, gold, platinum} / 16 B {copper, silver, gold, platinum}: coin added without a coin update |
+| GMKill | Z→C | 0x51d3 | 132 B {`char[64]` the named player, `char[64]` the GM, u32} (EQEmu forwards the GM's own /kill packet to the zone's other clients and does not kill the player itself): the name is compared with our name without case, and on a match the struck-down line (eqstr 1391, colour 10) and wave 0x8f (in the original the zone message handler at `0x4c3250` takes 0x51d3 to the case at `0x4c8a23` through the byte and pointer tables at `0x4d4998` / `0x4d4980`) |
 | GuildMemberAdd / Delete / Level / PublicNote / SetGuildRank (= RankAltBanker) / Details | Z→C | 0x2925 / 0x3141 / 0x1bd3 / 0x01f9 / 0x0b9c / 0x69b9 | u32 guild first; see GameConnection::handle_world_social |
 | Charm / DisciplineUpdate / Untargetable / YellForHelp / GetGuildMOTDReply | Z→C | 0x5d92 / 0x759e / 0x053c / 0x4e56 / 0x4f1f | 12 B {owner, pet, 1 on / 0 off} / 300 × u32 / 8 B {spawn, targetable} / u32 yeller / the GuildMOTD struct |
 | Weblink | Z→C | 0x6f4b | the address, NUL-terminated (EQEmu `Weblink_Struct`); the case @0x4c5b5d opens it in an HTML window (docs/browser.md) |

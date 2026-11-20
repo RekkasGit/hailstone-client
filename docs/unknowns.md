@@ -294,19 +294,6 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     `[LoginServer]`'s first `Host` (its network API accepts a host list).
 - **Membership details.** The feature ids' names and the refusal lines are decoded (`game/feature_restrictions.h`);
   the other uses of the 22 entries are not.
-- **After the player's own rename** (OP_MobRename, HandleWorldMessage's 0x2c57 case @0x4c9a6b).
-  - Known: after `PlayerManagerBase_RenamePlayer` the handler compares the renamed spawn's id (+0x148) with the local
-    player's; for the player's own spawn it sets the character's name (0x4d5a10), then sends opcode 0x2b8e alone (the
-    server transfer's server list request, `kOpServerTransfer`) when the server list window (`pinstCServerListWnd`,
-    0xd1fd34) exists and its byte +0x196 is set: it asks again for that window's list. Hailstone has no server list
-    window, so sending nothing is the same. What the path at 0x462780 does when that send fails is not read.
-  - Now: only the spawn is renamed. The original's character name change (0x4d5a10) is not made here: the profile,
-    group and raid leadership, the raid window, the Group Finder, the raid packets and the own-corpse checks
-    (`/corpse`, loot, hide-looted, `/decaycorpse`) still use the login name, and a respawn record under the new name
-    is not taken as the own spawn.
-  - Unknown: which of those readers the original takes from the character's name.
-  - Settle: tracing the readers of the character's name in the original, or a capture of a character rename on a live
-    server (stock EQEmu notes its `Client::ChangeFirstName` does not work for RoF2).
 - **Spawn suffix in destructible form** (OtherData 0xe1).
   - Now: the client reads no suffix there. EQEmu writes one only when it is not empty.
   - Unknown: the original appears to read one whenever bit 0x20 is set (`EQPlayer::UnSerializeSpawn`), and to treat
@@ -1209,6 +1196,19 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 - **Wave cache.** Decoded waves not asked for over two zone changes are freed (`SoundLibrary::drop_idle_waves`; the
   global waves stay). A freed wave's next play is skipped while it decodes again, as any wave's first play is. The
   original's wave cache policy is not traced.
+- **The quest reward's coin lines.** The wave plays for OP_Sound (EQEmu's `QuestReward`, the case at 0x4c7d39), not
+  for OP_CashReward, which credits the coin without one (0x4c636d → 0x4bcef0). Hailstone credits both and plays the
+  wave for OP_Sound, but prints none of the lines the original prints there: one per nonzero coin amount, built from
+  the string table (1438, 1440, 1441, 1442: "You receive %1 copper %2." and so on, with 1439 "from %1" naming the
+  giver when its spawn is known).
+  - Unknown: which id goes with which of the four amounts in the code, and the lines' colour.
+  - Settle: the arguments of the BuildStringFromEQSTR and dsp_chat calls between 0x4c7d39 and 0x4c7ff6.
+- **Struck down by the gods.** After the line and the wave, the original does its own death bookkeeping
+  (0x4c8aab onwards: two calls and the local player's RespawnTimer cleared); Hailstone leaves that to OP_Death. A stock
+  EQEmu server does not send OP_Death for it: its OP_GMKill handler forwards the GM's packet to the other clients
+  (`entity_list.QueueClients`) and leaves the kill to the named player's client, so here the player stays alive.
+  - Unknown: what the two calls after the wave do (0x45ffa0, 0x4423b0), and what the original sends the server.
+  - Settle: those two functions, or a capture of an original client being killed with /kill on a stock server.
 
 ## UI
 

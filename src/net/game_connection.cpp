@@ -1452,10 +1452,16 @@ void GameConnection::handle_zone(const AppPacket& p) {
         auto rename = decode_mob_rename(p);
         if (!rename) break;
         // GetSpawnByName @0x599b40 compares the full name, including a spawn's numeric suffix. For the player's own
-        // spawn the handler (0x4c9a6b) also sets the character's name (0x4d5a10, not made here: docs/unknowns.md) and
-        // sends 0x2b8e alone while the server list window is up, to refresh it; Hailstone has no such window.
+        // spawn (its id against the local player's, 0x4c9acd..0x4c9ae7) the handler (0x4c9a6b) also sets the
+        // character's name (0x4d5a10: CharacterBase +0x3c of the character at 0xdd261c), so later readers of the
+        // character's name (the profile, leadership, the own-corpse checks, the next zone's entry) take the new one.
+        // It then sends 0x2b8e alone while the server list window is up, to refresh it; Hailstone has no such window.
         for (auto& [id, spawn] : world_.spawns) {
             if (!iequals(spawn.name, rename->old_name)) continue;
+            if (id == world_.player_id) {
+                character_ = rename->new_name;
+                if (profile_) profile_->name = rename->new_name;
+            }
             if (spawn.name != rename->new_name) {
                 spawn.name = std::move(rename->new_name);
                 ++world_.spawn_set_serial;
@@ -2074,6 +2080,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
     case Op::SendTitleList:
     case Op::SetTitleReply:
     case Op::NewTitlesAvailable:
+    case Op::GMKill:
         handle_player(op, p);
         break;
     case Op::SpecialMesg:
