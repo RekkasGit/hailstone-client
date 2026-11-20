@@ -236,6 +236,34 @@ TEST_CASE("OP_MobRename updates the spawn with the full old name and preserves i
     CHECK(conn.target() == second);
 }
 
+TEST_CASE("OP_MobRename of the player's own spawn renames the character too (0x4d5a10)") {
+    Rig rig;
+    auto& conn = rig.conn;
+    REQUIRE(rig.to_zone());
+    const auto& spawns = conn.world().spawns;
+    const std::uint32_t own = conn.world().player_id;
+    REQUIRE(spawns.contains(own));
+    REQUIRE(conn.profile());
+    const std::string login = conn.character_name();
+    REQUIRE(spawns.at(own).name.starts_with(login));
+
+    // Another player's rename leaves the character's name alone.
+    constexpr std::uint32_t other = 4100;
+    rig.server.add_spawn(make_spawn("Otherguy000", other, 0, 1, 0, 0, 0));
+    REQUIRE(rig.until([&] { return spawns.contains(other); }));
+    rig.server.zone.send_reliable(mob_rename("Otherguy000", "Someone000"));
+    REQUIRE(rig.until([&] { return spawns.at(other).name == "Someone000"; }));
+    CHECK(conn.character_name() == login);
+    CHECK(conn.profile()->name == login);
+
+    // The own spawn's rename sets the character's and the profile's name, as the original's handler does.
+    rig.server.zone.send_reliable(mob_rename(spawns.at(own).name, "Renamed"));
+    REQUIRE(rig.until([&] { return spawns.at(own).name == "Renamed"; }));
+    CHECK(conn.character_name() == "Renamed");
+    CHECK(conn.profile()->name == "Renamed");
+    CHECK(conn.world().player_id == own);
+}
+
 TEST_CASE("zone-in forgets the last zone's auras, aggro meter and stun") {
     Rig rig;
     auto& conn = rig.conn;

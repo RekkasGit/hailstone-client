@@ -99,6 +99,7 @@
 - Modern login: Add-ons opens on its own when the cards cannot fit side by side, and the login and Add-ons cards scroll in short windows
 - Modern Buffs and Songs: **Show empty slots** keeps gaps in the tray, and **Show slot numbers in tooltips** adds the slot number after the spell name. Both are off by default and available with Alt-right-click on an icon
 - Zone lines between East Freeport and North Ro, and from Surefall Glade to Qeynos Hills, report the crossing position the server expects, shifted into the next zone's coordinates as the original client does, so a server whose zone point keeps the player's own coordinate places them correctly
+- When the server renames your own character, the client takes the new name everywhere: your corpse, group and raid leadership, and the next zone you enter, as the original does
 
 ## 0.7.2-beta (2026-11-19)
 

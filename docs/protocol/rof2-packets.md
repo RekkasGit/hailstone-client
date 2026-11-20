@@ -218,7 +218,9 @@ Allocation 58: base STR 85, DEX 75, AGI 80, STA 85, INT 75, WIS 75, CHA 75, defa
 3. ChannelMessage: the server ignores everything after the message. Sent names are at most 63 characters and the message 2047 (EQEmu's DECODE strcpy's the names into `char[64]`). Checked: SendNewText (0x40, 0x800).
 
 With a nonzero apply flag, MobRename looks up the first old name case-insensitively, including its spawn suffix.
-It replaces the name on the same spawn, preserving the spawn ID and target selection.
+It replaces the name on the same spawn, preserving the spawn ID and target selection. For the player's own spawn it also
+renames the character (0x4d5a10): the connection's character name and the profile's take the new name, so the
+own-corpse and leadership checks and the next zone's entry use it.
 
 ### Combat (`net/zone_packets.h` "combat", `GameConnection::handle_combat`, rules in `game/combat.{h,cpp}`)
 
