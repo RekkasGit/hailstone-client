@@ -10,6 +10,8 @@
 #include <string_view>
 #include <thread>
 
+#include <zlib.h>
+
 #include "core/byte_io.h"
 #include "core/log.h"
 #include "manual_clock.h"
@@ -114,6 +116,29 @@ TEST_CASE("compression pass: 0x5a zlib when smaller, 0xa5 otherwise") {
     CHECK(at(c, 0) == 0xa5);
     CHECK(soe::decompress_body(c) == rnd);
     CHECK_FALSE(soe::decompress_body(b({0x11, 1, 2})));
+}
+
+TEST_CASE("compression pass: the reused deflater gives compress2's level 6 bytes, packet after packet") {
+    // compress_body keeps one deflater per thread; each body must come out exactly as a fresh compress2 would
+    // make it (the server inflates it as zlib data), whatever was compressed before it.
+    for (std::uint32_t seed = 1; seed <= 40; ++seed) {
+        Bytes body = noise(31 + seed * 37, seed);
+        for (std::size_t i = 0; i < body.size(); i += 3) body[i] = std::byte{'a'}; // compressible
+        uLongf len = compressBound(static_cast<uLong>(body.size()));
+        Bytes want(len);
+        REQUIRE(compress2(reinterpret_cast<Bytef*>(want.data()), &len, reinterpret_cast<const Bytef*>(body.data()),
+                          static_cast<uLong>(body.size()), 6) == Z_OK);
+        want.resize(len);
+        Bytes c = soe::compress_body(body);
+        if (len < body.size()) {
+            REQUIRE(at(c, 0) == 0x5a);
+            CHECK(Bytes(c.begin() + 1, c.end()) == want);
+        } else {
+            CHECK(at(c, 0) == 0xa5);
+        }
+        CHECK(soe::decompress_body(c) == body);
+        (void)soe::compress_body(noise(500, seed)); // an incompressible body between them
+    }
 }
 
 TEST_CASE("XOR pass round trip and full encode/decode with both passes") {

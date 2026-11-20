@@ -76,15 +76,32 @@ void xor_decode(std::span<std::byte> data, std::uint32_t key) {
 Bytes compress_body(ByteSpan body) {
     Bytes out;
     if (body.size() > 30) {
-        uLongf len = compressBound(static_cast<uLong>(body.size()));
-        out.resize(1 + len);
-        // Level 6, as the original client.
-        if (compress2(reinterpret_cast<Bytef*>(out.data() + 1), &len, reinterpret_cast<const Bytef*>(body.data()),
-                      static_cast<uLong>(body.size()), 6) == Z_OK &&
-            len < body.size()) {
-            out[0] = std::byte{0x5a};
-            out.resize(1 + len);
-            return out;
+        // Level 6, as the original client, with compress2's settings (deflateInit: zlib format, 15-bit window,
+        // memory level 8, default strategy), so the bytes are the same. Every compressed datagram passes here, so
+        // the deflater is kept per thread and reused (deflateReset) instead of being set up and freed each time.
+        struct Deflater {
+            z_stream z{};
+            bool ok = deflateInit(&z, 6) == Z_OK;
+            ~Deflater() {
+                if (ok) deflateEnd(&z);
+            }
+        };
+        thread_local Deflater def;
+        if (def.ok && deflateReset(&def.z) == Z_OK) {
+            const uLong bound = deflateBound(&def.z, static_cast<uLong>(body.size()));
+            out.resize(1 + bound);
+            z_stream& z = def.z;
+            z.next_in = reinterpret_cast<Bytef*>(const_cast<std::byte*>(body.data()));
+            z.avail_in = static_cast<uInt>(body.size());
+            z.next_out = reinterpret_cast<Bytef*>(out.data() + 1);
+            z.avail_out = static_cast<uInt>(bound);
+            const std::size_t len = deflate(&z, Z_FINISH) == Z_STREAM_END ? static_cast<std::size_t>(z.total_out) : 0;
+            if (len != 0 && len < body.size()) {
+                out[0] = std::byte{0x5a};
+                out.resize(1 + len);
+                return out;
+            }
+            out.clear();
         }
     }
     out.assign(1, std::byte{0xa5});
