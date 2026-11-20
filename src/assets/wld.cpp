@@ -28,10 +28,17 @@ std::size_t checked_count(ByteReader& r, std::uint32_t count, std::size_t min_it
     return count;
 }
 
+// No stock RoF2 file names more than 12 bitmaps in one 0x03 fragment (podisease.s3d, measured 2026-11). Each name
+// is a std::string several times the size of its two-byte length on disk, so the byte check alone would let one
+// fragment of a 256 MB member ask for gigabytes.
+constexpr std::size_t kMaxBitmapNames = 4096;
+
 BitmapName read_bitmap_name(ByteReader& r) {
     BitmapName b;
     // The stored count is one less than the number of names.
     std::size_t count = checked_count(r, r.le<std::uint32_t>(), 2) + 1;
+    if (count > kMaxBitmapNames) throw std::out_of_range("too many bitmap names");
+    b.files.reserve(count);
     for (std::size_t i = 0; i < count; ++i) {
         auto len = r.le<std::uint16_t>();
         auto bytes = decode_string_bytes(r.bytes(len));
@@ -516,7 +523,8 @@ WldFile WldFile::parse_impl(std::span<const std::byte> data, std::string label, 
         auto string_size = r.le<std::uint32_t>();
         r.skip(4); // string count
         w.strings_ = decode_string_bytes(r.bytes(string_size));
-        if (fragment_count > r.remaining() / 8) throw std::runtime_error(w.label_ + ": bad WLD fragment count");
+        if (fragment_count > r.remaining() / 8 || fragment_count > kMaxFragments)
+            throw std::runtime_error(w.label_ + ": bad WLD fragment count");
         w.fragments_.reserve(fragment_count);
     } catch (const std::out_of_range&) {
         throw std::runtime_error(w.label_ + ": truncated WLD header");

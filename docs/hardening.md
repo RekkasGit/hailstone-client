@@ -85,6 +85,8 @@ verified part.
 | `src/assets/texture.cpp` `decode_bmp` (RLE) | a 130 KB RLE8 could declare 8192 x 8192, decoded via a 64 MB index buffer into a 256 MB image | refused when the size is over 128 pixels per byte of data (+512 bytes), what runs can fill; decoded straight into the image |
 | `src/assets/character_dress.cpp` `layered_texture` | layers were composited at the widest width by the tallest height: 16384 x 1 plus 1 x 16384 made 1 GiB | composited at the size of the layer with the most texels |
 | `src/assets/wld_zone.cpp`, `src/assets/eqg_zone.cpp` (lights) | a non-finite light position, colour or radius (`lights.wld`, EQG DAT or ZON) reached the light grid | left out at load (`finite_light`) |
+| `src/assets/wld.cpp` header and 0x03 | the fragment count and a bitmap's name count were checked only against the bytes left, at 8 and 2 bytes each, while a parsed fragment is well over 100 bytes and a name a `std::string`: a small archive whose member inflates to its 256 MB limit asked for gigabytes | absolute caps far above the RoF2 files (`wld::kMaxFragments` 524288 against 55572; 4096 names against 12) |
+| `src/nav/nav_mesh.cpp` `InputGeometry::finish` | the tile grid was sized from the raw vertex bounds: one vertex at 1e30 asked for billions of tiles, and one past `int`'s range made the tile cast undefined | triangles past 100000 units are left out (as ground_refine and zone_flora take them), and geometry needing more than 2^20 tiles builds no mesh |
 
 Valid input behaves as before. The packet decoders, session layer, login parsers and the WLD, ZON, model, DDS, TGA,
 XMI and table parsers had no findings.

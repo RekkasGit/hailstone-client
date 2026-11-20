@@ -44,6 +44,10 @@ namespace hailstone::assets::wld {
 constexpr std::uint32_t kMagic = 0x54503d02;
 constexpr std::uint32_t kVersionOld = 0x00015500;
 constexpr std::uint32_t kVersionNew = 0x1000c800;
+// The most fragments one WLD may declare. The largest stock RoF2 file has 55572 (iceclad.s3d, measured 2026-11);
+// each takes eight bytes on disk but well over a hundred in memory, so a count backed only by the bytes left would
+// let a small archive whose member inflates to its 256 MB limit ask for gigabytes.
+constexpr std::uint32_t kMaxFragments = 1u << 19;
 constexpr std::array<std::uint8_t, 8> kStringKey{0x95, 0x3a, 0xc5, 0x2a, 0x95, 0x7a, 0x95, 0x6a};
 
 using Ref = std::int32_t;

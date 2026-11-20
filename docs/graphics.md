@@ -794,7 +794,8 @@ keeps bare). Lines are read in order; the first matching ground line wins.
 - `max_slope` (degrees); `scale <min> <max>` (scattered plants' sizes); `lawn_height <min> <max>` (lawn blades, 1.8
   to 3 units by default; the grasslands' grow 2.4 to 4).
 - `include <name>`: another file's lines in place. A zone file puts its exceptions first, then `include default`;
-  East Commonlands adds desert plants from `commonlands.eqg` on its sand that way.
+  East Commonlands adds desert plants from `commonlands.eqg` on its sand that way. Includes nest four deep at most,
+  and one file's reading takes 64 at most, nested ones counted.
 
 The shared files go in this order:
 

@@ -46,6 +46,10 @@ raw bytes and never re-encoded before slicing.
 - A payload shorter than its fields need becomes an empty entry in `errors()`, so the fragment numbering stays intact.
 - A fragment that runs past the end of the file rejects the whole file.
 - Unknown fragment types are kept as empty entries, counted in `unknown_types()`.
+- Two counts have absolute caps besides the bytes left, since what they make in memory is many times their size on
+  disk: a file declaring more than `kMaxFragments` (524288; the largest RoF2 file, iceclad.s3d, has 55572) is
+  rejected, and a 0x03 bitmap name list of more than 4096 names (the most in a RoF2 file is 12) fails as a short
+  payload does.
 
 ## Fragments decoded
 

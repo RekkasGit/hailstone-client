@@ -4,7 +4,8 @@ GitHub Actions runs checks only (`.github/workflows/ci.yml`), on every push to `
 on pull requests to `main`:
 
 - `core-names`: `tools/check_core_names.py` checks that the client's sources name no server outside comments. Lua
-  long strings count as code.
+  long strings and C++ raw strings count as code, and Objective-C++ and the ini, JSON and text files under those
+  folders are scanned too.
   - The old names pass only in their own spellings (`nmsc`, `nmsc_`, `nmsc::`, `NMSC_`, the SDK's `Nmsc<Word>`,
     `nms-client`), so `NMSChat` or `kNmsCombatOp` fails (tests/server_tools_test.cpp).
   - The one exception, let through by file and exact line shape: the updater's table of files old releases shipped
@@ -21,6 +22,8 @@ on pull requests to `main`:
     `test_make_addon_autoload.py`).
   - `tests/test_make_update.py`: `tools/make_update.py` keeps out of a package exactly the paths the client's
     `is_player_path` refuses.
+  - `tests/test_release_tools.py`: the release packers' versions, names and contents (`tools/make_addon.py` and
+    `tools/make_update.py`).
 
 One workflow builds: `.github/workflows/macos.yml` ("macOS arm64" below), for the platform Linux cannot build,
 started by hand or by a push to a `macos/**` branch.

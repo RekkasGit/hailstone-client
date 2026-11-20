@@ -318,7 +318,12 @@ build/hailstone_sign keygen <secret-key-file>                  # once; keep it o
 build/hailstone_sign sign <secret-key-file> release/hailstone-addon.txt
 ```
 
-- The script checks the client's rules for what a package may hold before it makes anything.
+- The script checks the client's rules for what a package may hold before it makes anything:
+  - the names its zip reader takes (no `\`, `:` or control character, no part ending in `.` or a space, no Windows
+    device name such as `aux.lua`);
+  - the version as the client parses it (no leading zeros).
+- It leaves out files and folders whose name starts with `.`, stores a link as what it points to only when that lies
+  inside the package's folder, and refuses an `--out` inside a package's folder, where old zips would be packed.
 - Its zips are reproducible (sorted, dated 1980-01-01), so an unchanged package keeps its hash.
 - `hailstone_sign sign` writes the key's line into the manifest and signs it; `verify` checks it.
 - Upload everything in `release/` to a GitHub release.

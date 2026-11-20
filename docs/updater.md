@@ -245,8 +245,10 @@ updater and the add-on manager otherwise run as usual.
    ```
 
    This writes `hailstone-0.2.0-alpha-linux-x64.zip` (no top folder) and its line in `hailstone-update.txt`. The zip
-   is reproducible (sorted, dated 1980-01-01, Unix permissions kept). A symbolic link goes in as its target; a link
-   back into a folder holding it stops the tool.
+   is reproducible (sorted, dated 1980-01-01, Unix permissions kept). Files and folders whose name starts with `.`
+   are left out. A symbolic link goes in as its target, which must lie inside `--dist` (a link out of it, or back into
+   a folder holding it, stops the tool); `--out` may not lie inside `--dist`. A name the updater's zip reader would
+   refuse (core/zip_read.cpp `is_safe_zip_path`) stops it too.
 4. Sign the manifest:
 
    ```sh

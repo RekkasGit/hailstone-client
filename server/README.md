@@ -114,6 +114,16 @@ two go in `Resources/`), so they match the database.
 A zone hashes the folder (SHA-256) when it starts, keeping the hashes in `client_files/.hailstone-cache` by size and
 time so only new or changed files are hashed again.
 
+One zone hashes at a time:
+
+- A zone with files to hash first makes the folder `client_files/.hailstone-lock` (its start time and name in
+  `owner`).
+- Another zone that finds it waits, a second at a time, then takes the hashes the first wrote to the cache and
+  hashes only what is still missing, so a server starting all its zones at once hashes a new folder once.
+- A zone that already has a list keeps it while another hashes, rather than wait in the middle of a player's request.
+- A lock older than 15 minutes, or one with no owner after 10 seconds, is a stopped zone's: it is removed with a line
+  in the log. After waiting five minutes a zone hashes anyway. Deleting `.hailstone-lock` by hand is safe.
+
 When a client asks and the list is older than `files_rescan` (5 minutes), the zone looks again. Looking runs `find`
 and `sha256sum` and holds the zone while they run, so it happens at most that often and never more than every 30 s.
 
@@ -264,6 +274,8 @@ The script then:
 
 1. in the inviter's zone, makes EQEmu's checks with EQEmu's words: in a guild, the rank's invite permission
    (`guild_permissions`), the name is a character ("could not be found"), not in a guild, no invitation pending;
+   then its own: an inviter invites at most five different players a minute (counted by the inviter's zone), since
+   an invitation reaches any Hailstone player online as a prompt, and EQEmu's only reached the inviter's zone;
 2. leaves the invitation in the data bucket `hailstone:guildinvite:<character id>` (20 s) and signals the
    character (`eq.cross_zone_signal_client_by_char_id`);
 3. in the invitee's zone, sends the client the invitation (wire opcode 0x1431), which asks the usual

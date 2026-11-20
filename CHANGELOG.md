@@ -62,6 +62,14 @@
 - `HAILSTONE_DATA_DIR` naming an EverQuest folder is refused at start, as an install inside one already is: Hailstone never writes into the game folder
 - Windows: DLLs are no longer looked for in the current folder or PATH, for Hailstone itself, its plugins and its upscaler providers; a plugin's or provider's own DLLs are found beside it
 - Updates on Linux and macOS: the old program stays in place until the new one replaces it in one step, so a power cut during an install never leaves the folder without it (Windows still has a short moment; see docs/updater.md)
+- Server script (`server/`): a server starting many zones at once no longer has every zone hash the same new `client_files/` side by side
+  - One zone hashes and the others wait for it and reuse its hashes (`client_files/.hailstone-lock`; a lock a stopped zone left is removed after 15 minutes)
+  - The zones' scratch file names now carry the zone, so two can never collide
+- Server script (`server/`): a guild officer can invite at most five different players a minute across zones, since each invitation pops up a question for a player anywhere on the server
+- A damaged zone or model archive, or navigation geometry with a vertex far out, can no longer make the client ask for gigabytes of memory while loading
+- Add-on authors: `tools/make_addon.py` refuses what the client would refuse at install
+  - A version with leading zeros, names such as `aux.lua` or ending in a dot, and an `--out` folder inside the package's folder
+  - It no longer packs a link that leads out of the folder; `tools/make_update.py` does the same and leaves dotfiles out
 
 ## 0.7.2-beta (2026-11-19)
 
