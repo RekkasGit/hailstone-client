@@ -57,3 +57,4 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p 'test_make_addon_ui.py' -v
           python3 -m unittest discover -s tests -p 'test_make_addon_autoload.py' -v
+          python3 -m unittest discover -s tests -p 'test_release_tools.py' -v

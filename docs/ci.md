@@ -16,7 +16,8 @@ and on pull requests to `main`:
   --check` (`docs/ui-api-reference.md`, which links each binding's file, not a line, so an edit elsewhere in it does
   not make the page stale); then the Python tests of those tools and of `tools/make_addon.py`'s UI and autoload
   packages (`tests/test_migrate_ui_api.py`, `test_gen_ui_api_docs.py`, `test_make_addon_ui.py`,
-  `test_make_addon_autoload.py`).
+  `test_make_addon_autoload.py`), and of the release packers' versions, names and contents
+  (`test_release_tools.py`, `tools/make_addon.py` and `tools/make_update.py`).
 
 One workflow builds: `.github/workflows/macos.yml` ("macOS arm64" below), the one platform the developer's Linux
 machine cannot build. It runs only when started by hand or on a push to a `macos/**` branch.

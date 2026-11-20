@@ -228,8 +228,10 @@ player's run.
 
    This writes `hailstone-0.2.0-alpha-linux-x64.zip` (the folder's files with no top folder; a player unpacks it
    into a folder of their own) and its line in `hailstone-update.txt`. The zip is made the same way each time
-   (sorted, dated 1980-01-01, the files' Unix permissions), and a symbolic link goes in as the file or folder it
-   points to (a link that leads back into a folder holding it stops the tool).
+   (sorted, dated 1980-01-01, the files' Unix permissions). Files and folders whose name starts with `.` are left
+   out, and a symbolic link goes in as the file or folder it points to, which must lie inside `--dist` (a link out
+   of it, or back into a folder holding it, stops the tool); `--out` may not lie inside `--dist`. A name the
+   updater's zip reader would refuse (core/zip_read.cpp `is_safe_zip_path`) stops it too.
 4. Sign the manifest:
 
    ```sh

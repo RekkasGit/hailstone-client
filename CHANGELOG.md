@@ -10,6 +10,7 @@
 - Cures no longer remove debuffs locally: a partial or too-weak cure leaves its icon standing until the server's buff fade clears it, instead of making the debuff vanish early
 - Buff icons now show a debuff's curse, disease, poison or corruption counters as soon as the buff lands and keep showing the remaining count after a partial cure, a server refresh without counter data, or a full buff list that leaves the spell in the same slot
 - A damaged zone or model archive, or navigation geometry with a vertex far out, can no longer make the client ask for gigabytes of memory while loading
+- Add-on authors: `tools/make_addon.py` now refuses what the client would refuse at install (a version with leading zeros, names such as `aux.lua` or ending in a dot), and an `--out` folder inside the package's folder, and no longer packs a link that leads out of the folder. `tools/make_update.py` does the same and leaves dotfiles out
 
 ## 0.7.2-beta (2026-11-19)
 
