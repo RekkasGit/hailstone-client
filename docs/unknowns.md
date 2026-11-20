@@ -296,11 +296,10 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   the other uses of the 22 entries are not.
 - **OP_MobRename's packet to world.**
   - Now: the spawn with the old name is renamed in place and nothing is sent.
-  - Unknown: after `PlayerManagerBase_RenamePlayer` the RoF2 handler (HandleWorldMessage's 0x2c57 case @0x4c9a6b)
-    compares a +0x148 field of two objects and, with the server list window present, sends something on the world
-    connection. Which rename it is for (perhaps the player's own, as EQEmu's `Client::ChangeFirstName` sends) and what
-    it sends is not read.
-  - Settle: that branch read in the original, or a capture of a character rename on a live server.
+  - Known: on the player's own rename path (HandleWorldMessage's 0x2c57 case @0x4c9a6b, after `PlayerManagerBase_RenamePlayer`) the original sends the empty opcode 0x2b8e (`kOpServerTransfer`, the `/servertransfer` request) when a window check passes (a global at `0xd1fd34`, a byte at `+0x196`); it checks its connection object first.
+  - Unknown: which window `0xd1fd34` is, and what the failure path at `0x462780` does.
+  - After the player's own rename only the spawn is renamed. The profile, group and raid leadership, the raid window, the Group Finder, the raid packets and the own-corpse checks (`/corpse`, loot, hide-looted, `/decaycorpse`) still use the login name. Which of these the original takes from the renamed name is not read.
+  - Settle: the window and the failure path read in the original, or a capture of a character rename on a live server.
 - **Spawn suffix in destructible form** (OtherData 0xe1).
   - Now: the client reads no suffix there. EQEmu writes one only when it is not empty.
   - Unknown: the original appears to read one whenever bit 0x20 is set (`EQPlayer::UnSerializeSpawn`), and to treat
@@ -1423,3 +1422,8 @@ Real estate is built to the original (docs/protocol/rof2-packets.md "Real estate
   - The generic raid service supports subgroup moves and removal to ungrouped.
   - There is no verified native direct subgroup-leader promotion here. An add-on must expose any separate server
     command explicitly rather than claiming the host performed it.
+
+## Last names and the level-up effect
+
+- **OP_LevelAppearance effects are not drawn** (`net/game_connection_rename.cpp`, `net/rename_packets.h`).
+  - The original (`0x58fed0`) hangs each effect above 0 on the model's attach table (`spawn + 0xfec + slot * 4`, no bounds check). The link from effect id (EQEmu: 0x4d..0x51) to a file in the game folder is not derived from the client, so the packet is decoded, the latest 16 are kept and logged. Settled by tracing the model call (vtable `+0x1f8`) to the effect it loads.

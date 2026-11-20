@@ -221,6 +221,8 @@ add_library(hailstone_engine STATIC
   src/net/game_connection_player.cpp
   src/net/game_connection_game_commands.cpp
   src/net/game_connection_names.cpp
+  src/net/game_connection_rename.cpp
+  src/net/rename_packets.cpp
   src/net/game_connection_market.cpp
   src/net/game_connection_mail.cpp
   src/net/game_connection_merc.cpp
@@ -1428,6 +1430,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/friends_who_test.cpp
     tests/options_social_test.cpp
     tests/player_market_test.cpp
+    tests/spawn_rename_test.cpp
     tests/barter_test.cpp
     tests/xtarget_test.cpp
     tests/player_customization_test.cpp

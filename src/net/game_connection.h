@@ -106,6 +106,7 @@
 #include "net/movement_packets.h"
 #include "net/quest_npc_packets.h"
 #include "net/player_packets.h"
+#include "net/rename_packets.h"
 #include "net/tribute_packets.h"
 #include "net/marketplace_packets.h"
 #include "net/session.h"
@@ -469,6 +470,7 @@ public:
             it->second.body_wet = body_wet;
     }
     const std::optional<PlayerProfile>& profile() const { return profile_; }
+    const std::deque<LevelAppearance>& level_appearances() const { return level_appearances_; }
     // The character we play (as the server names it).
     const std::string& character_name() const { return character_; }
     // The game state last given to the plugin hooks (plugin::kGameState*; 0 none yet).
@@ -3892,6 +3894,12 @@ private:
     std::function<int(std::string_view, std::string_view, int)> char_ini_get_;
     std::function<void(std::string_view, std::string_view, const std::string&)> char_ini_put_;
     bool handle_name_change(const AppPacket& p);
+    // OP_MobRename, OP_GMLastName, OP_LevelAppearance (net/game_connection_rename.cpp).
+    bool handle_spawn_rename(const AppPacket& p);
+    void apply_gm_last_name(const GMLastName& r);
+    void apply_level_appearance(const LevelAppearance& r);
+    std::uint32_t find_spawn_by_name(std::string_view name) const; // 0 = none (GetSpawnByName @0x599b40)
+    std::deque<LevelAppearance> level_appearances_;                // the latest ones, unshown (docs/unknowns.md)
     bool handle_group_search(const AppPacket& p);
     bool handle_marketplace(const AppPacket& p);
     void marketplace_build();                     // the constructor's tail (0x6e18eb): 0x5bd5, 0x5148, 0x76c3, 0x356f

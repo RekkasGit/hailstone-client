@@ -1237,6 +1237,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
     // HandleWorldMessage serves both streams.
     if (handle_merc(p)) return;
     if (handle_name_change(p)) return; // net/game_connection_names.cpp
+    if (handle_spawn_rename(p)) return; // net/game_connection_rename.cpp
     if (handle_group_search(p)) return; // the group finder's replies (net/game_connection_group_search.cpp)
     if (handle_marketplace(p)) return;  // the marketplace's packets (net/game_connection_marketplace.cpp)
     if (handle_rewards(p)) return; // the two stock Select Reward managers
