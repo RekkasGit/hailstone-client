@@ -1203,12 +1203,6 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   giver when its spawn is known).
   - Unknown: which id goes with which of the four amounts in the code, and the lines' colour.
   - Settle: the arguments of the BuildStringFromEQSTR and dsp_chat calls between 0x4c7d39 and 0x4c7ff6.
-- **Struck down by the gods.** After the line and the wave, the original does its own death bookkeeping
-  (0x4c8aab onwards: two calls and the local player's RespawnTimer cleared); Hailstone leaves that to OP_Death. A stock
-  EQEmu server does not send OP_Death for it: its OP_GMKill handler forwards the GM's packet to the other clients
-  (`entity_list.QueueClients`) and leaves the kill to the named player's client, so here the player stays alive.
-  - Unknown: what the two calls after the wave do (0x45ffa0, 0x4423b0), and what the original sends the server.
-  - Settle: those two functions, or a capture of an original client being killed with /kill on a stock server.
 
 ## UI
 

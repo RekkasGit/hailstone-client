@@ -255,6 +255,9 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - A second `/discipline` right after `/stopdisc` is not refused by the client (NMS disc timer map or a missing server timer packet).
   - The reuse list is empty after zone-in until the server sends timers.
 
+- [x] **Struck down by the gods (OP_GMKill):** the named player's client sets its HP to -10000 after the line and the wave, as the original's case at 0x4c8a23 does (docs/mechanics.md). Unit-tested; not seen live.
+- [ ] OP_GMKill on a player already hovering dead: the original clears the RespawnTimer, which stops the respawn window's auto-select and lets transactions through; Hailstone's hover state has no separate RespawnTimer (docs/mechanics.md).
+
 ### Movement
 - [x] **Server flymodes.** The local player takes the spawn record's flymode and `SpawnAppearance` 19 (all six modes) and keeps them until the effect cache is rebuilt, when `UpdateLevitationState`'s rules apply again (docs/mechanics.md "fly mode"). Seen live 2026-11-18.
 - [x] **The game rules on a 60 Hz game clock** (`game.fixed_step`, docs/mechanics.md "Frame rate"): movement, other spawns, missiles, weather and fog steps, the frame-gated timers; the camera drawn between steps.

@@ -1271,6 +1271,21 @@ Code: `game/death_report.*`, `game/zoning.*`, `net/game_connection_death.cpp`; v
 - Every death removes that spawn from the cached tracking list, the player's own entry included; an unrelated tracked
   spawn stays tracked.
 
+#### Struck down by the gods (OP_GMKill)
+
+The case at 0x4c8a23 runs only when the packet names the local player (without case). After the line (eqstr 1391,
+colour 10) and wave 0x8f it kills on the client alone (0x4c8ab0..0x4c8aec):
+
+- the profile's current HP (PcProfile +0x3394, set through 0x45ffa0) and the own spawn's HPCurrent (+0x2e4, through
+  0x4423b0) become -10000, so the HP shown is -10000 plus the items' HP;
+- the own spawn's RespawnTimer (+0x2bc, the time of death PlayerZoneClient::IDied stamps) is cleared.
+
+Nothing is sent to the server, and there is no OP_Death, knock-out or respawn window. Stock EQEmu forwards the GM's
+packet and never kills the player, and it sends OP_HPUpdate only when the server's HP changes, so the player stays at
+-10000 until then. Hailstone does the same (`pstatus_.hp`, the own spawn's percentage 0). Not reproduced: for a player
+already dead and hovering, the cleared RespawnTimer stops the original's respawn window auto-selecting
+(CRespawnWnd::OnProcessFrame @0x74e720) and lets IsOkToTransact pass; Hailstone keeps the hover state as it was.
+
 #### Zone lines
 
 - The region change hands the teleport the region's text. An ATP region's text is "DRNTP00255%05d0..." of

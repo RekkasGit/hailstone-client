@@ -164,6 +164,47 @@ TEST_CASE("GM kill: the struck-down wave (0x8f) only for our own name") {
     CHECK(line->color == 10);
 }
 
+TEST_CASE("GM kill: the named player is left at -10000 HP, alive, until the server's next HP update") {
+    // The case at 0x4c8a23 kills locally after the wave: profile HP and the spawn's HPCurrent to -10000, the
+    // RespawnTimer cleared, no OP_Death and no respawn window. Stock EQEmu does not kill the player for it.
+    mq_test::World w("gmkill_hp");
+    auto& c = *w.conn;
+    auto& status = net::GameConnectionTestAccess::status(c);
+    status.hp = 500;
+    status.max_hp = 1000;
+    auto& world = net::GameConnectionTestAccess::world(c);
+    REQUIRE(world.spawns.count(world.player_id));
+    world.spawns.at(world.player_id).hp_percent = 50;
+
+    ByteWriter other;
+    other.fixed_string("Someoneelse", 64);
+    other.fixed_string("Gm", 64);
+    other.le<std::uint32_t>(0);
+    c.receive_zone_packet_for_test(net::make_packet(net::Op::GMKill, std::move(other)));
+    CHECK(status.hp == 500);
+    CHECK(world.spawns.at(world.player_id).hp_percent == 50);
+
+    ByteWriter mine;
+    mine.fixed_string("TESTER", 64);
+    mine.fixed_string("Gm", 64);
+    mine.le<std::uint32_t>(0);
+    c.receive_zone_packet_for_test(net::make_packet(net::Op::GMKill, std::move(mine)));
+    CHECK(status.hp == -10000);
+    CHECK(c.own_hp().cur < 1);
+    CHECK(world.spawns.at(world.player_id).hp_percent == 0);
+    CHECK_FALSE(status.dead);
+    CHECK(status.owner_status == 0);
+    CHECK_FALSE(c.respawn_window().has_value());
+
+    ByteWriter hp;
+    hp.le<std::int16_t>(static_cast<std::int16_t>(world.player_id));
+    hp.le<std::uint32_t>(1000);
+    hp.le<std::int32_t>(1000);
+    c.receive_zone_packet_for_test(net::make_packet(net::Op::HPUpdate, std::move(hp)));
+    CHECK(status.hp == 1000);
+    CHECK(world.spawns.at(world.player_id).hp_percent == 100);
+}
+
 TEST_CASE("Bags: a bag of a type with its own sound opens and closes (0x86/0x85), once each") {
     mq_test::World w("sound_container");
     auto& c = *w.conn;
