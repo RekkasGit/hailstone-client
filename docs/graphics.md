@@ -728,7 +728,8 @@ which the cover test below keeps bare). A rules file is read line by line, and t
 - `max_slope` (degrees), `scale <min> <max>` (the scattered plants' sizes), `lawn_height <min> <max>` (the lawn's
   blades, 1.8 to 3 units by default; the grasslands' grow 2.4 to 4), and `include <name>` (another file's lines in
   place: a zone file puts its own exceptions first, then `include default`; East Commonlands adds desert plants from
-  `commonlands.eqg` on its sand that way).
+  `commonlands.eqg` on its sand that way; includes nest four deep at most, and one file's reading takes 64 at most,
+  nested ones counted).
 
 The shared files turn down built and wet surfaces by name before anything else (`bare.txt`: roofs, walls, cobbles,
 tiles, bridges, hedges, ship decks, water, lava), then take grass-named textures with `+greenish`, then turn down
