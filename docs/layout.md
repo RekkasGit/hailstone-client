@@ -116,7 +116,8 @@ The paths come from `src/platform/paths.h`:
 
 - `install_dir()` is the binary's folder; the shipped parts are read from it (`shaders_dir()`, `ui_packs_dir()`).
 - `data_dir()` is where everything written goes: `install_dir()` itself.
-- `HAILSTONE_DATA_DIR`, when set, names another folder.
+- `HAILSTONE_DATA_DIR`, when set, names another folder. An EverQuest folder named there (or given to
+  `platform::use_data_dir`) is refused at start as below (`platform::given_data_dir_problem`).
 
 No settings are read from outside the folder (no `~/.config`, no `%APPDATA%`) or imported from another folder.
 

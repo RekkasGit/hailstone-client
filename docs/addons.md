@@ -87,6 +87,9 @@ login screen, with no login under way and no box set window running. Nothing run
 from copies in `cache/plugins/`, so an install never changes a file under a running script or plugin. One downloaded
 in the world waits for the next login screen, or the next start; it is not downloaded twice.
 
+The box set's other windows (started with `--box-child`) neither check, download nor install add-ons: the first
+window does, once they have quit.
+
 **Auto-update is off** for every add-on until the player switches it on in its row. The switch is written as
 `autoupdate`; an old `auto 1` in `installed.txt` (clients up to 0.7.0-beta set it unasked) reads as off.
 
@@ -514,7 +517,11 @@ ui-addons/<addon>/ an installed interface add-on (its ui/<pack>/ folders, UI pac
 
 - `installed.txt` is saved as `installed.prev.txt` before it is rewritten and put back with the old files, so the list
   matches the disk. One that wrote `done` is left as it is.
-- Each journal line is flushed before the move it names (write-ahead), each move is on the disk before the next, and
+- Each journal line is flushed before the move it names (write-ahead). The lines go in two batches of one synced
+  write each, the old files' moves out and then the new files' moves in; every place a batch moves to is checked free
+  before its lines are written, so a line for a move a cut-off install never made finds nothing there and the undo
+  skips it.
+- Each move is on the disk before the next, and
   each unpacked file is flushed before it moves: a power cut leaves no empty file and no moved file without its line.
 - A file left in `previous/` after an undo (a lost or damaged journal, a failed move back) may be the only copy of the
   player's old file, so `previous/` is renamed `kept-<time>/` with a warning in the log, not removed.

@@ -52,6 +52,16 @@
 - A minimised game window no longer runs a processor core at full speed: while minimised the client runs at 10 frames a second, whatever the frame rate settings say
 - Spell book: a spell dropped on a gem while standing or casting stays on the cursor instead of vanishing without being memorized
 - Add-ons: a line a plugin sends with `hs.ChatSubmit` no longer lands in the chat input's history (Up arrow) or makes its chat window the active one
+- In-game browser: a page a server opens with a link can no longer reach your own computer or home network (a router's page, a NAS) later on
+  - Not through a redirect, a link, a form or a request the page makes either, not only at the link's own address
+  - Your own tabs are unchanged
+- Box sets: only the window you logged in from checks for and downloads Hailstone and add-on updates
+  - The other windows no longer download the same update at once (which could break the download) or install one while the rest of the set still runs
+- Add-ons install faster: the install journal is flushed to the disk once per batch of files instead of once per file, and stays as safe against a power cut
+- Login screen: the Add-ons list is no longer rebuilt every frame; it follows the add-on manager's changes and refreshes every 3 seconds as before
+- `HAILSTONE_DATA_DIR` naming an EverQuest folder is refused at start, as an install inside one already is: Hailstone never writes into the game folder
+- Windows: DLLs are no longer looked for in the current folder or PATH, for Hailstone itself, its plugins and its upscaler providers; a plugin's or provider's own DLLs are found beside it
+- Updates on Linux and macOS: the old program stays in place until the new one replaces it in one step, so a power cut during an install never leaves the folder without it (Windows still has a short moment; see docs/updater.md)
 
 ## 0.7.2-beta (2026-11-19)
 

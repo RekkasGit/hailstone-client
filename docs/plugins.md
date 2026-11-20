@@ -1692,6 +1692,10 @@ authority.
 
 - The client hashes the file, checks the server's rules, and loads **a copy of exactly the hashed bytes** from
   `cache/plugins/`, so the file cannot be swapped between the check and the load.
+- On Windows a plugin's (and an upscaler provider's) own imports are looked for beside the copy, in Hailstone's
+  folder and in System32, never in the current folder or PATH; the client sets the same for every library loaded by
+  name alone (`SetDefaultDllDirectories`, `platform::restrict_dll_search`). A plugin that needs a DLL of its own loads
+  it by its full path.
 - Callbacks the plugin's capabilities do not cover stay unhooked, with a note in chat.
 - When the rules no longer allow a plugin, `ShutdownPlugin` runs and it is unloaded.
 

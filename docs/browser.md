@@ -41,7 +41,9 @@ export (docs/unknowns.md "OP_Weblink").
 - **The player's tab, with two limits.** The tab is the player's (not held to a script's rules), as the original's
   HTML window is, except:
   - a link to this computer or the player's network (`web::private_host`: localhost, 192.168.x.x ...) is logged and
-    not opened;
+    not opened, and the tab (`TabRules::ServerLink`) stays off them after that too: the host and the helper keep it,
+    its frames and every request its page makes (a redirect, `fetch`, a form's post, an image, its service workers')
+    off this computer and the player's network at every step, though it may go to any public site;
   - the links' tabs keep their cookies in `server-links/` in the server's folder, so a page the server picked does
     not run with the player's sign-ins.
 
@@ -101,7 +103,7 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
 
 - **Why a helper.** The client never links CEF, and a crashing page takes only the helper down. Without the helper
   every page opens in the system's browser.
-- **Messages** (`web/browser_protocol.h`, version 1).
+- **Messages** (`web/browser_protocol.h`, version 2: an open carries the tab's rules, `web::TabRules`).
   - Client → helper, on its standard input: hello, open, navigate, resize, mouse, wheel, keys, text, focus,
     back / forward / reload / stop, run script, post a message, close, shut down.
   - Helper → client, on its standard output: ready, frame, popup, address, title, loading, cursor, console line,

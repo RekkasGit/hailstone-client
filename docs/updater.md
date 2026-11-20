@@ -16,7 +16,7 @@ Code: `src/app/updater.*` (check, download), `src/app/update_install.*` (install
   updater's word on it (`ui::update_status_text`):
   - "Checking for updates...", "Up to date", "Version 0.5.0 is out";
   - "Could not check for updates" (offline, no manifest yet: the reason is only logged);
-  - "Updates are off: <why>" (a development build, `update.check=0`, no HTTPS, a test run).
+  - "Updates are off: <why>" (a development build, `update.check=0`, no HTTPS, a test run, a box set's other window).
 
   Under it, **What's new** (this version's part of the shipped `CHANGELOG.md`, `core/changelog.h`; greyed when
   missing) and **GitHub** (CMake `HAILSTONE_PROJECT_PAGE`, in the system browser). The Gamepad pack puts both under
@@ -170,12 +170,18 @@ and the plugins are gone):
 2. Each old file is moved into `previous/` and its new one into place.
    - Each move's journal line is flushed before the move (write-ahead), so after a power cut every file in
      `previous/` has its line.
+   - On Linux and macOS `previous/` gets a hard link to the old file, which stays in place until the new one is
+     renamed over it, so no moment leaves a name (the program itself among them) without a file. On Windows, and on a
+     file system without hard links, the old file is renamed away first (see "Limits and open points").
    - Both are renames on one volume, which Windows allows for a running program and its loaded libraries, and each
      is on the disk before the next begins.
 3. The files a component shipped before and no longer does are moved into `previous/` as well.
 4. `installed.txt` is written, and `state.txt` becomes `pending`.
 
 The install waits while the box set's other windows run (they use the same files), and happens at a later quit.
+Those windows are started with `--box-child` (`app/updater.h` `kBoxChildArg`) and have no updater and no add-on
+downloads of their own: only the first window downloads into `download/` and `addons/` and installs, so two windows
+never write the same `.part` file, and a window that quits first never installs while its siblings run.
 
 ### Start and rollback
 
@@ -286,6 +292,13 @@ its folder's permissions) and never written over an existing file.
   - An app bundle would need its own install step (the binary is in `Contents/MacOS/`, while `install_dir()` would
     be `Contents/Resources/`) and is not made.
   - No macOS release has been run on a Mac yet, nor its update.
+- **Windows: a moment without the program.** Windows lets a running program's files be renamed but not replaced, so
+  the old `hailstone.exe` (and each other file) is moved into `previous/` before the new one is moved in.
+  - Both moves are on the disk before the next begins, but a power cut exactly between the two leaves the folder
+    without `hailstone.exe`.
+  - The player then moves `update/previous/hailstone.exe` back by hand, and the next start rolls the rest of the
+    cut-off install back (a `moved` line with nothing in `previous/` leaves the file in place).
+  - Linux and macOS keep the old file in place until the new one replaces it in one rename.
 - **Downloads start over.** A broken-off download starts again from the beginning (no HTTP range requests). A
   package already downloaded whole is kept.
 - **Other Hailstone windows** the client did not start (not the box set's) are not seen. On Linux they run on; on
