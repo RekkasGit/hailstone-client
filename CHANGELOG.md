@@ -3,6 +3,7 @@
 ## Unreleased
 
 - A GM's /kill now drops you to -10000 HP, as in the original client, until the server next updates your HP (it only played the sound and printed the line)
+- Door clicks use the distance to the spot you clicked, fixing long-range zoning through the Guild Lobby entrance. The Plane of Fire orb in Plane of Tranquility can also be clicked.
 - Buying from or selling to a merchant, and buying from a trader, plays the cash register and prints the line in the Merchants chat colour, as in the original
 - Modern chat: select text in a chat window with the mouse and copy it with Ctrl+C or the right-click menu's **Copy**
   - Drag to select, double-click for a word, triple-click for a line, Shift+click to extend; links still open with a click
