@@ -55,7 +55,8 @@ Layouts below are after the name reference. `[flag]` marks a field that is prese
 | 0x1b | LightDef | u32 flags, u32 frames, [0x1] u32 current frame, [0x2] u32 sleep, [0x4] frames × f32 level, [0x10] frames × f32 rgb. Shipped flags: 0x4, 0x14, 0x1e. |
 | 0x1c | Light | ref to 0x1b, u32 flags |
 | 0x28 | PointLight | ref to 0x1c, u32 flags, f32 x, y, z, f32 radius |
-| 0x2d | DmSprite | ref to 0x36, u32 flags |
+| 0x2c | DmSpriteDef | the older mesh; see "0x2C mesh" below |
+| 0x2d | DmSprite | ref to 0x36 (or 0x2c), u32 flags |
 | 0x30 | MaterialDef | u32 flags (0x2: trailing pair present), u32 render method, u32 RGB pen, f32 brightness, f32 scaled ambient, ref to 0x05, [0x2] {u32, f32}. The texture reference comes before the pair: reading it after the pair gives 0 for every material (OpenEQ). |
 | 0x31 | MaterialPalette | u32 flags, u32 count, count × ref to 0x30. Slots are positional. Empty slots (ref 0) stay in place. |
 | 0x32 | DmRGBTrackDef | u32, u32 count, u32 ×3, count × u32 colour |
@@ -81,6 +82,23 @@ u32 flags, ref 0x31 material palette, ref animation, 2 × ref (unused), f32 cent
 `build_mesh` resolves every palette slot first, keeping empty and unresolved slots, so that the material numbers in the render groups stay valid. It then gathers the polygons per slot and emits one `MeshPart` per used slot, in slot order. `Mesh::materials` keeps only the used slots. Zone meshes all reference the same zone-wide palette, which has thousands of slots. Polygons with a bad slot or index are dropped with a warning; none occur in the shipped data.
 
 **Winding.** In the right-handed Z-up file frame, the stored order (a, b, c) is clockwise when seen from the front. Across all non-character archives, cross(b-a, c-a) points against the vertex normals for 22,091,292 triangles and along them for 41,812. OpenEQ emits (a, c, b) for a counter-clockwise front face. The loader keeps the file order.
+
+### 0x2C mesh
+
+The older mesh (libeq `DmSpriteDef`), read into the same `MeshDef` as a 0x36 and drawn the same way. Only five are in the archives seen: gequip's `2HNSWORD_DMSPRITEDEF` (the blade of the Fiery Avenger, IT62) and `IT1036_O_DMSPRITEDEF`, global_chr's `IVM_DMSPRITEDEF` and `IVMHE00_DMSPRITEDEF` (race 127's body and head), and erudsxing_chr2's `HULL_DMSPRITEDEF` (the ghost ship, `GHOSTSHIP`). The layout below consumes every one of them to its last byte.
+
+u32 flags, then u32 counts: vertices, uvs, normals, colours, polygons; u16 mesh-op count, u16 unknown; u32 vertex-piece count; ref 0x31 material palette; 12 bytes unknown (zero in all five); f32 centre ×3; f32 bounding radius (the farthest vertex as stored, before the centre). The arrays follow:
+
+- **Positions:** f32 ×3. Position = centre + value, as for 0x36. Checked on the Fiery Avenger: its blade plus its centre (0, 0, 1.2065) is IT2's 0x36 `2HNSWORD_DMSPRITEDEF`, vertex for vertex within 0.0004, under the same bone pose; and the ghost ship comes out symmetric across its width only with its centre (9.27, 57.84, 22.95) added. libeq puts the centre two floats earlier, where all five hold zero.
+- **UVs:** f32 u, v, as stored (repeats kept: the blade's fire texture runs to v = 40).
+- **Normals:** f32 ×3.
+- **Colours:** u32, as 0x36.
+- **Polygons:** 16 bytes: u16 flags (0x4b in all five, without the passable bit 0x10; no 0x2C is zone geometry), four u16 not used (small numbers in gequip's, zero in global_chr's), then u16 a, b, c, wound as 0x36's (the stored normals agree on every triangle of the unskinned four).
+- **Mesh ops:** 12 bytes each (u32 type; u32 vertex, or f32 for type 4; u16, u16), skipped.
+- **Vertex pieces:** {u16 vertex count, u16 skeleton node}.
+- With flag 0x200: u32 count, count × u32 (skipped). With flag 0x800: u32 count, count × {u16 polygon count, u16 material slot}, the render groups. With flag 0x1000: u32 count and the vertex material groups; flags 0x2000 and 0x4000 add 12 and 24 bytes. These are not read.
+
+A skeleton whose body meshes are all 0x2C and can draw nothing (every material invisible, or masked with every texel of its game file at palette index 0) has its body dropped: IVM keeps the body-less skeleton it has always been built as (docs/formats/characters.md).
 
 **Vertex colours.** Shipped values are dark (mean red 18–68 in qeynos, qeynos2, gfaydark, freportw, poknowledge and akanon). Several zones store many all-zero colours, and akanon has alpha 0 on every vertex. They look like baked light rather than albedo, so multiplying the texture by them directly would blacken zones. The classic lighting path lights them as the RegionC1 vertex shader does: `rgb = C.rgb + C.a·Ambient + SpecialAmbient + C.a·(Bounce·max(N·Dn, 0) + Directional·max(N·−Dn, 0))`, saturated, which then lights the texture (`shaders/zone.vert`; the modern lighting is in docs/graphics.md).
 
@@ -128,7 +146,7 @@ A region mesh without colours gets 0xFF1F1F1F on every vertex, so its RGB is dar
 
 ## Objects and skeletons
 
-- Static actor: 0x14 → 0x2d → 0x36. An actor with several sprites is merged into one mesh.
+- Static actor: 0x14 → 0x2d → 0x36 (or 0x2c). An actor with several sprites is merged into one mesh.
 - Skeletal actor: 0x14 → 0x11 → 0x10. Its mesh is built in its rest pose, following OpenEQ; one whose tracks have more than one key also plays them ("Placed-object animation" below). Each node's frame 0 gives local = T · R · S, and world = parent · local. Parents come from the child lists. A malformed hierarchy (a bad index, two parents, a cycle) rejects the actor. Frame 0's quaternion keeps its stored W sign, because the rest pose uses the quaternion unchanged (as OpenEQ does). The meshes are the skeleton's mesh list when flag 0x200 is set, otherwise each node's sprite. A mesh with vertex pieces is moved per run. A mesh without them follows the node whose sprite references it, with no fallback to node 0. Particle sprites (0x34 clouds on a node) are not meshes; they become the zone's particle fixtures (docs/formats/particles.md, "WLD particle clouds"). Check: citymist `JNTREE103_ACTORDEF` gives 106 vertices, 72 triangles and 50 placements, matching OpenEQ's witness.
 - Character models (skeleton, skinning, animation clips) are described in `docs/formats/characters.md`.
 - Zone::objects is keyed by the upper-case actor name, including `_ACTORDEF`. The loader reads object definitions from every WLD of the object archives in this order, the first of a name winning: `obequip_lexit.s3d` in the Lost Dungeons of Norrath zones (zone expansion 6), `<zone>_obj2.s3d`, `<zone>_obj.s3d`, `<zone>_2_obj.s3d`; then from the zone WLD. Zone WLD meshes that an actor definition uses are not terrain. A WLD's bitmaps come from its own archive: when an object archive's file has the name of a different file in the zone archive (qeytoqrg's treea.bmp: an opaque DXT1 on green in `qeytoqrg.s3d`, the DXT5 cut-out of the willows in `qeytoqrg_obj.s3d`), the object's frame becomes `<archive>/<file>` (`qeytoqrg_obj/treea.bmp`) and `Zone::generated_files` holds the object archive's bytes.
