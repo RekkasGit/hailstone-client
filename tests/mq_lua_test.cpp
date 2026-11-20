@@ -269,6 +269,43 @@ end
     CHECK_FALSE(h.hooks.has_command("/bump")); // the script's bind went with it
 }
 
+TEST_CASE("MQ Lua: a script that loses 'events' gets no more chat lines, queued or new") {
+    Host h(plugin::kCapAll);
+    h.write("ev.lua", R"(
+local mq = require('mq')
+mq.event('slain', '#*#You have slain #1#!#*#', function(line, who) print('killed', who) end)
+while true do
+    mq.doevents()
+    mq.delay(100)
+end
+)");
+    REQUIRE(h.scripts->run("ev", {}));
+    h.pulses(1);
+    plugin::ChatLine first{"You have slain a rat!", 0, 0};
+    h.hooks.chat(first);
+    h.pulses(2, 100);
+    CHECK(h.printed_line("killed a rat"));
+    // Queued while it may, run after it may not: dropped. Raised after: never queued. doevents is no error.
+    plugin::ChatLine queued{"You have slain a bat!", 0, 0};
+    h.hooks.chat(queued);
+    h.allow_unlisted(plugin::kCapAll & ~plugin::kCapEvents);
+    h.scripts->policy_changed();
+    plugin::ChatLine later{"You have slain a snake!", 0, 0};
+    h.hooks.chat(later);
+    h.pulses(3, 100);
+    CHECK(h.scripts->running("ev"));
+    CHECK_FALSE(h.printed_line("killed a bat"));
+    CHECK_FALSE(h.printed_line("killed a snake"));
+    // Given back: only lines from then on.
+    h.allow_unlisted(plugin::kCapAll);
+    h.scripts->policy_changed();
+    plugin::ChatLine again{"You have slain a wolf!", 0, 0};
+    h.hooks.chat(again);
+    h.pulses(2, 100);
+    CHECK(h.printed_line("killed a wolf"));
+    CHECK_FALSE(h.printed_line("killed a snake"));
+}
+
 TEST_CASE("MQ Lua: nothing before the zone-in, anything without a hailstone.cfg, only the server's under one") {
     Host h(0);
     h.write("a.lua", "while true do require('mq').delay(10) end\n");

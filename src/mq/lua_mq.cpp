@@ -561,6 +561,8 @@ void add_event(lua_State* L, Script& s, const char* name, std::string_view patte
         Script* sp = &s;
         s.host->env.hooks->on_chat(s.owner, [sp](plugin::ChatLine& line) {
             if (sp->status != Script::Status::Running && sp->status != Script::Status::Paused) return plugin::Flow::Continue;
+            // The server may take 'events' away after mq.event (ScriptHost::policy_changed): no more lines then.
+            if (!(sp->caps & plugin::kCapEvents)) return plugin::Flow::Continue;
             if (line.text.size() >= kMaxEventLine) return plugin::Flow::Continue;
             // MQ matches a line with its item links shown as their text, unless the event keeps them (keepLinks).
             std::optional<std::string> stripped;
@@ -633,9 +635,17 @@ void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args, s
 // goes on with the next. A thread so that the limit holds for each resume, if the handler waits. Each such event
 // returns to doevents' Lua loop rather than looping here: a handler whose own line raises its event again would keep
 // this C loop going forever, where no instruction hook could stop it.
+// Without 'events' (taken away after mq.event, or not held by the thread running now) there is nothing to run: nil,
+// not an error, since scripts call mq.doevents in their loop whether they have events or not. A script that lost the
+// permission loses the lines it had queued too.
 int l_next_event(lua_State* L) {
     Script& s = Script::of(L);
     const char* name = lua_isnoneornil(L, 1) ? nullptr : luaL_checkstring(L, 1);
+    if (!(s.caps & plugin::kCapEvents)) s.queued.clear();
+    if (!(s.caps & s.narrowed & plugin::kCapEvents)) {
+        lua_pushnil(L);
+        return 1;
+    }
     while (true) {
         auto it = s.queued.begin();
         while (it != s.queued.end() && name && it->name != name) ++it;
