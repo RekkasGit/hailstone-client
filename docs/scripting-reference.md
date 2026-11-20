@@ -1449,6 +1449,7 @@ or -1 and say so in the chat window. Only call these on the client's thread, fro
 | `get_avail_aa_data_bulk(out, size)`, `get_avail_disc_data_bulk(out, size)` | `read` | the owned alternate abilities by ability (group) id, or the combat abilities by spell id, each with its name (bulk note 3) |
 | `get_xtarget_data_bulk(out, size)` | `read` | every extended target slot: type, spawn id, aggro meter percent and HP percent, 16 bytes a slot, as many whole records as fit |
 | `get_raid_data_bulk(out, size)` | `read` | the raid roster: a 40-byte `HS_Bulk_RaidHeader`, then one `HS_Bulk_RaidData` per member (bulk note 4) |
+| `get_spells_data_bulk(ids, id_count, out, size)` | `read` | spells by id: an i32 count, then per id an `HS_Bulk_SpellFixedRecord` (509 bytes; `found` 0 for an unknown id), its `stringCount` texts (the name, cast texts, description, target, resist and category names) and its effect lines in MacroQuest's `ParseSpellEffect` wording, each a u16 length and the bytes; step by `recordSize` (layout in docs/plugins.md "get_spells_data_bulk") |
 | `cursor_origin()` | `read` | how the item on the cursor got there: `HAILSTONE_CURSOR_ORIGIN_UNKNOWN` (0, also empty), `_INVENTORY` (1, the player's pickup) or `_SERVER` (2, the server put it on the empty cursor); docs/plugins.md "The cursor item's origin". Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, cursor_origin)` first |
 | `add_ui_function(name, fn, user)`, `remove_ui_function` | `ui` | a function the plugin's windows call as `hs.Plugin("<name>").<name>(...)` |
 | `arg_count`, `arg(i, out)`, `arg_field(i, key, out)` | | a UI function's arguments |
@@ -1463,7 +1464,7 @@ or -1 and say so in the chat window. Only call these on the client's thread, fro
 | `world_capabilities`, `world_floor_below`, `world_anchor`, `world_submit`, `world_surface_patch` | per function | docs/plugins.md "Transient world geometry". Added later in ABI 3 |
 | `nameplate_register`, `nameplate_unregister`, `nameplate_submit`, `nameplate_measure_text`, `nameplate_spell_icon` | `read`, `ui` and `extend` | a nameplate canvas provider (docs/plugins.md "Native world nameplate canvases"). Added later in ABI 3 |
 
-Bulk reads (layout in docs/plugins.md "Buff, spawn, extended target and raid records"): each returns the bytes
+Bulk reads (layout in docs/plugins.md "Buff, spawn, extended target, ability and raid records"): each returns the bytes
 written. Each was added later in ABI 3: test `HAILSTONE_HOST_HAS(host, <field>)` first (for example
 `HAILSTONE_HOST_HAS(host, get_buff_name_data_bulk)`, `HAILSTONE_HOST_HAS(host, get_xtarget_data_bulk)`,
 `HAILSTONE_HOST_HAS(host, get_raid_data_bulk)`).

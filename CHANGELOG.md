@@ -31,6 +31,12 @@
 - Cures no longer remove debuffs locally: a partial or too-weak cure leaves the icon until the server's buff fade clears it, instead of the debuff vanishing early
 - Buff icons show a debuff's curse, disease, poison or corruption counters as soon as it lands
   - The remaining count stays after a partial cure, a server refresh without counter data, or a full buff list that leaves the spell in the same slot
+- Plugins: `get_spells_data_bulk` reads many spells by id in one call
+  - Each comes with its spells_us.txt fields, its description, and the names of its target type, resist type and categories
+  - Its effect slots come as text in MacroQuest's `ParseSpellEffect` wording ("Slot 1: Increase HP by 11 (L1) to 20 (L10)")
+  - For developers: docs/plugins.md "get_spells_data_bulk"
+- Scripts: `${Spell.TargetType}` gives MacroQuest's text for every target type
+  - `LifeTap` (was `Life Tap`), and `None`, `Special Muramites`, `Target_AE_No_Players_Pets` and `Single Friendly (or Target's Target` where it said `Unknown`
 
 ## 0.7.2-beta (2026-11-19)
 
