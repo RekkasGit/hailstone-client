@@ -19,6 +19,8 @@ on pull requests to `main`:
   - The Python tests of those tools and of `tools/make_addon.py`'s UI and autoload packages
     (`tests/test_migrate_ui_api.py`, `test_gen_ui_api_docs.py`, `test_make_addon_ui.py`,
     `test_make_addon_autoload.py`).
+  - `tests/test_make_update.py`: `tools/make_update.py` keeps out of a package exactly the paths the client's
+    `is_player_path` refuses.
 
 One workflow builds: `.github/workflows/macos.yml` ("macOS arm64" below), for the platform Linux cannot build,
 started by hand or by a push to a `macos/**` branch.

@@ -153,8 +153,7 @@ and the plugins are gone):
    - the files `hailstone.ini`, `hailstone-windows.ini` and `notes.txt`;
    - the folders `update/`, `servers/`, `logs/`, `cache/`, `screenshots/`, `bug-reports/`, `maps/`, `scripts/`,
      `textures/`, `web/`, `addons/` and `tools/` (the last two the add-ons', docs/addons.md), and `ui-data/` and
-     `ui-addons/` (the player's interface data and the UI add-ons; the client's list only, `tools/make_update.py`'s
-     copy does not have these two yet);
+     `ui-addons/` (the player's interface data and the UI add-ons);
    - `ui/settings/` and `ui/loadingbackgrounds/`.
 
    An update never writes or removes any of them.
