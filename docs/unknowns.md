@@ -489,6 +489,10 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 
 ## Combat, abilities and spells
 
+- **The target and pet windows' buff slot limit.**
+  - Now: `OP_TargetBuffs` and `OP_PetBuffWindow` entries for slot 97 or past it are ignored (`net::kMaxSpawnBuffSlots`,
+    EQEmu's RoF2 `NPC_BUFFS`), so a hostile packet cannot grow the lists. A stock server never sends more.
+  - Settle: the original's handler for these packets, which shows how many slots its target and pet windows take.
 - **A cure's counters after a fade.** EQEmu fades a fully cured buff before the cure's landing OP_Action.
   - Now: the client skips its counter prediction for that type only when both arrive in the same network update (one `GameConnection::update`).
   - In different updates, the next debuff of that type shows fewer counters than the server holds (its icon stays;

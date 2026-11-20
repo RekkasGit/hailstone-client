@@ -502,8 +502,12 @@ compressing the files again would gain about 5 %. Speed comes from asking ahead:
 - 32 pieces are asked ahead, into a 2 MiB socket receive buffer.
 
 A missing piece is asked for again (`ServerFileSync::kChunkRetry`, `kChunkRetries`) at once when a later one has come
-(the script answers in order), or after 3 s. After 5 requests for one piece the sync fails and the zone-in goes on
-with the old files.
+(the script answers in order), or after 3 s with nothing.
+
+- A piece skipped again after 5 requests fails the sync.
+- A server that just goes quiet fails it once 30 s pass with nothing from it (`kChunkTimeout`).
+
+Either way the zone-in goes on with the old files.
 
 When the server's files change during a download (its list id moves on), the script answers with a stale error and
 the download restarts on the new list; more than three restarts in one sync fail it.

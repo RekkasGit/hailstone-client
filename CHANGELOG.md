@@ -37,6 +37,11 @@
   - For developers: docs/plugins.md "get_spells_data_bulk"
 - Scripts: `${Spell.TargetType}` gives MacroQuest's text for every target type
   - `LifeTap` (was `Life Tap`), and `None`, `Special Muramites`, `Target_AE_No_Players_Pets` and `Single Friendly (or Target's Target` where it said `Unknown`
+- Server files: when the server goes quiet during the download, the client keeps asking for the missing pieces until 30 s pass with nothing from it, instead of giving up after about 15 s
+- Connection: a failed world or zone connection stays failed; a packet the server had already sent behind the failure no longer starts a zone connection
+- Network: broken or hostile packets can no longer stall the client
+  - Barter lists whose names never end, and mail with long runs of blanks
+  - Target or pet buff windows with slot numbers past RoF2's 97 (those slots are ignored)
 
 ## 0.7.2-beta (2026-11-19)
 

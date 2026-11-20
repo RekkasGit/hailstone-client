@@ -194,6 +194,7 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - Open: anonymous and roleplaying friends, a comparison with RoF2.
 
 ### Combat and spells (do first)
+- [ ] **Target and pet window buff slot limit.** Check the original's against the 97 the client keeps (`net::kMaxSpawnBuffSlots`, docs/unknowns.md).
 - [x] **Cure counters over multiple effect slots of one buff.**
   - A cure spends against that buff's whole local counter pool and caps it at zero, leaving removal to the server's fade.
   - Surplus is not carried to later buffs, as in RoF2. Tests: `tests/cure_counters_test.cpp`.

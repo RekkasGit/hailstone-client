@@ -456,7 +456,7 @@ The online client never finishes a cast itself: it gates the cast, starts its ca
 | Damage (spell) | Z→C | 0x6f15 | as above with type 231: the client prints the landing text from it (`ReportSuccessfulHit`). See note 1 |
 | Buff | both | 0x659c | 100 B: u32 entity, SpellBuff (88 B), u32 slot, u32 fade. See note 2 |
 | BuffCreate | Z→C | 0x3377 | u32 entity, u32 tic timer, u8 all buffs (1 = the whole list), u16 count, count × {u32 slot, u32 spell (0xffffffff = removed), u32 tics, u32 num hits, cstr caster}, u8 type (0 own window). See note 3 |
-| TargetBuffs | Z→C | 0x4f4b | as BuffCreate, type 5 (PC) or 7 (NPC): the target window's buffs |
+| TargetBuffs | Z→C | 0x4f4b | as BuffCreate, type 5 (PC) or 7 (NPC): the target window's buffs; an entry for slot 97 or past it (an NPC's most in RoF2, EQEmu's `NPC_BUFFS`) is ignored |
 | BuffRemoveRequest | C→Z | 0x64f2 | 8 B: u32 slot, u32 entity (own id or the pet's): click a buff off. EQEmu fades it if it is not detrimental |
 | DeleteSpell | both | 0x3358 | 8 B: i16 book slot, 2 B, u8 success (the echo: 1 = deleted), 3 B |
 | LoadSpellSet | C→Z | 0x261d | 16 B: u8 forget[12] (non-zero = forget that gem), u32 count (12). See note 4 |
@@ -538,7 +538,7 @@ EQEmu server; the GUI client and `playprobe` as the second player.
 | PetCommands | C→Z | 0x0159 | 12 B: u32 command, u32 target, u8 flag 0, 3 B (note 1) |
 | PetCommandState | Z→C | 0x1dc8 | 8 B: u32 button (EQEmu PET_BUTTON_*: 0 sit, 1 stop, 2 regroup, 3 follow, 4 guard, 5 taunt, 6 hold, 7 ghold, 8 focus, 9 spell hold), u32 state |
 | PetHoTT | Z→C | 0x794a | 4 B: the focused pet's target |
-| PetBuffWindow | Z→C | 0x5882 | the OP_BuffCreate layout (u32 pet, u32 0, u8 1, u16 count, entries, u8 0) |
+| PetBuffWindow | Z→C | 0x5882 | the OP_BuffCreate layout (u32 pet, u32 0, u8 1, u16 count, entries, u8 0); slots from 97 on are ignored, as for TargetBuffs |
 | SpawnAppearance type 25 | Z→C | 0x0971 | the spawn's owner (MasterID); 0 when a charm breaks |
 
 1. PetCommands:
