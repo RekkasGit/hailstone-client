@@ -10,6 +10,7 @@
 - Cures no longer remove debuffs locally: a partial or too-weak cure leaves its icon standing until the server's buff fade clears it, instead of making the debuff vanish early
 - Buff icons now show a debuff's curse, disease, poison or corruption counters as soon as the buff lands and keep showing the remaining count after a partial cure, a server refresh without counter data, or a full buff list that leaves the spell in the same slot
 - Connection: a failed world or zone connection stays failed; a packet the server had already sent behind the failure no longer starts a zone connection
+- Network: broken or hostile packets can no longer stall the client: barter lists whose names never end, mail with long runs of blanks, and target or pet buff windows with slot numbers past RoF2's 97 (those slots are ignored)
 
 ## 0.7.2-beta (2026-11-19)
 

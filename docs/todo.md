@@ -121,6 +121,7 @@ Not blocking 1.0: `/gems`; `/travel`, waypoints and the mesh editor; levitation 
 - [ ] Compare `/who friends` and `/who all friends` live with RoF2: online/offline transitions, friends in other zones and anonymous/roleplaying friends. Seen live (stock PEQ test server, 2026-11-18): both list an online friend in another zone and nothing once it camps; no logon/logoff notice appeared. Open: anonymous and roleplaying friends, a comparison with RoF2.
 
 ### Combat and spells (do first)
+- [ ] Check the original target and pet windows' buff slot limit against the 97 the client keeps (`net::kMaxSpawnBuffSlots`, docs/unknowns.md).
 - [x] Cure counters over multiple effect slots of one buff: a cure spends against that buff's whole local counter pool and caps it at zero, leaving the removal to the server's fade. Surplus is not carried to later buffs, as in RoF2; covered by `tests/cure_counters_test.cpp`.
 - [ ] Counters at zone-in: `OP_BuffCreate` all-buffs lists carry no `slot_data`, so curse counters are lost on zone-in; `ProfileBuff.counters` is decoded but not mapped to `BuffSlot.slot_data` (docs/unknowns.md "Combat, abilities and spells").
 - [ ] Shadow step (SPA 379) does nothing live: `land_spell` has no zone collision (point_in_world, collide_sphere, collide_line, floor_height and is_valid_teleport are stubbed in src/game/hit_landing.cpp) and the result has no position for the connection to apply. Needs collision in HitLandingContext, a port of IsValidTeleport and a teleport result applied with a position update.

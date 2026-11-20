@@ -281,7 +281,7 @@ The online client never finishes a cast itself. It gates the cast, starts its ow
 | Damage (spell) | Z→C | 0x6f15 | as above with type 231: the client prints the landing text from it (`ReportSuccessfulHit`): on itself CastOnYou, with damage "%1 You have been healed for %2 points." (4600/4601, negative damage) or "%1  You have taken %2 points of damage." (12203/12204); on others "<name><CastOnAnother>" |
 | Buff | both | 0x659c | 100 B: u32 entity, SpellBuff (88 B: u8 effect type, u8 level, u8, u8, f32 bard modifier, u32 spell, u32 duration tics, u32 caster, u32 num hits, f32 y, x, z, u32, i32 slot data[12]), u32 slot, u32 fade. Z→C fade 1 removes the slot (sent twice, the second with spell 0xffffffff), 2 refreshes it. RoF2 copies the whole `slot_data` (including zeroes); Hailstone keeps the local counters only on fade 2 + same spell + all `slot_data` zero, otherwise it overwrites |
 | BuffCreate | Z→C | 0x3377 | u32 entity, u32 tic timer, u8 all buffs (1 = the whole list), u16 count, count × {u32 slot, u32 spell (0xffffffff = removed), u32 tics, u32 num hits, cstr caster}, u8 type (0 own window). Own buff window; slots 0..41 long, 42..61 short (song window), 62 discipline. EQEmu sends full lists at zone-in and on buff changes; the list has no `slot_data`, so the client keeps local counters for spells still in the same slots and clears omitted slots |
-| TargetBuffs | Z→C | 0x4f4b | as BuffCreate, type 5 (PC) or 7 (NPC): the target window's buffs |
+| TargetBuffs | Z→C | 0x4f4b | as BuffCreate, type 5 (PC) or 7 (NPC): the target window's buffs; an entry for slot 97 or past it (an NPC's most in RoF2, EQEmu's `NPC_BUFFS`) is ignored |
 | BuffRemoveRequest | C→Z | 0x64f2 | 8 B: u32 slot, u32 entity (own id or the pet's): click a buff off. EQEmu fades it if it is not detrimental |
 | DeleteSpell | both | 0x3358 | 8 B: i16 book slot, 2 B, u8 success (the echo: 1 = deleted), 3 B |
 | LoadSpellSet | C→Z | 0x261d | 16 B: u8 forget[12] (non-zero = forget that gem), u32 count (12). Sent when a spell set is memorized (the spell book's sets, the gem menu, `/memspellset`; `net/game_connection_spell_sets.cpp`), forgetting the gems the set replaces |
@@ -339,7 +339,7 @@ Observed sequences (EQEmu server, South Qeynos; the GUI client and `playprobe` a
 | PetCommands | C→Z | 0x0159 | 12 B: u32 command (EQEmu PET_*: 0 health, 1 leader, 2 attack, 3 qattack, 4 follow, 5 guard, 6 sit (7 on, 8 off), 9 stop, 12 taunt (13/14), 15 hold (16/17), 18 ghold, 21 spell hold, 24 focus, 27 feign, 28 back off, 29 get lost, 31 regroup), u32 target (attack / qattack: the current target if not yourself; leader: the target if it is an NPC; else 0), u8 flag 0, 3 B. `/pet target` (30) targets the pet locally and sends nothing; an attack without a target sends nothing. EQEmu ignores a command whose target is the pet itself |
 | PetCommandState | Z→C | 0x1dc8 | 8 B: u32 button (EQEmu PET_BUTTON_*: 0 sit, 1 stop, 2 regroup, 3 follow, 4 guard, 5 taunt, 6 hold, 7 ghold, 8 focus, 9 spell hold), u32 state |
 | PetHoTT | Z→C | 0x794a | 4 B: the focused pet's target |
-| PetBuffWindow | Z→C | 0x5882 | the OP_BuffCreate layout (u32 pet, u32 0, u8 1, u16 count, entries, u8 0) |
+| PetBuffWindow | Z→C | 0x5882 | the OP_BuffCreate layout (u32 pet, u32 0, u8 1, u16 count, entries, u8 0); slots from 97 on are ignored, as OP_TargetBuffs's |
 | SpawnAppearance type 25 | Z→C | 0x0971 | the spawn's owner (MasterID); 0 when a charm breaks |
 
 ### Skills and abilities (`net/ability_packets.h`, rules in `game/mechanics/abilities.{h,cpp}`, glue in `app/actions_ui.cpp`)
