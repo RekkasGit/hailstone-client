@@ -481,6 +481,33 @@ require('hailstone').hooks{
     CHECK(b == "true:13:" + corpse.name + ":true");
 }
 
+TEST_CASE("Lua plugin: a __newindex the script puts on the reused spawn table does not stop the refill") {
+    Host h;
+    auto& c = *h.world.conn;
+    // The table is the script's between calls: it nils a field and makes every new key raise. The host refills it
+    // outside a protected call, so a metamethod run there would abort the client.
+    h.write("plate_meta.lua", R"lua(
+require('hailstone').hooks{
+  nameplate = function(spawn, text)
+    local out = spawn.id .. ':' .. tostring(getmetatable(spawn) == nil)
+    spawn.name = nil
+    spawn.level = nil
+    setmetatable(spawn, {__newindex = function() error('no') end, __index = function() error('no') end,
+                         __metatable = 'locked'})
+    return out
+  end,
+}
+)lua");
+    REQUIRE(h.scripts->run("plate_meta", {}));
+    h.scripts->pulse();
+    std::string a = "x", b = "x";
+    h.chain.nameplate_text(c, c.world().spawns.at(10), a);
+    h.chain.nameplate_text(c, c.world().spawns.at(13), b);
+    CHECK(a == "10:true");
+    CHECK(b == "13:true"); // refilled, and the metatable gone
+    CHECK(h.scripts->running("plate_meta"));
+}
+
 TEST_CASE("Lua plugin: map policy and visibility share native ownership and source lifetime rules") {
     Host h;
     h.write("map.lua",R"lua(

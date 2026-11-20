@@ -134,21 +134,28 @@ const net::GameConnection* readable(Script& s) {
     return s.host->env.context ? s.host->env.context().conn : nullptr;
 }
 
+// Raw sets (no metamethods run): the host fills tables outside a protected call, and one of them (the name plate's
+// reused spawn table) is the script's to change, metatable and all; a __newindex there could only abort.
+void raw_set_top(lua_State* L, const char* k) {
+    lua_pushstring(L, k);
+    lua_insert(L, -2);
+    lua_rawset(L, -3);
+}
 void set_int(lua_State* L, const char* k, lua_Integer v) {
     lua_pushinteger(L, v);
-    lua_setfield(L, -2, k);
+    raw_set_top(L, k);
 }
 void set_num(lua_State* L, const char* k, lua_Number v) {
     lua_pushnumber(L, v);
-    lua_setfield(L, -2, k);
+    raw_set_top(L, k);
 }
 void set_str(lua_State* L, const char* k, const std::string& v) {
     lua_pushlstring(L, v.data(), v.size());
-    lua_setfield(L, -2, k);
+    raw_set_top(L, k);
 }
 void set_bool(lua_State* L, const char* k, bool v) {
     lua_pushboolean(L, v);
-    lua_setfield(L, -2, k);
+    raw_set_top(L, k);
 }
 
 // An item as a table. With the connection (an item the player carries), also how long its click's recast still has
@@ -227,6 +234,9 @@ void push_spawn_scratch(lua_State* L, const game::Spawn& s) {
         lua_pushvalue(L, -1);
         lua_rawsetp(L, LUA_REGISTRYINDEX, &g_spawn_scratch_key);
     }
+    // A metatable the script gave it last time goes too (from C, __metatable does not stop this).
+    lua_pushnil(L);
+    lua_setmetatable(L, -2);
     fill_spawn(L, s);
 }
 
