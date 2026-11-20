@@ -393,7 +393,7 @@ TEST_CASE("light tweaks: the presets, Default first, and Custom for sliders matc
     // Option 1.
     CHECK(kLightTweakPresets[1].name == "Option 1");
     const LightTweaks o = kLightTweakPresets[1].values;
-    CHECK(o == LightTweaks{40, 300, 700, 140, 80, 0, 50, 50});
+    CHECK(o == LightTweaks{40, 300, 700, 140, 80, 0, 10, 10});
     // Which the sliders match; one moved off them is Custom (past the presets).
     CHECK(app::light_tweak_preset(d) == 0);
     CHECK(app::light_tweak_preset(o) == 1);
