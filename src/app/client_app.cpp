@@ -430,9 +430,11 @@ int ClientApp::run() {
         render::ModernView modern_view{view_, 0.0f};
         // The modern haze, eased between places and weathers (render/atmosphere.h): its reach, length and colour.
         render::HazeTarget haze;
+        float haze_scale = 1.0f; // display.ambient_light's share of the haze's colour (render::haze_ambient_scale)
         if (modern) {
             const bool extend = !fog_frame || fog_frame->sky;
             const render::Daylight sun = render::daylight(sky_hour, true, moon_phase_, blood_moon_);
+            haze_scale = render::haze_ambient_scale(sun.to_sun.z, outdoor, static_cast<float>(ambient_light_) / 100.0f);
             haze = haze_blend_.update(render::haze_target(view_, view_distance_, extend, outdoor,
                                                           sky_renderer_ != nullptr && extend, sun.to_sun,
                                                           weather_look_.storm, weather_look_.snowing,
@@ -512,6 +514,11 @@ int ClientApp::run() {
                     light.vision_lift = fog_frame->vision_lift;
                 }
                 game::SceneLight scene_light = game::compute_scene_light(light);
+                // Less fill light (display.ambient_light; Hailstone's own, the modern lighting only): the special
+                // ambient (the zone's global ambient and the vision floor's grey), here so the zone, which takes it
+                // from set_scene_light, and the characters (scene_lighting) lose it alike.
+                if (modern && ambient_light_ < 100)
+                    scene_light.special_ambient *= static_cast<float>(ambient_light_) / 100.0f;
                 if (zone_renderer_) {
                     zone_renderer_->set_scene_light(scene_light);
                     zone_renderer_->set_classic_smooth(lighting_mode_ == render::LightingMode::SmoothClassic);
@@ -577,7 +584,8 @@ int ClientApp::run() {
                         render::set_underwater(lighting, camera_.position, water_color);
                     else
                         render::set_haze_linear(lighting, camera_.position, haze.length,
-                                                render::lightning_haze(haze.color, weather_look_.flash, weather_look_.storm));
+                                                render::lightning_haze(haze.color * haze_scale, weather_look_.flash,
+                                                                       weather_look_.storm));
                     render::set_screen(lighting, camera_.ao_view(width, height, lit.far_plane).near_plane, lit.far_plane,
                                        f->extent.width, f->extent.height, t);
                     render::set_weather(lighting, weather_look_);

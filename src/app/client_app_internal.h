@@ -98,6 +98,7 @@
 #include "game/mechanics/character.h"
 #include "game/scaled_ambient.h"
 #include "game/light_list.h"
+#include "app/light_tweaks.h"
 #include "render/scene_lighting.h"
 #include "game/scene_fog.h"
 #include "game/scene_light.h"
@@ -889,6 +890,9 @@ private:
     void set_option_value(std::string_view name, int value);
     // A combo box's choices the client fills ("resolution": the display's modes); empty for others.
     std::vector<std::string> option_choices(std::string_view name) const;
+    // The Light Tweaks sliders as they are, and a preset's applied and saved (app/light_tweaks.h).
+    LightTweaks light_tweaks() const;
+    void apply_light_tweaks(const LightTweaks& values);
     // The window mode, resolution, vertical sync, frame caps, field of view (hailstone.ini display.*); at start
     // and as the Options window changes them.
     std::optional<int> video_option(std::string_view name) const;
@@ -1392,6 +1396,25 @@ private:
     bool horizon_hills_ = true;
     // The modern sky's volumetric clouds (render/cloud_renderer.h); display.volumetric_clouds.
     bool volumetric_clouds_ = true;
+    // The modern lighting's darkness controls, percent (100 as before, 0 none): the fill light in the dark
+    // (render::daylight's ambient, the special ambient, the characters' floor and the haze; display.ambient_light) and
+    // the baked colour's lamps' part (render::daylight's baked_lamps; display.baked_lamp_light, up to 300).
+    int ambient_light_ = 100;
+    int baked_lamp_light_ = 100;
+    // How far from the camera the zone's lamps light characters and objects, units (display.lamp_light_distance;
+    // render::kLampLightDistance).
+    int lamp_light_distance_ = static_cast<int>(render::kLampLightDistance);
+    // How strong and how far-reaching carried lights are, percent (display.carried_light, 0..300;
+    // display.carried_light_reach, 25..200; game::scaled_carried_light).
+    int carried_light_ = 100;
+    int carried_light_reach_ = 100;
+    // How much carried lights add to the brightest one where they overlap, percent (display.carried_light_stacking;
+    // SceneLighting::carried): 100 all of it, 0 the brightest alone (the default).
+    int carried_light_stacking_ = 0;
+    // How strong infravision and ultravision are, percent (display.infravision_strength / ultravision_strength,
+    // game::SkyWeatherInput's): 100 the original's, 0 none.
+    int infravision_strength_ = 100;
+    int ultravision_strength_ = 100;
     // The fog bank past an outdoor zone's edge (render/zone_fog.h); display.zone_fog. The land's build its field was
     // last made from (the zone renderer's; a new one, or none, uploads it again).
     bool edge_fog_ = true;
