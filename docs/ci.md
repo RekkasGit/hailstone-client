@@ -160,11 +160,15 @@ tools/docker/build.sh all            # the three; --no-test after the platform s
   `bin/x64/cl` (the install above), else `.docker/msvc`. With none there, `MSVC_ACCEPT_LICENSE=1` accepts
   Microsoft's license and downloads one into `MSVC_DIR` (`tools/docker/msvc_setup.sh`, msvc-wine pinned to a
   commit); without it the script stops. Wine's home is `.docker/wine-home`, one per checkout.
-- The Windows tests run under Wine with Microsoft's runtime DLLs copied beside them, and leave out four cases that
+- The Windows tests run under Wine with Microsoft's runtime DLLs copied beside them, and leave out the cases that
   fail only under Wine: the browser tests (Chromium does not run under Wine), "cancelled ends a transfer stalled
   waiting for the answer" (above), "allow_url refuses an empty..." (Wine's WinHTTP reports another address to the
-  check) and "File time" (MSVC's time zones need Windows' `icu.dll`). Nothing runs them for you, CI included: run
+  check), and "File time" and "Story window: a page's href links..." (MSVC's `clock_cast` from a file time needs
+  Windows' `icu.dll`, which every Windows the client supports has). Nothing runs them for you, CI included: run
   them on Windows by hand when a change touches the browser, `web/` or file times, and for a release.
+- Under Wine, `create_symlink` reports success but makes something `is_symlink` does not take for a link, so the
+  tests of links that escape a folder (shared files, UI packs, UI data) skip their link checks there, as they do on
+  a Windows that cannot make links (no Developer Mode). Only a run on Windows with links allowed checks them.
 - QEMU for linux-arm64 is not registered by the script, since it changes the host's kernel settings; it prints the
   pinned `tonistiigi/binfmt` command to run once per boot.
 - macOS is not built here: Apple's compiler and SDK run only on a Mac ("macOS arm64" below).

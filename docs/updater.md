@@ -201,8 +201,8 @@ player's run.
 
    For the first two, `CMAKE_ARGS=-DHAILSTONE_BROWSER=ON tools/docker/build.sh linux-x64` and the same with
    `windows-x64` (docs/ci.md "Builds in containers") do this step and step 2 from the same Dockerfiles, leaving each
-   folder in `dist/<platform>/hailstone`. Under Wine they leave out four tests that only fail there: run those on
-   Windows by hand.
+   folder in `dist/<platform>/hailstone`. Under Wine they leave out the tests that only fail there (docs/ci.md "Builds in
+   containers"): run those on Windows by hand.
 
    Run each platform's `hailstone_tests` (Windows under Wine) before going on; the macOS workflow runs its own.
 2. Install each platform's client (without the server plugins, which are released as add-ons by their own
