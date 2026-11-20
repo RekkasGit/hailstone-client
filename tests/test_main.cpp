@@ -1,4 +1,4 @@
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest/doctest.h>
 
 #include <cstdio>
@@ -6,6 +6,7 @@
 
 #include "core/env.h"
 #include "core/log.h"
+#include "test_shard.h"
 
 namespace {
 
@@ -45,3 +46,22 @@ struct TraceListener : doctest::IReporter {
 } // namespace
 
 REGISTER_LISTENER("hailstone_trace", 1, TraceListener);
+
+int main(int argc, char** argv) {
+    doctest::Context context;
+    // Set before the command line, which wins: a -tc run under ctest still picks its cases. The seed is fixed so every
+    // part shuffles the list the same way and the ranges do not overlap.
+    if (const char* spec = hailstone::core::env("TEST_SHARD")) {
+        const auto range = hailstone::test::shard_range(spec, doctest::detail::getRegisteredTests().size());
+        if (!range) {
+            std::fprintf(stderr, "HAILSTONE_TEST_SHARD=%s is not <k>/<n> with 1 <= k <= n\n", spec);
+            return 2;
+        }
+        context.setOption("order-by", "rand");
+        context.setOption("rand-seed", 1);
+        context.setOption("first", static_cast<int>(range->first));
+        context.setOption("last", static_cast<int>(range->last));
+    }
+    context.applyCommandLine(argc, argv);
+    return context.run();
+}

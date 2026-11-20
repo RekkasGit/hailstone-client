@@ -27,7 +27,7 @@ See the Quick start in the [README](README.md). Before sending a change:
 
 ```sh
 cmake --build build
-ctest --test-dir build --output-on-failure
+ctest --test-dir build -j 8 --output-on-failure
 build/hailstone/hailstone --validation
 ```
 
