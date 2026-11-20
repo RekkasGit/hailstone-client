@@ -2205,7 +2205,10 @@ int32_t h_get_raid_data_bulk(void* h, unsigned char* data, int32_t datamax) {
         rec->y = m.y;
         rec->z = m.z;
         rec->distance = m.distance;
-        copy_name(rec->name, m.name);
+        // Through a local: no reference to a field of the packed record (AGENTS.md).
+        char name[sizeof rec->name];
+        copy_name(name, m.name);
+        std::memcpy(rec->name, name, sizeof name);
         pBuffer += sizeof(HS_BulkRaidData);
         written += static_cast<int32_t>(sizeof(HS_BulkRaidData));
         ++header.count;
