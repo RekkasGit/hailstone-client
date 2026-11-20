@@ -987,8 +987,9 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 - **Race 127's IVM** (the enchanter pet, docs/formats/characters.md).
   - Now: a world click takes it through the spawn-size sphere a spawn without a model gets. In the nameplate depth test
     only its posed held items hide a plate.
-  - Unknown: in the original its fully masked body mesh (0x2c) exists; whether its click and line tests meet that
-    mesh's triangles, a sphere, or only the held items was not traced.
+  - Unknown: in the original its fully masked body mesh (0x2c) exists. The client reads 0x2c meshes but drops a body
+    like this one, which can draw nothing, to keep that behaviour. Whether the original's click and line tests meet
+    that mesh's triangles, a sphere, or only the held items was not traced.
   - Settle: tracing the original's actor pick for a hierarchical actor whose only material is masked, or clicking just
     beside an animation pet's weapon in the original client.
 - **NPC head textures** follow a simplified rule (texture-type variant, else head-type variant, else base).
@@ -1101,6 +1102,15 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - The flora's bounds against damaged `.eco` files are Hailstone's: `*ITERATIONS` at most 10,000, `*DENSITY` at most
     100,000, 65,536 plants per tile and ecosystem (the game's files reach 500 and 2,800). How the original takes larger
     values is not traced.
+- **WLD 0x2C meshes** (docs/formats/wld.md "0x2C mesh").
+  - Now: the layout comes from libeq and the five shipped fragments. The centre's place is settled by the Fiery
+    Avenger's blade matching IT2's and the ghost ship's symmetry. Read past, not used: the 12 bytes before the centre,
+    the u16 after the mesh-op count, the polygons' flags word (0x4b in all five) and their four other u16, the mesh
+    ops, the 0x200 block and the vertex material groups.
+  - Unknown: the original's 0x2C loader in EQGraphicsDX9.dll was not found. If 0x4b meant something to it (a 0x2C on
+    zone geometry, two-sided drawing), the client would not know: none of the five is zone geometry, and they draw
+    with their materials' own culling.
+  - Settle: finding the loader's fragment-type dispatch in EQGraphicsDX9.dll.
 - **Top-down WLD palette map.** A WLD palette map (detail textures) stored top-down (negative BMP height; none ships) is
   flipped so v = 0 stays the picture's bottom row. Whether 0x10019780 reads such a file in storage order is not traced.
 - **Mip filtering.**

@@ -294,6 +294,8 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
 - [ ] **Arena and Nektulos with a live folder** (unknowns.md, Movement and collision). Its arena.s3d and nektulos.s3d win over the revamped .eqg, but PEQ's Arena (its only row) and Nektulos version 1 (expansion 10 on) run the revamp: their spawns stand on the live .eqg.
 - [x] **IVM's animation** (race 127/600, the enchanter pet; game::animation_source). It has no named clips; GetAlternateAnimTag @0x406a60 maps its wood-elf prefix group to ELM, so it plays ELM's clips and holds its weapons as an elf does.
 - [ ] IVM's click volume: whether the original's click meets its masked body mesh, a sphere or only its held items (unknowns.md, Characters and models).
+- [x] WLD 0x2C meshes (docs/formats/wld.md "0x2C mesh"): read into a MeshDef, centre added, so the Fiery Avenger (IT62) shows its blade, not only its flames, and Erud's Crossing's ghost ship its hull; a 0x2C body that can draw nothing (IVM's) is dropped.
+- [ ] The 0x2C loader in EQGraphicsDX9.dll: the fields read past and the polygon flags word (unknowns.md, World rendering).
 
 ### Items and commerce
 - [x] Evolving-item Final Result inspection: native action-4 request, ordinary read-only item reply, received progress updates and a focusable gamepad action.

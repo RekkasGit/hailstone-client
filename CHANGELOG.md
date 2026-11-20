@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Item comparison, in both interfaces: an item's tooltip and details window show what wearing it instead of what you wear would change
+  - Tooltips cover the inventory, bags, bank, loot, trade and a merchant's goods; the details window covers a linked item too
+  - In the details window each stat's change sits beside the item's value (+12 in green beside AC 20, say), with the verdict and what it is compared with above the stats
+  - A tooltip shows the verdict under the name and the changes beside its AC, HP and mana
+  - It shows your HP, mana, endurance, AC, ATK, haste, stats, resists and regeneration as the game works them out, stat caps included, plus the weapon's damage and delay, effects gained and lost, and why you cannot use it
+  - A verdict (Upgrade, Downgrade, Mixed) weighs the changes by what matters for your class
+  - For rings, earrings and bracers Shift shows the other slot
+  - Options > Display > Compare Items and Upgrade Verdict turn them off. Nothing about the game's rules changes
+- The Fiery Avenger shows its blade
+  - Held by a player or an NPC it showed only its flames: its blade is in an older model format the client did not read
+  - The same fix draws the hull of the ghost ship in Erud's Crossing, which was invisible
 - Corpses no longer replay their death animation when a zone loads
   - An NPC corpse, or a feign-death spawn, that is already dead when first drawn shows its final pose at once, as on the original client
   - Standing up from feign death blends from that pose instead of the start of the fall
@@ -467,12 +478,6 @@
   - Options > Graphics > Horizon Hills turns it off
 - Fixed a crash on entering the world when a character's own settings chose a different texture pack from the one Hailstone started with (most likely with a large pack). The pack is now switched safely while the character's models load
 - Item details: with a live game folder, stats its string table lacks show their names instead of a bracketed number such as [13036]: Spell Shield, Combat Effects, Shielding, Damage Shield, DoT Shielding, DS Mitigation, Avoidance, Accuracy, Stun Resist, Strikethrough and "Potion Belt Enabled"
-- Item comparison, in both interfaces: an item's tooltip and details window show what wearing it instead of what you wear would change
-  - Tooltips cover the inventory, bags, bank, loot, trade and a merchant's goods; the details window covers a linked item too
-  - It shows your HP, mana, endurance, AC, ATK, haste, stats, resists and regeneration as the game works them out, stat caps included, plus the weapon's damage and delay, effects gained and lost, and why you cannot use it
-  - A verdict (Upgrade, Downgrade, Mixed) weighs the changes by what matters for your class
-  - For rings, earrings and bracers Shift shows the other slot
-  - Options > Display > Compare Items and Upgrade Verdict turn them off. Nothing about the game's rules changes
 - AA window: column headers and rows stay aligned at every window scale, including when the window or scroll bar changes size
   - Drag a header's right edge to resize its column (the ability column takes the room the others leave, so widening the window widens it), or drag the header to reorder it
   - **Reset columns** restores the default widths, order and name sort

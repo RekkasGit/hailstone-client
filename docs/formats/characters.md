@@ -105,15 +105,17 @@ HUM's materials are nearly all render method 0x80000014 (opaque):
 
 The texture number encodes variant and part (`HUMCH0001` = chest, variant 00, piece 01).
 
-A static (non-skeletal) actor without a mesh is a build error. A skeleton with no supported body mesh is still built
+A static (non-skeletal) actor without a mesh is a build error. A skeleton with no body that can show is still built
 (below).
 
 #### A skeleton with no drawable body: IVM
 
 Race 127's `IVM` (the enchanter pet; race 600 uses it too) has 26 bones and no named clips. Its meshes are 0x2c
-fragments (`IVM_DMSPRITEDEF`), which this client does not support, so it has no drawable body. Nothing would show in
-the original either: their only material, `IVM_MDF`, is masked (0x80000013) with an 8 x 8 texture all of palette index
-0, the masked colour.
+fragments (`IVM_DMSPRITEDEF`; docs/formats/wld.md, "0x2C mesh"). Nothing of that body would show in the original:
+their only material, `IVM_MDF`, is masked (0x80000013) with an 8 x 8 texture all of palette index 0, the masked
+colour. Such a body (all 0x2c meshes, every material invisible or masked with no texel that draws) is dropped when
+the model is built, so IVM stays a body-less skeleton (`bodiless_skeleton`). A live folder's `ivm_chr.s3d` has an IVM
+of its own, a 0x36 body that is kept.
 
 - Dressing skins the primary and secondary items onto its `R_POINT` / `L_POINT` bones, so the held weapon shows with
   an invisible body; with no item held nothing is drawn.
