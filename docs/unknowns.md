@@ -1196,6 +1196,15 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 - **Wave cache.** Decoded waves not asked for over two zone changes are freed (`SoundLibrary::drop_idle_waves`; the
   global waves stay). A freed wave's next play is skipped while it decodes again, as any wave's first play is. The
   original's wave cache policy is not traced.
+- **The coin-received line.** The wave plays for OP_Sound (the coin case at 0x4c7ff6), not for OP_CashReward, which
+  credits the coin without one (0x4c636d → 0x4bcef0). Hailstone credits both and plays the wave for OP_Sound, but
+  shows no line; the original builds one of its own (eqstr 1438..1441).
+  - Unknown: that line's wording, which was not traced.
+  - Settle: the message cases that print 1438..1441 in 0x4c3250, or a capture of a player handing coin over.
+- **Struck down by the gods.** After the line and the wave, the original also does its own death bookkeeping;
+  Hailstone leaves that to OP_Death. A server that sent the kill without OP_Death would leave the player alive here.
+  - Unknown: whether any stock server does.
+  - Settle: a capture of a stock server's GM kill, or the code after 0x4c8aab.
 
 ## UI
 

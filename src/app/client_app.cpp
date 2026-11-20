@@ -324,6 +324,7 @@ int ClientApp::run() {
                 audio_->set_hour(static_cast<int>(sky_hour));
                 sound_events_->update(*conn_, motion_, now_ms);
                 motion_.jumped = motion_.land_sound = false;
+                motion_.water_sounds.clear();
                 motion_.fall_damage.reset();
             }
             update_music();

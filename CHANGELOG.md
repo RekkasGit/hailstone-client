@@ -101,6 +101,9 @@
 - Modern Buffs and Songs: **Show empty slots** keeps gaps in the tray, and **Show slot numbers in tooltips** adds the slot number after the spell name. Both are off by default and available with Alt-right-click on an icon
 - Zone lines between East Freeport and North Ro, and from Surefall Glade to Qeynos Hills, report the crossing position the server expects, shifted into the next zone's coordinates as the original client does, so a server whose zone point keeps the player's own coordinate places them correctly
 - When the server renames your own character, the client takes the new name everywhere: your corpse, group and raid leadership, and the next zone you enter, as the original does
+- Six sounds the original client plays now play here too: putting on worn gear, opening and closing bags and containers, an adventure's win and loss, receiving coin, being struck down by the gods, and entering or leaving water
+  - A bag sounds like its chest type where the original uses one, and like a cloth item otherwise; opening all bags plays once per bag
+  - Water plays for the local player only, from the same wetness and vertical-speed test as the original
 
 ## 0.7.2-beta (2026-11-19)
 

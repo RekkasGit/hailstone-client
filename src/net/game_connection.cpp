@@ -2080,6 +2080,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
     case Op::SendTitleList:
     case Op::SetTitleReply:
     case Op::NewTitlesAvailable:
+    case Op::GMKill:
         handle_player(op, p);
         break;
     case Op::SpecialMesg:

@@ -22,6 +22,7 @@
 #include "game/item_options.h"
 #include "game/merchant.h"
 #include "game/quantity_dialog.h"
+#include "game/sound_rules.h"
 #include "game/trade_rules.h"
 #include "net/game_connection.h"
 #include "net/opcodes.h"
@@ -401,6 +402,15 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
         coins_.gold += r->coins.gold;
         coins_.silver += r->coins.silver;
         coins_.copper += r->coins.copper;
+        // Only OP_Sound reaches the coin-received wave at 0x4c7ff6, after the four amounts: the case at 0x4c7d39
+        // ends in EqSoundManager::WavePlay(0x8d, 0). OP_CashReward (`0x4c636d` -> `0x4bcef0`) credits the coins
+        // and never plays (docs/formats/audio.md).
+        if (op == Op::Sound) {
+            SoundCue cue;
+            cue.kind = SoundCue::Kind::Wave;
+            cue.spell = game::kSoundEndQuest;
+            sound_cues_.push_back(cue);
+        }
         break;
     }
     default:
@@ -452,7 +462,10 @@ void GameConnection::refresh_instrument_state() {
 }
 
 void GameConnection::move_item(const ItemSlot& from, const ItemSlot& to, std::uint32_t count) {
-    // CInvSlotMgr::MoveItem @00698d80: swap locally, then tell the server.
+    // CInvSlotMgr::MoveItem @00698d80: swap locally, then tell the server. Whether an item lands in a worn slot is
+    // read before the swap: Inventory::swap also reports success for the same slot and for an empty source.
+    const bool from_holds = inventory_.at(from) != nullptr;
+    const bool to_holds = inventory_.at(to) != nullptr;
     if (!inventory_.swap(from, to)) return;
     // Hailstone: an item this swap leaves on the cursor is the player's own pickup.
     if ((from.same(cursor_slot()) || to.same(cursor_slot())) && inventory_.cursor())
@@ -465,6 +478,15 @@ void GameConnection::move_item(const ItemSlot& from, const ItemSlot& to, std::ui
     send_zone(encode(m));
     if (is_worn(from)) refresh_worn_slot(from.slot);
     if (is_worn(to)) refresh_worn_slot(to.slot);
+    // An item landing in a worn slot: the original's wear sound after the move, a 2D wave (linked to the
+    // cursor-empty test at 0x4fe987; the same sound follows its other wear paths). A swap carries one item each
+    // way, so play once, and only when the slots differ and an item really ends up in a worn one.
+    if (!from.same(to) && ((is_worn(to) && from_holds) || (is_worn(from) && to_holds))) {
+        SoundCue cue;
+        cue.kind = SoundCue::Kind::Wave;
+        cue.spell = game::kSoundWear;
+        sound_cues_.push_back(cue);
+    }
     // CTradeWnd_OnTradeItemMoved (game/trade_rules.h): a move into or out of a trade slot clears both ready flags.
     if (trade_) {
         game::TradeFlags f{trade_->their_ready, trade_->my_ready};
@@ -807,15 +829,20 @@ bool GameConnection::can_use_item_full(const Item& item) const {
 void GameConnection::equip_attuned(const ItemSlot& slot) {
     // ConfirmationDialog_HandleResponse case 0x7a (yes, with a local PC): MoveItem(cursor 33, slot, 1, 1, 0, 0),
     // which sets NoDropFlag 1 for an attuneable item landing in a worn slot and sends the usual OP_MoveItem
-    // {from 33, to slot, count 0}; then sound 0x92. A no leaves the item on the cursor.
+    // {from 33, to slot, count 0}. A no leaves the item on the cursor. The wear sound is move_item's.
     if (state_ != ConnectionState::InZone) return;
     Item* held = inventory_.at(cursor_slot());
     if (!held || !is_worn(slot)) return;
     held->attuned = 1;
     move_item(cursor_slot(), slot, 0);
+}
+
+void GameConnection::container_sound(std::uint32_t bag_type, bool open) {
+    // CContainerMgr::OpenContainer @0x65cae0 / CloseContainer @0x65d180 play it with
+    // EqSoundManager::WavePlay(sound, 0): a 2D wave.
     SoundCue cue;
     cue.kind = SoundCue::Kind::Wave;
-    cue.spell = 0x92;
+    cue.spell = static_cast<std::uint32_t>(game::container_sound(bag_type, open));
     sound_cues_.push_back(cue);
 }
 

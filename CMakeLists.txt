@@ -1473,6 +1473,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/xmi_test.cpp
     tests/zone_emitters_test.cpp
     tests/sound_rules_test.cpp
+    tests/rof2_sound_gaps_test.cpp
     tests/mixer_test.cpp
     tests/rows2_vectors_test.cpp
     tests/rows3_vectors_test.cpp

@@ -16,6 +16,7 @@
 #include "game/distance.h"
 #include "game/eq_names.h"
 #include "game/slash_commands.h"
+#include "game/sound_rules.h"
 #include "game/world_state.h"
 #include "net/game_connection.h"
 #include "net/opcodes.h"
@@ -1086,6 +1087,24 @@ void GameConnection::handle_player(Op op, const AppPacket& p) {
     case Op::Surname:
         if (auto s = decode_surname(p); s && s->unknown64 == 1 && profile_) profile_->last_name = s->last_name;
         break;
+    case Op::GMKill: {
+        // OP_GMKill (wire 0x51d3): the original's zone message handler at 0x4c3250 jumps on the opcode through the
+        // byte table at 0x4d4998 and the pointer table at 0x4d4980. 0x51d3 lies in 0x5182..0x51f8; index 0x51
+        // holds 2, and entry 2 is 0x4c8a23, the GM-kill case. That case compares the payload, a player's name,
+        // with the local player's name without case; on a match it prints eqstr 1391 in colour index 10 and
+        // plays the struck-down wave 0x8f through EqSoundManager::WavePlay(..., 0). The original's own death
+        // bookkeeping after the line is left to OP_Death here (docs/unknowns.md).
+        if (p.data.empty()) break;
+        std::string name(reinterpret_cast<const char*>(p.data.data()), p.data.size());
+        name = name.substr(0, name.find('\0'));
+        if (name.empty() || !iequals(name, character_)) break;
+        show_chat(strings_.format(1391, std::vector<std::string>{name}), 10);
+        SoundCue cue;
+        cue.kind = SoundCue::Kind::Wave;
+        cue.spell = game::kSoundStruckDown;
+        sound_cues_.push_back(cue);
+        break;
+    }
     case Op::OnLevelMessage:
         // Handle_OP_OnLevelMessage @0x755350: CLargeDialogWnd::Open with the title, the text, the buttons and the
         // duration (the text's eqstr templates and language garbling are not applied, docs/unknowns.md).

@@ -510,6 +510,9 @@ public:
     // Spell 859 local presentation; no packet is encoded or sent.
     void spell_missile_hit(const game::Missile& missile);
     std::vector<SoundCue> take_sound_cues();
+    // CContainerMgr::OpenContainer / CloseContainer's sound for a bag of `bag_type`: a 2D wave cue
+    // (game/sound_rules.h container_sound). The windows and the bag keys call it; nothing is sent.
+    void container_sound(std::uint32_t bag_type, bool open);
     // What spells landing on the player changed that the movement owns
     // (EQ_Character::HitBySpell, game/hit_landing.h): taken once a frame.
     struct LandingEffects {
