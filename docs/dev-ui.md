@@ -806,6 +806,8 @@ NameChangeWnd, NameChangePetWnd and NameChangeMercWnd over `net/game_connection_
 
 A model's `context_menu(host, x, y)` calls `UiHost::open_menu(x, y, rows)` (rows: text, colour, check, enabled, separator, `act`, `submenu`), drawn by `menus.lua` (`hs.GameMenus` / `GameMenuHover` / `GameMenuClick` / `GameMenuClose`). `hs.GameMenus(scale)` measures at a scale: modern's `menus.scale`, 125 % by default (Options > Interface "Menu Size", or Ctrl+wheel over a menu). Right click on a Lua window opens the model's menu; Alt + right click (or a "Window" row, `UiHost::window_menu`) opens this client's window menu.
 
+Submenus open beside the row that opened them. They start on the right, switch sides when there is more room on the other side and the current side cannot fit the next menu, and carry that direction to deeper levels. The gamepad pack passes its panel width and row heights in screen pixels, so it uses the same placement with its larger controls.
+
 #### Dialog owners
 
 - `open_quantity(host, QuantityOpen, done)` (`game::quantity_dialog_open`) accepts at once or shows the dialog at the caller's point; `done` gets the quantity.
