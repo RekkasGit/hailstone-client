@@ -1273,7 +1273,9 @@ Code: `game/death_report.*`, `game/zoning.*`, `net/game_connection_death.cpp`; v
 - For zone 255 it takes the first zone point row with that number; with none, a zeroed position and failure.
 - Four zone pairs adjust the destination: 34 -> 10: world y - 1044; 10 -> 34: world y + 1044; 3 -> 4: z + 2; 2 -> 4:
   world x + 10. The first three also apply the offset to the position reported before zoning, which supplies any
-  coordinate EQEmu keeps across the line. The movement body stays at the crossing until normal movement or placement.
+  coordinate EQEmu keeps across the line. Change to a RoF2 rule: the original writes the offset into the player's own
+  position, so a refused request left the player displaced in the old zone; Hailstone leaves the player where it
+  crossed and reports that position again once the request ends.
 
 #### Heightmap zones' ATP boxes
 

@@ -647,6 +647,59 @@ TEST_CASE("mock server: East Freeport reports the mapped source X before zoning 
     CHECK(server.client_updates.back().motion.x == -668.0f);
 }
 
+TEST_CASE("mock server: a refused zone line reports the real position again; no reports while any change waits") {
+    MockConfig config = MockConfig::standard();
+    config.characters.front().zone_id = 10;
+    MockZone& east_freeport = config.zones[10];
+    east_freeport.id = 10;
+    east_freeport.short_name = "freporte";
+    east_freeport.long_name = "East Freeport";
+    east_freeport.zone_points = {{11, 4173.0f, 999999.0f, -27.0f, 256.0f, 34}};
+    Rig rig(std::move(config));
+    auto& conn = rig.conn;
+    auto& server = rig.server;
+    REQUIRE(rig.to_zone());
+    REQUIRE(rig.until([&] { return conn.zone_points().size() == 1; }));
+    const glm::vec3 walk_position(-1200.0f, -670.0f, -50.0f);
+    conn.set_player_motion(walk_position, 0.0f, glm::vec3(0.0f), true);
+
+    // The translated crossing (server x -670 + 1044) goes out, the request is refused, and the player has not
+    // moved: the next ordinary report still puts the server back on the real position.
+    server.zone_change_answers = {-2};
+    const std::size_t before = server.client_updates.size();
+    conn.send_zone_line_position(walk_position + glm::vec3(0.0f, 1044.0f, 0.0f));
+    game::MoveToZoneCall move;
+    move.zone = 34;
+    move.x = walk_position.x;
+    move.y = walk_position.y + 1044.0f;
+    move.z = walk_position.z;
+    conn.move_to_zone(move);
+    REQUIRE(rig.until([&] { return !conn.zone_change_pending() && server.client_updates.size() >= before + 2; }));
+    CHECK(server.client_updates[before].motion.x == 374.0f);
+    CHECK(server.client_updates.back().motion.x == -670.0f);
+    CHECK(server.client_updates.back().motion.y == -1200.0f);
+
+    // A server-requested change (type 0x0b) waits the same way: nothing between the request and its retry,
+    // although the player moves (RequestZoneChangeStatusBlocking @0x52cee0 keeps the main loop from running).
+    server.zone_change_answers = {-1, -2};
+    const int changes = MockEqServer::count(server.zone_log, Op::ZoneChange);
+    server.request_zone_change(2, -285.0f, -148.0f, 3.5f);
+    REQUIRE(rig.until([&] { return MockEqServer::count(server.zone_log, Op::ZoneChange) == changes + 1; }));
+    conn.set_player_motion(walk_position + glm::vec3(5.0f, 0.0f, 0.0f), 0.0f, glm::vec3(0.0f), true);
+    REQUIRE(rig.until([&] { return MockEqServer::count(server.zone_log, Op::ZoneChange) == changes + 2; }));
+    auto first = server.zone_log.end();
+    int seen = 0;
+    for (auto it = server.zone_log.begin(); it != server.zone_log.end(); ++it)
+        if (is_op(*it, Op::ZoneChange) && ++seen == changes + 1) first = it;
+    REQUIRE(first != server.zone_log.end());
+    const auto retry = std::find_if(std::next(first), server.zone_log.end(),
+                                    [](const AppPacket& p) { return is_op(p, Op::ZoneChange); });
+    REQUIRE(retry != server.zone_log.end());
+    CHECK(std::none_of(std::next(first), retry, [](const AppPacket& p) { return is_op(p, Op::ClientUpdate); }));
+    REQUIRE(rig.until([&] { return !conn.zone_change_pending(); }));
+    CHECK(conn.state() == ConnectionState::InZone);
+}
+
 // ---------------------------------------------------------------- world containers
 
 TEST_CASE("mock server: a tradeskill station opens in the tradeskill window, its own window only by Experiment") {

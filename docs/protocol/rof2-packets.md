@@ -57,7 +57,7 @@ Client-initiated: `game/zone_lines.{h,cpp}`, `GameConnection::move_to_zone`.
 
 1. During zone-in the zone sends `OP_SendZonepoints`, its zone points' targets.
 2. When the player's feet enter a zone-line region of the zone WLD (`docs/formats/wld.md`, "Regions"), the region's tag gives the zone, instance and target position: a "zone 255" tag through the zone-point table by number, otherwise directly.
-3. The client sends a reliable C→Z `OP_ClientUpdate` with its crossing position, including any legacy coordinate adjustment, then C→Z `OP_ZoneChange` {zone, instance, target y, x, z, reason 0, success 0}. Regular movement reports pause while the request is pending, including during a retry.
+3. The client sends a reliable C→Z `OP_ClientUpdate` with its crossing position, including any legacy coordinate adjustment, then C→Z `OP_ZoneChange` {zone, instance, target y, x, z, reason 0, success 0}. The update goes on the reliable stream, as DoTeleportB @0x507ca0 sends it. No movement reports go out while any zone change waits for its answer, retries included: the original blocks in `RequestZoneChangeStatusBlocking` @0x52cee0 and its main loop does not run.
 
 The EQEmu server (`zone/zoning.cpp` `Handle_OP_ZoneChange`, zone_mode ZoneUnsolicited) checks only the zone:
 

@@ -362,7 +362,10 @@ void ClientApp::region_teleport(const std::string& text) {
         has_description = true;
         float loc[3] = {pos.x, pos.y, pos.z};
         auto t = game::resolve_teleport_index(text, index, static_cast<std::int32_t>(zone), loc, rows);
-        // Some legacy lines translate the position sent before zoning into the destination's coordinates.
+        // A few zone pairs (34 <-> 10, 3 -> 4) translate the position into the destination's coordinates; it goes
+        // to the server in the OP_ClientUpdate before the zone change. Change to a RoF2 rule: the original writes the
+        // offset into the player's own position (+0x64), so a refused request left the player displaced in the old
+        // zone (1044 units on 10 <-> 34); here the player stays where it crossed.
         pos = glm::vec3(loc[0], loc[1], loc[2]);
         log::info("zone line {}: {} zone {:#x} zone point {} index request {} ({:.1f}, {:.1f}, {:.1f}) heading {:.1f}", text,
                   t.ok ? "to" : "unresolved", t.found, t.zone_point, t.index_request, t.x, t.y, t.z, t.heading);

@@ -342,9 +342,13 @@ void GameConnection::send_position_now() {
 }
 
 void GameConnection::send_zone_line_position(glm::vec3 position) {
-    // EQEmu uses this position to choose the zone point and resolve its kept coordinates. Send it on the
-    // reliable stream with the request so the request cannot overtake it.
-    if (!zone_change_pending_) send_position(true, position, true);
+    // EQEmu uses this position to choose the zone point and resolve its kept coordinates. DoTeleportB @0x507ca0
+    // sends it on channel 4, the reliable stream, so the request cannot overtake it.
+    if (zone_change_pending_) return;
+    send_position(true, position, true);
+    // The player stays where it crossed (see ClientApp::region_teleport), so once a refused request ends the
+    // ordinary report puts the server back on the real position, even when the player has not moved.
+    motion_dirty_ = true;
 }
 
 void GameConnection::move_to_zone(const game::MoveToZoneCall& m) {

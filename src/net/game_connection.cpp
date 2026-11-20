@@ -390,8 +390,10 @@ void GameConnection::update() {
         auto f = game::tracking_frame(tracking_.open, static_cast<std::uint32_t>(now_ms()), tracking_.next_controls,
                                       tracking_.next_track, tracking_.auto_update);
         if (f.send_track) send_track();
-        // An unsolicited transfer may be retried. Keep the zone-line position as the last report until it resolves.
-        if (!zone_change_pending_ || zone_change_request_.zone_reason != 0) send_position(false, position_);
+        // No movement reports while a zone change waits for its answer: the original blocks in
+        // RequestZoneChangeStatusBlocking @0x52cee0 (from MoveToZone @0x541710) and its main loop does not run, so a
+        // retry still finds the crossing position (send_zone_line_position) as the last report.
+        if (!zone_change_pending_) send_position(false, position_);
         update_afk();
         update_spells();
         update_npc_interactions();

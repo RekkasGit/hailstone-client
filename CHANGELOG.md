@@ -76,7 +76,7 @@
 - Chat codes: `%T`, `%M`, `%S`, `%O`, `%P` and `%R`, in either case, become the target's name, your pet's name, the target's pronouns and its race in what you say, tell, emote and send to chat channels, in socials, and in the names given to `/assist` and `/shield`, as on the original client. Each line uses the target and pet it has when it runs
 - Modern login: Add-ons opens on its own when the cards cannot fit side by side, and the login and Add-ons cards scroll in short windows
 - Modern Buffs and Songs: **Show empty slots** keeps gaps in the tray, and **Show slot numbers in tooltips** adds the slot number after the spell name. Both are off by default and available with Alt-right-click on an icon
-- Zoning preserves the correct crossing position on legacy lines that carry coordinates between zones, including East Freeport and North Ro
+- Zone lines between East Freeport and North Ro, and from Surefall Glade to Qeynos Hills, report the crossing position the server expects, shifted into the next zone's coordinates as the original client does, so a server whose zone point keeps the player's own coordinate places them correctly
 
 ## 0.7.2-beta (2026-11-19)
 
