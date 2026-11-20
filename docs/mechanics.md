@@ -1226,6 +1226,10 @@ logged ("pick (left click) ...").
 A click reaches up to the player's height plus 20 units in 3D from the player to that point. Activations without a
 pick point measure to the switch origin and add the model's radius to the reach.
 
+A left click in the world with a lockpick or key (item types 12, 0x21, 0x27) on the cursor goes to ClickedSwitch
+(`CEverQuest::LMouseUp` @0x5384d0), whatever is under it and whether or not the switch accepts it; the item stays on
+the cursor. Any other item is dropped (or placed).
+
 Left click on a player: the clicked spawn becomes the target unless its race is below 2253 and it is not targetable;
 then the "who is this" lines ([Defaults] LeftClickTargetHelp, default 1: 6780/6791, then class / gender); then the
 cursor item is given.

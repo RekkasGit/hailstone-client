@@ -121,13 +121,12 @@ bool ClientApp::activate_nameplate(std::uint32_t id) {
 bool ClientApp::click_world(const PickTarget& hit) {
     if (!world_objects_ || !conn_) return false;
     // CEverQuest::LMouseUp without a spawn: an item on the cursor is a key for ClickedSwitch when it is a key
-    // or a lockpick (item types 12, 33 and 39), else it goes to the ground; with an empty cursor, a ground item
-    // under the cursor is picked up (within 20), anything else goes to ClickedSwitch (doors).
+    // or a lockpick (game/clicks.h cursor_item_is_switch_key), else it goes to the ground; with an empty cursor, a
+    // ground item under the cursor is picked up (within 20), anything else goes to ClickedSwitch (doors).
     if (const net::Item* held = conn_->inventory().cursor()) {
-        bool key = held->item_type == 12 || held->item_type == 33 || held->item_type == 39;
-        if (!key || hit.kind != PickTarget::Kind::Door) return false;
-        // A rejected switch use still consumes the key click, as in LMouseUp.
-        use_door(static_cast<std::uint8_t>(hit.id), hit.point);
+        if (!game::cursor_item_is_switch_key(held->item_type)) return false;
+        // The click is the key's whether or not a switch is under it, or uses it: it is never dropped.
+        if (hit.kind == PickTarget::Kind::Door) use_door(static_cast<std::uint8_t>(hit.id), hit.point);
         return true;
     }
     if (hit.kind == PickTarget::Kind::Door) return use_door(static_cast<std::uint8_t>(hit.id), hit.point);
