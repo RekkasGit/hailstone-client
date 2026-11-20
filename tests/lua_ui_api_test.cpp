@@ -1087,6 +1087,126 @@ end)
     ImGui::DestroyContext(ctx);
 }
 
+// A word wider than the row (ui/modern/lib/stml.lua's wrap): broken where the row ends, never inside a UTF-8
+// sequence, each piece on a row of its own, its offsets still the line's bytes so the place under the mouse is right.
+TEST_CASE("Lua UI: STML breaks a word wider than the row at a character's start") {
+    hailstone::test::ScratchDir scratch("lua_ui_api_stml_longword_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir / "lib");
+    const fs::path ui_src = fs::path(__FILE__).parent_path().parent_path() / "ui";
+    if (!fs::exists(ui_src / "modern" / "lib" / "stml.lua")) return; // an installed test binary run away from the sources
+    fs::copy_file(ui_src / "modern" / "lib" / "stml.lua", dir / "lib" / "stml.lua");
+    fs::copy_file(ui_src / "modern" / "lib" / "textselect.lua", dir / "lib" / "textselect.lua");
+    std::ofstream(dir / "lib" / "theme.lua")
+        << "local c = { link = { 0, 0, 1, 1 }, text = { 1, 1, 1, 1 } }\n"
+           "return { color = c, C = c, text = function(x, y, t) return ui.CalcTextSize(t) end }\n";
+    std::ofstream(dir / "longword.lua") << R"lua(
+local stml = dofile("lib/stml.lua")
+local ts = dofile("lib/textselect.lua")
+out = {}
+-- the pieces cover the line's text in order, each within the width (but a lone character), none starting inside a
+-- UTF-8 sequence; returns "ok" and the number of rows, or what is wrong
+local function check(segments, width)
+  local p, text, at, rows = segments.wrap, ts.LineText(segments), 0, 1
+  for i = 1, #p, 6 do
+    if p[i + 4] ~= at then return "offset " .. tostring(p[i + 4]) .. " at " .. at end
+    local b = p[i]:byte(1)
+    if b and b >= 0x80 and b < 0xC0 then return "split at " .. at end
+    local word = p[i]:match("^(.-) *$")
+    if ui.CalcTextSize(word) > width and #word > 1 and not word:find("^[\192-\255][\128-\191]*$") then
+      return "too wide at " .. at
+    end
+    if i > 1 and p[i + 3] then rows = rows + 1 end
+    at = at + #p[i]
+  end
+  if at ~= #text then return "covers " .. at .. " of " .. #text end
+  return "ok", rows
+end
+local frame = 0
+ui.window("Long", function()
+  frame = frame + 1
+  ui.SetNextWindowSize(700, 400, ui.Cond.Always)
+  ui.Begin("Long")
+  local long = ("abcdefghij"):rep(12)
+  if frame == 1 then
+    -- one colour (drawn by its wrap, as the chat output draws it), then several colours and a UTF-8 run
+    local plain = stml.Parse("x " .. long .. " end")
+    stml.DrawLine(plain, 100, nil, "k", { active = false })
+    local r, rows = check(plain, 100)
+    out.plain, out.plainRows = r, rows
+    out.plainFirst = plain.wrap[1] .. "|" .. tostring(plain.wrap[4]) .. "|" .. tostring(plain.wrap[10])
+    local utf = stml.Parse('<c "#ff0000">ab </c>' .. ("\195\169"):rep(80) .. " z")
+    stml.DrawLine(utf, 50, nil, "k")
+    r, rows = check(utf, 50)
+    out.utf, out.utfRows = r, rows
+    local tiny = stml.Parse('<c "#ff0000">a</c>bcd')
+    stml.DrawLine(tiny, 1, nil, "k")
+    r, rows = check(tiny, 1)
+    out.tiny, out.tinyRows = r, rows
+    local short = stml.Parse('<c "#ff0000">one </c>two')
+    stml.DrawLine(short, 2000, nil, "k")
+    out.short = #short.wrap // 6
+  end
+  -- drawn: the place under the mouse on the long word's second row is that piece's offset
+  local view = out.view or {}
+  out.view = view
+  if frame == 1 then stml.UpdateLines(view, { long }) end
+  ui.BeginChild("output", 100, 200, false)
+  local x0, y0 = ui.GetCursorScreenPos()
+  local _, rowH = ui.CalcTextSize("Ag")
+  local sel = { rows = 0, color = { 1, 1, 1, 0.3 }, active = true, lineH = rowH }
+  sel.mx, sel.my = x0 + 1, y0 + rowH * 1.5 + 2
+  stml.DrawLines(view, 100, 200, "k100", nil, sel)
+  local w = view.lines[1].wrap
+  out.hit = tostring(sel.hitOff) .. "|" .. tostring(w and w[11])
+  ui.EndChild()
+  ui.End()
+end)
+)lua";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        for (int i = 0; i < 3; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+        }
+        auto get = [&](const char* key) {
+            lua_getglobal(L, "out");
+            if (!lua_istable(L, -1)) {
+                lua_settop(L, 0);
+                return std::string("no out");
+            }
+            lua_getfield(L, -1, key);
+            std::string v = lua_isnil(L, -1) ? "nil" : luaL_tolstring(L, -1, nullptr);
+            lua_settop(L, 0);
+            return v;
+        };
+        CHECK(get("plain") == "ok");
+        CHECK(std::stoi(get("plainRows")) >= 4); // (120 letters in rows of 100 pixels)
+        CHECK(get("plainFirst") == "x |false|true"); // the long word starts a row of its own
+        CHECK(get("utf") == "ok");
+        CHECK(std::stoi(get("utfRows")) >= 3);
+        CHECK(get("tiny") == "ok");
+        CHECK(get("tinyRows") == "4"); // a character a row, and no endless loop
+        CHECK(get("short") == "2");    // words that fit are not broken
+        const std::string hit = get("hit");
+        const auto bar = hit.find('|');
+        REQUIRE(bar != std::string::npos);
+        CHECK(hit.substr(0, bar) == hit.substr(bar + 1));
+        CHECK(hit.substr(0, bar) != "0");
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 // The table calls ImGui does not guard: TableNextRow and the header row with no current table read through a null
 // table, and a column or freeze set up after the first row asserts. The bindings refuse them; inside a table they
 // work as before.
