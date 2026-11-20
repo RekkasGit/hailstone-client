@@ -294,6 +294,13 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     `[LoginServer]`'s first `Host` (its network API accepts a host list).
 - **Membership details.** The feature ids' names and the refusal lines are decoded (`game/feature_restrictions.h`);
   the other uses of the 22 entries are not.
+- **OP_MobRename's packet to world.**
+  - Now: the spawn with the old name is renamed in place and nothing is sent.
+  - Unknown: after `PlayerManagerBase_RenamePlayer` the RoF2 handler (HandleWorldMessage's 0x2c57 case @0x4c9a6b)
+    compares a +0x148 field of two objects and, with the server list window present, sends something on the world
+    connection. Which rename it is for (perhaps the player's own, as EQEmu's `Client::ChangeFirstName` sends) and what
+    it sends is not read.
+  - Settle: that branch read in the original, or a capture of a character rename on a live server.
 - **Spawn suffix in destructible form** (OtherData 0xe1).
   - Now: the client reads no suffix there. EQEmu writes one only when it is not empty.
   - Unknown: the original appears to read one whenever bit 0x20 is set (`EQPlayer::UnSerializeSpawn`), and to treat
