@@ -5,6 +5,7 @@
 - Your own name is in parentheses while you are hidden, as in the original client (it was plain). Sneak alone adds none
 - The sample `hailstone.cfg` now includes the Ability Book's autoskill switch, and the server guide shows how to disable autoskill and Lua socials
 - Loot All takes NO DROP items from your own corpse without confirmation after a same-zone resurrection
+  - A spawn that dies in sight is renamed as the original client names it (`Name's corpse<id>` for a player, `name's_corpse<id>` for an NPC), so /corpse and the loot window know your corpse
 - Item comparison, in both interfaces: an item's tooltip and details window show what wearing it instead of what you wear would change
   - Tooltips cover the inventory, bags, bank, loot, trade and a merchant's goods; the details window covers a linked item too
   - In the details window each stat's change sits beside the item's value (+12 in green beside AC 20, say), with the verdict and what it is compared with above the stats

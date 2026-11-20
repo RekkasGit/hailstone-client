@@ -70,16 +70,9 @@ bool GameConnection::looting_own_corpse() const {
     // CLootWnd's own-corpse test: stricmp(the player's name, the corpse's +0xe4 owner).
     if (!loot_) return false;
     auto it = world_.spawns.find(loot_->corpse_id);
-    if (it == world_.spawns.end() || !it->second.is_corpse || it->second.is_npc) return false;
-
-    // OP_Death converts the spawn in place, using an underscore and no server spawn suffix.
-    std::string_view name = it->second.name;
-    constexpr std::string_view death_suffix = "'s_corpse";
-    if (name.ends_with(death_suffix)) {
-        name.remove_suffix(death_suffix.size());
-        return iequals(name, character_);
-    }
-    return iequals(corpse_owner(it->second.name), character_);
+    // A corpse spawned by the server and one renamed by OP_Death (handle_death) both read "Name's corpse<id>".
+    return it != world_.spawns.end() && it->second.is_corpse && !it->second.is_npc &&
+           iequals(corpse_owner(it->second.name), character_);
 }
 
 float GameConnection::distance_to(std::uint32_t spawn_id) const {

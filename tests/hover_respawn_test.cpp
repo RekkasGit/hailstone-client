@@ -390,6 +390,8 @@ TEST_CASE("Hover respawn: Loot All takes NO DROP items from the player's corpse 
     auto& c = h.rig.conn;
     const auto corpse = c.world().player_id;
     REQUIRE(c.world().spawns.at(corpse).is_corpse);
+    // PlayerZoneClient::IDied: "%s's corpse%u" with OP_Death's corpse id
+    CHECK(c.world().spawns.at(corpse).name == "Gennro's corpse" + std::to_string(corpse));
     const auto position = game::world_to_server(c.world().spawns.at(corpse).position);
 
     c.receive_zone_packet_for_test(rez_offer());
