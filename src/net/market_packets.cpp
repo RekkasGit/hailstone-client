@@ -1,6 +1,8 @@
 #include "net/market_packets.h"
 
 #include <algorithm>
+#include <cstring>
+#include <limits>
 
 #include "net/packet_io.h"
 
@@ -468,14 +470,22 @@ struct LenientReader {
     }
     // CUnSerializeBuffer::GetString(dst, max) / 0x62e430's string: up to max - 1 characters; a string without its
     // terminator in the packet reads as empty and moves nothing.
+    // Since pos never moves back, a failed search is remembered: a packet with no NUL in its tail costs one scan,
+    // not one per string field read after it.
     std::string str(std::size_t max) {
-        std::size_t n = 0;
-        while (pos + n < data.size() && data[pos + n] != std::byte{0}) ++n;
-        if (pos + n >= data.size()) return {};
+        if (pos >= no_nul_from || pos >= data.size()) return {};
+        const void* nul = std::memchr(data.data() + pos, 0, data.size() - pos);
+        if (!nul) {
+            no_nul_from = pos;
+            return {};
+        }
+        const std::size_t n = static_cast<std::size_t>(static_cast<const std::byte*>(nul) - (data.data() + pos));
         std::string s(reinterpret_cast<const char*>(data.data() + pos), std::min(n, max - 1));
         pos += n + 1;
         return s;
     }
+
+    std::size_t no_nul_from = std::numeric_limits<std::size_t>::max(); // str()'s memo: no NUL from here on
 };
 
 // 0x7d6ef0: a buy line; a line that is not enabled keeps the defaults after its flag.
