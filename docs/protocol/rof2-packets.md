@@ -1516,17 +1516,26 @@ Not built: the ghost's fit to walls and surfaces (ItemPlacement_UpdatePosition),
 
 ### Screen text and the camera effect (`net/notice_packets.h`, `game/text_overlay.h`, `game/camera_shake.h`)
 
-OP_Marquee (0x502e, zone → client; EQEmu's `Marquee_Struct`): six u32 and the text, NUL-terminated, at byte 24. The
-case @0x4cb7f7 hands the first three to `CTextOverlay::DisplayText` as the colour, the priority and the alpha (EQEmu
-names those fields type, unk04 and priority), then the fade-in, fade-out and hold times in ms. A debug log is the only
-other effect: no chat line. The text takes the overlay's one line, as OP_TaskActivityComplete's lines do (the priority
-is signed: a lower one is ignored while another line shows).
+OP_Marquee (0x502e, zone → client; EQEmu's `ClientMarqueeMessage_Struct`): six u32 and the text, NUL-terminated, at
+byte 24. The case @0x4cb7f7 hands the first three to `CTextOverlay::DisplayText` as the colour, the priority and the
+alpha (EQEmu names those fields type, unk04 and priority), then the fade-in, fade-out and hold times in ms. A debug log
+is the only other effect: no chat line. The text takes the overlay's one line, as OP_TaskActivityComplete's lines do
+(the priority is signed: a lower one is ignored while another line shows). Stock EQEmu (`Client::SendMarqueeMessage`)
+sends priority 10 and, unless a quest gives another, alpha 510: the overlay keeps only the alpha's low byte, so a fade
+past 255 wraps (what EQEmu's notes call the extra blinks). EQEmu has no RoF2 encoder for either packet: the bytes go
+out as built. The original reads the struct without a size check; a packet too short for the six words or without the
+text's NUL is dropped here.
 
 OP_CameraEffect (0x127f, zone → client; 8 bytes): u32 duration in ms, f32 intensity. The case @0x4c6f73 sets the
 camera effect (`game/camera_shake.h`): a stronger intensity replaces the current one (an equal one too, and only a
 longer duration moves the end), a weaker one or a NaN is ignored. Each frame adds a random offset of up to half the
 intensity each way to the drawn camera's position; the duration runs out, the clock going backwards wipes it, and a
 zone-in resets it (the original's zone-in path @0x4939b0). The player itself never moves.
+
+The original adds the offset in the per-frame camera driver @0x796dd0 and hands the shaken position to its render
+camera; when that camera refuses the position (its vtable slot 0x38 returns nonzero) it falls back to the unshaken one.
+Here the shaken position is only drawn: picking and line of sight keep the true camera, and no fallback is made
+(docs/unknowns.md).
 
 ### Spawn (ENCODE(OP_ZoneSpawns))
 

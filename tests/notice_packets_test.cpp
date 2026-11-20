@@ -198,7 +198,7 @@ TEST_CASE("OP_Weblink: the address up to its NUL; none past the end; empty is no
 }
 
 TEST_CASE("notices: OP_Marquee's six words and text, and OP_CameraEffect's duration and intensity") {
-    // EQEmu's Marquee_Struct as a quest sends it: type 15, unk04 10, priority 510, fade in 0, out 3000, duration
+    // EQEmu's ClientMarqueeMessage_Struct as a quest sends it: type 15, unk04 10, priority 510, fade in 0, out 3000, duration
     // 4000, the text NUL-terminated at byte 24.
     const std::string text = "YOU HAVE FOUND AN ECHO OF MEMORY!";
     AppPacket m = bytes(Op::Marquee, 24 + text.size() + 1);
@@ -236,7 +236,7 @@ TEST_CASE("notices: OP_Marquee's six words and text, and OP_CameraEffect's durat
     REQUIRE(empty);
     CHECK(empty->text.empty());
 
-    // EQEmu's CameraEffect_Struct: u32 duration, f32 intensity.
+    // EQEmu's Camera_Struct: u32 duration, f32 intensity.
     AppPacket c = bytes(Op::CameraEffect, 8);
     put32(c, 0, 2000);
     const float intensity = 3.5f;

@@ -1185,7 +1185,12 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     (up to half the intensity each way, in the camera position's units), but no shake was seen in the game.
   - Unknown: whether the original adds the shake to every camera mode (first person, third person, isometric); here it
     is added to the drawn camera in all of them, and picking and line of sight keep the true camera.
-  - Settle: a quest's camera effect and marquee against the original client, side by side.
+  - Not done: the original's per-frame camera driver @0x796dd0 falls back to the unshaken position when its render
+    camera refuses the shaken one (that camera's vtable slot 0x38 returning nonzero; what makes it refuse is not
+    traced). Here the shaken camera is always drawn, so a strong shake may show the camera inside a wall for a frame.
+  - Changed on purpose: the original's clicks likely use the shaken render camera too; here picking keeps the true
+    camera so a click does not jitter.
+  - Settle: a quest's camera effect and marquee against the original client, side by side, and tracing that slot.
 
 ## Audio
 
