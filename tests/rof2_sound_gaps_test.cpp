@@ -1,5 +1,5 @@
 // The RoF2 sound triggers that live in the packet handlers and the bag windows (docs/formats/audio.md "Which sound
-// for which event"): an item landing in a worn slot, the adventure finish, a coin reward, a GM kill, a bag opening
+// for which event"): an item moved by a click, the adventure finish, a quest reward, a GM kill, a bag opening
 // or closing, and the water under the feet. Each is a wave cue.
 #include <doctest/doctest.h>
 
@@ -33,60 +33,76 @@ std::vector<std::int32_t> wave_cues(net::GameConnection& c) {
 
 } // namespace
 
-TEST_CASE("Wear sound: an item landing in a worn slot (0x92)") {
-    mq_test::World w("sound_wear");
-    auto& c = *w.conn;
-    c.take_sound_cues();
-    net::GameConnectionTestAccess::move_item(c, net::ItemSlot::possessions(net::kSlotGeneral1),
-                                             net::ItemSlot::possessions(net::kSlotHead), 1);
-    CHECK(wave_cues(c) == std::vector<std::int32_t>{0x92});
-    // Taking the item out again is silent.
-    net::GameConnectionTestAccess::move_item(c, net::ItemSlot::possessions(net::kSlotHead),
-                                             net::ItemSlot::possessions(net::kSlotGeneral1), 1);
-    CHECK(wave_cues(c).empty());
-}
-
-TEST_CASE("Wear sound: an empty source, the same slot and a swap (one cue each way)") {
-    mq_test::World w("sound_wear_edges");
+TEST_CASE("Item sound: every click that moves an item plays 0x92, MoveItem itself plays nothing") {
+    mq_test::World w("sound_item_moved");
     auto& c = *w.conn;
     using A = net::GameConnectionTestAccess;
     auto poss = [](std::int16_t s) { return net::ItemSlot::possessions(s); };
-    c.take_sound_cues();
-
-    // An empty source and an empty worn slot: nothing moves, silent.
-    A::move_item(c, poss(net::kSlotGeneral1 + 2), poss(net::kSlotHead), 1);
-    CHECK(wave_cues(c).empty());
-    REQUIRE_FALSE(A::inventory(c).at(poss(net::kSlotHead)));
-
     net::Item hat;
     hat.name = "Hat";
     hat.id = 6001;
     hat.equip_slots = 1u << net::kSlotHead;
     hat.classes = 0xffff;
-    REQUIRE(A::inventory(c).put(poss(net::kSlotHead), hat));
-    // The same worn slot twice moves nothing, although the slot is filled.
-    A::move_item(c, poss(net::kSlotHead), poss(net::kSlotHead), 1);
-    CHECK(wave_cues(c).empty());
-    REQUIRE(A::inventory(c).at(poss(net::kSlotHead)));
+    REQUIRE(A::inventory(c).put(poss(net::kSlotGeneral1 + 2), hat));
+    c.take_sound_cues();
 
-    // A swap carries an item each way; the one landing on the head is what plays, once. General1 holds the potion.
-    A::move_item(c, poss(net::kSlotGeneral1), poss(net::kSlotHead), 1);
-    CHECK(wave_cues(c) == std::vector<std::int32_t>{0x92});
-    // The same swap the other way (the head now holds the potion, General1 the hat) plays once as well.
-    A::move_item(c, poss(net::kSlotHead), poss(net::kSlotGeneral1), 1);
-    CHECK(wave_cues(c) == std::vector<std::int32_t>{0x92});
-    // Worn to an empty general slot: nothing lands on the head.
-    A::move_item(c, poss(net::kSlotHead), poss(net::kSlotGeneral1 + 2), 1);
-    CHECK(wave_cues(c).empty());
-
-    // The usual equip route: click the hat up from a general slot, then click it onto the head.
+    // CInvSlot::HandleLButtonUp: the pick-up and the put-down each play once (@0x697148), into a worn slot or out of
+    // one alike.
     c.click_slot(poss(net::kSlotGeneral1 + 2));
     REQUIRE(A::inventory(c).at(poss(net::kSlotCursor)));
+    CHECK(wave_cues(c) == std::vector<std::int32_t>{0x92});
+    c.click_slot(poss(net::kSlotHead));
+    REQUIRE(A::inventory(c).at(poss(net::kSlotHead)));
+    CHECK(wave_cues(c) == std::vector<std::int32_t>{0x92});
     c.click_slot(poss(net::kSlotHead));
     CHECK(wave_cues(c) == std::vector<std::int32_t>{0x92});
-    // A move the inventory refuses (a bag slot with no bag in the parent) plays nothing.
-    A::move_item(c, poss(net::kSlotHead), net::ItemSlot::possessions(net::kSlotGeneral1 + 3, 0), 1);
+    // A click the client refuses moves nothing and is silent: the hat does not go on the chest.
+    c.click_slot(poss(net::kSlotChest));
     CHECK(wave_cues(c).empty());
+    REQUIRE(A::inventory(c).at(poss(net::kSlotCursor)));
+    c.click_slot(poss(net::kSlotGeneral1 + 3));
+    CHECK(wave_cues(c) == std::vector<std::int32_t>{0x92});
+
+    // A stack taken through the quantity dialog (Shift: all of it at once) is CInvSlot::SliderComplete's move,
+    // which plays nothing; putting it down again is an ordinary click.
+    c.click_slot(poss(net::kSlotGeneral1), true, false);
+    REQUIRE(A::inventory(c).at(poss(net::kSlotCursor)));
+    CHECK(wave_cues(c).empty());
+    c.click_slot(poss(net::kSlotGeneral1));
+    REQUIRE(A::inventory(c).at(poss(net::kSlotGeneral1)));
+    CHECK(wave_cues(c) == std::vector<std::int32_t>{0x92});
+
+    // CInvSlotMgr::MoveItem has no sound of its own.
+    A::move_item(c, poss(net::kSlotGeneral1 + 3), poss(net::kSlotHead), 1);
+    REQUIRE(A::inventory(c).at(poss(net::kSlotHead)));
+    CHECK(wave_cues(c).empty());
+}
+
+TEST_CASE("Item sound: /autoinventory into an empty worn slot plays twice, into the packs once") {
+    mq_test::World w("sound_autoinventory");
+    auto& c = *w.conn;
+    using A = net::GameConnectionTestAccess;
+    net::Item hat;
+    hat.name = "Hat";
+    hat.id = 6001;
+    hat.equip_slots = 1u << net::kSlotHead;
+    hat.classes = 0xffff;
+    REQUIRE(A::inventory(c).put(net::ItemSlot::possessions(net::kSlotCursor), hat));
+    c.take_sound_cues();
+    // AutoInventoryCursorItem's own wave for the worn slot (@0x4fe388), then cmd_autoinventory's for the empty
+    // cursor (@0x4fe987).
+    A::item_command(c, "/autoinventory", "");
+    REQUIRE(A::inventory(c).at(net::ItemSlot::possessions(net::kSlotHead)));
+    CHECK(wave_cues(c) == std::vector<std::int32_t>{0x92, 0x92});
+
+    net::Item rock;
+    rock.name = "Rock";
+    rock.id = 6002;
+    rock.item_class = 0;
+    REQUIRE(A::inventory(c).put(net::ItemSlot::possessions(net::kSlotCursor), rock));
+    A::item_command(c, "/autoinventory", "");
+    REQUIRE_FALSE(A::inventory(c).at(net::ItemSlot::possessions(net::kSlotCursor)));
+    CHECK(wave_cues(c) == std::vector<std::int32_t>{0x92});
 }
 
 TEST_CASE("Adventure finish: won plays 0x8d, failed 0x8c") {
@@ -101,7 +117,7 @@ TEST_CASE("Adventure finish: won plays 0x8d, failed 0x8c") {
     }
 }
 
-TEST_CASE("Coin reward: OP_Sound plays 0x8d, OP_CashReward only credits the coin") {
+TEST_CASE("Quest reward: OP_Sound plays 0x8d, OP_CashReward only credits the coin") {
     mq_test::World w("sound_coin");
     auto& c = *w.conn;
     const net::Coins before = net::GameConnectionTestAccess::coins(c);
@@ -171,6 +187,18 @@ TEST_CASE("Bags: a bag of a type with its own sound opens and closes (0x86/0x85)
     app::close_all_bags(host);
     CHECK(wave_cues(c) == std::vector<std::int32_t>{0x85});
     app::close_all_bags(host);
+    CHECK(wave_cues(c).empty());
+
+    // An open bag picked up closes with its own close wave (CloseContainer always ends in it), after the item
+    // sound; the windows notice it on the next frame.
+    app::open_all_bags(host);
+    CHECK(wave_cues(c) == std::vector<std::int32_t>{0x86});
+    c.click_slot(net::ItemSlot::possessions(net::kSlotGeneral1 + 1));
+    REQUIRE(net::GameConnectionTestAccess::inventory(c).at(net::ItemSlot::possessions(net::kSlotCursor)));
+    CHECK(wave_cues(c) == std::vector<std::int32_t>{0x92});
+    app::prune_bag_windows(c);
+    CHECK(wave_cues(c) == std::vector<std::int32_t>{0x85});
+    app::prune_bag_windows(c);
     CHECK(wave_cues(c).empty());
     app::reset_containers();
 }

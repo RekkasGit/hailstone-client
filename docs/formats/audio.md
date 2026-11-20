@@ -206,23 +206,29 @@ ship `sounds\rainloop.wav` and `wind_lp1.wav` as 80-byte files without samples, 
 **Doors.** By switch type and the new state (`game/sound_rules.cpp` `door_sounds`); e.g. type 0 plays `DoorWd_O`
 (0x87) on opening and `DoorWd_C` (0x88) on closing. A door that closes by itself (repop) is silent.
 
-**Wearing something.** `wearclth.WAV` (0x92), a 2D wave, when a move ends with the item in a worn slot: a click, the
-auto-equip's confirmation, or either side of a swap that leaves one there (0x4fe388, 0x4fe987, 0x697250). At most one
-per move. A move into a bag, or one the client refuses, is silent.
+**Moving an item.** `wearclth.WAV` (0x92), a 2D wave, after every click that moves an item: a pick-up or a put-down
+in any inventory, bank, trade or world-container slot, a merge onto a stack, a Ctrl-click into a bag and a Ctrl-right
+click that trades two bags' contents (CInvSlot::HandleLButtonUp after MoveItem, 0x697148; HandleRButtonUp, 0x697250).
+A stack split through the quantity dialog (CInvSlot::SliderComplete) and a click the client refuses are silent. It
+also plays when the attune question is answered yes (0x52d540), when auto-inventory puts the item into an empty worn
+slot (0x4fe388), and when /autoinventory or a drop on the character doll leaves the cursor empty (0x4fe987,
+0x692ec0), so an auto-equip from the doll can play it twice at once, as the original does.
 
 **Bags and containers.** Opening plays `Chest_Op.WAV` (0x86) and closing `Chest_Cl.WAV` (0x85) for bag types 6, 7, 10,
 15, 18, 19, 20 and 22; every other type, and a type outside 6..22, takes `itemclth.WAV` (0x91) for both (0x65cae0,
 0x65d180, 2D; `game::container_sound`). Opening all bags plays once per bag that opens. Hiding the bank window closes
 every container still open, carried bags too, each with its close wave (0x627760 → 0x65d4e0 → 0x65d180;
-`app::prune_bag_windows` and `ItemUi::close_bags_when_bank_hides` check once a frame). A close always uses the type
-the bag had when it opened, even when the slot has lost or replaced it.
+`app::prune_bag_windows` and `ItemUi::close_bags_when_bank_hides` check once a frame). A bag that leaves its slot
+(picked up, or removed by the server) closes with its close wave too: CloseContainer (0x65d2f0) always ends in it. A
+close always uses the type the bag had when it opened, even when the slot has lost or replaced it.
 
 **Adventures.** OP_AdventureFinish plays `EndQuest.WAV` (0x8d) when the adventure was won and `LevDn.WAV` (0x8c) when
 it failed, 2D (0x4207a7, 0x4207e7).
 
-**Coin from another player.** The coin-received wave `EndQuest.WAV` (0x8d), 2D, after the four amounts of an OP_Sound
-that names you (0x4c7ff6). OP_CashReward credits its coin but does not play it (0x4c636d → 0x4bcef0). The original
-prints its own line there; Hailstone credits the coins without one (docs/unknowns.md).
+**A quest reward.** `EndQuest.WAV` (0x8d), 2D, at the end of an OP_Sound (EQEmu's `QuestReward`, sent when a quest
+script rewards you) that names you, after its four coin amounts, whether or not it carries coin (0x4c7ff6).
+OP_CashReward credits its coin but does not play it (0x4c636d → 0x4bcef0). The original also prints a line per coin
+there; Hailstone credits the coins without them (docs/unknowns.md).
 
 **Struck down by the gods.** OP_GMKill that names you, compared without case, prints the line in colour 10 and plays
 `thunder1.wav` (0x8f), 2D (0x4c8aab). Another name is silent.

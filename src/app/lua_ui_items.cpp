@@ -280,7 +280,7 @@ private:
 // its slot.
 struct Containers {
     // An open container and the bag type it had when it opened: the close wave uses that type, never whatever
-    // stands in the slot at closing time (CContainerMgr::CloseContainer @0x65d180).
+    // stands in the slot at closing time (CContainerMgr::CloseContainer @0x65d2f0, whose wave plays at 0x65d180).
     struct OpenBag {
         net::ItemSlot slot;
         std::uint32_t type = 0;
@@ -310,8 +310,8 @@ struct Containers {
     }
     void prune(net::GameConnection& c) {
         // The bank window hiding (CBankWnd::OnShow @0x627760) runs CContainerMgr::CloseAllContainers @0x65d4e0:
-        // every still-present container closes, carried bags too, each through CloseContainer @0x65d180 and its
-        // close wave, and 0x697e40 sets both all-closed flags.
+        // every still-present container closes, carried bags too, each through 0x65d180 (where CloseContainer's
+        // close wave plays as well), and 0x697e40 sets both all-closed flags.
         const auto serial = c.bank() ? c.bank()->serial : 0;
         if (bank_serial != 0 && serial != bank_serial) {
             for (const OpenBag& o : open) c.container_sound(o.type, false);
@@ -319,11 +319,17 @@ struct Containers {
             all_closed = bank_all_closed = true;
         }
         bank_serial = serial;
-        // A container whose bag left its slot closes as well; the bag that chose its wave is no longer there.
+        // A container whose bag left its slot closes as well, with the close wave of the bag it opened with: the
+        // original closes it through CloseContainer, which always plays (a picked-up bag, CInvSlot::HandleLButtonUp
+        // @0x695670; the server's removal, Handle_OP_MoveItem_Apply @0x4c1ba0).
         std::erase_if(open, [&](const OpenBag& o) {
-            if ((o.slot.type == net::kInvBank || o.slot.type == net::kInvSharedBank) && !c.bank()) return true;
-            const net::Item* bag = c.inventory().at(o.slot);
-            return !bag || !bag->is_bag();
+            bool gone = (o.slot.type == net::kInvBank || o.slot.type == net::kInvSharedBank) && !c.bank();
+            if (!gone) {
+                const net::Item* bag = c.inventory().at(o.slot);
+                gone = !bag || !bag->is_bag();
+            }
+            if (gone) c.container_sound(o.type, false);
+            return gone;
         });
     }
 };

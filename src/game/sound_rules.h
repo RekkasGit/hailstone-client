@@ -159,7 +159,7 @@ std::array<std::int32_t, 3> old_spell_effect_sounds(std::span<const std::byte> r
 
 // ---- containers -----------------------------------------------------------
 
-// CContainerMgr::OpenContainer @0x65cae0 / CloseContainer @0x65d180: the
+// CContainerMgr::OpenContainer @0x65cae0 / CloseContainer @0x65d2f0 (its wave at 0x65d180): the
 // sound of a bag of `bag_type` opening or closing. Two one-byte tables (open
 // 0x65cda8, close 0x65d2d4), 17 entries at bag_type - 6: 0 is the bag's own
 // sound (0x86 opening, 0x85 closing), anything else the shared container
@@ -178,7 +178,7 @@ inline constexpr std::int32_t kSoundLevelUp = 0x8b;     // LevelUp.WAV, 2D
 inline constexpr std::int32_t kSoundJumpLand = 0x72;    // jumpland.WAV
 inline constexpr std::int32_t kSoundFallHurt = 0x73;    // fall_hit.WAV
 inline constexpr std::int32_t kSoundTeleport = 0x89;    // Teleport.WAV
-inline constexpr std::int32_t kSoundWear = 0x92;        // wearclth.WAV, 2D (0x4fe987)
+inline constexpr std::int32_t kSoundItemMoved = 0x92;   // wearclth.WAV, 2D: an item moved by a click (0x697148)
 inline constexpr std::int32_t kSoundEndQuest = 0x8d;    // EndQuest.WAV, 2D (0x4207a7 won, 0x4c7ff6 coin)
 inline constexpr std::int32_t kSoundAdventureFailed = 0x8c; // LevDn.WAV, 2D (0x4207e7)
 inline constexpr std::int32_t kSoundStruckDown = 0x8f;  // thunder1.wav, 2D (0x4c8aab)

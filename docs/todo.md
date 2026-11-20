@@ -751,10 +751,10 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
   - Open: zoning in, the leader printed "<name> joined the raid." for each of the 17 members (docs/unknowns.md).
 - [x] **Gamepad pack: the window under a closed one takes the pad back.** Two windows asking for the pad in one frame kept only the last request; every request is kept now. Checked live 2026-10-31.
 - [x] Melee sounds (the cues fire with the right waves; not listened to).
-- [ ] **The six RoF2 sound triggers added together:** worn gear (0x92), bags and containers (0x85/0x86/0x91), an
-  adventure's loss and win (0x8c/0x8d), coin received (0x8d), struck down by the gods (0x8f), water in and out
-  (0x64/0x63). Each cue and its condition is unit-tested, the water path end to end through `app::PlayerMovement`;
-  none listened to live.
+- [ ] **The six RoF2 sound triggers added together:** an item moved by a click (0x92), bags and containers
+  (0x85/0x86/0x91), an adventure's loss and win (0x8c/0x8d), a quest reward (0x8d), struck down by the gods (0x8f),
+  water in and out (0x64/0x63). Each cue and its condition is unit-tested, the water path end to end through
+  `app::PlayerMovement`; none listened to live.
 - [x] **Augment appearance-slot gating.** With game feature 0x15 on (the client's setting for EQEmu accounts) a type-21 ornament into a type-21 socket is not refused; seen live 2026-10-31 (stored in `inventory.augment_six`). The refusal with the feature off is unit-tested only (docs/unknowns.md).
 - [ ] **A server's class names in a live session** (`set_class_name`, docs/plugins.md "Class names"). Unit, plugin and script tests only.
   - A plugin that names classes on its server's hello, then every window that names a class (both UI packs).

@@ -3020,7 +3020,10 @@ private:
     void reset_group_for_zone();
     void note_pet_spawn(const game::Spawn& s);
     void forget_pet_spawn(std::uint32_t spawn_id);
-    void move_item(const ItemSlot& from, const ItemSlot& to, std::uint32_t count);
+    // False when the inventory refused the swap (nothing moved, nothing sent).
+    bool move_item(const ItemSlot& from, const ItemSlot& to, std::uint32_t count);
+    // The item-moved wave 0x92 (game::kSoundItemMoved), 2D: queued by the callers that play it in the original.
+    void item_moved_sound();
     void refresh_worn_slot(int slot);
     // PcClient_RefreshWornSlotVisual's instrument bit (0x5923f0): the local player's PlayerState bit 0x10, set when
     // the primary or secondary hand holds an instrument (item types 23..26).
@@ -3057,7 +3060,8 @@ private:
     bool can_use_item_full(const Item& item) const;
     // MoveItem's bag path with bMoveBagContents (OP_MoveMultipleItems): the cursor item, or a cursor bag's
     // contents, into the bag at `to`; with `force_bag` (Ctrl + right-click) the two bags' contents trade places.
-    void move_into_bag(const ItemSlot& to, bool force_bag = false);
+    // True when the move was sent.
+    bool move_into_bag(const ItemSlot& to, bool force_bag = false);
     // A server OP_MoveItem (Handle_OP_MoveItem_Apply, or the trade / world removal).
     void apply_server_move(const MoveItem& m);
     // ConfirmationDialog_HandleResponse case 0x7a, yes: the cursor item goes into `slot` by the ordinary MoveItem,
