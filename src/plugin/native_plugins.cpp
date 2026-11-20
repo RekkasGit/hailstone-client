@@ -2659,11 +2659,16 @@ template <auto F> constexpr auto main_only = &MainOnly<F>::call;
 template <auto F, auto Off> struct MainOnlyOr;
 template <typename R, typename... A, R (*F)(void*, A...), auto Off> struct MainOnlyOr<F, Off> {
     static R call(void* h, A... a) {
-        if (!on_main_thread()) {
-            off_thread(h);
+        try {
+            if (!on_main_thread()) {
+                off_thread(h);
+                return static_cast<R>(Off);
+            }
+            return F(h, a...);
+        } catch (...) {
+            host_threw(h); // as MainOnly: never through the plugin's frames; the call answers `off`, "unknown"
             return static_cast<R>(Off);
         }
-        return F(h, a...);
     }
 };
 template <auto F, auto Off> constexpr auto main_only_or = &MainOnlyOr<F, Off>::call;
