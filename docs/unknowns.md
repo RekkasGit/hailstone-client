@@ -1180,6 +1180,12 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     node stays where the first pose puts it.
   - Hailstone's plant sway in the wind is not applied to an object that plays its own animation.
   - Settle: comparing a forest zone (Emerald Jungle) with the original side by side.
+- **Camera shake (OP_CameraEffect) and server marquee text (OP_Marquee).**
+  - Unknown: the visible size of the shake for a given intensity. The offset per axis is read from the disassembly
+    (up to half the intensity each way, in the camera position's units), but no shake was seen in the game.
+  - Unknown: whether the original adds the shake to every camera mode (first person, third person, isometric); here it
+    is added to the drawn camera in all of them, and picking and line of sight keep the true camera.
+  - Settle: a quest's camera effect and marquee against the original client, side by side.
 
 ## Audio
 

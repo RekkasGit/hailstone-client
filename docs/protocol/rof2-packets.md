@@ -1514,6 +1514,20 @@ A 0x1228 {0} or 0x6213 ends it, and so does a zone change. Escape cancelling it 
 
 Not built: the ghost's fit to walls and surfaces (ItemPlacement_UpdatePosition), free mode's mouse moves, the binding of a placement session to the 0x21ea NPC item whose guid it is, the polls, `/outputfile realestate`'s rows.
 
+### Screen text and the camera effect (`net/notice_packets.h`, `game/text_overlay.h`, `game/camera_shake.h`)
+
+OP_Marquee (0x502e, zone → client; EQEmu's `Marquee_Struct`): six u32 and the text, NUL-terminated, at byte 24. The
+case @0x4cb7f7 hands the first three to `CTextOverlay::DisplayText` as the colour, the priority and the alpha (EQEmu
+names those fields type, unk04 and priority), then the fade-in, fade-out and hold times in ms. A debug log is the only
+other effect: no chat line. The text takes the overlay's one line, as OP_TaskActivityComplete's lines do (the priority
+is signed: a lower one is ignored while another line shows).
+
+OP_CameraEffect (0x127f, zone → client; 8 bytes): u32 duration in ms, f32 intensity. The case @0x4c6f73 sets the
+camera effect (`game/camera_shake.h`): a stronger intensity replaces the current one (an equal one too, and only a
+longer duration moves the end), a weaker one or a NaN is ignored. Each frame adds a random offset of up to half the
+intensity each way to the drawn camera's position; the duration runs out, the clock going backwards wipes it, and a
+zone-in resets it (the original's zone-in path @0x4939b0). The player itself never moves.
+
 ### Spawn (ENCODE(OP_ZoneSpawns))
 
 The temporary-pet byte is kept as `game::Spawn::temp_pet` (nonzero = true). Combat chat uses it with the owner to recognise the player's temporary pets, which do not take the permanent pet's window focus. Stock EQEmu writes it as zero and swarm spawns omit petOwnerId, so the record alone cannot establish swarm ownership (see the melee-line rules in docs/mechanics.md).

@@ -14,6 +14,7 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <deque>
 #include <filesystem>
 #include <functional>
@@ -76,6 +77,7 @@
 #include "game/achievements.h"
 #include "game/task_window.h"
 #include "game/text_overlay.h"
+#include "game/camera_shake.h"
 #include "game/tracking.h"
 #include "game/trade_rules.h"
 #include "game/training.h"
@@ -2303,6 +2305,8 @@ public:
                         std::string* why = nullptr);
     // The large centre-screen text (CTextOverlay: OP_TaskActivityComplete's lines); the app draws its frame().
     game::TextOverlay& text_overlay() { return text_overlay_; }
+    // The camera shake of OP_CameraEffect; the app adds its offset() to the camera each frame and the zone-in clears it.
+    game::CameraShake& camera_shake() { return camera_shake_; }
     // The task select window's Accept for one offered task (OP_AcceptNewTask, or
     // OP_SharedTaskAcceptNew for a shared task selection); Decline sends task id 0.
     void accept_task(std::uint32_t task_id);
@@ -3738,6 +3742,10 @@ private:
     std::int32_t task_compass_last_slot_ = -1;           // +0x1590
     void update_task_compass();
     game::TextOverlay text_overlay_;
+    // The camera shake's rand() (0..32767), the CRT's global sequence as the compass uses it.
+    // Drawn only from offset(), which the render loop calls on the game thread (the same thread as the compass's
+    // draws), so the shared std::rand state is not raced.
+    game::CameraShake camera_shake_{[] { return std::rand() & game::kCameraShakeRandMax; }};
     bool aa_requested_ = false;
     std::uint32_t aa_buy_all_ = 0; // the rank a client-side "buy all ranks" is waiting on (0: none)
     mutable std::unique_ptr<game::mechanics::GameTables> tables_; // SkillCaps / BaseData, loaded when first needed

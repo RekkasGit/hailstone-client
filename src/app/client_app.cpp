@@ -462,6 +462,12 @@ int ClientApp::run() {
         const bool in_game = screen_ == Screen::InGame && player_ready_;
         if (!in_game && automation_) automation_->world_unavailable();
         const bool scene = in_game || pre_game; // the world drawn: the zone, or character select's clz
+        // OP_CameraEffect's shake (game/camera_shake.h) for the image being drawn: the original adds it to the camera
+        // it renders with (@0x796dd0), never to the game camera. It is taken off again before picking.
+        const glm::vec3 unshaken_camera = camera_.position;
+        if (in_game && conn_)
+            camera_.position = conn_->camera_shake().offset(
+                camera_.position, static_cast<std::uint32_t>(net::GameConnection::now_ms()));
         if (conn_)
             for (const auto& w : conn_->take_weather()) weather_.handle_message(w.kind, w.intensity);
         if (in_game) {
@@ -1040,7 +1046,9 @@ int ClientApp::run() {
                     draw_text_overlay();
                     lap.mark("text overlay");
                 }
-                // The camera as CCamera::GetScreenRay reads it, in the 3D view's window (mouse) coordinates.
+                // The camera as CCamera::GetScreenRay reads it, in the 3D view's window (mouse) coordinates. Picking
+                // and its line of sight keep the true camera: the frame's shake is only in the image.
+                camera_.position = unshaken_camera;
                 auto fov = game::camera_fov(camera_.view_fov_units(), static_cast<int>(f->extent.width), static_cast<int>(f->extent.height));
                 pick_camera_.position = camera_.position;
                 pick_camera_.forward = camera_.forward();
@@ -1054,6 +1062,8 @@ int ClientApp::run() {
                 pick_camera_valid_ = view_area_.w > 0.0f && view_area_.h > 0.0f;
             }
         }
+        // Whatever the scene's branches did, the frame ends on the true camera (also when no picking ran above).
+        camera_.position = unshaken_camera;
         lap.mark("scene other");
         ui_.render(*f);
         lap.mark("ImGui render");

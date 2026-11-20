@@ -472,6 +472,7 @@ add_library(hailstone_engine STATIC
   src/game/char_create_look.cpp
   src/game/char_select_camera.cpp
   src/game/cameras.cpp
+  src/game/camera_shake.cpp
   src/game/iso_camera.cpp
   src/game/click_intent.cpp
   src/game/iso_occlusion.cpp
@@ -1445,6 +1446,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/key_commands_test.cpp
     tests/mouse_buttons_test.cpp
     tests/cameras_test.cpp
+    tests/camera_shake_test.cpp
     tests/iso_camera_test.cpp
     tests/temporal_test.cpp
     tests/upscaler_provider_test.cpp

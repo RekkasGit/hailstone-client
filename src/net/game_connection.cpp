@@ -1198,6 +1198,8 @@ void GameConnection::finish_zone_in() {
     if (entered) send_zone(encode_hailstone_guild({}));
     // And the server's settings for the client; a server without Hailstone's script does not answer.
     if (entered) send_zone(encode_hailstone_settings_request());
+    // The camera effect's reset @0x4939b0 runs on the zone-in: a new zone starts unshaken.
+    camera_shake_.reset();
     // DoMainLoop after ReadyEnterWorld: the task window rebuilt and the task compass mark looked for (0x76ff50).
     ++tasks_.revision;
     task_compass_dirty_ = true;
@@ -1936,6 +1938,18 @@ void GameConnection::handle_zone(const AppPacket& p) {
     case Op::Weblink:
         // The case @0x4c5b5d hands the address to WebManager_CreateHtmlWnd (an in-game HTML window); the app opens it.
         if (auto url = decode_weblink(p)) web_links_.push_back(std::move(*url));
+        break;
+    case Op::Marquee:
+        // The case @0x4cb7f7: CTextOverlay::DisplayText(text, colour, priority, alpha, fade-in, fade-out, hold) and a
+        // debug log. Nothing goes to chat.
+        if (auto m = decode_marquee(p))
+            text_overlay_.display(std::move(m->text), m->colour, m->priority, m->alpha, m->fade_in_ms, m->fade_out_ms,
+                                  m->hold_ms, static_cast<std::uint32_t>(now_ms()));
+        break;
+    case Op::CameraEffect:
+        // The case @0x4c6f73: the camera effect's Set(strength, duration) (game/camera_shake.h).
+        if (auto c = decode_camera_effect(p))
+            camera_shake_.set(c->intensity, c->duration_ms, static_cast<std::uint32_t>(now_ms()));
         break;
     case Op::Stun:
         // The case @0x4c7093: StunMe(duration, 0, 0, the lean byte) with a local character. EQEmu's UnStun sends a
