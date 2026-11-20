@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Scripts can ask whether you or your target is poisoned, diseased, cursed or corrupted: `Me.Poisoned`, `Target.Diseased`, `.Cursed` and `.Corrupted` give the buff responsible, as in MacroQuest
 - Windows: when the graphics device fails mid-game, the client no longer crashes while closing with a plugin loaded, so the device error itself reaches the log and an error box
 - Your own name is in parentheses while you are hidden, as in the original client (it was plain). Sneak alone adds none
 - The sample `hailstone.cfg` now includes the Ability Book's autoskill switch, and the server guide shows how to disable autoskill and Lua socials
