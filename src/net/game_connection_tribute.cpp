@@ -184,6 +184,8 @@ void GameConnection::tribute_toggle(bool on) {
 std::optional<std::uint64_t> GameConnection::tribute_cursor_value(bool guild) const {
     const Item* held = inventory_.cursor();
     if (!held) return std::nullopt;
+    // CTributeMasterWnd_SetDonationItem @0x7862e0 shows 0 (eqstr 3462) for a bag that holds anything.
+    if (held->is_bag() && !held->contents.empty()) return 0;
     // EQEmu awards the base item's favor for each copy in the donation, without counting augments or charges.
     const auto favor = guild ? held->guild_favor : held->favor;
     return static_cast<std::uint64_t>(favor) * donation_count(*held);

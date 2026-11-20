@@ -210,6 +210,8 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - Received bonus items feed local stats/effects; they retire on deactivation, selection changes, opt-out and context changes.
   - Guild benefit controls enforce received permissions; guild platinum donations wait for matching replies.
   - The full tribute workflow not checked live.
+  - Donate is not refused for an item worth no favour or a bag that holds anything, as the original's
+    CheckItemDonatable @0x785de0 and UpdateDonateButton @0x785f40 do (eqstr 3382, 3462).
 - [x] **Raid leadership controls and leadership hotkey creation in both UI packs.**
   - Correct trainable ability identities, delegate/mark sync, lifecycle cleanup.
   - Active leadership bonuses in local stats; raid invitations from expedition/shared-task rosters.

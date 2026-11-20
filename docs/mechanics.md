@@ -80,10 +80,12 @@ Full tribute workflows are not tested live.
 
 ## Tribute donation values
 
-The item description shows the item's positive personal and guild tribute values per copy. The Donate area in
-Modern and Gamepad previews the total favor for the item on the cursor using the open master's tribute type.
-Stacks use the full quantity that Donate sends. Charges and augments add no favor. The preview returns to the
-last donation receipt when the cursor is empty. That receipt uses the server's reply.
+The item description shows the item's positive personal and guild tribute values per copy (a Hailstone addition:
+the original's item display shows neither). The Donate area in Modern and Gamepad previews the total favor for the
+item on the cursor using the open master's tribute type. Stacks use the full quantity that Donate sends, as EQEmu
+multiplies by it; the original's TMW_ValueLabel shows the value of one copy (SetDonationItem @0x7862e0). Charges and
+augments add no favor. A bag that holds anything previews 0, as in the original. The preview returns to the last
+donation receipt when the cursor is empty. That receipt uses the server's reply.
 
 ## Exactness
 
