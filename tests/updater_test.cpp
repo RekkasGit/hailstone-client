@@ -759,3 +759,11 @@ TEST_CASE("update: the retired files' table") {
     test::ScratchDir dir("update_retire_table");
     CHECK(retire_old_release_files(dir.path()).empty());
 }
+// A box set's other windows run from the folder the first window updates: two updaters would download into the same
+// download/<file>.part, and one quitting first could install while its siblings run (docs/updater.md "Install").
+TEST_CASE("updater: a box set's other windows and test drives have no updater") {
+    CHECK(run_has_updates(0, false, false));
+    CHECK_FALSE(run_has_updates(0, false, true));
+    CHECK_FALSE(run_has_updates(120, false, false));
+    CHECK_FALSE(run_has_updates(0, true, false));
+    CHECK(std::string(kBoxChildArg) == "--box-child");

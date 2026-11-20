@@ -344,6 +344,8 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] The repository (or a public one for releases) has to be public: GitHub answers 404 to the client for a private one's releases. Public from 0.5.0-beta (AGENTS.md "Git workflow").
 - [x] A release key (`hailstone_sign keygen`, the public half in `update-key.pub`); until then builds have no updates.
 - [ ] The updater on Windows: WinHTTP and the install's renames of the running `hailstone.exe` and its DLLs (compiles; not run).
+- [x] The box set's other windows (`--box-child`) have no updater and fetch no add-ons: only the first window downloads and installs (tests/updater_test.cpp).
+- [ ] A lock between Hailstone windows the client did not start (two copies opened by hand): each still has its own updater and add-on manager on the same `download/` and `addons/` files.
 - [ ] A release job in CI (packages, manifest, signature, upload).
 - [x] macOS arm64 releases: a plain folder like Linux's with MoltenVK beside the binary, built, tested and signed ad hoc by the macOS workflow (docs/ci.md "macOS arm64"), packed and signed into the manifest locally. No Developer ID or notarization, by choice: players clear the quarantine (README.md).
 - [ ] macOS on a Mac: the client run on Apple Silicon (MoltenVK's device features, the window, input, audio, the Keychain), and an update installed there. Only the build and the headless tests have run.

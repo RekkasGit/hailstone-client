@@ -224,7 +224,8 @@ void ClientApp::start_addons() {
     if (automation_) automation_->refresh_managed_addons();
     ui::AddonsView& v = login_view_.addons;
     if (!opts_.updates) {
-        v.why_off = "Add-ons are not fetched on a test run.";
+        v.why_off = opts_.box_child ? "Add-ons are fetched and installed by the box set's first window."
+                                    : "Add-ons are not fetched on a test run.";
         return;
     }
     std::string why;

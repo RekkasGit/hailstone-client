@@ -12,7 +12,7 @@ a separate patcher before the game started. The code is `src/app/updater.*` (che
 - **The corner.** The login screen's top left corner always shows this build ("Hailstone 0.4.0-alpha") and the
   updater's word on it (`ui::update_status_text`): "Checking for updates...", "Up to date", "Version 0.5.0 is out",
   "Could not check for updates" (offline, no manifest yet: the reason is only logged) or "Updates are off: <why>" (a
-  development build, `update.check=0`, no HTTPS, a test run). Under it: **What's new**, a popup with this version's
+  development build, `update.check=0`, no HTTPS, a test run, a box set's other window). Under it: **What's new**, a popup with this version's
   part of the `CHANGELOG.md` shipped with the client (`core/changelog.h`; the button is greyed when the file or the
   section is missing), and **GitHub**, which opens Hailstone's page (CMake `HAILSTONE_PROJECT_PAGE`) in the system browser.
   The Modern pack draws it as a small card; the Gamepad pack shows the two lines there and puts What's new (a page)
@@ -163,6 +163,9 @@ helper and the plugins are gone:
 4. `installed.txt` is written, and `state.txt` becomes `pending`.
 
 The install waits while the box set's other windows run (they use the same files), and happens at a later quit.
+Those windows are started with `--box-child` (`app/updater.h` `kBoxChildArg`) and have no updater and no add-on
+downloads of their own: only the first window downloads into `download/` and `addons/` and installs, so two windows
+never write the same `.part` file, and a window that quits first never installs while its siblings run.
 
 ### Start and rollback
 

@@ -73,6 +73,8 @@ replaces them); not installed (another key, another add-on in the repository, a 
 
 **When files change.** A download is checked and unpacked on a worker thread. Its files move into place only while
 the login screen is up with no login under way and no box set window running, since those may run the same files.
+The box set's other windows (started with `--box-child`) neither check, download nor install add-ons: the first
+window does, once they have quit.
 Nothing runs at the login screen (docs/plugins.md), and plugins load from copies in `cache/plugins/`. So an install
 or an update never changes a file under a running script or plugin. One downloaded while in the world waits for the
 next login screen. A run that quits first finds it again at the next start, and the package is not downloaded twice.

@@ -141,6 +141,7 @@ struct Options {
     std::string host;                              // --host for the auto-login
     std::string server;                            // --server: a saved server (servers/<id>), by id or name
     std::string account;                           // --account: a saved account of that server
+    bool box_child = false;                        // --box-child: a box set's other window (app/updater.h)
     int port = 0;
     float auto_walk = 0.0f, camera_distance = 0.0f;
     std::string watch;
@@ -200,7 +201,8 @@ void usage() {
         "  --account A        log in to the saved server (--server, else the last used) with its saved\n"
         "                     account A and A's password from the system keyring, play the world played\n"
         "                     last there and enter A's character (or --character); the login screen's\n"
-        "                     Log in box starts its other windows so\n"
+        "                     Log in box starts its other windows so, with --box-child (no updater\n"
+        "                     or add-on downloads in those: the first window updates)\n"
         "  --auto-target      after zoning in, target and consider the nearest NPC (testing)\n"
         "  --pick-test        after zoning in, turn to the NPCs nearby and pick at the screen centre\n"
         "                     (logging which are hit and whether a wall is in the way), left click the\n"
@@ -592,6 +594,8 @@ Options parse_args(int argc, char** argv) {
         } else if (arg("--account")) {
             need(1);
             o.account = argv[++i];
+        } else if (arg(hailstone::app::kBoxChildArg)) {
+            o.box_child = true;
         } else if (arg("--port")) {
             need(1);
             const std::string_view text(argv[++i]);
@@ -848,7 +852,10 @@ int main(int argc, char** argv) {
             // The updater is for a player's own runs, not the test drives that stop after some frames. A ticket
             // launch keeps it, but is never restarted into another version before its one-use ticket is sent
             // (update_at_start_allowed); the next start without a ticket finishes what update_at_start would do.
-            c.updates = opts.frames == 0 && opts.screenshot.empty();
+            // A box set's other windows leave updates and add-ons to the first window, which waits for them to quit
+            // before it installs (app/updater.h kBoxChildArg).
+            c.updates = app::run_has_updates(opts.frames, !opts.screenshot.empty(), opts.box_child);
+            c.box_child = opts.box_child;
             if (c.updates && app::update_at_start_allowed(opts.login_launch)) {
                 // A cut-off install, or an update that never reached the login screen, is put back first; when the
                 // folder then holds another version than this one, that one is started instead.
