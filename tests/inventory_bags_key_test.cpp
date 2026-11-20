@@ -166,7 +166,7 @@ TEST_CASE("bank bags key: the bank's and the shared bank's bags open while the b
     ImGui::DestroyContext(ctx);
 }
 
-TEST_CASE("bag keys: a new UI session starts with no bag open and the keys set to open") {
+TEST_CASE("bag keys: a new UI session or a /loadskin starts with no bag open and the keys set to open") {
     ImGuiContext* ctx = ImGui::CreateContext();
     MockConfig config = MockConfig::standard();
     config.characters[0].inventory.push_back(item(1003, "Backpack", 23, true));
@@ -193,9 +193,14 @@ TEST_CASE("bag keys: a new UI session starts with no bag open and the keys set t
         api.toggle_all_bags(); // opens, and leaves the keys at "close"
         CHECK(first_bag(api) == "Backpack");
     }
-    app::UiApi again(host); // e.g. after /loadskin
+    app::UiApi again(host);
     CHECK(first_bag(again).empty());
     again.toggle_all_bags(); // the first press opens again
+    CHECK(first_bag(again) == "Backpack");
+    // A /loadskin keeps the UiApi and resets its bags the same way.
+    again.reset_bags();
+    CHECK(first_bag(again).empty());
+    again.toggle_all_bags();
     CHECK(first_bag(again) == "Backpack");
 
     lua_close(L);

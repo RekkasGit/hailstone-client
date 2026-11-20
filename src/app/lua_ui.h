@@ -443,6 +443,10 @@ public:
     void open_all_bags();
     void close_all_bags();
     void toggle_all_bags();
+    // A new interface (a /loadskin): no bag open and both bag keys set to open, as on a new UiApi. The original's
+    // CDisplay::ReloadUI @0x49d6b0 runs CleanGameUI @0x4936e0, which deletes CContainerMgr and CInvSlotMgr, and
+    // InitGameUI @0x4973f0 builds them again (the CInvSlotMgr constructor @0x697d00 sets both keys).
+    void reset_bags();
     // The CMD_TOGGLE_BANK_BAGS key: the bank's and the shared bank's bags open (the bank window showing) or close.
     void toggle_all_bank_bags();
     // The MAIN / ABILITIES / COMBAT / SOCIALS keys: the Actions window on that page, closed when already showing it.

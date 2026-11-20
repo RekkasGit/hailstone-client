@@ -2815,7 +2815,7 @@ int DebugScreens(lua_State* L) {
 } // namespace
 
 UiApi::UiApi(UiHost& host) : impl_(std::make_unique<Impl>(host)) {
-    // The open bags live in a process-wide table (lua_ui_items.cpp): a new UI session must not inherit the last one's.
+    // The open bags live in a process-wide table (lua_ui_items.cpp): a new UiApi must not inherit the last one's.
     reset_containers();
 }
 UiApi::~UiApi() {
@@ -3134,6 +3134,7 @@ bool UiApi::open_player_menu(std::uint32_t spawn_id, float x, float y) {
 void UiApi::open_all_bags() { app::open_all_bags(impl_->host); }
 void UiApi::close_all_bags() { app::close_all_bags(impl_->host); }
 void UiApi::toggle_all_bags() { app::toggle_all_bags(impl_->host); }
+void UiApi::reset_bags() { reset_containers(); }
 void UiApi::toggle_all_bank_bags() { app::toggle_all_bank_bags(impl_->host); }
 
 void register_chat_api(lua_State* L, UiHost& host); // app/lua_ui_chat.cpp

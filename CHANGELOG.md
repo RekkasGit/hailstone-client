@@ -13,6 +13,8 @@
 - `/debug_animinfo` prints your target's (or your own) model, the animations its upper and lower body are playing and which bones are left in their rest pose, to help report characters that animate wrongly
 - Bag windows close when the interface is reloaded with /loadskin
   - A reload starts a new interface session: no bag is open and the next bag key press opens them again
+- Bag windows close when the interface is reloaded with /loadskin, as in the original
+  - The next bag key press opens them again
 - A server's marquee text shows in the large centre-screen text, and its camera effect shakes the drawn camera for as long as it asks
   - They arrive as the zone packets OP_Marquee and OP_CameraEffect; a marquee never adds a chat line
   - The shake moves only the camera, never the player, and a zone change ends it

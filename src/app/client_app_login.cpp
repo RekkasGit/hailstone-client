@@ -504,7 +504,10 @@ void ClientApp::use_ui_pack(std::string_view id, bool force) {
     lua_ui_->set_caller_scope(lua_caller_scope());
     lua_ui_->set_clipboard_check(lua_clipboard_check());
     ui_textures_->set_all_art(pack->game_art);
-    if (ui_api_) ui_api_->reload_game_files(); // (the EQ menu's rows follow the pack's windows: read again)
+    if (ui_api_) {
+        ui_api_->reload_game_files(); // (the EQ menu's rows follow the pack's windows: read again)
+        ui_api_->reset_bags();        // a new interface opens no bag (UiApi::reset_bags)
+    }
     if (options_open) ui_api_->show("OptionsWindow", true);
     log::info("user interface: {}", ui_name_);
 }
