@@ -27,7 +27,7 @@ on 2026-11-02; they are in the workflow's history. Before a merge to `main`:
 | Platform | How | When |
 |---|---|---|
 | Linux | `cmake --build build && build/hailstone_tests` (AGENTS.md "Build and test"), with `EQ_GAME_DIR` set when the change touches assets | every merge |
-| macOS arm64 | the macOS workflow (below): Apple Clang, `hailstone_tests` on GitHub's Apple Silicon runner | a change to `src/platform/`, the build files, or anything Apple Clang may treat differently; and every release |
+| macOS arm64 | the macOS workflow (below): Apple Clang, `hailstone_tests` on GitHub's Apple Silicon runner | on hold until someone can test and maintain macOS (docs/plan.md, 0.9): not part of a release or a merge for now; run it by hand for a change to `src/platform/` or the build files when convenient |
 | Windows | MSVC, CI's old compiler, under Wine: `tools/docker/msvc_build.sh`, then `wine build-msvc/hailstone_tests.exe` ("MSVC under Wine" below) | a change to `src/platform/`, the build files, the Lua bridge (`app/lua_ui*`) or anything a compiler may treat differently; and every release |
 
 Releases are built the same way: Linux in the `hailstone-linux-build` container (Ubuntu 24.04, so the client runs
@@ -172,6 +172,9 @@ tools/docker/build.sh all            # the three; --no-test after the platform s
 Not in CI at present (see above). By hand: configure the tree with Clang (no build needed) and run `run-clang-tidy -p build -quiet -header-filter='.*/src/.*' '.*/src/.*\.cpp$'` with the root `.clang-tidy`; the CI job that did this is in the workflow's history.
 
 ## macOS arm64
+
+On hold until someone can test and maintain macOS (docs/plan.md, 0.9): a release does not wait for it, and no macOS
+build comes with one. The workflow is kept, so it can be started as below.
 
 `.github/workflows/macos.yml` builds on GitHub's `macos-15` runner (Apple Silicon, Apple Clang): a Release build,
 `hailstone_tests` (without game files or vectors), `cmake --install`, and an ad hoc signature on every Mach-O file of the
