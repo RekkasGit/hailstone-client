@@ -1094,9 +1094,10 @@ void GameConnection::handle_player(Op op, const AppPacket& p) {
         // with the local player's name without case; on a match it prints eqstr 1391 in colour index 10 and
         // plays the struck-down wave 0x8f through EqSoundManager::WavePlay(..., 0). The original's own death
         // bookkeeping after the line is left to OP_Death here (docs/unknowns.md).
-        if (p.data.empty()) break;
-        std::string name(reinterpret_cast<const char*>(p.data.data()), p.data.size());
-        name = name.substr(0, name.find('\0'));
+        // EQEmu sends GMKill_Struct (132 B: `char[64]` name, `char[64]` GM name, u32); the name is read up to its NUL
+        // within the first 64 bytes.
+        ByteReader r(p.data);
+        const std::string name = r.fixed_string(std::min<std::size_t>(p.data.size(), 64));
         if (name.empty() || !iequals(name, character_)) break;
         show_chat(strings_.format(1391, std::vector<std::string>{name}), 10);
         SoundCue cue;
