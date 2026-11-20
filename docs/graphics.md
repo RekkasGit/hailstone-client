@@ -1736,7 +1736,7 @@ sliders match (display option `light_tweaks`), or Custom once one is moved off t
 | Preset | Ambient | Baked lamps | Lamp distance | Carried | Reach | Stacking | Infravision | Ultravision |
 |---|---|---|---|---|---|---|---|---|
 | Default | 100 % | 100 % | 600 | 100 % | 100 % | 0 % | 100 % | 100 % |
-| Option 1 | 40 % | 300 % | 700 | 140 % | 80 % | 0 % | 50 % | 50 % |
+| Option 1 | 40 % | 300 % | 700 | 140 % | 80 % | 0 % | 10 % | 10 % |
 
 A new preset is a row of `kLightTweakPresets`; the dropdown's names come from it (`option_choices("light_tweaks")`).
 
