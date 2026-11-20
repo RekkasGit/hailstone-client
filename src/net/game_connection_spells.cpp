@@ -402,7 +402,8 @@ void GameConnection::memorize_tick(std::int64_t now) {
             auto& v = stats.emplace(std::array<std::int32_t, 3>{});
             with_character([&](game::mechanics::Character& ch) {
                 constexpr std::uint32_t kMeditate = 31;
-                // with_character's effect-only tables have zero skill caps. Use the game's caps for GetAdjustedSkill.
+                // with_character's effect-only tables have zero skill caps. Use the game's caps for GetAdjustedSkill;
+                // without SkillCaps.txt, the trained value (the client's own fallback: the original always has it).
                 const auto& game_tables = tables();
                 game::mechanics::Character memorizer(ch.sheet(), game_tables, ch.spells());
                 v[2] = game_tables.skill_caps.empty() ? ch.sheet().skills[kMeditate] : memorizer.adjusted_skill(kMeditate);

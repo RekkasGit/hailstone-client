@@ -809,8 +809,10 @@ Vectors in `tests/spell_gems_vectors_test.cpp`, replayed call for call.
 - A bard (class 8) has base (CalcDEX + CalcINT) / 30 + 1, steps 2 x base with AA 286, else base + Meditate / 10 + 2.
 - At 0 of 92: IsItemPending + 1, OP_MemorizeSpell {gem, spell, 1, ?}, last = 0, the book's gem and spell -1.
 - The gauge reads ticks_left x 1000 / 92.
-- The connection loads the game's skill caps for adjusted Meditate and uses the profile's trained value when the
-  skill-cap table is missing.
+- Meditate is GetAdjustedSkill @0x449fe0 against the game's SkillCaps.txt. A zero cap returns only the racial bonus,
+  so without the table trained Meditate reads 0 and every memorise takes the slowest step. When the game folder has
+  no SkillCaps.txt the client uses the profile's trained value instead: the client's own fallback, as the original
+  always has the file.
 
 `finish_memorizing`: the gem gets the spell, eqstr 12007 in colour 264, gem timer now + RecastTime + 1000. Mode 1
 hides the book unless it was open before, mode 2 goes on, else the cast window refreshes.
