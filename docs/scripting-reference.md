@@ -174,12 +174,13 @@ the clean name.
 | `Buff[n\|name]` | `buff` | the nth buff, or one by name (exact first, else a part of it; `=name` exact only). With no index, the count |
 | `MyBuff[n\|name]` | `buff` | the same, counting only buffs the player cast |
 | `BuffDuration[n\|name]`, `MyBuffDuration[n\|name]` | `timestamp` | time left on that buff |
-| `Mezzed`, `Charmed`, `Feared`, `Rooted`, `Snared`, `Slowed` | `buff` | the buff that puts it in that state; NULL when none does (below) |
+| `Mezzed`, `Charmed`, `Feared`, `Rooted`, `Snared`, `Slowed`, `Poisoned`, `Diseased`, `Cursed`, `Corrupted` | `buff` | the buff that puts it in that state; NULL when none does (below) |
 
 A spawn's buffs are the player's own, or the target's as OP_TargetBuffs gave them. Stock EQEmu sends those only to
 GMs, players with the Inspect Buffs AA or leadership, or when its `AlwaysSendTargetsBuffs` rule is on. Check
 `BuffsPopulated` first. The states use the buff's spell effects (EQEmu's spdat.h): `Mezzed` SPA 31, `Charmed` 22,
-`Feared` 23, `Rooted` 99, `Snared` SPA 3 with a negative value, `Slowed` SPA 11 below 100%.
+`Feared` 23, `Rooted` 99, `Snared` SPA 3 with a negative value, `Slowed` SPA 11 below 100%. `Poisoned`, `Diseased`,
+`Cursed` and `Corrupted` are a buff with poison (SPA 36), disease (35), curse (116) or corruption (369) counters.
 
 ### character
 

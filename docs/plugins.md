@@ -379,7 +379,8 @@ The server sends target buffs only to some players (stock EQEmu: GMs, Inspect Bu
 - `Target.Buff[n|name]` (a buff: `.Duration`, `.Caster`, `.ID` the slot ...), `.BuffCount`, `.BuffDuration[name]`;
 - `.MyBuff[name]` and `.MyBuffDuration[name]` (cast by the player);
 - the state a buff puts it in, by spell effect (EQEmu's spdat.h): `.Mezzed` (SPA 31), `.Charmed` (22), `.Feared`
-  (23), `.Rooted` (99), `.Snared` (3, negative), `.Slowed` (11, under 100%).
+  (23), `.Rooted` (99), `.Snared` (3, negative), `.Slowed` (11, under 100%); `.Poisoned` (36), `.Diseased` (35),
+  `.Cursed` (116), `.Corrupted` (369), a buff with counters of that kind.
 
 #### Spawn searches
 
