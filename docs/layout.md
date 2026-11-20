@@ -410,7 +410,8 @@ and A to open it. Options also offers the setting under Display > Interface in M
 Both controls use the same per-character `[Main] MapSkin` setting in `UI.ini`.
 
 The map looks in the chosen subfolder in all four locations first, then in the plain folders. **Default** uses
-the plain folders. The list refreshes when the map window opens, so a new pack is available without a restart.
+the plain folders. The list holds the subfolders of all four. It is read again each time the map window opens, and
+with the map closed whenever Options asks for it, so a pack dropped in shows up without a restart.
 
 #### Zone names
 

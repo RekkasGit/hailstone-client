@@ -345,6 +345,7 @@ end
 
 -- The map window uses the same per-character choice as the Options window.
 local MAP_PACK="Map Pack##map_pack"
+local function hint(s,key)for _,h in ipairs(s.beginOpts.hints)do if h[1]==key then return h[2]end end end
 do
  local s=rig("modern")
  s.mapPacks={"Default","Brewall","Good's"};s.mapPack=1
@@ -372,9 +373,11 @@ do
  s.focus=s.button("Map Pack").id
  s.draw({y=true});equal(#s.popupButtons,0,"Y does not open the focused map pack dropdown")
  s.draw();s.draw();equal(s.geometry[#s.geometry].cx,centred.cx,"Y still centres the map")
+ equal(hint(s,"a"),"Map pack","A's hint names the focused dropdown")
  s.draw({a=true});equal(#s.popupButtons,3,"A opens the focused map pack dropdown")
  equal(#s.mapActions,0,"Opening the dropdown with A does not find a path")
  s.draw({b=true,rb=true,rt=true});check(s.shown,"B closes the dropdown without closing the map")
+ equal(hint(s,"a"),"Select");equal(hint(s,"b"),"Back","The hints follow the open dropdown")
  s.draw();equal(s.geometry[#s.geometry].zoom,centred.zoom,"The dismiss-frame RB does not zoom")
  equal(#s.mapActions,0,"The dismiss-frame RT does not toggle Auto Z")
  s.draw({a=true});s.draw();s.focusLabel("Good's")
@@ -386,6 +389,7 @@ do
  s.draw();equal(s.combos[MAP_PACK],"Good's")
  s.focus=s.button("##maparea").id
  s.draw({a=true});equal(s.mapActions[2][1],"MapLocation","A still finds a path from the map canvas")
+ s.draw();equal(hint(s,"a"),"Find path to centre");equal(hint(s,"b"),"Close")
  s.restore()
 end
 

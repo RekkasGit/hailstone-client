@@ -21,6 +21,7 @@ local M = {
   cx = nil, cy = nil, -- the centre when panned, in map units
   labels = ui.GetSetting("map.labels", "1") == "1",
   packOpen = false,
+  packFocused = false, -- the Map Pack dropdown had the focus last frame (closed)
 }
 
 local function setZoom(step)
@@ -52,7 +53,7 @@ end
 ui.window("Map", function()
   if not W.shown(MAP) then
     MC.Reset()
-    M.open, M.packOpen = false, false
+    M.open, M.packOpen, M.packFocused = false, false, false
     return
   end
   if not M.open then -- each time it opens: the whole zone, following the player
@@ -66,7 +67,8 @@ ui.window("Map", function()
   M.packOpen = false
   local hints = { { "lb", "Zoom out" }, { "rb", "Zoom in" }, { "y", "Centre" },
     { "x", M.labels and "Hide labels" or "Labels" }, { "rt", API.map.AutoZ() and "Auto Z off" or "Auto Z" },
-    { "a", API.map.FindPathShown() and "End find" or "Find path to centre" }, { "b", "Close" } }
+    { "a", packWasOpen and "Select" or M.packFocused and "Map pack"
+      or API.map.FindPathShown() and "End find" or "Find path to centre" }, { "b", packWasOpen and "Back" or "Close" } }
   if hasControls then table.insert(hints,1,{ "lt", "Map controls" }) end
   if W.begin("Map", { w = 1500, h = 960, title = zone ~= "" and zone or "Map", close = not (MC.Open() or packWasOpen),
         hints = hints }) then
@@ -78,6 +80,7 @@ ui.window("Map", function()
       ui.SetCursorScreenPos(x0, y0)
       packOpen, packFocused = mapPack(packs, selected)
     end
+    M.packFocused = packFocused -- (the next frame's A and B hints)
     -- Native ImGui navigation handles the combo. A dismiss frame still belongs to the dropdown.
     local packInput = packWasOpen or packOpen
     if hasControls then
