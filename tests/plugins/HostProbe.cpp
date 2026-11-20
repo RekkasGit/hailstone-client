@@ -745,6 +745,7 @@ void probe_abilities(void*, const char* args) {
 }
 
 static_assert(sizeof(HS_Bulk_SpellFixedRecord) == HS_BULK_SPELL_RECORD_SIZE);
+static_assert(sizeof(HS_Bulk_SpellSlot) == HS_BULK_SPELL_SLOT_SIZE);
 
 // A uint16_t-prefixed string at buf + at, within size; false when it runs past the end.
 bool read_str16(const unsigned char* buf, std::size_t size, std::size_t& at, std::string& out) {
@@ -758,7 +759,9 @@ bool read_str16(const unsigned char* buf, std::size_t size, std::size_t& at, std
     return true;
 }
 
-// The count, then each record one line (id, found, its size, name, mana, target type, flags, effect lines), its
+// The count, then each record one line (id, found, its size, name, mana, target type, flags, slots, classes,
+// strings, effect lines), each used effect slot (SPA not 254, read stepping by slotSize), each class that can use
+// it (its level not 0 or 255), its
 // description (the ninth string), the target type's, resist type's and categories' names (the tenth to fourteenth)
 // and each effect line, stepping by recordSize; then the bytes left over after the last record (0 when every record is framed
 // right). The first number is the buffer size, the rest the spell ids; also how many bytes past the first n the host
@@ -809,7 +812,19 @@ void probe_spells(void*, const char* args) {
         std::string description;
         std::string names[5]; // targetTypeDesc, resistTypeDesc, category, subcategory, subcategory2
         std::vector<std::string> lines;
+        std::vector<HS_Bulk_SpellSlot> slots;
+        std::vector<std::uint8_t> classLevels;
         if (rec->found) {
+            // slotCount slots, slotSize bytes apart: copy the fields this SDK knows, skip any a later client added.
+            const std::size_t slotSize = rec->slotSize > 0 ? static_cast<std::size_t>(rec->slotSize) : 0;
+            for (std::int32_t k = 0; k < rec->slotCount && slotSize > 0 && end - p >= slotSize; ++k) {
+                HS_Bulk_SpellSlot slot{};
+                std::memcpy(&slot, buf + p, slotSize < sizeof slot ? slotSize : sizeof slot);
+                slots.push_back(slot);
+                p += slotSize;
+            }
+            // classCount levels, one byte each, class 1 first.
+            for (std::int32_t k = 0; k < rec->classCount && p < end; ++k) classLevels.push_back(buf[p++]);
             std::string text;
             // stringCount strings: the ones this SDK knows, then any a later client appended, skipped.
             for (int k = 0; k < rec->stringCount; ++k) {
@@ -823,10 +838,20 @@ void probe_spells(void*, const char* args) {
                 lines.push_back(text);
             }
         }
-        WriteChatf("[Probe] spell %d: id %d, found %d, %zu bytes, name %s, mana %d, target %d, flags %u, strings %d, "
-                   "effects %d",
+        WriteChatf("[Probe] spell %d: id %d, found %d, %zu bytes, name %s, mana %d, target %d, flags %u, slots %d, "
+                   "classes %d, strings %d, effects %d",
                    static_cast<int>(i), rec->id, rec->found, recordSize, name.empty() ? "-" : name.c_str(), rec->mana,
-                   static_cast<int>(rec->targetType), rec->flags, rec->stringCount, rec->effectCount);
+                   static_cast<int>(rec->targetType), rec->flags, rec->slotCount, rec->classCount, rec->stringCount,
+                   rec->effectCount);
+        for (std::size_t k = 0; k < classLevels.size(); ++k)
+            if (classLevels[k] != 0 && classLevels[k] != 255)
+                WriteChatf("[Probe] spell %d class %zu: level %d", static_cast<int>(i), k + 1,
+                           static_cast<int>(classLevels[k]));
+        for (std::size_t k = 0; k < slots.size(); ++k)
+            if (slots[k].effect != 254)
+                WriteChatf("[Probe] spell %d slot %zu: effect %d, base %d, base2 %d, max %d, formula %d",
+                           static_cast<int>(i), k + 1, slots[k].effect, slots[k].base, slots[k].base2, slots[k].max,
+                           slots[k].formula);
         if (rec->found)
             WriteChatf("[Probe] spell %d description %d: %s", static_cast<int>(i), rec->descriptionId,
                        description.empty() ? "-" : description.c_str());

@@ -1880,16 +1880,16 @@ TEST_CASE("native plugins: get_spells_data_bulk, laid out as docs/plugins.md say
     h.approve(plugin::kCapAll);
     REQUIRE(h.plugins->load("HostProbe"));
     net::GameConnection& conn = *h.world.conn;
-    // 3020: a heal (SPA 0, 40), mana 25, single target, magic resist, cancelled by sitting, with a description (dbstr_us.txt type
-    // 6, id 3020, in the test world's file) and category 42, subcategory 43 (type 5, Heals and Direct), no second
-    // subcategory. 3021: a proc of 3020 and a mana slot, no description. 3022: 3020 again
-    // under another id, not in the player's spell book. The slots they do not use are 254.
+    // 3020: a heal (SPA 0, 40), mana 25, single target, magic resist, cleric 5 (no other class), cancelled by sitting,
+    // with a description (dbstr_us.txt type 6, id 3020, in the test world's file) and category 42, subcategory 43
+    // (type 5, Heals and Direct), no second subcategory. 3021: a proc of 3020 and a mana slot, no description. 3022:
+    // 3020 again under another id, not in the player's spell book. The slots they do not use are 254.
     auto table = std::make_shared<game::SpellTable>();
     REQUIRE(table->parse(mq_test::spell_line({{0, "3020"}, {1, "Test Heal"}, {19, "25"}, {20, "40"}, {85, "1"},
                                               {86, "0"}, {87, "254"}, {88, "254"}, {89, "254"}, {90, "254"}, {91, "254"},
                                               {92, "254"}, {93, "254"}, {94, "254"}, {95, "254"}, {96, "254"},
-                                              {97, "254"}, {98, "5"}, {124, "1"}, {155, "3020"}, {156, "42"},
-                                              {157, "43"}}) +
+                                              {97, "254"}, {98, "5"}, {105, "5"}, {124, "1"}, {155, "3020"},
+                                              {156, "42"}, {157, "43"}}) +
                          "\n" +
                          mq_test::spell_line({{0, "3021"}, {1, "Test Proc"}, {20, "3020"}, {21, "10"}, {86, "85"},
                                               {87, "15"}, {88, "254"}, {89, "254"}, {90, "254"}, {91, "254"},
@@ -1906,40 +1906,49 @@ TEST_CASE("native plugins: get_spells_data_bulk, laid out as docs/plugins.md say
     if (!profile) profile.emplace();
     profile->spell_book = {0xffffffffu, 3020, 3021};
 
-    // One record per id, in the order asked: an unknown id gets the fixed record alone (509 bytes, stringCount 0). A
-    // known one adds its fourteen strings, as its stringCount says (the name, seven empty ones here at 2 bytes each, the description, then the target type's,
-    // resist type's and categories' names) and its effect lines. A spell in the player's book has its description filled in
-    // for the player, as the spell display shows it.
+    // One record per id, in the order asked: an unknown id gets the fixed record alone (265 bytes, every count 0). A
+    // known one adds its 12 effect slots (20 bytes each), its 16 class levels (a byte each) and its fourteen strings,
+    // as its counts say (the name, seven empty ones here at 2 bytes each, the description, then the target type's,
+    // resist type's and categories' names) and its effect lines. A spell in the player's book has its description
+    // filled in for the player, as the spell display shows it.
     h.run("/probespells 16384 3020 9999 3021");
-    CHECK(h.printed_line("[Probe] spell 0: id 3020, found 1, 630 bytes, name Test Heal, mana 25, target 5, flags 1, "
-                         "strings 14, effects 1")); // 509 + 11 + 14 + 30 + (8 + 7 + 7 + 8 + 9) + 27
+    CHECK(h.printed_line("[Probe] spell 0: id 3020, found 1, 642 bytes, name Test Heal, mana 25, target 5, flags 1, "
+                         "slots 12, classes 16, strings 14, effects 1")); // 265 + 240 + 16 + 11 + 14 + 30 + 39 + 27
+    // The classes that can use it, class 1 first: only the cleric (class 2).
+    CHECK(h.printed_line("[Probe] spell 0 class 2: level 5"));
+    // The slots, slot 1 first; the 11 unused ones (SPA 254) are not printed.
+    CHECK(h.printed_line("[Probe] spell 0 slot 1: effect 0, base 40, base2 0, max 0, formula 0"));
+    CHECK_FALSE(h.printed_line("[Probe] spell 0 slot 2: effect 254, base 0, base2 0, max 0, formula 0"));
     CHECK(h.printed_line("[Probe] spell 0 description 3020: Heals you for 40 hit points."));
     CHECK(h.printed_line("[Probe] spell 0 target Single, resist Magic, category 42 Heals, subcategory 43 Direct, "
                          "subcategory2 0 Unknown"));
     CHECK(h.printed_line("[Probe] spell 0 effect: Slot 1: Increase HP by 40"));
-    CHECK(h.printed_line("[Probe] spell 1: id 9999, found 0, 509 bytes, name -, mana 0, target 0, flags 0, strings 0, "
-                         "effects 0"));
-    CHECK(h.printed_line("[Probe] spell 2: id 3021, found 1, 641 bytes, name Test Proc, mana 0, target 0, flags 0, "
-                         "strings 14, effects 2")); // 509 + 11 + 16 + (6 + 14 + 9 + 9 + 9) + 29 + 29
+    CHECK(h.printed_line("[Probe] spell 1: id 9999, found 0, 265 bytes, name -, mana 0, target 0, flags 0, slots 0, "
+                         "classes 0, strings 0, effects 0"));
+    CHECK(h.printed_line("[Probe] spell 2: id 3021, found 1, 653 bytes, name Test Proc, mana 0, target 0, flags 0, "
+                         "slots 12, classes 16, strings 14, effects 2")); // 265 + 240 + 16 + 11 + 16 + 47 + 29 + 29
+    CHECK(h.printed_line("[Probe] spell 2 slot 1: effect 85, base 3020, base2 0, max 0, formula 0"));
+    CHECK(h.printed_line("[Probe] spell 2 slot 2: effect 15, base 10, base2 0, max 0, formula 0"));
     // Target type 0 is MacroQuest's "None", resist type 0 "Unresistable"; a category of 0 is "Unknown".
     CHECK(h.printed_line("[Probe] spell 2 target None, resist Unresistable, category 0 Unknown, subcategory 0 Unknown, "
                          "subcategory2 0 Unknown"));
     CHECK(h.printed_line("[Probe] spell 2 description 0: -")); // no description id: an empty string
     CHECK(h.printed_line("[Probe] spell 2 effect: Slot 1: Add Proc: Test Heal"));
     CHECK(h.printed_line("[Probe] spell 2 effect: Slot 2: Increase Mana by 10"));
-    CHECK(h.printed_line("[Probe] spells count 3, 1784 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] spells count 3, 1564 bytes, 0 bytes left"));
     // A spell not in the book keeps dbstr_us.txt's text, its codes left in.
     h.printed.clear();
     h.run("/probespells 16384 3022");
     CHECK(h.printed_line("[Probe] spell 0 description 3020: Heals you for #1 hit points."));
-    CHECK(h.printed_line("[Probe] spells count 1, 644 bytes, 0 bytes left")); // 4 + 509 + 11 + 14 + 30 + 49 + 27
+    // 4 + 265 + 240 + 16 + 11 + 14 + 30 + 49 + 27
+    CHECK(h.printed_line("[Probe] spells count 1, 656 bytes, 0 bytes left"));
     // A discipline is the player's own too, though not in the book.
     profile->disciplines = {3022};
     h.printed.clear();
     h.run("/probespells 16384 3022");
     CHECK(h.printed_line("[Probe] spell 0 description 3020: Heals you for 40 hit points."));
     // The filled text happens to be as long as the unfilled ("40" for "#1").
-    CHECK(h.printed_line("[Probe] spells count 1, 644 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] spells count 1, 656 bytes, 0 bytes left"));
     // So is the spell of an AA the player owns.
     profile->disciplines.clear();
     auto& aa = net::GameConnectionTestAccess::alt_adv(conn);
@@ -1964,7 +1973,7 @@ TEST_CASE("native plugins: get_spells_data_bulk, laid out as docs/plugins.md say
     // Only whole records: the third does not fit in 1200 bytes, and nothing goes past them.
     h.printed.clear();
     h.run("/probespells 1200 3020 9999 3021");
-    CHECK(h.printed_line("[Probe] spells count 2, 1143 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] spells count 2, 911 bytes, 0 bytes left"));
     CHECK(h.printed_line("[Probe] spells past the end 0"));
     // Below the count's 4 bytes nothing; no ids, the count alone.
     h.printed.clear();

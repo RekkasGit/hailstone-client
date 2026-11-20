@@ -989,16 +989,16 @@ slots, then the one discipline slot, always last.
 - The counts are the client's, not the SDK's: tell a record's kind by its last byte, not its position, and pass room
   to spare (4096 bytes holds 141 records).
 
-| Offset | Type | Field |
-|---|---|---|
-| 0 | i32 | spell id; 0 an empty slot, whose other fields are all 0 |
-| 4 | i32 | the caster's spawn id |
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | spell id; 0 an empty slot, whose other fields are all 0 |
+  | 4 | i32 | the caster's spawn id |
 | 8 | i32 | tics left; see the note below |
-| 12 | i32 | hits left |
-| 16 | i32 | the spell's type: 0 detrimental, 1 beneficial, 2 beneficial group-only (0 for a spell not in spells_us.txt) |
-| 20 | i32 | counter type of the spell's first counter effect: -1 none, 0 disease, 1 poison, 2 curse, 3 corruption. An empty slot also has 0 here, so test the spell id before reading it as disease |
-| 24 | i32 | that effect's base: the counters the buff starts with (MacroQuest's `Spell.CounterNumber`); 0 with no counter effect |
-| 28 | u8 | the slot's window: 0 buff (`HAILSTONE_BUFF_SLOT_BUFF`, RoF2's slots 0 to 41), 1 song (`HAILSTONE_BUFF_SLOT_SONG`, 42 to 61), 2 discipline (`HAILSTONE_BUFF_SLOT_DISC`, the last slot, 62); 0 in an empty slot. Taken from the slot, not the spell |
+  | 12 | i32 | hits left |
+  | 16 | i32 | the spell's type: 0 detrimental, 1 beneficial, 2 beneficial group-only (0 for a spell not in spells_us.txt) |
+  | 20 | i32 | counter type of the spell's first counter effect: -1 none, 0 disease, 1 poison, 2 curse, 3 corruption. An empty slot also has 0 here, so test the spell id before reading it as disease |
+  | 24 | i32 | that effect's base: the counters the buff starts with (MacroQuest's `Spell.CounterNumber`); 0 with no counter effect |
+  | 28 | u8 | the slot's window: 0 buff (`HAILSTONE_BUFF_SLOT_BUFF`, RoF2's slots 0 to 41), 1 song (`HAILSTONE_BUFF_SLOT_SONG`, 42 to 61), 2 discipline (`HAILSTONE_BUFF_SLOT_DISC`, the last slot, 62); 0 in an empty slot. Taken from the slot, not the spell |
 
 Tics left is the server's count less the 6 s ticks since it came (none while the buff timers are on hold). A permanent
 buff is negative, the server's count as sent, never counted down (EQEmu: -1 for duration formula 50, -4 for an aura's
@@ -1019,12 +1019,12 @@ The name is the one the server last sent for the slot (`OP_BuffCreate`), without
 while the player stays in the zone, even after the caster dies or leaves; after zoning only when the caster is a player
 already in the new zone (never an NPC). So an empty name is common.
 
-| Offset | Type | Field |
-|---|---|---|
-| 0 | i32 | spell id; 0 an empty slot, whose other fields are all 0 (and no name follows) |
-| 4 | i32 | `casterNameLength`: the bytes of the caster's name that follow; 0 when the server sent none |
-| 8 to 28 | | as `get_buff_data_bulk`'s: tics left, hits left, spell type, counter type, counters, slot's window |
-| 29 | bytes | the caster's name, `casterNameLength` bytes |
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | spell id; 0 an empty slot, whose other fields are all 0 (and no name follows) |
+  | 4 | i32 | `casterNameLength`: the bytes of the caster's name that follow; 0 when the server sent none |
+  | 8 to 28 | | as `get_buff_data_bulk`'s: tics left, hits left, spell type, counter type, counters, slot's window |
+  | 29 | bytes | the caster's name, `casterNameLength` bytes |
 
 ##### `get_pet_buff_data_bulk`
 
@@ -1040,40 +1040,40 @@ Every spawn in the zone: a 16-byte header, then one record per spawn.
   would not fit. Only whole records are written; the header's count says how many.
 - Below 4096 bytes it returns 0. One record needs at least 4112 bytes, plus a few hundred bytes per spawn.
 
-Header (`HS_Bulk_SpawnHeader`, `HS_BULK_SPAWN_HEADER_SIZE` = 16 bytes):
+  Header (`HS_Bulk_SpawnHeader`, `HS_BULK_SPAWN_HEADER_SIZE` = 16 bytes):
 
-| Offset | Type | Field |
-|---|---|---|
-| 0 | u32 | the number of spawn records that follow |
-| 4 | f32 | the player's x (0 with no player) |
-| 8 | f32 | the player's y |
-| 12 | f32 | the player's z |
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | u32 | the number of spawn records that follow |
+  | 4 | f32 | the player's x (0 with no player) |
+  | 8 | f32 | the player's y |
+  | 12 | f32 | the player's z |
 
-Each record (`HS_Bulk_SpawnFixedRecord`) is `HS_BULK_SPAWN_RECORD_SIZE` = 92 fixed bytes:
+  Each record (`HS_Bulk_SpawnFixedRecord`) is `HS_BULK_SPAWN_RECORD_SIZE` = 92 fixed bytes:
 
-| Offset | Type | Field |
-|---|---|---|
-| 0 | i32 | spawn id |
-| 4 | u32 | flags (below) |
-| 8 | i32 | body type id |
-| 12 | i32 | class id |
-| 16 | i32 | consider colour, the one `/consider` and the target window show (the original's con level, with the server's PvP rules), as a chat colour (`CONCOLOR_*`: 6 grey, 2 green, 18 light blue, 4 blue, 10 white, 15 yellow, 13 red); 6 also for a corpse |
-| 20 | i64 | current HP: the HP percent, as the server sends it |
-| 28 | i32 | gender |
-| 32 | i64 | guild id |
-| 40 | f32 | heading in degrees (the server's heading x 0.703125) |
-| 44 | f32 | height (the model's avatar height) |
-| 48 | i32 | level |
-| 52 | i32 | master: the pet owner's spawn id, 0 for none |
-| 56 | f32 | max range: 14.5, or 0 for a ground item |
-| 60 | f32 | max range to: 14.5, or 0 for a ground item |
-| 64 | i32 | HP percent |
-| 68 | i32 | player state, as the server sends it |
-| 72 | i32 | race id |
-| 76 | f32 | x |
-| 80 | f32 | y |
-| 84 | f32 | z |
-| 88 | i32 | deity (tells a player's corpse from an NPC's) |
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | spawn id |
+  | 4 | u32 | flags (below) |
+  | 8 | i32 | body type id |
+  | 12 | i32 | class id |
+  | 16 | i32 | consider colour, the one `/consider` and the target window show (the original's con level, with the server's PvP rules), as a chat colour (`CONCOLOR_*`: 6 grey, 2 green, 18 light blue, 4 blue, 10 white, 15 yellow, 13 red); 6 also for a corpse |
+  | 20 | i64 | current HP: the HP percent, as the server sends it |
+  | 28 | i32 | gender |
+  | 32 | i64 | guild id |
+  | 40 | f32 | heading in degrees (the server's heading x 0.703125) |
+  | 44 | f32 | height (the model's avatar height) |
+  | 48 | i32 | level |
+  | 52 | i32 | master: the pet owner's spawn id, 0 for none |
+  | 56 | f32 | max range: 14.5, or 0 for a ground item |
+  | 60 | f32 | max range to: 14.5, or 0 for a ground item |
+  | 64 | i32 | HP percent |
+  | 68 | i32 | player state, as the server sends it |
+  | 72 | i32 | race id |
+  | 76 | f32 | x |
+  | 80 | f32 | y |
+  | 84 | f32 | z |
+  | 88 | i32 | deity (tells a player's corpse from an NPC's) |
 
 Then seven strings, each a u16 length and that many bytes, no NUL:
 
@@ -1085,10 +1085,10 @@ Then seven strings, each a u16 length and that many bytes, no NUL:
 6. the suffix;
 7. the spawn type's description.
 
-Flags (bit: meaning): 0 AFK, 1 aggressive (player state 0x04 or 0x08), 2 anonymous, 3 buyer, 4 dead, 5 ducking,
-6 feigning death, 7 GM, 8 invisible, 9 summoned, 10 levitating, 11 link dead, 12 on a mount, 13 moving (a run speed
-other than 0), 14 named, 15 roleplaying, 16 sitting, 17 sneaking, 18 standing, 19 stunned (player state 0x20),
-20 targetable, 21 trader, 22 underwater. Bits 8, 17 and 22 are never set at present.
+  Flags (bit: meaning): 0 AFK, 1 aggressive (player state 0x04 or 0x08), 2 anonymous, 3 buyer, 4 dead, 5 ducking,
+  6 feigning death, 7 GM, 8 invisible, 9 summoned, 10 levitating, 11 link dead, 12 on a mount, 13 moving (a run speed
+  other than 0), 14 named, 15 roleplaying, 16 sitting, 17 sneaking, 18 standing, 19 stunned (player state 0x20),
+  20 targetable, 21 trader, 22 underwater. Bits 8, 17 and 22 are never set at present.
 
 ##### `get_xtarget_data_bulk`
 
@@ -1097,10 +1097,10 @@ as many whole records as fit (0 bytes before the server sent the list). The slot
 index, including one the server's extension hides from the window. RoF2 has at most 20 slots (EQEmu: 5 plus the AA's),
 so 512 bytes is plenty.
 
-| Offset | Type | Field |
-|---|---|---|
-| 0 | i32 | the slot's type, as `HailstoneXTarget.type`: an `HS_BULK_XTARGET_*` value (`enum HS_BULK_XTargetTypes`, the protocol's 0 to 26: 0 empty, 1 auto hater, 2 / 3 a specific PC / NPC, ... 25 / 26 the mercenary and its target) |
-| 4 | i32 | the slot's spawn id, 0 for none |
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | the slot's type, as `HailstoneXTarget.type`: an `HS_BULK_XTARGET_*` value (`enum HS_BULK_XTargetTypes`, the protocol's 0 to 26: 0 empty, 1 auto hater, 2 / 3 a specific PC / NPC, ... 25 / 26 the mercenary and its target) |
+  | 4 | i32 | the slot's spawn id, 0 for none |
 | 8 | i32 | the aggro meter's percent for the slot's spawn, as the server sent it; see the note below |
 | 12 | i32 | the spawn's HP percent, as the extended target window draws it; see the note below |
 
@@ -1129,22 +1129,22 @@ The current target's buffs, as the target window draws them (what `OP_TargetBuff
 - Size for the worst case: EQEmu gives an NPC 60 buff slots by default (`Spells:MaxTotalSlotsNPC`) and a caster's name
   at most 63 bytes, so 8 + 60 x 83 = 4988 bytes. 8192 bytes holds any target on a stock server.
 
-| Offset | Type | Field |
-|---|---|---|
-| 0 | i32 | `count`: the records that follow in this buffer |
-| 4 | i32 | `total`: the number of the target's buffs the client holds |
-| 8 | records | the records, one after another, as many as fit |
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | `count`: the records that follow in this buffer |
+  | 4 | i32 | `total`: the number of the target's buffs the client holds |
+  | 8 | records | the records, one after another, as many as fit |
 
-Each record:
+  Each record:
 
-| Offset | Type | Field |
-|---|---|---|
-| 0 | i32 | spell id (never 0: entries with no spell are left out) |
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | spell id (never 0: entries with no spell are left out) |
 | 4 | i32 | tics left; see the note below |
-| 8 | i32 | the spell's type: 0 detrimental, 1 beneficial, 2 beneficial group-only (0 for a spell not in spells_us.txt) |
-| 12 | i32 | the target's buff slot, as the server sent it (EQEmu: the mob's own slot index, not mapped to RoF2's) |
-| 16 | i32 | `casterNameLength`: the bytes of the caster's name that follow; 0 when the server sent none |
-| 20 | bytes | the caster's name, `casterNameLength` bytes |
+  | 8 | i32 | the spell's type: 0 detrimental, 1 beneficial, 2 beneficial group-only (0 for a spell not in spells_us.txt) |
+  | 12 | i32 | the target's buff slot, as the server sent it (EQEmu: the mob's own slot index, not mapped to RoF2's) |
+  | 16 | i32 | `casterNameLength`: the bytes of the caster's name that follow; 0 when the server sent none |
+  | 20 | bytes | the caster's name, `casterNameLength` bytes |
 
 Tics left is the server's count less the 6 s ticks since it came, held as the target window holds it: a suspendable
 spell in a zone that suspends buffs, and, with the player its own target, the player's buff-timer hold
@@ -1162,19 +1162,19 @@ An `HS_Bulk_ListHeader`, then `count` records, each an id and its name.
   0, total 0, 8 bytes).
 - RoF2's lists have at most 300 entries each; 16384 bytes holds either with ordinary names.
 
-| Offset | Type | Field |
-|---|---|---|
-| 0 | i32 | `count`: the records that follow in this buffer |
-| 4 | i32 | `total`: the entries the list holds, written or not |
-| 8 | records | the records, one after another |
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | `count`: the records that follow in this buffer |
+  | 4 | i32 | `total`: the entries the list holds, written or not |
+  | 8 | records | the records, one after another |
 
-Each record:
+  Each record:
 
-| Offset | Type | Field |
-|---|---|---|
-| 0 | i32 | the id (below) |
-| 4 | i32 | `nameSize`: the bytes of the name that follow; 0 when the client has no name for it |
-| 8 | bytes | the name, `nameSize` bytes |
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | the id (below) |
+  | 4 | i32 | `nameSize`: the bytes of the name that follow; 0 when the client has no name for it |
+  | 8 | bytes | the name, `nameSize` bytes |
 
 `get_avail_aa_data_bulk` lists the alternate abilities the character owns (bought or granted, passive and activated),
 in the owned list's order (the profile's, then `OP_RespondAA`'s).
@@ -1200,15 +1200,15 @@ The Ability Book's usable entries with their readiness in one call, instead of `
 - An owned AA rank the AA table does not hold is left out, as in `get_avail_aa_data_bulk`.
 - Match an entry by `kind` and `id`, not by its position.
 
-| Offset | Type | Field |
-|---|---|---|
-| 0 | i32 | `kind`: `HS_ABILITY_SKILL` (0), `HS_ABILITY_DISCIPLINE` (1) or `HS_ABILITY_ALT` (2) |
-| 4 | i32 | `id`: a skill's id, a discipline's **spell id** (not its profile slot), or an AA's ability (group) id |
-| 8 | i32 | `ready`: 1 its reuse has run out, 0 on reuse |
-| 12 | i64 | `remainingMs`: until it is ready, 0 when ready |
-| 20 | i64 | `reuseMs`: its reuse time |
-| 28 | i32 | `nameSize`: the bytes of the name that follow; 0 when the client has no name for it |
-| 32 | bytes | the name, `nameSize` bytes |
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | `kind`: `HS_ABILITY_SKILL` (0), `HS_ABILITY_DISCIPLINE` (1) or `HS_ABILITY_ALT` (2) |
+  | 4 | i32 | `id`: a skill's id, a discipline's **spell id** (not its profile slot), or an AA's ability (group) id |
+  | 8 | i32 | `ready`: 1 its reuse has run out, 0 on reuse |
+  | 12 | i64 | `remainingMs`: until it is ready, 0 when ready |
+  | 20 | i64 | `reuseMs`: its reuse time |
+  | 28 | i32 | `nameSize`: the bytes of the name that follow; 0 when the client has no name for it |
+  | 32 | bytes | the name, `nameSize` bytes |
 
 - **Readiness** is what `ability_state` gives: an AA's own reuse (SPA 264 reduction applied), a discipline's reuse
   timer, a skill's timer rounded up to the whole second the book shows; all in ms.
@@ -1229,43 +1229,43 @@ member, in roster order, as many whole records as fit.
 - `version` changes only when an older reader can no longer read the header or a record at all.
 - `total` is the roster's member count; `count < total` means retry with a larger buffer.
 
-Header (`HS_Bulk_RaidHeader`, `HS_BULK_RAID_HEADER_SIZE` = 40 bytes):
+  Header (`HS_Bulk_RaidHeader`, `HS_BULK_RAID_HEADER_SIZE` = 40 bytes):
 
-| Offset | Type | Field |
-|---|---|---|
-| 0 | u32 | `sizeof(HS_BulkRaidHeader)` |
-| 4 | u32 | version, 1 |
-| 8 | u32 | `count`: member records that follow (what fit in `out_size`) |
-| 12 | u32 | bytes between records; a later client may grow it |
-| 16 | u32 | leader's 0-based member index, or `HS_BULK_RAID_NO_INDEX` |
-| 20 | u32 | the raid window's selected member, same encoding |
-| 24 | i32 | in a raid (1) or not (0) |
-| 28 | i32 | locked (1) or not (0) |
-| 32 | i32 | loot type, as the raid window names it: 1 Leader Only, 2 Leader and Group Leader, 3 Leader Selected, 4 Entire Raid |
-| 36 | u32 | `total`: the roster's member count, not only those written |
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | u32 | `sizeof(HS_BulkRaidHeader)` |
+  | 4 | u32 | version, 1 |
+  | 8 | u32 | `count`: member records that follow (what fit in `out_size`) |
+  | 12 | u32 | bytes between records; a later client may grow it |
+  | 16 | u32 | leader's 0-based member index, or `HS_BULK_RAID_NO_INDEX` |
+  | 20 | u32 | the raid window's selected member, same encoding |
+  | 24 | i32 | in a raid (1) or not (0) |
+  | 28 | i32 | locked (1) or not (0) |
+  | 32 | i32 | loot type, as the raid window names it: 1 Leader Only, 2 Leader and Group Leader, 3 Leader Selected, 4 Entire Raid |
+  | 36 | u32 | `total`: the roster's member count, not only those written |
 
-Each record (`HS_Bulk_RaidData`, `HS_BULK_RAID_RECORD_SIZE` = 124 bytes):
+  Each record (`HS_Bulk_RaidData`, `HS_BULK_RAID_RECORD_SIZE` = 124 bytes):
 
-| Offset | Type | Field |
-|---|---|---|
-| 0 | i32 | roster slot, 0-based |
-| 4 | u32 | spawn id; 0 when the member is not in this zone |
-| 8 | i32 | the server's raid group 0..11; -1 ungrouped or any other value |
-| 12 | u32 | flags (below) |
-| 16 | i32 | level; 0 when unknown |
-| 20 | i32 | class id; 0 when unknown |
-| 24 | i32 | HP percent; -1 when unknown |
-| 28 | i32 | mana percent; -1 when unknown (the client has it only for group members) |
-| 32 | i32 | endurance percent; same |
-| 36 | u32 | pet spawn id (the pet window's for the player, else a spawn the member owns that is neither a mercenary nor a temporary pet); 0 none |
-| 40 | i32 | pet HP percent; -1 unknown or no pet |
-| 44 | f32 | x (the zone's coordinates, as `HailstoneSpawn.x`) |
-| 48 | f32 | y |
-| 52 | f32 | z |
-| 56 | f32 | 3D distance from the player; 0 when the member is not here |
-| 60 | char[64] | member name, NUL-terminated |
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | roster slot, 0-based |
+  | 4 | u32 | spawn id; 0 when the member is not in this zone |
+  | 8 | i32 | the server's raid group 0..11; -1 ungrouped or any other value |
+  | 12 | u32 | flags (below) |
+  | 16 | i32 | level; 0 when unknown |
+  | 20 | i32 | class id; 0 when unknown |
+  | 24 | i32 | HP percent; -1 when unknown |
+  | 28 | i32 | mana percent; -1 when unknown (the client has it only for group members) |
+  | 32 | i32 | endurance percent; same |
+  | 36 | u32 | pet spawn id (the pet window's for the player, else a spawn the member owns that is neither a mercenary nor a temporary pet); 0 none |
+  | 40 | i32 | pet HP percent; -1 unknown or no pet |
+  | 44 | f32 | x (the zone's coordinates, as `HailstoneSpawn.x`) |
+  | 48 | f32 | y |
+  | 52 | f32 | z |
+  | 56 | f32 | 3D distance from the player; 0 when the member is not here |
+  | 60 | char[64] | member name, NUL-terminated |
 
-Flags (bit: meaning): 0 leader, 1 group leader, 2 main assist, 3 raid marker (the member holds the Marker role),
+  Flags (bit: meaning): 0 leader, 1 group leader, 2 main assist, 3 raid marker (the member holds the Marker role),
 4 waypointer, 5 looter, 6 reserved (this client keeps no offline flag), 7 present in this zone, 8 the player.
 
 - Main assist: the member's own flag first, then the raid's assigned assist names.
@@ -1277,151 +1277,165 @@ Flags (bit: meaning): 0 leader, 1 group leader, 2 main assist, 3 raid marker (th
 ##### `get_spells_data_bulk`
 
 `get_spells_data_bulk(host, ids, id_count, out, out_size)`: spells by id in one call, each with its effect slots
-decoded to text, so a plugin needs neither `get_spell` once per spell nor its own copy of the effect rules. `ids`
-points at `id_count` spell ids (`const int32_t*`). `out` gets an i32 `count` (`HS_BULK_SPELL_HEADER_SIZE` = 4
-bytes), then one record per id, in the order asked, as many whole records as fit: `count` below `id_count` means
-`out_size` was too small for the next one, so call again for the rest. Each record is an
-`HS_Bulk_SpellFixedRecord` (`HS_BULK_SPELL_RECORD_SIZE` = 509 bytes) and, for a spell the client holds, the
-strings after it; step from record to record by its `recordSize`, never a fixed stride. An id the client has no
-spell for (not in spells_us.txt, 0 or negative) gets the fixed record alone, `found` 0 and the rest 0.
+  decoded to text, so a plugin needs neither `get_spell` once per spell nor its own copy of the effect rules. `ids`
+  points at `id_count` spell ids (`const int32_t*`). `out` gets an i32 `count` (`HS_BULK_SPELL_HEADER_SIZE` = 4
+  bytes), then one record per id, in the order asked, as many whole records as fit: `count` below `id_count` means
+  `out_size` was too small for the next one, so call again for the rest. Each record is an
+  `HS_Bulk_SpellFixedRecord` (`HS_BULK_SPELL_RECORD_SIZE` = 265 bytes) and, for a spell the client holds, the
+  strings after it; step from record to record by its `recordSize`, never a fixed stride. An id the client has no
+  spell for (not in spells_us.txt, 0 or negative) gets the fixed record alone, `found` 0 and the rest 0.
 
-Fixed record (`HS_Bulk_SpellFixedRecord`, `HS_BULK_SPELL_RECORD_SIZE` = 509 bytes). The column is the field's in
-spells_us.txt, as the client reads it into `game::SpellData`; an array's columns run on from the one given.
+  Fixed record (`HS_Bulk_SpellFixedRecord`, `HS_BULK_SPELL_RECORD_SIZE` = 265 bytes). The column is the field's in
+  spells_us.txt, as the client reads it into `game::SpellData`; an array's columns run on from the one given.
 
-| Offset | Type | Field | Column |
-|---|---|---|---|
-| 0 | i32 | `recordSize`: this record's bytes, its strings and lines included; the next record starts here | |
-| 4 | i32 | `id`: the spell id asked for | 0 |
-| 8 | i32 | `found`: 1 the client holds the spell, 0 it does not (every field after is 0 and nothing follows) | |
-| 12 | f32 | `range` | 9 |
-| 16 | f32 | `aeRange` | 10 |
-| 20 | f32 | `pushBack` | 11 |
-| 24 | f32 | `pushUp` | 12 |
-| 28 | i32 | `castTime`, ms | 13 |
-| 32 | i32 | `recoveryTime`, ms | 14 |
-| 36 | i32 | `recastTime`, ms | 15 |
-| 40 | i32 | `durationFormula` | 16 |
-| 44 | i32 | `durationCap`, ticks | 17 |
-| 48 | i32 | `aeDuration` | 18 |
-| 52 | i32 | `mana` | 19 |
-| 56 | i32[12] | `base`, per effect slot | 20..31 |
-| 104 | i32[12] | `base2` (limit) | 32..43 |
-| 152 | i32[12] | `max` | 44..55 |
-| 200 | i32[12] | `formula` | 70..81 |
-| 248 | i32[12] | `effect`: SPA ids, 254 unused | 86..97 |
-| 296 | i32 | `bookIcon` | 56 |
-| 300 | i32 | `gemIcon` | 57 |
-| 304 | i32[4] | `reagentId` | 58..61 |
-| 320 | i32[4] | `reagentCount` | 62..65 |
-| 336 | i32[4] | `noExpendReagent` | 66..69 |
-| 352 | i32 | `spaIndex` | 123 |
-| 356 | u32 | `deityMask`: bit n set when column 125 + n is; 0 any deity | 125..141 |
-| 360 | i32 | `spellIcon` | 144 |
-| 364 | i32 | `spellAnim` | 145 |
-| 368 | i32 | `resistAdj` | 147 |
-| 372 | i32 | `recourseLink` | 150 |
-| 376 | i32 | `descriptionId` (dbstr type 6; its text is the ninth string) | 155 |
-| 380 | i32 | `category` (dbstr type 5; its name is the twelfth string) | 156 |
-| 384 | i32 | `subcategory` | 157 |
-| 388 | i32 | `subcategory2` | 158 |
-| 392 | i32 | `enduranceCost` | 166 |
-| 396 | i32 | `reuseTimerIndex` | 167 |
-| 400 | i32 | `enduranceUpkeep` | 174 |
-| 404 | i32 | `hitCountType` | 175 |
-| 408 | i32 | `hitCount` | 176 |
-| 412 | i32 | `globalGroup` | 180 |
-| 416 | i32 | `pcnpcOnly` | 183 |
-| 420 | i32 | `spellGroup` | 207 |
-| 424 | i32 | `spellRank` | 208 |
-| 428 | i32 | `spellSubgroup` | 236 |
-| 432 | i32 | `reqAssociation` | 211 |
-| 436 | i32 | `spellClass` | 221 |
-| 440 | i32 | `spellSubclass` | 222 |
-| 444 | i32 | `maxTargets`: an AE's target cap, 0 none | 218 |
-| 448 | f32 | `distanceModStartX` | 227 |
-| 452 | f32 | `distanceModStartMod` | 228 |
-| 456 | f32 | `distanceModEndX` | 229 |
-| 460 | f32 | `distanceModEndMod` | 230 |
-| 464 | f32 | `minRange` | 231 |
-| 468 | u32 | `flags`: the yes/no columns, below | |
-| 472 | i32 | `stringCount`: the strings after this record, `HS_BULK_SPELL_STRINGS` (14) today; 0 for `found` 0 | |
-| 476 | i32 | `effectCount`: the effect lines after the strings | |
-| 480 | u8 | `lightType` | 82 |
-| 481 | u8 | `spellType`: 0 detrimental, 1 beneficial, 2 beneficial group-only | 83 |
-| 482 | u8 | `activated` | 84 |
-| 483 | u8 | `resist` | 85 |
-| 484 | u8 | `targetType` | 98 |
-| 485 | u8 | `castDifficulty` | 99 |
-| 486 | u8 | `skill` | 100 |
-| 487 | u8 | `zoneType` | 101 |
-| 488 | u8 | `environment` | 102 |
-| 489 | u8 | `timeOfDay` | 103 |
-| 490 | u8 | `castingAnim` | 120 |
-| 491 | u8 | `targetAnim` | 121 |
-| 492 | u8 | `travelType` | 122 |
-| 493 | u8[16] | `classLevel`: classes 1..16, 255 (or 0) cannot use | 104..119 |
-| 509 | | the strings, for a found spell | |
+  | Offset | Type | Field | Column |
+  |---|---|---|---|
+  | 0 | i32 | `recordSize`: this record's bytes, everything after it included (slots, class levels, strings, lines); the next record starts here | |
+  | 4 | i32 | `id`: the spell id asked for | 0 |
+  | 8 | i32 | `found`: 1 the client holds the spell, 0 it does not (every field after is 0 and nothing follows) | |
+  | 12 | f32 | `range` | 9 |
+  | 16 | f32 | `aeRange` | 10 |
+  | 20 | f32 | `pushBack` | 11 |
+  | 24 | f32 | `pushUp` | 12 |
+  | 28 | i32 | `castTime`, ms | 13 |
+  | 32 | i32 | `recoveryTime`, ms | 14 |
+  | 36 | i32 | `recastTime`, ms | 15 |
+  | 40 | i32 | `durationFormula` | 16 |
+  | 44 | i32 | `durationCap`, ticks | 17 |
+  | 48 | i32 | `aeDuration` | 18 |
+  | 52 | i32 | `mana` | 19 |
+  | 56 | i32 | `bookIcon` | 56 |
+  | 60 | i32 | `gemIcon` | 57 |
+  | 64 | i32[4] | `reagentId` | 58..61 |
+  | 80 | i32[4] | `reagentCount` | 62..65 |
+  | 96 | i32[4] | `noExpendReagent` | 66..69 |
+  | 112 | i32 | `spaIndex` | 123 |
+  | 116 | u32 | `deityMask`: bit n set when column 125 + n is; 0 any deity | 125..141 |
+  | 120 | i32 | `spellIcon` | 144 |
+  | 124 | i32 | `spellAnim` | 145 |
+  | 128 | i32 | `resistAdj` | 147 |
+  | 132 | i32 | `recourseLink` | 150 |
+  | 136 | i32 | `descriptionId` (dbstr type 6; its text is the ninth string) | 155 |
+  | 140 | i32 | `category` (dbstr type 5; its name is the twelfth string) | 156 |
+  | 144 | i32 | `subcategory` | 157 |
+  | 148 | i32 | `subcategory2` | 158 |
+  | 152 | i32 | `enduranceCost` | 166 |
+  | 156 | i32 | `reuseTimerIndex` | 167 |
+  | 160 | i32 | `enduranceUpkeep` | 174 |
+  | 164 | i32 | `hitCountType` | 175 |
+  | 168 | i32 | `hitCount` | 176 |
+  | 172 | i32 | `globalGroup` | 180 |
+  | 176 | i32 | `pcnpcOnly` | 183 |
+  | 180 | i32 | `spellGroup` | 207 |
+  | 184 | i32 | `spellRank` | 208 |
+  | 188 | i32 | `spellSubgroup` | 236 |
+  | 192 | i32 | `reqAssociation` | 211 |
+  | 196 | i32 | `spellClass` | 221 |
+  | 200 | i32 | `spellSubclass` | 222 |
+  | 204 | i32 | `maxTargets`: an AE's target cap, 0 none | 218 |
+  | 208 | f32 | `distanceModStartX` | 227 |
+  | 212 | f32 | `distanceModStartMod` | 228 |
+  | 216 | f32 | `distanceModEndX` | 229 |
+  | 220 | f32 | `distanceModEndMod` | 230 |
+  | 224 | f32 | `minRange` | 231 |
+  | 228 | u32 | `flags`: the yes/no columns, below | |
+  | 232 | i32 | `slotCount`: the effect slots after this record, 12 on RoF2; 0 for `found` 0 | |
+  | 236 | i32 | `slotSize`: the bytes between slots, `HS_BULK_SPELL_SLOT_SIZE` (20) today; step by it | |
+  | 240 | i32 | `classCount`: the class levels after the slots, one byte each, 16 on RoF2; 0 for `found` 0 | |
+  | 244 | i32 | `stringCount`: the strings after the class levels, `HS_BULK_SPELL_STRINGS` (14) today; 0 for `found` 0 | |
+  | 248 | i32 | `effectCount`: the effect lines after the strings | |
+  | 252 | u8 | `lightType` | 82 |
+  | 253 | u8 | `spellType`: 0 detrimental, 1 beneficial, 2 beneficial group-only | 83 |
+  | 254 | u8 | `activated` | 84 |
+  | 255 | u8 | `resist` | 85 |
+  | 256 | u8 | `targetType` | 98 |
+  | 257 | u8 | `castDifficulty` | 99 |
+  | 258 | u8 | `skill` | 100 |
+  | 259 | u8 | `zoneType` | 101 |
+  | 260 | u8 | `environment` | 102 |
+  | 261 | u8 | `timeOfDay` | 103 |
+  | 262 | u8 | `castingAnim` | 120 |
+  | 263 | u8 | `targetAnim` | 121 |
+  | 264 | u8 | `travelType` | 122 |
+  | 265 | | the effect slots, the class levels, then the strings | |
 
-`flags` (`HS_BULK_SPELL_*`, bit: column):
+  `flags` (`HS_BULK_SPELL_*`, bit: column):
 
-| Bit | Flag | Column |
-|---|---|---|
-| 0 | `CANCEL_ON_SIT` | 124 |
-| 1 | `UNINTERRUPTABLE` | 146 |
-| 2 | `NOT_STACKABLE_DOT` | 148 |
-| 3 | `DELETABLE` | 149 |
-| 4 | `DURATION_WINDOW`: shown in the short buff (song) window | 154 |
-| 5 | `NPC_NO_LOS` | 159 |
-| 6 | `IS_SKILL` | 168 |
-| 7 | `CAST_NOT_STANDING` | 184 |
-| 8 | `NO_DISPELL` | 186 |
-| 9 | `SNEAK` | 196 |
-| 10 | `NOT_FOCUSABLE` | 197 |
-| 11 | `STACKS_WITH_SELF` | 203 |
-| 12 | `SUSPENDABLE` | 200 |
-| 13 | `BYPASS_REGEN_CHECK` | 212 |
-| 14 | `CAN_CAST_IN_COMBAT` | 213 |
-| 15 | `CAN_CAST_OUT_OF_COMBAT` | 214 |
-| 16 | `NO_REMOVE` | 232 |
-| 17 | `ONLY_DURING_FAST_REGEN` | 234 |
+  | Bit | Flag | Column |
+  |---|---|---|
+  | 0 | `CANCEL_ON_SIT` | 124 |
+  | 1 | `UNINTERRUPTABLE` | 146 |
+  | 2 | `NOT_STACKABLE_DOT` | 148 |
+  | 3 | `DELETABLE` | 149 |
+  | 4 | `DURATION_WINDOW`: shown in the short buff (song) window | 154 |
+  | 5 | `NPC_NO_LOS` | 159 |
+  | 6 | `IS_SKILL` | 168 |
+  | 7 | `CAST_NOT_STANDING` | 184 |
+  | 8 | `NO_DISPELL` | 186 |
+  | 9 | `SNEAK` | 196 |
+  | 10 | `NOT_FOCUSABLE` | 197 |
+  | 11 | `STACKS_WITH_SELF` | 203 |
+  | 12 | `SUSPENDABLE` | 200 |
+  | 13 | `BYPASS_REGEN_CHECK` | 212 |
+  | 14 | `CAN_CAST_IN_COMBAT` | 213 |
+  | 15 | `CAN_CAST_OUT_OF_COMBAT` | 214 |
+  | 16 | `NO_REMOVE` | 232 |
+  | 17 | `ONLY_DURING_FAST_REGEN` | 234 |
 
-After a found spell's fixed record come `stringCount` strings and then `effectCount` effect lines,
-each a u16 length and that many bytes with no NUL, as `get_spawns_data_bulk`'s strings:
+  After a found spell's fixed record come `slotCount` effect slots, slot 1 first, each an `HS_Bulk_SpellSlot` and
+  `slotSize` bytes from the next. The slots are counted rather than fixed arrays, so a server that offers more than
+  RoF2's 12 can send them (an extension past RoF2; a stock server's spells have 12). Step by `slotSize` and read only
+  the fields it covers: a later client may append some.
 
-| # | String | Column |
-|---|---|---|
-| 1 | the name | 1 |
-| 2 | the target or model text | 2 |
-| 3 | the teleport zone or pet name (MacroQuest's `Extra`) | 3 |
-| 4 | the cast-by-me text | 4 |
-| 5 | the cast-by-other text | 5 |
-| 6 | the cast-on-you text | 6 |
-| 7 | the cast-on-other text | 7 |
-| 8 | the wear-off text | 8 |
-| 9 | the description, dbstr_us.txt's type 6 text for `descriptionId`: for one of the player's own spells (in the spell book, in the discipline list, or the spell an owned AA casts), as the spell display window shows it to the player, its `#n`, `$n`, `@n` and `%z` codes filled in for the player's level, class and effects; for any other spell, as the file has it, the codes left in. Empty when the game folder's file has none | |
-| 10 | `targetTypeDesc`: the target type's name, MacroQuest's `${Spell.TargetType}` text (`Single`, `Group v2`, ...), `Unknown` for a type it does not name | 98 |
-| 11 | `resistTypeDesc`: the resist type's name, MacroQuest's `${Spell.ResistType}` text (`Unresistable` for 0, `Magic`, `Fire`, `Cold`, ...), `Unknown` for a type it does not name | 85 |
-| 12 | the category's name: dbstr_us.txt type 5, as MacroQuest's `${Spell.Category}` gives it, `Unknown` for 0 or one the game folder's file lacks | 156 |
-| 13 | the subcategory's name, the same way | 157 |
-| 14 | the second subcategory's name, the same way | 158 |
-| 15.. | any strings a later client appends, up to `stringCount`: skip the ones you do not know | |
-| then | the effect lines, `effectCount` of them | |
+  | Offset | Type | Field | Column for slot n (1..12) |
+  |---|---|---|---|
+  | 0 | i32 | `effect`: the SPA id, 254 unused | 85 + n |
+  | 4 | i32 | `base` | 19 + n |
+  | 8 | i32 | `base2` (the limit) | 31 + n |
+  | 12 | i32 | `max` | 43 + n |
+  | 16 | i32 | `formula` (the value formula) | 69 + n |
 
-Read `stringCount` strings, never a fixed number: the effect lines start after the last of them, so a plugin
-built against this header keeps reading a later client's records correctly.
+  Then come `classCount` class levels, one u8 each, class 1 first (column 103 + n for class n): the level class n
+  gets the spell at, 255 or 0 when it cannot use it. Counted for the same reason as the slots: a server with more
+  than RoF2's 16 classes can send them (an extension past RoF2).
 
-The effect lines are MacroQuest's `ParseSpellEffect` text for each slot that has one, in slot order,
-`Slot <n>: ...` (for example `Slot 1: Increase HP by 11 (L1) to 20 (L10)`); a slot with nothing to show (SPA 254,
-the teleport's location slots) has no line. The value ranges run to level 100, as MacroQuest's `/spellslotinfo`
-shows them. Spell names in the text are the client's (`Unknown Spell` for one it has not); skill and faction names
-come from the game folder's string tables (`Unknown[n]`, `Unknown Faction[n]` without one); a summoned item reads
-`[  id]`, since the client keeps no item database. The text is ported from MacroQuest
-(game/spell_effect_text.cpp).
+  Then come `stringCount` strings and then `effectCount` effect lines,
+  each a u16 length and that many bytes with no NUL, as `get_spawns_data_bulk`'s strings:
 
-Below 4 bytes nothing is written and 0 comes back; with no game connection, or no ids, the count alone (0). A
-plugin without `read` gets 0 bytes. A record is 509 bytes plus its texts and lines, a few hundred bytes for a
-stock spell, so about 1500 bytes per id is ample. Added later in ABI 3: test
-`HAILSTONE_HOST_HAS(host, get_spells_data_bulk)` first.
+  | # | String | Column |
+  |---|---|---|
+  | 1 | the name | 1 |
+  | 2 | the target or model text | 2 |
+  | 3 | the teleport zone or pet name (MacroQuest's `Extra`) | 3 |
+  | 4 | the cast-by-me text | 4 |
+  | 5 | the cast-by-other text | 5 |
+  | 6 | the cast-on-you text | 6 |
+  | 7 | the cast-on-other text | 7 |
+  | 8 | the wear-off text | 8 |
+  | 9 | the description, dbstr_us.txt's type 6 text for `descriptionId`: for one of the player's own spells (in the spell book, in the discipline list, or the spell an owned AA casts), as the spell display window shows it to the player, its `#n`, `$n`, `@n` and `%z` codes filled in for the player's level, class and effects; for any other spell, as the file has it, the codes left in. Empty when the game folder's file has none | |
+  | 10 | `targetTypeDesc`: the target type's name, MacroQuest's `${Spell.TargetType}` text (`Single`, `Group v2`, ...), `Unknown` for a type it does not name | 98 |
+  | 11 | `resistTypeDesc`: the resist type's name, MacroQuest's `${Spell.ResistType}` text (`Unresistable` for 0, `Magic`, `Fire`, `Cold`, ...), `Unknown` for a type it does not name | 85 |
+  | 12 | the category's name: dbstr_us.txt type 5, as MacroQuest's `${Spell.Category}` gives it, `Unknown` for 0 or one the game folder's file lacks | 156 |
+  | 13 | the subcategory's name, the same way | 157 |
+  | 14 | the second subcategory's name, the same way | 158 |
+  | 15.. | any strings a later client appends, up to `stringCount`: skip the ones you do not know | |
+  | then | the effect lines, `effectCount` of them | |
+
+  Read `stringCount` strings, never a fixed number: the effect lines start after the last of them, so a plugin
+  built against this header keeps reading a later client's records correctly.
+
+  The effect lines are MacroQuest's `ParseSpellEffect` text for each slot that has one, in slot order,
+  `Slot <n>: ...` (for example `Slot 1: Increase HP by 11 (L1) to 20 (L10)`); a slot with nothing to show (SPA 254,
+  the teleport's location slots) has no line. The value ranges run to level 100, as MacroQuest's `/spellslotinfo`
+  shows them. Spell names in the text are the client's (`Unknown Spell` for one it has not); skill and faction names
+  come from the game folder's string tables (`Unknown[n]`, `Unknown Faction[n]` without one); a summoned item reads
+  `[  id]`, since the client keeps no item database. The text is ported from MacroQuest
+  (game/spell_effect_text.cpp).
+
+  Below 4 bytes nothing is written and 0 comes back; with no game connection, or no ids, the count alone (0). A
+  plugin without `read` gets 0 bytes. A record is 265 bytes plus 240 for its 12 effect slots, 16 for its class levels, its texts and lines, a few hundred bytes for a
+  stock spell, so about 1500 bytes per id is ample. Added later in ABI 3: test
+  `HAILSTONE_HOST_HAS(host, get_spells_data_bulk)` first.
 
 ### Connections (ABI 2)
 
