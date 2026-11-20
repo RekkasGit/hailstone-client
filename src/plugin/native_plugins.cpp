@@ -2171,25 +2171,27 @@ int32_t h_get_avail_disc_data_bulk(void* h, unsigned char* data, int32_t datamax
 }
 
 static_assert(sizeof(HS_BulkSpellFixedRecord) == HS_BULK_SPELL_RECORD_SIZE);
+static_assert(sizeof(HS_BulkSpellSlot) == HS_BULK_SPELL_SLOT_SIZE);
 
 /// <summary>
 /// Spells by id in one call: an int32_t count, then for each of the id_count ids, in order, an HS_Bulk_SpellFixedRecord
-/// (the spell's spells_us.txt fields, game::SpellData's) followed by fourteen length-prefixed strings and effectCount
-/// effect lines. The strings: the name, target or model text, teleport zone, the four cast texts and the wear-off
-/// text; the description (filled in for the player for one of their own spells: spell book, disciplines, owned AAs;
-/// dbstr_us.txt's unfilled text for any other); then the names of the target type, resist type, category, subcategory
-/// and second subcategory. The effect lines are MacroQuest's ParseSpellEffect text for each slot that has one
-/// (game/spell_effect_text.h). An id the client has no spell for gets the fixed record alone, found 0. recordSize
-/// gives each record's whole size. Only whole records go out, as many as fit after the count, none after the first
-/// that does not; count below id_count means the buffer was too small. Nothing (0 bytes) when not even the count
-/// fits; the count alone (0) with no game connection or no ids.
+/// (the spell's spells_us.txt fields, game::SpellData's) followed by its effect slots (slotCount HS_BulkSpellSlot, 12
+/// on RoF2), its class levels (classCount bytes, 16 on RoF2), fourteen length-prefixed strings and effectCount effect
+/// lines. The strings: the name, target or model
+/// text, teleport zone, the four cast texts and the wear-off text; the description (filled in for the player for one
+/// of their own spells: spell book, disciplines, owned AAs; dbstr_us.txt's unfilled text for any other); then the
+/// names of the target type, resist type, category, subcategory and second subcategory. The effect lines are
+/// MacroQuest's ParseSpellEffect text for each slot that has one (game/spell_effect_text.h). An id the client has no
+/// spell for gets the fixed record alone, found 0. recordSize gives each record's whole size. Only whole records go
+/// out, as many as fit after the count, none after the first that does not; count below id_count means the buffer was
+/// too small. Nothing (0 bytes) when not even the count fits; the count alone (0) with no game connection or no ids.
 /// </summary>
 /// <param name="h">host</param>
 /// <param name="ids">the spell ids</param>
 /// <param name="id_count">how many ids</param>
 /// <param name="data">buffer to put data in</param>
-/// <param name="datamax">4 bytes for the count, 509 per record and its strings: a spell's texts and its effect lines
-/// run to a few hundred bytes more, so about 1500 bytes per id holds any stock spell</param>
+/// <param name="datamax">4 bytes for the count, then per spell 265 bytes, 240 for its 12 slots, 16 for its class
+/// levels, and its texts and effect lines, a few hundred bytes more: about 1500 bytes per id holds any stock spell</param>
 /// <returns>bytes written; 0 below 4 bytes</returns>
 int32_t h_get_spells_data_bulk(void* h, const int32_t* ids, int32_t id_count, unsigned char* data, int32_t datamax)
 {
@@ -2214,6 +2216,7 @@ int32_t h_get_spells_data_bulk(void* h, const int32_t* ids, int32_t id_count, un
                                 : std::string();
         };
         const std::size_t fixedBytes = sizeof(HS_BulkSpellFixedRecord);
+        const std::size_t slotBytes = sizeof(HS_BulkSpellSlot);
         // The player's own spells get their description as the spell display shows it to the player: those in the
         // spell book, the disciplines and the spells of the AAs the player owns (activated ones cast one).
         const auto& describe = l.host->env.spell_description;
@@ -2261,6 +2264,9 @@ int32_t h_get_spells_data_bulk(void* h, const int32_t* ids, int32_t id_count, un
                 category = category_name(sp->category);
                 subcategory = category_name(sp->subcategory);
                 subcategory2 = category_name(sp->subcategory2);
+                // Every slot the spell has, 12 on RoF2: counted, so a spell with more needs no new layout.
+                recordBytes += sp->effect.size() * slotBytes;
+                recordBytes += sp->class_level.size(); // one byte a class, 16 on RoF2: counted as the slots are
                 recordBytes += str16_size(sp->name) + str16_size(sp->player_1) + str16_size(sp->teleport_zone)
                     + str16_size(sp->cast_by_me) + str16_size(sp->cast_by_other) + str16_size(sp->cast_on_you)
                     + str16_size(sp->cast_on_other) + str16_size(sp->wear_off) + str16_size(description)
@@ -2276,6 +2282,7 @@ int32_t h_get_spells_data_bulk(void* h, const int32_t* ids, int32_t id_count, un
             *rec = HS_BulkSpellFixedRecord{}; // an unknown id: found 0, the rest 0
             rec->recordSize = static_cast<int32_t>(recordBytes);
             rec->id = id;
+            rec->slotSize = static_cast<int32_t>(slotBytes); // set even for found 0, as the reader steps by it
             pBuffer += fixedBytes;
             if (sp) {
                 const game::SpellData& s = *sp;
@@ -2291,13 +2298,6 @@ int32_t h_get_spells_data_bulk(void* h, const int32_t* ids, int32_t id_count, un
                 rec->durationCap = static_cast<int32_t>(s.duration_cap);
                 rec->aeDuration = static_cast<int32_t>(s.ae_duration);
                 rec->mana = s.mana;
-                for (std::size_t k = 0; k < 12; ++k) {
-                    rec->base[k] = s.base[k];
-                    rec->base2[k] = s.base2[k];
-                    rec->max[k] = s.max[k];
-                    rec->formula[k] = s.formula[k];
-                    rec->effect[k] = s.effect[k];
-                }
                 rec->bookIcon = s.book_icon;
                 rec->gemIcon = s.gem_icon;
                 for (std::size_t k = 0; k < 4; ++k) {
@@ -2354,6 +2354,8 @@ int32_t h_get_spells_data_bulk(void* h, const int32_t* ids, int32_t id_count, un
                 if (s.no_remove)              flags |= HS_BULK_SPELL_NO_REMOVE;
                 if (s.only_during_fast_regen) flags |= HS_BULK_SPELL_ONLY_DURING_FAST_REGEN;
                 rec->flags = flags;
+                rec->slotCount = static_cast<int32_t>(s.effect.size());
+                rec->classCount = static_cast<int32_t>(s.class_level.size());
                 rec->stringCount = HS_BULK_SPELL_STRINGS; // the write_str16 calls below
                 rec->effectCount = static_cast<int32_t>(lines.size());
                 rec->lightType = s.light_type;
@@ -2369,8 +2371,20 @@ int32_t h_get_spells_data_bulk(void* h, const int32_t* ids, int32_t id_count, un
                 rec->castingAnim = s.casting_anim;
                 rec->targetAnim = s.target_anim;
                 rec->travelType = s.travel_type;
-                for (std::size_t k = 0; k < 16; ++k) rec->classLevel[k] = s.class_level[k];
 
+                for (std::size_t k = 0; k < s.effect.size(); ++k) {
+                    // Written in place through the packed struct, as the record.
+                    HS_BulkSpellSlot* slot = reinterpret_cast<HS_BulkSpellSlot*>(pBuffer);
+                    slot->effect = s.effect[k];
+                    slot->base = s.base[k];
+                    slot->base2 = s.base2[k];
+                    slot->max = s.max[k];
+                    slot->formula = s.formula[k];
+                    pBuffer += slotBytes;
+                }
+                // The level each class gets the spell at, class 1 first, as the file gives it (255 or 0: cannot use).
+                std::memcpy(pBuffer, s.class_level.data(), s.class_level.size());
+                pBuffer += s.class_level.size();
                 write_str16(pBuffer, s.name);
                 write_str16(pBuffer, s.player_1);
                 write_str16(pBuffer, s.teleport_zone);

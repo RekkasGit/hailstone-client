@@ -344,8 +344,14 @@ typedef struct HS_Bulk_RaidData {
 
 /* get_spells_data_bulk: an int32_t count (HS_BULK_SPELL_HEADER_SIZE bytes), then `count` records, one per spell id
  * asked for, in the order asked. A record is an HS_Bulk_SpellFixedRecord (HS_BULK_SPELL_RECORD_SIZE bytes), then
- * stringCount strings, then effectCount effect lines, each a uint16_t length and that many bytes (no NUL), as
+ * slotCount effect slots (HS_Bulk_SpellSlot, slotSize bytes apart), then classCount class levels (one uint8_t each,
+ * class 1 first: the level the class gets the spell, 255 or 0 when it cannot use it), then stringCount strings, then
+ * effectCount effect lines, each string and line a uint16_t length and that many bytes (no NUL), as
  * get_spawns_data_bulk's strings. Step from record to record by recordSize.
+ *
+ * The slots and class levels are counted, not fixed arrays, so a server that offers more than RoF2's 12 slots or 16
+ * classes can send them (an extension past RoF2; a stock server's spells have 12 and 16). Read slotCount slots,
+ * stepping by slotSize, then classCount bytes.
  *
  * The strings, in order (HS_BULK_SPELL_STRINGS of them today): the name; the target or model text (spells_us.txt
  * column 2); the teleport zone or pet name (column 3, MacroQuest's Extra); the cast-by-me, cast-by-other,
@@ -358,8 +364,8 @@ typedef struct HS_Bulk_RaidData {
  * the ones this header knows and skip the rest; the effect lines follow the last.
  *
  * The effect lines are MacroQuest's ParseSpellEffect text for each effect slot that has one, in slot order ("Slot 1:
- * Increase HP by 30"). An id the client has no spell for gets a record with found 0, its other fields 0 (stringCount
- * and effectCount among them) and nothing after it. Only whole records go out: count less than the ids asked for
+ * Increase HP by 30"). An id the client has no spell for gets a record with found 0, its other fields 0 (slotCount,
+ * classCount, stringCount and effectCount among them; slotSize is still set) and nothing after it. Only whole records go out: count less than the ids asked for
  * means out_size was too small for the next one. The fields follow game::SpellData (spells_us.txt's columns); the
  * yes/no columns are bits of flags. docs/plugins.md gives each field's offset and column. */
 enum HS_BulkSpellFlags {
@@ -384,11 +390,12 @@ enum HS_BulkSpellFlags {
     HS_BULK_SPELL_ONLY_DURING_FAST_REGEN = 1 << 17
 };
 #define HS_BULK_SPELL_HEADER_SIZE 4
-#define HS_BULK_SPELL_RECORD_SIZE 509
+#define HS_BULK_SPELL_RECORD_SIZE 265
+#define HS_BULK_SPELL_SLOT_SIZE 20
 #define HS_BULK_SPELL_STRINGS 14 /* the strings this header knows; a record says how many it holds */
 #pragma pack(push, 1)
 typedef struct HS_Bulk_SpellFixedRecord {
-    int32_t recordSize; /* this record's bytes, its strings included; the next record starts here */
+    int32_t recordSize; /* this record's bytes, everything after it included; the next record starts here */
     int32_t id;         /* the spell id asked for */
     int32_t found;      /* 1 the client holds the spell; 0 it does not (the rest 0, no strings follow) */
     float range;
@@ -402,11 +409,6 @@ typedef struct HS_Bulk_SpellFixedRecord {
     int32_t durationCap; /* ticks */
     int32_t aeDuration;
     int32_t mana;
-    int32_t base[12];
-    int32_t base2[12];
-    int32_t max[12];
-    int32_t formula[12];
-    int32_t effect[12]; /* SPA ids; 254 unused */
     int32_t bookIcon;
     int32_t gemIcon;
     int32_t reagentId[4];
@@ -442,7 +444,10 @@ typedef struct HS_Bulk_SpellFixedRecord {
     float distanceModEndMod;
     float minRange;
     uint32_t flags;      /* HS_BULK_SPELL_* */
-    int32_t stringCount; /* strings after this record: HS_BULK_SPELL_STRINGS today, 0 for found 0 (see above) */
+    int32_t slotCount;   /* effect slots after this record: 12 on RoF2; 0 for found 0 */
+    int32_t slotSize;    /* bytes between slots, HS_BULK_SPELL_SLOT_SIZE today; may grow, so step by it */
+    int32_t classCount;  /* class levels after the slots, one byte each: 16 on RoF2; 0 for found 0 */
+    int32_t stringCount; /* strings after the class levels: HS_BULK_SPELL_STRINGS today, 0 for found 0 (see above) */
     int32_t effectCount; /* effect lines after the strings */
     uint8_t lightType;
     uint8_t spellType; /* 0 detrimental, 1 beneficial, 2 beneficial group-only */
@@ -457,8 +462,16 @@ typedef struct HS_Bulk_SpellFixedRecord {
     uint8_t castingAnim;
     uint8_t targetAnim;
     uint8_t travelType;
-    uint8_t classLevel[16]; /* class 1..16; 255 or 0 cannot use */
 } HS_BulkSpellFixedRecord;
+/* One effect slot, slot 1 first: the five values RoF2's spells_us.txt gives each slot (columns 86.., 20.., 32..,
+ * 44.., 70.. for slot 1). A later client may append fields: read only those slotSize covers. */
+typedef struct HS_Bulk_SpellSlot {
+    int32_t effect;  /* the SPA id; 254 unused */
+    int32_t base;
+    int32_t base2;   /* the limit */
+    int32_t max;
+    int32_t formula; /* the value formula (calc) */
+} HS_BulkSpellSlot;
 #pragma pack(pop)
 /* A TLO the plugin adds (AddTopLevelObject): asked for ${Name[index]} (member NULL: the TLO's own value) and for
  * ${Name[index].Member[member_index]}. Return nonzero when `out` was set; zero is NULL. */

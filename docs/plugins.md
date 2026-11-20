@@ -1008,16 +1008,16 @@ size nothing is written and 0 comes back; with nothing to list the header alone 
   points at `id_count` spell ids (`const int32_t*`). `out` gets an i32 `count` (`HS_BULK_SPELL_HEADER_SIZE` = 4
   bytes), then one record per id, in the order asked, as many whole records as fit: `count` below `id_count` means
   `out_size` was too small for the next one, so call again for the rest. Each record is an
-  `HS_Bulk_SpellFixedRecord` (`HS_BULK_SPELL_RECORD_SIZE` = 509 bytes) and, for a spell the client holds, the
+  `HS_Bulk_SpellFixedRecord` (`HS_BULK_SPELL_RECORD_SIZE` = 265 bytes) and, for a spell the client holds, the
   strings after it; step from record to record by its `recordSize`, never a fixed stride. An id the client has no
   spell for (not in spells_us.txt, 0 or negative) gets the fixed record alone, `found` 0 and the rest 0.
 
-  Fixed record (`HS_Bulk_SpellFixedRecord`, `HS_BULK_SPELL_RECORD_SIZE` = 509 bytes). The column is the field's in
+  Fixed record (`HS_Bulk_SpellFixedRecord`, `HS_BULK_SPELL_RECORD_SIZE` = 265 bytes). The column is the field's in
   spells_us.txt, as the client reads it into `game::SpellData`; an array's columns run on from the one given.
 
   | Offset | Type | Field | Column |
   |---|---|---|---|
-  | 0 | i32 | `recordSize`: this record's bytes, its strings and lines included; the next record starts here | |
+  | 0 | i32 | `recordSize`: this record's bytes, everything after it included (slots, class levels, strings, lines); the next record starts here | |
   | 4 | i32 | `id`: the spell id asked for | 0 |
   | 8 | i32 | `found`: 1 the client holds the spell, 0 it does not (every field after is 0 and nothing follows) | |
   | 12 | f32 | `range` | 9 |
@@ -1031,63 +1031,60 @@ size nothing is written and 0 comes back; with nothing to list the header alone 
   | 44 | i32 | `durationCap`, ticks | 17 |
   | 48 | i32 | `aeDuration` | 18 |
   | 52 | i32 | `mana` | 19 |
-  | 56 | i32[12] | `base`, per effect slot | 20..31 |
-  | 104 | i32[12] | `base2` (limit) | 32..43 |
-  | 152 | i32[12] | `max` | 44..55 |
-  | 200 | i32[12] | `formula` | 70..81 |
-  | 248 | i32[12] | `effect`: SPA ids, 254 unused | 86..97 |
-  | 296 | i32 | `bookIcon` | 56 |
-  | 300 | i32 | `gemIcon` | 57 |
-  | 304 | i32[4] | `reagentId` | 58..61 |
-  | 320 | i32[4] | `reagentCount` | 62..65 |
-  | 336 | i32[4] | `noExpendReagent` | 66..69 |
-  | 352 | i32 | `spaIndex` | 123 |
-  | 356 | u32 | `deityMask`: bit n set when column 125 + n is; 0 any deity | 125..141 |
-  | 360 | i32 | `spellIcon` | 144 |
-  | 364 | i32 | `spellAnim` | 145 |
-  | 368 | i32 | `resistAdj` | 147 |
-  | 372 | i32 | `recourseLink` | 150 |
-  | 376 | i32 | `descriptionId` (dbstr type 6; its text is the ninth string) | 155 |
-  | 380 | i32 | `category` (dbstr type 5; its name is the twelfth string) | 156 |
-  | 384 | i32 | `subcategory` | 157 |
-  | 388 | i32 | `subcategory2` | 158 |
-  | 392 | i32 | `enduranceCost` | 166 |
-  | 396 | i32 | `reuseTimerIndex` | 167 |
-  | 400 | i32 | `enduranceUpkeep` | 174 |
-  | 404 | i32 | `hitCountType` | 175 |
-  | 408 | i32 | `hitCount` | 176 |
-  | 412 | i32 | `globalGroup` | 180 |
-  | 416 | i32 | `pcnpcOnly` | 183 |
-  | 420 | i32 | `spellGroup` | 207 |
-  | 424 | i32 | `spellRank` | 208 |
-  | 428 | i32 | `spellSubgroup` | 236 |
-  | 432 | i32 | `reqAssociation` | 211 |
-  | 436 | i32 | `spellClass` | 221 |
-  | 440 | i32 | `spellSubclass` | 222 |
-  | 444 | i32 | `maxTargets`: an AE's target cap, 0 none | 218 |
-  | 448 | f32 | `distanceModStartX` | 227 |
-  | 452 | f32 | `distanceModStartMod` | 228 |
-  | 456 | f32 | `distanceModEndX` | 229 |
-  | 460 | f32 | `distanceModEndMod` | 230 |
-  | 464 | f32 | `minRange` | 231 |
-  | 468 | u32 | `flags`: the yes/no columns, below | |
-  | 472 | i32 | `stringCount`: the strings after this record, `HS_BULK_SPELL_STRINGS` (14) today; 0 for `found` 0 | |
-  | 476 | i32 | `effectCount`: the effect lines after the strings | |
-  | 480 | u8 | `lightType` | 82 |
-  | 481 | u8 | `spellType`: 0 detrimental, 1 beneficial, 2 beneficial group-only | 83 |
-  | 482 | u8 | `activated` | 84 |
-  | 483 | u8 | `resist` | 85 |
-  | 484 | u8 | `targetType` | 98 |
-  | 485 | u8 | `castDifficulty` | 99 |
-  | 486 | u8 | `skill` | 100 |
-  | 487 | u8 | `zoneType` | 101 |
-  | 488 | u8 | `environment` | 102 |
-  | 489 | u8 | `timeOfDay` | 103 |
-  | 490 | u8 | `castingAnim` | 120 |
-  | 491 | u8 | `targetAnim` | 121 |
-  | 492 | u8 | `travelType` | 122 |
-  | 493 | u8[16] | `classLevel`: classes 1..16, 255 (or 0) cannot use | 104..119 |
-  | 509 | | the strings, for a found spell | |
+  | 56 | i32 | `bookIcon` | 56 |
+  | 60 | i32 | `gemIcon` | 57 |
+  | 64 | i32[4] | `reagentId` | 58..61 |
+  | 80 | i32[4] | `reagentCount` | 62..65 |
+  | 96 | i32[4] | `noExpendReagent` | 66..69 |
+  | 112 | i32 | `spaIndex` | 123 |
+  | 116 | u32 | `deityMask`: bit n set when column 125 + n is; 0 any deity | 125..141 |
+  | 120 | i32 | `spellIcon` | 144 |
+  | 124 | i32 | `spellAnim` | 145 |
+  | 128 | i32 | `resistAdj` | 147 |
+  | 132 | i32 | `recourseLink` | 150 |
+  | 136 | i32 | `descriptionId` (dbstr type 6; its text is the ninth string) | 155 |
+  | 140 | i32 | `category` (dbstr type 5; its name is the twelfth string) | 156 |
+  | 144 | i32 | `subcategory` | 157 |
+  | 148 | i32 | `subcategory2` | 158 |
+  | 152 | i32 | `enduranceCost` | 166 |
+  | 156 | i32 | `reuseTimerIndex` | 167 |
+  | 160 | i32 | `enduranceUpkeep` | 174 |
+  | 164 | i32 | `hitCountType` | 175 |
+  | 168 | i32 | `hitCount` | 176 |
+  | 172 | i32 | `globalGroup` | 180 |
+  | 176 | i32 | `pcnpcOnly` | 183 |
+  | 180 | i32 | `spellGroup` | 207 |
+  | 184 | i32 | `spellRank` | 208 |
+  | 188 | i32 | `spellSubgroup` | 236 |
+  | 192 | i32 | `reqAssociation` | 211 |
+  | 196 | i32 | `spellClass` | 221 |
+  | 200 | i32 | `spellSubclass` | 222 |
+  | 204 | i32 | `maxTargets`: an AE's target cap, 0 none | 218 |
+  | 208 | f32 | `distanceModStartX` | 227 |
+  | 212 | f32 | `distanceModStartMod` | 228 |
+  | 216 | f32 | `distanceModEndX` | 229 |
+  | 220 | f32 | `distanceModEndMod` | 230 |
+  | 224 | f32 | `minRange` | 231 |
+  | 228 | u32 | `flags`: the yes/no columns, below | |
+  | 232 | i32 | `slotCount`: the effect slots after this record, 12 on RoF2; 0 for `found` 0 | |
+  | 236 | i32 | `slotSize`: the bytes between slots, `HS_BULK_SPELL_SLOT_SIZE` (20) today; step by it | |
+  | 240 | i32 | `classCount`: the class levels after the slots, one byte each, 16 on RoF2; 0 for `found` 0 | |
+  | 244 | i32 | `stringCount`: the strings after the class levels, `HS_BULK_SPELL_STRINGS` (14) today; 0 for `found` 0 | |
+  | 248 | i32 | `effectCount`: the effect lines after the strings | |
+  | 252 | u8 | `lightType` | 82 |
+  | 253 | u8 | `spellType`: 0 detrimental, 1 beneficial, 2 beneficial group-only | 83 |
+  | 254 | u8 | `activated` | 84 |
+  | 255 | u8 | `resist` | 85 |
+  | 256 | u8 | `targetType` | 98 |
+  | 257 | u8 | `castDifficulty` | 99 |
+  | 258 | u8 | `skill` | 100 |
+  | 259 | u8 | `zoneType` | 101 |
+  | 260 | u8 | `environment` | 102 |
+  | 261 | u8 | `timeOfDay` | 103 |
+  | 262 | u8 | `castingAnim` | 120 |
+  | 263 | u8 | `targetAnim` | 121 |
+  | 264 | u8 | `travelType` | 122 |
+  | 265 | | the effect slots, the class levels, then the strings | |
 
   `flags` (`HS_BULK_SPELL_*`, bit: column):
 
@@ -1112,7 +1109,24 @@ size nothing is written and 0 comes back; with nothing to list the header alone 
   | 16 | `NO_REMOVE` | 232 |
   | 17 | `ONLY_DURING_FAST_REGEN` | 234 |
 
-  After a found spell's fixed record come `stringCount` strings and then `effectCount` effect lines,
+  After a found spell's fixed record come `slotCount` effect slots, slot 1 first, each an `HS_Bulk_SpellSlot` and
+  `slotSize` bytes from the next. The slots are counted rather than fixed arrays, so a server that offers more than
+  RoF2's 12 can send them (an extension past RoF2; a stock server's spells have 12). Step by `slotSize` and read only
+  the fields it covers: a later client may append some.
+
+  | Offset | Type | Field | Column for slot n (1..12) |
+  |---|---|---|---|
+  | 0 | i32 | `effect`: the SPA id, 254 unused | 85 + n |
+  | 4 | i32 | `base` | 19 + n |
+  | 8 | i32 | `base2` (the limit) | 31 + n |
+  | 12 | i32 | `max` | 43 + n |
+  | 16 | i32 | `formula` (the value formula) | 69 + n |
+
+  Then come `classCount` class levels, one u8 each, class 1 first (column 103 + n for class n): the level class n
+  gets the spell at, 255 or 0 when it cannot use it. Counted for the same reason as the slots: a server with more
+  than RoF2's 16 classes can send them (an extension past RoF2).
+
+  Then come `stringCount` strings and then `effectCount` effect lines,
   each a u16 length and that many bytes with no NUL, as `get_spawns_data_bulk`'s strings:
 
   | # | String | Column |
@@ -1146,7 +1160,7 @@ size nothing is written and 0 comes back; with nothing to list the header alone 
   (game/spell_effect_text.cpp).
 
   Below 4 bytes nothing is written and 0 comes back; with no game connection, or no ids, the count alone (0). A
-  plugin without `read` gets 0 bytes. A record is 509 bytes plus its texts and lines, a few hundred bytes for a
+  plugin without `read` gets 0 bytes. A record is 265 bytes plus 240 for its 12 effect slots, 16 for its class levels, its texts and lines, a few hundred bytes for a
   stock spell, so about 1500 bytes per id is ample. Added later in ABI 3: test
   `HAILSTONE_HOST_HAS(host, get_spells_data_bulk)` first.
 
