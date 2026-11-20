@@ -18,6 +18,7 @@
 - A server's marquee text shows in the large centre-screen text, and its camera effect shakes the drawn camera for as long as it asks
   - They arrive as the zone packets OP_Marquee and OP_CameraEffect; a marquee never adds a chat line
   - The shake moves only the camera, never the player, and a zone change ends it
+- Modern hotbars: **Lock layout** keeps hotbuttons in their slots and blocks edits while leaving activation and page changes available.
 - Item comparison, in both interfaces: an item's tooltip and details window show what wearing it instead of what you wear would change
   - Tooltips cover the inventory, bags, bank, loot, trade and a merchant's goods; the details window covers a linked item too
   - In the details window each stat's change sits beside the item's value (+12 in green beside AC 20, say), with the verdict and what it is compared with above the stats
