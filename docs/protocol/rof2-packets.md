@@ -357,7 +357,7 @@ Only OP_ShopPlayerBuy/Sell (field copies) and OP_CancelTrade have a RoF2 transla
 | ShopPlayerBuy | C→Z | 0x0ddd | 32 B Merchant_Sell_Struct: u32 merchant, u32 me, u32 item slot (the item's instance id) + u32 high dword (0), u32 quantity, 12 bytes unset (0). Refused locally with an item on the cursor (8548) or too little money (12060/12061) |
 | ShopPlayerBuy | Z→C | 0x0ddd | same, quantity bought, u32 total price at +24. See note 2 |
 | ShopPlayerSell | C→Z | 0x791b | 20 B Merchant_Purchase_Struct: u32 merchant, TypelessInventorySlot {i16 slot, i16 bag sub-slot, i16 augment, i16}, u32 quantity, u32 price (unset by the client; 0). Refused locally: not droppable 12062, a non-empty bag 12064, augmented 5360, a sale pending 12063 |
-| ShopPlayerSell | Z→C | 0x791b | same with the copper paid; slot -1 = refused (1364). The sold count leaves the stack (no item packet), 1361 "You receive%1 from %2 for the %3(s).", then OP_MoneyUpdate with the new coin |
+| ShopPlayerSell | Z→C | 0x791b | same with the copper paid; slot -1 = refused (1364, colour 0x113). The sold count leaves the stack (no item packet); the copper is credited, wave 0x8a (the cash register) plays and 1361 "You receive%1 from %2 for the %3(s)." prints in the Merchants colour 0x114 (FinishSellingItem @0x6f4200), then OP_MoneyUpdate with the new coin |
 | ShopEnd | C→Z | 0x30a8 | 8 B: u32 merchant, u32 me; answered by an empty OP_ShopEndConfirm (0x3196) |
 | ShopDelItem | Z→C | 0x724f | 12 B: u32 merchant, u32 player, u32 merchant slot (sold out) |
 | TradeRequest | both | 0x77b5 | 8 B: u32 the other side, u32 the sender. See note 3 |
@@ -371,7 +371,7 @@ Only OP_ShopPlayerBuy/Sell (field copies) and OP_CancelTrade have a RoF2 transla
 | ItemLinkClick (say link) | C→Z | 0x4cef | the ordinary OP_ItemLinkClick; the server says the phrase. See note 6 |
 
 1. ShopRequest stock: item packets type 0x64 (header slot type 9, slot = instance id = merchant slot, price = per-unit copper, merchant_slot = stock, -1 unlimited).
-2. ShopPlayerBuy reply: the item arrives first as an item packet type 0x67. There is **no** OP_MoneyUpdate: the client takes the price itself (smallest coins first; the split may differ from the server's, the total agrees) and prints 1437 "You give%1 to %2.".
+2. ShopPlayerBuy reply: the item arrives first as an item packet type 0x67. There is **no** OP_MoneyUpdate: the client takes the price itself (smallest coins first; the split may differ from the server's, the total agrees) and prints 1437 "You give%1 to %2." in the Merchants colour 0x114. Wave 0x8a (the cash register) plays only when the purse could pay; otherwise the coin is zeroed silently (FinishBuyingItem @0x6ef220, also a trader purchase, TraderShop 10 method 0).
 3. TradeRequest C→Z is sent on a left click on a spawn while holding an item (within AvatarHeight + 20, 12294). Banker-type classes 40/63/64/66/74 refuse (8505). Z→C (a player asks): the client opens its trade window at once and answers the Ack.
 4. TradeRequestAck: for an NPC the server answers itself ({me, NPC}); the cursor item then goes into the trade (OP_MoveItem cursor → {3, slot}, count 0; a stack merges first) and the 4-slot give window opens. Players get the 8-slot trade window.
 5. CancelTrade: the client prints 1448/1450 and sends its own cancel back while a partner is set. Refunds come as item packets and OP_MoneyUpdate, then OP_FinishWindow/2 (empty).

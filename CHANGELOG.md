@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Buying from or selling to a merchant, and buying from a trader, plays the cash register and prints the line in the Merchants chat colour, as in the original
 - Your own name is in parentheses while you are hidden, as in the original client (it was plain). Sneak alone adds none
 - The sample `hailstone.cfg` now includes the Ability Book's autoskill switch, and the server guide shows how to disable autoskill and Lua socials
 - Loot All takes NO DROP items from your own corpse without confirmation after a same-zone resurrection
