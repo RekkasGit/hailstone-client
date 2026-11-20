@@ -23,10 +23,12 @@ A script manifest may opt into managed startup with `autoload 1` (scripts only).
 
 ## What the player sees
 
-**Add-ons** on the login screen opens a card in the Modern pack (beside the characters card, open until Close), a page
-under More in the Gamepad pack, or a window in the client's own ImGui screen. All three draw `ui::LoginView::addons`
-(`view.addons` in Lua, app/lua_ui_pregame.cpp). The Modern card has two tabs: **Find add-ons** (the store, below),
-where it opens, and **My add-ons** (the list).
+**Add-ons** on the login screen opens a card in the Modern pack, a page under More in the Gamepad pack, or a window
+in the client's own ImGui screen. All three draw `ui::LoginView::addons` (`view.addons` in Lua,
+app/lua_ui_pregame.cpp). The Modern card opens beside the login and character cards when they fit side by side; in a
+narrower window it opens on its own, with **Close** near the top to return to login. The Modern login and Add-ons
+cards scroll when their contents exceed the available height. The Modern card has two tabs: **Find add-ons** (the
+store, below), where it opens, and **My add-ons** (the list).
 
 **Find add-ons** lists every add-on of the add-on index (see Finding add-ons). A pasted link (below the store in the
 Modern pack) works for any add-on.

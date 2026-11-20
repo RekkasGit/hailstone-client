@@ -74,6 +74,7 @@
 - Context submenus now open to the left when they run out of room on the right. Nested menus such as the spell picker keep cascading in that direction while there is room.
 - Chat and socials expand `%T`, `%M`, `%S`, `%O`, `%P` and `%R` in either case, using the target and pet at the time the line runs
 - Chat codes: `%T`, `%M`, `%S`, `%O`, `%P` and `%R`, in either case, become the target's name, your pet's name, the target's pronouns and its race in what you say, tell, emote and send to chat channels, in socials, and in the names given to `/assist` and `/shield`, as on the original client. Each line uses the target and pet it has when it runs
+- Modern login: Add-ons opens on its own when the cards cannot fit side by side, and the login and Add-ons cards scroll in short windows
 
 ## 0.7.2-beta (2026-11-19)
 
