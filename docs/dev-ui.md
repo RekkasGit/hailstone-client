@@ -78,6 +78,15 @@ Chat Here, the tell menus, Filters, Channel, Language, Hit Modes); the tab rows,
 Tell Windows and Timestamps are Hailstone's and follow. Rename Window renames the frame, Rename Tab the chat window it
 shows; both take 15 characters, as the original's. Checked: CChatWindowManager::InitContextMenu @0x6513c0.
 
+The output's text can be selected with the mouse and copied, a Hailstone addition (`ui/modern/lib/textselect.lua`):
+drag to select, double-click for a word, triple-click for the line, Shift+click to extend. A plain click clears it;
+a click on a link follows the link, and Alt+drag still moves the frame. Dragging above or below the output scrolls it.
+**Ctrl+C** copies while the chat window has the focus and its input does not (the input copies its own text), and the
+menu's last row, **Copy**, does the same. The text is what the lines show, timestamps and link names included, one
+chat line to a line. The selection follows its lines as new ones arrive, and goes when the tab changes, the window
+is cleared or its lines have all scrolled out of the buffer. While a selection exists, the window has the focus and
+Ctrl is held, the keys are the UI's, so a Ctrl key bind does not also fire.
+
 Tabs are kept in the character's `UI.ini` `[ChatManager]` beside the original's keys: `ChatWindow<n>_Group` (the
 frame, 1..32), `_TabOrder`, `_Highlight` and `_HighlightColor` per chat window, and `ChatGroup<g>_Selected` and
 `_Name` per frame. An older file (`ChatWindow<n>_Dock` and `_Up`) loads as it was: a docked window becomes a tab of

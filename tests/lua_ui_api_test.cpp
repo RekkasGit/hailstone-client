@@ -709,6 +709,7 @@ TEST_CASE("Lua UI: STML wraps are kept until the width changes, and match the pe
     const fs::path ui_src = fs::path(__FILE__).parent_path().parent_path() / "ui";
     if (!fs::exists(ui_src / "modern" / "lib" / "stml.lua")) return; // an installed test binary run away from the sources
     fs::copy_file(ui_src / "modern" / "lib" / "stml.lua", dir / "lib" / "stml.lua");
+    fs::copy_file(ui_src / "modern" / "lib" / "textselect.lua", dir / "lib" / "textselect.lua");
     fs::copy_file(ui_src / "gamepad" / "lib" / "stml.lua", dir / "lib" / "gpstml.lua");
     // (both libraries' theme, the colours they read)
     std::ofstream(dir / "lib" / "theme.lua")
@@ -741,7 +742,7 @@ local function reference(segments, width)
 end
 local function kept(segments)
   local r, p = {}, segments.wrap
-  for i = 1, #p, 4 do r[#r + 1] = p[i] .. (p[i + 3] and "|row" or "") end
+  for i = 1, #p, 6 do r[#r + 1] = p[i] .. (p[i + 3] and "|row" or "") end
   return table.concat(r, ",")
 end
 local line = stml.Parse('<c "#ff0000">one two three  four five six seven eight nine ten</c> <a WndNotify="27,x">a link name</a> end')
@@ -886,6 +887,7 @@ TEST_CASE("Lua UI: STML href links, an unclosed quote ending at the tag's end") 
     const fs::path ui_src = fs::path(__FILE__).parent_path().parent_path() / "ui";
     if (!fs::exists(ui_src / "modern" / "lib" / "stml.lua")) return; // an installed test binary run away from the sources
     fs::copy_file(ui_src / "modern" / "lib" / "stml.lua", dir / "lib" / "stml.lua");
+    fs::copy_file(ui_src / "modern" / "lib" / "textselect.lua", dir / "lib" / "textselect.lua");
     std::ofstream(dir / "lib" / "theme.lua")
         << "local c = { link = { 0, 0, 1, 1 }, text = { 1, 1, 1, 1 } }\n"
            "return { color = c, C = c, text = function(x, y, t) return ui.CalcTextSize(t) end }\n";
@@ -939,6 +941,148 @@ out.lt = plain("a < b") .. "|" .. plain('<c "#ff0000">x &amp; <3') .. "|" .. pla
         CHECK(get("notify") == "item=27,x");
         CHECK(get("plain") == "here=plain");
         CHECK(get("lt") == "a < b|x & <3|one two three"); // a "<" that opens no tag is text
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// The chat output's text selection (ui/modern/lib/textselect.lua, drawn by ui/modern/lib/stml.lua): words, the
+// character under the mouse never splitting a UTF-8 sequence, multiple clicks, the selected text across lines and
+// past lines that have gone, and, drawn, the place under the mouse on a wrapped line's rows.
+TEST_CASE("Lua UI: chat text selection finds the place under the mouse and the selected text") {
+    hailstone::test::ScratchDir scratch("lua_ui_api_textselect_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir / "lib");
+    const fs::path ui_src = fs::path(__FILE__).parent_path().parent_path() / "ui";
+    if (!fs::exists(ui_src / "modern" / "lib" / "textselect.lua")) return; // an installed test binary run away from the sources
+    fs::copy_file(ui_src / "modern" / "lib" / "stml.lua", dir / "lib" / "stml.lua");
+    fs::copy_file(ui_src / "modern" / "lib" / "textselect.lua", dir / "lib" / "textselect.lua");
+    std::ofstream(dir / "lib" / "theme.lua")
+        << "local c = { link = { 0, 0, 1, 1 }, text = { 1, 1, 1, 1 } }\n"
+           "return { color = c, C = c, text = function(x, y, t) return ui.CalcTextSize(t) end }\n";
+    std::ofstream(dir / "select.lua") << R"lua(
+local stml = dofile("lib/stml.lua")
+local ts = dofile("lib/textselect.lua")
+local function pair(a, b) return tostring(a) .. "," .. tostring(b) end
+out = {}
+out.word = pair(ts.Word("tells you, hello there", 12))
+out.wordSpace = pair(ts.Word("a  b", 2))
+out.wordEnds = pair(ts.Word("edge", 0)) .. "|" .. pair(ts.Word("edge", 99))
+local m = function(t) return #t * 10 end
+out.charAt = ts.CharAt("abcd", 14, m) .. "," .. ts.CharAt("abcd", 16, m) .. "," .. ts.CharAt("ab", 100, m) .. "," .. ts.CharAt("ab", -1, m)
+out.utf8 = ts.CharAt("a\195\169 b", 25, m) .. "," .. ts.CharAt("a\195\169 b", 14, m)
+local st = {}
+local clicks = {}
+for _, c in ipairs({ { 0, 0 }, { 0.1, 1 }, { 0.2, 1 }, { 0.3, 1 }, { 1.0, 1 }, { 1.1, 50 } }) do
+  clicks[#clicks + 1] = ts.Clicks(st, c[1], c[2], 0, 0.35, 4)
+end
+out.clicks = table.concat(clicks)
+local view = {}
+stml.UpdateLines(view, { "first line", "second", "third one" })
+stml.AppendLines(view, { "fourth" }, 3)
+out.dropped = view.dropped
+local s, e = ts.Range({ anchor = { line = 4, off = 3 }, caret = { line = 2, off = 2 } })
+out.extract = ts.Extract(view, s, e)
+out.extractGone = ts.Extract(view, { line = 1, off = 3 }, { line = 2, off = 3 })
+out.empty = tostring(ts.Range({ anchor = { line = 2, off = 1 }, caret = { line = 2, off = 1 } }))
+out.span = pair(ts.Span(s, e, 3, 6, 3)) .. "|" .. pair(ts.Span(s, e, 4, 0, 6)) .. "|" .. pair(ts.Span(s, e, 2, 0, 2)) .. "|" .. tostring(ts.Span(s, e, 5, 0, 3))
+stml.UpdateLines(view, { "again" })
+out.renumbered = view.dropped
+out.markup = ts.LineText(stml.Parse('<c "#808080">[12:00] </c>Bob tells you, &lt;3 <a WndNotify="27,x">Sword</a>'))
+
+-- drawn: a wrapped first line and a second, the mouse put at known places frame by frame
+local dview = {}
+local first = "alpha beta gamma delta epsilon zeta eta theta"
+stml.UpdateLines(dview, { first, "second line" })
+local sel = { rows = 0, color = { 1, 1, 1, 0.3 }, anchor = { line = 1, off = 2 }, caret = { line = 2, off = 3 } }
+local frame = 0
+ui.window("Select", function()
+  frame = frame + 1
+  ui.SetNextWindowSize(700, 400, ui.Cond.Always)
+  ui.Begin("Select")
+  if frame == 1 then
+    -- a line holding new lines: each piece's offset in the line's text, and which rows the text's new lines start
+    local motd = stml.Parse("Be Free! \n\nDo Not")
+    stml.DrawLine(motd, 2000, nil, "k", { active = false })
+    local offs = {}
+    for i = 1, #motd.wrap, 6 do offs[#offs + 1] = motd.wrap[i + 4] .. tostring(motd.wrap[i + 3]) end
+    out.motdOffsets = table.concat(offs, " ")
+  end
+  ui.BeginChild("output", 300, 200, false)
+  local x0, y0 = ui.GetCursorScreenPos()
+  local alphaW = ui.CalcTextSize("alpha ")
+  local _, rowH = ui.CalcTextSize("Ag")
+  local points = {
+    { x0 + alphaW + 1, y0 + 1 },      -- just inside "beta"
+    { x0 + 1, y0 + rowH * 1.5 + 2 },  -- the start of the second row (whatever the rows' spacing)
+    { x0 + 1000, y0 + 1 },            -- right of the first row's end
+    { x0 + 5, y0 - 50 },              -- above every line
+    { x0 + 1, y0 + 150 },             -- below the last line
+  }
+  local p = points[frame] or points[1]
+  sel.mx, sel.my = p[1], p[2]
+  sel.s, sel.e = ts.Range(sel)
+  sel.active, sel.lineH = true, rowH
+  sel.rows, sel.candRow, sel.hitLine, sel.firstLine, sel.overLink = 0, nil, nil, nil, false
+  stml.DrawLines(dview, 120, 200, "k120", nil, sel)
+  out["line" .. frame], out["off" .. frame], out["first" .. frame] = sel.hitLine, sel.hitOff, sel.firstLine
+  if frame == 2 then out.rowStart = sel.hitOff and sel.hitOff > 0 and first:sub(sel.hitOff, sel.hitOff) == " " end
+  out.wrappedSingle = dview.lines[2].wrap ~= nil -- (with a selection a one-coloured line is drawn by its wrap)
+  ui.EndChild()
+  ui.End()
+end)
+)lua";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        for (int i = 0; i < 5; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+        }
+        auto get = [&](const char* key) {
+            lua_getglobal(L, "out");
+            if (!lua_istable(L, -1)) {
+                lua_settop(L, 0);
+                return std::string("no out");
+            }
+            lua_getfield(L, -1, key);
+            std::string v = lua_isnil(L, -1) ? "nil" : luaL_tolstring(L, -1, nullptr);
+            lua_settop(L, 0);
+            return v;
+        };
+        CHECK(get("word") == "11,16");
+        CHECK(get("wordSpace") == "2,2");
+        CHECK(get("wordEnds") == "0,4|0,4");
+        CHECK(get("charAt") == "1,2,2,0");
+        CHECK(get("utf8") == "3,1"); // (never 2: the middle of the two-byte character)
+        CHECK(get("clicks") == "123111");
+        CHECK(get("dropped") == "1");
+        CHECK(get("extract") == "cond\nthird one\nfou");
+        CHECK(get("extractGone") == "sec");
+        CHECK(get("empty") == "nil");
+        CHECK(get("span") == "0,3|0,3|nil,nil|nil");
+        CHECK(get("renumbered") == "0");
+        CHECK(get("markup") == "[12:00] Bob tells you, <3 Sword");
+        CHECK(get("motdOffsets") == "0false 3false 10hard 11hard 14false");
+        // drawn
+        CHECK(get("line1") == "1");
+        CHECK(get("off1") == "6");
+        CHECK(get("line2") == "1");
+        CHECK(get("rowStart") == "true");
+        CHECK(get("line3") == "1");
+        CHECK(get("off3") == get("off2")); // the first row's end is where the second row starts
+        CHECK(get("line4") == "nil");
+        CHECK(get("first4") == "1");
+        CHECK(get("line5") == "2");
+        CHECK(get("wrappedSingle") == "true");
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
     }
     ImGui::DestroyContext(ctx);
 }
