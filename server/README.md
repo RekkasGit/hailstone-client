@@ -179,8 +179,10 @@ Every Hailstone request is limited per character before the zone does any work f
 | group declines | five in 10 seconds |
 | file piece requests | twice what the two limits above let a player be sent in a second, plus the 64 that may wait (at least 2112 a second) |
 
-Counting malformed requests keeps a flood of them out of the log. An honest client asks once a piece (again for a
-lost one), and for the others once a zone-in. What is over the limit is dropped, with one line in the zone's log.
+Counting malformed requests keeps a flood of them out of the log. An honest client asks for each file piece once
+(again for a lost one), for the file list once a login (again if it changes meanwhile, at most three times), and for
+the guild hello and the settings once a zone-in; it sends invitations and declines only when the player acts. What is
+over the limit is dropped, with one line in the zone's log.
 
 A first download of a gigabyte took about 70 seconds in a test; a player who has the files only gets the list. Compressing
 the files would not help: EQEmu already compresses the zone stream (`Network:CompressZoneStream`), and zone and model

@@ -162,8 +162,8 @@ and the plugins are gone):
    packages and the core package's files for it are left out of the install and of `installed.txt`.
 
    Also refused before anything moves:
-   - a package whose file would go where the folder has a folder (an update replaces files only, and that folder
-     holds what it did not put there);
+   - a package with a file whose path in the install folder is a folder (an update replaces files only, and such a
+     folder may hold files the update did not put there);
    - an update whose packages' declared sizes add up to more than 4 GiB.
 
    Each unpacked file is flushed to the disk before it is renamed into `new/`.

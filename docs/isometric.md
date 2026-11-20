@@ -28,7 +28,8 @@ Camera type 7 (`game::kCameraIsometric`), Hailstone's own beside the camera behi
 - The right button held turns the camera about the player, never the player; a short right click still clicks.
 - The left button always clicks, never starts a mouse look.
 - The wheel zooms a tenth of the distance a notch, 60 to 320 units.
-- TOGGLECAM's cycle counts it as first person (0 -> 1), as it counts camera 6; the first person key leaves it.
+- TOGGLECAM's cycle counts it, as it counts camera 6, as first person (0), so the next camera is 1; the first person
+  key leaves it.
 
 To the movement controls it is camera 6 with no mouse look, so neither button runs.
 

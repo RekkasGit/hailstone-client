@@ -362,8 +362,9 @@ Still open:
 
 #### Live models
 
-- Live dropped the zones' own `<zone>_chr.s3d`; its `<zone>_chr.txt` lists name per-model archives (`kob,kob_chr` for
-  `kob_chr.s3d`), which `chr_txt_entry_is_s3d` takes for an S3D when that file exists (RoF2's rule would take an EQG).
+- Live dropped the zones' own `<zone>_chr.s3d`; its `<zone>_chr.txt` names each model's own archive (`kob,kob_chr` for
+  `kob_chr.s3d`). RoF2's rule would take such a line for an EQG; `chr_txt_entry_is_s3d` takes it for an S3D when that
+  file exists.
 - Live renamed models (Kael's frost giants are `FSG`, `GAM` in RoF2). When the client's code for a race has no model,
   `ActorRenderer::choose_model` tries the live `racedata.txt`'s code for the spawn's gender, then 2 (both), 0 and 1.
   Heights, dressing and animations still go by the client's code.

@@ -300,8 +300,8 @@ radius (`model_sweep_radius`, 6.68 for a human) cannot pass South Qeynos' doorwa
 
 Two things in eqgame point away from the type 1 reading: the centre's 1.9 fallback fits the player value, and
 ChangeHeight keeps the volume's sphere radius (vf48) in step with size although only a type 2 volume reads it. The
-static chain (CreatePlayerActor type 1, CHierarchicalActor vf44 -> 0x10045fd0, model +0x38) checks out, so a run-time
-read of vf44 decides.
+static chain (CreatePlayerActor type 1, CHierarchicalActor vf44 -> 0x10045fd0, model +0x38) points to type 1, so only
+reading vf44 in the running game can settle it.
 
 #### Other spawns in the original
 
@@ -1180,8 +1180,8 @@ required bit. In a pass:
 - The hit point stops 0.001 short.
 
 The client tests the zone mesh (CollisionMesh::for_each_on_segment), each spawn's last drawn pose
-(ActorRenderer::spawn_pose), box-drawn spawns as spheres, and the doors' and objects' solid triangles. Every pick is
-logged ("pick (left click) ...").
+(ActorRenderer::spawn_pose), a spawn drawn as a placeholder box as a sphere, and the doors' and objects' solid
+triangles. Every pick is logged ("pick (left click) ...").
 
 #### Left clicks and switches
 
@@ -1367,8 +1367,8 @@ Deliberate difference (always on): a mounted player camps from the saddle withou
 1. Length 0. A Height not above 0 (a NaN is kept) takes racedata.txt's default: column 89, or 90 for gender 1; 6.0
    for a missing row or a value below 1.
 2. AvatarHeight = ROffset (moddat.ini `[code] ROffset`, 3.125) x the scale, unrounded. The scale is Height x 1/6 x
-   1.3 for new-style races (flag 0x08), Height x 0.2 for classic ones. While the new-zone flag is set the 1.3 is left
-   out / x 0.7692308.
+   1.3 for new-style races (flag 0x08), Height x 0.2 for classic ones. While the new-zone flag is set, a new-style race
+   leaves out the 1.3 and a classic one is multiplied by 0.7692308 (1 / 1.3).
 3. ViewHeight = 6.2 x the stored scale.
 4. ComputeSpecialHeights; then ViewHeight += the view offset. A special scale is stored without recomputing the others.
 5. JumpStrength 1.35, SwimStrength 3.375.
@@ -1562,8 +1562,8 @@ Code: `game/chat_input.*`, `game/combat.*` (con_level_value), `game/zone_lines.*
 
 The chat input takes the keyboard only through key slots 479..499, which fire while no window has the keys:
 
-- Enter (488) toggles the chat focus and, with movement keys held, AUTORUN with the mask forward 1 / back 2, left 4 /
-  right 8, 0x10 while strafing.
+- Enter (488) toggles the chat focus. Giving the input the focus while movement keys are held sends AUTORUN with the
+  held mask: forward 1, else back 2; turn left 4, else turn right 8; 0x10 while strafing.
 - ';', '/', '[' (481, 482, 499) go into the input.
 - 493..496 are the character select keys; 498 leaves character creation.
 
@@ -1811,7 +1811,8 @@ last_cast_time).
   item's timer = recast + the client time offset, in client-time ms.
 
 The inventory slot draw (every item slot: `hs.Item` / `hs.BagSlotItem` / `hs.SlotItem` give `cooldown`; inventory hot
-buttons) computes left = timer - now and restarts the cool-down when the button has none or is 1000 ms or more off.
+buttons) takes the time left (timer - now). When the button has no cool-down, or its cool-down differs from that time
+by 1000 ms or more, the draw restarts it (or stops it once the time is up).
 The potion belt starts a slot's only while its button has none and the timer is ahead.
 
 #### Item preview
@@ -2133,7 +2134,8 @@ instrument song per "Bone groups" below. The local player's OP_Animation is sent
   and granting nothing.
 
 The launch delay is 70 % of the animation's own length (the .ani's last key time), multiplied by the float 0.7 at the
-FPU's extended precision and truncated (1000 ms gives 699), or 1500 ms when below 1; 0 without a range byte. Checked:
+FPU's extended precision and truncated, so 1000 ms gives 699. A result below 1 ms becomes 1500 ms; without a range
+byte the delay is 0. Checked:
 0x58f540's CalcAnimLength, 0x58f5fe-0x58f622.
 
 #### Launch placement and pulse timing
@@ -2353,8 +2355,8 @@ Which group plays what:
     or none (0xfe); after anything else P08 (0x47): run, jump or fall, duck, posture change, instruments, a social,
     P08 itself.
   - An idle request (O01) after such an animation is O02 (0x48). A model without P08 / O02 plays P01 / O01.
-  - A corpse, a posture change and an unfinished action 0x4b0900 does not let it interrupt keep what plays. The stand
-    keeps the same clip's phase (0x4b1ab3).
+  - The stand does not replace what plays on a corpse, during a posture change, or while an unfinished action plays
+    that 0x4b0900 says it may not interrupt. The stand keeps the same clip's phase (0x4b1ab3).
   - When the stand plays the follow-up, +0x10c4 becomes 0x20 after a named animation, else 0x47.
   - The layers keep an OP_Animation action as +0x10c0 until it ends, unless a walk or run took the legs: after a
     social the stand is P08, after an attack P01.

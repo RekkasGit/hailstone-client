@@ -508,7 +508,8 @@ illusion (docs/unknowns.md).
   its ornament (`game::worn_look`). A held item shows the model of its ornament strings (`IT<n>`); armour shows its own
   Material with the ornament's hero's forge model. A disabled ornament (the first type 20/21 socket's augment with its
   stats disabled) shows the plain item (PcClient_RefreshWornSlotVisual @0x4919b0). An ornament augment's own Material
-  is not shown, since EQEmu shows everyone, and the player at zone-in, the item's.
+  is not shown: EQEmu sends the item's Material to everyone else and to the player at zone-in, so the augment's would
+  be a look only this player sees, and only until the next zone.
 - **Heads.** The head of a PC-model race shows its armour only with spawn bit 23 (show_helm) set. Head material 7 is
   drawn as 2.
 - **Robes:** chest 10–16. Arms and wrists then show the chest's material. On a Luclin model they also take the chest's

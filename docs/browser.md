@@ -131,8 +131,8 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
     held to the same sites and never reach a private address (`web::script_request_allowed`);
   - `data:`, `blob:`, `about:blank` and `about:srcdoc` stay allowed, since they reach no network.
 
-  The player's own tabs (http(s) too) are not limited by host or checked. Only a script's or plugin's tab hands the
-  page's messages on (to its owner). Downloads are off.
+  The player's own tabs (http(s) too) are not limited by host or checked. A page's messages go only to the script or
+  plugin that opened its tab; on the player's own tabs they go nowhere. Downloads are off.
 - **Rules that change.** The helper keeps a tab's sites for its life, so each frame (`WebService::recheck`) a
   script's or plugin's tab is closed as Refused, its owner told why (`state().why`), when:
   - the owner no longer has `web`, or

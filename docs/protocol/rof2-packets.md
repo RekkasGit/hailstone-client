@@ -440,7 +440,7 @@ EQEmu server, `playprobe --bank any [--bank-keep 1]`, South Qeynos. 24 bank slot
 
 ### Spells (`net/spell_packets.h`, `GameConnection` in `net/game_connection_spells.cpp`, rules and spell data in `game/spells.{h,cpp}`)
 
-Spell data: the client reads `spells_us.txt` (237 '^'-separated columns, `game::SpellTable`). The server's table decides; the client's only gates and labels.
+Spell data: the client reads `spells_us.txt` (237 '^'-separated columns, `game::SpellTable`). The server's table decides; the client uses its copy only to gate casts and to label (names and messages).
 
 The online client never finishes a cast itself: it gates the cast, starts its cast bar, locks the gem and the global recovery for 10 s, sends `OP_CastSpell` and waits. The server decides everything else and ends **every** cast with `OP_ManaChange`.
 

@@ -38,7 +38,7 @@ greyscale TGA, DX10 DDS headers, volume textures. A DX10 header is read for R8G8
 the formats texture packs use; other DXGI formats are refused.
 
 Mips and sizes: most DDS files have one level, the rest chains of 4 to 11. Every mip count matches the data present.
-92 textures are not powers of two (largest 1108 on a side); the largest overall is 1024×1024.
+92 textures are not powers of two, the largest 1108 on a side; the largest power-of-two texture is 1024×1024.
 
 ### Failures (bad data)
 

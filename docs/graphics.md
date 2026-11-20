@@ -1743,7 +1743,8 @@ resolved depth.
   the kernel's radius shrinks to the pixel cap's world size, so near samples cannot over-darken.
 - An angular bias of 0.1 keeps almost coplanar samples from shadowing themselves.
 - Within 12 units of the camera the AO fades out, to none at 4 (`ao_close_fade`): up close the kernel finds each fold
-  of a low-poly face that its smoothed normals hide and draws dark lines. Contact shading within arm's reach is lost.
+  of a low-poly face that its smoothed normals hide and draws dark lines. The cost: no contact shading on surfaces
+  that close.
 - Intensity 12 over the 12 samples.
 - The post pass averages the 4 x 4 block weighted by depth and darkens the scene by it (strength 0.85) before the
   exposure. As it darkens every lighting term, it is kept to contact shadows.
@@ -1845,9 +1846,9 @@ of edge, so a river's mouth is no shore.
 
 #### Horizon hills: the land
 
-A grid of vertices covers the zone's squares and 2500 units past them, 64 units apart (more for a zone wider than
-256 squares), then wider by 12 % a step out to 10000 units. Vertices are tucked down so the land meets the zone's edge
-without a gap and stays under its ground:
+A grid of vertices covers the zone's squares and 2500 units past them, 64 units apart (a multiple of 64 for a big
+zone, so that part is at most 256 squares across), then wider by 12 % a step out to 10000 units. Vertices are tucked
+down so the land meets the zone's edge without a gap and stays under its ground:
 
 - in a covered square, 40 units under its lowest terrain;
 - in the empty square beside one, 5 units under the lowest terrain beside it (a wall's foot), or 40 under the zone's
@@ -2029,7 +2030,7 @@ when the mist shifts once.
 bloom and upscalers, so they all see the fogged picture.
 
 - Each pixel's line of sight is marched from the camera to the depth (the sky's to 16000 units, at most the far
-  plane) in 40 steps, closer together near the camera (t = length s^2), with a 4 x 4 ordered dither.
+  plane) in 40 steps, closer together near the camera (step i at reach x s^2, s = i / 40), with a 4 x 4 ordered dither.
   It stops where under 0.1 % shows through.
 - The colour is the haze's 1.35 times as bright (`kZoneFogLift`), with its sun glow (as `apply_haze`).
 - The field is uploaded with each new zone's land.
@@ -2171,7 +2172,8 @@ At run time:
 - A masked material takes `.m`.
 - The maps (`decode_texture_map`) shade zones, placed objects and characters in the modern lighting: the normal map
   on a cotangent frame from screen derivatives (the meshes have no tangents; shadows keep the surface's own normal),
-  and the sun's and moon's GGX highlight from the roughness map, taken into 0.5..1.
+  and the sun's and moon's GGX highlight from the roughness map, its 0..1 mapped onto a roughness of 0.5..1 (the
+  game's surfaces are never polished).
 - `display.material_maps` (on by default) and the viewer's `--no-material-maps` turn the maps off.
 - Every viewer, the model viewer too, takes `--textures`.
 
@@ -2237,7 +2239,7 @@ the game's mesh, so where a player can walk does not change.
   - The generator stores each vertex's sway height in the second UV set (glTF TEXCOORD_1, asset extras
     `hailstone_sway`): a branch and its sprays take its root's height, so its crossing cards move together (a
     per-vertex sway or flutter makes leaves seem to flip).
-  - A generated tree from a pack built before stands still.
+  - A generated tree from a pack built before sway heights were stored (no `hailstone_sway`) stands still.
 - **Levels of detail:** a node's extras `{"hailstone_lod": [near, far]}` draw its meshes only from `near` to `far`
   world units from the camera. Bands are chosen by the camera's distance to the placement (`render/lod_bands.h`), so a
   whole tree changes level together.
