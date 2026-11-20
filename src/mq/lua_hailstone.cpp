@@ -1244,19 +1244,26 @@ int l_eqstr(lua_State* L) {
     const int last = std::min(top, 17);
     luaL_checkstack(L, last - 1, "hailstone.eqstr");
     for (int i = 2; i <= last; ++i) luaL_tolstring(L, i, nullptr);
-    std::vector<std::string> args;
-    for (int i = top + 1; i <= lua_gettop(L); ++i) args.emplace_back(lua_tostring(L, i));
-    std::string r = c->strings().format(id, args);
-    lua_pushlstring(L, r.data(), r.size());
+    // The vector goes before the push, and the result is pushed by push_made (moved out of this frame first): a push
+    // that fails longjmps past this frame (Lua is built as C).
+    std::string r;
+    plugin::cxx_guard(L, [&] {
+        std::vector<std::string> args;
+        for (int i = top + 1; i <= lua_gettop(L); ++i) args.emplace_back(lua_tostring(L, i));
+        r = c->strings().format(id, args);
+    });
+    plugin::push_made(L, std::move(r));
     return 1;
 }
 
 // hailstone.zone_name(id): the zone's short name; nil for an unknown id.
 int l_zone_name(lua_State* L) {
     need_cap(L, plugin::kCapRead, "hailstone.zone_name");
-    std::string name = game::zone_short_name(static_cast<std::uint32_t>(luaL_checkinteger(L, 1)));
+    const auto id = static_cast<std::uint32_t>(luaL_checkinteger(L, 1)); // (before the string: it may raise)
+    std::string name;
+    plugin::cxx_guard(L, [&] { name = game::zone_short_name(id); });
     if (name.empty()) lua_pushnil(L);
-    else lua_pushlstring(L, name.data(), name.size());
+    else plugin::push_made(L, std::move(name)); // moved out of this frame before the push, which may raise
     return 1;
 }
 
