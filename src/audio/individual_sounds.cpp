@@ -21,7 +21,7 @@ constexpr IndividualSound kSounds[] = {
     {SoundGroup::Thunder, "thunder", "Thunder", "The thunder of a storm."},
     {SoundGroup::Equip, "equip", "Equipping items", "The sound of putting on or taking off an item."},
     {SoundGroup::CreatureAmbient, "creature_ambient", "Creature ambient sounds",
-     "The sounds some creatures make all the time, such as spectres and the necromancer pet Minion of Shadows."},
+     "The sounds some creatures make all the time, such as a spectre's hum."},
 };
 
 } // namespace

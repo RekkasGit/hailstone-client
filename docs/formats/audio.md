@@ -378,8 +378,8 @@ The synthesiser is TinySoundFont with `synthusr.sf2`, so it will not sound ident
    - `money`: wave 0x8a (the cash register: merchant, trader, barter, loot, split and coin moves). The quest reward's
      coin sound (0x8d) is not.
    - `thunder`: the storm's thunder (0x8f, 0x90). The "struck down" thunder of a GM kill is not.
-   - `creature_ambient`: the loop and idle sounds of an NPC that are not its footsteps (a spectre's, the necromancer
-     pet Minion of Shadows'). Which exact sound that pet makes is not confirmed; this covers every non-step loop.
+   - `creature_ambient`: every loop and idle sound of a spawn that is not its footsteps (a spectre's `SpecLoop.wav`,
+     racedata.txt race 85). Which creatures players find tiresome is not narrowed down: this covers every non-step loop.
    - The Test button of a footstep plays the walk steps in turn. Thunder and rain can be silent in an install whose
      `thunder1.wav` and `thunder2.wav` are 80-byte files without samples.
    - `equip`: the item-moved wave (0x92) after a move that took an item out of or into a worn slot, the callers of an

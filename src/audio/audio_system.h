@@ -45,7 +45,8 @@ struct AudioSettings {
     int npc_hits = 100;         // audio.npc_hits, 0..100: Hailstone, not in the original: the sounds of an NPC being
                                 // hit, blocking or dodging, scaled on top of audio.effects (app/sound_events.cpp)
     // Hailstone, not in the original: audio.own_footsteps, pet_footsteps, other_footsteps, open_bag, open_bank, money,
-    // thunder and equip (audio/individual_sounds.h), each 0..100 on top of audio.effects (app/sound_events.cpp).
+    // thunder, equip and creature_ambient (audio/individual_sounds.h), each 0..100 on top of audio.effects
+    // (app/sound_events.cpp).
     GroupVolumes individual;
     bool mute = false;          // audio.mute
     bool environment = true;    // audio.environment: the zone's ambient emitters (EmitterSetUserDisabled)

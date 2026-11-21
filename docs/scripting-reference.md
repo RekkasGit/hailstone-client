@@ -880,7 +880,7 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | Option | (name) → int\|nil | Client option value (ui/<pack>/options.lua) | — |
 | SetOption | (name, int) → — | Change, apply and save a client option | commands |
 | OptionChoices | (name) → {string} | Choices the client lists for an option (e.g. "resolution") | — |
-| PlaySoundTest | (name) → bool | Plays one of the Individual Sounds options (`own_footsteps`, `pet_footsteps`, `other_footsteps`, `open_bag`, `open_bank`, `money`, `thunder`, `equip`) once at its volume; false for another name | — |
+| PlaySoundTest | (name) → bool | Plays one of the Individual Sounds options (`own_footsteps`, `pet_footsteps`, `other_footsteps`, `open_bag`, `open_bank`, `money`, `thunder`, `equip`, `creature_ambient`) once at its volume; false for another name | — |
 | UiIni | (section, key) → string\|nil | Character UI ini value (over defaults.ini) | — |
 | SetUiIni | (section, key, value) → — | Write and save a UI ini value | commands |
 | CoolDownColor | () → r, g, b, a | Colour of cool-down rectangles (user colour 0x15f, alpha 0x40) | — |

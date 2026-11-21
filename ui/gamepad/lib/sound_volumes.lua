@@ -17,7 +17,7 @@ M.SOUNDS = {
   { "thunder", "Thunder", "The thunder of a storm." },
   { "equip", "Equipping items", "The sound of putting on or taking off an item." },
   { "creature_ambient", "Creature ambient sounds",
-    "The sounds some creatures make all the time, such as spectres and the necromancer pet Minion of Shadows." },
+    "The sounds some creatures make all the time, such as a spectre's hum." },
 }
 
 -- A volume brought into 0..100 (whole numbers).
