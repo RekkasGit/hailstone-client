@@ -11,8 +11,8 @@
 --     dropped on a set's card goes straight into that set;
 --   * the gems along the bottom: drag a spell onto a gem (or double-click it: the selected gem, else the first
 --     empty one) to memorize it, right-click a gem to forget it; the memorize under way shows on its gem.
--- Memorizing and scribing follow the game's rules (sitting, one at a time, the level, the gems you can use); a
--- scroll on the cursor is scribed into the first empty page slot ("Scribe").
+-- Memorizing and scribing follow the game's rules (sitting or mounted, one at a time, the level, the gems you can
+-- use); a scroll on the cursor is scribed into the first empty page slot ("Scribe").
 local API = hs.UI
 local hud = dofile("lib/hud.lua")
 local stml = dofile("lib/stml.lua")

@@ -839,6 +839,10 @@ A stopped rider can use the spell book to memorize individual spells and spell s
 saddle. RoF2's book click checks for sitting or a mount (CSpellBookWnd @0x75e790). Movement and dismounting close
 the book and interrupt active or queued memorization and unsent scribing.
 
+Whatever closes the book, its hide worker (unk_CSpellBookWnd_HideWorker @0x75b7c0) aborts a memorization under way
+(12045, "Aborting memorization of spell."), else a scribe whose request is not yet sent (12044, "Aborting scribing of
+spell."), and drops the rest of a spell set.
+
 `get_spell_mem_ticks_left` runs once per draw of the book's memorise gauge:
 
 - A tick when now - last > max(100, (levelNeeded - level + 5) x 100).

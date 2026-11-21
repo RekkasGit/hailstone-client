@@ -391,9 +391,14 @@ TEST_CASE("spell book: a stopped rider can memorize spells and sets, and scribe 
             CHECK(conn.spell_state().book[0] == 200);
         }
         SUBCASE("moving closes the book and cancels the pending scribe") {
+            drain_chat(conn);
             conn.set_player_motion(conn.world().player()->position, 0.0f, {1.0f, 0.0f, 0.0f}, true);
             CHECK_FALSE(conn.spell_book_open());
             CHECK_FALSE(conn.spell_state().scribing);
+            // HideWorker: "Aborting scribing of spell."
+            const auto lines = drain_chat(conn);
+            REQUIRE(lines.size() == 1);
+            CHECK(lines[0].rfind("[12044]", 0) == 0);
             CHECK(MockEqServer::count(rig.server.zone_log, Op::MemorizeSpell) == 0);
         }
     }
