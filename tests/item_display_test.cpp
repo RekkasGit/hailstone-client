@@ -128,6 +128,25 @@ TEST_CASE("Item descriptions show loot effects when the spell table cannot resol
     CHECK(std::find(lines.begin(), lines.end(), "Combat Effect:  Winter's Waltz & <Chill>") != lines.end());
 }
 
+TEST_CASE("Item descriptions show a click effect without a local spell record, and a masked one by name") {
+    game::EqStrings s;
+    s.set(0xbdc, "Effect: %1 %2");
+    s.set(0xbd7, "(Any Slot)");
+    game::ItemDisplayContext ctx;
+    ctx.strings = &s;
+    ctx.spell = [](std::int32_t) -> const game::SpellData* { return nullptr; };
+    net::Item it;
+    auto& click = it.effects[net::kEffectClick];
+    click.type = 1;
+    click.effect = 1234; // as at 0x6a1c70, a valid ID shows its line without a spell record
+    click.name = "Gate";
+    CHECK(game::build_item_display(it, ctx).description == "Effect: Gate (Any Slot)<BR><BR>");
+    click.effect = -1; // masked, named: the extension
+    CHECK(game::build_item_display(it, ctx).description == "Effect: Gate (Any Slot)<BR><BR>");
+    click.name.clear(); // stock EQEmu's "no effect"
+    CHECK(game::build_item_display(it, ctx).description.find("Effect:") == std::string::npos);
+}
+
 TEST_CASE("item_display_text_width: the longer of name and flags, then the other lines") {
     game::ItemDisplay d;
     d.measured[0] = "abc";

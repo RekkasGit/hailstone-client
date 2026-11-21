@@ -233,6 +233,10 @@ std::string size_name(const ItemDisplayContext& ctx, std::uint32_t s) { return s
 
 // ItemDisplay_BuildSpellEffectText @0x6a1c70: one line per item spell (click, combat, worn, focus, the bard focus),
 // then the augments' (`recurse`). The spells with a description go to `described` for the description blocks.
+// The original needs no spell record to show a line: the click effect needs IsValidSpellID @0x4ad150 (1..45000), the
+// others an ID above 0, and the name is the item's override or the spell's. Here any ID above 0 shows (an extension
+// for servers past 45000 spells), as does a masked -1 that carries a name (ItemEffect::displayable). Without a name or
+// a local record the line reads "spell N"; the original reads its spell table regardless.
 std::string spell_effect_text(const net::Item& item, const ItemDisplayContext& ctx, bool recurse,
                               std::vector<const net::ItemEffect*>& described) {
     std::string out;
