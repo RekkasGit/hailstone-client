@@ -254,9 +254,10 @@ own-corpse and leadership checks and the next zone's entry use it.
 5. ExpUpdate tip flag: the original shows the experience tip when it is 2. It is not AA experience, which only OP_AAExpUpdate carries. EQEmu sends 0.
 6. Animation: action n is the n-th clip of C01..C11, D01..D05, L01..L09, O01, S01..S05, P01..P07, T01..T09, S06..S28, P08, O02, O03.
 
-Considering an NPC or player corpse sends `OP_ConsiderCorpse`. EQEmu's `Client::Handle_OP_ConsiderCorpse`
-sends the remaining decay time and, for player corpses, the resurrection time or status. The client displays
-these replies through the usual formatted, simple or plain chat message handlers.
+Considering an NPC or player corpse sends `OP_ConsiderCorpse`, as the original does (Cmd_consider @0x4df830,
+for spawn type 2 and up, without the consider tip). EQEmu's `Client::Handle_OP_ConsiderCorpse` sends the
+remaining decay time and, for player corpses, the resurrection time or status. The client displays these
+replies through the usual formatted, simple or plain chat message handlers.
 
 #### Combat: observed sequences
 

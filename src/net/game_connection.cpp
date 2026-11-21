@@ -2765,6 +2765,8 @@ void GameConnection::consider() {
     Consider c;
     c.player_id = world_.player_id;
     c.target_id = world_.target_id;
+    // Cmd_consider @0x4df830: spawn type 2 and up (a corpse) sends OP_ConsiderCorpse with the same 20 bytes and no
+    // consider tip; the server answers in chat (decay, and a player corpse's resurrection time).
     const auto op = it->second.is_corpse ? Op::ConsiderCorpse : Op::Consider;
     send_zone(encode(c, op));
     if (op == Op::Consider) context_tip(0x1d); // Cmd_consider: the consider tip
