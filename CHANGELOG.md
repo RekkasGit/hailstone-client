@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Linux arm64 release package** (`hailstone-<version>-linux-arm64.zip`) for arm64 handhelds, boards and laptops with a Vulkan 1.3 driver, such as Mesa's Turnip on Snapdragon; it updates itself like the x64 one. So far it has only been tested on a Qualcomm Snapdragon 8 Elite (an AYN Odin 3 Max)
 - Fixed stale Hide indicators on other players' nameplates after the server cancels Hide during combat.
 - When the server ends your Hide or Sneak, the chat says so, as in the original client.
 - Item descriptions and comparisons show named weapon procs and other item effects even when the spell ID or its local definition is unavailable.
