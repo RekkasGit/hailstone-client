@@ -919,6 +919,10 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 
 ## Characters and models
 
+- **Held bow.** RoF2's local ranged attack puts the bow in the visible secondary slot. Hailstone displays it for
+  the firing animation on manual attacks and auto fire. A live RoF2 comparison would settle how long the bow
+  remains visible after a shot.
+
 - **ActorTagInfo.txt beyond the shield flag** (docs/formats/characters.md "ActorTagInfo.txt").
   - Unknown: what fields 3 to 10 and kinds other than 1 (2, and a later file's 37 .. 64) mean; whether the original
     keeps a model's first or last line when it is listed twice, and whether an empty or unreadable file still counts as

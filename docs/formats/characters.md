@@ -561,6 +561,11 @@ grip space; skeletal ones are baked in their rest pose.
 - EQG models use `ARMR_WEAP`, `ARML_WEAP`, `ARML_SHLD` and the bone's bind matrix.
 - Items are not tinted (`itmt.ini[Primary/SecondaryTintIndex]` is not read).
 
+When a local archery projectile arrives, the firing animation puts the visible model of the equipped Range item on
+the left-hand grip and frees the right. A bow uses the grip even if its model appears in the shield list. Normal
+equipment reappears when the animation ends. EQEmu's projectile describes the ammo, so a remote archer's equipment
+appearance comes from its spawn and wear updates.
+
 #### ActorTagInfo.txt
 
 `Resources\ActorTagInfo.txt` (stored lower-case, `actortaginfo.txt`) is read with the other appearance tables
