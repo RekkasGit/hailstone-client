@@ -321,6 +321,10 @@ void plan_buttons(const SourceFields& fields, const std::array<SocialRecord, kSo
                 else {
                     row.name = button.label;
                     if (row.name.empty() && button.type == HotButtonType::MenuButton) row.name = menu_name(button.slot);
+                    // An unlabelled social button shows its social's name, also when it is skipped.
+                    if (row.name.empty() && button.type == HotButtonType::Social && button.slot >= 0 &&
+                        button.slot < kSocialCount)
+                        row.name = socials[static_cast<std::size_t>(button.slot)].value.name;
                     row.reason = button_error(button, socials, options, staged);
                     if (row.reason.empty() && same_button(existing, button)) {
                         row.disposition = CharacterImportDisposition::Keep;

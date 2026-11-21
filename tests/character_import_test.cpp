@@ -120,6 +120,15 @@ TEST_CASE("Character import skips unsafe scripts, unsupported references, and ma
     for (const auto& row : plan.rows) CHECK(row.disposition == Disposition::Skip);
     CHECK(staged.social(0).empty());
     CHECK(staged.at(1, 0, 0).empty());
+
+    // An unlabelled button for a skipped social is named after that social in the preview.
+    constexpr std::string_view unlabelled =
+        "[Socials]\nPage1Button1Name=Pet attack\nPage1Button1Line1=/pet attack\n"
+        "[HotButtons]\nPage1Button1=E0,@-1,0000000000000000,0,\n";
+    const auto named = game::plan_character_import(unlabelled, destination, kImportBoth, staged);
+    REQUIRE(named.rows.size() == 2);
+    CHECK(named.rows[1].disposition == Disposition::Skip);
+    CHECK(named.rows[1].name == "Pet attack");
 }
 
 TEST_CASE("Character import fails closed on ambiguous or oversized input") {
