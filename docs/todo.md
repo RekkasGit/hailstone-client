@@ -151,6 +151,11 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
 
 ### Modular interfaces
 
+- [x] **Client-owned map overlays** (`hs.UI.map.RegisterOverlay`, docs/ui-api.md "Map overlays"): an add-on draws on
+  the zone map and the minimap whichever copy of `map.lua`/`minimap.lua` draws the view, by priority and registration
+  order, retired with its source.
+- [ ] Live acceptance in both packs, and moving qol's target line onto the overlay API, after which qol keeps no
+  `map.lua` copy of its own.
 - [x] Generic owner-scoped method hooks with explicit exposure policies and protected callbacks.
 
 - [x] Generic owner-scoped world nameplate canvas, bounded drawing and measurements, whole-caption claims, guarded physical clicks, automatic Lua addon activation and color widgets.

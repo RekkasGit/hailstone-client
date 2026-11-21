@@ -744,6 +744,13 @@ MapViewWnd, MapToolbarWnd and EditLabelWnd (`map.lua`, `maptoolbar.lua`, `editla
 - `on, above, below = hs.MapAutoZ([on [, above [, below]]])` (`above` alone sets both). Kept as `AutoZ` / `AutoZAbove` / `AutoZBelow` in `[MapViewWnd]`; an older single `AutoZRange` is read as both.
 - The stock layout has no button for it; the modern map (arrow beside Auto Z) and minimap (frame menu) have range sliders.
 
+**Map overlays.** `hs.UI.map.RegisterOverlay` (`app/lua_ui_map_overlay.cpp`) is the client-owned drawing layer of
+`hs.DrawZoneMap` and `hs.DrawMinimap`: the callbacks run at the end of each drawn view, after the client's own lines,
+labels, marks and player and before the pack's own additions, so they draw in whichever add-on's window called the
+method. The registry is kept per UI VM, as the named window extensions are; a view's geometry is one plain table
+(screen rectangle or disc, scale, centre, player, zone). A callback runs as its registered source, under that source's
+ceiling, and a failed one retires like a named extension's. The complete API is in `docs/ui-api.md` "Map overlays".
+
 **Paths and the atlas.** The find path (`game/player_path.h`; `hs.FindMapLocation(x, y)` as the stock right click, `hs.FindPathShown()`, `hs.EndFind()`), the atlas page (`game/atlas.h`, `hs.DrawAtlas`), and `hs.DrawZoneMap` for another zone's map. The modern World view and zone finder (docs/navigation.md "Zone atlas"; `ui/modern/lib/atlas.lua`) use `hs.AtlasIndex()`, `hs.AtlasPageData(file)`, `hs.AtlasTexture(file)`, `hs.ZoneLinks()` (asks the server once a session), `hs.ZoneRoute(to [, from])`, `hs.ZoneExits()`, `hs.ZoneExitWalk(zone)` (a `/nav` walk to that zone's nearest line), `hs.ShowZoneMap([zone])` and `hs.MapZoneShown()`.
 
 #### `lua_ui_player.cpp`

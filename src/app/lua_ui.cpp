@@ -39,6 +39,7 @@
 #include "app/lua_ui_plugins.h"
 #include "app/lua_ui_record.h"
 #include "app/lua_ui_extensions.h"
+#include "app/lua_ui_map_overlay.h"
 #include "plugin/lua_keep.h"
 #include "plugin/ui_bridge.h"
 #include "core/ini_file.h"
@@ -84,6 +85,9 @@ struct UiApi::Impl {
         return host.plugin_caps ? host.plugin_caps(tag) : 0u;
     }};
     UiCallbackContext extensions_context{callback_lifetime, [this](std::string_view tag) {
+        return host.plugin_caps ? host.plugin_caps(tag) : 0u;
+    }};
+    UiCallbackContext map_overlay_context{callback_lifetime, [this](std::string_view tag) {
         return host.plugin_caps ? host.plugin_caps(tag) : 0u;
     }};
     std::vector<std::unique_ptr<StockWindow>> windows;
@@ -3262,6 +3266,7 @@ void UiApi::register_functions(lua_State* L) {
     lua_pushcclosure(L, CompassMarkers, 1);
     lua_setfield(L, -2, "CompassMarkers");
     register_map_api(L, impl_->host, impl_->windows);
+    register_map_overlay_api(L, impl_->map_overlay_context);
     register_plugins_api(L, impl_->host);
     register_ui_extensions(L, impl_->extensions_context);
     register_scripts_api(L, impl_->host);
@@ -3335,7 +3340,7 @@ void UiApi::register_functions(lua_State* L) {
     lua_setfield(L, -2, "CursorSlot");
     // Last: the functions that act check a plugin's capabilities first (app/lua_ui_caps.h).
     gate_ui_calls(L);
-    for(const char* name:{"NameplateRegister","NameplateUnregister","NameplateMeasureText","UiHookRegister","UiHookRemove","UiHookList","ExtensionRegisterAction","ExtensionRegisterSection"}){lua_getfield(L,-1,name);ui::lua::LuaUi::source_generation_function(L,-1);lua_pop(L,1);}
+    for(const char* name:{"NameplateRegister","NameplateUnregister","NameplateMeasureText","UiHookRegister","UiHookRemove","UiHookList","ExtensionRegisterAction","ExtensionRegisterSection","MapOverlayRegister"}){lua_getfield(L,-1,name);ui::lua::LuaUi::source_generation_function(L,-1);lua_pop(L,1);}
     register_ui_api(L);
 }
 

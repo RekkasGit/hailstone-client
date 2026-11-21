@@ -249,6 +249,71 @@ Callbacks run as their registered source, under the intersection of captured and
 - Dispatch nesting is limited to eight.
 - A saved function or proxy identity is not a lifecycle token: keep handles and use `IsRegistered`.
 
+## Map overlays
+
+API 1.8 adds `hs.UI.map.RegisterOverlay(draw [, options])`, a drawing layer the client owns for the zone map
+(`hs.DrawZoneMap`) and the minimap (`hs.DrawMinimap`). An add-on draws there whatever copy of `map.lua` or
+`minimap.lua` draws the view, another add-on's included.
+
+```lua
+local handle, reason = hs.UI.map.RegisterOverlay(function(view)
+  if view.kind ~= 'minimap' then return end
+  ui.DrawCircle(view.cx, view.cy, view.radius, 1, 1, 0, 0.6) -- a ring on the minimap's edge
+end, {priority = 0})
+```
+
+`view` is one plain table, read-only by convention:
+
+| Field | Meaning |
+| --- | --- |
+| `kind` | `'zone'` for the map window's zone map, `'minimap'` for the minimap |
+| `x0`, `y0`, `x1`, `y1` | The area drawn, in screen pixels (the minimap's bounding square) |
+| `cx`, `cy` | The view's screen centre |
+| `radius` | The minimap's disc radius in pixels; `0` for the zone map |
+| `scale` | Screen pixels per map unit |
+| `turn` | The view's rotation in heading units (0 is north up; the minimap's rotate option) |
+| `center_x`, `center_y` | The map position of the centre, in map units |
+| `player_x`, `player_y` | The player's map position; absent on another zone's map |
+| `zone` | The loaded map's short zone name (`hs.ZoneName`'s second return) |
+| `current_zone` | Whether the loaded map is the player's own zone |
+
+`options.priority` is an integer from -10,000 to 10,000 (default 0). Callbacks run by ascending priority, ties in
+registration order. At most 16 registrations per owner and 64 per UI VM.
+
+The zone map's callbacks draw on the map window's own draw list, inside the rectangle's clip (`x0`..`y1`), also when
+the code that drew the view left `ui.Foreground(true)` on: a shape that runs past the clip is cut off. An overlay that
+turns `ui.Foreground(true)` on itself draws above every window, as any code does. The minimap has no clip of its own:
+stay within `cx ± radius` and `cy ± radius` yourself. Map units are the same pair `hs.DrawZoneMap` and the Find rows
+take (the `/loc` x and y, negated).
+
+`RegisterOverlay` returns an opaque handle, or nil and a reason. `UnregisterOverlay(handle)` removes only the owner's
+registration and returns a boolean; it is ungated, so an add-on whose capabilities were reduced can still take its
+own overlay off.
+
+- The capability floor is `read` plus `ui`, needed at registration and still live when a callback runs. A callback
+  that needs more (say a `commands` call) gets it only if its owner holds it: the registry confers no authority.
+- A callback runs as its registered source even when another add-on's window or map code drew the view.
+- A callback runs on the frame's time budget. Running into the time the drawing code kept for itself is not its
+  failure: it is skipped, and stays registered. A callback that runs too long on its own is a failure like any other.
+- A handle belongs to the owner that registered it: only that owner can remove its overlay, and the pack's code and an
+  add-on never remove each other's.
+- Registrations retire on source reload, source failure, owner removal, VM/host destruction and a native owner's
+  authority growing past the captured ceiling. A failed callback follows the source-file error policy: that file's
+  callbacks retire, other files keep drawing. An owner that merely loses a capability is skipped while it lacks it and
+  draws again when it is back; it is not retired.
+- Drawing a map does not start a second pass: an overlay's own `hs.DrawZoneMap` or `hs.DrawMinimap` draws the view
+  without overlays.
+
+**Where the overlays sit.** The client draws the view first, then the callbacks, then the pack continues. In the
+Modern zone map that means the lines, labels, group, Find path and player, then the overlays, then the NPC marks,
+exits and markers; Modern's minimap likewise. Gamepad calls the same two methods and adds its own
+ring and buttons around the minimap afterwards. Both packs draw through `hs.DrawZoneMap` and `hs.DrawMinimap`, so
+overlays appear in both.
+
+**When they do not run.** Only a drawn view dispatches. Nothing runs while the map or minimap is hidden, outside a
+drawing frame, or when an add-on replaces the map through `hs.UI.extensions` (`MapViewWnd` `map.canvas`): the
+replacement draws its own view and `hs.DrawZoneMap` never runs, so overlays belong to that replacement.
+
 ## Color controls for interface and addon settings
 
 The `ui` library has `ColorButton(label,r,g,b[,a,flags,width,height]) -> pressed` and `ColorPicker3` / `ColorEdit3`

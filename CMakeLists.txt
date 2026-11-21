@@ -597,6 +597,7 @@ add_library(hailstone_engine STATIC
   src/app/lua_ui_group_search.cpp
   src/app/lua_ui_marketplace.cpp
   src/app/lua_ui_map.cpp
+  src/app/lua_ui_map_overlay.cpp
   src/app/lua_ui_player.cpp
   src/app/lua_ui_market.cpp
   src/app/lua_ui_mail.cpp
@@ -1362,6 +1363,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/lua_ui_hooks_test.cpp
     tests/lua_ui_extension_drawing_test.cpp
     tests/lua_ui_extensions_test.cpp
+    tests/lua_ui_map_overlay_test.cpp
     tests/lua_ui_inheritance_test.cpp
     tests/ui_api_starter_test.cpp
     tests/lua_ui_modern_windows_test.cpp

@@ -43,6 +43,7 @@
 #include <imgui.h>
 #include <lua.hpp>
 
+#include "app/lua_ui_map_overlay.h"
 #include "app/lua_ui_windows.h"
 #include "core/ascii_case.h"
 #include "core/atomic_file.h"
@@ -1757,6 +1758,20 @@ int DrawMinimap(lua_State* L) {
     zv.reach = range; // the circle's radius r is `range` map units, however the map turns
     zv.reach_from = glm::vec2(me->x, me->y);
     draw_zone_view(s, h, zv);
+    MapOverlayView overlay;
+    overlay.minimap = true;
+    overlay.x0 = cx - r; overlay.y0 = cy - r; overlay.x1 = cx + r; overlay.y1 = cy + r;
+    overlay.cx = cx; overlay.cy = cy; overlay.radius = r;
+    overlay.scale = k;
+    overlay.turn = hd;
+    overlay.center_x = me->x; overlay.center_y = me->y;
+    // The minimap is centred on the player, but another zone's map (chosen in the atlas) draws no player marker;
+    // the overlay is told the same, so it does not put one back.
+    overlay.have_player = s.view.current_zone;
+    if (overlay.have_player) { overlay.player_x = me->x; overlay.player_y = me->y; }
+    overlay.zone = s.zone;
+    overlay.current_zone = s.view.current_zone;
+    dispatch_map_overlays(L, overlay);
     lua_pushnumber(L, me->x);
     lua_pushnumber(L, me->y);
     lua_pushnumber(L, k);
@@ -1808,6 +1823,18 @@ int DrawZoneMap(lua_State* L) {
     zv.P = [&](float x, float y) { return glm::vec2((x - cx) * k, (y - cy) * k); };
     ImGui::GetWindowDrawList()->PushClipRect(ImVec2(x0, y0), ImVec2(x1, y1), true);
     draw_zone_view(s, h, zv);
+    MapOverlayView overlay;
+    overlay.minimap = false;
+    overlay.x0 = x0; overlay.y0 = y0; overlay.x1 = x1; overlay.y1 = y1;
+    overlay.cx = (x0 + x1) / 2; overlay.cy = (y0 + y1) / 2; overlay.radius = 0.0f;
+    overlay.scale = k;
+    overlay.turn = 0.0f;
+    overlay.center_x = cx; overlay.center_y = cy;
+    overlay.have_player = s.view.current_zone;
+    if (overlay.have_player) { overlay.player_x = me->x; overlay.player_y = me->y; }
+    overlay.zone = s.zone;
+    overlay.current_zone = s.view.current_zone;
+    dispatch_map_overlays(L, overlay);
     ImGui::GetWindowDrawList()->PopClipRect();
     return out;
 }
