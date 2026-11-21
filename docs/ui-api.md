@@ -525,7 +525,9 @@ The pack draws these records at the anchors it supports. An empty `target` is th
 
 Use stable target IDs for sections and controls. Show all applicable notices with their source. A control is
 unavailable when any record for it sets `disabled`. Make the control non-interactive in this case and keep its
-reasons and any actions usable. The setting value is still owned by the existing settings service.
+reasons and any actions usable. The setting value is still owned by the existing settings service. The client never
+lists a disabling record for `setting:upscaler`, `setting:ui_name` or `setting:texture_pack` (the way out of an add-on
+or a broken pack; docs/plugins.md "Adding to a pack's window"), so a pack need not guard them itself.
 
 On an explicit action click, call `Activate(window, owner, id)`. The host resolves the current registration and
 checks its owner's current permissions before dispatch. It returns false if the action is unavailable.

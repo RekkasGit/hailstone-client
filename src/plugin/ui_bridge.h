@@ -121,6 +121,11 @@ public:
     bool add_menu(MenuEntry e);
     const std::vector<MenuEntry>& menu() const { return menu_; }
 
+    // The controls that are the player's way out of an add-on or a broken pack: the upscaler (an upscaler add-on),
+    // the UI pack (a UI pack add-on, or a pack that no longer works) and the texture pack (a pack a tool add-on built).
+    // A contribution may put a notice on them but never disable them: set_contribution refuses such an entry whole,
+    // from any owner (script, plugin or upscaler) and in any window.
+    static bool escape_target(std::string_view target);
     // Replaces an entry by owner and id. An invalid update leaves its previous entry intact.
     bool set_contribution(Contribution entry);
     bool set_contribution_from_sdk(std::string_view plugin, const HailstoneUiContribution* entry,

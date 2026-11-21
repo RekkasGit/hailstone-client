@@ -173,13 +173,17 @@ bool UiBridge::add_menu(MenuEntry e) {
     return true;
 }
 
+bool UiBridge::escape_target(std::string_view target) {
+    return target == "setting:upscaler" || target == "setting:ui_name" || target == "setting:texture_pack";
+}
+
 bool UiBridge::set_contribution(Contribution entry) {
     if (entry.plugin.empty() || !identifier(entry.id, kMaxContributionIdBytes) ||
         !identifier(entry.window, kMaxContributionWindowBytes) ||
         (!entry.target.empty() && !identifier(entry.target, kMaxContributionTargetBytes))) return false;
     if (!entry.text.empty() && !display_text(entry.text, kMaxContributionTextBytes)) return false;
     if (entry.disabled) {
-        if (entry.target.empty()) return false;
+        if (entry.target.empty() || escape_target(entry.target)) return false;
         if (entry.text.empty()) entry.text = "This control is disabled.";
     }
     if (!entry.action_label.empty() || !entry.command.empty()) {

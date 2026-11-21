@@ -629,6 +629,31 @@ end)
     CHECK(contributions.empty());
 }
 
+TEST_CASE("Lua plugin: the rows that are a way out take notices but are never disabled") {
+    Host h;
+    h.write("contributor.lua", R"lua(
+local hs = require('hailstone')
+for _, setting in ipairs({'upscaler', 'ui_name', 'texture_pack'}) do
+    local target = 'setting:' .. setting
+    assert(not hs.ui_contribution{ id=setting, window='OptionsWindow', target=target, text='Locked', disabled=true })
+    assert(not hs.ui_contribution{ id=setting, window='OptionsWindow', target=target, disabled=true })
+    assert(hs.ui_contribution{ id=setting, window='OptionsWindow', target=target, text='Managed here' })
+    -- a later update that would disable it is refused too, and the notice stays as it was
+    assert(not hs.ui_contribution{ id=setting, window='OptionsWindow', target=target, text='Now locked', disabled=true })
+end
+print('escape rows checked')
+)lua");
+    REQUIRE(h.scripts->run("contributor", {}));
+    h.scripts->pulse();
+    CHECK(h.printed_part("escape rows checked"));
+    const auto& contributions = h.bridge.contributions();
+    REQUIRE(contributions.size() == 3);
+    for (const auto& entry : contributions) {
+        CHECK_FALSE(entry.disabled);
+        CHECK(entry.text == "Managed here");
+    }
+}
+
 TEST_CASE("Lua plugin: UI contribution registration needs UI and extend capabilities") {
     for (const auto missing : {plugin::kCapUi, plugin::kCapExtend}) {
         CAPTURE(missing);

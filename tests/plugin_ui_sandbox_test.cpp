@@ -313,6 +313,46 @@ TEST_CASE("Plugin UI: contribution bounds and invalid updates preserve current r
     CHECK(bridge.contributions().empty());
 }
 
+TEST_CASE("Plugin UI: no owner may disable the rows that are a way out of an add-on or a broken pack") {
+    using Bridge = plugin::UiBridge;
+    for (const char* target : {"setting:upscaler", "setting:ui_name", "setting:texture_pack"}) {
+        CAPTURE(target);
+        CHECK(Bridge::escape_target(target));
+        Bridge bridge;
+        for (const auto kind : {Bridge::Kind::Plugin, Bridge::Kind::Script, Bridge::Kind::Upscaler}) {
+            CHECK_FALSE(bridge.set_contribution({"Owner", "lock", "OptionsWindow", target, "Locked", "", "", true, kind}));
+            CHECK_FALSE(bridge.set_contribution({"Owner", "lock", "OtherWindow", target, "", "", "", true, kind}));
+            CHECK(bridge.set_contribution({"Owner", "note", "OptionsWindow", target, "A notice", "", "", false, kind}));
+        }
+        HailstoneUiContribution native{sizeof(HailstoneUiContribution), HAILSTONE_UI_CONTRIBUTION_DISABLED,
+                                        "native", "OptionsWindow", target, "Locked", nullptr, nullptr};
+        CHECK_FALSE(bridge.set_contribution_from_sdk("Owner", &native));
+        CHECK_FALSE(bridge.set_contribution_from_sdk("Owner", &native, Bridge::Kind::Upscaler));
+        native.flags = 0;
+        CHECK(bridge.set_contribution_from_sdk("Owner", &native));
+        CHECK(bridge.contributions().size() == 4);
+        CHECK(std::ranges::none_of(bridge.contributions(), [](const Bridge::Contribution& e) { return e.disabled; }));
+    }
+    CHECK_FALSE(Bridge::escape_target("setting:render_scale"));
+    CHECK_FALSE(Bridge::escape_target("setting:Upscaler")); // targets are case-sensitive
+
+    // An upscaler's snapshot keeps its notice on its own row and loses the disabling entry.
+    SandboxUi s;
+    s.host.collect_upscaler_ui_contributions = [](Bridge& snapshot) {
+        HailstoneUiContribution lock{sizeof(HailstoneUiContribution), HAILSTONE_UI_CONTRIBUTION_DISABLED, "lock",
+                                     "OptionsWindow", "setting:upscaler", "Locked", nullptr, nullptr};
+        HailstoneUiContribution note{sizeof(HailstoneUiContribution), 0, "note", "OptionsWindow", "setting:upscaler",
+                                     "Provided by the add-on", nullptr, nullptr};
+        CHECK_FALSE(snapshot.set_contribution_from_sdk("Provider", &lock, Bridge::Kind::Upscaler));
+        CHECK(snapshot.set_contribution_from_sdk("Provider", &note, Bridge::Kind::Upscaler));
+    };
+    s.frame();
+    CHECK(s.run("", R"(
+        local e = hs.UI.contributions.List('OptionsWindow')
+        return #e .. ' ' .. e[1].id .. ' ' .. tostring(e[1].disabled)
+    )") == "1 note false");
+}
+
 TEST_CASE("Plugin UI: upscaler contributions are snapshots and cannot include commands") {
     using Bridge = plugin::UiBridge;
     SandboxUi s;

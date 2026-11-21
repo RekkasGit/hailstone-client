@@ -12,7 +12,9 @@ extern "C" {
 
 /* A notice or disabled control in a location supported by the UI. The host copies
  * all strings before returning. IDs, windows and targets are case-sensitive.
- * A disabled control requires a target. Omit the text to use a stock explanation. */
+ * A disabled control requires a target. Omit the text to use a stock explanation.
+ * setting:upscaler, setting:ui_name and setting:texture_pack are never disabled: such an entry is refused whole
+ * (a notice without the flag is allowed there). */
 typedef struct HailstoneUiContribution {
     uint32_t size;          /* sizeof(HailstoneUiContribution) used by the caller */
     uint32_t flags;         /* HAILSTONE_UI_CONTRIBUTION_* */

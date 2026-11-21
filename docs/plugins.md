@@ -1529,7 +1529,11 @@ if hs.remove_ui_contribution then hs.remove_ui_contribution('nameplate-settings'
   `section:nameplates`, and `setting:<id>` for supported controls. The IDs are the setting keys the Options scripts
   pass to `hs.UI.settings.Option`, such as `setting:render_scale` and `setting:target_plate_highlight`.
 - Set `disabled = true` for a supported individual control. Supply `text` for a custom explanation or omit it to use
-  the stock one. An optional action supplies
+  the stock one. Three rows are the player's way out of an add-on or a broken pack and are never disabled:
+  `setting:upscaler` (an upscaler add-on), `setting:ui_name` (a UI pack, or one that stopped working) and
+  `setting:texture_pack` (a texture pack, such as one a tool add-on built). A disabling entry for one of them is
+  refused whole (`ui_contribution` returns false, `set_ui_contribution` 0, and an upscaler's record is left out of
+  its snapshot), in any window and from any owner; a notice without `disabled` is still allowed there. An optional action supplies
   both `action_label` and a slash `command`. The player's activation dispatches the command with the add-on's
   current capabilities, as with its Plugins menu entries.
 - Native plugins use `set_ui_contribution` and `remove_ui_contribution`, appended to ABI 3. Check
@@ -1829,7 +1833,8 @@ refuses a provider built for a newer ABI.
 **Options notices.** An active provider may supply the optional `ui_contributions` table member. It returns the
 count of pointers to `HailstoneUiContribution` records for the current snapshot. An empty snapshot clears the
 provider's notices. The records are copied immediately and disappear on fallback. Use the same window and target
-IDs as game add-ons. The renderer provider fills `action_label` and
+IDs as game add-ons; the provider cannot disable the Upscaler row (or the other two above). The renderer provider
+fills `action_label` and
 `command` with `NULL`. The example below supplies a Graphics notice.
 
 **The example.** `plugins/example/upscaler/example.c` is a whole provider in plain C: it checks the GPU can blit

@@ -513,6 +513,25 @@ TEST_CASE("plugin windows: its ui/<pack>/ folder, hs.Plugin calls, options and m
     ImGui::DestroyContext(ctx);
 }
 
+TEST_CASE("compiled plugins: the rows that are a way out take notices but are never disabled") {
+    Host h;
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("ExtendTest"));
+    const auto& contributions = h.bridge.contributions();
+    for (const char* setting : {"upscaler", "ui_name", "texture_pack"}) {
+        CAPTURE(setting);
+        h.run(std::string("/extcontribution escape ") + setting);
+        CHECK(contributions.empty());
+        CHECK(h.printed_part("contribution written 0"));
+        h.run(std::string("/extcontribution notice ") + setting);
+        REQUIRE(contributions.size() == 1);
+        CHECK(contributions.front().target == std::string("setting:") + setting);
+        CHECK_FALSE(contributions.front().disabled);
+        h.run("/extcontribution clear");
+        CHECK(contributions.empty());
+    }
+}
+
 TEST_CASE("compiled plugins: UI contributions use the SDK owner's lifetime and permissions") {
     Host h;
     h.approve(plugin::kCapAll);
