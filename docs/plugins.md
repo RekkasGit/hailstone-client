@@ -1610,8 +1610,8 @@ add-on gets at most what its manifest declared (docs/addons.md). Whatever its ca
 
 - **has globals of its own.** It reads the pack's globals (shared state tables such as `modern_colors` or `GPSTATE`),
   but a global it sets is its own, as is every global a pack library it `dofile`s sets.
-  A drawing the add-on makes itself on the zone map or the minimap goes through `hs.UI.map.RegisterOverlay`, which
-  reaches the map the client draws whoever's `map.lua` or `minimap.lua` called it (docs/ui-api.md "Map overlays").
+- **draws on the zone map and the minimap through `hs.UI.map.RegisterOverlay`**, which reaches the map the client
+  draws whoever's `map.lua` or `minimap.lua` called it (docs/ui-api.md "Map overlays").
 - **sees `hs`, `ui` and the standard libraries read-only.**
 - **reaches only its own owner's** exported functions, options and menu entries (the pack's windows reach every
   plugin's).

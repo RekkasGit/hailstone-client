@@ -312,7 +312,8 @@ overlays appear in both.
 
 **When they do not run.** Only a drawn view dispatches. Nothing runs while the map or minimap is hidden, outside a
 drawing frame, or when an add-on replaces the map through `hs.UI.extensions` (`MapViewWnd` `map.canvas`): the
-replacement draws its own view and `hs.DrawZoneMap` never runs, so overlays belong to that replacement.
+replacement draws its own view and `hs.DrawZoneMap` never runs, so overlays belong to that replacement. The
+stock-style `hs.DrawMap` (`map.Draw`), which neither shipped pack calls, draws no overlays either.
 
 ## Color controls for interface and addon settings
 
