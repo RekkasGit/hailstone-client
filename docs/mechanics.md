@@ -2038,19 +2038,31 @@ until /afk. Without input nothing is sent.
 
 #### The NPC target keys
 
-The original's TARGETNPC 32 and CYCLENPCTARGETS 33 accept pets and mercenaries with bTargetCyclable set. Hailstone's
-options below apply to the nearest NPC key and the forward and backward NPC cycles. Eligible targets are still
-ordered by distance within the 500-unit range.
+The original's TARGETNPC 32 and CYCLENPCTARGETS 33 accept pets and mercenaries with bTargetCyclable set. Its scene
+query (EQGraphicsDX9 CSceneGraph vtable +0x98 @0x100690f0) offers only the spawns in sight: it drops a spawn when
+eqgame's callback 0x5c5860 sweeps a 0.25 sphere through the world from 1 over the player's eye point to 2.5 over the
+spawn and is stopped. The options below apply to the nearest NPC key and the forward and backward NPC cycles.
+Eligible targets are still ordered by distance within the 500-unit range.
 
 - Enhancement (option `tab_skip_pets`, hailstone.ini `target.skip_pets`, Options > Display "Tab Skips Pets", on by
   default): leaves out a spawn whose MasterID is a player, and mercenaries. An NPC's own pet stays.
-- By default the NPC must be in the current camera view and clear of occluding geometry, including closed doors.
-  The client tests points on the spawn's body and at eye height against the rendered view and scene collision.
-  **Tab Target Through Walls and Doors** (`tab_target_through_walls`) allows occluded NPCs. It is off when
-  `target.line_of_sight` is true, the default. Profiles that disabled **Tab Needs Line of Sight** keep that preference.
-  The script option `tab_line_of_sight` also retains its original polarity.
-- **Tab Target Off-Screen** (`tab_target_offscreen`, `target.offscreen` in hailstone.ini) allows candidates outside the
-  camera view, including behind the camera. It is off by default. The two visibility options apply independently.
+- Line of sight, on by default as in the original: the NPC must be clear of the zone, placed objects and doors as they
+  stand, to a point at the spawn's middle, its eyes or its lower body; one clear point is enough. Without the zone's
+  collision every NPC counts as seen. Change from the original: the original tests from the player's eye point
+  (0x5c5860 through CDisplay 0x490f60); Hailstone tests from the camera that drew the scene (the eyes when no scene
+  has been drawn), so it offers what is visible on screen. In a third-person view it can pick an NPC the camera sees
+  but the character does not, and the server may then refuse spells for line of sight. Hailstone option **Tab Target Through Walls
+  and Doors** (`tab_target_through_walls`, Options > Display; Gamepad Options > Interface "Target through walls and
+  doors") turns the test off. It is stored as hailstone.ini `target.line_of_sight` (true, the test on, by default),
+  so profiles that turned off the old **Tab Needs Line of Sight** keep that choice, and the script option
+  `tab_line_of_sight` keeps its old polarity.
+- Change from the original (option `tab_target_offscreen`, hailstone.ini `target.offscreen`, Options > Display "Tab
+  Target Off-Screen", Gamepad "Target off-screen", off by default): only NPCs on screen, with one of those points
+  inside the view of the camera that drew the scene (third-person and isometric too) and within the actor clip
+  distance. The original has no view test. Turned on, NPCs off-screen and behind the camera are offered too.
+- Not modelled yet (docs/todo.md): the original measures the range and the order on the horizontal distance (it
+  compares squared x/y distances), where the client uses 3D distance, and gives the PC and corpse cycles the same
+  sight test.
 
 #### Target death and auto targeting
 

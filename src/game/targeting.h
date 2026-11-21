@@ -12,8 +12,15 @@
 //   TARGETPC 30 (mode 0, restart), CYCLEPCTARGETS 31 (0), TARGETNPC 32 (1,
 //   restart), CYCLENPCTARGETS 33 (1), TARGETCORPSE 34 (2, restart),
 //   CYCLECORPSETARGETS 35 (2), range 500 for all.
-// Not modelled (the scene graph lives in EQGraphicsDX9.dll, vtable +0x98): the
-// distance it measures. The client offers the spawns within 500 units of the
+// The spawns come from the scene graph (EQGraphicsDX9.dll, CSceneGraph vtable
+// +0x98 @0x100690f0). For each actor that eqgame's filter passes, it measures
+// the squared horizontal distance from the eye point against the squared
+// range, asks the list's prune callback 0x5c6570, then drops the spawn when
+// callback 0x5c5860 (CDisplay 0x490f60, a 0.25 sphere swept through the world)
+// is blocked between 1 over the eye point and 2.5 over the actor; this holds
+// for all three modes. Not modelled yet (docs/todo.md): the horizontal
+// distance, and the sight test for the PC and corpse cycles.
+// The client offers the spawns within 500 units of the
 // eye point, in id order, with their 3D distance, that eqgame's filter
 // 0x5c58c0 passes (never the local or the controlled player): mode 0 the
 // players and the mount races with a rider (whom the candidate callback puts
@@ -58,8 +65,10 @@ struct TargetManager {
     // PlayerZoneClient::IsInvisible for another spawn (0x5c58c0's test for the PC and NPC cycles): the traders
     // Hide Traders hides and the buyers Hide Buyers hides (GameConnection::market_hidden). Unset: none.
     std::function<bool(const Spawn&)> invisible;
-    // Hailstone (docs/mechanics.md): the NPC cycle takes only the NPCs allowed by the view and occlusion options.
-    // Unset: no visibility filter.
+    // The NPC cycle takes only the NPCs this allows (app: ClientApp::prepare_target_cycle; docs/mechanics.md):
+    // in sight, as the scene query's 0x5c5860 test above but seen from the camera (Hailstone's change), unless the
+    // option tab_target_through_walls is on, and (Hailstone, option tab_target_offscreen off by default) on
+    // screen. Unset: no visibility filter.
     std::function<bool(const Spawn&)> in_sight;
 };
 

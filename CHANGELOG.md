@@ -15,7 +15,7 @@
 - Archery holds your bow in your left hand, as the original client does: from the first shot until your next melee swing, which brings back your weapons or shield. Other players in the zone see it too.
 - Options can show notices from active add-ons and explain why a setting is unavailable. Notices from several add-ons can appear together in Modern and Gamepad. No add-on can disable the Upscaler, UI pack or Texture pack choice, so the way out of an add-on or a broken pack stays open.
 - Clicking a dead member's name in the Group window targets their corpse when it is in the zone.
-- Tab and the other NPC target keys now pick nearby NPCs visible on screen by default. Separate options allow targeting through walls and doors or off-screen.
+- Tab and the other NPC target keys now pick only nearby NPCs on screen by default, and closed doors and placed objects hide NPCs as walls do. Separate options allow targeting through walls and doors or off-screen.
 - Item descriptions and comparisons show named weapon procs and other item effects even when the spell ID or its local definition is unavailable.
 - NPCs keep their current tint when a live update sends zero or an out-of-range palette index.
 - Bane damage in item descriptions names the creature type with the game's own labels instead of "body type N". A server's body-type change (SetBodyType, read against `Resources/CharacterPropertySets.txt`) updates spell checks and targeting.

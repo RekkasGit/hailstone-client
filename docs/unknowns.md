@@ -1254,11 +1254,13 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - The journal keeps the server's objective group boundaries as separators; a quest's groups are not labelled as numbered stages.
   - Settle: a live quest session with a packet capture.
 
-- **The NPC target keys** (game/targeting.h).
-  - Unknown: whether the scene graph query that offers the cycle's spawns (EQGraphicsDX9.dll, vtable +0x98) tests line of sight.
-  - Now: Hailstone's nearest NPC and NPC cycle bindings default to candidates within 500 units that are in the
-    camera view and clear of occluding geometry. Both visibility checks have independent opt-outs.
-  - Settle: read that query or use the nearest NPC key in the original client with an NPC behind a wall.
+- **The NPC target keys' sight test** (game/targeting.h, app/client_app_input.cpp `prepare_target_cycle`).
+  - Settled: the scene query (CSceneGraph vtable +0x98 @0x100690f0) drops a spawn that eqgame's 0x5c5860 finds
+    hidden by the world. Unknown: whether that sweep (CDisplay 0x490f60 into s3dCollideSphereWithWorld @0x4767a0)
+    also hits doors and placed objects.
+  - Now: the zone, placed objects and doors as they stand all block, from the camera (a deliberate change; the
+    original starts at the eye point) to any of three points on the spawn (the original: one point 2.5 over it).
+  - Settle: read 0x4767a0's object callbacks, or press F8 in the original with an NPC behind a closed door.
 
 - **Group targeting after a death.**
   - Now: Hailstone targets the nearest matching player corpse when the member's living spawn is absent.

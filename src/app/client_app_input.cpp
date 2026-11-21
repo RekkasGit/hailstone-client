@@ -131,7 +131,9 @@ void ClientApp::key_command(const game::KeyMap::Event& e) {
     case C::CYCLECORPSETARGETS:
     case C::TOGGLETARGET:
     case C::TOGGLETWOTARGETS:
-        // __ExecuteCmd's target keys (game/targeting.h): Tab selects a nearby NPC. A frozen player's keys are refused.
+        // __ExecuteCmd's target keys (game/targeting.h): TOGGLETARGET swaps between yourself and the remembered
+        // target; the others cycle the spawns within 500 units, nearest first (Hailstone binds Tab to TARGETNPC).
+        // A frozen player's keys are refused.
         prepare_target_cycle();
         if (conn_->player_status().stand_state != net::kStandFreeze)
             if (auto id = game::target_key_command(target_manager_, cmd, world, eye_position()))
@@ -585,8 +587,14 @@ std::optional<bool> ClientApp::can_see_spawn(std::uint32_t id) const {
     return collision_->line_of_sight(eye_position(), to);
 }
 
-// The target keys' filters, set before each press. Screen position follows the camera that drew the scene,
-// including third-person and isometric views. Occlusion also checks the current positions of doors.
+// The target keys' filters, set before each press. Hailstone: the NPC cycle skips players' pets and mercenaries
+// unless tab_skip_pets is off. Like the original's scene query (CSceneGraph vtable +0x98 @0x100690f0, which drops a
+// spawn when eqgame's callback 0x5c5860 finds the world in the way), the NPC cycle takes only the NPCs in sight
+// unless tab_target_through_walls is on; here the zone, placed objects and doors as they stand all block.
+// Deliberate change from the original: the sight line starts at the camera that drew the scene (third-person and
+// isometric too), not the eye point the original uses, so Tab offers what is visible on screen; it can pick an NPC
+// the character cannot see, and the server may then refuse spells. Hailstone also takes only the NPCs on screen
+// unless tab_target_offscreen is on.
 void ClientApp::prepare_target_cycle() {
     target_manager_.skip_pets = option_value("tab_skip_pets").value_or(1) != 0;
     const auto see_invisible = viewer_see_invisible_rank();
