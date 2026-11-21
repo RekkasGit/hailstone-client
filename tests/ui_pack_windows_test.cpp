@@ -5821,6 +5821,11 @@ TEST_CASE("UI packs: Options changes the Find trail style, Tab targeting and res
             click(point("Target through walls and doors"));
             CHECK(settings.at("tab_target_through_walls") == 1);
             CHECK(settings.at("tab_target_offscreen") == 0);
+            if (std::string_view(pack) == "gamepad") {
+                // The off-screen option is just below the visible rows at this window size.
+                ImGui::GetIO().AddMouseWheelEvent(0, -1);
+                s.frames(3);
+            }
             click(point("Target off-screen"));
             CHECK(settings.at("tab_target_through_walls") == 1);
             CHECK(settings.at("tab_target_offscreen") == 1);
