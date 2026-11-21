@@ -81,7 +81,8 @@ private:
 //   ui.offer_layout_copy, on by default) and another character of this server has a layout. The original only opens
 //   the window from the Options window and /copylayout (pinstCLayoutCopyWnd's only Activate callers are
 //   COptionsWnd's OGP_LayoutCopyButton and Cmd_copylayout). The offer selects the character played last and checks
-//   the available boxes; LC_FirstVisitText says why the window came up and LC_OfferCheckBox turns the offer off.
+//   every box it can (Key Bindings only when the source has a hailstone.ini), since a new character has nothing of
+//   its own to lose; LC_FirstVisitText says why the window came up and LC_OfferCheckBox turns the offer off.
 class LayoutCopyWindow : public StockWindow {
 public:
     LayoutCopyWindow() : StockWindow("LayoutCopyWindow", false) {}

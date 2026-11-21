@@ -349,7 +349,8 @@ struct UiHost {
         std::string world;                   // its world's folder, when this server has characters on several
         bool has_key_bindings = false;       // another character with a saved hailstone.ini
     };
-    // What is copied with the window places, including Hailstone's chat, game options and keyboard bindings.
+    // What is copied with the window places: the original's three boxes, and Hailstone's three for what this client
+    // keeps outside the UI ini (chat.ini's filters and colours, options.ini's game options, hailstone.ini's keys).
     struct LayoutCopyParts {
         bool hot_buttons = false, loadouts = false, socials = false;
         bool chat = false, options = false, key_bindings = false;

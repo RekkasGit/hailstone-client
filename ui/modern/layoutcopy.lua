@@ -2,7 +2,8 @@
 -- copied over the current one (another character's, or the default; File and Mode), what to copy with the windows
 -- (Hot Buttons, Loadouts, Socials) and Copy, which asks first. The list, the check boxes and Copy are the
 -- original's (app/lua_ui_layout.cpp), so the copy is the game's. Hailstone adds Chat, Options and Key Bindings
--- and offers the window on a character's first entry into the world.
+-- (this client keeps them per character) and opens the window at a character's first entry into the world, with a
+-- line saying why and a box to stop offering it.
 local API = hs.UI
 local hud = dofile("lib/hud.lua")
 local W = dofile("lib/widgets.lua")
@@ -41,7 +42,7 @@ local function drawWindow(x, y, w, h, s)
   W.Check(WINDOW, "LC_CopyOptionsCheckBox", "Game Options",
     { tooltip = "Hailstone: the Options window's game settings (not Anonymous or Roleplaying)" })
   W.Check(WINDOW, "LC_CopyKeysCheckBox", "Key Bindings",
-    { tooltip = "Use the selected character's primary and alternate keyboard bindings" })
+    { tooltip = "Hailstone: the selected character's primary and alternate keyboard bindings" })
   if first then
     W.Check(WINDOW, "LC_OfferCheckBox", "Offer this for new characters",
       { tooltip = "Hailstone: also in Options, General" })

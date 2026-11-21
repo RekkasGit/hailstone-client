@@ -258,6 +258,8 @@ struct UiApi::Impl {
     // ViewPort section, which this client does not have, and the HB_<n> hot button files.
     // Hailstone: the Chat and Options boxes also copy the source character's chat.ini and options.ini, which hold
     // what the original keeps in the shared eqclient.ini (net::GameConnection::copy_character_settings).
+    // Key Bindings copies the source character's keyboard map (its hailstone.ini) over this one's (ActionsUi::
+    // copy_key_bindings); the original's copy has no such box (0x55b930 copies only the sections above).
     std::optional<std::pair<std::uint32_t, std::vector<std::string>>> copy_layout(const UiHost::LayoutSource& from,
                                                                               const UiHost::LayoutCopyParts& parts) {
         const bool hot = parts.hot_buttons, loadouts = parts.loadouts, socials = parts.socials;

@@ -104,7 +104,7 @@ ui.window("Copy Layout", function()
     M.toggle(CW, "LC_CopySocialsCheckBox", "Socials", cw, bh)
     M.toggle(CW, "LC_CopyChatCheckBox", "Chat filters and colours", cw, bh)
     M.toggle(CW, "LC_CopyOptionsCheckBox", "Game options", cw, bh)
-    M.toggle(CW, "LC_CopyKeysCheckBox", "Key Bindings", cw, bh)
+    M.toggle(CW, "LC_CopyKeysCheckBox", "Key bindings", cw, bh)
     if first then M.toggle(CW, "LC_OfferCheckBox", "Offer for new characters", cw, bh) end
     ui.Dummy(1, T.px(10))
     M.button(CW, "LC_CopyButton", "Copy", cw, bh, { primary = true })
