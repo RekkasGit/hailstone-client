@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Modern Player Info: right-click the frame to show mana and endurance percentages, current / maximum values, or both. Each readout defaults to off.
 - Fixed stale Hide indicators on other players' nameplates after the server cancels Hide during combat.
 - When the server ends your Hide or Sneak, the chat says so, as in the original client.
 - Memorize individual spells and saved spell sets, or scribe scrolls, while mounted and stopped.
