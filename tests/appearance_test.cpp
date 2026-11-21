@@ -123,7 +123,8 @@ TEST_CASE("ActorTagInfo.txt: field 2 of 1 marks a shield, and a loaded table is 
     using hailstone::game::ActorTagTable;
     using hailstone::game::is_shield_model;
     ActorTagTable tags;
-    // Stock RoF2's form (10 fields, CRLF, no trailing caret) and a later one's (a trailing caret, 9 fields).
+    // The form of the folder at hand, a later live client's (10 fields, CRLF, no trailing caret), and of others (a
+    // trailing caret, 9 fields).
     tags.parse("1^0^1^0^0^0^0^0^0^0\r\n"
                "6^2^36^0^0^0^0^0^0^0\r\n"
                "200^1^-1^0^0^0^0^0^0^0\r\n"
@@ -174,6 +175,8 @@ TEST_CASE("without ActorTagInfo.txt the fixed list decides") {
     hailstone::game::ActorTagTable empty;
     empty.parse("");
     CHECK_FALSE(empty.loaded());
+    // A file without one valid line falls back too (Hailstone, a deliberate difference: the original counts any file
+    // that opens as loaded).
     hailstone::game::ActorTagTable junk;
     junk.parse("not a table\r\n#^1\r\n");
     CHECK_FALSE(junk.loaded());

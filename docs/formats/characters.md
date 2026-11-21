@@ -573,26 +573,38 @@ slot 8, a range item's goes on the shield point when `CDisplay::IsShield` (Actor
 #### ActorTagInfo.txt
 
 `Resources\ActorTagInfo.txt` (stored lower-case, `actortaginfo.txt`) is read with the other appearance tables
-(`game::ActorTagTable`, `assets::load_appearance_data`). RoF2 ships it (48,174 lines); later and server-patched
-folders ship longer ones.
+(`game::ActorTagTable`, `assets::load_appearance_data`). The folder at hand (a later live client's) has one of 48,174
+lines; server-patched folders have longer ones. Whether a RoF2 install ships the file is not known
+(docs/unknowns.md); without it the fixed list above applies, as in the original.
 
 - ASCII text, CRLF line ends, no header or comments. One record a line, fields separated by `^`.
-- The field count differs between folders: stock RoF2 has 10 with no trailing `^`, others 10 with a trailing `^`
-  or 9. Only the first two fields are read.
-- Records are in ascending model order, with gaps. A model listed twice takes its last line.
+- The field count differs between folders: the folder at hand has 10 with no trailing `^`, others 10 with a trailing
+  `^` or 9. Only the first two fields are read.
+- Records are in ascending model order, with gaps. A model listed twice takes its last line, as in the original: its
+  loader (@0x7f4130) does not look for an earlier record while the file loads and puts each new one at the head of its
+  hash bucket (@0x7f43a7), where the lookup (@0x7f4030) finds it first.
 
-| Field | Meaning | Values seen |
+The loader reads each line as four integers and six floats. Field 3 is kept as an integer; a non-zero field 4 keeps
+fields 5 to 7 as a vector; fields 8 to 10 are kept as a second vector only when all three are above 0. What they mean
+is not known, and they are not read here.
+
+| Field | Meaning | Values seen (the folder at hand; later files) |
 |---|---|---|
-| 1 | item model number, `IT<n>` | 1 .. 86799 in RoF2 |
-| 2 | kind: 1 is a shield | 0, 1, 2 in RoF2; later files also 37 .. 64 |
-| 3 | unknown | -1 mostly; 0, 1, 2, 3, 7, 10, 28, 36, 51, 77 |
-| 4 | unknown | 0; -1 or 1 on a few models |
-| 5, 6, 8, 9, 10 | unknown | 0 in RoF2 (a later file has small fractions in 6) |
-| 7 | unknown | 0; 1.84 .. 3.1 on a few models |
+| 1 | item model number, `IT<n>` | 1 .. 86799 |
+| 2 | kind: 1 is a shield | 0, 1, 2; later files also 37 .. 64 |
+| 3 | unknown (integer) | -1 mostly; 0, 1, 2, 3, 7, 10, 28, 36, 51, 77 |
+| 4 | unknown (non-zero: fields 5 to 7 kept) | 0; -1 or 1 on a few models |
+| 5, 6, 8, 9, 10 | unknown (floats) | 0 (a later file has small fractions in 6) |
+| 7 | unknown (float) | 0; 1.84 .. 3.1 on a few models |
 
-Only kind 1 counts as a shield; what 2 and 37 .. 64 mean is not known (docs/unknowns.md). RoF2's file lists 278
+Only kind 1 counts as a shield; what 2 and 37 .. 64 mean is not known (docs/unknowns.md). The file at hand lists 278
 shields, among them most of the fixed list's, but not IT11004..11012 or 11014..11016, which it holds in the hand.
-A line whose first two fields are not whole numbers is skipped; a file without one valid line counts as not loaded.
+
+- A line whose first two fields are not whole numbers is skipped, the safe choice: how the original's integer reader
+  takes such a field is not traced.
+- The original counts the file as loaded once it opens (@0x7f4130 sets the result before reading a line), so a
+  present but empty or garbled file would hold every model in the hand. Hailstone, a deliberate difference, counts a
+  file without one valid line as not loaded and uses the fixed list.
 
 #### Tints
 

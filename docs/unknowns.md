@@ -925,11 +925,16 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   item unserialiser's write to +0x570 would settle it.
 
 - **ActorTagInfo.txt beyond the shield flag** (docs/formats/characters.md "ActorTagInfo.txt").
-  - Unknown: what fields 3 to 10 and kinds other than 1 (2, and a later file's 37 .. 64) mean; whether the original
-    keeps a model's first or last line when it is listed twice, and whether an empty or unreadable file still counts as
-    loaded.
-  - Now: only kind 1 is a shield; the last line wins; a file with no valid line falls back to the fixed list.
-  - Settle: trace the file's loader behind `CDisplay::IsShield` @0x489d70 in the original.
+  - Unknown: what fields 3 to 10 and kinds other than 1 (2, and a later file's 37 .. 64) mean. Their layout is known
+    (the loader @0x7f4130 keeps field 3 as an integer, fields 5 to 7 when field 4 is non-zero, fields 8 to 10 when all
+    are above 0); their use is not traced. How the loader reads a 9-field line's missing tenth field is not traced.
+  - Now: only kind 1 is a shield; the other fields are not read.
+  - Settle: trace the users of the record's +8, +0xc and +0x10 in the original.
+- **Whether a RoF2 install ships ActorTagInfo.txt** (docs/formats/characters.md "ActorTagInfo.txt").
+  - Unknown: the only copies at hand come from later live clients' folders.
+  - Now: the file is read when present; without it the original's fixed list applies (`game::is_stock_shield_model`),
+    which is what the original does either way.
+  - Settle: look in a genuine RoF2 install's `Resources` folder.
 - **Held-item effects.** Keep WLD cloud nodes, bitmap sequences and EQG surface maps.
   - The WLD creator's manager density configuration (`+0xa8`, separate from EDD actor density) is untraced; the native
     default 1 and descriptor opacity are verified and used.
