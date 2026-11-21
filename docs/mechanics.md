@@ -1572,7 +1572,9 @@ race from 0x8cd up. Checked: PlayerClient::SetNameSpriteState @0x58e2d0.
 
 - Another spawn's HideMode is the server's (spawn record, then SpawnAppearance type 3). When an attack ends Hide,
   the attacking client replies to the server's OP_CancelSneakHide with its cleared appearance so the server can
-  pass the change to observers.
+  pass the change to observers. Hailstone change: it replies even when its own Hide roll failed, since the
+  server's roll is separate and the original answered only while its local flag was set, leaving observers'
+  marks in place (docs/protocol/rof2-packets.md, CancelSneakHide).
 - The player's own comes from Hide and its effects: above 0 while hidden (the local hide flag, Shroud of Stealth
   included) or for regular invisibility (SPAs 12, 314); -2 / -1 for versus undead / animals, no parentheses. Sneak
   alone adds no mark. Checked: EQ_Character::UpdateMyVisibleStatus @0x459510 by PcZoneClient's virtual @0x5804e0,

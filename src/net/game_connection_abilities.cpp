@@ -23,25 +23,28 @@ void GameConnection::handle_ability(Op op, const AppPacket& p) {
         server_coin(op, p);
         break;
     case Op::CancelSneakHide: {
+        // HandleWorldMessage @0x4c7623 calls @0x5319e0: Send_OP_Hide @0x52b9e0 (only while the local hide flag is
+        // set: the flag clears, OP_Hide {0} goes out, UpdateMyVisibleStatus @0x459510 sends SpawnAppearance {me, 3,
+        // level} when the level changed, eqstr 12337), then @0x52bae0 (only while sneaking: the flag clears,
+        // eqstr 12338, SpawnAppearance {me, 15, 0}).
+        // Hailstone change (a fixed RoF2 gap): the replies go out even when the local flags are clear. Stock EQEmu
+        // sends OP_CancelSneakHide only while it holds the player hidden (Client::CancelSneakHide), its Hide roll
+        // is independent of the client's, and it clears its hidden flag and tells observers only on the client's
+        // SpawnAppearance 3 with 0. Answering on the local flag alone left observers' hidden marks in place.
+        const bool was_hidden = hidden_, was_sneaking = sneaking_;
         hidden_ = false;
         sneaking_ = false;
         const auto me = static_cast<std::uint16_t>(world_.player_id);
-        // A cancellation can arrive while a regular invisibility spell still applies.
-        const bool spell_invisible = own_effect_with(game::SPA_INVISIBILITY) >= 0 ||
+        // Regular invisibility that outlasts Hide: a known spell, or a level the server set for the player itself
+        // (SpawnAppearance 3 to the player; a successful Hide's goes to the others only), e.g. a worn item's.
+        // SpawnAppearance 3 with 0 would make EQEmu zero that invisibility (Handle_OP_SpawnAppearance).
+        const bool still_invisible = invis_state_ > 0 || own_effect_with(game::SPA_INVISIBILITY) >= 0 ||
                                      own_effect_with(game::SPA_IMPROVED_INVIS) >= 0;
-        if (!spell_invisible) {
-            if (invis_state_ > 0) invis_state_ = 0;
-            if (auto player = world_.spawns.find(world_.player_id);
-                player != world_.spawns.end() && player->second.invis_rank > 0)
-                player->second.invis_rank = 0;
-        }
         send_zone(encode_hide_cancel());
-        if (me != 0) {
-            // EQEmu relays the visibility update to observers. The server's Hide roll can
-            // succeed independently of our local Hide flag.
-            if (!spell_invisible) send_zone(encode(SpawnAppearance{me, kAppearanceInvisibility, 0}));
-            send_zone(encode(SpawnAppearance{me, kAppearanceSneak, 0}));
-        }
+        if (me != 0 && !still_invisible) send_zone(encode(SpawnAppearance{me, kAppearanceInvisibility, 0}));
+        if (was_hidden) system(12337);
+        if (was_sneaking) system(12338);
+        if (me != 0) send_zone(encode(SpawnAppearance{me, kAppearanceSneak, 0}));
         break;
     }
     case Op::SpawnAppearance:

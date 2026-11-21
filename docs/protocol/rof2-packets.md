@@ -570,14 +570,18 @@ The client decides locally whether a skill may be used and sends one request; th
 | Animation | both | 0x7177 | 4 B: u16 spawn id, u8 action, u8 speed (RoF2 order); fishing sends action 5, speed 5 when standing |
 | Hide, Sneak, Forage, Mend, SenseHeading, Fishing, InstillDoubt (intimidation), SenseTraps, DisarmTraps, LDoNPickLock, TrackUnknown | C→Z | 0x67fe, 0x5d55, 0x5306, 0x0ecf, 0x260a, 0x1e2a, 0x640e, 0x02af, 0x78bf, 0x9be3, 0x4577 | empty |
 | Hide (cancel) | C→Z | 0x67fe | 4 zero bytes: acknowledgement for the server's OP_CancelSneakHide |
-| CancelSneakHide | Z→C | 0x0927 | empty: clear Hide and Sneak locally, then send Hide (cancel) and own SpawnAppearance type 15 with parameter 0. Also send type 3 with parameter 0 when no regular invisibility spell remains |
+| CancelSneakHide | Z→C | 0x0927 | empty: clear Hide and Sneak, then send Hide (cancel), own SpawnAppearance type 3 with parameter 0 unless regular invisibility remains (a known spell, or a level the server set for the player), and type 15 with parameter 0 (note 2) |
 | SpawnAppearance (sneak / hide) | both | 0x0971 | type 15 (sneak) parameter 0/1 from the server sets the player's sneak flag; the client sends {me, 15, 0} to stop sneaking and {me, 3, 0} to unhide before a disarm |
 | SkillUpdate | Z→C | 0x004c | 12 B: u32 skill, u32 value, 4 unknown bytes; the value goes into the profile's skills |
 | Track | both | 0x17e5 | C→Z empty (the tracking window asks for the list); Z→C the list (note 1) |
 
 1. Track Z→C: the list is decoded, sorted and filtered for the tracking window (`net/game_connection_tracking.cpp`). A first u32 of 0xff8b344f (`decode_track_reply_header`) is the tracking timer, not a list.
-2. EQEmu's `Client::CancelSneakHide` sends the cancellation to the hidden player. When the client replies with
-   SpawnAppearance type 3 (visibility) and type 15 (Sneak), the server can relay the cleared state to nearby clients.
+2. CancelSneakHide: the original (HandleWorldMessage @0x4c7623, @0x5319e0) answers only for the flags it holds:
+   Send_OP_Hide @0x52b9e0 while hidden (OP_Hide {0}, type 3 when the visibility level changed, eqstr 12337), then
+   @0x52bae0 while sneaking (eqstr 12338, type 15). Hailstone sends all three whatever its flags (a fixed RoF2
+   gap): EQEmu's `Client::CancelSneakHide` sends the packet only while it holds the player hidden, its Hide roll
+   is independent of the client's, and it clears its hidden flag and relays the reveal to nearby clients only on
+   the client's type 3 with 0. The lines are printed only for a flag that was set.
 
 ### Doors and ground objects (`net/door_packets.h`, `GameConnection` in `net/game_connection_doors.cpp`, rules in `game/doors.{h,cpp}`, drawing and collision in `app/world_objects.{h,cpp}`)
 
