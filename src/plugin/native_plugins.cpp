@@ -76,6 +76,7 @@ static_assert(sizeof(HailstoneWorldSurfacePatch) == 64 && sizeof(HailstoneWorldS
               offsetof(HailstoneWorldSurfacePatchResult, region_xy) == 64);
 static_assert(sizeof(HailstoneWorldReceipt) == 48);
 static_assert(sizeof(void*) != 8 || (sizeof(HailstoneWorldSubmission) == 56 && offsetof(HailstoneWorldSubmission, vertices) == 40));
+static_assert(sizeof(void*) != 8 || (sizeof(HailstoneUiContribution) == 56 && offsetof(HailstoneUiContribution, command) == 48));
 
 #if defined(_WIN32)
 constexpr const char* kExt = ".dll";

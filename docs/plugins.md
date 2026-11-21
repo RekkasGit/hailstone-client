@@ -1534,7 +1534,8 @@ if hs.remove_ui_contribution then hs.remove_ui_contribution('nameplate-settings'
   current capabilities, as with its Plugins menu entries.
 - Native plugins use `set_ui_contribution` and `remove_ui_contribution`, appended to ABI 3. Check
   `HAILSTONE_HOST_HAS(host, set_ui_contribution)` and use the sized `HailstoneUiContribution` record from
-  `sdk/hailstone_ui_contribution.h`. The host copies the strings during registration. See
+  `sdk/hailstone_ui_contribution.h` (56 bytes in a 64-bit build; the client needs `size` to cover `command`). The
+  host copies the strings during registration. See
   [the pack API](ui-api.md#ui-contributions) for the presenter contract.
 
 Some pack windows live in a library that takes the plugin's part, so a plugin adds to them without copying.
