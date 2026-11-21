@@ -1979,7 +1979,7 @@ PlayerZoneClient::IsInvisible @0x5a1850).
 - Group members are exempt. A GM target stays hidden from a non-GM viewer whose rank reaches it.
 - The player's own model is hidden only for a GM with hide mode 3001.
 - Corpses and zero-HP targets are never hidden; remote HP comes from the server's percentage.
-- Any other spawn with property 100 is always hidden.
+- Any other spawn with property 100 (PlayerBase::HasProperty(0x64)) is always hidden.
 - Visibility is independent of material opacity.
 
 #### Actor property sets
@@ -1988,10 +1988,15 @@ PlayerZoneClient::IsInvisible @0x5a1850).
 same set. The client reads the table from the game folder with the other game-file tables.
 
 A spawn record already carries its individual property IDs. An explicit `SetBodyType` update
-(`0x2115`, two 32-bit values for the spawn ID and set ID) replaces the actor's property list with the set's members.
-An unknown set ID is kept as a single property, including when the file is absent. Member IDs are used as-is.
-Spell eligibility, visibility and targeting use property membership. The item window also uses the table to look up
-the localized body-type label for bane damage.
+(`0x2115`, two 32-bit values for the spawn ID and set ID; HandleWorldMessage @0x4c5747 -> 0x59fb20 -> 0x8cfd90) clears
+the actor's property list and fills it with the set's members. An unknown set leaves the list empty, as in the original.
+Hailstone: when the file is absent (not a RoF2 install), the set ID is kept as the single property instead. Member IDs
+are used as-is. The spawn's body type (MQ `BodyType`, `hs` `body_type`) is the list's first entry, 0 when it is empty.
+Stock EQEmu does not send this opcode; it changes a body type by sending the spawn again.
+
+Spell eligibility, visibility and targeting use property membership. The item window names a bane body (a set ID) by
+the set's first member property found in CEverQuest::GetBodyTypeDesc's order (@0x515660, via 0x5159b0); an unknown
+set is eqstr 2455. Without the file or the string, it names the raw ID.
 
 #### AFK
 

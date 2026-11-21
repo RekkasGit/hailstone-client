@@ -15,6 +15,7 @@
 
 #include "app/lua_ui.h"
 #include "core/game_dir.h"
+#include "game/character_property_sets.h"
 #include "game/eq_strings.h"
 #include "game/item_display.h"
 #include "game/server_ext.h"
@@ -116,8 +117,15 @@ TEST_CASE("Item presentation: bane damage uses the localized label of the proper
     item.bane_dmg_body = 701;
     CHECK(game::build_item_display(item, context).description.find("Bane: Unknown creature +5") != std::string::npos);
 
+    // An unknown set is eqstr 2455, as for a set with no labelled member (0x5159b0).
     item.bane_dmg_body = 702;
-    CHECK(game::build_item_display(item, context).description.find("Bane: body type 702 +5") != std::string::npos);
+    CHECK(game::build_item_display(item, context).description.find("Bane: Unknown creature +5") != std::string::npos);
+
+    // Hailstone: without the file the raw ID is named.
+    const game::CharacterPropertySets no_file;
+    context.character_property_sets = &no_file;
+    item.bane_dmg_body = 700;
+    CHECK(game::build_item_display(item, context).description.find("Bane: body type 700 +5") != std::string::npos);
 
     item.bane_dmg_body = 700;
     context.character_property_sets = nullptr;

@@ -184,8 +184,38 @@ TEST_CASE("CastSpell checks direct spawn properties and expands explicit body ty
     update.le(kSet);
     rig.server.zone.send_reliable(make_packet(Op::SetBodyType, std::move(update)));
     REQUIRE(rig.until([&] { return world.spawns.at(set_target).properties == undead_properties; }));
-    CHECK(world.spawns.at(set_target).body_type == kSet);
+    // As for a spawn record, the body type is the list's first entry.
+    CHECK(world.spawns.at(set_target).body_type == 1);
     CHECK(MockEqServer::count(rig.server.zone_log, Op::CastSpell) == 1);
     cast_at(set_target);
     REQUIRE(sent_to(set_target));
+
+    // An unknown set clears the list (0x8cfd90), so the undead-only spell is refused again.
+    ByteWriter unknown;
+    unknown.le(set_target);
+    unknown.le(std::uint32_t{9999});
+    rig.server.zone.send_reliable(make_packet(Op::SetBodyType, std::move(unknown)));
+    REQUIRE(rig.until([&] { return world.spawns.at(set_target).properties.empty(); }));
+    CHECK(world.spawns.at(set_target).body_type == 0);
+    CHECK_FALSE(world.spawns.at(set_target).has_property(0));
+    cast_at(set_target);
+    CHECK_FALSE(A::spells(conn).casting.casting());
+    CHECK(MockEqServer::count(rig.server.zone_log, Op::CastSpell) == 2);
+}
+
+TEST_CASE("SetBodyType without CharacterPropertySets.txt keeps the set ID as the property") {
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    auto& world = A::world(rig.conn);
+    std::uint32_t target = 0;
+    for (const auto& [id, spawn] : world.spawns)
+        if (id != world.player_id) { target = id; break; }
+    REQUIRE(target != 0);
+    ByteWriter update;
+    update.le(target);
+    update.le(std::uint32_t{9100});
+    rig.server.zone.send_reliable(make_packet(Op::SetBodyType, std::move(update)));
+    REQUIRE(rig.until([&] { return world.spawns.at(target).properties == std::vector<std::uint32_t>{9100}; }));
+    CHECK(world.spawns.at(target).body_type == 9100);
+    CHECK(world.spawns.at(target).has_property(9100));
 }

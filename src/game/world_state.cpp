@@ -17,7 +17,8 @@
 namespace hailstone::game {
 
 bool Spawn::has_property(std::uint32_t property) const {
-    if (properties.empty()) return body_type == property;
+    // A spawn built without a list (body_type alone) still answers for its body type; 0 is never a property.
+    if (properties.empty()) return body_type != 0 && body_type == property;
     return std::find(properties.begin(), properties.end(), property) != properties.end();
 }
 

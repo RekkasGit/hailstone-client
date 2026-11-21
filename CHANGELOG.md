@@ -4,7 +4,7 @@
 
 - Item descriptions and comparisons show named weapon procs and other item effects even when the spell ID or its local definition is unavailable.
 - NPCs keep their current tint when a live update sends zero or an out-of-range palette index.
-- Actor property sets now update spell eligibility and targeting. Item bane damage uses the game's body-type labels.
+- Bane damage in item descriptions names the creature type with the game's own labels instead of "body type N". A server's body-type change (SetBodyType, read against `Resources/CharacterPropertySets.txt`) updates spell checks and targeting.
 - Fixed Horizon Hills scenery protruding through the ground near cliffs in Trakanon's Teeth and at the Stonebrunt waterfall.
 - A GM's /kill now drops you to -10000 HP, as in the original client, until the server next updates your HP (it only played the sound and printed the line)
 - Door clicks use the distance to the spot you clicked, fixing long-range zoning through the Guild Lobby entrance. The Plane of Fire orb in Plane of Tranquility can also be clicked.

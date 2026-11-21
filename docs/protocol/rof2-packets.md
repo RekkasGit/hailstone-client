@@ -202,6 +202,7 @@ Allocation 58: base STR 85, DEX 75, AGI 80, STA 85, INT 75, WIS 75, CHA 75, defa
 | DeleteSpawn | both | 0x7280 | Z→C 5 B: u32 id, u8 1; C→Z 4 B: u32 own spawn id (note 2) |
 | SpawnAppearance | both | 0x0971 | 8 B: u16 id (0 = me), u16 type, u32 parameter |
 | ChangeSize | Z→C | 0x4707 | 16 B: u32 id, f32 size, u32 0, f32 1.0 (sent instead of SpawnAppearance type Size) |
+| SetBodyType | Z→C | 0x2115 | 8 B: u32 spawn id, u32 property set id (`Resources/CharacterPropertySets.txt`); other sizes are ignored (0x4c5747). Not in EQEmu's table; stock EQEmu does not send it (docs/mechanics.md, Actor property sets) |
 | HPUpdate | Z→C | 0x2828 | 10 B: i16 id, u32 current, i32 max |
 | MobHealth | Z→C | 0x37b1 | 3 B: u16 id, u8 percent |
 | ChannelMessage | both | 0x2b2d | cstr sender, cstr target, u32 0, u32 language, u32 channel, 5 B, u32 skill, cstr message, 15 zero bytes (note 3) |

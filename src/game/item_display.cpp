@@ -304,24 +304,24 @@ std::string spell_effect_text(const net::Item& item, const ItemDisplayContext& c
     return out;
 }
 
+// The bane body is a property set ID: 0x5159b0 looks the set up and names it with CEverQuest::GetBodyTypeDesc
+// @0x515660 (the first member property found, in this order); an unknown set is eqstr 2455.
+// Hailstone: without the table or the string the line names the raw ID instead.
 std::string bane_body_name(const ItemDisplayContext& ctx, std::uint32_t set_id) {
-    if (ctx.character_property_sets && ctx.strings) {
+    if (ctx.character_property_sets && !ctx.character_property_sets->empty() && ctx.strings) {
         const auto members = ctx.character_property_sets->find(set_id);
-        if (!members.empty()) {
-            // A set can match several labels. The item window uses the first matching property in this order.
-            constexpr std::pair<std::uint32_t, std::uint32_t> labels[] = {
-                {21, 2437}, {5, 2438}, {26, 2439}, {24, 2440}, {6, 2441}, {4, 2442}, {1, 2443}, {22, 2444},
-                {2, 2445}, {7, 2446}, {23, 2447}, {25, 2448}, {3, 2449}, {13, 2450}, {14, 2451}, {15, 2452},
-                {12, 2453}, {28, 2454}, {19, 5754}, {20, 5786}, {34, 5841}, {18, 664},
-            };
-            std::uint32_t label = 2455;
-            for (const auto& [property, string_id] : labels) {
-                if (std::ranges::find(members, property) == members.end()) continue;
-                label = string_id;
-                break;
-            }
-            if (ctx.strings->has(label)) return str(ctx, label);
+        constexpr std::pair<std::uint32_t, std::uint32_t> labels[] = {
+            {21, 2437}, {5, 2438}, {26, 2439}, {24, 2440}, {6, 2441}, {4, 2442}, {1, 2443}, {22, 2444},
+            {2, 2445}, {7, 2446}, {23, 2447}, {25, 2448}, {3, 2449}, {13, 2450}, {14, 2451}, {15, 2452},
+            {12, 2453}, {28, 2454}, {19, 5754}, {20, 5786}, {34, 5841}, {18, 664},
+        };
+        std::uint32_t label = 2455;
+        for (const auto& [property, string_id] : labels) {
+            if (std::ranges::find(members, property) == members.end()) continue;
+            label = string_id;
+            break;
         }
+        if (ctx.strings->has(label)) return str(ctx, label);
     }
     return std::format("body type {}", set_id);
 }

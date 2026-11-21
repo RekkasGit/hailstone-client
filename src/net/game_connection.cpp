@@ -1581,10 +1581,15 @@ void GameConnection::handle_zone(const AppPacket& p) {
             auto it = world_.spawns.find(update->spawn_id);
             if (it == world_.spawns.end()) break;
             auto& spawn = it->second;
-            spawn.body_type = update->set_id;
+            // HandleWorldMessage @0x4c5747 (8 bytes: spawn ID, set ID) -> 0x59fb20 -> 0x8cfd90: the spawn's property
+            // list is cleared, then filled with the set's members; an unknown set leaves it empty.
+            // Hailstone: without the file (not a RoF2 install) the set ID is kept as the single property instead.
             const auto members = character_property_sets_.find(update->set_id);
-            if (members.empty()) spawn.properties = {update->set_id};
-            else spawn.properties.assign(members.begin(), members.end());
+            if (!members.empty()) spawn.properties.assign(members.begin(), members.end());
+            else if (character_property_sets_.empty()) spawn.properties = {update->set_id};
+            else spawn.properties.clear();
+            // As for a spawn record, body_type is the list's first entry (0 for an empty list).
+            spawn.body_type = spawn.properties.empty() ? 0 : spawn.properties.front();
         }
         break;
     case Op::SetFace:
