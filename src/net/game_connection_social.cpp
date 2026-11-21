@@ -2451,7 +2451,10 @@ void GameConnection::handle_social(Op op, const AppPacket& p) {
                 // the leader of the raid." (5069) or "%1 is now the leader of your raid." (5070), colour 0x111, every
                 // time (EQEmu sends it at every zone-in).
                 set_raid_ability_ranks(u->leadership);
-                // EQEmu puts the new leader in both name fields. A nameless update only supplies ranks.
+                // RoF2 reads the +72 name alone; the +4 fallback matches RaidCreate (EQEmu puts the new leader in both
+                // name fields, so it never fires against a stock server). A deliberate change from RoF2: with both
+                // names empty the original clears the leader and prints 5070 with a blank name; here the update only
+                // supplies ranks and the known leader is kept.
                 const auto& leader = g.leader_name.empty() ? g.player_name : g.leader_name;
                 if (leader.empty()) break;
                 raid_.leader = leader;
