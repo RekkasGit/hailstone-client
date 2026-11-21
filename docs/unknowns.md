@@ -919,12 +919,22 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 
 ## Characters and models
 
+- **Held-model tint index.** `PlayerClient::SetHeldModel`'s OP_WearChange carries `ItemBase_GetPaletteTintIndex`
+  (item definition +0x570) of the primary (slot 7) or secondary (slot 8) item. Which serialised item field fills
+  +0x570 is not traced, so Hailstone sends 0 (stock EQEmu also sends 0 for the spawn's tint indexes). Tracing the
+  item unserialiser's write to +0x570 would settle it.
+
 - **ActorTagInfo.txt beyond the shield flag** (docs/formats/characters.md "ActorTagInfo.txt").
-  - Unknown: what fields 3 to 10 and kinds other than 1 (2, and a later file's 37 .. 64) mean; whether the original
-    keeps a model's first or last line when it is listed twice, and whether an empty or unreadable file still counts as
-    loaded.
-  - Now: only kind 1 is a shield; the last line wins; a file with no valid line falls back to the fixed list.
-  - Settle: trace the file's loader behind `CDisplay::IsShield` @0x489d70 in the original.
+  - Unknown: what fields 3 to 10 and kinds other than 1 (2, and a later file's 37 .. 64) mean. Their layout is known
+    (the loader @0x7f4130 keeps field 3 as an integer, fields 5 to 7 when field 4 is non-zero, fields 8 to 10 when all
+    are above 0); their use is not traced. How the loader reads a 9-field line's missing tenth field is not traced.
+  - Now: only kind 1 is a shield; the other fields are not read.
+  - Settle: trace the users of the record's +8, +0xc and +0x10 in the original.
+- **Whether a RoF2 install ships ActorTagInfo.txt** (docs/formats/characters.md "ActorTagInfo.txt").
+  - Unknown: the only copies at hand come from later live clients' folders.
+  - Now: the file is read when present; without it the original's fixed list applies (`game::is_stock_shield_model`),
+    which is what the original does either way.
+  - Settle: look in a genuine RoF2 install's `Resources` folder.
 - **Held-item effects.** Keep WLD cloud nodes, bitmap sequences and EQG surface maps.
   - The WLD creator's manager density configuration (`+0xa8`, separate from EDD actor density) is untraced; the native
     default 1 and descriptor opacity are verified and used.
@@ -1244,10 +1254,17 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - The journal keeps the server's objective group boundaries as separators; a quest's groups are not labelled as numbered stages.
   - Settle: a live quest session with a packet capture.
 
-- **The NPC target keys** (game/targeting.h).
-  - Unknown: whether the scene graph query that offers the cycle's spawns (EQGraphicsDX9.dll, vtable +0x98) tests line of sight.
-  - Now: every NPC within 500 units is offered. The Hailstone option `tab_line_of_sight` (on by default) adds a sight test of its own.
-  - Settle: reading that query, or pressing Tab in the original client with an NPC behind a wall.
+- **The NPC target keys' sight test** (game/targeting.h, app/client_app_input.cpp `prepare_target_cycle`).
+  - Settled: the scene query (CSceneGraph vtable +0x98 @0x100690f0) drops a spawn that eqgame's 0x5c5860 finds
+    hidden by the world. Unknown: whether that sweep (CDisplay 0x490f60 into s3dCollideSphereWithWorld @0x4767a0)
+    also hits doors and placed objects.
+  - Now: the zone, placed objects and doors as they stand all block, from the camera (a deliberate change; the
+    original starts at the eye point) to any of three points on the spawn (the original: one point 2.5 over it).
+  - Settle: read 0x4767a0's object callbacks, or press F8 in the original with an NPC behind a closed door.
+
+- **Group targeting after a death.**
+  - Now: Hailstone targets the nearest matching player corpse when the member's living spawn is absent.
+  - Settle: check whether RoF2 targets a corpse from the Group window and which it chooses when several are present.
 
 - **Labels and gauges** (`app/lua_ui_values.cpp`).
   - ATK leaves out the profile's `+0x3468` bonus.

@@ -188,11 +188,14 @@ void ActorTagTable::parse(std::string_view text) {
         std::int32_t kind = 0;
         auto [end1, ec1] = std::from_chars(f[0].data(), f[0].data() + f[0].size(), model);
         auto [end2, ec2] = std::from_chars(f[1].data(), f[1].data() + f[1].size(), kind);
+        // A line whose first two fields are not whole numbers is skipped, the safe choice: how the original's integer
+        // reader (@0x7f4130) takes such a field is not traced.
         if (ec1 != std::errc{} || end1 != f[0].data() + f[0].size() || ec2 != std::errc{} ||
             end2 != f[1].data() + f[1].size())
             continue;
         ++records_;
-        // A model listed twice takes its last line (unknowns.md: the stock files list none twice with two kinds).
+        // A model listed twice takes its last line, as in the original: its loader (@0x7f4130) does not look for an
+        // earlier record while loading and puts each new one at its hash bucket's head (@0x7f43a7), found first.
         if (kind == 1)
             shields_.insert(model);
         else

@@ -148,6 +148,7 @@ struct UiHost {
     // CollisionMesh::bounds).
     std::string zone_short_name;
     std::string zone_long_name;             // the zone's name for the windows (OP_NewZone)
+    std::uint32_t zone_entry = 0;           // advances on every successful entry, including the same zone again
     float game_hour = -1.0f;                // the game clock (game/sky_clock.h hour: 1.0 .. 24.99), -1 unknown
     // Where the map edits made on this server go and are read first (servers/<profile>/maps, core/server_profile.h);
     // empty: maps/ in the character's folder (the user_dir of StockWindow::ini_loaded).
@@ -186,6 +187,8 @@ struct UiHost {
     const mq::Registry* registry = nullptr;
     // What the plugins give the UI (plugin/ui_bridge.h; app/lua_ui_plugins.h): null without plugins.
     plugin::UiBridge* plugin_ui = nullptr;
+    // Copy the currently active render provider's UI data into the pack's contribution snapshot.
+    std::function<void(plugin::UiBridge&)> collect_upscaler_ui_contributions;
     // The server's compiled plugins waiting for the player's word (Automation::plugin_consent; hs.PluginConsent), and
     // the answer (true allow, false refuse, nullopt put away). Empty: none.
     std::function<std::optional<plugin::ConsentPrompt>()> plugin_consent;
@@ -347,12 +350,13 @@ struct UiHost {
         std::string label, mode;
         std::filesystem::path character_dir; // the character's folder (core/character_files.h); empty: defaults.ini
         std::string world;                   // its world's folder, when this server has characters on several
+        bool has_key_bindings = false;       // another character with a saved hailstone.ini
     };
-    // What is copied with the window places: the original's three boxes, and Hailstone's two for the files this
-    // client keeps outside the UI ini (chat.ini's filters and colours, options.ini's game options).
+    // What is copied with the window places: the original's three boxes, and Hailstone's three for what this client
+    // keeps outside the UI ini (chat.ini's filters and colours, options.ini's game options, hailstone.ini's keys).
     struct LayoutCopyParts {
         bool hot_buttons = false, loadouts = false, socials = false;
-        bool chat = false, options = false;
+        bool chat = false, options = false, key_bindings = false;
     };
     std::function<std::vector<LayoutSource>()> layout_sources;
     // Hailstone: the copy also brings the UI's window layout (the character's ui-<pack>.txt keys, LuaUi::

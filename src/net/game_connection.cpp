@@ -664,6 +664,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         world_.spawns.clear();
         ++world_.spawn_set_serial;
         findable_npcs_.clear(); // the old zone's ids
+        ++findable_npcs_revision_;
         quest_npcs_.clear();    // and quest NPCs: the next zone's are asked for when wanted
         quest_npcs_asked_ = false;
         world_.player_id = 0;
@@ -1211,7 +1212,9 @@ void GameConnection::finish_zone_in() {
 
 void GameConnection::request_quest_npcs() {
     // Only of a server whose zone answered the settings request (it runs the script): others never see the opcode.
-    if (!npc_find_enabled() || quest_npcs_asked_ || !zone_ready_ || !hailstone_script_) return;
+    const auto policy = server_ext().map_policy(*this);
+    if (!policy.npc_find_enabled() || policy.npc_find_server_only() || quest_npcs_asked_ ||
+        !zone_ready_ || !hailstone_script_) return;
     quest_npcs_asked_ = true;
     send_zone(encode_quest_npcs_request());
 }
@@ -1545,6 +1548,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
     }
     case Op::DeleteSpawn:
         if (auto id = decode_delete_spawn(p)) {
+            if (findable_npcs_.erase(*id)) ++findable_npcs_revision_;
             duel_spawn_removed(*id, decode_delete_spawn_decayed(p).value_or(false));
             // msgEQRmPlayer: the trade partner (pinstTradeTarget) leaving cancels and closes the trade
             // (CTradeWnd_CancelAndClose, which sends OP_CancelTrade). EQEmu tells only the player who left.
@@ -2033,6 +2037,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
     case Op::SendFindableNPCs:
         // Handle_OP_SendFindableNPCs: an addition (or a change) of the spawn, or its removal.
         if (auto n = decode_findable_npc(p)) {
+            ++findable_npcs_revision_;
             if (n->remove) findable_npcs_.erase(n->spawn_id);
             else findable_npcs_[n->spawn_id] = std::move(*n);
         }
@@ -2762,15 +2767,14 @@ void GameConnection::consider() {
         chat(ChatEvent::Kind::System, strings_.format(12240, {})); // Consider who?
         return;
     }
-    if (it->second.is_corpse) {
-        chat(ChatEvent::Kind::System, strings_.format(12241, {})); // It is futile to consider the dead...
-        return;
-    }
     Consider c;
     c.player_id = world_.player_id;
     c.target_id = world_.target_id;
-    send_zone(encode(c));
-    context_tip(0x1d); // Cmd_consider: the consider tip
+    // Cmd_consider @0x4df830: spawn type 2 and up (a corpse) sends OP_ConsiderCorpse with the same 20 bytes and no
+    // consider tip; the server answers in chat (decay, and a player corpse's resurrection time).
+    const auto op = it->second.is_corpse ? Op::ConsiderCorpse : Op::Consider;
+    send_zone(encode(c, op));
+    if (op == Op::Consider) context_tip(0x1d); // Cmd_consider: the consider tip
 }
 
 void GameConnection::report_hit(const game::HitLine& line, std::uint32_t source, bool report) {

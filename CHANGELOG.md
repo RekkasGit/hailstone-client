@@ -3,8 +3,21 @@
 ## Unreleased
 
 - **Linux arm64 release package** (`hailstone-<version>-linux-arm64.zip`) for arm64 handhelds, boards and laptops with a Vulkan 1.3 driver, such as Mesa's Turnip on Snapdragon; it updates itself like the x64 one. So far it has only been tested on a Qualcomm Snapdragon 8 Elite (an AYN Odin 3 Max)
+- Modern Player Info: right-click the frame to show mana and endurance percentages, current / maximum values, or both. Each readout defaults to off.
+- Considering an NPC or player corpse shows its remaining decay time in chat. Player corpses also show their resurrection time or status.
+- Server add-ons can offer Find for the zone server's advertised NPCs and draw the paths returned by the server.
+- Added `/import` to preview eligible socials and hotbar buttons from game data, fill empty slots, and restore the previous character settings from a backup.
+- The map remembers its zoom and position when reopened in Modern and Gamepad. Zoning or logging out resets the view.
 - Fixed stale Hide indicators on other players' nameplates after the server cancels Hide during combat.
 - When the server ends your Hide or Sneak, the chat says so, as in the original client.
+- Memorize individual spells and saved spell sets, or scribe scrolls, while mounted and stopped.
+- Closing the spell book aborts a scribe in progress with "Aborting scribing of spell.", as in the original, instead of pausing it or dropping it silently.
+- Copy Layout can also bring over another character's keyboard bindings, including movement remaps and alternate keys.
+- Your bow appears in your left hand during the archery animation, then your equipped melee weapons or shield return.
+- Archery holds your bow in your left hand, as the original client does: from the first shot until your next melee swing, which brings back your weapons or shield. Other players in the zone see it too.
+- Options can show notices from active add-ons and explain why a setting is unavailable. Notices from several add-ons can appear together in Modern and Gamepad. No add-on can disable the Upscaler, UI pack or Texture pack choice, so the way out of an add-on or a broken pack stays open.
+- Clicking a dead member's name in the Group window targets their corpse when it is in the zone.
+- Tab and the other NPC target keys now pick only nearby NPCs on screen by default, and closed doors and placed objects hide NPCs as walls do. Separate options allow targeting through walls and doors or off-screen.
 - Item descriptions and comparisons show named weapon procs and other item effects even when the spell ID or its local definition is unavailable.
 - NPCs keep their current tint when a live update sends zero or an out-of-range palette index.
 - Bane damage in item descriptions names the creature type with the game's own labels instead of "body type N". A server's body-type change (SetBodyType, read against `Resources/CharacterPropertySets.txt`) updates spell checks and targeting.

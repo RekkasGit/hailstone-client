@@ -100,6 +100,30 @@ void ActionsUi::reload_keymap() {
     keymap_.load(config_);
 }
 
+void ActionsUi::copy_key_bindings(const std::filesystem::path& from_file) {
+    if (config_.character_path().empty()) return;
+    std::error_code ec;
+    if (std::filesystem::equivalent(from_file, config_.character_path(), ec)) return;
+    Config source;
+    if (!std::filesystem::is_regular_file(from_file, ec) || !source.load(from_file)) {
+        messages_.push_back({"Could not read the source character's key bindings.", 0xd});
+        return;
+    }
+
+    const bool use_wasd = source.get_bool("UseWASDDefault", true);
+    game::KeyMap copied;
+    copied.reset_defaults(use_wasd);
+    copied.load(source);
+    config_.set_bool("UseWASDDefault", use_wasd);
+    copied.save(config_);
+    if (!config_.save(config_path_)) messages_.push_back({"Could not save this character's key bindings.", 0xd});
+
+    // End any commands held under the old mapping before processing input with the new one.
+    keymap_.release_all(pending_key_releases_);
+    cancel_key_capture();
+    keymap_ = std::move(copied);
+}
+
 ActionsUi::~ActionsUi() { save_character(); }
 
 void ActionsUi::press_social(std::int32_t social) {
@@ -112,7 +136,7 @@ void ActionsUi::press_social(std::int32_t social) {
 }
 
 std::vector<game::KeyMap::Event> ActionsUi::process_keys(const platform::InputState& in, bool keyboard_free) {
-    std::vector<game::KeyMap::Event> out;
+    auto out = std::exchange(pending_key_releases_, {});
     auto combo = [&](std::uint8_t code) {
         game::KeyCombo k;
         k.code = code;
@@ -802,8 +826,19 @@ void ActionsUi::melee_attack(net::GameConnection& conn, const mech::Character* c
     bool done = mech::do_attack(ctx, state_, static_cast<std::uint8_t>(slot), 0, r);
     for (const auto& m : r.messages) message(conn, m);
     for (int buff : r.removed_buffs) conn.clear_buff_locally(buff);
-    for (const auto& s : r.sends) // DoRangedAttack's OP_CombatAbility (slot 11)
-        if (auto p = net::encode_skill_send(s)) conn.send_zone_packet(*p);
+    // DoRangedAttack's OP_CombatAbility (slot 11), and the held models DoAttack and DoRangedAttack set around it
+    // (the bow in the left hand from the first shot until the next melee swing), each with its OP_WearChange, in
+    // the original's order.
+    std::size_t held = 0;
+    auto held_models = [&](std::size_t sent) {
+        for (; held < r.held_models.size() && r.held_models[held].after_sends <= sent; ++held)
+            conn.set_held_model(r.held_models[held].slot, r.held_models[held].item_slot);
+    };
+    for (std::size_t i = 0; i < r.sends.size(); ++i) {
+        held_models(i);
+        if (auto p = net::encode_skill_send(r.sends[i])) conn.send_zone_packet(*p);
+    }
+    held_models(r.sends.size());
     if (r.stop_auto_fire) conn.set_auto_fire(false);
     // The swing's animation: SendCombatAbilityAttack computes PlayerZoneClient_PlayAttackAnimation's choice and
     // drops it (@0x4fb627); the server's OP_Animation, which EQEmu sends to the attacker too, plays it.

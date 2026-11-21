@@ -228,6 +228,8 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - Accept expedition/shared-task roster invitations with real players and a controller.
 - [x] Extended chat channels 57..107 and user colours 355..408 for servers that send a later client's chat colours (a Hailstone extension; stock routing and colours unchanged; docs/mechanics.md "Extended chat routing").
 - [x] Missiles: a despawned source or target handled as DeleteMyMissiles; flying through walls with a target is the original's behaviour (60b1934). Not tested live (no archer).
+- [x] Archery's held models: the bow in the left hand from the shot until the next melee swing, with OP_WearChange (DoAttack @0x5a5000, DoRangedAttack @0x5a4920, SetHeldModel @0x5923f0). Not checked live.
+- [ ] SetHeldModel's local special cases are not ported on any path: a range item named IT159*, IT10758* or IT10742* shown in an empty hand (sent as 0x9f, 0x2a06, 0x29f6), and IT36 shown as IT13 while spawn +0xa2 is set.
 - [x] **Valid spell missiles.**
   - Spell lifetime, launch and ending stages, stationary area contact, source physics clock, spell 859 local presentation. Not checked live.
   - Invalid or absent spell ids still end immediately.
@@ -264,6 +266,8 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
 
 - [x] **Struck down by the gods (OP_GMKill):** the named player's client sets its HP to -10000 after the line and the wave, as the original's case at 0x4c8a23 does (docs/mechanics.md). Unit-tested; not seen live.
 - [ ] OP_GMKill on a player already hovering dead: the original clears the RespawnTimer, which stops the respawn window's auto-select and lets transactions through; Hailstone's hover state has no separate RespawnTimer (docs/mechanics.md).
+
+- [ ] **The target keys' distance and the PC / corpse cycles' sight test** (game/targeting.h). The original's scene query (CSceneGraph +0x98 @0x100690f0) compares the squared horizontal distance with the squared range and orders by it, and drops hidden spawns in all three modes; the client uses 3D distance and tests sight for the NPC cycle only.
 
 ### Movement
 - [x] **Server flymodes.** The local player takes the spawn record's flymode and `SpawnAppearance` 19 (all six modes) and keeps them until the effect cache is rebuilt, when `UpdateLevitationState`'s rules apply again (docs/mechanics.md "fly mode"). Seen live 2026-11-18.
@@ -623,6 +627,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] Trace and fix the upstream gamepad all-pack smoke test's cursor-extent assertion with ImGui debug checks enabled (docs/unknowns.md "UI").
 
 - [x] **Group role controls in both packs.** Right-click member names or the player's own name (Y on a gamepad Group window row); server-confirmed role icons in the Group and Player windows; leader-only Main Tank / Main Assist / Puller changes, mercenaries restricted to tank. Not checked live.
+- [ ] Check RoF2 group targeting after a member dies, including when several of their corpses are in the zone (docs/unknowns.md "UI").
 - [x] **AA names missing from dbstr_us.txt** (a live folder's renumbered titles, gaps in a server's export). The windows show the spell's name, else "Ability <group>" (GameConnection::aa_display_name); plugins and /alternateadv keep the raw title. Seen live.
 - [x] Modern AA window: aligned headers and rows at the dialog's scale, current-frame column bounds, saved column resizing, clipped cells and Reset columns (live acceptance pending).
 - [x] **Hover respawn:** availability validated; same-zone player identity, placement and resources recovered; resurrection confirmation, server timeout and disconnect handled. Live acceptance open.

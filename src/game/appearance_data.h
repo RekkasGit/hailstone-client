@@ -94,6 +94,8 @@ class ActorTagTable {
 public:
     void parse(std::string_view text);
     // Whether the file gave any record. Without one the original's fixed list applies (game::is_shield_model).
+    // Hailstone, a deliberate difference: the original counts the file as loaded once it opens (@0x7f4130), so an
+    // empty or garbled file would hold every model in the hand; here such a file falls back to the fixed list.
     bool loaded() const { return records_ != 0; }
     bool is_shield(std::uint32_t item_model) const { return shields_.contains(item_model); }
     std::size_t record_count() const { return records_; }

@@ -835,6 +835,14 @@ Vectors in `tests/spell_gems_vectors_test.cpp`, replayed call for call.
 
 #### Memorising
 
+A stopped rider can use the spell book to memorize individual spells and spell sets, or scribe a scroll, from the
+saddle. RoF2's book click checks for sitting or a mount (CSpellBookWnd @0x75e790). Movement and dismounting close
+the book and interrupt active or queued memorization and unsent scribing.
+
+Whatever closes the book, its hide worker (unk_CSpellBookWnd_HideWorker @0x75b7c0) aborts a memorization under way
+(12045, "Aborting memorization of spell."), else a scribe whose request is not yet sent (12044, "Aborting scribing of
+spell."), and drops the rest of a spell set.
+
 `get_spell_mem_ticks_left` runs once per draw of the book's memorise gauge:
 
 - A tick when now - last > max(100, (levelNeeded - level + 5) x 100).
@@ -1694,6 +1702,13 @@ behaviour (`LockedActiveWindow=-1`, kept). The original has no locked window unt
   1447. CastSpell asks the same check.
 - Group invites: 148 bytes out. In: declines 1 / 4 / 5 or the pending invitation with the u32 at +0x94.
 
+## Group targeting
+
+Clicking a member's name in the Modern or Gamepad Group window or pressing F2–F6 targets their living spawn. If the
+client has no living spawn for that member, Hailstone falls back to the nearest player corpse with that member's
+name in the current zone. Mounts and NPC corpses are skipped. A member who has already returned to the zone is
+targeted even if their corpse is still there.
+
 ## Group roles
 
 The group leader assigns Main Tank (1), Main Assist (2) and Puller (3) in either UI pack by right-clicking a member's
@@ -2023,15 +2038,31 @@ until /afk. Without input nothing is sent.
 
 #### The NPC target keys
 
-TARGETNPC 32 and CYCLENPCTARGETS 33 take every NPC with bTargetCyclable set, with no owner check, so pets and
-mercenaries too. The two options below filter the NPC cycle and the pad's backward cycle; PC and corpse cycles are
-not filtered.
+The original's TARGETNPC 32 and CYCLENPCTARGETS 33 accept pets and mercenaries with bTargetCyclable set. Its scene
+query (EQGraphicsDX9 CSceneGraph vtable +0x98 @0x100690f0) offers only the spawns in sight: it drops a spawn when
+eqgame's callback 0x5c5860 sweeps a 0.25 sphere through the world from 1 over the player's eye point to 2.5 over the
+spawn and is stopped. The options below apply to the nearest NPC key and the forward and backward NPC cycles.
+Eligible targets are still ordered by distance within the 500-unit range.
 
 - Enhancement (option `tab_skip_pets`, hailstone.ini `target.skip_pets`, Options > Display "Tab Skips Pets", on by
   default): leaves out a spawn whose MasterID is a player, and mercenaries. An NPC's own pet stays.
-- Enhancement (option `tab_line_of_sight`, hailstone.ini `target.line_of_sight`, Options > Display "Tab Needs Line of
-  Sight", on by default): only NPCs with a clear segment from the player's eyes to 1 over the spawn (Spawn.LineOfSight's
-  test). Without the zone's collision every NPC counts as seen.
+- Line of sight, on by default as in the original: the NPC must be clear of the zone, placed objects and doors as they
+  stand, to a point at the spawn's middle, its eyes or its lower body; one clear point is enough. Without the zone's
+  collision every NPC counts as seen. Change from the original: the original tests from the player's eye point
+  (0x5c5860 through CDisplay 0x490f60); Hailstone tests from the camera that drew the scene (the eyes when no scene
+  has been drawn), so it offers what is visible on screen. In a third-person view it can pick an NPC the camera sees
+  but the character does not, and the server may then refuse spells for line of sight. Hailstone option **Tab Target Through Walls
+  and Doors** (`tab_target_through_walls`, Options > Display; Gamepad Options > Interface "Target through walls and
+  doors") turns the test off. It is stored as hailstone.ini `target.line_of_sight` (true, the test on, by default),
+  so profiles that turned off the old **Tab Needs Line of Sight** keep that choice, and the script option
+  `tab_line_of_sight` keeps its old polarity.
+- Change from the original (option `tab_target_offscreen`, hailstone.ini `target.offscreen`, Options > Display "Tab
+  Target Off-Screen", Gamepad "Target off-screen", off by default): only NPCs on screen, with one of those points
+  inside the view of the camera that drew the scene (third-person and isometric too) and within the actor clip
+  distance. The original has no view test. Turned on, NPCs off-screen and behind the camera are offered too.
+- Not modelled yet (docs/todo.md): the original measures the range and the order on the horizontal distance (it
+  compares squared x/y distances), where the client uses 3D distance, and gives the PC and corpse cycles the same
+  sight test.
 
 #### Target death and auto targeting
 
