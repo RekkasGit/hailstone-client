@@ -517,7 +517,7 @@ display name as identity, and keep saved preferences so ordinary behaviour retur
 
 ## UI contributions
 
-API 1.8 adds `hs.UI.contributions`. Packs can use `hs.UI.Supports("contributions", "List")` to detect the service.
+API 1.9 adds `hs.UI.contributions`. Packs can use `hs.UI.Supports("contributions", "List")` to detect the service.
 `List(window)` returns plain records
 for the window's current contributions. Each record has `owner`, `plugin`, `id`, `target`, `text`, `disabled` and
 `action_label`. They are ordered by owner and then ID. An add-on's own Lua window can read its own contributions.
