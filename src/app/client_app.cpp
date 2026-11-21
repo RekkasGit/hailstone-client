@@ -480,7 +480,8 @@ int ClientApp::run() {
             // LightningStrike plays the thunder with the flash, WavePlay(id, 0); ApplyWeatherState shows the start.
             auto weather_step = [&](double at) {
                 weather_.update(at, outdoor, random, zone_id);
-                if (std::int32_t sound = weather_.thunder(); sound && audio_) audio_->play_wave_2d(sound);
+                if (std::int32_t sound = weather_.thunder(); sound && audio_)
+                    audio_->play_group_2d(sound, audio::SoundGroup::Thunder); // Hailstone: the Thunder volume
                 if (std::uint32_t message = weather_.message(); message && conn_) conn_->show_eqstr(message);
             };
             // Once per step of the game clock (core/step_clock.h): the fog band's fade is a fixed step an update.
@@ -1070,6 +1071,8 @@ int ClientApp::run() {
                 pick_camera_.fov_ratio = fov.v != 0.0f ? fov.h / fov.v : 1.0f;
                 pick_camera_.yon = view_.far_plane;
                 pick_camera_valid_ = view_area_.w > 0.0f && view_area_.h > 0.0f;
+                if (pick_camera_valid_) target_view_projection_ = plain_proj * camera_.view();
+                else target_view_projection_.reset();
             }
         }
         // Whatever the scene's branches did, the frame ends on the true camera (also when no picking ran above).

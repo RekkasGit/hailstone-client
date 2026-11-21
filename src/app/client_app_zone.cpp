@@ -337,8 +337,10 @@ void ClientApp::update_zone_settle() {
 }
 
 void ClientApp::unload_zone() {
+    close_character_import();
     retire_world_geometry();
     zone_settle_.cancel();
+    target_view_projection_.reset();
     if (pre_game_loaded_) {
         // Character select's scene goes with its zone: the model player and its camera's field of view.
         pre_game_loaded_ = false;
@@ -652,6 +654,7 @@ void ClientApp::enter_zone() {
         actions_ui_->setup_test_buttons(skills);
         actions_ui_->open_all();
     }
+    ++ui_host_.zone_entry;
     player_ready_ = true;
 }
 
