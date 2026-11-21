@@ -919,6 +919,12 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 
 ## Characters and models
 
+- **ActorTagInfo.txt beyond the shield flag** (docs/formats/characters.md "ActorTagInfo.txt").
+  - Unknown: what fields 3 to 10 and kinds other than 1 (2, and a later file's 37 .. 64) mean; whether the original
+    keeps a model's first or last line when it is listed twice, and whether an empty or unreadable file still counts as
+    loaded.
+  - Now: only kind 1 is a shield; the last line wins; a file with no valid line falls back to the fixed list.
+  - Settle: trace the file's loader behind `CDisplay::IsShield` @0x489d70 in the original.
 - **Held-item effects.** Keep WLD cloud nodes, bitmap sequences and EQG surface maps.
   - The WLD creator's manager density configuration (`+0xa8`, separate from EDD actor density) is untraced; the native
     default 1 and descriptor opacity are verified and used.

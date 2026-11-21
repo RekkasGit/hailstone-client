@@ -223,7 +223,7 @@ Some keys stay in `hailstone.ini` whoever plays (`Config::is_shared_key`):
 - the computer's graphics tier: `display.gpu_tier`;
 - what is taken only at start: `display.msaa`, `display.upscaler`, `ui.name`, `ui.scale`, `ui.cpp_windows`,
   `ui.dev_windows`, `ui.perf_*`, `game.fixed_step`, `audio.enabled`, `audio.soundfont`, `audio.mix_ahead`,
-  `nav.threads`, `nav.prebuild`, `display.extra_shields`.
+  `nav.threads`, `nav.prebuild`.
 
 A shared key still in a character's file moves into `hailstone.ini` when the character enters, if that has none. The
 UI packs' script settings (`ui/settings/<pack>.txt`) are shared too; the window layout is per character

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Which off-hand items are worn as shields now comes from your game folder's `Resources\ActorTagInfo.txt`, as in the original client, so the shields a server's client files add are worn on the forearm. Without that file the original's built-in list is used
+  - `display.extra_shields` and Hailstone's own extra shield list are gone; a few weapons that shared a shield's model are held in the hand again
 - Fixed Horizon Hills scenery protruding through the ground near cliffs in Trakanon's Teeth and at the Stonebrunt waterfall.
 - A GM's /kill now drops you to -10000 HP, as in the original client, until the server next updates your HP (it only played the sound and printed the line)
 - Door clicks use the distance to the spot you clicked, fixing long-range zoning through the Guild Lobby entrance. The Plane of Fire orb in Plane of Tranquility can also be clicked.

@@ -772,9 +772,6 @@ void ClientApp::apply_settings() {
     npc_names_ = config_.get_bool("display.npc_names", true);
     con_name_colour_ = config_.get_bool("display.con_name_colour", true);
     show_invis_undead_ = config_.get_bool("display.show_invis_undead", false);
-    // display.extra_shields (Hailstone, a deliberate difference): later shields on the shield point, not in the hand.
-    // Read at start only: dressed models are cached.
-    if (!settings_applied_) game::set_extra_shields(config_.get_bool("display.extra_shields", true));
     target_plate_highlight_ = config_.get_bool("display.target_plate_highlight", true);
     plate_overlap_fade_ = config_.get_bool("display.plate_overlap_fade", true);
     target_plate_through_walls_ = config_.get_bool("display.target_plate_through_walls", false);

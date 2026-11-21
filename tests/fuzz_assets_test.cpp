@@ -35,6 +35,7 @@
 #include "core/ini_file.h"
 #include "core/server_profile.h"
 #include "core/shared_file_cache.h"
+#include "game/appearance_data.h"
 #include "nav/nav_mesh.h"
 #include "platform/gpu_ipc.h"
 #include "render/gpu_cache_protocol.h"
@@ -732,6 +733,12 @@ TEST_CASE("fuzz: XMI, sound and effect tables, ini and tag text") {
               (void)ini.get_int("a", "k", 1);
               (void)ini.get_int("HotButtons", "Page1Button1", 2);
               (void)ini.to_string();
+          });
+    sweep("ActorTagInfo.txt", {text_bytes("1^0^1^0^0^0^0^0^0^0\r\n200^1^-1^0^0^0^0^0^0^0\r\n"), text_bytes("4294967296^1^\n-5^1\n7\n300^1^0^\n300^0\n")}, 0, 300,
+          [&](std::span<const std::byte> d) {
+              game::ActorTagTable tags;
+              tags.parse(as_text(d));
+              (void)tags.is_shield(200);
           });
     sweep("eqhost.txt", {text_bytes("\xEF\xBB\xBF[LoginServer]\r\nHost=login.example.org:5999\r\n"), text_bytes("[LoginServer]\nHost=[2001:db8::1]:65535\nHost=2001:db8::1\nHost=x:99999999999\n")}, 0, 400,
           [&](std::span<const std::byte> d) { (void)profile_from_eqhost(as_text(d)); });

@@ -553,26 +553,37 @@ grip space; skeletal ones are baked in their rest pose.
 
 - Classic and Luclin models carry them on `<code>R_POINT_TRACK` / `<code>L_POINT_TRACK`.
 - A secondary goes on `SHIELD_POINT` when its model number is a shield to `CDisplay::IsShield` @0x489d70
-  (`game::is_shield_model`: IT200..228, 10530..10544, 10664..10671, 11001..11020, 11496..11497 and 25 single numbers
-  such as 14000). The original asks `Resources\ActorTagInfo.txt` first when it loaded, and RoF2 ships none.
+  (`game::is_shield_model`). It asks `Resources\ActorTagInfo.txt` (below) when that file loaded; a model the file does
+  not list as a shield is held in the hand. Without the file it uses a fixed list: IT200..228, 10530..10544,
+  10664..10671, 11001..11020, 11496..11497 and 25 single numbers such as 14000 (`game::is_stock_shield_model`).
 - Texture names do not count.
 - Matching is exact (`find_bone`, so `HAIR_POINT` is not `R_POINT`).
 - EQG models use `ARMR_WEAP`, `ARML_WEAP`, `ARML_SHLD` and the bone's bind matrix.
 - Items are not tinted (`itmt.ini[Primary/SecondaryTintIndex]` is not read).
 
-#### Extra shield models
+#### ActorTagInfo.txt
 
-Hailstone adds, as a deliberate difference (`display.extra_shields`, on by default), 336 later shield models that RoF2
-does not list and so holds in the hand like a weapon: `src/game/shield_models.inc`.
+`Resources\ActorTagInfo.txt` (stored lower-case, `actortaginfo.txt`) is read with the other appearance tables
+(`game::ActorTagTable`, `assets::load_appearance_data`). RoF2 ships it (48,174 lines); later and server-patched
+folders ship longer ones.
 
-- `tools/gen_shield_models.py` made most of them from an EQEmu items table and the game folders: models mostly used
-  by shield items (type 8), and shield ornaments' models whose EQG mesh is flat and covers most of its box seen from
-  the broad side (as shields do and weapon ornaments do not), plus shields the measure misses (`SEEN_SHIELDS`).
-- The rest were added by hand from an items-table query, less the weapon models some shields share (IT0, IT7, IT63,
-  IT10201, IT10650). Running the generator again would drop them.
+- ASCII text, CRLF line ends, no header or comments. One record a line, fields separated by `^`.
+- The field count differs between folders: stock RoF2 has 10 with no trailing `^`, others 10 with a trailing `^`
+  or 9. Only the first two fields are read.
+- Records are in ascending model order, with gaps. A model listed twice takes its last line.
 
-So the Haunting Nightmares ornament (IT101064, IT101068) is worn on the forearm like other shield ornaments, where RoF2
-holds it in the hand.
+| Field | Meaning | Values seen |
+|---|---|---|
+| 1 | item model number, `IT<n>` | 1 .. 86799 in RoF2 |
+| 2 | kind: 1 is a shield | 0, 1, 2 in RoF2; later files also 37 .. 64 |
+| 3 | unknown | -1 mostly; 0, 1, 2, 3, 7, 10, 28, 36, 51, 77 |
+| 4 | unknown | 0; -1 or 1 on a few models |
+| 5, 6, 8, 9, 10 | unknown | 0 in RoF2 (a later file has small fractions in 6) |
+| 7 | unknown | 0; 1.84 .. 3.1 on a few models |
+
+Only kind 1 counts as a shield; what 2 and 37 .. 64 mean is not known (docs/unknowns.md). RoF2's file lists 278
+shields, among them most of the fixed list's, but not IT11004..11012 or 11014..11016, which it holds in the hand.
+A line whose first two fields are not whole numbers is skipped; a file without one valid line counts as not loaded.
 
 #### Tints
 
