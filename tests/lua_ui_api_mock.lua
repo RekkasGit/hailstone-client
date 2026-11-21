@@ -79,6 +79,8 @@ local descriptors = {
   {"CompareSlotItem", "compare", "SlotItem", "function", 0, false},
   {"CompassMarkers", "compass", "Markers", "function", 0, false},
   {"CompassStrips", "compass", "Strips", "function", 0, false},
+  {"UiContributionActivate", "contributions", "Activate", "function", 0, false},
+  {"UiContributionList", "contributions", "List", "function", 0, false},
   {"CursorAttachment", "cursor", "Attachment", "function", 0, false},
   {"ClearCursorButton", "cursor", "ClearButton", "function", 8, false},
   {"CursorCoin", "cursor", "Coin", "function", 0, false},
