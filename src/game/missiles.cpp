@@ -158,7 +158,9 @@ std::uint32_t missile_bow_model(const MissilePacket& packet, std::uint32_t playe
     // The two bow and ammo type pairs in PlayerZoneClient::HandleAmmo.
     if ((range_item->item_type == 5 && packet.item_type == 27) ||
         (range_item->item_type == 6 && packet.item_type == 28))
-        return worn_look(*range_item, kSlotSecondary).material;
+        // DoRangedAttack @0x5a4920 names the model with ItemBase_GetIDFile(0x22) @0x7b3e70, which for an item in the
+        // range slot takes the ornament's main model, not its secondary one, then the item's own.
+        return worn_look(*range_item, kSlotPrimary).material;
     return 0;
 }
 

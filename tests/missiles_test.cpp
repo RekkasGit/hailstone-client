@@ -98,14 +98,14 @@ TEST_CASE("a local arrow launch takes the held bow from the Range slot") {
     CHECK(missile_bow_model(*p, 7, &bow) == 100);
     bow.ornament_main = "IT101";
     bow.ornament_off = "IT102";
-    CHECK(missile_bow_model(*p, 7, &bow) == 102);
+    CHECK(missile_bow_model(*p, 7, &bow) == 101); // the ornament's main model, as GetIDFile gives for the range slot
     CHECK(missile_bow_model(*p, 7, nullptr) == 0);
     CHECK(missile_bow_model(*p, 9, &bow) == 0); // remote shooter
 
     p->item_type = 28;
     CHECK(missile_bow_model(*p, 7, &bow) == 0);
     bow.item_type = 6;
-    CHECK(missile_bow_model(*p, 7, &bow) == 102);
+    CHECK(missile_bow_model(*p, 7, &bow) == 101);
     p->item_type = 19; // thrown weapon
     CHECK(missile_bow_model(*p, 7, &bow) == 0);
     p->item_type = 28;
