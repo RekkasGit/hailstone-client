@@ -94,11 +94,21 @@ local function readoutMode(key)
   return READOUT_HEIGHT[mode] and mode or "none"
 end
 
+-- "current / max" for a pair of labels, made again only when they change (drawn every frame, as hpText is)
+local VALUE_CACHE = {} -- by the current label's id: { current, max, text }
 local function resourceValue(currentId, maxId)
   local current, max = API.character.Label(currentId), API.character.Label(maxId)
-  if current and max and current ~= "" and max ~= "" then
-    return T.Thousands(current) .. " / " .. T.Thousands(max)
+  local c = VALUE_CACHE[currentId]
+  if not c then
+    c = {}
+    VALUE_CACHE[currentId] = c
   end
+  if c[1] ~= current or c[2] ~= max then
+    c[1], c[2] = current, max
+    c[3] = (current and max and current ~= "" and max ~= "") and (T.Thousands(current) .. " / " .. T.Thousands(max))
+      or nil
+  end
+  return c[3]
 end
 
 local function resourceReadout(opts, mode, fraction, currentId, maxId)
