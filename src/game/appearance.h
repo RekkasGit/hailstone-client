@@ -64,12 +64,7 @@ void normalize_appearance(Appearance& a, std::uint32_t race);
 // stay undyed although the server re-sends every slot's tint after
 // OP_Illusion. Where the original drops them is not found
 // (docs/unknowns.md); SwapBodyMaterial itself has no race rule.
-// With `bow` set (a local shot, game::missile_bow_model), the primary is empty and the secondary holds the bow, as
-// PlayerZoneClient::DoRangedAttack @0x5a4920 sets held models 7 and 8. Hailstone (a deliberate difference, not yet
-// switchable): only for the firing animation. The original keeps them until something else sets the held models
-// (DoAttack @0x5a5000's preamble after a ranged attack, game::mechanics::melee_models), and its SetHeldModel sends
-// OP_WearChange for each, so others see the bow too (docs/todo.md).
-Appearance drawn_appearance(const Appearance& a, std::uint32_t race, std::uint32_t bow = 0);
+Appearance drawn_appearance(const Appearance& a, std::uint32_t race);
 
 // OP_WearChange. Returns false when the client ignores it: a body
 // slot of a spawn with a fixed body texture, or a slot >= 9.
@@ -112,12 +107,12 @@ struct HeadModel {
 HeadModel head_model(std::uint32_t race, std::uint8_t gender, std::uint32_t material, std::uint32_t hero_forge = 0);
 
 // CDisplay::IsShield @0x489d70: whether a secondary's item model IT<n> is a shield, which PlayerClient::SetHeldModel
-// shows on bone slot 5 (<code>SHIELD_POINT_DAG / ARML_SHLD) instead of slot 4 (L_POINT / ARML_WEAP).
-// The RoF2 binary uses Resources\ActorTagInfo.txt when that file is present and loads (the model's second field is 1;
-// a model not in it is no shield; the loader @0x7f4130, the lookup @0x7f4030), and a built-in list of model numbers
-// otherwise. Whether a RoF2 install carries the file is unconfirmed (docs/unknowns.md). Hailstone does not read it: it
-// uses the built-in list, plus later shields and shield ornaments when display.extra_shields is enabled
-// (shield_models.inc, tools/gen_shield_models.py).
+// shows on bone slot 5 (<code>SHIELD_POINT_DAG / ARML_SHLD) instead of slot 4 (L_POINT / ARML_WEAP). A fixed list of
+// model numbers; a model named like a shield but not on it (the Haunting Nightmares ornament IT101064) is held in the
+// hand. The original asks Resources\ActorTagInfo.txt's table first when that file loaded; RoF2 ships none.
+// Hailstone (a deliberate difference, display.extra_shields, on by default): with `extra_shields` set, also the
+// models of later shields the list lacks (shield_models.inc, tools/gen_shield_models.py), which RoF2 holds in the
+// hand like a weapon, and of shield ornaments no other item uses (IT101064 among them).
 bool is_shield_model(std::uint32_t item_model);
 bool is_stock_shield_model(std::uint32_t item_model);
 // display.extra_shields, set once at start (dressed models are cached).
