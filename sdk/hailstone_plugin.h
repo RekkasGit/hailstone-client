@@ -1150,6 +1150,16 @@ typedef struct PluginHostApi {
      * connection, a NULL name or one no spell has. Added later in ABI 3: test
      * HAILSTONE_HOST_HAS(host, get_spells_by_name_data_bulk) first. */
     int32_t (*get_spells_by_name_data_bulk)(void* host, const char* name, unsigned char* out, int32_t out_size);
+    /* The shared bulk buffer: HS_BULK_BUFFER_SIZE (2 MiB) bytes to pass the *_data_bulk reads as `out`, so a plugin
+     * need not allocate its own. One plugin holds it at a time. acquire returns it and sets *size (size may be NULL),
+     * or returns NULL with *size 0 while another plugin holds it, or when called outside the plugin's own callbacks
+     * (from another thread among them). Asked again by its holder it returns the same buffer. It stays the plugin's
+     * until release_bulk_buffer or, at the latest, until the callback it was acquired in returns: never keep the
+     * pointer past that. Never zeroed: it holds whatever the last holder left, so zero it yourself if you need to.
+     * No permission needed (the reads still need theirs). Added later in ABI 3: test
+     * HAILSTONE_HOST_HAS(host, acquire_bulk_buffer) first. */
+    unsigned char* (*acquire_bulk_buffer)(void* host, int32_t* size);
+    void (*release_bulk_buffer)(void* host);
 } PluginHostApi;
 /* What use_ability and ability_state take: the kinds of ability the Ability Book lists. The values are stable. */
 enum HS_AbilityKinds {
@@ -1180,6 +1190,7 @@ enum HS_AbilityKinds {
 #define HAILSTONE_ID_NAME_RECORD_SIZE 8
 #define HAILSTONE_ABILITY_RECORD_SIZE 32 /* get_ability_data_bulk's fixed part, before the name */
 #define HS_BULK_LIST_HEADER_SIZE 8 /* HS_Bulk_ListHeader */
+#define HS_BULK_BUFFER_SIZE 2097152 /* acquire_bulk_buffer's buffer: 2 MiB */
 /* raid_action's actions. */
 #define HAILSTONE_RAID_MOVE 1u /* move a member to another group, or out of every group */
 /* Whether this client's host table has `field` (one added after the plugin's ABI) and it is set. */
