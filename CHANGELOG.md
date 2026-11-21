@@ -5,6 +5,7 @@
 - Modern Player Info: right-click the frame to show mana and endurance percentages, current / maximum values, or both. Each readout defaults to off.
 - Considering an NPC or player corpse shows its remaining decay time in chat. Player corpses also show their resurrection time or status.
 - Server add-ons can offer Find for the zone server's advertised NPCs and draw the paths returned by the server.
+- Added `/import` to preview eligible socials and hotbar buttons from game data, fill empty slots, and restore the previous character settings from a backup.
 - Fixed stale Hide indicators on other players' nameplates after the server cancels Hide during combat.
 - When the server ends your Hide or Sneak, the chat says so, as in the original client.
 - Memorize individual spells and saved spell sets, or scribe scrolls, while mounted and stopped.
