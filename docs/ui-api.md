@@ -427,6 +427,13 @@ it (`set_class_name`, docs/plugins.md), else the stock one. Text the client hand
 character select) already carries these. An interface mapping text back to a class, or with its own class list, asks
 `ClassName` by id and keys caches on `ClassNamesRevision()`.
 
+## Zone entries
+
+API 1.10 adds an optional argument to `map.ZoneName` (flat `hs.ZoneName`): `ZoneName(true)` returns a third value, a
+number that changes on every entry into the world, the same zone again included, and is nil outside the world.
+Without the argument it returns the name and short name as before. Compare it for equality only. The packs' map
+windows keep their zoom and centre while closed and reset them when it changes; an older host returns no third value.
+
 ## Discovering optional features
 
 ```lua
