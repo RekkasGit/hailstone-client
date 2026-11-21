@@ -9,7 +9,8 @@
 
 namespace hailstone::platform {
 
-// Pins a directory for bounded enumeration and direct child reads. No symlinks or reparse points are followed.
+// Pins a directory for bounded enumeration and direct child reads. open() resolves links in the path to the directory
+// itself; no symlinks or reparse points below it are followed.
 class ReadOnlyDirectory {
 public:
     enum class EntryType { File, Directory, Other };

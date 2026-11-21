@@ -48,6 +48,27 @@ TEST_CASE("Character import refuses a missing target under a linked character di
 }
 }
 
+TEST_CASE("Character import works when the path to the character directory passes through a link") {
+    // A linked ancestor (a /home that is a link, a games folder on another disk) is not an escape.
+    ImportFixture fixture;
+    const auto real = fixture.target.parent_path().parent_path() / "real";
+    fs::create_directories(real / "settings");
+    std::error_code ec;
+    fs::create_directory_symlink(real, fixture.target.parent_path().parent_path() / "linked", ec);
+    if (ec) return;
+    const auto target = fixture.target.parent_path().parent_path() / "linked" / "settings" / "hotbuttons.ini";
+    REQUIRE(write_file_atomic(real / "settings" / "hotbuttons.ini", kOriginalSettings));
+
+    fixture.actions->enter_zone(target);
+    const auto preview = fixture.actions->preview_import(kIncoming, kSocials);
+    CHECK(preview.plan.error.empty());
+    CHECK(preview.plan.additions == 1);
+    std::string error;
+    CHECK(fixture.actions->apply_import(preview, kIncoming, kSocials, error));
+    CHECK(error.empty());
+    CHECK(fixture.actions->has_import_backup());
+}
+
 TEST_CASE("Character import preview is read-only and can restore a persisted revision after reload") {
     ImportFixture fixture;
     REQUIRE(write_file_atomic(fixture.target, kOriginalSettings));

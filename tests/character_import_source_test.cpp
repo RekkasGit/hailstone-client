@@ -139,8 +139,11 @@ TEST_CASE("Character import refuses link escapes and case-ambiguous settings fil
     fs::create_directory_symlink(outside, game / "UserData", ec);
     if (!ec) {
         CHECK(discover_character_import_sources(game).sources.empty());
-        CHECK_FALSE(discover_character_import_sources(game / "UserData").error.empty());
-        CHECK_FALSE(read_character_import_source(game / "UserData", original.sources[0], error));
+        // A link as the folder itself is the folder chosen, and is followed (a Wine dosdevices path, a linked /home).
+        const auto linked_root = discover_character_import_sources(game / "UserData");
+        CHECK(linked_root.error.empty());
+        CHECK(linked_root.sources.size() == 1);
+        CHECK(read_character_import_source(game / "UserData", original.sources[0], error));
     }
 }
 

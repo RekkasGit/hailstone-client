@@ -75,8 +75,11 @@ std::optional<ReadOnlyDirectory> ReadOnlyDirectory::open(const std::filesystem::
     if (path.empty()) return std::nullopt;
     for (const auto& component : path)
         if (component == "..") return std::nullopt;
+    // The folder itself is one the player chose, or Hailstone's own, and the path to it may pass through links (a
+    // Wine prefix's dosdevices, a /home that is a link on Fedora Atomic and Bazzite, a games folder on another disk).
+    // Those are resolved once here; nothing below the folder is followed.
     std::error_code ec;
-    const auto absolute = std::filesystem::absolute(path, ec).lexically_normal();
+    const auto absolute = std::filesystem::canonical(path, ec);
     if (ec || !absolute.is_absolute()) return std::nullopt;
 #ifdef _WIN32
     auto handle = std::make_shared<Handle>(absolute.root_path(), nullptr);
