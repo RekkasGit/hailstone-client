@@ -622,8 +622,10 @@ default 24: players 8 and NPCs 0x10; 1 self, 2 group, 4 raid; `Appearance::new_a
 
 For new-style races (flag 0x08): `npct.ini` Value<index> (entry index − 1) on the whole actor (not its held items).
 The spawn packet's `NpcTintIndex` selects the initial color, with 0 for no tint.
-`OP_SpawnAppearance` type 39 changes it while the NPC is present. An update with index 0 or an index past
-the palette keeps the current tint.
+`OP_SpawnAppearance` type 39 changes it while the NPC is present (`Handle_OP_SpawnAppearance` @0x4b4b60, new-style
+races only). An update with index 0 or an index past the palette keeps the current tint: the original stores the
+index but `ActorClient_ApplyNpcTint` leaves the actor untouched, and the client, which rebuilds the dress from the
+stored index, does not store it.
 Type 43 sets `show_helm`.
 
 `npct.ini` and `itmt.ini` hold `[Data] Number` entries, `Value1..ValueN` (default 0xffffff), alpha forced to 0xff

@@ -3063,6 +3063,11 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
                         afk_keepalive_.zone_afk_since_ms = s->afk ? now_ms() : -1;
                     }
                     break;
+                // NPC tint. Handle_OP_SpawnAppearance @0x4b4b60 stores NpcTintIndex for
+                // new-style races and calls ActorClient_ApplyNpcTint @0x40cea0, which leaves
+                // the actor as it is for 0 or an index past npct.ini. The index stored here
+                // is what the dress is rebuilt from, so an index the original would not
+                // apply is not stored: the tint on screen stays the same as in the original.
                 case 39:
                     if (a->parameter != 0 && a->parameter <= npc_tint_count_ && game::is_new_style_model_race(s->race))
                         s->appearance.npc_tint = a->parameter;
