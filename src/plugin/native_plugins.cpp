@@ -170,6 +170,11 @@ struct NativePlugins::Impl {
         bool operator==(const ReadyInputs&) const = default;
     };
     mutable std::optional<ReadyInputs> ready_inputs;
+    // The shared bulk buffer (acquire_bulk_buffer): HS_BULK_BUFFER_SIZE bytes, made at the first request and kept for
+    // the client's life, never zeroed. One plugin holds it at a time, until it releases it or the callback it
+    // acquired it in returns (Busy).
+    std::unique_ptr<unsigned char[]> bulk_buffer;
+    const Loaded* bulk_holder = nullptr;
     mutable bool ready_answer = true;
     mutable std::string ready_problem;
 
@@ -332,7 +337,10 @@ struct Loaded {
 // Inside a plugin's code: its capabilities, and it stays loaded until this ends.
 struct Busy {
     explicit Busy(Loaded& l) : l_(l), scope_(l.caps, l.name) { ++l_.busy; }
-    ~Busy() { --l_.busy; }
+    ~Busy() {
+        // Out of its code altogether: the bulk buffer is only the plugin's while it runs, so it goes back for others.
+        if (--l_.busy == 0 && l_.host && l_.host->bulk_holder == &l_) l_.host->bulk_holder = nullptr;
+    }
     Busy(const Busy&) = delete;
     Busy& operator=(const Busy&) = delete;
 
@@ -2450,6 +2458,36 @@ int32_t h_get_spells_by_name_data_bulk(void* h, const char* name, unsigned char*
     return h_get_spells_data_bulk(h, ids.data(), static_cast<int32_t>(ids.size()), data, datamax);
 }
 
+static_assert(HS_BULK_BUFFER_SIZE == 2 * 1024 * 1024);
+
+/// <summary>
+/// The shared bulk buffer, HS_BULK_BUFFER_SIZE bytes for the *_data_bulk reads, so a plugin need not allocate its
+/// own. One plugin holds it at a time: null while another does (it is that plugin's until it releases it or its
+/// callback returns), and null outside the plugin's own callbacks, where nothing would give it back. The holder asking
+/// again gets the same buffer. Its bytes are whatever the last holder left: never zeroed.
+/// </summary>
+/// <param name="h">host</param>
+/// <param name="size">set to the buffer's size, 0 when there is none (may be null)</param>
+/// <returns>the buffer, or null</returns>
+unsigned char* h_acquire_bulk_buffer(void* h, int32_t* size)
+{
+    Loaded& l = Loaded::of(h);
+    if (size) *size = 0;
+    NativePlugins::Impl& m = *l.host;
+    if (!l.busy || (m.bulk_holder && m.bulk_holder != &l)) return nullptr;
+    if (!m.bulk_buffer) m.bulk_buffer.reset(new unsigned char[HS_BULK_BUFFER_SIZE]); // left as it comes: not zeroed
+    m.bulk_holder = &l;
+    if (size) *size = HS_BULK_BUFFER_SIZE;
+    return m.bulk_buffer.get();
+}
+
+// Gives the bulk buffer back for other plugins; nothing when this plugin does not hold it.
+void h_release_bulk_buffer(void* h)
+{
+    Loaded& l = Loaded::of(h);
+    if (l.host->bulk_holder == &l) l.host->bulk_holder = nullptr;
+}
+
 int32_t h_get_raid_data_bulk(void* h, unsigned char* data, int32_t datamax) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_raid_data_bulk");
     if (!c || !data || datamax < static_cast<int32_t>(sizeof(HS_BulkRaidHeader))) return 0;
@@ -2962,6 +3000,13 @@ template <typename R, typename... A, R (*F)(void*, A...), auto Off> struct MainO
 };
 template <auto F, auto Off> constexpr auto main_only_or = &MainOnlyOr<F, Off>::call;
 
+// acquire_bulk_buffer as the table holds it: *size 0 first, so it says 0 for a call main_only refuses (another thread)
+// too.
+unsigned char* acquire_bulk_buffer_entry(void* h, int32_t* size) {
+    if (size) *size = 0;
+    return main_only<h_acquire_bulk_buffer>(h, size);
+}
+
 template <typename F> F symbol(void* lib, const char* name) {
     return reinterpret_cast<F>(platform::library_symbol(lib, name));
 }
@@ -3185,6 +3230,7 @@ void discard(NativePlugins::Impl& m, std::unique_ptr<Loaded> l, bool shutdown) {
         if (m.env.extensions) m.env.extensions->remove(l->chain_id);
     }
     game::clear_class_name_overrides(l->class_names_owner);
+    if (m.bulk_holder == l.get()) m.bulk_holder = nullptr; // (Busy gives it back first; never left to a freed plugin)
     for (const auto& t : std::vector<std::string>(l->tlos)) h_remove_tlo(l.get(), t.c_str());
     platform::unload_library(l->lib);
 }
@@ -3409,6 +3455,8 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.set_ui_contribution = main_only<h_set_ui_contribution>;
     p.table.remove_ui_contribution = main_only<h_remove_ui_contribution>;
     p.table.get_spells_by_name_data_bulk = main_only<h_get_spells_by_name_data_bulk>;
+    p.table.acquire_bulk_buffer = acquire_bulk_buffer_entry;
+    p.table.release_bulk_buffer = main_only<h_release_bulk_buffer>;
     Hooks& hooks = *m.env.hooks;
     Loaded* lp = &p;
     // Each callback runs with the plugin's capabilities and counts as the plugin being busy (no unloading under it).

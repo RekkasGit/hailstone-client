@@ -863,6 +863,7 @@ The bulk reads give packed records (Buff, spawn, extended target, ability and ra
 | `get_raid_data_bulk` | the raid roster |
 | `get_spells_data_bulk` | spells by id, with their effects as text |
 | `get_spells_by_name_data_bulk` | every spell of a name, laid out as `get_spells_data_bulk`'s |
+| `acquire_bulk_buffer`, `release_bulk_buffer` | a shared 2 MiB buffer for the reads above, one plugin at a time |
 
 #### Actions
 
@@ -979,6 +980,31 @@ Hailstone runs on), unaligned.
   raid read, whose `HS_Bulk_RaidHeader` has `count` and `total` meaning the same;
 - write nothing and return 0 below the header's size. With nothing to list, the header alone goes out, `count` 0 and
   `total` 0.
+
+**The shared bulk buffer.** `acquire_bulk_buffer(host, &size)` lends the plugin the client's one bulk buffer,
+`HS_BULK_BUFFER_SIZE` (2 MiB) bytes, to pass the reads as `out`, so a plugin need not allocate a buffer of its own for
+each read. `release_bulk_buffer(host)` gives it back.
+
+- One plugin holds it at a time. While another does, `acquire_bulk_buffer` returns NULL and sets `size` to 0; so it
+  does outside the plugin's own callbacks, from another thread among them. `size` may be NULL.
+- The holder asking again gets the same buffer.
+- It is the plugin's only while the plugin runs: until it releases it or, at the latest, until the callback it
+  acquired it in returns, when the client takes it back. Never keep the pointer past that. Release it as soon as the
+  read's results are copied out, since a plugin your code calls into (a command run with `DoCommand`, say) gets none
+  while you hold it.
+- It is never zeroed: it holds whatever its last holder left. Zero what you need zeroed yourself.
+- It needs no permission; the reads still need `read`.
+- It came later in ABI 3: test `HAILSTONE_HOST_HAS(host, acquire_bulk_buffer)` first.
+
+```c
+int32_t size = 0;
+unsigned char* buf = host->acquire_bulk_buffer(host->host, &size);
+if (buf) {
+    int32_t n = host->get_spells_by_name_data_bulk(host->host, "Third Spire of Necromancy", buf, size);
+    /* ... read the n bytes ... */
+    host->release_bulk_buffer(host->host);
+}
+```
 
 ##### `get_buff_data_bulk`
 

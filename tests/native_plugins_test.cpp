@@ -1504,17 +1504,6 @@ TEST_CASE("native plugins: get_buff_data_bulk and get_pet_buff_data_bulk, laid o
                          "counter type -1, counters 0, slot type 2"));
     sp.buffs[42].tics = 3;
     sp.buffs[62].tics = 9;
-    // All the slots or nothing: a buffer smaller than 62 records gets none.
-    h.printed.clear();
-    h.run("/probebuffs 1797");
-    CHECK(h.printed_line("[Probe] buffs 0 bytes, 0 empty"));
-    // 62 records as before: the disc slot only goes out with room for a 63rd.
-    h.run("/probebuffs 1798");
-    CHECK(h.printed_line("[Probe] buffs 1798 bytes, 58 empty"));
-    h.run("/probebuffs 1826");
-    CHECK_FALSE(h.printed_line("[Probe] buff slot 62: spell 99999, caster 0, tics 9, hits 0, spell type 0, "
-                               "counter type -1, counters 0, slot type 2"));
-    CHECK_FALSE(h.printed_line("[Probe] buffs 1827 bytes, 58 empty"));
 
     // No pet buffs: nothing. Then the pet window's, in the server's order (the slots are not sent).
     h.run("/probepetbuffs");
@@ -1533,13 +1522,6 @@ TEST_CASE("native plugins: get_buff_data_bulk and get_pet_buff_data_bulk, laid o
     CHECK(h.printed_line("[Probe] pet buff: spell 11, tics 1, spell type 1"));
     CHECK(h.printed_line("[Probe] pet buff: spell 99999, tics 4, spell type 0")); // a spell not known: type 0
     CHECK(h.printed_line("[Probe] pet buffs 36 bytes")); // 3 records of 12 bytes
-    // Only whole records go into a buffer too small for all.
-    h.printed.clear();
-    h.run("/probepetbuffs 35");
-    CHECK(h.printed_line("[Probe] pet buff: spell 3002, tics 5, spell type 0"));
-    CHECK(h.printed_line("[Probe] pet buff: spell 11, tics 1, spell type 1"));
-    CHECK_FALSE(h.printed_line("[Probe] pet buff: spell 99999, tics 4, spell type 0"));
-    CHECK(h.printed_line("[Probe] pet buffs 24 bytes"));
 }
 TEST_CASE("native plugins: get_buff_name_data_bulk, laid out as docs/plugins.md says") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
@@ -1582,18 +1564,6 @@ TEST_CASE("native plugins: get_buff_name_data_bulk, laid out as docs/plugins.md 
     CHECK(h.printed_line("[Probe] buff slot 5: spell 3004, caster 12, tics 5, hits 2, spell type 0, counter type 0, "
                          "counters 4, slot type 0"));
     CHECK(h.printed_line("[Probe] buffs 1827 bytes, 58 empty"));
-    // All the buff and song slots, names included, or nothing: 62 records of 29 bytes and "Groupie" is 1805.
-    h.printed.clear();
-    h.run("/probebuffnames 1804");
-    CHECK(h.printed_line("[Probe] buff names 0 bytes, 0 empty, 0 bytes left"));
-    h.run("/probebuffnames 1805");
-    CHECK(h.printed_line("[Probe] buff names 1805 bytes, 58 empty, 0 bytes left"));
-    // The disc slot only goes out with room for its record and its name.
-    h.printed.clear();
-    h.run("/probebuffnames 1839");
-    CHECK_FALSE(h.printed_line("[Probe] buff name slot 62: spell 99999, caster Tester, tics 9, hits 0, "
-                               "spell type 0, counter type -1, counters 0, slot type 2"));
-    CHECK(h.printed_line("[Probe] buff names 1805 bytes, 58 empty, 0 bytes left"));
 }
 TEST_CASE("native plugins: get_spawns_data_bulk, laid out as docs/plugins.md says") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
@@ -1609,35 +1579,17 @@ TEST_CASE("native plugins: get_spawns_data_bulk, laid out as docs/plugins.md say
     CHECK(h.printed_line("[Probe] spawn 13: level 3, class 1, race 1, hp 80%, con 6, name a_rat02"));
     // Every record's strings framed right: nothing left over.
     CHECK(h.printed_line("[Probe] spawns 5, player 0.00 0.00 0.00, 0 bytes left"));
-    // Below 4096 bytes nothing; at 4112 (the header and the 4096 kept free) one record, then it stops.
-    h.printed.clear();
-    h.run("/probespawns 4095");
-    CHECK(h.printed_line("[Probe] spawns 0 bytes"));
-    h.run("/probespawns 4112");
-    CHECK(h.printed_line("[Probe] spawns 1, player 0.00 0.00 0.00, 0 bytes left"));
-    CHECK(h.printed_line("[Probe] spawns past the end 0"));
 }
-TEST_CASE("native plugins: get_spawns_data_bulk stops before a record that would not fit") {
+TEST_CASE("native plugins: get_spawns_data_bulk with names far longer than any stock one") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);
     REQUIRE(h.plugins->load("HostProbe"));
     // Names and suffixes come from the server uncapped: give every spawn 20,000-byte ones, so one record is more
-    // than 80,000 bytes, far past the 4096 kept free.
+    // than 80,000 bytes. All five still fit the shared bulk buffer, framed right.
     for (auto& [id, s] : net::GameConnectionTestAccess::world(*h.world.conn).spawns) {
         s.name = std::string(20000, 'n');
         s.suffix = std::string(20000, 's');
     }
-    // Room for the header and the 4096 only: no record, and nothing written past the end.
-    h.run("/probespawns 8192");
-    CHECK(h.printed_line("[Probe] spawns 0, player 0.00 0.00 0.00, 0 bytes left"));
-    CHECK(h.printed_line("[Probe] spawns past the end 0"));
-    // Room for one record but not two: one, whole.
-    h.printed.clear();
-    h.run("/probespawns 150000");
-    CHECK(h.printed_line("[Probe] spawns 1, player 0.00 0.00 0.00, 0 bytes left"));
-    CHECK(h.printed_line("[Probe] spawns past the end 0"));
-    // The whole buffer: all five.
-    h.printed.clear();
     h.run("/probespawns");
     CHECK(h.printed_line("[Probe] spawns 5, player 0.00 0.00 0.00, 0 bytes left"));
 }
@@ -1670,12 +1622,6 @@ TEST_CASE("native plugins: get_xtarget_data_bulk, laid out as docs/plugins.md sa
     CHECK(h.printed_line("[Probe] xtarget 3: type 3, spawn 0, aggro 0%, hp 0%"));
     CHECK(h.printed_line("[Probe] xtarget 4: type 1, spawn 0, aggro 0%, hp 0%"));
     CHECK(h.printed_line("[Probe] xtargets 80 bytes")); // 5 records of 16 bytes
-    // Only whole records go into a buffer too small for all.
-    h.printed.clear();
-    h.run("/probextargets 47");
-    CHECK(h.printed_line("[Probe] xtarget 1: type 1, spawn 11, aggro 42%, hp 55%"));
-    CHECK_FALSE(h.printed_line("[Probe] xtarget 2: type 1, spawn 13, aggro 60%, hp 0%"));
-    CHECK(h.printed_line("[Probe] xtargets 32 bytes"));
 }
 TEST_CASE("native plugins: get_target_buff_data_bulk, laid out as docs/plugins.md says") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
@@ -1709,34 +1655,6 @@ TEST_CASE("native plugins: get_target_buff_data_bulk, laid out as docs/plugins.m
     CHECK(h.printed_line("[Probe] target buff slot 7: spell 99999, tics 4, spell type 0, caster -"));
     // 8 for the header, then 20+6, 20+7, 20+0: the entry with no spell is not sent
     CHECK(h.printed_line("[Probe] target buffs count 3, total 3, 81 bytes, 3 records, 0 empty, 0 bytes left"));
-    // Only whole records, names included, go into a buffer too small for all, and nothing past its end; the header's
-    // count says how many follow and its total how many the client holds, so the plugin sees it was cut short. The third record (20 bytes) would
-    // fit where the second (27) does not, but nothing follows the first cut: the records stay in order.
-    h.printed.clear();
-    h.run("/probetargetbuffs 60");
-    CHECK(h.printed_line("[Probe] target buff slot 3: spell 3002, tics 5, spell type 0, caster Tester"));
-    CHECK_FALSE(h.printed_line("[Probe] target buff slot 0: spell 11, tics 1, spell type 1, caster Groupie"));
-    CHECK_FALSE(h.printed_line("[Probe] target buff slot 7: spell 99999, tics 4, spell type 0, caster -"));
-    CHECK(h.printed_line("[Probe] target buffs count 1, total 3, 34 bytes, 1 records, 0 empty, 0 bytes left"));
-    CHECK(h.printed_line("[Probe] target buffs past the end 0"));
-    h.printed.clear();
-    h.run("/probetargetbuffs 61");
-    CHECK(h.printed_line("[Probe] target buffs count 2, total 3, 61 bytes, 2 records, 0 empty, 0 bytes left"));
-    CHECK(h.printed_line("[Probe] target buffs past the end 0"));
-    // The last record needs its 20 bytes: one byte short, it is left out.
-    h.printed.clear();
-    h.run("/probetargetbuffs 80");
-    CHECK_FALSE(h.printed_line("[Probe] target buff slot 7: spell 99999, tics 4, spell type 0, caster -"));
-    CHECK(h.printed_line("[Probe] target buffs count 2, total 3, 61 bytes, 2 records, 0 empty, 0 bytes left"));
-    CHECK(h.printed_line("[Probe] target buffs past the end 0"));
-    h.printed.clear();
-    h.run("/probetargetbuffs 27"); // the header and not even one fixed part
-    CHECK(h.printed_line("[Probe] target buffs count 0, total 3, 8 bytes, 0 records, 0 empty, 0 bytes left"));
-    CHECK(h.printed_line("[Probe] target buffs past the end 0"));
-    h.printed.clear();
-    h.run("/probetargetbuffs 7"); // not even the header: nothing
-    CHECK(h.printed_line("[Probe] target buffs 0 bytes"));
-    CHECK(h.printed_line("[Probe] target buffs past the end 0"));
     // A new target whose buffs have not come yet: the old target's are not given as its.
     h.printed.clear();
     w.target_id = 11;
@@ -1854,21 +1772,6 @@ TEST_CASE("native plugins: get_avail_aa_data_bulk and get_avail_disc_data_bulk, 
     CHECK(h.printed_line("[Probe] aas 0: ability 5, name Innate Strength"));
     CHECK(h.printed_line("[Probe] aas 1: ability 77, name -"));
     CHECK(h.printed_line("[Probe] aas count 2, total 2, 39 bytes, 0 bytes left")); // 8, 8+15, 8+0
-    // As many whole records, names included, as fit after the header, whose total still says how many the client
-    // holds; below the header's 8 bytes nothing, and nothing past the end.
-    h.printed.clear();
-    h.run("/probeaas 38");
-    CHECK(h.printed_line("[Probe] aas 0: ability 5, name Innate Strength"));
-    CHECK_FALSE(h.printed_line("[Probe] aas 1: ability 77, name -"));
-    CHECK(h.printed_line("[Probe] aas count 1, total 2, 31 bytes, 0 bytes left"));
-    CHECK(h.printed_line("[Probe] aas past the end 0"));
-    h.printed.clear();
-    h.run("/probeaas 8"); // the header alone: no record fits
-    CHECK(h.printed_line("[Probe] aas count 0, total 2, 8 bytes, 0 bytes left"));
-    h.printed.clear();
-    h.run("/probeaas 7");
-    CHECK(h.printed_line("[Probe] aas 0 bytes"));
-    CHECK(h.printed_line("[Probe] aas past the end 0"));
 
     // The profile's discipline list without its empty entries, in list order, each with its spell's name (none for
     // a spell not in spells_us.txt).
@@ -1877,16 +1780,6 @@ TEST_CASE("native plugins: get_avail_aa_data_bulk and get_avail_disc_data_bulk, 
     CHECK(h.printed_line("[Probe] discs 0: spell 4498, name Test Discipline"));
     CHECK(h.printed_line("[Probe] discs 1: spell 99999, name -"));
     CHECK(h.printed_line("[Probe] discs count 2, total 2, 39 bytes, 0 bytes left")); // 8, 8+15, 8+0
-    h.printed.clear();
-    h.run("/probediscs 38");
-    CHECK(h.printed_line("[Probe] discs 0: spell 4498, name Test Discipline"));
-    CHECK_FALSE(h.printed_line("[Probe] discs 1: spell 99999, name -"));
-    CHECK(h.printed_line("[Probe] discs count 1, total 2, 31 bytes, 0 bytes left"));
-    CHECK(h.printed_line("[Probe] discs past the end 0"));
-    h.printed.clear();
-    h.run("/probediscs 7");
-    CHECK(h.printed_line("[Probe] discs 0 bytes"));
-    CHECK(h.printed_line("[Probe] discs past the end 0"));
     // Before the profile: the header, count 0 and total 0.
     h.printed.clear();
     A::profile(*h.world.conn).reset();
@@ -1939,7 +1832,7 @@ TEST_CASE("native plugins: get_spells_data_bulk, laid out as docs/plugins.md say
     // as its counts say (the name, seven empty ones here at 2 bytes each, the description, then the target type's,
     // resist type's and categories' names) and its effect lines. A spell in the player's book has its description
     // filled in for the player, as the spell display shows it.
-    h.run("/probespells 16384 3020 9999 3021");
+    h.run("/probespells 3020 9999 3021");
     CHECK(h.printed_line("[Probe] spell 0: id 3020, found 1, 642 bytes, name Test Heal, mana 25, target 5, flags 1, "
                          "slots 12, classes 16, strings 14, effects 1")); // 265 + 240 + 16 + 11 + 14 + 30 + 39 + 27
     // The classes that can use it, class 1 first: only the cleric (class 2).
@@ -1966,14 +1859,14 @@ TEST_CASE("native plugins: get_spells_data_bulk, laid out as docs/plugins.md say
     CHECK(h.printed_line("[Probe] spells count 3, 1564 bytes, 0 bytes left"));
     // A spell not in the book keeps dbstr_us.txt's text, its codes left in.
     h.printed.clear();
-    h.run("/probespells 16384 3022");
+    h.run("/probespells 3022");
     CHECK(h.printed_line("[Probe] spell 0 description 3020: Heals you for #1 hit points."));
     // 4 + 265 + 240 + 16 + 11 + 14 + 30 + 49 + 27
     CHECK(h.printed_line("[Probe] spells count 1, 656 bytes, 0 bytes left"));
     // A discipline is the player's own too, though not in the book.
     profile->disciplines = {3022};
     h.printed.clear();
-    h.run("/probespells 16384 3022");
+    h.run("/probespells 3022");
     CHECK(h.printed_line("[Probe] spell 0 description 3020: Heals you for 40 hit points."));
     // The filled text happens to be as long as the unfilled ("40" for "#1").
     CHECK(h.printed_line("[Probe] spells count 1, 656 bytes, 0 bytes left"));
@@ -1988,35 +1881,26 @@ TEST_CASE("native plugins: get_spells_data_bulk, laid out as docs/plugins.md say
     aa.add(rank);
     aa.owned = {{7001, 1, 0}};
     h.printed.clear();
-    h.run("/probespells 16384 3022");
+    h.run("/probespells 3022");
     CHECK(h.printed_line("[Probe] spell 0 description 3020: Heals you for 40 hit points."));
     // An AA rank the player does not own does not count.
     aa.owned.clear();
     h.printed.clear();
-    h.run("/probespells 16384 3022");
+    h.run("/probespells 3022");
     CHECK(h.printed_line("[Probe] spell 0 description 3020: Heals you for #1 hit points."));
     CHECK(std::none_of(h.printed.begin(), h.printed.end(),
                        [](const std::string& line) { return line.find("bytes unread") != std::string::npos; }));
 
-    // Only whole records: the third does not fit in 1200 bytes, and nothing goes past them.
+    // No ids: the count alone.
     h.printed.clear();
-    h.run("/probespells 1200 3020 9999 3021");
-    CHECK(h.printed_line("[Probe] spells count 2, 911 bytes, 0 bytes left"));
-    CHECK(h.printed_line("[Probe] spells past the end 0"));
-    // Below the count's 4 bytes nothing; no ids, the count alone.
-    h.printed.clear();
-    h.run("/probespells 3 3020");
-    CHECK(h.printed_line("[Probe] spells 0 bytes"));
-    CHECK(h.printed_line("[Probe] spells past the end 0"));
-    h.printed.clear();
-    h.run("/probespells 64");
+    h.run("/probespells");
     CHECK(h.printed_line("[Probe] spells count 0, 4 bytes, 0 bytes left"));
 
     // Without 'read': nothing, and the chat window says why.
     Host denied(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     denied.approve(plugin::kCapAll & ~plugin::kCapRead);
     REQUIRE(denied.plugins->load("HostProbe"));
-    denied.run("/probespells 4096 3020");
+    denied.run("/probespells 3020");
     CHECK(denied.printed_line("[Probe] spells 0 bytes"));
     CHECK(denied.printed_line("[Plugin] HostProbe: get_spells_data_bulk needs the server's 'read' permission"));
 }
@@ -2042,7 +1926,7 @@ TEST_CASE("native plugins: get_spells_by_name_data_bulk, every spell of the name
     };
 
     // Every spell of the name, lowest id first, whatever the case asked.
-    h.run("/probespellsbyname 16384 third SPIRE of necromancy");
+    h.run("/probespellsbyname third SPIRE of necromancy");
     CHECK(has_record(0, 16290, 10));
     CHECK(has_record(1, 16291, 20));
     CHECK(has_record(2, 16292, 30));
@@ -2051,37 +1935,30 @@ TEST_CASE("native plugins: get_spells_by_name_data_bulk, every spell of the name
     CHECK(std::none_of(h.printed.begin(), h.printed.end(),
                        [](const std::string& line) { return line.find("bytes unread") != std::string::npos; }));
 
-    // Byte for byte what get_spells_data_bulk gives for those ids, the whole of it and when the buffer is too small
-    // for all three (only whole records) or for the count.
-    for (const char* size : {"16384", "1200", "700", "3"}) {
-        h.printed.clear();
-        h.run(std::string("/probespells ") + size + " 16290 16291 16292");
-        const std::vector<std::string> by_id = h.printed;
-        h.printed.clear();
-        h.run(std::string("/probespellsbyname ") + size + " Third Spire of Necromancy");
-        CHECK(h.printed == by_id);
-    }
+    // Byte for byte what get_spells_data_bulk gives for those ids. (A buffer too small is get_spells_data_bulk's
+    // to handle, and its test's: this call hands it the ids.)
+    h.printed.clear();
+    h.run("/probespells 16290 16291 16292");
+    const std::vector<std::string> by_id = h.printed;
+    h.printed.clear();
+    h.run("/probespellsbyname Third Spire of Necromancy");
+    CHECK(h.printed == by_id);
     // One spell of its name: that one alone.
     h.printed.clear();
-    h.run("/probespellsbyname 16384 Test Heal");
+    h.run("/probespellsbyname Test Heal");
     CHECK(std::any_of(h.printed.begin(), h.printed.end(), [](const std::string& line) {
         return line.starts_with("[Probe] spell 0: id 3020, found 1, ");
     }));
     // A name no spell has, a part of one, or none: the count alone.
     for (const char* name : {"Fourth Spire of Necromancy", "Third Spire", ""}) {
         h.printed.clear();
-        h.run(std::string("/probespellsbyname 64 ") + name);
+        h.run(std::string("/probespellsbyname ") + name);
         CHECK(h.printed_line("[Probe] spells count 0, 4 bytes, 0 bytes left"));
     }
-    // Below the count's 4 bytes nothing, and nothing past the buffer.
-    h.printed.clear();
-    h.run("/probespellsbyname 3 Third Spire of Necromancy");
-    CHECK(h.printed_line("[Probe] spells 0 bytes"));
-    CHECK(h.printed_line("[Probe] spells past the end 0"));
     // No game connection (the login screen): the count alone.
     h.printed.clear();
     auto held = std::move(h.world.conn);
-    h.run("/probespellsbyname 64 Third Spire of Necromancy");
+    h.run("/probespellsbyname Third Spire of Necromancy");
     CHECK(h.printed_line("[Probe] spells count 0, 4 bytes, 0 bytes left"));
     h.world.conn = std::move(held);
 
@@ -2089,9 +1966,71 @@ TEST_CASE("native plugins: get_spells_by_name_data_bulk, every spell of the name
     Host denied(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     denied.approve(plugin::kCapAll & ~plugin::kCapRead);
     REQUIRE(denied.plugins->load("HostProbe"));
-    denied.run("/probespellsbyname 4096 Third Spire of Necromancy");
+    denied.run("/probespellsbyname Third Spire of Necromancy");
     CHECK(denied.printed_line("[Probe] spells 0 bytes"));
     CHECK(denied.printed_line("[Plugin] HostProbe: get_spells_by_name_data_bulk needs the server's 'read' permission"));
+}
+TEST_CASE("native plugins: the shared bulk buffer, one plugin at a time and never zeroed") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    // A second copy of the probe beside the first: its commands are /hostprobeb..., the first's /hostprobe....
+    std::string second = h.file.filename().string();
+    second.insert(second.find("HostProbe") + 9, "B");
+    fs::copy_file(h.file, h.file.parent_path() / second, fs::copy_options::overwrite_existing);
+    REQUIRE(h.plugins->load("HostProbe"));
+    REQUIRE(h.plugins->load("HostProbeB"));
+
+    // 2 MiB, and the holder asking again gets the same buffer.
+    h.run("/hostprobebuf");
+    CHECK(h.printed_line("[Probe] HostProbe acquire: 2097152 bytes"));
+    CHECK(h.printed_line("[Probe] HostProbe again: same, 2097152 bytes"));
+    // Never released by the command, but its callback has returned: free for the other plugin.
+    h.printed.clear();
+    h.run("/hostprobebbuf");
+    CHECK(h.printed_line("[Probe] HostProbeB acquire: 2097152 bytes"));
+
+    // While one plugin holds it, the other gets none: here from inside the holder's command (DoCommand), and the
+    // holder keeps it.
+    h.printed.clear();
+    h.run("/hostprobebufhold /hostprobebbuf");
+    CHECK(h.printed_line("[Probe] HostProbe acquire: 2097152 bytes"));
+    CHECK(h.printed_line("[Probe] HostProbeB acquire: none, size 0"));
+    CHECK(h.printed_line("[Probe] HostProbe still: same"));
+    h.printed.clear();
+    h.run("/hostprobebbufhold /hostprobebuf");
+    CHECK(h.printed_line("[Probe] HostProbe acquire: none, size 0"));
+    CHECK(h.printed_line("[Probe] HostProbeB still: same"));
+    // Released, it is the other's at once.
+    h.printed.clear();
+    h.run("/hostprobebufpass /hostprobebbuf");
+    CHECK(h.printed_line("[Probe] HostProbeB acquire: 2097152 bytes"));
+
+    // Never zeroed: the next holder finds what the last one left, at both ends.
+    h.printed.clear();
+    h.run("/hostprobebufwrite 90");
+    h.run("/hostprobebbufread");
+    CHECK(h.printed_line("[Probe] HostProbeB read 90 90"));
+    h.run("/hostprobebbufwrite 7");
+    h.run("/hostprobebufread");
+    CHECK(h.printed_line("[Probe] HostProbe read 7 7"));
+
+    // From another thread: none, and the size says 0.
+    h.printed.clear();
+    h.run("/hostprobebufthread");
+    CHECK(h.printed_line("[Probe] HostProbe thread: none, size 0"));
+
+    // The plugin that last held it unloaded: the other still gets it.
+    REQUIRE(h.plugins->unload("HostProbe"));
+    h.printed.clear();
+    h.run("/hostprobebbuf");
+    CHECK(h.printed_line("[Probe] HostProbeB acquire: 2097152 bytes"));
+
+    // It needs no permission of its own ('read' is for the reads).
+    Host plain(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    plain.approve(plugin::kCapAll & ~plugin::kCapRead);
+    REQUIRE(plain.plugins->load("HostProbe"));
+    plain.run("/hostprobebuf");
+    CHECK(plain.printed_line("[Probe] HostProbe acquire: 2097152 bytes"));
 }
 TEST_CASE("native plugins: get_raid_data_bulk roster, pets, positions and edge cases") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
@@ -2123,15 +2062,6 @@ TEST_CASE("native plugins: get_raid_data_bulk roster, pets, positions and edge c
     // No spawn in this zone: the roster's level and class, the marker flag, and no percentages.
     CHECK(h.printed_line("[Probe] raid 2: Third 0 g1 f12 l45 c1 hp-1 mp-1 ep-1 pet0 ph-1"));
 
-    h.printed.clear();
-    h.run("/proberaid 39"); // not even the header: nothing
-    CHECK(h.printed_line("[Probe] raid 0 bytes"));
-    h.run("/proberaid 40"); // the header alone; count < total says the buffer was too small
-    CHECK(h.printed_line("[Probe] raid active 1, count 0, total 3, leader 0, target 1, locked 1, loot 3, 40 bytes"));
-    h.run("/proberaid 164"); // header + one whole record
-    CHECK(h.printed_line("[Probe] raid active 1, count 1, total 3, leader 0, target 1, locked 1, loot 3, 164 bytes"));
-    CHECK(h.printed_line("[Probe] raid 0: Groupie 12 g0 f167 l48 c2 hp100 mp-1 ep-1 pet0 ph-1"));
-    CHECK_FALSE(h.printed_line("[Probe] raid 1: Tester 1 g0 f416 l50 c2 hp75 mp25 ep50 pet0 ph-1"));
 
     // 4 Entire Raid: every member may loot, so the unlisted third member gains the looter flag too.
     h.printed.clear();
@@ -2279,24 +2209,24 @@ TEST_CASE("native plugins: the buff bulk reads need 'read'") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll & ~plugin::kCapRead);
     REQUIRE(h.plugins->load("HostProbe"));
-    h.run("/probebuffs 4096");
+    h.run("/probebuffs");
     CHECK(h.printed_line("[Probe] buffs 0 bytes, 0 empty"));
     CHECK(h.printed_line("[Plugin] HostProbe: get_buff_data_bulk needs the server's 'read' permission"));
-    h.run("/probebuffnames 4096");
+    h.run("/probebuffnames");
     CHECK(h.printed_line("[Probe] buff names 0 bytes, 0 empty, 0 bytes left"));
-    h.run("/probepetbuffs 1024");
+    h.run("/probepetbuffs");
     CHECK(h.printed_line("[Probe] pet buffs 0 bytes"));
-    h.run("/probespawns 16384");
+    h.run("/probespawns");
     CHECK(h.printed_line("[Probe] spawns 0 bytes")); // the denial is said once per plugin, above
-    h.run("/probextargets 512");
+    h.run("/probextargets");
     CHECK(h.printed_line("[Probe] xtargets 0 bytes"));
-    h.run("/proberaid 512");
+    h.run("/proberaid");
     CHECK(h.printed_line("[Probe] raid 0 bytes"));
-    h.run("/probetargetbuffs 2048");
+    h.run("/probetargetbuffs");
     CHECK(h.printed_line("[Probe] target buffs 0 bytes"));
-    h.run("/probeaas 2048");
+    h.run("/probeaas");
     CHECK(h.printed_line("[Probe] aas 0 bytes"));
-    h.run("/probediscs 2048");
+    h.run("/probediscs");
     CHECK(h.printed_line("[Probe] discs 0 bytes"));
 }
 
@@ -2331,7 +2261,7 @@ TEST_CASE("native plugins: use_ability and ability_state, by kind and name, held
     CHECK(denied.checked.empty());
 }
 
-TEST_CASE("native plugins: get_ability_data_bulk, its layout, truncation and the read gate") {
+TEST_CASE("native plugins: get_ability_data_bulk, its layout and the read gate") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);
     h.ability_rows = {
@@ -2346,21 +2276,6 @@ TEST_CASE("native plugins: get_ability_data_bulk, its layout, truncation and the
     CHECK(h.printed_line("[Probe] ability 2: kind 2, id 5, ready 1, 0 of 6000 ms, name Innate Strength"));
     CHECK(h.printed_line("[Probe] abilities count 3, total 3, 138 bytes, 3 records, 0 bytes left"));
 
-    // Whole records only: the third needs 47 bytes, 100 leaves 9 after the first two.
-    h.printed.clear();
-    h.run("/probeabilities 100");
-    CHECK(h.printed_line("[Probe] ability 0: kind 0, id 30, ready 1, 0 of 6000 ms, name Kick"));
-    CHECK(h.printed_line("[Probe] ability 1: kind 1, id 4498, ready 0, 1500 of 60000 ms, name Test Discipline"));
-    CHECK_FALSE(h.printed_line("[Probe] ability 2: kind 2, id 5, ready 1, 0 of 6000 ms, name Innate Strength"));
-    CHECK(h.printed_line("[Probe] abilities count 2, total 3, 91 bytes, 2 records, 0 bytes left"));
-    CHECK(h.printed_line("[Probe] abilities past the end 0"));
-    h.printed.clear();
-    h.run("/probeabilities 8"); // the header alone
-    CHECK(h.printed_line("[Probe] abilities count 0, total 3, 8 bytes, 0 records, 0 bytes left"));
-    h.printed.clear();
-    h.run("/probeabilities 7"); // below the header
-    CHECK(h.printed_line("[Probe] abilities 0 bytes"));
-    CHECK(h.printed_line("[Probe] abilities past the end 0"));
 
     // Nothing to list: the header alone, count 0 and total 0.
     Host empty(false, nullptr, HAILSTONE_PROBE_PLUGIN);
@@ -2386,9 +2301,5 @@ TEST_CASE("native plugins: get_ability_data_bulk, its layout, truncation and the
     auto conn = std::move(disconnected.world.conn);
     disconnected.run("/probeabilities");
     CHECK(disconnected.printed_line("[Probe] abilities count 0, total 0, 8 bytes, 0 records, 0 bytes left"));
-    disconnected.printed.clear();
-    disconnected.run("/probeabilities 7"); // below the header: nothing written
-    CHECK(disconnected.printed_line("[Probe] abilities 0 bytes"));
-    CHECK(disconnected.printed_line("[Probe] abilities past the end 0"));
     disconnected.world.conn = std::move(conn);
 }
