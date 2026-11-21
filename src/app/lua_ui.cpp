@@ -2337,6 +2337,15 @@ int SetOption(lua_State* L) {
     return 0;
 }
 
+// played = hs.PlaySoundTest(name)   -- plays one of the Individual Sounds options ("own_footsteps", "thunder", ...) once
+// at its volume; false for a name that is not one
+int PlaySoundTest(lua_State* L) {
+    auto& m = Impl::of(L);
+    const char* name = luaL_checkstring(L, 1);
+    lua_pushboolean(L, m.host.play_sound_test && m.host.play_sound_test(name));
+    return 1;
+}
+
 // choices = hs.OptionChoices(name)   -- the choices the client lists for an option ("resolution"), else empty
 int OptionChoices(lua_State* L) {
     auto& m = Impl::of(L);
@@ -3277,6 +3286,7 @@ void UiApi::register_functions(lua_State* L) {
         {"ChildRect", ChildRect}, {"WindowClient", WindowClient}, {"SizeWindow", SizeWindow},
         {"CursorAttachment", CursorAttachment}, {"StmlLink", StmlLink}, {"DebugTree", ReturnEmptyTable},
         {"SetSlider", SetSlider}, {"ComboInfo", ComboInfo}, {"ListHeaderClick", ListHeaderClick}, {"Option", Option}, {"SetOption", SetOption}, {"UiIni", UiIniGet}, {"SetUiIni", UiIniSet}, {"OptionChoices", OptionChoices},
+        {"PlaySoundTest", PlaySoundTest},
         {"InterfaceList", InterfaceList}, {"InterfaceLoadBase", InterfaceLoadBase}, {"InterfaceLoadData", InterfaceLoadData}, {"InterfaceStatus", InterfaceStatus},
         {"ComboSelect", ComboSelect}, {"BagInfo", BagInfo}, {"SortItems", SortItems}, {"SellJunk", SellJunk}, {"Parcels", Parcels}, {"RetrieveParcel", RetrieveParcel}, {"ClaimAllParcels", ClaimAllParcels}, {"SendParcel", SendParcel}, {"SendParcelMoney", SendParcelMoney}, {"ItemJob", ItemJob}, {"StopItemJob", StopItemJob}, {"FindItems", FindItems},
         {"InventorySpace", InventorySpace}, {"PlaceClick", PlaceClick}, {"BagSlotItem", BagSlotItem}, {"BagSlotClick", BagSlotClick},
@@ -3300,7 +3310,7 @@ void UiApi::register_functions(lua_State* L) {
         "GemInfo", "HoldingButton", "SlotItem", "ListInfo", "ListRow", "ChildState", "WindowTitle", "ChildGauge",
         "ChildColor", "TabPage", "ItemPreview",
         "ChildTooltip", "DebugScreens", "ChildUnder", "VoiceChat", "ChildRect", "WindowClient", "CursorAttachment",
-        "DebugTree", "ComboInfo", "Option", "UiIni", "OptionChoices", "BagInfo", "Parcels", "FindItems",
+        "DebugTree", "ComboInfo", "Option", "UiIni", "OptionChoices", "PlaySoundTest", "BagInfo", "Parcels", "FindItems",
         "InventorySpace", "BagSlotItem", "CascadeMenus", "GameMenus", "ContextMenus", "ItemJob", "InterfaceList", "InterfaceLoadBase", "InterfaceLoadData", "InterfaceStatus"};
     auto changes_lists = [](lua_State* L2) -> int {
         Impl::of(L2).lists_changed();

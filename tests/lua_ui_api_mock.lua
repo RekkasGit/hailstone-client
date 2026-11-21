@@ -268,6 +268,7 @@ local descriptors = {
   {"VoiceChat", "session", "VoiceChat", "function", 0, false},
   {"Option", "settings", "Option", "function", 0, false},
   {"OptionChoices", "settings", "OptionChoices", "function", 0, false},
+  {"PlaySoundTest", "settings", "PlaySoundTest", "function", 0, false},
   {"SetOption", "settings", "SetOption", "function", 2, false},
   {"SetUiIni", "settings", "SetUiIni", "function", 2, false},
   {"UiIni", "settings", "UiIni", "function", 0, false},

@@ -3,6 +3,7 @@
 --   Buttons       what each button does in game mode (hs.gamepad.binding / set_binding), A picks a new action
 --   Cross Hotbar  which hot button each cross hotbar slot fires (hs.gamepad.cross_slot / set_cross_slot)
 --   Interface, Game, Display, Audio   the client options (hs.Option / hs.SetOption), as the classic Options window
+--   Sounds        the Individual Sounds volumes: left / right steps one, A plays the sound (Test), the last row resets
 --   Camera        the isometric camera's (the iso_* options, docs/isometric.md)
 -- Every row is changed with the D-pad left / right (or A); the mouse clicks a row (right click: back).
 local API = hs.UI
@@ -10,9 +11,19 @@ local T = dofile("lib/theme.lua")
 local pad = dofile("lib/pad.lua")
 local W = dofile("lib/window.lua")
 local interfaceStatus = dofile("lib/interface_status.lua")
+local V = dofile("lib/sound_volumes.lua")
 local C = T.C
 
 local OW = "OptionsWindow"
+local SOUND_SUFFIX = " %"
+-- The click targets inside a row, as drawn this frame (lib/sound_volumes.lua clickTarget): the list's own row button
+-- is the only ImGui item, so a click is hit-tested by ImGui (windows on top included) and only then split by where
+-- on the row the mouse was.
+local rowGeometry = {}
+local ARROW_HIT = 14   -- half the side of an arrow's click target, unscaled pixels
+local TEST_CHIP_W = 80 -- the Test chip's width, unscaled pixels
+local CHIP_INSET = 8   -- the chip's gap above and below, unscaled pixels
+local TEST_LABEL = "Test"
 
 -- ---------------------------------------------------------------- rows
 -- A row: { label, value text, change(dir) } where dir is +1 / -1; nil change: read only. `note`: dim text.
@@ -369,6 +380,26 @@ local PAGES = {
     for i = 1, list.n do if list[i] then rows[#rows + 1] = list[i] end end
     return rows
   end },
+  -- Hailstone's Individual Sounds (lib/sound_volumes.lua): left / right changes a volume by one step (the pad has no
+  -- number box), A plays the sound at that volume (the Test button), and the last row sets them all back to 100 %.
+  { "Sounds", function()
+    local rows = {}
+    for _, entry in ipairs(V.SOUNDS) do
+      local name, label = entry[1], entry[2]
+      local v = API.settings.Option(name)
+      if v ~= nil then
+        rows[#rows + 1] = { label, v .. SOUND_SUFFIX, function(dir) API.settings.SetOption(name, V.step(v, dir)) end,
+          test = name }
+      end
+    end
+    if #rows > 0 then
+      rows[#rows + 1] = { "Reset all to " .. V.FULL .. SOUND_SUFFIX, "", nil,
+        press = function() V.reset(API.settings.Option, API.settings.SetOption) end }
+    else
+      rows[1] = { "This client has no Individual Sounds", "" }
+    end
+    return rows
+  end },
   -- The plugins' options (hs.PluginOptions; docs/plugins.md "Plugin windows"): a switch, or left / right over its range.
   { "Plugins", function()
     local rows = {}
@@ -422,6 +453,7 @@ ui.window("Options", function()
   end
   local hints = picking and { { "a", "Choose" }, { "b", "Back" } }
       or page == 2 and { { "a", "Choose action" }, { "lb", "Page" }, { "rb", "Page" }, { "b", "Close" } }
+      or PAGES[page][1] == "Sounds" and { { "left", "Less" }, { "right", "More" }, { "a", "Test / reset" }, { "lb", "Page" }, { "rb", "Page" }, { "b", "Close" } }
       or { { "left", "Less" }, { "right", "More" }, { "a", "Change" }, { "lb", "Page" }, { "rb", "Page" }, { "b", "Close" } }
   local back = false
   if W.begin("Options", { w = 1300, h = 940, title = picking and ("Button " .. inputLabel(picking)) or "Options", hints = hints }) then
@@ -465,12 +497,27 @@ ui.window("Options", function()
         local r = rows[i]
         T.textIn(rx0 + T.px(18), ry0, rx0 + cw * 0.5, ry1, r[1], C.text, 0)
         local vx1 = rx1 - T.px(18)
+        local midY = (ry0 + ry1) / 2
+        local geo = rowGeometry[i] or {}
+        rowGeometry[i] = geo
+        geo.chipX0, geo.chipX1, geo.leftX, geo.rightX = nil, nil, nil, nil
+        geo.rowX0, geo.rowY0, geo.rowX1, geo.rowY1 = rx0, ry0, rx1, ry1
+        if r.test then -- the Sounds page: a Test chip, so the mouse can test without A
+          local cx0 = rx0 + cw * 0.5
+          geo.chipX0, geo.chipX1 = cx0, cx0 + T.px(TEST_CHIP_W)
+          T.rect(cx0, ry0 + T.px(CHIP_INSET), geo.chipX1, ry1 - T.px(CHIP_INSET), focused and C.accent or C.sunken, 1, T.px(8))
+          T.textIn(cx0, ry0, geo.chipX1, ry1, TEST_LABEL, focused and C.onAccent or C.text, 0.5)
+        end
         if r[3] then -- arrows either side of the value
-          T.triangle("right", vx1 - T.px(6), (ry0 + ry1) / 2, T.px(7), focused and C.accent or C.dim, 1)
+          geo.rightX = vx1 - T.px(6)
+          T.triangle("right", geo.rightX, midY, T.px(7), focused and C.accent or C.dim, 1)
           vx1 = vx1 - T.px(26)
         end
         local tw = T.textIn(rx0 + cw * 0.5, ry0, vx1, ry1, T.fit(r[2], vx1 - rx0 - cw * 0.5), r[3] and C.text or C.dim, 1)
-        if r[3] then T.triangle("left", vx1 - tw - T.px(16), (ry0 + ry1) / 2, T.px(7), focused and C.accent or C.dim, 1) end
+        if r[3] then
+          geo.leftX = vx1 - tw - T.px(16)
+          T.triangle("left", geo.leftX, midY, T.px(7), focused and C.accent or C.dim, 1)
+        end
         if focused and r[3] then
           if pad.menuPressed("left") then r[3](-1) end
           if pad.menuPressed("right") then r[3](1) end
@@ -478,8 +525,15 @@ ui.window("Options", function()
         if ui.IsItemClicked(ui.Mouse.Right) and r[3] then r[3](-1) end
       end, function(i)
         local r = rows[i]
-        if r.pick then picking = r.pick lists.pick = { offset = 0, want = true }
-        elseif r[3] then r[3](1) end
+        if r.pick then picking = r.pick lists.pick = { offset = 0, want = true } return end
+        -- W.list calls this once per click of the row's button: ImGui's press and release over it (the mouse; so
+        -- IsMouseReleased is true this frame) or the pad's A (nav activation). One call, one action.
+        -- A release counts only with the mouse over this row, so a stray release in the frame of the pad's A is not
+        -- a click on it.
+        local mx, my = ui.GetMousePos()
+        local byMouse = ui.IsMouseReleased(ui.Mouse.Left) and V.overRow(rowGeometry[i], mx, my)
+        local target = byMouse and V.clickTarget(rowGeometry[i], mx, T.px(ARROW_HIT)) or nil
+        V.perform(r, V.activation(r, byMouse and "mouse" or "pad", target), API.settings.PlaySoundTest)
       end)
       if focusedRow then lists[page].last = focusedRow end
     end

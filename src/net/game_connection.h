@@ -273,6 +273,15 @@ struct SoundCue {
     std::uint8_t door_type = 0, door_state = 0;
     glm::vec3 position{0.0f};
     bool environment = false; // a Hit from an environmental type (0xf3..0xfd) or a spell: Hit1..4 only, no FlshHit
+    // Hailstone: what a Wave cue is for, where its wave alone does not say (the item-moved wave serves every move, the
+    // bag wave opening and closing); the app picks the Individual Sounds volume from it.
+    enum class Context : std::uint8_t {
+        None,
+        BagOpen,     // a bag in a carried slot opening
+        BankBagOpen, // a bag in a bank or shared bank slot opening
+        ItemWorn,    // an item put into or taken out of a worn slot
+    };
+    Context context = Context::None;
 };
 
 // A spell effect stage to play (SpellEffect_SpawnStageEmitters): the cast
@@ -513,7 +522,8 @@ public:
     std::vector<SoundCue> take_sound_cues();
     // CContainerMgr::OpenContainer / CloseContainer's sound for a bag of `bag_type`: a 2D wave cue
     // (game/sound_rules.h container_sound). The windows and the bag keys call it; nothing is sent.
-    void container_sound(std::uint32_t bag_type, bool open);
+    // `in_bank`: the bag sits in a bank slot (Hailstone: its opening has its own volume).
+    void container_sound(std::uint32_t bag_type, bool open, bool in_bank = false);
     // What spells landing on the player changed that the movement owns
     // (EQ_Character::HitBySpell, game/hit_landing.h): taken once a frame.
     struct LandingEffects {
@@ -1758,7 +1768,9 @@ public:
     // Item Destroy the cursor's item or coin goes at once, else it asks first (2043 / 2061, 10 s).
     void destroy_held();
     // Puts the cursor item into the first free general slot or bag slot; false when it stays on the cursor.
-    bool auto_inventory();
+    // `equipped`, when given, tells whether the item went into a worn slot (its stack merged into one, or it was put
+    // on): the callers' own item-moved wave is then an equip sound too.
+    bool auto_inventory(bool* equipped = nullptr);
     // auto_inventory's last steps only: the first free general slot, else the first bag with room; never a worn slot
     // (Hailstone's bulk withdraw, which is not the original's and must not equip what it takes from the bank).
     bool stow_cursor_in_packs();
@@ -3028,7 +3040,9 @@ private:
     // False when the inventory refused the swap (nothing moved, nothing sent).
     bool move_item(const ItemSlot& from, const ItemSlot& to, std::uint32_t count);
     // The item-moved wave 0x92 (game::kSoundItemMoved), 2D: queued by the callers that play it in the original.
-    void item_moved_sound();
+    // `context`: ItemWorn when the move touched a worn slot (worn_context), given by each caller.
+    void item_moved_sound(SoundCue::Context context = SoundCue::Context::None);
+    SoundCue::Context worn_context(const ItemSlot& from, const ItemSlot& to) const;
     void refresh_worn_slot(int slot);
     // PcClient_RefreshWornSlotVisual's instrument bit (0x5923f0): the local player's PlayerState bit 0x10, set when
     // the primary or secondary hand holds an instrument (item types 23..26).

@@ -337,6 +337,7 @@ UI_METHOD("VoiceChat", "session", "VoiceChat", 0)
 // settings
 UI_METHOD("Option", "settings", "Option", 0)
 UI_METHOD("OptionChoices", "settings", "OptionChoices", 0)
+UI_METHOD("PlaySoundTest", "settings", "PlaySoundTest", 0)
 UI_METHOD("SetOption", "settings", "SetOption", kCapCommands)
 UI_METHOD("SetUiIni", "settings", "SetUiIni", kCapCommands)
 UI_METHOD("UiIni", "settings", "UiIni", 0)

@@ -672,6 +672,7 @@ add_library(hailstone_engine STATIC
   src/audio/listener.cpp
   src/audio/environment_presets.cpp
   src/audio/audio_system.cpp
+  src/audio/individual_sounds.cpp
   src/app/sound_events.cpp
   src/app/actor_emitters.cpp
   src/app/spell_particles.cpp

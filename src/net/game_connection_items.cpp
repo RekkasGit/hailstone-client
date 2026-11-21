@@ -64,6 +64,9 @@ std::vector<std::uint32_t> loot_descendants(const Item& root, bool& complete) {
 }
 
 
+// merge_stacks' results: all of the stack moved, some of it, none of it.
+constexpr int kMergeAll = 0, kMergeNothing = 2;
+
 bool is_worn(const ItemSlot& s) { return s.type == kInvPossessions && s.sub < 0 && s.slot >= 0 && s.slot < kEquipmentSlots; }
 
 } // namespace
@@ -487,11 +490,16 @@ bool GameConnection::move_item(const ItemSlot& from, const ItemSlot& to, std::ui
     return true;
 }
 
-void GameConnection::item_moved_sound() {
+void GameConnection::item_moved_sound(SoundCue::Context context) {
     SoundCue cue;
     cue.kind = SoundCue::Kind::Wave;
     cue.spell = game::kSoundItemMoved;
+    cue.context = context;
     sound_cues_.push_back(cue);
+}
+
+SoundCue::Context GameConnection::worn_context(const ItemSlot& from, const ItemSlot& to) const {
+    return is_worn(from) || is_worn(to) ? SoundCue::Context::ItemWorn : SoundCue::Context::None;
 }
 
 void GameConnection::click_slot(const ItemSlot& slot, bool shift, bool ctrl) {
@@ -565,7 +573,7 @@ void GameConnection::click_slot(const ItemSlot& slot, bool shift, bool ctrl) {
                 return;
             }
         }
-        if (move_item(slot, cursor, 0)) item_moved_sound();
+        if (move_item(slot, cursor, 0)) item_moved_sound(worn_context(slot, cursor));
         return;
     }
     // Put down (step 5).
@@ -625,10 +633,10 @@ void GameConnection::click_slot(const ItemSlot& slot, bool shift, bool ctrl) {
     // Send_OP_MoveItem / ItemContainer_MergeStacks: as much as fits. A full
     // stack of the same item does not swap (MoveItem fails on CanStackWith).
     if (there && game::can_stack_with(*held, *there)) {
-        if (merge_stacks(cursor, slot) != 2) item_moved_sound();
+        if (merge_stacks(cursor, slot) != kMergeNothing) item_moved_sound(worn_context(cursor, slot));
         return;
     }
-    if (move_item(cursor, slot, 0)) item_moved_sound();
+    if (move_item(cursor, slot, 0)) item_moved_sound(worn_context(cursor, slot));
 }
 
 void GameConnection::finish_quantity(std::uint32_t quantity) {
@@ -730,12 +738,13 @@ void GameConnection::destroy_held() {
     }
 }
 
-bool GameConnection::auto_inventory() {
+bool GameConnection::auto_inventory(bool* equipped) {
     // AutoInventoryCursorItem @004fe090: a stack first merges into the worn slots (0..22) holding the same item that
     // CanItemGoInEquipSlot takes, when CharacterZoneClient::CanUseItem(item, 0, 0) (the class check) passes
     // (Send_OP_MoveItem; done when all of it went); then a common item that is not an unattuned Attuneable goes into
     // the first empty worn slot taking it with the same class check; else the first free general slot, else the
     // first bag with room (PcZoneClient_AutoInventoryOrDropItem).
+    if (equipped) *equipped = false;
     if (state_ != ConnectionState::InZone) return false;
     const Item* held = inventory_.cursor();
     if (!held) return false;
@@ -749,7 +758,10 @@ bool GameConnection::auto_inventory() {
             if (!there || there->id != held->id ||
                 !game::can_go_in_equip_slot(*held, s, primary, secondary, dual_wield, inv_slot_available(s)))
                 continue;
-            if (merge_stacks(cursor, ItemSlot::possessions(s)) == 0) return true;
+            const int merged = merge_stacks(cursor, ItemSlot::possessions(s));
+            // Some of the stack went into a worn slot, even when the rest is stowed elsewhere below.
+            if (merged != kMergeNothing && equipped) *equipped = true;
+            if (merged == kMergeAll) return true;
             held = inventory_.cursor();
         }
     }
@@ -761,7 +773,8 @@ bool GameConnection::auto_inventory() {
                 !can_use_item_class(*held))
                 continue;
             // AutoInventoryCursorItem plays the item-moved wave itself for an empty worn slot (@0x4fe388).
-            if (move_item(cursor, to, 0)) item_moved_sound();
+            if (move_item(cursor, to, 0)) item_moved_sound(SoundCue::Context::ItemWorn);
+            if (equipped) *equipped = true;
             return true;
         }
     }
@@ -797,8 +810,9 @@ void GameConnection::drop_on_doll() {
     if (state_ != ConnectionState::InZone) return;
     if (inventory_.cursor()) {
         // CInventoryWnd::HandleLButtonUp @0x692ec0: the item-moved wave when the cursor ends up empty.
-        auto_inventory();
-        if (!inventory_.cursor()) item_moved_sound();
+        bool equipped = false;
+        auto_inventory(&equipped);
+        if (!inventory_.cursor()) item_moved_sound(equipped ? SoundCue::Context::ItemWorn : SoundCue::Context::None);
         if (const Item* still = inventory_.cursor(); still && still->id != kKronoItemId) system(5290, {}, 0xd);
         return;
     }
@@ -844,15 +858,17 @@ void GameConnection::equip_attuned(const ItemSlot& slot) {
     if (!held || !is_worn(slot)) return;
     held->attuned = 1;
     move_item(cursor_slot(), slot, 0);
-    item_moved_sound();
+    item_moved_sound(SoundCue::Context::ItemWorn); // `slot` is worn (checked above)
 }
 
-void GameConnection::container_sound(std::uint32_t bag_type, bool open) {
+void GameConnection::container_sound(std::uint32_t bag_type, bool open, bool in_bank) {
     // CContainerMgr::OpenContainer @0x65cae0 / CloseContainer @0x65d2f0 (through 0x65d180) play it with
     // EqSoundManager::WavePlay(sound, 0): a 2D wave.
     SoundCue cue;
     cue.kind = SoundCue::Kind::Wave;
     cue.spell = static_cast<std::uint32_t>(game::container_sound(bag_type, open));
+    // Hailstone: only the opening has a volume of its own, in a bank slot a second one.
+    if (open) cue.context = in_bank ? SoundCue::Context::BankBagOpen : SoundCue::Context::BagOpen;
     sound_cues_.push_back(cue);
 }
 
@@ -1419,8 +1435,10 @@ bool GameConnection::item_command(const std::string& command, const std::string&
         // The item-moved wave when the cursor ends up empty (@0x4fe987).
         const Item* held = inventory_.cursor();
         if (!held) return true;
-        auto_inventory();
-        if (const Item* still = inventory_.cursor(); !still) item_moved_sound();
+        bool equipped = false;
+        auto_inventory(&equipped);
+        if (const Item* still = inventory_.cursor(); !still)
+            item_moved_sound(equipped ? SoundCue::Context::ItemWorn : SoundCue::Context::None);
         else if (still->id != kKronoItemId) system(5290, {}, 0xd);
         return true;
     }

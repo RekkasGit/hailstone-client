@@ -888,6 +888,8 @@ private:
     // mouse and sound settings; nullopt for a name the client does not have.
     std::optional<int> option_value(std::string_view name) const;
     void set_option_value(std::string_view name, int value);
+    // Hailstone: the Test button of the Individual Sounds window (audio/individual_sounds.h).
+    bool play_sound_test(std::string_view option);
     // A combo box's choices the client fills ("resolution": the display's modes); empty for others.
     std::vector<std::string> option_choices(std::string_view name) const;
     // The Light Tweaks sliders as they are, and a preset's applied and saved (app/light_tweaks.h).

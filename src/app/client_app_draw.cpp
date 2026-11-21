@@ -607,6 +607,7 @@ void ClientApp::update_ui_host() {
         h.find_option = [this](std::string_view o) { return option_value(o); };
         h.set_option = [this](std::string_view o, int v) { set_option_value(o, v); };
         h.option_choices = [this](std::string_view o) { return option_choices(o); };
+        h.play_sound_test = [this](std::string_view o) { return play_sound_test(o); };
         h.run_command = [this](int command) {
             if (conn_) key_command({command, true});
         };

@@ -10,7 +10,7 @@ does not bypass a function's own caller, screen or server-state checks.
 `API.version`, `API.Supports(module[, member])` and `API.Describe([module[, member]])`
 provide contract version and structural discovery. They confer no permissions.
 
-Coverage: **342/342 method implementation links**, **220/342 adjacent binding comment excerpts**, and **6/6 constant implementation links**. Excerpts below are verbatim binding comments; they preserve any documented signatures and results, and do not invent omitted arguments or results. **See binding** marks an author documentation gap.
+Coverage: **343/343 method implementation links**, **221/343 adjacent binding comment excerpts**, and **6/6 constant implementation links**. Excerpts below are verbatim binding comments; they preserve any documented signatures and results, and do not invent omitted arguments or results. **See binding** marks an author documentation gap.
 
 Unresolved method implementations: none.
 Unresolved constant implementations: none.
@@ -431,6 +431,7 @@ Unresolved constant implementations: none.
 | --- | --- | --- | --- | --- |
 | `API.settings.Option` | `value = hs.Option(name)   -- a client option (ui/<pack>/options.lua; ClientApp::option_value); nil for one the`<br>`client does not have` | `hs.Option` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |
 | `API.settings.OptionChoices` | `choices = hs.OptionChoices(name)   -- the choices the client lists for an option ("resolution"), else empty` | `hs.OptionChoices` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |
+| `API.settings.PlaySoundTest` | `played = hs.PlaySoundTest(name)   -- plays one of the Individual Sounds options ("own_footsteps", "thunder", ...) once`<br>`at its volume; false for a name that is not one` | `hs.PlaySoundTest` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |
 | `API.settings.SetOption` | `hs.SetOption(name, value)   -- changes, applies and saves a client option` | `hs.SetOption` · [source](../src/app/lua_ui.cpp) | commands | closed |
 | `API.settings.SetUiIni` | `hs.SetUiIni(section, key, value)   -- writes a value to the character's UI ini (UIIni_WriteString) and saves it` | `hs.SetUiIni` · [source](../src/app/lua_ui.cpp) | commands | closed |
 | `API.settings.UiIni` | `value = hs.UiIni(section, key)   -- a value of the character's UI ini (over defaults.ini), nil when neither has it` | `hs.UiIni` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |

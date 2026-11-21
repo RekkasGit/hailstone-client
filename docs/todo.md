@@ -760,6 +760,9 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
   (0x85/0x86/0x91), an adventure's loss and win (0x8c/0x8d), a quest reward (0x8d), struck down by the gods (0x8f),
   water in and out (0x64/0x63). Each cue and its condition is unit-tested, the water path end to end through
   `app::PlayerMovement`; none listened to live.
+- [ ] **The bank window's opening sound.** The Individual Sounds window has a volume for bags opened in a bank slot (`audio.open_bank`), not for the bank window itself, because no sound for that is known (docs/unknowns.md "The sound of the bank window opening").
+  - Open: trace the original opening the bank window with sound on; if it plays one, give it that volume (`app::wave_cue_group`).
+  - Until then a bag in a slot that is not a bank slot opens at the ordinary bag volume (`in_bank_slot`, app/lua_ui_items.cpp).
 - [x] **Augment appearance-slot gating.** With game feature 0x15 on (the client's setting for EQEmu accounts) a type-21 ornament into a type-21 socket is not refused; seen live 2026-10-31 (stored in `inventory.augment_six`). The refusal with the feature off is unit-tested only (docs/unknowns.md).
 - [ ] **A server's class names in a live session** (`set_class_name`, docs/plugins.md "Class names"). Unit, plugin and script tests only.
   - A plugin that names classes on its server's hello, then every window that names a class (both UI packs).

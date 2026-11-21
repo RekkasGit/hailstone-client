@@ -119,6 +119,9 @@ struct UiHost {
     // lists (hs.OptionChoices: "resolution").
     std::function<std::optional<int>(std::string_view option)> find_option;
     std::function<std::vector<std::string>(std::string_view option)> option_choices;
+    // The Test button of the Individual Sounds window (hs.PlaySoundTest): plays the sound of that option name at its
+    // volume; false for a name that is not one of them.
+    std::function<bool(std::string_view option)> play_sound_test;
     // Whether a book spell dropped or clicked onto gem `gem` (0-based) starts memorizing there: an empty usable gem,
     // or (Hailstone, option replace_gem_spell, on by default) one that holds another spell, which the server forgets
     // as it memorizes the new one (Client::MemSpell). The original refuses a gem that holds a spell

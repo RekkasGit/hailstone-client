@@ -480,7 +480,8 @@ int ClientApp::run() {
             // LightningStrike plays the thunder with the flash, WavePlay(id, 0); ApplyWeatherState shows the start.
             auto weather_step = [&](double at) {
                 weather_.update(at, outdoor, random, zone_id);
-                if (std::int32_t sound = weather_.thunder(); sound && audio_) audio_->play_wave_2d(sound);
+                if (std::int32_t sound = weather_.thunder(); sound && audio_)
+                    audio_->play_group_2d(sound, audio::SoundGroup::Thunder); // Hailstone: the Thunder volume
                 if (std::uint32_t message = weather_.message(); message && conn_) conn_->show_eqstr(message);
             };
             // Once per step of the game clock (core/step_clock.h): the fog band's fade is a fixed step an update.

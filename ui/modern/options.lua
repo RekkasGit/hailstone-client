@@ -864,6 +864,114 @@ local function graphicsTab()
   end
 end
 
+-- ---------------------------------------------------------------- Individual Sounds
+-- A window of its own, opened from the Audio tab (Hailstone's own options, audio/individual_sounds.h): a volume for
+-- each of a few sounds that tire players, on top of Sound Effects. Per row a box to type the percentage in, the
+-- slider (steps of 5) in step with it, both 0..100 (lib/sound_volumes.lua), and a Test button that plays the sound
+-- at that volume (hs.PlaySoundTest).
+local V = dofile("lib/sound_volumes.lua")
+local SOUND_BOX_CHARS = 3 -- "100"
+local SOUND_BOX_W, SOUND_TEST_W, SOUND_NAME_W = 52, 56, 150 -- unscaled pixels
+local SOUND_WINDOW_W, SOUND_WINDOW_H = 520, 360
+local FILL_WIDTH = -1 -- ImGui: to the right edge
+local AUTO_SIZE = 0   -- ImGui: the size the content gives (a stretch column takes what is left)
+local SOUND_COLUMNS = 4 -- name, box, slider, Test
+local SOUND_TEST_TIP = "Plays this sound once at the volume set here."
+local soundsOpen = false
+local soundText = {} -- name -> what is being typed in its box (only while the box is active)
+
+local function closeSounds()
+  soundsOpen = false
+  soundText = {}
+end
+
+-- The number box of one row. A number typed is applied at once, brought into 0..100 (lib/sound_volumes.lua parse),
+-- and the new value is returned so the slider beside it shows the same one this frame (999 -> 100). ImGui keeps
+-- what was typed in the box while it is active, so the text stays as typed (the binding has no way to replace the
+-- edit buffer without taking Tab or the arrow keys from the box); the box shows the clamped value once it is left.
+-- Text that is not a number yet (empty) changes nothing.
+local function soundBox(name, v)
+  local shown = soundText[name] or tostring(v)
+  ui.SetNextItemWidth(SOUND_BOX_W * U)
+  local text = ui.InputText("##box" .. name, shown, SOUND_BOX_CHARS,
+    ui.InputTextFlags.CharsDecimal | ui.InputTextFlags.AutoSelectAll)
+  if text ~= shown then
+    soundText[name] = text
+    local n = V.parse(text)
+    if n then
+      API.settings.SetOption(name, n)
+      v = n
+    end
+  end
+  if not ui.IsItemActive() then soundText[name] = nil end
+  return v
+end
+
+local function soundRow(entry)
+  local name, label, tooltip = entry[1], entry[2], entry[3]
+  local v = API.settings.Option(name)
+  if v == nil then return end
+  ui.TableNextRow()
+  ui.TableNextColumn()
+  ui.Text(label)
+  tip(tooltip)
+  ui.TableNextColumn()
+  v = soundBox(name, v)
+  ui.TableNextColumn()
+  ui.SetNextItemWidth(FILL_WIDTH)
+  local nv, changed = ui.SliderInt("##slider" .. name, v, V.MIN, V.MAX, pct(v))
+  if changed then
+    soundText[name] = nil
+    API.settings.SetOption(name, V.snap(nv))
+  end
+  tip(tooltip)
+  ui.TableNextColumn()
+  if ui.Button("Test##" .. name, SOUND_TEST_W * U, AUTO_SIZE) then API.settings.PlaySoundTest(name) end
+  tip(SOUND_TEST_TIP)
+end
+
+local function soundsBody()
+  ui.PushTextWrapPos(0)
+  ui.TextDisabled("Each volume is on top of Sound Effects. 100 % leaves a sound as it is, 0 % silences it.")
+  ui.PopTextWrapPos()
+  ui.Spacing()
+  if ui.BeginTable("##individualsounds", SOUND_COLUMNS, ui.TableFlags.SizingFixedFit) then
+    ui.TableSetupColumn("name", ui.TableColumnFlags.WidthFixed, SOUND_NAME_W * U)
+    ui.TableSetupColumn("box", ui.TableColumnFlags.WidthFixed, SOUND_BOX_W * U)
+    ui.TableSetupColumn("slider", ui.TableColumnFlags.WidthStretch, AUTO_SIZE)
+    ui.TableSetupColumn("test", ui.TableColumnFlags.WidthFixed, SOUND_TEST_W * U)
+    for _, entry in ipairs(V.SOUNDS) do soundRow(entry) end
+    ui.EndTable()
+  end
+  ui.Spacing()
+  if ui.Button("Reset all to 100 %", AUTO_SIZE, AUTO_SIZE) then
+    soundText = {}
+    V.reset(API.settings.Option, API.settings.SetOption)
+  end
+  tip("Sets every volume in this window back to 100 %.")
+end
+
+ui.window("Individual Sounds", function()
+  if not soundsOpen or not API.session.InGame() then return end
+  U = ui.GetIO().uiScale or 1
+  ui.SetNextWindowSize(SOUND_WINDOW_W * U, SOUND_WINDOW_H * U, ui.Cond.FirstUseEver)
+  style.Push()
+  local w, b = C.window, C.frameBorder
+  ui.PushStyleColor(ui.Col.WindowBg, w[1], w[2], w[3], w[4])
+  local visible, open = ui.Begin("Individual Sounds##hailstone", true, ui.WindowFlags.NoCollapse)
+  ui.PushStyleColor(ui.Col.Border, b[1], b[2], b[3], b[4])
+  ui.PushStyleVar(ui.StyleVar.FrameBorderSize, 1)
+  local ok, err = true, nil
+  if visible then ok, err = pcall(soundsBody) end
+  ui.PopStyleVar()
+  ui.PopStyleColor()
+  ui.End()
+  ui.PopStyleColor()
+  style.Pop()
+  if not ok then error(err, 0) end
+  if not open then closeSounds() end
+end)
+
 -- ---------------------------------------------------------------- Audio
 local function audioTab()
   section("Volume", function()
@@ -873,6 +981,10 @@ local function audioTab()
     slider("effects", "Sound Effects", 0, 100, pct, "Spells, combat and the world's sounds.")
     slider("npc_hits", "NPC Hit Sounds", 0, 100, pct,
       "NPCs being hit, blocking and dodging, on top of Sound Effects (a Hailstone option).")
+    if API.settings.Option("own_footsteps") ~= nil then
+      row("Individual Sounds", "A volume for each of a few tiresome sounds: footsteps, bags, money, thunder and equipping (Hailstone options).",
+        function() if ui.Button("Individual Sounds...", FILL_WIDTH, AUTO_SIZE) then soundsOpen = true end end)
+    end
   end)
   section("Sound", function()
     check("environment", "Environment Sounds", "The zone's ambient sounds: wind, water, birds and the like.")
