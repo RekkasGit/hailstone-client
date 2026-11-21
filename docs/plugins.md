@@ -862,6 +862,7 @@ The bulk reads give packed records (Buff, spawn, extended target, ability and ra
 | `get_spawns_data_bulk` | every spawn in the zone |
 | `get_raid_data_bulk` | the raid roster |
 | `get_spells_data_bulk` | spells by id, with their effects as text |
+| `get_spells_by_name_data_bulk` | every spell of a name, laid out as `get_spells_data_bulk`'s |
 
 #### Actions
 
@@ -948,8 +949,9 @@ The calls: `get_buff_data_bulk(host, out, out_size)`, `get_pet_buff_data_bulk(ho
 `get_spawns_data_bulk(host, out, out_size)`, `get_xtarget_data_bulk(host, out, out_size)`,
 `get_target_buff_data_bulk(host, out, out_size)`, `get_avail_aa_data_bulk(host, out, out_size)`,
 `get_avail_disc_data_bulk(host, out, out_size)`, `get_buff_name_data_bulk(host, out, out_size)`,
-`get_ability_data_bulk(host, out, out_size)`, `get_raid_data_bulk(host, out, out_size)` and
-`get_spells_data_bulk(host, ids, id_count, out, out_size)`.
+`get_ability_data_bulk(host, out, out_size)`, `get_raid_data_bulk(host, out, out_size)`,
+`get_spells_data_bulk(host, ids, id_count, out, out_size)` and
+`get_spells_by_name_data_bulk(host, name, out, out_size)`.
 
 - They need `read`; without it they return 0 and say so in the chat window.
 - They came later in ABI 3: test `HAILSTONE_HOST_HAS(host, <field>)` first.
@@ -1436,6 +1438,17 @@ member, in roster order, as many whole records as fit.
   plugin without `read` gets 0 bytes. A record is 265 bytes plus 240 for its 12 effect slots, 16 for its class levels, its texts and lines, a few hundred bytes for a
   stock spell, so about 1500 bytes per id is ample. Added later in ABI 3: test
   `HAILSTONE_HOST_HAS(host, get_spells_data_bulk)` first.
+
+##### `get_spells_by_name_data_bulk`
+
+`get_spells_by_name_data_bulk(host, name, out, out_size)`: every spell named `name` (a C string, matched without
+  regard to case, the whole name only) in one call, so a plugin need not know the ids of a spell's ranks or copies.
+  Several spells often share a name (Third Spire of Necromancy is 16290, 16291 and 16292); they come lowest id first.
+  The bytes are exactly those `get_spells_data_bulk` writes for those ids: an i32 `count`, then as many whole
+  records as fit, laid out as above. A name no spell has, or a NULL one, gives the count alone (0), as does no game
+  connection; below 4 bytes nothing is written and 0 comes back, and a plugin without `read` gets 0 bytes. Size
+  `out` as for `get_spells_data_bulk`, about 1500 bytes per spell of the name. Added later in ABI 3: test
+  `HAILSTONE_HOST_HAS(host, get_spells_by_name_data_bulk)` first.
 
 ### Connections (ABI 2)
 

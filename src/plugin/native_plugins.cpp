@@ -2406,6 +2406,26 @@ int32_t h_get_spells_data_bulk(void* h, const int32_t* ids, int32_t id_count, un
     return static_cast<int32_t>(bufferSize);
 }
 
+/// <summary>
+/// Every spell named `name` in one call (case-insensitive, SpellTable::find_all_by_name, lowest id first), laid out
+/// as h_get_spells_data_bulk lays out spells by id: those ids are handed to it. A name the table lacks, or a null one,
+/// gives the count alone (0).
+/// </summary>
+/// <param name="h">host</param>
+/// <param name="name">the spell's name</param>
+/// <param name="data">buffer to put data in</param>
+/// <param name="datamax">as h_get_spells_data_bulk's, about 1500 bytes per spell of that name</param>
+/// <returns>bytes written; 0 below 4 bytes</returns>
+int32_t h_get_spells_by_name_data_bulk(void* h, const char* name, unsigned char* data, int32_t datamax)
+{
+    // Asked under this call's name, so a plugin without 'read' is told which call it made (readable says so once).
+    const net::GameConnection* c = readable(Loaded::of(h), "get_spells_by_name_data_bulk");
+    std::vector<int32_t> ids;
+    if (c && name)
+        for (std::uint32_t id : c->spell_table().find_all_by_name(name)) ids.push_back(static_cast<int32_t>(id));
+    return h_get_spells_data_bulk(h, ids.data(), static_cast<int32_t>(ids.size()), data, datamax);
+}
+
 int32_t h_get_raid_data_bulk(void* h, unsigned char* data, int32_t datamax) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_raid_data_bulk");
     if (!c || !data || datamax < static_cast<int32_t>(sizeof(HS_BulkRaidHeader))) return 0;
@@ -3362,6 +3382,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.nameplate_measure_text = main_only<h_nameplate_measure_text>;
     p.table.nameplate_spell_icon = main_only<h_nameplate_spell_icon>;
     p.table.get_spells_data_bulk = main_only<h_get_spells_data_bulk>;
+    p.table.get_spells_by_name_data_bulk = main_only<h_get_spells_by_name_data_bulk>;
     Hooks& hooks = *m.env.hooks;
     Loaded* lp = &p;
     // Each callback runs with the plugin's capabilities and counts as the plugin being busy (no unloading under it).

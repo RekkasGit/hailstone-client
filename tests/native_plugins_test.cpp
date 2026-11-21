@@ -2011,6 +2011,79 @@ TEST_CASE("native plugins: get_spells_data_bulk, laid out as docs/plugins.md say
     CHECK(denied.printed_line("[Probe] spells 0 bytes"));
     CHECK(denied.printed_line("[Plugin] HostProbe: get_spells_data_bulk needs the server's 'read' permission"));
 }
+TEST_CASE("native plugins: get_spells_by_name_data_bulk, every spell of the name as get_spells_data_bulk lays them out") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+    net::GameConnection& conn = *h.world.conn;
+    // Three spells share a name (as Third Spire of Necromancy's three ranks do in spells_us.txt), given out of id
+    // order, a mana cost apiece to tell them apart; and one other spell.
+    auto table = std::make_shared<game::SpellTable>();
+    REQUIRE(table->parse(mq_test::spell_line({{0, "16292"}, {1, "Third Spire of Necromancy"}, {19, "30"}}) + "\n" +
+                         mq_test::spell_line({{0, "16290"}, {1, "Third Spire of Necromancy"}, {19, "10"}}) + "\n" +
+                         mq_test::spell_line({{0, "3020"}, {1, "Test Heal"}, {19, "25"}}) + "\n" +
+                         mq_test::spell_line({{0, "16291"}, {1, "Third Spire of Necromancy"}, {19, "20"}})) == 4);
+    conn.set_spell_table_for_test(table);
+    auto has_record = [&h](int index, int id, int mana) {
+        const std::string head = "[Probe] spell " + std::to_string(index) + ": id " + std::to_string(id) + ", found 1, ";
+        const std::string mid = " bytes, name Third Spire of Necromancy, mana " + std::to_string(mana) + ",";
+        return std::any_of(h.printed.begin(), h.printed.end(), [&](const std::string& line) {
+            return line.starts_with(head) && line.find(mid) != std::string::npos;
+        });
+    };
+
+    // Every spell of the name, lowest id first, whatever the case asked.
+    h.run("/probespellsbyname 16384 third SPIRE of necromancy");
+    CHECK(has_record(0, 16290, 10));
+    CHECK(has_record(1, 16291, 20));
+    CHECK(has_record(2, 16292, 30));
+    CHECK_FALSE(std::any_of(h.printed.begin(), h.printed.end(),
+                            [](const std::string& line) { return line.starts_with("[Probe] spell 3:"); }));
+    CHECK(std::none_of(h.printed.begin(), h.printed.end(),
+                       [](const std::string& line) { return line.find("bytes unread") != std::string::npos; }));
+
+    // Byte for byte what get_spells_data_bulk gives for those ids, the whole of it and when the buffer is too small
+    // for all three (only whole records) or for the count.
+    for (const char* size : {"16384", "1200", "700", "3"}) {
+        h.printed.clear();
+        h.run(std::string("/probespells ") + size + " 16290 16291 16292");
+        const std::vector<std::string> by_id = h.printed;
+        h.printed.clear();
+        h.run(std::string("/probespellsbyname ") + size + " Third Spire of Necromancy");
+        CHECK(h.printed == by_id);
+    }
+    // One spell of its name: that one alone.
+    h.printed.clear();
+    h.run("/probespellsbyname 16384 Test Heal");
+    CHECK(std::any_of(h.printed.begin(), h.printed.end(), [](const std::string& line) {
+        return line.starts_with("[Probe] spell 0: id 3020, found 1, ");
+    }));
+    // A name no spell has, a part of one, or none: the count alone.
+    for (const char* name : {"Fourth Spire of Necromancy", "Third Spire", ""}) {
+        h.printed.clear();
+        h.run(std::string("/probespellsbyname 64 ") + name);
+        CHECK(h.printed_line("[Probe] spells count 0, 4 bytes, 0 bytes left"));
+    }
+    // Below the count's 4 bytes nothing, and nothing past the buffer.
+    h.printed.clear();
+    h.run("/probespellsbyname 3 Third Spire of Necromancy");
+    CHECK(h.printed_line("[Probe] spells 0 bytes"));
+    CHECK(h.printed_line("[Probe] spells past the end 0"));
+    // No game connection (the login screen): the count alone.
+    h.printed.clear();
+    auto held = std::move(h.world.conn);
+    h.run("/probespellsbyname 64 Third Spire of Necromancy");
+    CHECK(h.printed_line("[Probe] spells count 0, 4 bytes, 0 bytes left"));
+    h.world.conn = std::move(held);
+
+    // Without 'read': nothing, and the chat window names this call.
+    Host denied(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    denied.approve(plugin::kCapAll & ~plugin::kCapRead);
+    REQUIRE(denied.plugins->load("HostProbe"));
+    denied.run("/probespellsbyname 4096 Third Spire of Necromancy");
+    CHECK(denied.printed_line("[Probe] spells 0 bytes"));
+    CHECK(denied.printed_line("[Plugin] HostProbe: get_spells_by_name_data_bulk needs the server's 'read' permission"));
+}
 TEST_CASE("native plugins: get_raid_data_bulk roster, pets, positions and edge cases") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);

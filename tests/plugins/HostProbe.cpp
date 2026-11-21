@@ -22,6 +22,7 @@
 //   /probeabilities [n]  get_ability_data_bulk the same way, through HS_Bulk_ListHeader and HS_Bulk_AbilityRecord
 //   /probespells n id...  get_spells_data_bulk for those ids into n bytes, through HS_Bulk_SpellFixedRecord and the
 //   strings and effect lines after each
+//   /probespellsbyname n name  get_spells_by_name_data_bulk for that name into n bytes, printed as /probespells does
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
 #include <cstddef>
@@ -52,6 +53,8 @@ static_assert(offsetof(PluginHostApi, select_raid_member) == offsetof(PluginHost
 static_assert(offsetof(PluginHostApi, set_class_name) == offsetof(PluginHostApi, get_map_policy) + sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, get_spells_data_bulk) ==
               offsetof(PluginHostApi, nameplate_spell_icon) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, get_spells_by_name_data_bulk) ==
+              offsetof(PluginHostApi, get_spells_data_bulk) + sizeof(PluginHostApi::caps));
 
 namespace {
 
@@ -759,38 +762,13 @@ bool read_str16(const unsigned char* buf, std::size_t size, std::size_t& at, std
     return true;
 }
 
-// The count, then each record one line (id, found, its size, name, mana, target type, flags, slots, classes,
-// strings, effect lines), each used effect slot (SPA not 254, read stepping by slotSize), each class that can use
-// it (its level not 0 or 255), its
-// description (the ninth string), the target type's, resist type's and categories' names (the tenth to fourteenth)
-// and each effect line, stepping by recordSize; then the bytes left over after the last record (0 when every record is framed
-// right). The first number is the buffer size, the rest the spell ids; also how many bytes past the first n the host
-// changed.
-void probe_spells(void*, const char* args) {
-    if (!HAILSTONE_HOST_HAS(host, get_spells_data_bulk)) {
-        WriteChatf("[Probe] spells: not in this client");
-        return;
-    }
-    std::vector<std::int32_t> nums;
-    for (const char* p = args ? args : "";;) {
-        char* end = nullptr;
-        const long v = std::strtol(p, &end, 10);
-        if (end == p) break;
-        nums.push_back(static_cast<std::int32_t>(v));
-        p = end;
-    }
-    unsigned char buf[16384];
+// The records as /probespells prints them (see probe_spells): `buf`, of `bufSize` bytes, was filled with 0xA5 before
+// the host was given `n` of them and returned `r`.
+void print_spells(const unsigned char* buf, std::size_t bufSize, std::int32_t n, std::int32_t r) {
     constexpr unsigned char guard = 0xA5;
-    std::memset(buf, guard, sizeof buf);
-    const std::int32_t n = nums.empty() || nums[0] < 0 ? 0
-        : nums[0] < static_cast<std::int32_t>(sizeof buf) ? nums[0] : static_cast<std::int32_t>(sizeof buf);
-    std::vector<std::int32_t> ids;
-    if (nums.size() > 1) ids.assign(nums.begin() + 1, nums.end());
-    const std::int32_t r = host->get_spells_data_bulk(host->host, ids.data(), static_cast<std::int32_t>(ids.size()),
-                                                      buf, n);
-    if (n < static_cast<std::int32_t>(sizeof buf)) {
+    if (n < static_cast<std::int32_t>(bufSize)) {
         std::size_t changed = 0;
-        for (std::size_t i = static_cast<std::size_t>(n); i < sizeof buf; ++i) changed += buf[i] != guard;
+        for (std::size_t i = static_cast<std::size_t>(n); i < bufSize; ++i) changed += buf[i] != guard;
         WriteChatf("[Probe] spells past the end %zu", changed);
     }
     const std::size_t size = r > 0 ? static_cast<std::size_t>(r) : 0;
@@ -867,6 +845,61 @@ void probe_spells(void*, const char* args) {
                size - at);
 }
 
+// The count, then each record one line (id, found, its size, name, mana, target type, flags, slots, classes,
+// strings, effect lines), each used effect slot (SPA not 254, read stepping by slotSize), each class that can use
+// it (its level not 0 or 255), its
+// description (the ninth string), the target type's, resist type's and categories' names (the tenth to fourteenth)
+// and each effect line, stepping by recordSize; then the bytes left over after the last record (0 when every record is framed
+// right). The first number is the buffer size, the rest the spell ids; also how many bytes past the first n the host
+// changed.
+void probe_spells(void*, const char* args) {
+    if (!HAILSTONE_HOST_HAS(host, get_spells_data_bulk)) {
+        WriteChatf("[Probe] spells: not in this client");
+        return;
+    }
+    std::vector<std::int32_t> nums;
+    for (const char* p = args ? args : "";;) {
+        char* end = nullptr;
+        const long v = std::strtol(p, &end, 10);
+        if (end == p) break;
+        nums.push_back(static_cast<std::int32_t>(v));
+        p = end;
+    }
+    unsigned char buf[16384];
+    constexpr unsigned char guard = 0xA5;
+    std::memset(buf, guard, sizeof buf);
+    const std::int32_t n = nums.empty() || nums[0] < 0 ? 0
+        : nums[0] < static_cast<std::int32_t>(sizeof buf) ? nums[0] : static_cast<std::int32_t>(sizeof buf);
+    std::vector<std::int32_t> ids;
+    if (nums.size() > 1) ids.assign(nums.begin() + 1, nums.end());
+    const std::int32_t r = host->get_spells_data_bulk(host->host, ids.data(), static_cast<std::int32_t>(ids.size()),
+                                                      buf, n);
+    print_spells(buf, sizeof buf, n, r);
+}
+
+// /probespellsbyname n name: get_spells_by_name_data_bulk for the name (the rest of the line, spaces and all) into n
+// bytes, printed as /probespells prints its records.
+void probe_spells_by_name(void*, const char* args) {
+    if (!HAILSTONE_HOST_HAS(host, get_spells_by_name_data_bulk)) {
+        WriteChatf("[Probe] spells by name: not in this client");
+        return;
+    }
+    const char* p = args ? args : "";
+    char* end = nullptr;
+    const long v = std::strtol(p, &end, 10);
+    if (end == p) {
+        WriteChatf("[Probe] spells by name: no size");
+        return;
+    }
+    while (*end == ' ') ++end;
+    unsigned char buf[16384];
+    std::memset(buf, 0xA5, sizeof buf);
+    const std::int32_t n = v < 0 ? 0
+        : v < static_cast<long>(sizeof buf) ? static_cast<std::int32_t>(v) : static_cast<std::int32_t>(sizeof buf);
+    const std::int32_t r = host->get_spells_by_name_data_bulk(host->host, end, buf, n);
+    print_spells(buf, sizeof buf, n, r);
+}
+
 int probe_tlo(void*, const char*, const char* member, const char*, HailstoneValue* out) {
     if (member && std::strcmp(member, "Throw") == 0) throw std::runtime_error("the TLO threw");
     out->kind = HAILSTONE_STRING;
@@ -908,6 +941,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probeability", probe_ability, nullptr);
     AddCommand("/probeabilities", probe_abilities, nullptr);
     AddCommand("/probespells", probe_spells, nullptr);
+    AddCommand("/probespellsbyname", probe_spells_by_name, nullptr);
     AddTopLevelObject("Probe", probe_tlo, nullptr);
 #ifdef HAILSTONE_PROBE_THROW_INIT
     throw std::runtime_error("InitializePlugin threw");

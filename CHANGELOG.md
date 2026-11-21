@@ -78,6 +78,8 @@
   - Each comes with its spells_us.txt fields, its description, and the names of its target type, resist type and categories
   - Its effect slots come as text in MacroQuest's `ParseSpellEffect` wording ("Slot 1: Increase HP by 11 (L1) to 20 (L10)")
   - For developers: docs/plugins.md "get_spells_data_bulk"
+- Plugins: `get_spells_by_name_data_bulk` reads every spell of a name in one call (all three Third Spire of Necromancy, say), laid out as `get_spells_data_bulk`'s
+  - For developers: docs/plugins.md "get_spells_by_name_data_bulk"
 - Scripts: `${Spell.TargetType}` gives MacroQuest's text for every target type
   - `LifeTap` (was `Life Tap`), and `None`, `Special Muramites`, `Target_AE_No_Players_Pets` and `Single Friendly (or Target's Target` where it said `Unknown`
 - Server files: when the server goes quiet during the download, the client keeps asking for the missing pieces until 30 s pass with nothing from it, instead of giving up after about 15 s

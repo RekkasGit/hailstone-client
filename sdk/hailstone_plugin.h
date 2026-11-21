@@ -1144,6 +1144,12 @@ typedef struct PluginHostApi {
      * HAILSTONE_HOST_HAS(host, get_spells_data_bulk) first. */
     int32_t (*get_spells_data_bulk)(void* host, const int32_t* ids, int32_t id_count, unsigned char* out,
                                     int32_t out_size);
+    /* Every spell named `name` (HAILSTONE_CAP_READ; case-insensitive, lowest id first), laid out as
+     * get_spells_data_bulk's: an int32_t count, then one record per spell of that name, as many whole records as fit.
+     * Bytes written; 0 without `read` or when out_size cannot hold the count. The count alone (0) with no game
+     * connection, a NULL name or one no spell has. Added later in ABI 3: test
+     * HAILSTONE_HOST_HAS(host, get_spells_by_name_data_bulk) first. */
+    int32_t (*get_spells_by_name_data_bulk)(void* host, const char* name, unsigned char* out, int32_t out_size);
 } PluginHostApi;
 /* What use_ability and ability_state take: the kinds of ability the Ability Book lists. The values are stable. */
 enum HS_AbilityKinds {
