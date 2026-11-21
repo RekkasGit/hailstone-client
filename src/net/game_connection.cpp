@@ -2763,8 +2763,17 @@ void GameConnection::attack_command(const std::string& args) {
 void GameConnection::consider() {
     if (state_ != ConnectionState::InZone) return;
     auto it = world_.spawns.find(world_.target_id);
+    // Cmd_consider @0x4df830 prints its lines with dsp_chat_2 (colour 0x111, the default). With no target it is
+    // 13063 "Consider whom?"; 12240 "Consider who?" is the reply handler's (CEverQuest::Consider @0x5239a0).
     if (it == world_.spawns.end()) {
-        chat(ChatEvent::Kind::System, strings_.format(12240, {})); // Consider who?
+        chat(ChatEvent::Kind::System, strings_.format(13063, {}));
+        return;
+    }
+    // A living target (spawn type below 2) whose PlayerClient vftable slot +0x50 (PlayerClient_IsVehicleRace
+    // @0x59e530: the race table's vehicle flag, ships and boats) is set gets 13064 "You can't consider that." and
+    // no packet.
+    if (!it->second.is_corpse && game::is_vehicle_race(it->second.race, it->second.gender)) {
+        chat(ChatEvent::Kind::System, strings_.format(13064, {}));
         return;
     }
     Consider c;
@@ -2930,6 +2939,8 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
         break;
     case Op::Consider:
         if (auto c = decode_consider(p)) {
+            // CEverQuest::Consider @0x5239a0, as the original: 12240 for an unknown spawn and 12241 for type 2 and
+            // up. /consider sends OP_ConsiderCorpse for a corpse, so stock EQEmu never answers one here.
             const game::Spawn* t = spawn(c->target_id);
             if (!t) {
                 chat(ChatEvent::Kind::System, strings_.format(12240, {}));

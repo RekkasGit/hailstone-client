@@ -108,6 +108,57 @@ TEST_CASE("mock server: considering corpses requests and displays the server's d
     CHECK(sent(rig, kCorpseConsider).size() == 2);
 }
 
+TEST_CASE("mock server: /consider refuses without a target and for a ship or boat, as Cmd_consider does") {
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    constexpr std::uint32_t kBoat = 61;
+    constexpr std::uint32_t kShipCorpse = 62;
+    constexpr std::uint16_t kCorpseConsider = 0x5204;
+    constexpr std::uint16_t kLivingConsider = 0x742b;
+    // Race 141 (BOAT) and 72 (SHIP) carry the race table's vehicle flag (PlayerClient_IsVehicleRace @0x59e530).
+    rig.server.add_spawn(make_spawn("a_boat", kBoat, 1, 141, 10.0f, 10.0f, 3.0f, 0.0f));
+    rig.server.add_spawn(make_spawn("a_ship's corpse", kShipCorpse, 2, 72, 12.0f, 12.0f, 3.0f, 0.0f));
+    REQUIRE(add_rival(rig));
+    REQUIRE(rig.until([&] {
+        const auto& spawns = rig.conn.world().spawns;
+        return spawns.contains(kBoat) && spawns.contains(kShipCorpse);
+    }));
+
+    std::vector<ChatEvent> lines;
+    auto wait_line = [&](const std::string& text) {
+        return rig.until([&] {
+            for (auto& line : rig.chat()) lines.push_back(std::move(line));
+            return has_line(lines, text);
+        });
+    };
+
+    // No target: 13063 "Consider whom?", not the reply handler's 12240.
+    REQUIRE(rig.conn.world().target_id == 0);
+    rig.conn.consider();
+    REQUIRE(wait_line("[13063]"));
+    CHECK_FALSE(has_line(lines, "[12240]"));
+
+    // A living vehicle: 13064 "You can't consider that." and nothing sent.
+    rig.conn.set_target(kBoat);
+    rig.conn.consider();
+    REQUIRE(wait_line("[13064]"));
+
+    // The check is on the living branch only: a vehicle's corpse still sends OP_ConsiderCorpse.
+    rig.conn.set_target(kShipCorpse);
+    rig.conn.consider();
+    REQUIRE(rig.until([&] { return !sent(rig, kCorpseConsider).empty(); }));
+    CHECK(u32_at(*sent(rig, kCorpseConsider).back(), 4) == kShipCorpse);
+
+    // An ordinary living target still sends OP_Consider; it is the only one sent.
+    rig.conn.set_target(kRival);
+    rig.conn.consider();
+    REQUIRE(rig.until([&] { return !sent(rig, kLivingConsider).empty(); }));
+    auto living = sent(rig, kLivingConsider);
+    REQUIRE(living.size() == 1);
+    CHECK(u32_at(*living.front(), 4) == kRival);
+    CHECK(sent(rig, kCorpseConsider).size() == 1);
+}
+
 TEST_CASE("mock server: /decline sends the original's 0x52f7 and EQEmu's 12-byte OP_DuelDecline") {
     Rig rig;
     REQUIRE(rig.to_zone());

@@ -259,6 +259,14 @@ for spawn type 2 and up, without the consider tip). EQEmu's `Client::Handle_OP_C
 remaining decay time and, for player corpses, the resurrection time or status. The client displays these
 replies through the usual formatted, simple or plain chat message handlers.
 
+`/consider` sends nothing in two cases, as Cmd_consider does. With no target it prints eqstr 13063 ("Consider
+whom?"). A living target whose race carries the race table's vehicle flag (PlayerClient vftable slot +0x50,
+PlayerClient_IsVehicleRace @0x59e530: the ships and boats) gets 13064 ("You can't consider that."); a vehicle's
+corpse still sends `OP_ConsiderCorpse`. Both lines use the default chat colour (dsp_chat 0x111). The reply
+handler (CEverQuest::Consider @0x5239a0) keeps its own lines: 12240 ("Consider who?") when the target is not in
+the spawn list and 12241 for a corpse, which stock EQEmu never sends since corpses go through
+`OP_ConsiderCorpse`.
+
 #### Combat: observed sequences
 
 EQEmu server, `playprobe --fight-nearest`:
