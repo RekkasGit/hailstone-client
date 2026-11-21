@@ -919,9 +919,10 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 
 ## Characters and models
 
-- **Held bow.** RoF2's local ranged attack puts the bow in the visible secondary slot. Hailstone displays it for
-  the firing animation on manual attacks and auto fire. A live RoF2 comparison would settle how long the bow
-  remains visible after a shot.
+- **ActorTagInfo.txt.** The RoF2 binary loads `Resources\ActorTagInfo.txt` when present (@0x7f4410, @0x7f4130) and
+  `CDisplay::IsShield` @0x489d70 then uses it instead of its built-in list. Hailstone uses the built-in list. The
+  only copy checked came from a later live client's folder. A RoF2 install's file list would settle whether RoF2
+  carries one, and so which list the original uses in practice.
 
 - **Held-item effects.** Keep WLD cloud nodes, bitmap sequences and EQG surface maps.
   - The WLD creator's manager density configuration (`+0xa8`, separate from EDD actor density) is untraced; the native

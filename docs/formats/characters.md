@@ -554,16 +554,24 @@ grip space; skeletal ones are baked in their rest pose.
 - Classic and Luclin models carry them on `<code>R_POINT_TRACK` / `<code>L_POINT_TRACK`.
 - A secondary goes on `SHIELD_POINT` when its model number is a shield to `CDisplay::IsShield` @0x489d70.
   The original uses `Resources\ActorTagInfo.txt` when it loads: the first caret-delimited field is the IT model
-  number and a second field of 1 marks a shield. Missing entries in a loaded table are treated as non-shields.
-  Hailstone uses the original's built-in fallback list (IT200..228, 10530..10544, 10664..10671, 11001..11020,
-  11496..11497 and 25 single numbers such as 14000), with the optional additions described below.
+  number and a second field of 1 marks a shield (loader @0x7f4130, lookup @0x7f4030). Missing entries in a loaded
+  table are treated as non-shields. Without the file the binary falls back to a built-in list (IT200..228,
+  10530..10544, 10664..10671, 11001..11020, 11496..11497 and 25 single numbers such as 14000). Whether a RoF2 install
+  carries the file is unconfirmed (docs/unknowns.md); the copy checked came from a later live client's folder, so it
+  is weak evidence for RoF2 (it does mark the handheld models below as non-shields). Hailstone does not read the file
+  and uses the built-in list, with the optional additions described below.
 - Texture names do not count.
 - Matching is exact (`find_bone`, so `HAIR_POINT` is not `R_POINT`).
 - EQG models use `ARMR_WEAP`, `ARML_WEAP`, `ARML_SHLD` and the bone's bind matrix.
 - Items are not tinted (`itmt.ini[Primary/SecondaryTintIndex]` is not read).
 
 When a local archery projectile arrives, the firing animation puts the visible model of the equipped Range item in
-the left hand and frees the right. Normal equipment reappears when the animation ends. EQEmu's projectile describes
+the left hand and frees the right. Normal equipment reappears when the animation ends. The model is the one
+`ItemBase_GetIDFile(0x22)` @0x7b3e70 gives a range-slot item: the ornament's main model, else the item's own.
+`PlayerZoneClient::DoRangedAttack` @0x5a4920 sets held models 7 ("0") and 8 (the range item) the same way, but keeps
+them until something else sets the held models (`DoAttack` @0x5a5000 restores them before the next melee swing) and
+sends `OP_WearChange` for each, so other players see the bow as well. Hailstone shows it only during the animation and
+sends nothing: a difference (docs/todo.md). EQEmu's projectile describes
 the ammo, so a remote archer's equipment appearance comes from its spawn and wear updates.
 
 #### Extra shield models

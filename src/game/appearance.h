@@ -64,7 +64,11 @@ void normalize_appearance(Appearance& a, std::uint32_t race);
 // stay undyed although the server re-sends every slot's tint after
 // OP_Illusion. Where the original drops them is not found
 // (docs/unknowns.md); SwapBodyMaterial itself has no race rule.
-// During a local bow action, the bow takes the left hand and the right is free for the arrow.
+// With `bow` set (a local shot, game::missile_bow_model), the primary is empty and the secondary holds the bow, as
+// PlayerZoneClient::DoRangedAttack @0x5a4920 sets held models 7 and 8. Hailstone (a deliberate difference, not yet
+// switchable): only for the firing animation. The original keeps them until something else sets the held models
+// (DoAttack @0x5a5000's preamble after a ranged attack, game::mechanics::melee_models), and its SetHeldModel sends
+// OP_WearChange for each, so others see the bow too (docs/todo.md).
 Appearance drawn_appearance(const Appearance& a, std::uint32_t race, std::uint32_t bow = 0);
 
 // OP_WearChange. Returns false when the client ignores it: a body
@@ -109,8 +113,10 @@ HeadModel head_model(std::uint32_t race, std::uint8_t gender, std::uint32_t mate
 
 // CDisplay::IsShield @0x489d70: whether a secondary's item model IT<n> is a shield, which PlayerClient::SetHeldModel
 // shows on bone slot 5 (<code>SHIELD_POINT_DAG / ARML_SHLD) instead of slot 4 (L_POINT / ARML_WEAP).
-// RoF2 uses Resources\ActorTagInfo.txt when it loads, and a built-in list of model numbers otherwise.
-// Hailstone uses the built-in list, plus later shields and shield ornaments when display.extra_shields is enabled
+// The RoF2 binary uses Resources\ActorTagInfo.txt when that file is present and loads (the model's second field is 1;
+// a model not in it is no shield; the loader @0x7f4130, the lookup @0x7f4030), and a built-in list of model numbers
+// otherwise. Whether a RoF2 install carries the file is unconfirmed (docs/unknowns.md). Hailstone does not read it: it
+// uses the built-in list, plus later shields and shield ornaments when display.extra_shields is enabled
 // (shield_models.inc, tools/gen_shield_models.py).
 bool is_shield_model(std::uint32_t item_model);
 bool is_stock_shield_model(std::uint32_t item_model);

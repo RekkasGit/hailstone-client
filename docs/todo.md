@@ -223,7 +223,8 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - Accept expedition/shared-task roster invitations with real players and a controller.
 - [x] Extended chat channels 57..107 and user colours 355..408 for servers that send a later client's chat colours (a Hailstone extension; stock routing and colours unchanged; docs/mechanics.md "Extended chat routing").
 - [x] Missiles: a despawned source or target handled as DeleteMyMissiles; flying through walls with a target is the original's behaviour (60b1934). Not tested live (no archer).
-- [ ] Compare the local bow's visibility after a shot with RoF2. Hailstone displays it during the firing animation.
+- [ ] Held bow after a shot as RoF2 does it: `DoRangedAttack` @0x5a4920 empties held model 7 and shows the range item in 8 until `DoAttack`'s preamble restores them, sending `OP_WearChange` for each (game::mechanics::do_ranged_attack already makes those calls; game/mechanics/abilities.cpp ignores them). Hailstone shows the bow only during the firing animation and sends nothing (docs/formats/characters.md "Held items").
+- [ ] `Resources\ActorTagInfo.txt` for `CDisplay::IsShield`: the RoF2 binary reads it when present and falls back to its built-in list; whether a RoF2 install carries one is unconfirmed (docs/unknowns.md "ActorTagInfo.txt"). If it does, read it from the game folder and decide how `display.extra_shields` combines with it (docs/formats/characters.md "Held items").
 - [x] **Valid spell missiles.**
   - Spell lifetime, launch and ending stages, stationary area contact, source physics clock, spell 859 local presentation. Not checked live.
   - Invalid or absent spell ids still end immediately.
