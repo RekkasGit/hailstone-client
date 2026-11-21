@@ -107,7 +107,7 @@ float blend_seconds(const LayerRequest& req, std::uint8_t from, std::uint8_t to,
 } // namespace
 
 bool ActorLayers::start_action(const assets::AnimationClip* clip, std::uint8_t requested, std::uint8_t chosen,
-                               float rate, const LayerRequest& req, std::uint32_t bow_model) {
+                               float rate, const LayerRequest& req) {
     if (!clip || req.corpse) return false;
     GroupTrack& up = group[game::kUpperBones];
     GroupTrack& lo = group[game::kLowerBones];
@@ -159,7 +159,6 @@ bool ActorLayers::start_action(const assets::AnimationClip* clip, std::uint8_t r
                 follow_up = chosen;
                 follow_clip = clip;
                 follow_rate = rate;
-                follow_bow_model_ = bow_model;
             } else if (game::classic_clears_queue(chosen)) {
                 follow_up = kNoFollowUp;
                 follow_clip = nullptr;
@@ -176,7 +175,6 @@ bool ActorLayers::start_action(const assets::AnimationClip* clip, std::uint8_t r
     }
     action = clip;
     action_anim = chosen;
-    action_bow_model_ = bow_model;
     action_on_legs = !upper_only;
     legs_took_motion = false;
     return true;
@@ -209,10 +207,7 @@ bool ActorLayers::start_stand(const assets::AnimationClip* clip, std::uint8_t re
 bool ActorLayers::step(const LayerRequest& req, float dt) {
     GroupTrack& up = group[game::kUpperBones];
     GroupTrack& lo = group[game::kLowerBones];
-    if (req.corpse) {
-        action = nullptr;
-        follow_bow_model_ = 0;
-    }
+    if (req.corpse) action = nullptr;
     // The action ends once the upper body has played it through (or something else took the upper body).
     if (action && (up.clip != action || up.completed())) action = nullptr;
     if (!action) {
@@ -233,7 +228,7 @@ bool ActorLayers::step(const LayerRequest& req, float dt) {
             const std::uint8_t a = follow_up;
             follow_up = req.follow_up_after;
             follow_clip = nullptr;
-            followed = start_action(c, a, a, follow_rate, req, follow_bow_model_);
+            followed = start_action(c, a, a, follow_rate, req);
         }
     }
     bool legs_free = !action;

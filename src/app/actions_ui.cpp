@@ -826,8 +826,19 @@ void ActionsUi::melee_attack(net::GameConnection& conn, const mech::Character* c
     bool done = mech::do_attack(ctx, state_, static_cast<std::uint8_t>(slot), 0, r);
     for (const auto& m : r.messages) message(conn, m);
     for (int buff : r.removed_buffs) conn.clear_buff_locally(buff);
-    for (const auto& s : r.sends) // DoRangedAttack's OP_CombatAbility (slot 11)
-        if (auto p = net::encode_skill_send(s)) conn.send_zone_packet(*p);
+    // DoRangedAttack's OP_CombatAbility (slot 11), and the held models DoAttack and DoRangedAttack set around it
+    // (the bow in the left hand from the first shot until the next melee swing), each with its OP_WearChange, in
+    // the original's order.
+    std::size_t held = 0;
+    auto held_models = [&](std::size_t sent) {
+        for (; held < r.held_models.size() && r.held_models[held].after_sends <= sent; ++held)
+            conn.set_held_model(r.held_models[held].slot, r.held_models[held].item_slot);
+    };
+    for (std::size_t i = 0; i < r.sends.size(); ++i) {
+        held_models(i);
+        if (auto p = net::encode_skill_send(r.sends[i])) conn.send_zone_packet(*p);
+    }
+    held_models(r.sends.size());
     if (r.stop_auto_fire) conn.set_auto_fire(false);
     // The swing's animation: SendCombatAbilityAttack computes PlayerZoneClient_PlayAttackAnimation's choice and
     // drops it (@0x4fb627); the server's OP_Animation, which EQEmu sends to the attacker too, plays it.

@@ -28,6 +28,7 @@
 #include "net/opcodes.h"
 #include "net/player_packets.h"
 #include "net/trade_packets.h"
+#include "net/zone_packets.h"
 
 namespace hailstone::net {
 
@@ -437,6 +438,32 @@ void GameConnection::refresh_worn_slot(int slot) {
     game::apply_wear_change(it->second.appearance, static_cast<std::uint8_t>(ms), look.material, look.hero_forge,
                             look.tint);
     refresh_instrument_state();
+}
+
+void GameConnection::set_held_model(int held, int item_slot) {
+    if (held != game::kSlotPrimary && held != game::kSlotSecondary) return;
+    auto it = world_.spawns.find(world_.player_id);
+    if (it == world_.spawns.end()) return;
+    const Item* item =
+        item_slot >= 0 ? inventory_.at(ItemSlot::possessions(static_cast<std::int16_t>(item_slot))) : nullptr;
+    // ItemBase_GetIDFile(0x22) @0x7b3e70 reads the model for the slot the item is in: the secondary's (14) prefers
+    // its own ornament string; the primary's and the range item's (11) take the main one (game::worn_look 7).
+    game::WornLook look;
+    if (item) look = game::worn_look(*item, item_slot == kSlotSecondary ? game::kSlotSecondary : game::kSlotPrimary);
+    game::Appearance& a = it->second.appearance;
+    const auto slot = static_cast<std::uint8_t>(held);
+    game::apply_wear_change(a, slot, look.material, 0, look.tint);
+    // SetHeldModel's last step (quiet 0, online): {spawn id, the model number, tint, slot}. Stock EQEmu relays it to
+    // the other clients in the zone (Client::Handle_OP_WearChange) and keeps no state of it, so a later zone-in shows
+    // the worn primary and secondary again. The model is the IT number (0 for "0"); the four dwords after it stay 0
+    // as SetHeldModel leaves them. The tint is ItemBase_GetPaletteTintIndex of the primary (slot 7) or secondary
+    // (slot 8) item, a definition field (+0x570) the item serialisation is not known to carry: 0 (docs/unknowns.md).
+    if (!zone_ready_) return;
+    WearChange w;
+    w.spawn_id = static_cast<std::uint16_t>(world_.player_id);
+    w.armor.material = look.material;
+    w.slot = slot;
+    send_zone(encode(w));
 }
 
 void GameConnection::refresh_instrument_state() {

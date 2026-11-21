@@ -2101,6 +2101,10 @@ public:
     // ---- skills and abilities (app/actions_ui.cpp, net/ability_packets.h) ----
     // Sends a zone packet the abilities code built (UseSkill's requests).
     void send_zone_packet(const AppPacket& p) { send_zone(p); }
+    // PlayerClient::SetHeldModel(held, model, 0, 1) @0x5923f0 for the local player, as DoAttack and DoRangedAttack
+    // call it (game::mechanics::SkillResult::held_models): held slot 7 or 8 shows the model of the item in
+    // possessions slot `item_slot` (-1: nothing) and OP_WearChange tells the zone.
+    void set_held_model(int held, int item_slot);
     void send_world_packet(const AppPacket& p) { send_world(p); }
     // What plugins and scripts may do on this server (plugin/policy.h: its hailstone.cfg, or no rules), set once the
     // zone-in has checked the server's files and kept while in the world; the serial changes with it.

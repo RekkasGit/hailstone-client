@@ -228,7 +228,8 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - Accept expedition/shared-task roster invitations with real players and a controller.
 - [x] Extended chat channels 57..107 and user colours 355..408 for servers that send a later client's chat colours (a Hailstone extension; stock routing and colours unchanged; docs/mechanics.md "Extended chat routing").
 - [x] Missiles: a despawned source or target handled as DeleteMyMissiles; flying through walls with a target is the original's behaviour (60b1934). Not tested live (no archer).
-- [ ] Compare the local bow's visibility after a shot with RoF2. Hailstone displays it during the firing animation.
+- [x] Archery's held models: the bow in the left hand from the shot until the next melee swing, with OP_WearChange (DoAttack @0x5a5000, DoRangedAttack @0x5a4920, SetHeldModel @0x5923f0). Not checked live.
+- [ ] SetHeldModel's local special cases are not ported on any path: a range item named IT159*, IT10758* or IT10742* shown in an empty hand (sent as 0x9f, 0x2a06, 0x29f6), and IT36 shown as IT13 while spawn +0xa2 is set.
 - [x] **Valid spell missiles.**
   - Spell lifetime, launch and ending stages, stationary area contact, source physics clock, spell 859 local presentation. Not checked live.
   - Invalid or absent spell ids still end immediately.

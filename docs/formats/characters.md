@@ -561,10 +561,14 @@ grip space; skeletal ones are baked in their rest pose.
 - EQG models use `ARMR_WEAP`, `ARML_WEAP`, `ARML_SHLD` and the bone's bind matrix.
 - Items are not tinted (`itmt.ini[Primary/SecondaryTintIndex]` is not read).
 
-When a local archery projectile arrives, the firing animation puts the visible model of the equipped Range item on
-the left-hand grip and frees the right. A bow uses the grip even if its model appears in the shield list. Normal
-equipment reappears when the animation ends. EQEmu's projectile describes the ammo, so a remote archer's equipment
-appearance comes from its spawn and wear updates.
+The local player's ranged attack changes the held models as the original does. `PlayerZoneClient::DoAttack`
+@0x5a5000 for the range slot (after another kind of attack) sets 7 and 8 to "0" and 8 to the range item;
+`DoRangedAttack` @0x5a4920 then sets 7 to "0" and 8 to the range item (`ItemBase_GetIDFile(0x22)` @0x7b3e70: its main
+ornament model, else its own). The bow stays in the left hand until the next melee swing, whose `DoAttack`
+preamble puts back the primary and the secondary. Each change is `PlayerClient::SetHeldModel` @0x5923f0 with quiet 0,
+which sends `OP_WearChange` {spawn id, model number, tint 0, slot}; stock EQEmu relays it to the other clients
+(`Client::Handle_OP_WearChange`) and keeps no state of it (`net::GameConnection::set_held_model`). Like any model in
+slot 8, a range item's goes on the shield point when `CDisplay::IsShield` (ActorTagInfo.txt, below) calls it a shield.
 
 #### ActorTagInfo.txt
 

@@ -919,9 +919,10 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 
 ## Characters and models
 
-- **Held bow.** RoF2's local ranged attack puts the bow in the visible secondary slot. Hailstone displays it for
-  the firing animation on manual attacks and auto fire. A live RoF2 comparison would settle how long the bow
-  remains visible after a shot.
+- **Held-model tint index.** `PlayerClient::SetHeldModel`'s OP_WearChange carries `ItemBase_GetPaletteTintIndex`
+  (item definition +0x570) of the primary (slot 7) or secondary (slot 8) item. Which serialised item field fills
+  +0x570 is not traced, so Hailstone sends 0 (stock EQEmu also sends 0 for the spawn's tint indexes). Tracing the
+  item unserialiser's write to +0x570 would settle it.
 
 - **ActorTagInfo.txt beyond the shield flag** (docs/formats/characters.md "ActorTagInfo.txt").
   - Unknown: what fields 3 to 10 and kinds other than 1 (2, and a later file's 37 .. 64) mean; whether the original

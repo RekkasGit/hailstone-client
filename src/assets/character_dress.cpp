@@ -107,7 +107,6 @@ std::string appearance_key(const CharacterModel& m, const game::Appearance& a) {
     add(a.beard);
     add(a.show_helm);
     add(a.new_armor_bits);
-    add(a.secondary_in_hand);
     for (std::size_t i = 0; i < 9; ++i) {
         add(a.material[i]);
         add(a.material_variation[i]);
@@ -700,7 +699,7 @@ void CharacterLibrary::attach_items(const CharacterModel& model, const game::App
         const CharacterMesh* item = &held->mesh;
         // PlayerClient::SetHeldModel puts a secondary on the shield point when CDisplay::IsShield knows its model
         // number (ActorTagInfo.txt, else the fixed list), whatever its textures are called.
-        const bool shield = slot == game::kSlotSecondary && !a.secondary_in_hand &&
+        const bool shield = slot == game::kSlotSecondary &&
                             game::is_shield_model(number, appearance_ ? &appearance_->actor_tags : nullptr);
         int bone = -1;
         if (model.eqg) {
