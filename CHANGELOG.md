@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed stale Hide indicators on other players' nameplates after the server cancels Hide during combat.
 - Item descriptions and comparisons show named weapon procs and other item effects even when the spell ID or its local definition is unavailable.
 - NPCs keep their current tint when a live update sends zero or an out-of-range palette index.
 - Bane damage in item descriptions names the creature type with the game's own labels instead of "body type N". A server's body-type change (SetBodyType, read against `Resources/CharacterPropertySets.txt`) updates spell checks and targeting.
