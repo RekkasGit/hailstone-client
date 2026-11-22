@@ -1,8 +1,9 @@
 # Build, test and verify Hailstone
 
-Run the smallest relevant check while developing, then follow the repository's
-[build and test requirements](../../CONTRIBUTING.md) before handing off a code change.
-Record which executable, fixtures and environment produced each result.
+Run the smallest relevant check while developing. Before you call a change
+done, run the whole `hailstone_tests` and report what it covered, as
+[AGENTS.md, Build and test](../../AGENTS.md#build-and-test) requires. Record which executable,
+fixtures and environment produced each result.
 
 ## Configure a development build
 
@@ -79,6 +80,9 @@ shard or in a full direct run, record the order, shard and last traced case
 before narrowing it down. Compare with the same invocation on the base commit
 when determining whether an unexpected failure predates the change.
 
+How to report a run without these inputs is in [AGENTS.md, Build and test](../../AGENTS.md#build-and-test).
+The table adds what each one covers.
+
 | Input | What it covers | How to report its absence |
 |---|---|---|
 | No external fixtures | Synthetic tests and the in-process [mock EQEmu server](../../tests/mock_server/README.md). Mock network cases use loopback and ephemeral ports. | Record any loopback failures or selected cases omitted by a filter. |
@@ -87,16 +91,15 @@ when determining whether an unexpected failure predates the change.
 | `HAILSTONE_VECTORS_DIR` | The relevant recorded `*.jsonl` comparisons through [vector_files.h](../../tests/vector_files.h). | Check the expected files and record counts. A case can return successfully with no vectors if its file is missing. |
 | Optional server plugin checkout | Some integration cases are compiled into `hailstone_tests` only when the corresponding source checkout is present. | Record which optional plugins were built. The [container setup](../ci.md#images-and-containers) can omit checkouts linked from outside its mount. |
 
-Use assets only from an authorized local install and keep it read-only. For
-changes to file or packet parsing, run the repository's
-[ASan and UBSan build](../hardening.md#sanitizer-build) with GCC or Clang in
-addition to the normal tests. Use the repo's synthetic fixtures to exercise
+Use assets only from an authorized local install; the read-only rule is in
+[AGENTS.md, The rules that matter most](../../AGENTS.md#the-rules-that-matter-most). The sanitizer build for parsing
+changes is required by [AGENTS.md, Build and test](../../AGENTS.md#build-and-test); see the
+[ASan and UBSan build](../hardening.md#sanitizer-build) (GCC or Clang). Use the repo's synthetic fixtures to exercise
 the affected format. For packets, prefer a byte-level test for layout and a
 mock-session test for state transitions. The mock reuses some client encoders,
-so matching results on both sides can miss an incorrect layout. For file
-writes use [ScratchDir](../../tests/scratch_dir.h). For timers use
-[ManualClock](../../tests/manual_clock.h) at an existing injectable clock
-boundary.
+so matching results on both sides can miss an incorrect layout. File writes
+and timers in tests: [AGENTS.md, Adding code](../../AGENTS.md#adding-code)
+([ScratchDir](../../tests/scratch_dir.h), [ManualClock](../../tests/manual_clock.h)).
 
 ## Reproduce the repository checks
 
@@ -108,7 +111,7 @@ launcher such as `py -3` on Windows.
 
 | Change | Local checks |
 |---|---|
-| Documentation or wiki tooling | `git diff --check` and `python3 tools/sync_wiki.py --check`. List new docs in the wiki tool's `PAGES` table. |
+| Documentation or wiki tooling | `git diff --check` and `python3 tools/sync_wiki.py --check`. New docs: [AGENTS.md, Docs travel with the code](../../AGENTS.md#docs-travel-with-the-code). |
 | Client, SDK or UI source boundaries | `python3 tools/check_core_names.py`. |
 | Shared Lua UI API or bundled packs | `python3 tools/migrate_ui_api.py --check`, `python3 tools/migrate_ui_api.py --mock-adapter --check` and `python3 tools/gen_ui_api_docs.py --check`. Run the tooling unit tests from the workflow. |
 | Add-on or updater packaging | Run the Python packaging tests from the workflow using local inputs. Follow the appropriate install and persistence checks before claiming an update or add-on installed. |
@@ -152,17 +155,19 @@ folder. Normal client runs log to `logs/hailstone.log`.
 
 For a bug report, use the logs under the scratch data directory and capture
 only the excerpts needed to describe the issue. Review local screenshots,
-crash reports, logs and traces for private data before sharing. Keep
-credentials, ticket values, personal profiles and proprietary game files out
-of commits and review artifacts.
+crash reports, logs and traces for private data before sharing. What stays
+out of commits: "No secrets and no real identifiers" in
+[AGENTS.md, The rules that matter most](../../AGENTS.md#the-rules-that-matter-most), and [AGENTS.md, Git workflow](../../AGENTS.md#git-workflow).
+Keep it out of review artifacts too.
 
 ## Record evidence for review
 
 For each applicable check, record the base and tested commit, OS, compiler and
-configuration, command or manual steps, and the outcome. Distinguish unit tests,
-mock sessions, recorded vectors, fixture-backed asset tests, a rendered demo,
-and gameplay on a real server. Specify any relevant fixture gates, omitted
-build options, and blocked checks. For performance or visual comparisons,
+configuration, command or manual steps, and the outcome. What to say about
+coverage is in [AGENTS.md, Build and test](../../AGENTS.md#build-and-test) and
+[AGENTS.md, When you finish](../../AGENTS.md#when-you-finish); a rendered demo and fixture-backed
+asset tests are kinds of coverage too. Specify omitted build options and
+blocked checks. For performance or visual comparisons,
 capture the baseline and candidate with the same scene, settings and hardware.
 
 A handoff can say “eight fixture-free CTest shards passed on Linux with CEF

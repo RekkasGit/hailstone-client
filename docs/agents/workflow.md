@@ -28,8 +28,8 @@ review with evidence a second person can reproduce.
    git worktree list
    ```
 
-4. Start work in a separate worktree from the public Hailstone `main` for
-   a new task. For an existing change, compare against its intended base.
+4. Set up the worktree and branch as [AGENTS.md, Git workflow](../../AGENTS.md#git-workflow)
+   says. For an existing change, compare against its intended base.
    Inspect staged and unstaged changes and preserve both. A checkout's
    `main` name alone says nothing about whether it contains the public base
    or work from a maintainer's local integration branch.
@@ -59,9 +59,9 @@ Keep these questions distinct when a report involves parity.
 Check implementation and executable tests together. A reference can show
 intended behavior while a test covers just one input. If tests, docs and
 implementation disagree, identify the discrepancy in the review or
-change. Use [known gaps](../unknowns.md) for unresolved RoF2 behavior and
-include what would resolve it. Keep proprietary reference materials, raw
-captures and player assets local. [Clean-room rules](../../CONTRIBUTING.md#clean-room-rule)
+change. Unresolved RoF2 behavior follows "No guessing", and reference
+material, captures and player assets follow "Clean room", both in
+[AGENTS.md, The rules that matter most](../../AGENTS.md#the-rules-that-matter-most).
 
 Send security findings through the project's disclosure process.
 [Security policy](../../SECURITY.md)
@@ -114,9 +114,9 @@ Report the revision, evidence, skipped coverage and next check.
    [validation guide](validation.md) to add higher-level checks where a
    unit test cannot see the failure.
 2. Check old profiles, fixtures, UI packs, SDK consumers or server paths
-   when the change touches their contract. Follow the area's generator
-   before reviewing derived files. Update the behavior docs, known gaps
-   and changelog as required by [AGENTS.md](../../AGENTS.md).
+   when the change touches their contract. Generated files:
+   [AGENTS.md, Adding code](../../AGENTS.md#adding-code). Docs, known gaps and changelog:
+   [AGENTS.md, Docs travel with the code](../../AGENTS.md#docs-travel-with-the-code).
 3. When splitting work, give each contributor the same base, task scope,
    expected evidence and a non-overlapping write area. Keep integration
    and final verification with one owner. If changes overlap, inspect
@@ -141,12 +141,11 @@ and the path the change adds or fixes.
 
 ## Review and fix an organization PR
 
-When a maintainer assigns a review and the PR's head is a topic branch
-in this repository, handle the review, in-scope fixes, validation and
-review decision on that PR as one task. The assignment covers editing
-and pushing those fixes to the existing branch. Use the same branch
-and PR throughout. For a read-only review, provide findings. For a fork
-or a branch outside this repository, follow its own authorization.
+[AGENTS.md, Git workflow](../../AGENTS.md#git-workflow) ("Review on the existing PR branch")
+says what a review assignment on a topic branch in this repository
+authorizes. These steps carry it out on that branch and PR throughout.
+For a fork or a branch outside this repository, follow its own
+authorization.
 
 1. **Confirm the PR and branch.** Check the GitHub repository, base, head
    repository, head branch and latest commit. Fetch that head into an
@@ -170,9 +169,8 @@ or a branch outside this repository, follow its own authorization.
    the result and identify the review still required.
    [GitHub review rules](https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/approving-a-pull-request-with-required-reviews)
 4. **Complete an authorized merge.** Approval records the review decision.
-   A maintainer's request to merge or land the PR authorizes the merge in
-   the same task once the tested head, required reviews and checks meet
-   the [repository Git rules](../../AGENTS.md#git-workflow). Preserve draft
+   When and how a merge is authorized, and what it requires, is in
+   [AGENTS.md, Git workflow](../../AGENTS.md#git-workflow). Preserve draft
    status unless taking the PR out of draft is part of the assignment.
    Honor branch protections and match the merge to the tested head SHA
    when the GitHub tool supports it. If the head changes, review and

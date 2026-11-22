@@ -31,44 +31,41 @@ and test reports.
 
 ## Decisions that matter early
 
-1. **Identify the baseline.** Use original RoF2 behavior for game rules and
-   keep the stock EQEmu path working. A server-offered extension needs a
-   stock fallback. The renderer has its own modern design.
-2. **Anchor each claim.** Trace the current checkout to establish what
-   Hailstone does. Use reference observations to establish what RoF2 does.
-   Record uncertain behavior and the evidence needed to settle it in
-   [known gaps](../unknowns.md) and the [to-do list](../todo.md).
-3. **Keep ownership clear.** Server-specific client behavior belongs in
-   its own add-on. A reusable host API belongs in the client with its tests
-   and documentation. Use the repository's drop-in Lua scripts for
-   Hailstone support. [Server support](../../server/README.md)
-4. **Keep the project clean-room.** Cite behavioral findings, use
-   independently written code and honor license boundaries. Keep player
-   assets, session data and signing material outside the repository.
+The rules themselves live in [AGENTS.md](../../AGENTS.md). Each decision
+below points to the section that states it.
+
+1. **Identify the baseline.** "RoF2 is the baseline, not the ceiling" and
+   "Compatible with stock EQEmu" in [AGENTS.md, The rules that matter most](../../AGENTS.md#the-rules-that-matter-most).
+2. **Anchor each claim.** "No guessing" in [AGENTS.md, The rules that matter most](../../AGENTS.md#the-rules-that-matter-most).
+   Gaps go in [known gaps](../unknowns.md) and the [to-do list](../todo.md).
+3. **Keep ownership clear.** "Compatible with stock EQEmu" in
+   [AGENTS.md, The rules that matter most](../../AGENTS.md#the-rules-that-matter-most), and
+   [AGENTS.md, Plugins, scripts and add-ons](../../AGENTS.md#plugins-scripts-and-add-ons).
+   [Server support](../../server/README.md)
+4. **Keep the project clean-room.** "Clean room", "Licence" and "No secrets
+   and no real identifiers" in [AGENTS.md, The rules that matter most](../../AGENTS.md#the-rules-that-matter-most).
    [Contributor rules](../../CONTRIBUTING.md#clean-room-rule)
-5. **Protect existing work.** Check repository, branch, base and pending
-   changes. Use an isolated worktree and build directory. Keep the
-   player's game installation read-only. [Folder layout](../layout.md)
+5. **Protect existing work.** [AGENTS.md, Git workflow](../../AGENTS.md#git-workflow), and "The
+   player's game folder is read-only" in [AGENTS.md, The rules that matter most](../../AGENTS.md#the-rules-that-matter-most).
+   [Folder layout](../layout.md)
 6. **Match checks to the claim.** A build, a test with local fixtures, a
-   mock session and a live check answer different questions. Record the
-   exact commands and which prerequisites were available.
-7. **Follow through on the interfaces.** Check both shipped UI packs for
-   shared UI changes, legacy callers for persistent state and extension
-   points, and other compilers for portable code. Generate derived tables
-   and references from their owning inputs.
+   mock session and a live check answer different questions. Report them as
+   [AGENTS.md, Build and test](../../AGENTS.md#build-and-test) says.
+7. **Follow through on the interfaces.** UI packs, generated files and new
+   sources: [AGENTS.md, Adding code](../../AGENTS.md#adding-code). Other compilers:
+   [AGENTS.md, Build and test](../../AGENTS.md#build-and-test). Also check legacy callers for
+   persistent state and extension points ([contracts](contracts.md)).
 
 ## Finish checklist
 
-- The diff belongs to the requested repository and intended base, and
-  preserves work from other contributors.
-- The implementation, public contract and docs agree. Source and test
-  additions appear in the build lists, and generated changes come from
-  the appropriate tool.
-- Regression checks go through the normal affected entry point. The
-  report names stock, extended, platform and fixture coverage where
-  they apply.
-- A reviewer can start from the PR or handoff, identify what ran on which
-  revision, and reproduce or pick up the outstanding checks.
+- Branch, base and other people's work: [AGENTS.md, Git workflow](../../AGENTS.md#git-workflow).
+- Build lists, generated files and tests: [AGENTS.md, Adding code](../../AGENTS.md#adding-code).
+- Docs, known gaps and changelog: [AGENTS.md, Docs travel with the code](../../AGENTS.md#docs-travel-with-the-code).
+- Checks and how to report them: [AGENTS.md, Build and test](../../AGENTS.md#build-and-test)
+  and [AGENTS.md, When you finish](../../AGENTS.md#when-you-finish).
+- Regression checks go through the normal affected entry point. A reviewer
+  can start from the PR or handoff, identify what ran on which revision,
+  and reproduce or pick up the outstanding checks.
 
 ## Add to this handbook
 

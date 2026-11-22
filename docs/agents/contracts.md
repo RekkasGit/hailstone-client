@@ -10,23 +10,23 @@ establish the intended contract before changing callers.
 | --- | --- | --- |
 | UDP session or login | Keep framing, application opcodes and login data distinct. The session header fields are big-endian, while RoF2 application opcodes and the documented world and zone payload fields are little-endian. Follow the encoding for each field. | [Session codec](../../src/net/session_codec.cpp) · [Session protocol](../protocol/session.md) · [Login protocol](../protocol/login.md) |
 | World or zone handling | Confirm opcode direction, layout, size and connection phase. Check initial login, zone transitions and repeated updates where relevant. Keep packet decoding separate from state mutation. Preserve the state expected on the stock path. | [RoF2 packets](../protocol/rof2-packets.md) · [Connection](../../src/net/game_connection.cpp) · [Mock integration](../../tests/mock_server/README.md) |
-| Client-side mechanics | Keep observed RoF2 behavior and cite the evidence. Distinguish server-authoritative state, locally predicted state, and presentation. Mark intentional deviations and retain the original behavior behind a switch where the project calls for it. | [Mechanics](../mechanics.md) · [Unknowns](../unknowns.md) |
-| A generally useful extension beyond a RoF2 limit | Enable it only where the server or input actually supplies the extension. Exercise the supported extension and the stock fallback. | [Plan](../plan.md) · [Server extension defaults](../../src/game/server_ext.h) |
-| A single server's private behavior | Use the server extension/add-on boundary. The core defines a reusable hook with the stock default. The server's add-on supplies the override and activates on its matching server. | [Server extension chain](../../src/game/server_ext_chain.h) · [Plugin activity and order](../plugins.md#activity-order-and-compatibility) · [Server script](../../server/README.md) |
+| Client-side mechanics | The baseline and deviation rules: "RoF2 is the baseline" and "No guessing" in [AGENTS.md, The rules that matter most](../../AGENTS.md#the-rules-that-matter-most). Distinguish server-authoritative state, locally predicted state, and presentation. | [Mechanics](../mechanics.md) · [Unknowns](../unknowns.md) |
+| A generally useful extension beyond a RoF2 limit | The rule: "RoF2 is the baseline" and "Compatible with stock EQEmu" in [AGENTS.md, The rules that matter most](../../AGENTS.md#the-rules-that-matter-most). Exercise the supported extension and the stock fallback. | [Plan](../plan.md) · [Server extension defaults](../../src/game/server_ext.h) |
+| A single server's private behavior | The rule: "Compatible with stock EQEmu" in [AGENTS.md, The rules that matter most](../../AGENTS.md#the-rules-that-matter-most). The core defines a reusable hook with the stock default. The server's add-on supplies the override and activates on its matching server. | [Server extension chain](../../src/game/server_ext_chain.h) · [Plugin activity and order](../plugins.md#activity-order-and-compatibility) · [Server script](../../server/README.md) |
 
-Read and write packets and files with `ByteReader` and `ByteWriter`. Validate the available bytes, field limits
-and allocations before consuming input. Reuse the existing endian helpers instead of copying native C++ layout
-onto disk or the wire. Add decoder and connection-level cases according to what changed. Round trips and mock
+Packet and file I/O follows [AGENTS.md, Portability rules](../../AGENTS.md#portability-rules-they-hold-on-four-platforms-linux-and-windows-are-built-locally); tests and fuzz lists follow [AGENTS.md, Adding code](../../AGENTS.md#adding-code). Validate the
+available bytes, field limits and allocations before consuming input. Add decoder and connection-level cases
+according to what changed. Round trips and mock
 traffic built by the client's own encoder can share the same mistake, so pin the relevant bytes independently.
-Use a synthetic fixture derived from the documented layout, or cite a separately verified observation. Link the
-gap in [unknowns](../unknowns.md) when evidence is missing. [Byte I/O](../../src/core/byte_io.h) ·
+Use a synthetic fixture derived from the documented layout, or cite a separately verified observation. Missing
+evidence: "No guessing" in [AGENTS.md, The rules that matter most](../../AGENTS.md#the-rules-that-matter-most). [Byte I/O](../../src/core/byte_io.h) ·
 [Parser checks](../hardening.md)
 
 ## Lua interface and script contracts
 
 - **One owner for game rules and actions.** Put shared state, permission checks and actions in the client. Let
   each pack draw its own presentation. Check the same calling contract through Modern, Gamepad and any affected
-  add-on surface. Publish reusable UI methods through the shared catalog. [UI API](../ui-api.md) ·
+  add-on surface ([AGENTS.md, Adding code](../../AGENTS.md#adding-code)). Publish reusable UI methods through the shared catalog. [UI API](../ui-api.md) ·
   [Catalog](../../src/app/lua_ui_api.inc)
 - **Compatible within a major.** Preserve existing arguments, return shapes, nil versus false, defaults and
   side effects. Check for new members with `hs.UI.Supports(module, member)`. Check the API version when an
@@ -53,14 +53,14 @@ gap in [unknowns](../unknowns.md) when evidence is missing. [Byte I/O](../../src
 
 The [SDK headers](../../sdk/) and [compiled plugin documentation](../plugins.md#compiled-plugins) define the
 contract across compilers and releases. The [example plugin](../../plugins/example/MQ2Example.c) shows the
-basic lifecycle. Build an external plugin from the MIT-licensed SDK headers alone.
+basic lifecycle. How an external plugin is built and released: [AGENTS.md, Plugins, scripts and add-ons](../../AGENTS.md#plugins-scripts-and-add-ons).
 
 | Boundary | Preserve |
 | --- | --- |
 | Host table and hook table | Keep existing entries and their offsets. Append compatible entries at the end and honor the caller's table size. A plugin can use `HAILSTONE_HOST_HAS(host, field)` when a member was added within the same ABI. Check the ABI policy before proposing a breaking change. |
-| Structures and bulk records | Respect each record's advertised size and version. Step through a bulk list by its advertised stride and read only the fields present. For the documented in-process packed records, keep fixed-size fields and the size checks. Use byte serialization for packets and files. |
+| Structures and bulk records | Respect each record's advertised size and version. Step through a bulk list by its advertised stride and read only the fields present. Packed in-process records and byte serialization: [AGENTS.md, Portability rules](../../AGENTS.md#portability-rules-they-hold-on-four-platforms-linux-and-windows-are-built-locally). |
 | Strings and callbacks | Copy borrowed data before its validity ends. Keep C++ exceptions and types inside the plugin. Use the host table in a host callback on the client thread. Background work hands results back to that thread for host calls. |
-| Add-on identity and permissions | Use the manifest to declare the minimum capabilities the add-on needs. Check installed identity, effective capability, current server policy and consent where each applies. Eligibility to load, ability to call a host function and authority to change server state are distinct checks. |
+| Add-on identity and permissions | Manifest capabilities: [AGENTS.md, Plugins, scripts and add-ons](../../AGENTS.md#plugins-scripts-and-add-ons). Check installed identity, effective capability, current server policy and consent where each applies. Eligibility to load, ability to call a host function and authority to change server state are distinct checks. |
 | Package lifecycle | Preserve signed-manifest verification, the journal and recovery behavior, and files owned by the player. A partial download or install must be recoverable by the existing retry path. Exercise the failed and successful paths with fixture packages. |
 
 Native code has the player's OS privileges once loaded. Host capabilities restrict calls through the host
@@ -79,7 +79,8 @@ fresh zone-in policy and the behavior when policy changes while the player is al
   layered lookup. Recheck what cached objects need to reload when the source or overlay changes.
   [Asset lookup contract](../../src/core/game_dir.h) · [Folder layout](../layout.md#the-asset-folder)
 - **Separate installed files from data written by the client.** Read shipped UI packs and shaders from the
-  install. Use the existing Hailstone path helpers for writable data. Never change the player's game files.
+  install. Use the existing Hailstone path helpers for writable data. The game folder is read-only
+  ([AGENTS.md, The rules that matter most](../../AGENTS.md#the-rules-that-matter-most)).
   Keep the updater's replacement scope and player-owned files in mind when adding an installed directory or
   changing a file format. [Paths](../../src/platform/paths.h) · [Updater](../updater.md)
 - **Pick a setting's scope before adding it.** Check whether it belongs to the app, server profile, character,
@@ -105,7 +106,7 @@ fresh zone-in policy and the behavior when policy changes while the player is al
 | Game thread to background work | Give jobs stable input and apply results only while their owner and context are current. `LatestJobs` is the existing pattern for keyed work whose older results are superseded. Check cancellation and shutdown before modifying what a job captures. [Latest jobs](../../src/core/latest_jobs.h) · [Worker threads](../graphics.md#worker-threads) |
 | CPU to Vulkan | Hold resources through the frames and uploads that still use them. Use the existing retirement path for GPU objects and preserve flush ordering for recorded draws. Check fallback paths when optional device features or parallel recording are off. [Vulkan retirement](../../src/render/retire_queue.h) · [Graphics](../graphics.md) |
 | Rendering to world rules | Keep presentation decisions in the renderer or presenter and preserve collision, targeting and selection in their owners. Maintain the separation between current frame geometry, game-state identity and action permission. [Nameplate canvas contract](../ui-api.md#optional-world-nameplate-presentations) · [Nameplate input tests](../../tests/nameplate_input_test.cpp) |
-| Platform to portable code | Use the platform layer for OS calls. Keep Vulkan in rendering and the UI's existing texture integration, outside pure gameplay, network and asset code. Read [the project rules](../../AGENTS.md) for the compiler and packed-record exceptions. |
+| Platform to portable code | OS calls, Vulkan placement, compiler traps and the packed-record exception: [AGENTS.md, Portability rules](../../AGENTS.md#portability-rules-they-hold-on-four-platforms-linux-and-windows-are-built-locally). |
 
 ## Review the old and new paths
 

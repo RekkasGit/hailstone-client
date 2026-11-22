@@ -58,15 +58,13 @@ behavior.
    unknown set. They also cover a missing file. [Appearance tests](../../tests/appearance_systems_test.cpp)
    cover targeting by membership, and [item metadata tests](../../tests/item_metadata_display_test.cpp) cover
    the localized bane label.
-4. For a new decoder, add a byte-level layout check and update the
-   [fuzz decoder list](../../tests/fuzz_decoders.inc) and [hardening coverage](../hardening.md) as
-   appropriate. If the opcode changes, edit [the generator](../../tools/gen_opcodes.py) and regenerate its
-   table. Use a sanitizer build when changing a parser. If you alter transport, zone entry or an outgoing
-   request, add a loopback integration test as described below.
+4. For a new decoder, add a byte-level layout check. The fuzz list, generated opcode table
+   ([generator](../../tools/gen_opcodes.py)) and sanitizer build follow [AGENTS.md, Adding code](../../AGENTS.md#adding-code) and
+   [AGENTS.md, Build and test](../../AGENTS.md#build-and-test); update [hardening coverage](../hardening.md) as appropriate. If you
+   alter transport, zone entry or an outgoing request, add a loopback integration test as described below.
 5. Update the packet and mechanic references with the evidence, fallback, and what would resolve any remaining
-   uncertainty. Use [the unknowns list](../unknowns.md) for behavior that still needs confirmation. Put a
-   server-specific protocol or gameplay extension in its add-on repository. A portable host hook and its stock
-   default belong in the client.
+   uncertainty. Unconfirmed behavior: "No guessing"; server-specific protocol or gameplay: "Compatible with
+   stock EQEmu"; both in [AGENTS.md, The rules that matter most](../../AGENTS.md#the-rules-that-matter-most).
 
 ## Extend the native SDK or an add-on
 
@@ -83,18 +81,18 @@ through the SDK. The wire decoder and plugin buffer have separate contracts.
    at a whole-record boundary. The host checks `read` access.
 3. Follow the compatibility and threading rules in the [host table guide](../plugins.md#the-host-table) and
    SDK header. For a new optional entry, establish the minimum compatible host before using it and keep an
-   unavailable path for older supported hosts. Keep record-layout assertions and SDK-only includes. A worker
+   unavailable path for older supported hosts. Record layouts and SDK-only includes: [AGENTS.md, Portability rules](../../AGENTS.md#portability-rules-they-hold-on-four-platforms-linux-and-windows-are-built-locally)
+   and [AGENTS.md, Plugins, scripts and add-ons](../../AGENTS.md#plugins-scripts-and-add-ons). A worker
    can hand results to a plugin callback on the client's thread.
 4. Run a caller through the real plugin boundary. [HostProbe](../../tests/plugins/HostProbe.cpp) consumes the
    SDK data and [native plugin tests](../../tests/native_plugins_test.cpp) check known and missing spell IDs,
    record layout, short buffers and a caller without `read`. Add checks for inactive or absent owners or for
    unload when the feature depends on those states.
 5. For the add-on itself, use the [example plugin](../../plugins/example/MQ2Example.c) for the build and
-   callback pattern and [the add-on guide](../addons.md) for manifest, capabilities and packaging. Use the
-   declared capabilities the add-on actually needs. Test both install and runtime behavior with an isolated
+   callback pattern and [the add-on guide](../addons.md) for manifest, capabilities and packaging. Capabilities
+   and releases follow [AGENTS.md, Plugins, scripts and add-ons](../../AGENTS.md#plugins-scripts-and-add-ons). Test both install and runtime behavior with an isolated
    data folder. If server admission changes, cover stock behavior, opted-in behavior and refusal with
-   [add-on requirements tests](../../tests/addon_requirements_test.cpp). Publishing or signing a release uses
-   the add-on repository's authorized release workflow.
+   [add-on requirements tests](../../tests/addon_requirements_test.cpp).
 
 ## Fix a world asset or rendering issue
 
@@ -126,8 +124,7 @@ collision authority.
    SPIR-V is loaded and review the Vulkan validation log in addition to the image.
 4. Report CPU geometry checks, asset-backed measurements, Vulkan output, and live gameplay as distinct
    evidence. The viewer can verify the visible seam. A symptom involving movement or collision also needs a
-   check at the feature's gameplay entry point. Keep screenshots containing game art and real game files out
-   of Git.
+   check at the feature's gameplay entry point. What stays out of Git: [AGENTS.md, Git workflow](../../AGENTS.md#git-workflow).
 
 ## Exercise login and zone behavior without the GUI
 
@@ -153,10 +150,11 @@ Both run with synthetic inputs and without a Vulkan window.
    ```
 
    Doctest treats commas in filters as separators. Use a distinctive prefix or substring when a case name
-   contains a comma. After focused checks, run the suite using the [validation guide](validation.md).
+   contains a comma. After focused checks, run the whole `hailstone_tests` as [AGENTS.md, Build and test](../../AGENTS.md#build-and-test)
+   requires ([validation guide](validation.md)).
 4. Confirm protocol layouts independently where the mock builds packets with the client's own encoder. Use an
-   original observation or documented byte fixture as appropriate. Report the flow as loopback coverage and
-   list any unexercised stock server differences. The [playprobe tool](../../tools/playprobe.cpp) is a
+   original observation or documented byte fixture as appropriate. Report the flow as mock-server coverage
+   ([AGENTS.md, Build and test](../../AGENTS.md#build-and-test)) and list any unexercised stock server differences. The [playprobe tool](../../tools/playprobe.cpp) is a
    separate command-line path for authorized live EQEmu sessions. Use its argument help to choose an
    observation, use a disposable test character, and record whether the action changes world or character
    state. Live probe output still leaves GUI, input, and render acceptance to the client.

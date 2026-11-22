@@ -78,19 +78,14 @@ For example, a nameplate presentation can use the existing generic callback and 
 exposes. Follow the [nameplate canvas context](../../src/app/nameplate_canvas_context.cpp), the
 [input handling](../../src/app/nameplate_input.cpp) and the [contract for a presentation](../ui-api.md#optional-world-nameplate-presentations).
 Look for the corresponding [lifetime test](../../tests/lua_nameplate_lifetime_test.cpp) if the callback survives
-a reload or zone change. Any server-specific decision stays in the add-on repo. When support is missing, put the
-shared API and its compatibility tests here and give the add-on a way to discover the API at runtime.
+a reload or zone change. Where server-specific decisions and missing host support go: [AGENTS.md, Plugins, scripts and add-ons](../../AGENTS.md#plugins-scripts-and-add-ons). Give
+the add-on a way to discover a new API at runtime.
 
 ## Changes that cross build or registry boundaries
 
-- Add a new engine or test translation unit to the matching list in [CMakeLists.txt](../../CMakeLists.txt).
-  A file present on disk can still be absent from the build.
-- For a generated opcode or game table, read its header for the generator and expected inputs. Change the generator
-  and regenerate from the approved inputs. Keep generated output and generator changes together.
+- New source files, tests, fuzz lists and generated files: [AGENTS.md, Adding code](../../AGENTS.md#adding-code).
 - When a Lua binding changes, follow [Adding a new client feature](../ui-api.md#adding-a-new-client-feature) to update
   the catalog, reference and mock adapter and run their checks.
 - For file or packet parsing, add a focused fixture and follow the [fuzz and sanitizer guidance](../hardening.md).
   Assets and packets from outside the repository may have separate requirements and availability.
-- Update the owning behavior document. If a corrected rule resolves an open question, reconcile
-  [to-do](../todo.md) and [unknowns](../unknowns.md) against the evidence. Report player-visible changes in the
-  [changelog](../../CHANGELOG.md).
+- Docs, to-do, unknowns and changelog: [AGENTS.md, Docs travel with the code](../../AGENTS.md#docs-travel-with-the-code).
