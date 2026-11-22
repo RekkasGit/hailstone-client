@@ -371,8 +371,9 @@ matches are sorted nearest first. Any word that is not a keyword is part of the 
 | `gm`, `trader`, `buyer`, `afk`, `lfg`, `linkdead` | spawns with that flag |
 | a name, `=Name` or `exact` | a part of the name (not case sensitive); `=` or `exact` asks for the whole name |
 
-`next`, `prev` and `los` are accepted and ignored for now. MQ's alert list words (`alert N`, `noalert N`, ...) are
-skipped, because there are no alert lists.
+`next` and `prev` direct `/target` to the match after or before the current target, nearest first; `los` uses the
+client's line of sight. MQ's alert list words (`alert N`, `noalert N`, ...) are skipped, because there are no alert
+lists.
 
 ## Inventory slots
 
@@ -402,7 +403,7 @@ them. These commands come from MacroQuest rather than the game:
 | Command | What |
 |---|---|
 | `/echo text` | a line in the chat window |
-| `/target id N` \| `clear` \| `mycorpse` \| a search | targets |
+| `/target id N` \| `clear` \| `mycorpse` \| `myself` \| a search | targets (nothing, or `myself`: you) |
 | `/face` [target] \| `id N` \| `heading H` \| `loc y,x` \| a search [`fast`] | turns to face |
 | `/keypress <command> [hold\|release]` | presses a key command by the game's name: `forward`, `jump`, `hot1_1`, ... |
 | `/squelch <cmd>` | runs the command without its chat output |

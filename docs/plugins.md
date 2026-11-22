@@ -399,10 +399,19 @@ Spawn searches use MQ's words and rules (ParseSearchSpawn and SpawnMatchesSearch
   `noalert N`, `nearalert N`, `notnearalert N`
 - names: words that are no keyword make a partial name, matched in the name as sent or cleaned. `=Name` or
   `name =Name` asks for the whole cleaned name (MQ keeps the `#` of a `#Name` there, so `=` never finds one)
+- `/target`'s `next` / `prev`: the match after / before the current target in distance order, instead of the
+  nearest; the last word wins
 
-Results come nearest first (3D, from the player). `targetable` is the game's own test, as in MQ: the Targetable flag
-on and body type not 11 (EQEmu's NoTarget, given to portal and trigger NPCs). `Spawn.Targetable` is the flag alone,
-as in MQ, so a script filtering spawns itself checks `BodyType` too.
+Results come nearest first (3D, from the player). `/target`'s `next` and `prev` walk that list from the current
+target; other callers ignore them and take the nearest (`next` and `prev` do not filter), so `SpawnCount` counts
+every match and `NearestSpawn[N]` can take the Nth. With no target, or one the zone no longer has, both directions
+take the nearest valid match: the nearest, with you left out while another spawn matches. A bare-name `/target`
+without `next` or `prev` is not the same: RoF2's choice (`docs/commands.md`) takes your exact name even then. A
+current target that is no match starts from its own distance: `next` takes the first match farther away and `prev`
+the last one nearer. Past either end of the list there is none: it does not start again at the other end.
+`targetable` is the game's own test, as in MQ: the Targetable flag on and body type not 11 (EQEmu's NoTarget, given
+to portal and trigger NPCs). `Spawn.Targetable` is the flag alone, as in MQ, so a script filtering spawns itself
+checks `BodyType` too.
 
 Differences from MQ:
 
@@ -410,7 +419,11 @@ Differences from MQ:
 - No alert lists are kept, so `nearalert` finds nothing and the other alert words ask nothing (as MQ with no list).
 - `fellowship` matches the server-supplied roster, including expanded rosters of up to 64 members.
 - `los` keeps a spawn while the zone's collision is not loaded.
-- `next` and `prev` (MQ's target cycling) are accepted and do nothing yet.
+- `/target next` and `/target prev` measure from the player and walk the matches nearest first, where MQ measures from
+  the old target and walks its spawn list in spawn order.
+- `/target` leaves you out while another spawn matches, in every direction: a typed search, `next` and `prev` alike.
+  A bare name without `next` or `prev` is the exception, because RoF2's choice takes your exact name even then. That
+  is Hailstone's own rule, not MQ's.
 
 Not yet:
 
@@ -420,7 +433,8 @@ Not yet:
 
 ### MQ commands
 
-`/echo`, `/target` (`id N`, `clear`, `mycorpse`, or a spawn search), `/face` (target, `id`, `heading H`, `loc y,x`,
+`/echo`, `/target` (`id N`, `clear`, `mycorpse`, `myself`, or a spawn search; with nothing, yourself; `next` / `prev`
+walk the search's matches), `/face` (target, `id`, `heading H`, `loc y,x`,
 a search; `fast`), `/keypress <command> [hold|release]` (the game's key command names: `forward`, `jump`, `hot1_1`, ...),
 `/squelch <cmd>`, `/docommand <cmd>`, `/noparse <cmd>`, `/lua ...`, `/plugin ...`. `/nav` (MQ2Nav's commands),
 `/moveto` and `/stick` are built in (`docs/navigation.md`).
