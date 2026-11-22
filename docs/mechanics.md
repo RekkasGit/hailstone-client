@@ -786,8 +786,13 @@ cursor, or the quantity dialog opens with all of that coin.
 To start a coin-only trade, pick up coin and click the other player. The coin stays on the cursor while the
 request is pending. Once the server acknowledges the trade, the held coin moves directly into the offer.
 Clicking a money button in an open trade also offers the held coin. Adding coin clears both players' acceptance,
-and the server sends the final balances on completion or cancellation.
-Large same-denomination moves may use two packets so the server can represent the full amount exactly.
+and the server sends the final balances on completion or cancellation. An answer from a partner out of reach still
+opens the trade and offers the coin; the 500 ms reach check then cancels it (Handle_OP_TradeRequestAck @0x4c2070
+checks only the spawn and IsOkToTransact). A deliberate difference: while its own request waits for an answer, the
+client refuses another player's request as busy, since on EQEmu the late answer would start a second trade with us.
+A deliberate difference from the original, which sends one OP_MoveCoin per move: a same-denomination move of more
+than 2^24 coins goes as two packets, the first rounded down to 24 significant bits. EQEmu's OPMoveCoin scales the
+amount through a float even when the coin type stays the same, so one packet could move a slightly different amount.
 
 On the merchant's Parcels page (0x698290, `GameConnection::parcel_coin_button`) the button is first outlined (+0x259,
 0x6909a0) and the merchant's item and row are cleared (0x6f2120); any later SelectSlot clears the outline. The
