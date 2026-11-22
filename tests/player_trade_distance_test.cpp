@@ -277,7 +277,7 @@ TEST_CASE("player trade: a large coin offer transfers the exact amount") {
     CHECK(offered == amount);
 }
 
-TEST_CASE("player trade: a refused or out-of-range request leaves the coin on the cursor") {
+TEST_CASE("player trade: a refused request leaves the coin on the cursor") {
     test::Rig rig;
     REQUIRE(rig.to_zone());
     auto& c = rig.conn;
@@ -291,14 +291,6 @@ TEST_CASE("player trade: a refused or out-of-range request leaves the coin on th
     rig.server.zone.send_reliable(net::encode(net::TradeBusy{me, kPartner, 'b'}));
     REQUIRE(rig.until([&] { return !c.trade(); }));
     CHECK(c.cursor_coins()[net::kCoinGold] == 2);
-
-    c.give_to(kPartner);
-    REQUIRE(rig.until([&] { return test::MockEqServer::count(rig.server.zone_log, net::Op::TradeRequest) == 2; }));
-    c.world_for_test().spawns[kPartner].position = c.world().player()->position + glm::vec3{0, 0, 27};
-    rig.server.zone.send_reliable(net::encode_trade_request_ack({me, kPartner}));
-    REQUIRE(rig.until([&] { return test::MockEqServer::count(rig.server.zone_log, net::Op::CancelTrade) == 1; }));
-    CHECK_FALSE(c.trade());
-    CHECK(c.cursor_coins()[net::kCoinGold] == 2);
     for (const auto& packet : rig.server.zone_log) {
         if (net::is_op(packet, net::Op::MoveCoin)) {
             auto move = net::decode_move_coin(packet);
@@ -306,6 +298,41 @@ TEST_CASE("player trade: a refused or out-of-range request leaves the coin on th
             CHECK(move->to != net::kCoinTrade);
         }
     }
+}
+
+TEST_CASE("player trade: an answer from out of reach offers the coin, then the reach check cancels") {
+    // Handle_OP_TradeRequestAck @0x4c2070 checks only the spawn and IsOkToTransact; CTradeWnd::Activate drops the
+    // cursor money, and CTradeWnd::OnProcessFrame's 500 ms reach check cancels so the server returns it.
+    test::Rig rig;
+    REQUIRE(rig.to_zone());
+    auto& c = rig.conn;
+    add_partner(c);
+    put_mock_cursor_coins_away(c);
+    const auto baseline_moves = static_cast<int>(c.cursor_coins().size());
+    REQUIRE(c.move_coin(net::kCoinInventory, net::kCoinCursor, net::kCoinGold, net::kCoinGold, 2));
+
+    const auto me = c.world().player_id;
+    c.give_to(kPartner);
+    REQUIRE(rig.until([&] { return test::MockEqServer::count(rig.server.zone_log, net::Op::TradeRequest) == 1; }));
+    c.world_for_test().spawns[kPartner].position = c.world().player()->position + glm::vec3{0, 0, 27};
+    rig.server.zone.send_reliable(net::encode_trade_request_ack({me, kPartner}));
+    // The reach check may run in the same update that opens the trade, so look at what was sent.
+    REQUIRE(rig.until([&] { return test::MockEqServer::count(rig.server.zone_log, net::Op::CancelTrade) == 1; }));
+    CHECK_FALSE(c.trade());
+    CHECK(c.cursor_coins()[net::kCoinGold] == 0);
+    CHECK(test::MockEqServer::count(rig.server.zone_log, net::Op::MoveCoin) == baseline_moves + 2);
+    bool offered = false;
+    for (const auto& packet : rig.server.zone_log) {
+        if (net::is_op(packet, net::Op::CancelTrade)) {
+            CHECK(offered);
+            break;
+        }
+        if (!net::is_op(packet, net::Op::MoveCoin)) continue;
+        auto move = net::decode_move_coin(packet);
+        REQUIRE(move);
+        if (move->from == net::kCoinCursor && move->to == net::kCoinTrade && move->amount == 2) offered = true;
+    }
+    CHECK(offered);
 }
 
 TEST_CASE("player trade distance: separation cancels once and items and coin return through the server") {
@@ -403,4 +430,33 @@ TEST_CASE("trade windows: hiding the window not showing the trade leaves it open
     CHECK(c.trade()); // the hand-in stays
     api.show("GiveWnd", false);
     CHECK_FALSE(c.trade()); // its own window hidden: cancelled (OP_CancelTrade, the server returns the items)
+}
+
+TEST_CASE("player trade: another player's request is refused as busy while our own waits for its answer") {
+    // A deliberate difference from IsOkToTransact (see Op::TradeRequest in game_connection_commerce.cpp).
+    test::Rig rig;
+    REQUIRE(rig.to_zone());
+    auto& c = rig.conn;
+    add_partner(c);
+    constexpr std::uint32_t kOther = 4101;
+    game::Spawn other = c.world().spawns.at(kPartner);
+    other.id = kOther;
+    other.name = "Other";
+    c.world_for_test().spawns[kOther] = other;
+    c.set_auto_attack(false);
+    c.give_to(kPartner);
+    REQUIRE(c.trade());
+    REQUIRE(c.trade()->requested);
+
+    c.receive_zone_packet_for_test(net::encode_trade_request({c.world().player_id, kOther}));
+    REQUIRE(rig.until([&] { return test::MockEqServer::count(rig.server.zone_log, net::Op::TradeBusy) == 1; }));
+    REQUIRE(c.trade());
+    CHECK(c.trade()->requested);
+    CHECK(c.trade()->partner_id == kPartner);
+    CHECK(test::MockEqServer::count(rig.server.zone_log, net::Op::TradeRequestAck) == 0);
+
+    c.receive_zone_packet_for_test(net::encode_trade_request_ack({c.world().player_id, kPartner}));
+    REQUIRE(c.trade());
+    CHECK(c.trade()->open);
+    CHECK(c.trade()->partner_id == kPartner);
 }

@@ -679,7 +679,9 @@ void GameConnection::handle_commerce(Op op, const AppPacket& p) {
             in.pc = profile_.has_value();
             in.group = group_.active;
             in.requester_in_group = group_.has_member(game::display_name(name)) || group_.has_member(name);
-            // Keep our pending request until its partner answers.
+            // A deliberate difference: our own request still waiting for its answer refuses as busy. The original's
+            // IsOkToTransact does not count it, but on EQEmu the late answer starts that partner's trade with us
+            // (Handle_OP_TradeRequestAck) while our window is with this requester, so their offers would land here.
             in.ok_to_transact = !trade_ && ok_to_transact();
             in.attacking = auto_attack_;
             game::TradeRequestResult res = game::handle_trade_request(in);
@@ -705,11 +707,9 @@ void GameConnection::handle_commerce(Op op, const AppPacket& p) {
         if (auto r = decode_trade_request(p); r && r->to_id == world_.player_id) {
             if (!trade_ || !trade_->requested || trade_->partner_id != r->from_id) break;
             auto it = world_.spawns.find(r->from_id);
-            if (pstatus_.dead || it == world_.spawns.end() || it->second.is_corpse ||
-                distance_to(r->from_id) > it->second.heights.avatar_height + kInteractRange) {
-                trade_cancel();
-                break;
-            }
+            // Only a missing spawn ends the handler; reach and death are CTradeWnd::OnProcessFrame's 500 ms check
+            // once the window is open (update_npc_interactions), so the offer goes in first and the server returns it.
+            if (it == world_.spawns.end()) break;
             if (!ok_to_transact()) {
                 log::info("trade: the answer from {} came while busy", it->second.name);
                 std::string partner = it->second.name;
