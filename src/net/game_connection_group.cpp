@@ -65,7 +65,8 @@ const game::Spawn* group_member_spawn(const game::WorldState& world, const std::
 const game::Spawn* group_pet_of(const game::WorldState& world, std::uint32_t owner) {
     if (owner == 0) return nullptr;
     for (const auto& [id, s] : world.spawns) {
-        // Mercenaries can also carry MasterID. Use the live, targetable pet linked by that ID.
+        // Mercenaries can also carry MasterID. Use the live, targetable pet linked by that ID. RoF2 reads the owner's
+        // PetID (+0x2b4) instead; which spawns it can name is not traced (docs/unknowns.md "Group pet targeting").
         if (s.pet_owner_id == owner && id != owner && s.targetable && !s.is_corpse && !s.temp_pet && !s.mercenary &&
             game::Spawn::GetSpawnType(&s) == game::eSpawnType::PET) return &s;
     }

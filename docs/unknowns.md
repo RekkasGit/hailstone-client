@@ -216,6 +216,13 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - Sends `OP_CancelInvite`, which stock EQEmu does not handle; the inviter is told only on a server with the Hailstone server script (`server/`).
   - The relay was checked live once, on the NMS test server (docs/todo.md "Network and session"), not yet on a stock server.
   - The stock handler's other step, removing the decliner from its group, is not done.
+- **Group pet targeting: which pet.**
+  - Unknown: RoF2's F1 (ExecuteCmd case TARGETME @0x4d8000) takes the first spawn whose MasterID is the player's and
+    that is not a temporary pet; F2..F6 (case PARTY1..5 @0x4d80c0) take the member's PetID (+0x2b4). How RoF2 fills
+    PetID, and whether a mercenary, an untargetable spawn or a corpse can be either one, is not traced.
+  - Now: both keys and the Modern pet bar take the live, targetable spawn of pet type whose owner id is the member's,
+    skipping temporary pets, mercenaries and corpses (`group_pet_of`, net/game_connection_group.cpp).
+  - Settle: the writers of PetID in the spawn and charm handlers, or a live RoF2 session with a mercenary and a charm.
 - **Login: already online and kick.**
   - EQEmu's login server never answers 302/114. Its "already online" is 111, a plain refusal, and only with
     `World:EnforceCharacterLimitAtLogin`. It has no kick request (0x16) or reply (0x32).

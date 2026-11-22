@@ -1709,7 +1709,8 @@ behaviour (`LockedActiveWindow=-1`, kept). The original has no locked window unt
 F1 targets yourself and F2–F6 target the corresponding group member. When that player is already targeted, the
 same key targets their pet, if one is available. The next press returns to the owner. This follows RoF2's
 ExecuteCmd self and party cases (0x4d8000 and 0x4d80c0). Hailstone resolves the pet from its current owner ID,
-which also tracks charm changes. Temporary pets, mercenaries, mounts and corpses are skipped.
+which also tracks charm changes. Temporary pets, mercenaries, mounts and corpses are skipped (RoF2 reads the
+owner's PetID instead; docs/unknowns.md "Group pet targeting").
 
 Clicking a member's name in the Modern or Gamepad Group window selects the member. Click the green pet bar in
 Modern to select the pet directly. If the client has no living spawn for the member, the member click and group
