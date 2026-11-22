@@ -54,7 +54,7 @@
 extern "C" {
 #endif
 
-#define HAILSTONE_PLUGIN_ABI 3
+#define HAILSTONE_PLUGIN_ABI 4
 
 #if defined(_WIN32)
 #define HAILSTONE_EXPORT __declspec(dllexport)
@@ -896,7 +896,9 @@ typedef struct PluginHostApi {
     /* The directory for the plugin's own files (created on demand): writes `out` and returns the length. */
     int (*config_dir)(void* host, char* out, size_t out_size);
     /* The client's Dear ImGui context (ImGui::SetCurrentContext; the plugin must be built with the same Dear ImGui
-     * version), or NULL without HAILSTONE_CAP_UI. */
+     * version), or NULL without HAILSTONE_CAP_UI. Since ABI 4 that is Dear ImGui 1.92.9b (the font and texture rework
+     * of 1.92 changed the context's layout): the client neither calls OnUpdateImGui of a plugin built for an older ABI
+     * nor gives it the context, so rebuild such a plugin against this SDK and that Dear ImGui. */
     void* (*imgui_context)(void* host);
 
     /* ---- ABI 2: server extensions (HAILSTONE_CAP_EXTEND) ---- */

@@ -86,7 +86,7 @@ endif()
 # Built with the SDL3 platform backend and the Vulkan backend on our volk loader.
 FetchContent_Declare(imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
-  GIT_TAG 97428e8ac99e339ce05eee531cf55b77b29ea709 # v1.91.9
+  GIT_TAG f1cc2ae15e53a861a874c3034aae6798fde194ab # v1.92.9b
   SYSTEM)
 FetchContent_MakeAvailable(imgui)
 add_library(imgui STATIC

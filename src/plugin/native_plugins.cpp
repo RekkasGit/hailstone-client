@@ -271,6 +271,7 @@ struct Loaded {
     int (*incoming_chat)(const char*, std::uint32_t) = nullptr;
     int (*filter_chat)(const char*, std::uint32_t) = nullptr;
     void (*update_imgui)() = nullptr;
+    std::uint32_t built_abi = 0; // the ABI the plugin reported
     int (*packet)(int, int, HailstonePacket*) = nullptr;
     const HailstoneHooks* (*hooks_fn)() = nullptr;
 
@@ -323,6 +324,8 @@ struct Loaded {
 
     static Loaded& of(void* h) { return *static_cast<Loaded*>(h); }
     bool can(std::uint32_t cap) const { return (caps & cap) == cap; }
+    // Dear ImGui's 1.92 changed the context a plugin shares with the client: ABI 4 is the first built for it.
+    bool imgui_compatible() const { return built_abi >= 4; }
     void denied(const char* what, std::uint32_t cap) const {
         host->say(std::format("[Plugin] {}: {} needs the server's '{}' permission", name, what, caps_text(cap)));
     }
@@ -834,7 +837,7 @@ int h_config_dir(void* h, char* out, std::size_t out_size) {
 
 void* h_imgui_context(void* h) {
     Loaded& l = Loaded::of(h);
-    if (!l.can(kCapUi) || !l.host->env.imgui_context) return nullptr;
+    if (!l.can(kCapUi) || !l.imgui_compatible() || !l.host->env.imgui_context) return nullptr;
     return l.host->env.imgui_context();
 }
 
@@ -2937,7 +2940,8 @@ int h_web_state(void* h, std::uint32_t tab, HailstoneWebState* out) {
 int h_web_view(void* h, std::uint32_t tab, float width, float height) {
     Loaded& l = Loaded::of(h);
     WebAccess* w = web_of(l, "web_view");
-    if (!w || !l.can(kCapUi) || !l.host->env.imgui_context || !l.host->env.imgui_context()) return 0;
+    if (!w || !l.can(kCapUi) || !l.imgui_compatible() || !l.host->env.imgui_context || !l.host->env.imgui_context())
+        return 0;
     return w->view(web_owner(l), l.caps, tab, width, height) ? 1 : 0;
 }
 
@@ -3332,6 +3336,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
         platform::unload_library(p.lib);
         return refuse(std::format("{} was built for plugin ABI {}, this client has {}", name, got, HAILSTONE_PLUGIN_ABI));
     }
+    p.built_abi = got;
     p.initialize = symbol<void (*)()>(p.lib, "InitializePlugin");
     p.shutdown = symbol<void (*)()>(p.lib, "ShutdownPlugin");
     p.pulse = symbol<void (*)()>(p.lib, "OnPulse");
@@ -3344,6 +3349,9 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.incoming_chat = symbol<int (*)(const char*, std::uint32_t)>(p.lib, "OnIncomingChat");
     p.filter_chat = symbol<int (*)(const char*, std::uint32_t)>(p.lib, "OnFilterChat");
     p.update_imgui = symbol<void (*)()>(p.lib, "OnUpdateImGui");
+    if (p.update_imgui && !p.imgui_compatible())
+        log::warn("plugin {}: built for plugin ABI {}, before Dear ImGui 1.92 (ABI 4); its OnUpdateImGui is not called",
+                  name, got);
     p.packet = symbol<int (*)(int, int, HailstonePacket*)>(p.lib, "OnPacket");
     p.hooks_fn = sdk_symbol<const HailstoneHooks* (*)()>(p.lib, "hooks");
 
@@ -3841,7 +3849,7 @@ void NativePlugins::recheck_consent() {
 void NativePlugins::imgui() {
     for (std::size_t i = 0; i < impl_->loaded.size(); ++i) {
         Loaded& l = *impl_->loaded[i];
-        if (!l.update_imgui || !l.can(kCapUi)) continue;
+        if (!l.update_imgui || !l.can(kCapUi) || !l.imgui_compatible()) continue;
         guarded(l, "OnUpdateImGui", [&] { l.update_imgui(); });
     }
 }

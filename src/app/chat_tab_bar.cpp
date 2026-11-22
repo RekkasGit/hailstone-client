@@ -97,7 +97,8 @@ bool draw_tab_strip(UiHost& host, const tabs::Group& group, ImVec2 pos, float wi
     if (group.tabs.empty()) return false;
 
     ImGui::PushID("chat-tabs");
-    ImGui::PushFont(ui::ui_font(3));
+    ImFont* const tab_font = ui::ui_font(3);
+    ImGui::PushFont(tab_font, tab_font ? tab_font->LegacySize : 0.0f); // size 0 keeps the current one
     const auto frame_title = group.tabs.size() == 1 ? group.title : std::string_view{};
     std::array<StripItem, tabs::kMaxSlots> items{};
     const auto count = group.tabs.size();

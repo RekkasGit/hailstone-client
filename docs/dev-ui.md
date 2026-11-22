@@ -8,7 +8,7 @@ Lua interfaces (Modern and Gamepad) use the versioned, modular `hs.UI` contract 
 `AlwaysVerticalScrollbar` and `AlwaysHorizontalScrollbar`, with Dear ImGui's values in ordinary and child windows.
 Internal and obsolete flags are not exported; use the window, popup or child functions for those scopes.
 
-The client uses [Dear ImGui](https://github.com/ocornut/imgui) (v1.91.9, fetched by `cmake/Dependencies.cmake`) for a minimal developer UI: log in, pick a server and a character, see basic in-game information. The Lua windows below replace it for play.
+The client uses [Dear ImGui](https://github.com/ocornut/imgui) (v1.92.9b, fetched by `cmake/Dependencies.cmake`) for a minimal developer UI: log in, pick a server and a character, see basic in-game information. The Lua windows below replace it for play.
 
 ## Pieces
 

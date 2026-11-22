@@ -608,7 +608,18 @@ TEST_CASE("native plugins: a plugin built against the 0.7.1 SDK loads and finds 
     CHECK(h.printed_line("[Sdk071] loaded"));
     h.run("/sdk071");
     // Whole 16-byte xtarget records (remainder 0): the call reached get_xtarget_data_bulk, not a later entry.
-    CHECK(h.printed_line("[Sdk071] abi 3 table 1 name Sdk071Plugin xtarget 0"));
+    CHECK(h.printed_line("[Sdk071] abi 4 table 1 name Sdk071Plugin xtarget 0")); // the host table's ABI, not its own
+}
+
+// A plugin built for ABI 3 draws against the Dear ImGui before 1.92 (a context of another layout), so the client does
+// not call its OnUpdateImGui; one built for this SDK (HostProbe, whose OnUpdateImGui throws) is called.
+TEST_CASE("native plugins: OnUpdateImGui is not called for a plugin built for an ABI before Dear ImGui 1.92") {
+    Host h(false, nullptr, HAILSTONE_SDK071_PLUGIN);
+    h.approve(plugin::kCapAll);
+    std::string why;
+    REQUIRE_MESSAGE(h.plugins->load("Sdk071Plugin", &why), why);
+    h.plugins->imgui();
+    CHECK_FALSE(h.printed_line("[Sdk071] OnUpdateImGui called"));
 }
 
 TEST_CASE("native plugins: MQ callbacks, commands and TLOs, then unloaded cleanly") {

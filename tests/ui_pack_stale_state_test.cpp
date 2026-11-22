@@ -125,9 +125,7 @@ struct PackRig {
         fs::copy(src, dir / pack, fs::copy_options::recursive);
         ctx = ImGui::CreateContext();
         ImGui::GetIO().IniFilename = nullptr;
-        unsigned char* px = nullptr;
-        int w = 0, h = 0;
-        ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+        ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures; // 1.92: the atlas is built by NewFrame
         s = std::make_unique<Session>(dir, pack);
         s->frames(2);
         L = s->lua.state();
@@ -200,9 +198,7 @@ TEST_CASE("UI packs: blocked bases cannot start or retain a Lua presentation and
 
         PolicyUi() {
             ImGui::GetIO().IniFilename = nullptr;
-            unsigned char* pixels = nullptr;
-            int width = 0, height = 0;
-            ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+            ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures; // 1.92: the atlas is built by NewFrame
             auto put = [](const fs::path& file, const char* text) {
                 fs::create_directories(file.parent_path());
                 std::ofstream(file) << text;
