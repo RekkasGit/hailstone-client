@@ -438,13 +438,13 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - The offline viewers keep the refusal.
   - Settle: testing other servers' zone tables.
 - **Arena and Nektulos with a live folder.**
-  - Now: the `.s3d` wins over the revamped `.eqg` (`is_eqg_zone`); the safe-point test is not asked.
+  - Now: the safe-point test picks between the two files, as for the zones with no `.s3d`; the `.s3d` loads when it
+    fails or before any safe point has come. By name alone (`is_eqg_zone`) the `.s3d` still wins.
   - Yet PEQ runs the revamp there: its only Arena row's safe point stands 4.2 units above the live arena.eqg's floor
     and 51 above arena.s3d's (6 of 6 spawns on the `.eqg`, 1 of 6 on the `.s3d`); Nektulos version 1 (expansion 10
     on) has 400 of 404 spawns on nektulos.eqg and 39 of 404 on nektulos.s3d.
-  - Open: whether a RoF2 folder's own arena.s3d and nektulos.s3d are the live folder's; whether the safe point should
-    also choose between a present `.s3d` and the `.eqg`.
-  - Settle (the first): comparing the files with a RoF2 install.
+  - Open: whether a RoF2 folder's own arena.s3d and nektulos.s3d are the live folder's.
+  - Settle: comparing the files with a RoF2 install.
 - **The local player's fly mode** (docs/mechanics.md "fly mode").
   - The original rebuilds its effect cache, recomputing levitation, whenever something clears the cache flag
     (+0x1a4): OP_Buff in every form, `HitBySpell`, `RemoveAffect`, the buff tick for tick-varying effects, possibly
