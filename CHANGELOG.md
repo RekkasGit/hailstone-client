@@ -5,6 +5,7 @@
 - The out-of-combat regeneration indicator and countdown resume after camping and logging back in.
 - The Potion Belt remembers whether you left it open or closed when you camp and log back in.
 - Fixed automatic AFK while standing still, including automatic tribute shutoff on servers that offer it.
+- Chat displays curly apostrophes and quotes from UTF-8 messages. Fonts without curly quotes draw straight ones.
 - Server owners can set `[client] deny = on` in `hailstone.cfg` to deny Hailstone access and show a notice at login. Launcher and `--user` test logins now ask for that file too, so on a server without Hailstone's script their first zone-in waits 5 s, as a saved server's already did.
 - Completed LDoN adventures release the request controls even while the instance remains accessible. The Adventure window updates after the server confirms a leave, and Kind and Risk stay editable during the request cooldown.
 - `/target next` and `/target prev` cycle through a spawn search's matches, and `/target` with no argument or `myself` targets you, as in MacroQuest.
