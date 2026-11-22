@@ -288,6 +288,10 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
 - [x] Lifts carry riders (checked live on the Paineel lift).
 - [x] Teleport doors (a Bazaar IT78 door, the PoK books' type, checked live).
 - [x] Touch-activated switches: PlayerClient::TouchingSwitch ported, traps checked live (f500930).
+- [ ] **Switch clicks while riding.** `EQSwitch::UseSwitch` (0x511d70) puts `pinstControlledPlayer` in place of the
+  local player whenever they differ: the mount while riding as well as an Eye. It measures the reach from that
+  spawn with its Height and sends its spawn ID in OP_ClickDoor. Hailstone does this for an Eye only and still
+  measures from the rider on a mount.
 - [x] **Boats, as our own design** (docs/mechanics.md "Boats"): hull floors and walls, smoothed boat motion, other riders, zone-in onto a deck, climbing aboard, sailing a small boat at the helm. Checked live in Butcherblock and OOT.
 - [x] **Boats with a live asset folder: not the client's job.** The classic boat models (LAUNCH etc.) are only in RoF2's per-zone `_chr` archives, which live dropped; a server that wants them supplies them in its `client_files/` (user's decision, 2026-10-29).
 - [x] **Boats: decks, animation, helm and rails** (tests/boats_test.cpp).
