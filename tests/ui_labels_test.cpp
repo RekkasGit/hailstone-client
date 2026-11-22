@@ -131,17 +131,21 @@ TEST_CASE("Combat timer resumes from the player profile on login") {
     CHECK(app::ui_gauge(t.host, 29).value == -1);
     CHECK(combat_indicator() == "A_PWCSInCombat");
 
+    // @0x57a04a writes only the downtime and its start: the combat flag stays as OP_RestState left it.
     t.conn.receive_zone_packet_for_test(test::build_player_profile(profile));
-    CHECK_FALSE(t.conn.in_combat());
-    CHECK(app::ui_gauge(t.host, 29).value == 1000);
+    CHECK(t.conn.in_combat());
+    CHECK(combat_indicator() == "A_PWCSInCombat");
+    t.conn.receive_zone_packet_for_test(rest_state(false, 0));
+    CHECK(t.conn.resting_for_fast_regen());
+    CHECK(combat_indicator() == "A_PWCSStanding");
 
+    // A zero rest timer leaves a running countdown alone.
+    t.conn.receive_zone_packet_for_test(rest_state(false, 75));
     profile.rest_timer = 0;
     t.conn.receive_zone_packet_for_test(test::build_player_profile(profile));
-    CHECK_FALSE(t.conn.in_combat());
-    CHECK(t.conn.resting_for_fast_regen());
-    CHECK(app::ui_label(t.host, 137).text.empty());
-    CHECK(app::ui_gauge(t.host, 29).value == -1);
-    CHECK(combat_indicator() == "A_PWCSStanding");
+    CHECK_FALSE(t.conn.resting_for_fast_regen());
+    CHECK(app::ui_gauge(t.host, 29).value == 1000);
+    CHECK(combat_indicator() == "A_PWCSTimer");
 }
 
 TEST_CASE("Discipline timer: gauge 26 counts down between ticks with whole seconds") {

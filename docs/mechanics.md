@@ -556,8 +556,9 @@ target-type-needs-target, language garbling, profanity filter, partial name look
   type 6) and SPA 324 (no mana check).
 - OP_RestState's combat flag and downtime answer can-cast-in-combat / out-of-combat (9190..9194) and
   `IsRestingForFastRegen` (6460/6461), which also feeds the sheet's `fast_regen_resting`.
-  On login and zoning, OP_PlayerProfile starts the countdown from the remaining seconds sent by the server.
-  Subsequent OP_RestState packets update it during play.
+  On login and zoning, a non-zero rest timer in OP_PlayerProfile (the seconds EQEmu saved at camp or zone-out)
+  starts the countdown from now (PcClient_ApplyPlayerProfileData @0x57a04a); zero, and the combat flag, are left
+  as they were. OP_RestState packets update both during play.
 - Casting runs MakeMeVisible(0xb0, 1) unless the spell is a sneak attack or CastNotStanding; a sitting caster stands
   (ChangePosition 100).
 - Line of sight uses the app's collision (eqstr 108).

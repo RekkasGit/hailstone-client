@@ -534,6 +534,12 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     slot data have known counters.
   - Settle (to predict from zone-in data): confirm how the profile's count maps to per-effect slots (see "Spell gems and
     buff stacking" in [mechanics.md](mechanics.md)).
+- **The combat flag across a zone change.**
+  - Now: OP_PlayerProfile's rest timer starts the downtime only (PcClient_ApplyPlayerProfileData @0x57a04a), as the
+    original does, and the combat flag (+0x31bc) keeps its last OP_RestState value. A new login starts out of combat.
+    Zoning while in combat leaves the crossed swords up until the next OP_RestState, if EQEmu sends none at zone-in.
+  - Settle: whether the original clears +0x31bc elsewhere on zoning (the PcClient constructor or the zone-in path), or a
+    capture of zoning while in combat against stock EQEmu.
 - **Slam under an illusion.**
   - Now: granted for every race whose innate table has it (Barbarian, Troll, Ogre and their citizen models 90, 92, 93).
   - EQEmu bypasses the Bash skill check only for races 2, 9 and 10, so under a 90 / 92 / 93 illusion a class without
