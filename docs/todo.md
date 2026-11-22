@@ -292,7 +292,7 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
 - [x] **The live folder's revamped bazaar, lavastorm and highpasshold load** when the server's safe point (OP_NewZone) stands on their floor (game/revamped_zone.h).
   - Covers PEQ's Bazaar and Lava Storm version 1 (expansion 9 on) and its only High Pass Hold row.
   - Version 0's safe points have no floor there, so those stay refused.
-- [ ] **Arena and Nektulos with a live folder** (unknowns.md, Movement and collision). Its arena.s3d and nektulos.s3d win over the revamped .eqg, but PEQ's Arena (its only row) and Nektulos version 1 (expansion 10 on) run the revamp: their spawns stand on the live .eqg.
+- [x] **Arena and Nektulos with a live folder** (unknowns.md, Movement and collision). Its arena.s3d and nektulos.s3d won over the revamped .eqg, but PEQ's Arena (its only row) and Nektulos version 1 (expansion 10 on) run the revamp. The server's safe point now picks between the two files, as it does for the revamps with no .s3d.
 - [x] **IVM's animation** (race 127/600, the enchanter pet; game::animation_source). It has no named clips; GetAlternateAnimTag @0x406a60 maps its wood-elf prefix group to ELM, so it plays ELM's clips and holds its weapons as an elf does.
 - [ ] IVM's click volume: whether the original's click meets its masked body mesh, a sphere or only its held items (unknowns.md, Characters and models).
 - [x] WLD 0x2C meshes (docs/formats/wld.md "0x2C mesh"): read into a MeshDef, centre added, so the Fiery Avenger (IT62) shows its blade, not only its flames, and Erud's Crossing's ghost ship its hull; a 0x2C body that can draw nothing (IVM's) is dropped.
