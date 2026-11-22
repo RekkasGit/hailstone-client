@@ -847,8 +847,8 @@ Game fonts are built at the display's content scale (or `--ui-scale`), and the p
 `src/ui/ui_ini.{h,cpp}`: at world entry, windows are placed from `servers/<profile>/characters/<world>/<name>/UI.ini` over the game's `defaults.ini`. The game directory's `UI_<name>_<server>.ini` seeds it and is never written.
 
 - **Place and size**: the XML rectangle, then `Width`/`Height` and `XPos`/`YPos` for 1280x1024 and `...Windowed`. Windowed values are stored for 4096 x 4096 and moved by `ConvertToRes`, whose sums wrap in 32 bits as the original's do.
-- **Shown or not**: `Show` comes from the character's file only (defaults.ini too for HotButtonWnd). Without it a window starts shown when its IniFlags have bit 9 (player, target, group, buffs, songs, gems, compass, chat, EQ button, hot bar 1). Hailstone clears it for the aura window, which RoF2 starts shown.
-- Each character entry restores window visibility from `UI.ini`, including when you camp and return to the same character. With no saved visibility, the Potion Belt starts closed.
+- **Shown or not**: `Show` comes from the character's file only (defaults.ini too for HotButtonWnd), and only for a window whose IniFlags have bit 8, as CSidlScreenWnd::LoadIniInfo @0x85dda0 reads it. Without it a window starts shown when its IniFlags have bit 9 (player, target, group, buffs, songs, gems, compass, chat, EQ button, hot bar 1). Hailstone clears it for the aura window, which RoF2 starts shown.
+  - It is read again at each entry into the world, also after a camp back to the same character, whose new connection starts with the Potion Belt closed. Changes are written only while in game, and once more as the layout is saved on leaving, so character select never writes its own state into the last character's file.
 - **Chat windows**: a file with no `[ChatManager] NumWindows` takes defaults.ini's extra chat windows as tabs of the main window; after that only the character's file counts. A deliberate change: through defaults.ini, "Other Chat" came back at every start after the player closed it.
 - Moves, resizes and show / hide are written back to the same keys.
 
