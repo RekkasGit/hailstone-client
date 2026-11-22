@@ -2011,6 +2011,19 @@ Actor drawing, nameplates, picking and target cycling share viewer visibility (`
 - Any other spawn with property 100 (PlayerBase::HasProperty(0x64)) is always hidden.
 - Visibility is independent of material opacity.
 
+#### /hidecorpses
+
+cmd_hidecorpses @0x4e78c0 matches the whole argument, prints its answer in colour 0xf and sends OP_HideCorpse
+{action, 0}: all 1, allbutgroup 2, looted 3, npc 5, anything else 0. The original keeps the mode for the session only
+and repeats only the looted action at zone-in. Hailstone extensions, beyond RoF2:
+
+- The mode is saved per character (`options.ini` `[Hailstone] HideCorpses`) and every server mode is sent again at
+  each zone-in, since EQEmu forgets it when the player zones.
+- `always` is local: it clears the server's filter (action 0) and hides every corpse, the player's own too.
+- Changing to npc or looted after a broader mode sends action 0 first. EQEmu ignores looted and, for npc, does not
+  send back the player corpses the broader mode hid (EntityList::HideCorpses).
+- With no argument, a line naming the current mode follows the original's usage lines.
+
 #### Actor property sets
 
 `Resources/CharacterPropertySets.txt` lists one `set ID^property ID` pair per row. Repeated set IDs add members to the
