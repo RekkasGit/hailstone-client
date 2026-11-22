@@ -2172,7 +2172,8 @@ from the body, which keeps gravity, air and environment damage; the Eye sends it
 despawn, death and zoning restore control. Once held, control stays while that spawn lives.
 
 Mouse look and the gamepad's right stick use the Eye's posture for turning, so you can steer a standing or
-crouching Eye while your character sits. Stun still blocks turning.
+crouching Eye while your character sits. Stun still blocks turning. This follows `CEverQuest::ProcessControls`
+(0x52bbd0), which tests the posture of `pinstControlledPlayer` and the owner's CharacterBase status (+0xfc).
 
 Deliberate safety differences:
 

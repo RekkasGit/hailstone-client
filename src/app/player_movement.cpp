@@ -29,14 +29,16 @@ namespace hailstone::app {
 namespace mech = game::mechanics;
 
 bool can_turn_controlled_actor(const net::GameConnection& conn) {
-    if (conn.stunned()) return false;
+    // ProcessControls (0x52bbd0): the local PC's CharacterBase status (+0xfc, tested at 0x52bbe7) blocks, whoever
+    // is in control.
     const auto& status = conn.player_status();
+    if (conn.stunned() || status.owner_status > 0) return false;
     std::uint32_t stand = status.stand_state;
     if (const auto eye_id = conn.eye_id()) {
-        // ProcessControls reads the controlled spawn's posture. The Eye's owner still supplies character status.
+        // It reads pinstControlledPlayer's StandState, so the Eye's posture counts and the owner's does not.
         const auto& spawns = conn.world().spawns;
         const auto eye = spawns.find(eye_id);
-        if (eye == spawns.end() || status.owner_status > 0) return false;
+        if (eye == spawns.end()) return false;
         stand = eye->second.stand_state;
     }
     return stand == net::kStandStanding || stand == net::kStandCrouching;
