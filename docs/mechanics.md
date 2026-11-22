@@ -2070,8 +2070,12 @@ OP_ClientUpdate at the last position more than the AFK time after `ResetAFKTimer
 OP_ChannelMessage, OP_MoveItem, auto attack and OP_SpawnAppearance AFK reset that timer, not walking, so a player who
 only runs and clicks goes AFK at his next stop (seen live).
 
-Hailstone sends its position every 1.3 seconds while it is unchanged so the zone can check its idle and AFK timers.
-The zone applies any server-side AFK effects, such as disabling personal tribute when the player has opted in.
+Enhancement (always on): while the position is unchanged, Hailstone sends OP_ClientUpdate every 1.3 s, so the zone
+can check its idle and AFK timers on a player who stands still. The original sends it only while the position is
+dirty (DoMainLoop @0x53e0c1); 1.3 s is its resend interval for an unchanged controlled spawn (@0x53e410). Stock EQEmu
+does not relay an update that changed nothing (Handle_OP_ClientUpdate's `positionUpdated`), and with
+Character:EnableAutoAFK off (its default) the update does nothing. The zone applies any server-side AFK effects, such
+as disabling personal tribute when the player has opted in.
 
 Enhancement (`game::AfkKeepalive`, always on): while the user gives input (`InputState::user_activity`: keys, mouse,
 pad, touch, held or moved), the client sends OP_SpawnAppearance {me, 24, 0} at once, then at most once a minute. The

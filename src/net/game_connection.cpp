@@ -52,7 +52,11 @@ constexpr std::uint16_t kOpAttackUnlock = 0x4d09;
 // The original client sends its position at most every 280 ms while it can
 // move (CEverQuest::DoMainLoop @0x53e0c1).
 constexpr auto kPositionInterval = std::chrono::milliseconds(280);
-// The zone evaluates its idle and AFK timers on position packets, including while the player stands still.
+// Enhancement (not in RoF2): the original sends OP_ClientUpdate only while the position is dirty (DoMainLoop
+// @0x53e0c1), so a player who stands still sends nothing. EQEmu's auto idle / AFK (Client::CheckAutoIdleAFK) runs
+// only on an OP_ClientUpdate at an unchanged position, so Hailstone repeats it at the original's own resend interval
+// for a controlled spawn whose position has not changed (1300 ms, @0x53e410). The zone does not relay an unchanged
+// update to other players.
 constexpr auto kStationaryPositionInterval = std::chrono::milliseconds(1300);
 // RequestZoneChangeStatus @0x5203c0 waits up to 180 s for the answer to one OP_ZoneChange (@0x52050e).
 // RequestZoneChangeStatusBlocking @0x52cee0 sends it again 500 ms after a "not ready" answer (-1) while
