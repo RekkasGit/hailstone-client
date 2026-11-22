@@ -650,10 +650,9 @@ public:
     bool attack_until_xtarget_clear() const { return attack_until_xtarget_clear_; }
     // A living spawn other than `except` in a slot of the extended target list that is not hidden.
     bool xtarget_holds_spawn(std::uint32_t except = 0) const;
-    // Hailstone (option auto_target_xtarget, on by default; docs/mechanics.md): with no target, an NPC on the
-    // extended target list (slots the server extension hides left out) that attacks the player (an OP_Damage on
-    // the player from it, a miss included) becomes the target; so does such an NPC still on the list when the
-    // target dies. Clearing the target by hand holds until the next hit. The original never targets by itself.
+    // Hailstone (option auto_target_xtarget, on by default; docs/mechanics.md): with no target, a qualifying NPC
+    // that attacks the player becomes the target. When the target dies or despawns, the client can pick another
+    // attacker from the visible extended target slots. Clearing by hand holds until the next attack.
     void set_auto_target_xtarget(bool on) { auto_target_xtarget_ = on; }
     bool auto_target_xtarget() const { return auto_target_xtarget_; }
     // Hailstone (option face_on_attack, on by default; docs/mechanics.md): the attack key and buttons
@@ -3222,7 +3221,10 @@ private:
     std::uint32_t save_tick_ms_ = 0; // the last tick
     void camp_tick();
     void attack_hold_tick(); // attack_until_xtarget_clear: auto attack off once the list holds no spawn
-    void auto_target_tick(); // auto_target_xtarget: a pending pick, with no target, of an attacker on the list
+    void auto_target_tick();
+    bool can_auto_target_attacker(std::uint32_t id) const;
+    void record_auto_target_attack(const CombatDamage& damage);
+    void forget_auto_target_attacker(std::uint32_t id);
     // auto_target_xtarget: the attacker to target, `prefer` first when it qualifies, else the first in slot order;
     // 0 none.
     std::uint32_t xtarget_attacker(std::uint32_t prefer) const;
@@ -3406,9 +3408,10 @@ private:
     bool attack_held_for_xtarget_ = false; // kept on at the target's death (attack_until_xtarget_clear)
     bool auto_target_xtarget_ = true;
     bool face_on_attack_ = true;
-    std::vector<std::uint32_t> xtarget_attackers_; // NPCs that hit (or missed) the player this zone
-    bool auto_target_due_ = false;                 // a hit or the target's death since the last pick
-    std::uint32_t auto_target_prefer_ = 0;         // the latest attacker
+    std::vector<std::uint32_t> xtarget_attackers_; // NPCs that attacked the player this zone
+    std::vector<std::uint32_t> pending_auto_target_attackers_; // attacks while untargeted since the last tick
+    bool auto_target_xtarget_due_ = false;        // the current target died or despawned
+    std::uint32_t auto_target_prefer_ = 0;         // the latest attacker seen while no target was held
     std::int32_t pvp_rules_ = 0;
     std::int32_t spell_scribe_allowed_ = 0; // 0xddfd3c, OP_LogServer +0x18 (/spellscribe)
     bool spell_book_open_ = false;

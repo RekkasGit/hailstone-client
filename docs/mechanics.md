@@ -2132,12 +2132,15 @@ General "Attack Until XTarget Is Clear", off by default): auto attack stays on w
 living spawn (server-hidden slots left out). Taking a new target ends the hold. Auto fire still goes off.
 
 The original never picks a target itself. Enhancement (option `auto_target_xtarget`, hailstone.ini
-`combat.auto_target_xtarget`, Options > General "Auto Target XTarget Attackers", on by default):
+`combat.auto_target_xtarget`, "Auto Target Attackers" under Options > General in Modern or Options > Game in
+Gamepad, on by default):
 
-- With no target, an NPC that attacks the player (an OP_Damage, a miss included) and is on the extended target list
-  becomes the target; also when the target dies and such an attacker remains (latest attacker first, else slot order).
+- With no target, an NPC that attacks the player becomes the target, even with no extended target slots. This
+  uses `OP_Damage` and includes missed swings and known detrimental spells that land for zero damage.
+- When the target dies or despawns, an attacker in a visible extended target slot can take its place (the last
+  attacker seen while untargeted first, otherwise in slot order).
 - Players' pets, corpses and untargetable spawns are skipped.
-- Clearing the target by hand holds until the next hit. Nothing is picked while dead.
+- Clearing the target by hand holds until the next attack. Nothing is picked while dead.
 
 #### Facing and role sets
 

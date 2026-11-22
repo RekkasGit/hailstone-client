@@ -478,7 +478,7 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     // Hailstone: auto attack stays on past the target's death while the extended target list holds a spawn
     // (net::GameConnection::set_attack_until_xtarget_clear), off by default.
     if (o == "attack_until_xtarget_clear") return config_.get_bool("combat.attack_until_xtarget_clear", false) ? 1 : 0;
-    // Hailstone: with no target, an NPC on the extended target list that attacks the player becomes the target
+    // Hailstone: with no target, an NPC that attacks the player becomes the target
     // (net::GameConnection::set_auto_target_xtarget), on by default.
     if (o == "auto_target_xtarget") return config_.get_bool("combat.auto_target_xtarget", true) ? 1 : 0;
     // Hailstone: off, the attack key and buttons leave the player's heading alone; on (the default) they turn the
