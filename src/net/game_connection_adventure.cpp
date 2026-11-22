@@ -243,7 +243,11 @@ void GameConnection::handle_adventure(Op op, const AppPacket& p) {
     switch (op) {
     case Op::AdventureInfo:
         if (auto v = decode_adventure_text(p)) {
-            // EQEmu uses this notice for both a successful leave and an expired assignment.
+            // EQEmu uses this notice for both a successful leave and an expired assignment (zone/client.cpp
+            // Client::ClearCurrentAdventure, zone/worldserver.cpp ServerOP_AdventureDataClear). RoF2 matches no
+            // text: AdventureMgr_HandleAdventureInfo @0x420130 enters state 1, the request state, on every
+            // AdventureInfo, which also ends the assignment's states 3 / 4. This client keeps the assignment for
+            // other notices and clears it only on this one.
             if (adventure_notice_is(*v, "You are not currently assigned to an adventure")) {
                 clear_adventure_assignment();
                 if (a.window_open && adventure_recruiter_available()) a.npc_text = std::move(*v);
@@ -276,7 +280,10 @@ void GameConnection::handle_adventure(Op op, const AppPacket& p) {
                 a.window_open = true;
                 set_recruiter_state(2);
             } else {
-                // Decline offers that cannot be shown or accepted.
+                // No recruiter (the player zoned, or the recruiter's words were dismissed), another recruiter
+                // opened since the request, or already on an adventure. RoF2 shows this offer too, and its range
+                // check (AdventureMgr_Process @0x41fa80) then hides the window with no recruiter in reach,
+                // declining it; this client declines at once.
                 send_zone(encode_ldon_button(false));
                 a.offer.clear();
                 if (!a.data.assigned && a.window_open && adventure_recruiter_available()) set_recruiter_state(1);
@@ -286,6 +293,8 @@ void GameConnection::handle_adventure(Op op, const AppPacket& p) {
         break;
     case Op::AdventureData:
         if (auto v = decode_adventure_data(p)) {
+            // AdventureMgr_HandleAdventureData @0x420320 enters state 3 (entry timer) or 4 (completion timer)
+            // and leaves the state alone when both timers are zero, as in EQEmu's finished-only snapshot.
             if (!v->assigned) {
                 clear_adventure_assignment();
                 break;
@@ -304,11 +313,14 @@ void GameConnection::handle_adventure(Op op, const AppPacket& p) {
         }
         break;
     case Op::AdventureUpdate:
-        // A final count can arrive after the assignment has already ended.
+        // AdventureMgr_HandleAdventureUpdate @0x4204e0 stores the count whatever the state and shows it only in
+        // state 4 (the completion timer). This client drops a count with no assignment: EQEmu can send the final
+        // count after the finish, and it must not show under the next adventure. What is shown is the same.
         if (auto v = decode_adventure_count(p); v && a.data.assigned) a.count = *v;
         break;
     case Op::AdventureFinish:
         if (auto v = decode_adventure_finish(p)) {
+            // RoF2's OP_AdventureFinish branch @0x4206eb resets the assignment and hides the request window.
             clear_adventure_assignment();
             a.offer.clear();
             a.npc_text.clear();

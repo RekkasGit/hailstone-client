@@ -123,6 +123,9 @@ Short entries stay on one line.
     on an empty AdventureData snapshot.
   - A server that uses a different reply may require a zone change to refresh the client. Settle with a capture of
     the server's leave response.
+  - RoF2's adventure dispatcher (`0x420610`) also resets the adventure state (`AdventureMgr_SetState(0)`) on opcode
+    0x0dcb, which EQEmu's patch_RoF2.conf does not map and no stock server sends; whether a live server answered a
+    leave with it is not established.
 - **AdventureData's risk.**
   - RoF2 sets the window's risk choice to risk - 1 (`0x618790`, the 1 normal / 2 high of its own request); stock EQEmu sends 0 normal / 1 high.
   - Now: nonzero shows as high. Right for EQEmu; a server sending RoF2's 1 for normal would show as high.

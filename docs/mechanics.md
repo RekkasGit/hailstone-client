@@ -2720,17 +2720,21 @@ and decides eligibility, acceptance and departure.
 
 - AdventureData selects the entry timer when nonzero, otherwise the completion timer.
 - Displays round remaining seconds up to whole minutes and clamp at zero (`0x618a00`, `0x618ae0`).
-- Progress counts are kept while assigned and shown during the completion timer. A late count after completion
-  cannot carry over to the next adventure.
+- Progress counts are kept while assigned and shown during the completion timer. RoF2 keeps a count in any state
+  (`0x4204e0`); this client drops one with no assignment, so a late count after completion cannot carry over to the
+  next adventure. What is shown is the same.
+- AdventureData with both timers zero leaves RoF2's state alone (`0x420320` enters state 3 or 4 from the timers);
+  this client treats it as no assignment, which is how EQEmu's finished-only snapshot looks.
 - The risk selector shows AdventureData's risk: nonzero is high. Stock EQEmu sends 0 normal / 1 high, not the
   request's 1 / 2, which RoF2's `0x618790` assumes.
 - The compass uses the server's zone-local XYZ/flag.
-- AdventureFinish clears the assignment, timers, compass and progress and closes the window. A finished instance can
-  remain accessible through its entrance. The server controls when occupants return, and a player can use its exit
-  after completing the objectives.
-- Leave waits for the server. A leave acknowledgement or an empty assignment snapshot clears the mission. EQEmu
-  can deny leaving while the player is still inside the active instance. A denial or eight seconds without a reply
-  re-enables Leave and keeps the assignment visible.
+- AdventureFinish clears the assignment, timers, compass and progress and closes the window (`0x4206eb`). A
+  finished instance can remain accessible through its entrance. The server controls when occupants return, and a
+  player can use its exit after completing the objectives.
+- Leave waits for the server. A leave acknowledgement or an empty assignment snapshot clears the mission. RoF2
+  matches no text: every AdventureInfo puts it in the request state (`0x420130`); this client keeps the assignment
+  for other notices. EQEmu can deny leaving while the player is still inside the active instance. A denial or eight
+  seconds without a reply re-enables Leave and keeps the assignment visible.
 - Zone changes clear the old recruiter and zone-local data; selecting another character clears cached state.
 
 #### Adventure stats
