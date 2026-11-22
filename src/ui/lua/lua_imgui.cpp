@@ -1184,7 +1184,8 @@ int DrawRectGradient(lua_State *L) {
 }
 // ui.DrawLine(x0, y0, x1, y1, r, g, b, a [, thickness])
 int DrawLine(lua_State *L) {
-	DrawTarget()->AddLine(ImVec2(F(L, 1), F(L, 2)), ImVec2(F(L, 3), F(L, 4)), ImGui::GetColorU32(Color(L, 5)), F(L, 9, 1));
+	DrawTarget()->AddLine(ImVec2(F(L, 1), F(L, 2)), ImVec2(F(L, 3), F(L, 4)), ImGui::GetColorU32(Color(L, 5)), F(L, 9, 1),
+											 ImDrawFlags_StrokeLegacy); // scripts keep the pre-1.93 pixel placement
 	return 0;
 }
 // ui.DrawCircleFilled(x, y, radius, r, g, b, a) / ui.DrawCircle(x, y, radius, r, g, b, a [, thickness])
@@ -1193,7 +1194,7 @@ int DrawCircleFilled(lua_State *L) {
 	return 0;
 }
 int DrawCircle(lua_State *L) {
-	DrawTarget()->AddCircle(ImVec2(F(L, 1), F(L, 2)), F(L, 3), ImGui::GetColorU32(Color(L, 4)), 0, F(L, 8, 1));
+	DrawTarget()->AddCircle(ImVec2(F(L, 1), F(L, 2)), F(L, 3), ImGui::GetColorU32(Color(L, 4)), 0, F(L, 8, 1), ImDrawFlags_StrokeLegacy);
 	return 0;
 }
 // ui.DrawTriangleFilled(x1, y1, x2, y2, x3, y3, r, g, b, a)

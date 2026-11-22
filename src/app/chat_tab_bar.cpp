@@ -168,7 +168,7 @@ bool draw_tab_strip(UiHost& host, const tabs::Group& group, ImVec2 pos, float wi
         draw->AddText(nullptr, 0, text_pos, ImGui::GetColorU32(color), begin, finish, 0, &clip);
         if (index == selected && count > 1 && text_end > text_pos.x)
             draw->AddLine({text_pos.x, pos.y + height - 3 * scale}, {text_end, pos.y + height - 3 * scale},
-                          ImGui::GetColorU32(style.accent), 2 * scale);
+                          ImGui::GetColorU32(style.accent), 2 * scale, ImDrawFlags_StrokeLegacy);
         if (hovered) {
             const auto tip = item.size.x + 2 * padding > end - x || item.text != label(item.tab) ? label(item.tab)
                 : index == selected && item.text != group.title ? group.title : std::string_view{};

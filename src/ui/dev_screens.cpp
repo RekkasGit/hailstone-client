@@ -2123,7 +2123,7 @@ void chat_line_with_links(const std::string& text, ChatView& view) {
         ImGui::TextColored(ImVec4(0.45f, 0.75f, 1.0f, 1.0f), "%s", seg.text.c_str());
         if (ImGui::IsItemHovered()) {
             ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
-            ImGui::GetWindowDrawList()->AddLine(ImVec2(a.x, b.y), b, IM_COL32(115, 190, 255, 255));
+            ImGui::GetWindowDrawList()->AddLineH(a.x, b.x, b.y, IM_COL32(115, 190, 255, 255));
             ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         }
         if (ImGui::IsItemClicked()) view.clicked_link = seg.link;

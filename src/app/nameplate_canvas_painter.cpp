@@ -133,17 +133,17 @@ bool paint_nameplate_canvas(ImDrawList& draw, const game::NameplateCanvasModel& 
             break;
         }
         case Kind::Line:
-            draw.AddLine(point(command.x0, command.y0), point(command.x1, command.y1), color, command.thickness);
+            draw.AddLine(point(command.x0, command.y0), point(command.x1, command.y1), color, command.thickness, ImDrawFlags_StrokeLegacy);
             break;
         case Kind::Circle:
-            draw.AddCircle(point(command.x, command.y), command.radius, color, command.segments, command.thickness);
+            draw.AddCircle(point(command.x, command.y), command.radius, color, command.segments, command.thickness, ImDrawFlags_StrokeLegacy);
             break;
         case Kind::CircleFilled:
             draw.AddCircleFilled(point(command.x, command.y), command.radius, color, command.segments);
             break;
         case Kind::Triangle:
             draw.AddTriangle(point(command.x0, command.y0), point(command.x1, command.y1), point(command.x2, command.y2),
-                             color, command.thickness);
+                             color, command.thickness, ImDrawFlags_StrokeLegacy);
             break;
         case Kind::TriangleFilled:
             draw.AddTriangleFilled(point(command.x0, command.y0), point(command.x1, command.y1), point(command.x2, command.y2), color);

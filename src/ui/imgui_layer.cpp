@@ -120,7 +120,7 @@ bool detail::build_ui_font_atlas(ImFontAtlas& atlas) {
         // built (there is no build step), so ask the font itself.
         if (!font->IsGlyphInFont('A') && !font->IsGlyphInFont(' ')) return false;
         for (const auto& [curly, straight] : quote_fallbacks) {
-            if (!font->IsGlyphInFont(curly) && font->IsGlyphInFont(straight)) font->AddRemapChar(curly, straight);
+            if (!font->IsGlyphInFont(curly) && font->IsGlyphInFont(straight)) font->AddRemapCodepoint(curly, straight);
         }
     }
     return true;
