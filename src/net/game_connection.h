@@ -43,6 +43,7 @@
 #include "game/bazaar.h"
 #include "game/chat_text.h"
 #include "game/client_options.h"
+#include "game/character_property_sets.h"
 #include "game/combat.h"
 #include "game/doors.h"
 #include "game/eq_names.h"
@@ -272,6 +273,15 @@ struct SoundCue {
     std::uint8_t door_type = 0, door_state = 0;
     glm::vec3 position{0.0f};
     bool environment = false; // a Hit from an environmental type (0xf3..0xfd) or a spell: Hit1..4 only, no FlshHit
+    // Hailstone: what a Wave cue is for, where its wave alone does not say (the item-moved wave serves every move, the
+    // bag wave opening and closing); the app picks the Individual Sounds volume from it.
+    enum class Context : std::uint8_t {
+        None,
+        BagOpen,     // a bag in a carried slot opening
+        BankBagOpen, // a bag in a bank or shared bank slot opening
+        ItemWorn,    // an item put into or taken out of a worn slot
+    };
+    Context context = Context::None;
 };
 
 // A spell effect stage to play (SpellEffect_SpawnStageEmitters): the cast
@@ -336,8 +346,10 @@ struct ConnectionOptions {
     // The servers/ folder of those profiles; empty: platform::servers_dir() (tests name a scratch folder).
     std::filesystem::path servers_dir;
     // The saved server's folder (servers/<id>/): at the first zone-in the zone-in waits while the server's client
-    // files are brought into its assets/ (net/server_files.h). Empty: no download (a test login, tests).
+    // files are brought into it (net/server_files.h).
     std::filesystem::path server_files_dir;
+    // Transient logins cache only hailstone.cfg here, to check server access without enabling the full download.
+    std::filesystem::path server_access_dir;
     // How much those files may come to (hailstone.ini's assets.server_files_max_*_mb).
     ServerFileSync::Limits server_files_limits;
     // Hailstone: the bank as last seen is read from and saved to the character's bank.dat (game/bank_snapshot.h).
@@ -510,6 +522,10 @@ public:
     // Spell 859 local presentation; no packet is encoded or sent.
     void spell_missile_hit(const game::Missile& missile);
     std::vector<SoundCue> take_sound_cues();
+    // CContainerMgr::OpenContainer / CloseContainer's sound for a bag of `bag_type`: a 2D wave cue
+    // (game/sound_rules.h container_sound). The windows and the bag keys call it; nothing is sent.
+    // `in_bank`: the bag sits in a bank slot (Hailstone: its opening has its own volume).
+    void container_sound(std::uint32_t bag_type, bool open, bool in_bank = false);
     // What spells landing on the player changed that the movement owns
     // (EQ_Character::HitBySpell, game/hit_landing.h): taken once a frame.
     struct LandingEffects {
@@ -588,12 +604,12 @@ public:
     // Sets the target and tells the server (OP_TargetMouse, as the original
     // does on every target change); 0 clears it.
     void set_target(std::uint32_t spawn_id);
-    // LocalPlayer_TargetSelfOrPet (F1 = 0, F2..F6 = 1..5, the group window's
-    // rows): targets group member n, the n-th occupied slot, and selects it
-    // (game/group_rules.h). The selection /disband reads is
-    // group_member_targeted(): that ordinal, or, once the target changes, the
-    // new target's slot index (CTargetWnd::OnProcessFrame), -1 none.
-    void target_group_member(std::int32_t n, bool target_of_target = false);
+    enum class GroupTargetMode { CyclePet, MemberOnly };
+    // F1 = self, F2..F6 = the group's other rows. The keys select the pet when the owner is already
+    // targeted. A click on the member's row selects the member. The selection /disband reads is
+    // the corresponding roster slot (CTargetWnd::OnProcessFrame), -1 none.
+    void target_group_member(std::int32_t n, GroupTargetMode mode = GroupTargetMode::CyclePet);
+    const game::Spawn* group_member_pet(const game::GroupMember& member) const;
     std::int32_t group_member_targeted() const { return group_member_targeted_; }
     // The target's target (OP_TargetHoTT; PlayerZoneClient::TargetOfTarget), 0 none.
     std::uint32_t target_of_target() const { return target_of_target_; }
@@ -719,6 +735,7 @@ public:
     // set_stand_state(110 / 100).
     void set_sitting(bool sitting);
     bool sitting() const { return pstatus_.stand_state == 110; }
+    bool sitting_or_mounted() const { return sitting() || mount_id() != 0; }
     // ---- the spell book (CSpellBookWnd's open/close rules, game/spell_book.h) ----
     // The UI calls open_spell_book() when the book is about to show (false:
     // the original refuses and the window must stay closed) and
@@ -795,6 +812,7 @@ public:
     // Sends new benefits (OP_TributeUpdate); the server checks the tiers.
     void tribute_change(const TributeSettings& settings);
     void tribute_toggle(bool on);
+    std::optional<std::uint64_t> tribute_cursor_value(bool guild) const;
     bool tribute_donate_cursor();
     bool tribute_donate_platinum(std::uint32_t platinum);
 
@@ -852,9 +870,8 @@ public:
     bool find_spawn(std::uint32_t spawn_id);
     bool npc_find_enabled() const;
     bool npc_find_allowed(std::uint32_t spawn_id) const;
-    // npc_find_allowed for one row of many, the map policy already read (npc_find_enabled) by the caller for them
-    // all: an NPC that is not a corpse and that every server extension lets Find show.
-    bool npc_find_visible(std::uint32_t spawn_id) const;
+    // Per-row visibility after the caller has read the map policy for the whole Find list.
+    bool npc_find_visible(std::uint32_t spawn_id, bool server_only) const;
     // PlayerPath_FindMapLocation (MapViewMap::HandleRButtonDown): the path to a point of the map, world coordinates
     // at the player's height.
     void find_map_location(const glm::vec3& at);
@@ -884,6 +901,7 @@ public:
     // The original's find window listed them (Handle_OP_SendFindableNPCs); the Find window here does too
     // (game/useful_npcs.h).
     const std::unordered_map<std::uint32_t, FindableNpc>& findable_npcs() const { return findable_npcs_; }
+    std::uint64_t findable_npcs_revision() const { return findable_npcs_revision_; }
     // The zone's quest NPCs from Hailstone's server script (net/quest_npc_packets.h), by their names as shown
     // (game::display_name, ASCII lower case): kQuestNpcItems / kQuestNpcTalks. Asked once a zone, the first time the
     // Find window wants them (request_quest_npcs); empty without the script. Cleared on zoning.
@@ -1190,11 +1208,15 @@ public:
     // an offer; a request still awaiting its answer keeps the recruiter, and the answer shows the window again.
     void close_adventure_recruiter();
     bool adventure_recruiter_available() const;
+    bool adventure_request_options_ready() const;
     bool adventure_request_ready() const;
     void adventure_request(std::uint32_t risk, std::uint32_t type);
     void adventure_answer(bool accept);
     // OP_LeaveAdventure (no body): leave the current adventure (EQEmu's world server may refuse, with its own line).
+    bool adventure_leave_pending() const;
+    bool adventure_leave_ready() const;
     void adventure_leave();
+    std::uint64_t adventure_assignment_revision() const { return adventure_assignment_revision_; }
     void set_adventure_stats_open(bool open);
     void set_adventure_leaderboard_open(bool open);
     void adventure_stats_request();
@@ -1450,6 +1472,7 @@ public:
     }
     // eqstr_us.txt / dbstr_us.txt (spell descriptions are dbstr type 6).
     const game::EqStrings& strings() const { return strings_; }
+    const game::CharacterPropertySets& character_property_sets() const { return character_property_sets_; }
     // The player's classes as a bit mask: server_class_mask(), else the profile's class.
     std::uint32_t player_class_mask() const;
     // player_class_mask() where the server extension tests those class checks over the player's classes
@@ -1632,7 +1655,8 @@ public:
     using TeleportHandler = std::function<void(const game::TeleportBArgs&)>;
     void set_teleport_handler(TeleportHandler h) { teleport_handler_ = std::move(h); }
     // OP_RestState (PcClient_HandleRestState @0x578530): the combat flag (+0x31bc, vtable +0x80) and the
-    // downtime still to run (+0x31c0 / +0x31c4, vtable +0x84 @0x577dd0, seconds).
+    // downtime still to run (+0x31c0 / +0x31c4, vtable +0x84 @0x577dd0, seconds). OP_PlayerProfile's
+    // non-zero rest timer starts the downtime too (@0x57a04a).
     bool in_combat() const { return in_combat_; }
     std::uint32_t rest_downtime_left() const;
     // PcZoneClient_IsRestingForFastRegen @0x580370.
@@ -1752,7 +1776,9 @@ public:
     // Item Destroy the cursor's item or coin goes at once, else it asks first (2043 / 2061, 10 s).
     void destroy_held();
     // Puts the cursor item into the first free general slot or bag slot; false when it stays on the cursor.
-    bool auto_inventory();
+    // `equipped`, when given, tells whether the item went into a worn slot (its stack merged into one, or it was put
+    // on): the callers' own item-moved wave is then an equip sound too.
+    bool auto_inventory(bool* equipped = nullptr);
     // auto_inventory's last steps only: the first free general slot, else the first bag with room; never a worn slot
     // (Hailstone's bulk withdraw, which is not the original's and must not equip what it takes from the bank).
     bool stow_cursor_in_packs();
@@ -1924,6 +1950,7 @@ public:
     void give_to(std::uint32_t spawn_id);
     // CTradeWnd::DropItemIntoTrade: the cursor item into the first free trade slot.
     void trade_drop_cursor();
+    void trade_drop_cursor_coin();
     // Puts coin of one type (0 copper .. 3 platinum) into the trade (through the cursor, as the original).
     void trade_coin(int type, std::uint32_t amount);
     // The Trade / Give button (OP_TradeAcceptClick) and Cancel.
@@ -1954,6 +1981,7 @@ public:
     const game::BankCoins& bank_coins() const { return bank_coins_; }
     // Coin on the cursor by wire type (0 copper .. 3 platinum).
     const std::array<std::uint32_t, 4>& cursor_coins() const { return cursor_coins_; }
+    std::optional<std::pair<int, std::uint32_t>> held_coin() const;
     // CEverQuest::MoveMoney: moves coin between locations (kCoinCursor,
     // kCoinInventory, kCoinBank, kCoinSharedBank) with the original's
     // conversion, updates the local piles and sends OP_MoveCoin. Returns
@@ -2037,16 +2065,18 @@ public:
     const std::vector<game::GroundObject>& ground_objects() const { return ground_objects_; }
     // CEverQuest::ClickedSwitch -> EQSwitch::UseSwitch: refuses unusable or
     // moving switches, says "You can't reach that, get closer." out of reach
-    // (actor_radius: the door model's bounding radius, scaled), else sends
+    // (at the hit point, or using the scaled actor radius when there is no hit), else sends
     // OP_ClickDoor with `key` (the item id, -1 for none) and `skill` (the
     // adjusted Pick Lock or Disarm Traps value, game/clicks.h clicked_switch);
     // OP_MoveDoor answers. Returns true when the click was sent.
-    bool click_door(std::uint8_t door_id, float actor_radius, std::int32_t key = -1, std::int32_t skill = 0);
-    // Whether the local player is within reach of the door for a click (UseSwitch's test, as click_door makes it).
-    bool door_in_reach(std::uint8_t door_id, float actor_radius) const;
-    // EQSwitch::UseSwitch(switch, user, key, skill, 0) as PlayerClient::TouchingSwitch calls it: `user` is the
-    // spawn id; 0 (nobody, type 0x23) skips the reach test and sends player id 0.
-    bool use_switch(std::uint8_t door_id, std::uint32_t user, float actor_radius, std::int32_t key, std::int32_t skill = 0);
+    bool click_door(std::uint8_t door_id, float actor_radius, std::int32_t key = -1, std::int32_t skill = 0,
+                    std::optional<glm::vec3> hit = std::nullopt);
+    // Whether the local player or controlled Eye is within reach of the door for a click.
+    bool door_in_reach(std::uint8_t door_id, float actor_radius, std::optional<glm::vec3> hit = std::nullopt) const;
+    // EQSwitch::UseSwitch also takes touch activations without a pick point. `user` is the spawn id;
+    // 0 (nobody, type 0x23) skips the reach test and sends player id 0.
+    bool use_switch(std::uint8_t door_id, std::uint32_t user, float actor_radius, std::int32_t key, std::int32_t skill = 0,
+                    std::optional<glm::vec3> hit = std::nullopt);
     // TouchingSwitch's close of a type-0x32 switch past its repop time: the state byte (+0x27) = 0, without
     // ChangeState (no sound, nothing sent).
     void set_door_state_now(std::uint8_t door_id, std::uint8_t state);
@@ -2080,6 +2110,10 @@ public:
     // ---- skills and abilities (app/actions_ui.cpp, net/ability_packets.h) ----
     // Sends a zone packet the abilities code built (UseSkill's requests).
     void send_zone_packet(const AppPacket& p) { send_zone(p); }
+    // PlayerClient::SetHeldModel(held, model, 0, 1) @0x5923f0 for the local player, as DoAttack and DoRangedAttack
+    // call it (game::mechanics::SkillResult::held_models): held slot 7 or 8 shows the model of the item in
+    // possessions slot `item_slot` (-1: nothing) and OP_WearChange tells the zone.
+    void set_held_model(int held, int item_slot);
     void send_world_packet(const AppPacket& p) { send_world(p); }
     // What plugins and scripts may do on this server (plugin/policy.h: its hailstone.cfg, or no rules), set once the
     // zone-in has checked the server's files and kept while in the world; the serial changes with it.
@@ -2523,6 +2557,9 @@ public:
     // The Options window's game options (game/client_options.h): the character's options.ini over eqclient.ini's.
     const game::ClientOptions& client_options() const { return client_options_; }
     bool client_option(game::ClientOption id) const { return client_options_.on(id); }
+    game::HideCorpseMode hide_corpse_mode() const {
+        return static_cast<game::HideCorpseMode>(client_options_.get(game::ClientOption::HideCorpses));
+    }
     // Sets an option as the Options window does: kept in options.ini, then acted on (apply_client_option: the
     // original's COptionsWnd page handlers, e.g. the anonymous flag's spawn appearance and the chat line).
     void change_client_option(game::ClientOption id, int value);
@@ -2930,6 +2967,7 @@ private:
     void reset_achievements();
     void update_achievements();
     std::pair<std::uint32_t, std::uint64_t> achievement_target() const;
+    bool achievement_link_ready() const;
     bool reward_request_ready(std::string* why = nullptr) const;
     void reset_rewards();
     std::int64_t reward_now_ms() const;
@@ -2954,6 +2992,8 @@ private:
     // its chat line, sounds and the target's animation.
     void report_successful_hit(const CombatDamage& d, bool reported);
     void update_doors();
+    bool switch_in_reach(const game::Door& door, const game::Spawn* eye, float actor_radius,
+                         std::optional<glm::vec3> hit) const;
     // Sends an OP_ZoneChange and waits for its answer (RequestZoneChangeStatus).
     void start_zone_change(const ZoneChange& request);
     const game::DoorRiders* door_riders_ = nullptr;
@@ -3017,7 +3057,12 @@ private:
     void reset_group_for_zone();
     void note_pet_spawn(const game::Spawn& s);
     void forget_pet_spawn(std::uint32_t spawn_id);
-    void move_item(const ItemSlot& from, const ItemSlot& to, std::uint32_t count);
+    // False when the inventory refused the swap (nothing moved, nothing sent).
+    bool move_item(const ItemSlot& from, const ItemSlot& to, std::uint32_t count);
+    // The item-moved wave 0x92 (game::kSoundItemMoved), 2D: queued by the callers that play it in the original.
+    // `context`: ItemWorn when the move touched a worn slot (worn_context), given by each caller.
+    void item_moved_sound(SoundCue::Context context = SoundCue::Context::None);
+    SoundCue::Context worn_context(const ItemSlot& from, const ItemSlot& to) const;
     void refresh_worn_slot(int slot);
     // PcClient_RefreshWornSlotVisual's instrument bit (0x5923f0): the local player's PlayerState bit 0x10, set when
     // the primary or secondary hand holds an instrument (item types 23..26).
@@ -3054,7 +3099,8 @@ private:
     bool can_use_item_full(const Item& item) const;
     // MoveItem's bag path with bMoveBagContents (OP_MoveMultipleItems): the cursor item, or a cursor bag's
     // contents, into the bag at `to`; with `force_bag` (Ctrl + right-click) the two bags' contents trade places.
-    void move_into_bag(const ItemSlot& to, bool force_bag = false);
+    // True when the move was sent.
+    bool move_into_bag(const ItemSlot& to, bool force_bag = false);
     // A server OP_MoveItem (Handle_OP_MoveItem_Apply, or the trade / world removal).
     void apply_server_move(const MoveItem& m);
     // ConfirmationDialog_HandleResponse case 0x7a, yes: the cursor item goes into `slot` by the ordinary MoveItem,
@@ -3195,10 +3241,10 @@ private:
     void shield_group_command();
     void blockspell_command(const std::string& args);
     void hidecorpses_command(const std::string& args);
+    void send_hide_corpse_setting(game::HideCorpseMode previous = game::HideCorpseMode::None);
     void decaycorpse_command();
     // The loot window closing (CLootWnd::AboutToHide @0x6bcd40) with /hidecorpses looted on.
     void hide_looted_corpse();
-    bool hide_looted_corpses_ = false; // CDisplay +0x14 (bHideLootedCorpses)
     // /targetgroupbuff and /tgb (Cmd_targetgroupbuff @0x4ea820), /spellscribe (Cmd_spellscribe @0x4f7b90),
     // /offlinemode (Cmd_offlinemode @0x4e6660).
     void target_group_buff_command(const std::string& args);
@@ -3254,7 +3300,8 @@ private:
     const GameDir& game_;
     ConnectionOptions options_;
     std::optional<plugin::Rules> server_rules_;
-    void update_server_rules();
+    // Returns false when this login received a policy that denies Hailstone access.
+    bool update_server_rules();
     bool guild_world_invites_ = false; // OP_HailstoneGuildReply's hello this zone-in (server/'s script)
     std::uint32_t server_rules_serial_ = 0;
     int hook_game_state_ = 0;              // the game state last raised (plugin::kGameState*; 0 none yet)
@@ -3322,6 +3369,8 @@ private:
     ZoneChange zone_change_request_; // the pending request, for "not ready" retries
     std::chrono::steady_clock::time_point zone_change_started_{}, zone_change_sent_{}, zone_change_retry_at_{};
     game::EqStrings strings_;
+    std::size_t npc_tint_count_ = 0;
+    game::CharacterPropertySets character_property_sets_;
 
     // Movement sending.
     glm::vec3 position_{0.0f};
@@ -3835,6 +3884,11 @@ private:
     void handle_tribute(Op op, const AppPacket& p);
     Expedition expedition_;
     Adventure adventure_;
+    std::uint64_t adventure_assignment_revision_ = 0;
+    std::uint32_t adventure_requested_recruiter_ = 0;
+    std::int64_t adventure_offer_until_ms_ = 0;
+    std::int64_t adventure_accept_until_ms_ = 0;
+    std::int64_t adventure_leave_until_ms_ = 0;
     RaidOptions raid_options_;
     bool target_of_target_open_ = false;
     game::PlayerPath path_;
@@ -3845,6 +3899,7 @@ private:
     std::optional<FailedFind> failed_find_;
     std::uint32_t find_replies_ = 0;
     std::unordered_map<std::uint32_t, FindableNpc> findable_npcs_;
+    std::uint64_t findable_npcs_revision_ = 0;
     std::unordered_map<std::string, std::uint8_t> quest_npcs_;
     bool quest_npcs_asked_ = false;
     bool hailstone_script_ = false;   // a zone answered OP_HailstoneSettingsRequest
@@ -3936,6 +3991,8 @@ private:
     void reset_real_estate_for_zone();
     void server_coin(Op op, const AppPacket& p); // begging and pick-pocket coin (net/game_connection_abilities.cpp)
     void handle_adventure(Op op, const AppPacket& p);
+    void clear_adventure_assignment();
+    void handle_adventure_leave_denial(const SpecialMessage& m);
     void handle_dz(Op op, const AppPacket& p);
     void answer_dz_invite(bool accept);
     bool potion_belt_open_ = false;

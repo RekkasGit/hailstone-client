@@ -63,7 +63,8 @@ static_assert(HAILSTONE_CAP_READ == kCapRead && HAILSTONE_CAP_COMMANDS == kCapCo
               HAILSTONE_CAP_EVENTS == kCapEvents && HAILSTONE_CAP_UI == kCapUi && HAILSTONE_CAP_PACKETS == kCapPackets &&
               HAILSTONE_CAP_EXTEND == kCapExtend && HAILSTONE_CAP_LOGIN == kCapLogin && HAILSTONE_CAP_NET == kCapNet &&
               HAILSTONE_CAP_WEB == kCapWeb);
-static_assert(offsetof(HailstoneMapPolicy, revision)==72 && offsetof(HailstoneMapPolicy, context)==80 && sizeof(HailstoneMapPolicy)==88);
+static_assert(offsetof(HailstoneMapPolicy, revision)==72 && offsetof(HailstoneMapPolicy, context)==80 &&
+              offsetof(HailstoneMapPolicy, npc_find_mode)==88 && sizeof(HailstoneMapPolicy)==96);
 // The add-on service records' sizes as released (docs/plugins.md "Server add-on services"): a field moved or added
 // anywhere but the end breaks a plugin built against an earlier header. The submission holds a pointer and a size_t.
 static_assert(sizeof(HailstoneFollowProfile) == 56 && sizeof(HailstoneMountProfile) == 8);
@@ -76,6 +77,7 @@ static_assert(sizeof(HailstoneWorldSurfacePatch) == 64 && sizeof(HailstoneWorldS
               offsetof(HailstoneWorldSurfacePatchResult, region_xy) == 64);
 static_assert(sizeof(HailstoneWorldReceipt) == 48);
 static_assert(sizeof(void*) != 8 || (sizeof(HailstoneWorldSubmission) == 56 && offsetof(HailstoneWorldSubmission, vertices) == 40));
+static_assert(sizeof(void*) != 8 || (sizeof(HailstoneUiContribution) == 56 && offsetof(HailstoneUiContribution, command) == 48));
 
 #if defined(_WIN32)
 constexpr const char* kExt = ".dll";
@@ -297,6 +299,11 @@ struct Loaded {
     // The packet OnPacket is looking at (resize_packet's target).
     net::AppPacket* current_packet = nullptr;
     int busy = 0;              // inside one of its callbacks
+    // Its own bulk buffer (acquire_bulk_buffer): HS_BULK_BUFFER_SIZE bytes, made at its first acquire, never zeroed,
+    // freed with it. bulk_held_at is the callback depth (busy) it was acquired at, 0 while not held: a release in a
+    // deeper (nested) callback leaves it held, and it goes back when the callback it was acquired in returns (Busy).
+    std::unique_ptr<unsigned char[]> bulk_buffer;
+    int bulk_held_at = 0;
     bool unload_pending = false; // unload asked for while busy: done at the next pulse
     bool host_threw_warned = false; // (host_threw)
     bool map_policy_running = false; // get_map_policy cannot recursively invoke its caller's policy hook
@@ -330,7 +337,10 @@ struct Loaded {
 // Inside a plugin's code: its capabilities, and it stays loaded until this ends.
 struct Busy {
     explicit Busy(Loaded& l) : l_(l), scope_(l.caps, l.name) { ++l_.busy; }
-    ~Busy() { --l_.busy; }
+    ~Busy() {
+        // The callback its bulk buffer was acquired in has returned: the pointer is no longer the plugin's to use.
+        if (--l_.busy < l_.bulk_held_at) l_.bulk_held_at = 0;
+    }
     Busy(const Busy&) = delete;
     Busy& operator=(const Busy&) = delete;
 
@@ -430,7 +440,9 @@ public:
             l_->map_content_revision = content;
             l_->policy_generation = core::next_process_identity();
         }
-        return {raw.flags, std::string(std::begin(raw.name), end), l_->policy_generation};
+        const auto flags = raw.size >= sizeof(raw) && raw.npc_find_mode == HAILSTONE_NPC_FIND_SERVER_ONLY
+            ? raw.flags | game::MapPolicyServerNpcFindOnly : raw.flags;
+        return {flags, std::string(std::begin(raw.name), end), l_->policy_generation};
     }
     bool merchant_right_click(net::GameConnection& c, std::uint32_t merchant, const net::ItemSlot& slot,
                               std::uint32_t item, std::uint32_t quantity) override {
@@ -1031,6 +1043,7 @@ void h_set_active(void* h, int active) {
             l.world_ready = false;
             l.host->world_geometry.retire(l.owner);
             remove_nameplates(l);
+            if (l.host->env.ui) l.host->env.ui->remove_contributions(l.name);
         }
     }
 }
@@ -1234,6 +1247,21 @@ int h_add_menu(void* h, const char* label, const char* command) {
     Loaded& l = Loaded::of(h);
     if (!label || !*label || !command || !*command || !l.host->env.ui || !may_ui(l, "add_menu")) return 0;
     return l.host->env.ui->add_menu({l.name, label, command}) ? 1 : 0;
+}
+
+int h_set_ui_contribution(void* h, const HailstoneUiContribution* entry) {
+    auto& l = Loaded::of(h);
+    constexpr std::uint32_t needed = kCapUi | kCapExtend;
+    if (!l.can(needed)) {
+        l.denied("set_ui_contribution", needed);
+        return 0;
+    }
+    return l.active && !l.unload_pending && l.host->env.ui && l.host->env.ui->set_contribution_from_sdk(l.name, entry);
+}
+
+int h_remove_ui_contribution(void* h, const char* id) {
+    auto& l = Loaded::of(h);
+    return l.host->env.ui && l.can(kCapUi | kCapExtend) && l.host->env.ui->remove_contribution_from_sdk(l.name, id);
 }
 
 // The plugin's folder: plugins/<name>/ when its binary is there, else plugins/<name>/ beside the binary.
@@ -1613,7 +1641,11 @@ int h_get_map_policy(void* h, HailstoneMapPolicy* out) {
     const auto policy = connection ? connection->server_ext().map_policy(*connection) : game::MapPolicy{};
     HailstoneMapPolicy value{};
     value.size = sizeof(value);
-    value.flags = policy.flags;
+    value.flags = policy.flags & ~game::MapPolicyServerNpcFindOnly;
+    if (policy.npc_find_server_only()) {
+        if (size >= sizeof(value)) value.npc_find_mode = HAILSTONE_NPC_FIND_SERVER_ONLY;
+        else value.flags |= HAILSTONE_MAP_POLICY_DISABLE_NPC_FIND;
+    }
     value.revision = policy.revision;
     value.context = connection ? connection->interaction_context() : 0;
     const auto length = std::min(policy.name.size(), sizeof(value.name) - 1);
@@ -2406,6 +2438,57 @@ int32_t h_get_spells_data_bulk(void* h, const int32_t* ids, int32_t id_count, un
     return static_cast<int32_t>(bufferSize);
 }
 
+/// <summary>
+/// Every spell named `name` in one call (case-insensitive, SpellTable::find_all_by_name, lowest id first), laid out
+/// as h_get_spells_data_bulk lays out spells by id: those ids are handed to it. A name the table lacks, or a null one,
+/// gives the count alone (0).
+/// </summary>
+/// <param name="h">host</param>
+/// <param name="name">the spell's name</param>
+/// <param name="data">buffer to put data in</param>
+/// <param name="datamax">as h_get_spells_data_bulk's, about 1500 bytes per spell of that name</param>
+/// <returns>bytes written; 0 below 4 bytes</returns>
+int32_t h_get_spells_by_name_data_bulk(void* h, const char* name, unsigned char* data, int32_t datamax)
+{
+    // Asked under this call's name, so a plugin without 'read' is told which call it made (readable says so once).
+    const net::GameConnection* c = readable(Loaded::of(h), "get_spells_by_name_data_bulk");
+    std::vector<int32_t> ids;
+    if (c && name)
+        for (std::uint32_t id : c->spell_table().find_all_by_name(name)) ids.push_back(static_cast<int32_t>(id));
+    return h_get_spells_data_bulk(h, ids.data(), static_cast<int32_t>(ids.size()), data, datamax);
+}
+
+static_assert(HS_BULK_BUFFER_SIZE == 2 * 1024 * 1024);
+
+/// <summary>
+/// The plugin's own bulk buffer, HS_BULK_BUFFER_SIZE bytes for the *_data_bulk reads, so it need not allocate its
+/// own: made at its first acquire and kept until it unloads, never zeroed. Each plugin has its own, so no plugin waits
+/// on another. Null outside the plugin's own callbacks, where nothing would end its hold. Held from the first acquire
+/// until release_bulk_buffer at the same callback depth or the end of that callback; asked again meanwhile (from a
+/// nested callback too) it gives the same buffer.
+/// </summary>
+/// <param name="h">host</param>
+/// <param name="size">set to the buffer's size, 0 when there is none (may be null)</param>
+/// <returns>the buffer, or null</returns>
+unsigned char* h_acquire_bulk_buffer(void* h, int32_t* size)
+{
+    Loaded& l = Loaded::of(h);
+    if (size) *size = 0;
+    if (!l.busy) return nullptr;
+    if (!l.bulk_buffer) l.bulk_buffer.reset(new unsigned char[HS_BULK_BUFFER_SIZE]); // left as it comes: not zeroed
+    if (!l.bulk_held_at) l.bulk_held_at = l.busy;
+    if (size) *size = HS_BULK_BUFFER_SIZE;
+    return l.bulk_buffer.get();
+}
+
+// Ends the hold acquire_bulk_buffer began; nothing when not held, or from a callback nested inside the one that
+// acquired it (that one is still using it).
+void h_release_bulk_buffer(void* h)
+{
+    Loaded& l = Loaded::of(h);
+    if (l.bulk_held_at && l.busy <= l.bulk_held_at) l.bulk_held_at = 0;
+}
+
 int32_t h_get_raid_data_bulk(void* h, unsigned char* data, int32_t datamax) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_raid_data_bulk");
     if (!c || !data || datamax < static_cast<int32_t>(sizeof(HS_BulkRaidHeader))) return 0;
@@ -2918,6 +3001,13 @@ template <typename R, typename... A, R (*F)(void*, A...), auto Off> struct MainO
 };
 template <auto F, auto Off> constexpr auto main_only_or = &MainOnlyOr<F, Off>::call;
 
+// acquire_bulk_buffer as the table holds it: *size 0 first, so it says 0 for a call main_only refuses (another thread)
+// too.
+unsigned char* acquire_bulk_buffer_entry(void* h, int32_t* size) {
+    if (size) *size = 0;
+    return main_only<h_acquire_bulk_buffer>(h, size);
+}
+
 template <typename F> F symbol(void* lib, const char* name) {
     return reinterpret_cast<F>(platform::library_symbol(lib, name));
 }
@@ -3123,6 +3213,17 @@ bool NativePlugins::has_plugin(std::string_view name) const {
 std::uint32_t NativePlugins::loaded_caps(std::string_view name) const {
     const Loaded* l = impl_->find(name);
     return l && l->name == name ? l->caps : 0;
+}
+
+std::optional<NativePlugins::BulkBufferState> NativePlugins::bulk_buffer_for_test(std::string_view name) const {
+    const Loaded* l = impl_->find(name);
+    if (!l) return std::nullopt;
+    return BulkBufferState{l->bulk_buffer.get(), l->bulk_held_at != 0};
+}
+
+std::size_t NativePlugins::bulk_buffers_for_test() const {
+    return static_cast<std::size_t>(std::count_if(impl_->loaded.begin(), impl_->loaded.end(),
+                                                  [](const auto& l) { return l->bulk_buffer != nullptr; }));
 }
 
 namespace {
@@ -3362,6 +3463,11 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.nameplate_measure_text = main_only<h_nameplate_measure_text>;
     p.table.nameplate_spell_icon = main_only<h_nameplate_spell_icon>;
     p.table.get_spells_data_bulk = main_only<h_get_spells_data_bulk>;
+    p.table.set_ui_contribution = main_only<h_set_ui_contribution>;
+    p.table.remove_ui_contribution = main_only<h_remove_ui_contribution>;
+    p.table.get_spells_by_name_data_bulk = main_only<h_get_spells_by_name_data_bulk>;
+    p.table.acquire_bulk_buffer = acquire_bulk_buffer_entry;
+    p.table.release_bulk_buffer = main_only<h_release_bulk_buffer>;
     Hooks& hooks = *m.env.hooks;
     Loaded* lp = &p;
     // Each callback runs with the plugin's capabilities and counts as the plugin being busy (no unloading under it).
@@ -3502,6 +3608,7 @@ bool NativePlugins::unload_file(std::string_view name) {
     if (it == m.loaded.end()) return false;
     if ((*it)->busy) { // the plugin asked from its own code: not under its feet
         (*it)->unload_pending = true;
+        if (m.env.ui) m.env.ui->remove_contributions((*it)->name);
         return true;
     }
     std::unique_ptr<Loaded> l = std::move(*it);
@@ -3551,6 +3658,7 @@ void NativePlugins::policy_changed(const std::vector<std::string>& autoload) {
         }
         // No longer allowed windows: its Lua windows, functions, options and menu entries go.
         if (!l->can(kCapUi) && m.env.ui) m.env.ui->remove(l->name);
+        else if (!l->can(kCapExtend) && m.env.ui) m.env.ui->remove_contributions(l->name);
         // No longer allowed its own connections: they close (tcp_state -1 from now on).
         if (!l->can(kCapNet)) l->tcp.clear();
     }

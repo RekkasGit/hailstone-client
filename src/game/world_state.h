@@ -1197,8 +1197,9 @@ namespace hailstone::game {
 		bool click_through = false;     // bit 31: bClickThrough (+0x162), mask bit 8 (game/clicks.h)
 		bool mercenary = false;         // the spawn record's IsMercenary (+0x208)
 		std::uint32_t body_type = 0;
-		// The spawn record's properties (PlayerBase +0x128, PlayerBase::HasProperty's list; [0] is body_type).
+		// Membership from the spawn record or the last property-set update.
 		std::vector<std::uint32_t> properties;
+		bool has_property(std::uint32_t property) const;
 		bool summoned = false;          // bSummoned (+0x2e0): the spawn bitfield's bit 2 (EQEmu is_pet)
 		bool temp_pet = false;          // bTempPet (+0x3dc): the spawn record's temporary-pet byte
 		std::uint32_t pet_owner_id = 0; // MasterID: the spawn record's petOwnerId, SpawnAppearance 25 (pet)
@@ -2893,6 +2894,8 @@ namespace hailstone::game {
 		// Spawns can come before the zone's floor (character select's scene is still loaded), and one that stands
 		// still would keep what it was measured against then.
 		void reground();
+
+		std::uint32_t view_spawn_id() const { return view_id ? view_id : player_id; }
 
 		const Spawn* player() const {
 			auto it = spawns.find(player_id);

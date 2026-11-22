@@ -372,8 +372,9 @@ matches are sorted nearest first. Any word that is not a keyword is part of the 
 | `gm`, `trader`, `buyer`, `afk`, `lfg`, `linkdead` | spawns with that flag |
 | a name, `=Name` or `exact` | a part of the name (not case sensitive); `=` or `exact` asks for the whole name |
 
-`next`, `prev` and `los` are accepted and ignored for now. MQ's alert list words (`alert N`, `noalert N`, ...) are
-skipped, because there are no alert lists.
+`next` and `prev` direct `/target` to the match after or before the current target, nearest first; `los` uses the
+client's line of sight. MQ's alert list words (`alert N`, `noalert N`, ...) are skipped, because there are no alert
+lists.
 
 ## Inventory slots
 
@@ -403,7 +404,7 @@ them. These commands come from MacroQuest rather than the game:
 | Command | What |
 |---|---|
 | `/echo text` | a line in the chat window |
-| `/target id N` \| `clear` \| `mycorpse` \| a search | targets |
+| `/target id N` \| `clear` \| `mycorpse` \| `myself` \| a search | targets (nothing, or `myself`: you) |
 | `/face` [target] \| `id N` \| `heading H` \| `loc y,x` \| a search [`fast`] | turns to face |
 | `/keypress <command> [hold\|release]` | presses a key command by the game's name: `forward`, `jump`, `hot1_1`, ... |
 | `/squelch <cmd>` | runs the command without its chat output |
@@ -881,6 +882,7 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | Option | (name) → int\|nil | Client option value (ui/<pack>/options.lua) | — |
 | SetOption | (name, int) → — | Change, apply and save a client option | commands |
 | OptionChoices | (name) → {string} | Choices the client lists for an option (e.g. "resolution") | — |
+| PlaySoundTest | (name) → bool | Plays one of the Individual Sounds options (`own_footsteps`, `pet_footsteps`, `other_footsteps`, `open_bag`, `open_bank`, `money`, `thunder`, `equip`, `creature_ambient`) once at its volume; false for another name | — |
 | UiIni | (section, key) → string\|nil | Character UI ini value (over defaults.ini) | — |
 | SetUiIni | (section, key, value) → — | Write and save a UI ini value | commands |
 | CoolDownColor | () → r, g, b, a | Colour of cool-down rectangles (user colour 0x15f, alpha 0x40) | — |
@@ -1107,7 +1109,7 @@ achievement and reward-selection APIs.
 | Function | Args → returns | What | Cap |
 |---|---|---|---|
 | SpellBook | () → {{slot, id, name, icon, level, mana, endurance, castTime, recastTime, recoveryTime, range, aeRange, duration, beneficial, targetType, skill, skillName, category, categoryName, subcategory, subcategoryName, resist, gem}} | Every scribed spell | — |
-| SpellBookState | () → {open, sitting, gems, usableGems, memorizing={gem,spell}, settingSet, scribing, cursorSpell, holdingItem, swapSlot} | Book state | — |
+| SpellBookState | () → {open, sitting, sittingOrMounted, gems, usableGems, memorizing={gem,spell}, settingSet, scribing, cursorSpell, holdingScroll, swapSlot} | Book state. `sittingOrMounted` reports whether the posture permits memorizing or scribing. | — |
 | SpellIcon | (icon) → tex,u0,v0,u1,v1 \| nil | Spell icon cell | — |
 | SpellBookClick | (slot) → ok | Stock book click: scribe, or spell to cursor | actions |
 | SpellBookSwap | (slot) → — | Quick right click: pick up or swap book slots | actions |
@@ -1230,7 +1232,7 @@ achievement and reward-selection APIs.
 | FindMapLocation | (x, y) → — | Find path to a map point | commands |
 | FindPathShown | () → bool | A find path is shown | — |
 | EndFind | () → — | End the find path | commands |
-| ZoneName | () → long, short | Current zone | — |
+| ZoneName | ([with_entry]) → long, short [, entry] | Current zone. Pass `true` for the zone entry counter, which is nil outside the world. | — |
 | GameTime | () → hour, minute \| nothing | Game clock | — |
 | MapAutoZ | ([on [, above [, below]]]) → on, above, below | Auto Z setting (get or set) | commands |
 | AtlasIndex | () → {pages={{file,title,parent}}, zones={{zone,name,page,x0,y0,x1,y1,id,expansion,allowed}}} | Atlas index | — |
@@ -1453,6 +1455,8 @@ or -1 and say so in the chat window. Only call these on the client's thread, fro
 | `get_xtarget_data_bulk(out, size)` | `read` | every extended target slot: type, spawn id, aggro meter percent and HP percent, 16 bytes a slot, as many whole records as fit (layout in docs/plugins.md "Buff, spawn, extended target and raid records"); returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_xtarget_data_bulk)` first |
 | `get_raid_data_bulk(out, size)` | `read` | the raid roster: a 40-byte `HS_Bulk_RaidHeader`, then one `HS_Bulk_RaidData` per member, as many whole records as fit; the header says `active` 0 and `count` 0 outside a raid. Step records by the header's `recordSize` for `count` of them; `total` is the roster's member count, so `count < total` means the buffer was too small. Returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_raid_data_bulk)` first |
 | `get_spells_data_bulk(ids, id_count, out, size)` | `read` | spells by id: an i32 count, then per id, in order, an `HS_Bulk_SpellFixedRecord` (265 bytes; `found` 0 for an id the client has no spell for) followed by `slotCount` `HS_Bulk_SpellSlot` effect slots (12 on RoF2, `slotSize` bytes apart), `classCount` class levels (a byte each, 16 on RoF2), `stringCount` texts (fourteen today; the ninth its description, filled in for the player for their own spells: book, disciplines, owned AAs; the last five the names of its target type, resist type, category, subcategory and second subcategory) and its effect lines in MacroQuest's `ParseSpellEffect` wording, each a u16 length and the bytes; step by `recordSize`, as many whole records as fit (layout in docs/plugins.md). Returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_spells_data_bulk)` first |
+| `get_spells_by_name_data_bulk(name, out, size)` | `read` | every spell named `name` (case-insensitive, lowest id first), as `get_spells_data_bulk` gives them for those ids: the count, then as many whole records as fit; the count alone (0) for a name no spell has. Returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_spells_by_name_data_bulk)` first |
+| `acquire_bulk_buffer(size)`, `release_bulk_buffer()` | | the plugin's own bulk buffer, `HS_BULK_BUFFER_SIZE` (2 MiB) bytes, for the `*_data_bulk` reads' `out`, so it need not allocate its own: acquire returns it and sets `*size`, or NULL and 0 outside the plugin's own callbacks. It is the plugin's until it releases it, the callback it acquired it in returns, or it unloads; a release in a nested callback of the plugin's leaves the outer one's hold; never zeroed (zero it yourself if you need to). More in docs/plugins.md "The bulk buffer". Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, acquire_bulk_buffer)` first |
 | `cursor_origin()` | `read` | how the item on the cursor got there: `HAILSTONE_CURSOR_ORIGIN_UNKNOWN` (0, also empty), `_INVENTORY` (1, the player's pickup) or `_SERVER` (2, the server put it on the empty cursor); docs/plugins.md "The cursor item's origin". Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, cursor_origin)` first |
 | `add_ui_function(name, fn, user)`, `remove_ui_function` | `ui` | a function the plugin's windows call as `hs.Plugin("<name>").<name>(...)` |
 | `arg_count`, `arg(i, out)`, `arg_field(i, key, out)` | | a UI function's arguments |

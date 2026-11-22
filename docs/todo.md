@@ -55,7 +55,7 @@ The steps are in `docs/plan.md` "Road to 1.0". This section maps items to steps;
 - [ ] Play it and fix what it finds.
 - [ ] Shadow step (SPA 379): the zone collision `land_spell` needs ("Combat and spells").
 - [ ] The collision radius, too wide for doorways ("Movement").
-- [ ] Leaving an adventure clears the window ("Adventures").
+- [ ] Verify leave and follow-up requests in live play ("Adventures").
 - [ ] UCS reconnection and a wrong chat key ("Items and commerce").
 
 ### 0.11, real estate
@@ -151,6 +151,11 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
 
 ### Modular interfaces
 
+- [x] **Client-owned map overlays** (`hs.UI.map.RegisterOverlay`, docs/ui-api.md "Map overlays"): an add-on draws on
+  the zone map and the minimap whichever copy of `map.lua`/`minimap.lua` draws the view, by priority and registration
+  order, retired with its source.
+- [ ] Live acceptance in both packs, and moving qol's target line onto the overlay API, after which qol keeps no
+  `map.lua` copy of its own.
 - [x] Generic owner-scoped method hooks with explicit exposure policies and protected callbacks.
 
 - [x] Generic owner-scoped world nameplate canvas, bounded drawing and measurements, whole-caption claims, guarded physical clicks, automatic Lua addon activation and color widgets.
@@ -170,9 +175,8 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - Request, accept/decline, zone in, objective updates, finish, leave and cross-zone refresh.
   - Confirm stats, leaderboard standings and physical controller operation.
   - Remaining protocol ambiguity is in unknowns.md.
-- [ ] **Leaving an adventure.**
-  - Stock EQEmu sends nothing after a granted leave, so the window stays on the adventure until zoning.
-  - Settle what RoF2 shows (unknowns.md) and clear the window to match.
+- [x] **Clear completed and abandoned assignments.**
+  - Mock coverage includes finished-instance snapshots, leave acknowledgements, denial, and retry after a missing reply.
 
 ### Fellowships
 
@@ -210,6 +214,8 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - Received bonus items feed local stats/effects; they retire on deactivation, selection changes, opt-out and context changes.
   - Guild benefit controls enforce received permissions; guild platinum donations wait for matching replies.
   - The full tribute workflow not checked live.
+  - Donate is not refused for an item worth no favour or a bag that holds anything, as the original's
+    CheckItemDonatable @0x785de0 and UpdateDonateButton @0x785f40 do (eqstr 3382, 3462).
 - [x] **Raid leadership controls and leadership hotkey creation in both UI packs.**
   - Correct trainable ability identities, delegate/mark sync, lifecycle cleanup.
   - Active leadership bonuses in local stats; raid invitations from expedition/shared-task rosters.
@@ -221,6 +227,8 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - Accept expedition/shared-task roster invitations with real players and a controller.
 - [x] Extended chat channels 57..107 and user colours 355..408 for servers that send a later client's chat colours (a Hailstone extension; stock routing and colours unchanged; docs/mechanics.md "Extended chat routing").
 - [x] Missiles: a despawned source or target handled as DeleteMyMissiles; flying through walls with a target is the original's behaviour (60b1934). Not tested live (no archer).
+- [x] Archery's held models: the bow in the left hand from the shot until the next melee swing, with OP_WearChange (DoAttack @0x5a5000, DoRangedAttack @0x5a4920, SetHeldModel @0x5923f0). Not checked live.
+- [ ] SetHeldModel's local special cases are not ported on any path: a range item named IT159*, IT10758* or IT10742* shown in an empty hand (sent as 0x9f, 0x2a06, 0x29f6), and IT36 shown as IT13 while spawn +0xa2 is set.
 - [x] **Valid spell missiles.**
   - Spell lifetime, launch and ending stages, stationary area contact, source physics clock, spell 859 local presentation. Not checked live.
   - Invalid or absent spell ids still end immediately.
@@ -255,6 +263,11 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - A second `/discipline` right after `/stopdisc` is not refused by the client (NMS disc timer map or a missing server timer packet).
   - The reuse list is empty after zone-in until the server sends timers.
 
+- [x] **Struck down by the gods (OP_GMKill):** the named player's client sets its HP to -10000 after the line and the wave, as the original's case at 0x4c8a23 does (docs/mechanics.md). Unit-tested; not seen live.
+- [ ] OP_GMKill on a player already hovering dead: the original clears the RespawnTimer, which stops the respawn window's auto-select and lets transactions through; Hailstone's hover state has no separate RespawnTimer (docs/mechanics.md).
+
+- [ ] **The target keys' distance and the PC / corpse cycles' sight test** (game/targeting.h). The original's scene query (CSceneGraph +0x98 @0x100690f0) compares the squared horizontal distance with the squared range and orders by it, and drops hidden spawns in all three modes; the client uses 3D distance and tests sight for the NPC cycle only.
+
 ### Movement
 - [x] **Server flymodes.** The local player takes the spawn record's flymode and `SpawnAppearance` 19 (all six modes) and keeps them until the effect cache is rebuilt, when `UpdateLevitationState`'s rules apply again (docs/mechanics.md "fly mode"). Seen live 2026-11-18.
 - [x] **The game rules on a 60 Hz game clock** (`game.fixed_step`, docs/mechanics.md "Frame rate"): movement, other spawns, missiles, weather and fog steps, the frame-gated timers; the camera drawn between steps.
@@ -275,6 +288,10 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
 - [x] Lifts carry riders (checked live on the Paineel lift).
 - [x] Teleport doors (a Bazaar IT78 door, the PoK books' type, checked live).
 - [x] Touch-activated switches: PlayerClient::TouchingSwitch ported, traps checked live (f500930).
+- [ ] **Switch clicks while riding.** `EQSwitch::UseSwitch` (0x511d70) puts `pinstControlledPlayer` in place of the
+  local player whenever they differ: the mount while riding as well as an Eye. It measures the reach from that
+  spawn with its Height and sends its spawn ID in OP_ClickDoor. Hailstone does this for an Eye only and still
+  measures from the rider on a mount.
 - [x] **Boats, as our own design** (docs/mechanics.md "Boats"): hull floors and walls, smoothed boat motion, other riders, zone-in onto a deck, climbing aboard, sailing a small boat at the helm. Checked live in Butcherblock and OOT.
 - [x] **Boats with a live asset folder: not the client's job.** The classic boat models (LAUNCH etc.) are only in RoF2's per-zone `_chr` archives, which live dropped; a server that wants them supplies them in its `client_files/` (user's decision, 2026-10-29).
 - [x] **Boats: decks, animation, helm and rails** (tests/boats_test.cpp).
@@ -582,7 +599,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] **Spawn searches follow MacroQuest's words and matching rules** (`mq/spawn_search.h`): spawn types, pets, 3D radius, named test, group, raid, guild, xtarget, light, player state.
 - [x] **The alerts key** (CMD_HISTORIC_ALERTS, __ExecuteCmd case 168) toggles AlertHistoryWnd in both packs; listed with its Shift+H default. Seen live in the Modern pack.
 - [ ] **MacroQuest's alert lists:** `/alert`, and the spawn search's `alert`, `noalert`, `nearalert`, `notnearalert`. None kept yet, so those words act as with an empty list.
-- [ ] **The spawn search's `next` / `prev`: accepted and ignored.** MacroQuest's `/target next` cycles from the current target through the matching spawns.
+- [x] **The spawn search's `next` / `prev`** walk `/target`'s matches from the current target, nearest first; MQ measures from the old target and sorts by flat distance (docs/plugins.md).
 - [x] **`mq.event` patterns match as MacroQuest's Lua events do (Blech)** (`mq/event_pattern.h`).
   - Case-insensitive; every `#...#` up to the first place the next literal is.
   - `#name#`, `|${...}|`, `##` / `||`; arguments by number with gaps.
@@ -613,6 +630,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] Trace and fix the upstream gamepad all-pack smoke test's cursor-extent assertion with ImGui debug checks enabled (docs/unknowns.md "UI").
 
 - [x] **Group role controls in both packs.** Right-click member names or the player's own name (Y on a gamepad Group window row); server-confirmed role icons in the Group and Player windows; leader-only Main Tank / Main Assist / Puller changes, mercenaries restricted to tank. Not checked live.
+- [ ] Check RoF2 group targeting after a member dies, including when several of their corpses are in the zone (docs/unknowns.md "UI").
 - [x] **AA names missing from dbstr_us.txt** (a live folder's renumbered titles, gaps in a server's export). The windows show the spell's name, else "Ability <group>" (GameConnection::aa_display_name); plugins and /alternateadv keep the raw title. Seen live.
 - [x] Modern AA window: aligned headers and rows at the dialog's scale, current-frame column bounds, saved column resizing, clipped cells and Reset columns (live acceptance pending).
 - [x] **Hover respawn:** availability validated; same-zone player identity, placement and resources recovered; resurrection confirmation, server timeout and disconnect handled. Live acceptance open.
@@ -751,12 +769,21 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
   - Open: zoning in, the leader printed "<name> joined the raid." for each of the 17 members (docs/unknowns.md).
 - [x] **Gamepad pack: the window under a closed one takes the pad back.** Two windows asking for the pad in one frame kept only the last request; every request is kept now. Checked live 2026-10-31.
 - [x] Melee sounds (the cues fire with the right waves; not listened to).
+- [ ] **The six RoF2 sound triggers added together:** an item moved by a click (0x92), bags and containers
+  (0x85/0x86/0x91), an adventure's loss and win (0x8c/0x8d), a quest reward (0x8d), struck down by the gods (0x8f),
+  water in and out (0x64/0x63). Each cue and its condition is unit-tested, the water path end to end through
+  `app::PlayerMovement`; none listened to live.
+- [ ] **The bank window's opening sound.** The Individual Sounds window has a volume for bags opened in a bank slot (`audio.open_bank`), not for the bank window itself, because no sound for that is known (docs/unknowns.md "The sound of the bank window opening").
+  - Open: trace the original opening the bank window with sound on; if it plays one, give it that volume (`app::wave_cue_group`).
+  - Until then a bag in a slot that is not a bank slot opens at the ordinary bag volume (`in_bank_slot`, app/lua_ui_items.cpp).
 - [x] **Augment appearance-slot gating.** With game feature 0x15 on (the client's setting for EQEmu accounts) a type-21 ornament into a type-21 socket is not refused; seen live 2026-10-31 (stored in `inventory.augment_six`). The refusal with the feature off is unit-tested only (docs/unknowns.md).
 - [ ] **A server's class names in a live session** (`set_class_name`, docs/plugins.md "Class names"). Unit, plugin and script tests only.
   - A plugin that names classes on its server's hello, then every window that names a class (both UI packs).
   - `/who`; camping to character select and back.
   - Logging in to another server with the plugin still loaded (the names must go).
   - Open: the stock-layout windows' own class labels (the XML's "WAR" check box labels in the group search and looking-for-guild windows) keep the stock names.
+- [ ] **Ground objects made only of passable triangles are clicked by them** (as the Plane of Fire orb door is).
+  Unit-tested only; open: a live dropped item or ground spawn whose model has no solid triangle.
 - [ ] OP_Weblink from a quest's `SendWebLink`, `/url` from a script, and the browser window (`/web`), in a live session (unit and window tests only).
 
 - [ ] **Idle appearances freed during a zone** (render/look_eviction.h, five minutes unworn). The rule is unit-tested; the renderer side was only built.

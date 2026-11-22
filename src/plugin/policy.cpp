@@ -178,6 +178,20 @@ CallerScope::~CallerScope() {
     g_caller_name = std::move(prev_name_);
 }
 
+HostCallerScope::HostCallerScope() : active_(on_main_thread()) {
+    if (!active_) return;
+    prev_caps_ = g_caller_caps;
+    prev_name_ = std::move(g_caller_name);
+    g_caller_caps = kCapAll;
+    g_caller_name.clear();
+}
+
+HostCallerScope::~HostCallerScope() {
+    if (!active_) return;
+    g_caller_caps = prev_caps_;
+    g_caller_name = std::move(prev_name_);
+}
+
 namespace {
 
 std::string lower(std::string_view s) {
@@ -284,8 +298,8 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
             if (!ini.keys(section_name).empty()) warn("lines before the first [section] are ignored");
             continue;
         }
-        static constexpr std::string_view kOwn[] = {"scripts", "plugins", "assets", "socials", "abilities", "movement", "web",
-                                                    "addons"};
+        static constexpr std::string_view kOwn[] = {"client", "scripts", "plugins", "assets", "socials",
+                                                    "abilities", "movement", "web", "addons"};
         if (std::find(std::begin(kOwn), std::end(kOwn), section) == std::end(kOwn)) {
             auto& kept = r.script_sections[section];
             for (const std::string& key_name : ini.keys(section_name))
@@ -305,6 +319,10 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
                 if (!known_caps(v)) warn(std::format("{}: unknown capabilities in \"{}\" are ignored", where, v));
                 out = parse_caps(v);
             };
+            if (section == "client" && key == "deny") {
+                flag(r.deny_client);
+                continue;
+            }
             if (section == "scripts" || section == "plugins") {
                 bool scripts = section == "scripts";
                 if (key == "player") {

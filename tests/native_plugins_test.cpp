@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <deque>
 #include <fstream>
+#include <functional>
 #include <thread>
 #include <stdexcept>
 
@@ -131,10 +132,14 @@ struct Host {
         r.server_files.push_back({plugin::FileKind::Plugin, "plugins/MQ2Example", hash()});
         policy.set(r);
     }
+    // Called with each line no command took (after it goes into `sent`), so a test can look in from inside a
+    // plugin's DoCommand.
+    std::function<void(const std::string&)> on_sent;
     void run(const std::string& line) {
         std::string l = line;
         if (hooks.command(l)) return;
         sent.push_back(l);
+        if (on_sent) on_sent(l);
     }
     std::string p(std::string_view text) { return mq::parse_macro_data(ctx, text); }
     bool printed_line(const std::string& t) const { return std::find(printed.begin(), printed.end(), t) != printed.end(); }
@@ -531,12 +536,21 @@ TEST_CASE("native plugins: map policy accepts old aligned prefixes and changes a
         h.run("/probemapset 7 "+std::to_string(format)+" 42");
         const auto policy=current();CHECK(policy.flags==7);CHECK(policy.name=="Probe map");CHECK(policy.revision!=0);
         CHECK(lifecycle()==initial_lifecycle); // map-only content and optional record format do not retire Tracking
-        for(const int size:{72,80,88}) {
+        for(const int size:{72,80,88,96}) {
             h.run("/probemapprefix "+std::to_string(size));
             CHECK(h.printed_line("[Probe] map prefix "+std::to_string(size)+" result 1 flags 7 canary 1 revision "+
-                (size>=80?"1":"0")+" context "+(size>=88?"1":"0")));
+                (size>=80?"1":"0")+" context "+(size>=88?"1":"0")+" server find 0"));
         }
     }
+    h.run("/probemapset 3 9 42");
+    CHECK(current().npc_find_server_only());
+    h.run("/probemapprefix 96");
+    CHECK(h.printed_line("[Probe] map prefix 96 result 1 flags 3 canary 1 revision 1 context 1 server find 1"));
+    h.run("/probemapprefix 88");
+    CHECK(h.printed_line("[Probe] map prefix 88 result 1 flags 7 canary 1 revision 1 context 1 server find 0"));
+    h.run("/probemapset 7 9 42");
+    CHECK_FALSE(current().npc_find_enabled());
+    CHECK_FALSE(current().npc_find_server_only());
     auto before=current().revision;CHECK(current().revision==before);
     h.run("/probemapset 7 0 43");CHECK(current().revision!=before);CHECK(lifecycle()==initial_lifecycle);
     before=current().revision;h.run("/probemapcycle");CHECK(current().revision!=before);CHECK(lifecycle()!=initial_lifecycle);
@@ -2010,6 +2024,179 @@ TEST_CASE("native plugins: get_spells_data_bulk, laid out as docs/plugins.md say
     denied.run("/probespells 4096 3020");
     CHECK(denied.printed_line("[Probe] spells 0 bytes"));
     CHECK(denied.printed_line("[Plugin] HostProbe: get_spells_data_bulk needs the server's 'read' permission"));
+}
+TEST_CASE("native plugins: get_spells_by_name_data_bulk, every spell of the name as get_spells_data_bulk lays them out") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+    net::GameConnection& conn = *h.world.conn;
+    // Three spells share a name (as Third Spire of Necromancy's three ranks do in spells_us.txt), given out of id
+    // order, a mana cost apiece to tell them apart; and one other spell.
+    auto table = std::make_shared<game::SpellTable>();
+    REQUIRE(table->parse(mq_test::spell_line({{0, "16292"}, {1, "Third Spire of Necromancy"}, {19, "30"}}) + "\n" +
+                         mq_test::spell_line({{0, "16290"}, {1, "Third Spire of Necromancy"}, {19, "10"}}) + "\n" +
+                         mq_test::spell_line({{0, "3020"}, {1, "Test Heal"}, {19, "25"}}) + "\n" +
+                         mq_test::spell_line({{0, "16291"}, {1, "Third Spire of Necromancy"}, {19, "20"}})) == 4);
+    conn.set_spell_table_for_test(table);
+    auto has_record = [&h](int index, int id, int mana) {
+        const std::string head = "[Probe] spell " + std::to_string(index) + ": id " + std::to_string(id) + ", found 1, ";
+        const std::string mid = " bytes, name Third Spire of Necromancy, mana " + std::to_string(mana) + ",";
+        return std::any_of(h.printed.begin(), h.printed.end(), [&](const std::string& line) {
+            return line.starts_with(head) && line.find(mid) != std::string::npos;
+        });
+    };
+
+    // Every spell of the name, lowest id first, whatever the case asked.
+    h.run("/probespellsbyname third SPIRE of necromancy");
+    CHECK(has_record(0, 16290, 10));
+    CHECK(has_record(1, 16291, 20));
+    CHECK(has_record(2, 16292, 30));
+    CHECK_FALSE(std::any_of(h.printed.begin(), h.printed.end(),
+                            [](const std::string& line) { return line.starts_with("[Probe] spell 3:"); }));
+    CHECK(std::none_of(h.printed.begin(), h.printed.end(),
+                       [](const std::string& line) { return line.find("bytes unread") != std::string::npos; }));
+
+    // Byte for byte what get_spells_data_bulk gives for those ids, into a buffer of the same size.
+    h.printed.clear();
+    h.run("/probespells 16384 16290 16291 16292");
+    const std::vector<std::string> by_id = h.printed;
+    h.printed.clear();
+    h.run("/probespellsbyname 16384 Third Spire of Necromancy");
+    CHECK(h.printed == by_id);
+    CHECK(h.printed_line("[Probe] spells past the end 0"));
+    // Too small for all three: only whole records, lowest id first, and nothing past the end. Each record here is 926
+    // bytes (2782 for the count and three), so 2781 holds two.
+    REQUIRE(h.printed_line("[Probe] spells count 3, 2782 bytes, 0 bytes left"));
+    h.printed.clear();
+    h.run("/probespellsbyname 2781 Third Spire of Necromancy");
+    CHECK(has_record(0, 16290, 10));
+    CHECK(has_record(1, 16291, 20));
+    CHECK_FALSE(has_record(2, 16292, 30));
+    CHECK(h.printed_line("[Probe] spells count 2, 1856 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] spells past the end 0"));
+    h.printed.clear();
+    h.run("/probespellsbyname 930 Third Spire of Necromancy"); // the count and the first record exactly
+    CHECK(has_record(0, 16290, 10));
+    CHECK(h.printed_line("[Probe] spells count 1, 930 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] spells past the end 0"));
+    h.printed.clear();
+    h.run("/probespellsbyname 929 Third Spire of Necromancy"); // a byte short of the first: the count alone
+    CHECK(h.printed_line("[Probe] spells count 0, 4 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] spells past the end 0"));
+    h.printed.clear();
+    h.run("/probespellsbyname 3 Third Spire of Necromancy"); // not even the count: nothing
+    CHECK(h.printed_line("[Probe] spells 0 bytes"));
+    CHECK(h.printed_line("[Probe] spells past the end 0"));
+    // One spell of its name: that one alone.
+    h.printed.clear();
+    h.run("/probespellsbyname Test Heal");
+    CHECK(std::any_of(h.printed.begin(), h.printed.end(), [](const std::string& line) {
+        return line.starts_with("[Probe] spell 0: id 3020, found 1, ");
+    }));
+    // A name no spell has, a part of one, or none: the count alone.
+    for (const char* name : {"Fourth Spire of Necromancy", "Third Spire", ""}) {
+        h.printed.clear();
+        h.run(std::string("/probespellsbyname ") + name);
+        CHECK(h.printed_line("[Probe] spells count 0, 4 bytes, 0 bytes left"));
+    }
+    // No game connection (the login screen): the count alone.
+    h.printed.clear();
+    auto held = std::move(h.world.conn);
+    h.run("/probespellsbyname Third Spire of Necromancy");
+    CHECK(h.printed_line("[Probe] spells count 0, 4 bytes, 0 bytes left"));
+    h.world.conn = std::move(held);
+
+    // Without 'read': nothing, and the chat window names this call.
+    Host denied(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    denied.approve(plugin::kCapAll & ~plugin::kCapRead);
+    REQUIRE(denied.plugins->load("HostProbe"));
+    denied.run("/probespellsbyname Third Spire of Necromancy");
+    CHECK(denied.printed_line("[Probe] spells 0 bytes"));
+    CHECK(denied.printed_line("[Plugin] HostProbe: get_spells_by_name_data_bulk needs the server's 'read' permission"));
+}
+TEST_CASE("native plugins: each plugin's own bulk buffer, its hold, nesting and unload") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    // A second copy of the probe beside the first: its commands are /hostprobeb..., the first's /hostprobe....
+    std::string second = h.file.filename().string();
+    second.insert(second.find("HostProbe") + 9, "B");
+    fs::copy_file(h.file, h.file.parent_path() / second, fs::copy_options::overwrite_existing);
+    REQUIRE(h.plugins->load("HostProbe"));
+    REQUIRE(h.plugins->load("HostProbeB"));
+    // /check (no such command) records, from inside a plugin's command, whether each copy holds its buffer.
+    std::vector<std::pair<bool, bool>> holds;
+    h.on_sent = [&](const std::string& line) {
+        if (line != "/check") return;
+        holds.emplace_back(h.plugins->bulk_buffer_for_test("HostProbe")->held,
+                           h.plugins->bulk_buffer_for_test("HostProbeB")->held);
+    };
+
+    // None until asked for.
+    CHECK(h.plugins->bulk_buffers_for_test() == 0);
+    CHECK(h.plugins->bulk_buffer_for_test("HostProbe")->data == nullptr);
+    // 2 MiB, and asked again the same buffer.
+    h.run("/hostprobebuf");
+    CHECK(h.printed_line("[Probe] HostProbe acquire: 2097152 bytes"));
+    CHECK(h.printed_line("[Probe] HostProbe again: same, 2097152 bytes"));
+    CHECK(h.plugins->bulk_buffers_for_test() == 1);
+    // Never released by the command, but the hold ends with the callback it began in; the buffer stays.
+    auto a = h.plugins->bulk_buffer_for_test("HostProbe");
+    REQUIRE(a);
+    CHECK(a->data != nullptr);
+    CHECK_FALSE(a->held);
+
+    // Both plugins hold their own at once: the second's, asked from inside the first's command, is another buffer,
+    // and writing it leaves the first's alone.
+    h.printed.clear();
+    h.run("/hostprobebufhold 11 /hostprobebbufwrite 22;/check");
+    CHECK(h.printed_line("[Probe] HostProbeB acquire: 2097152 bytes"));
+    CHECK(h.printed_line("[Probe] HostProbe still: same, read 11 11"));
+    REQUIRE(holds.size() == 1);
+    CHECK(holds[0] == std::pair{true, false}); // the second's own command released it
+    CHECK(h.plugins->bulk_buffers_for_test() == 2);
+    CHECK(h.plugins->bulk_buffer_for_test("HostProbe")->data != h.plugins->bulk_buffer_for_test("HostProbeB")->data);
+    CHECK_FALSE(h.plugins->bulk_buffer_for_test("HostProbe")->held);
+    h.printed.clear();
+    h.run("/hostprobebufread");
+    h.run("/hostprobebbufread");
+    CHECK(h.printed_line("[Probe] HostProbe read 11 11"));
+    CHECK(h.printed_line("[Probe] HostProbeB read 22 22")); // never zeroed: what each left
+
+    // Nested in its own command, the plugin gets the same buffer (it reads what the outer wrote), and a release
+    // there leaves the outer's hold alone.
+    holds.clear();
+    h.printed.clear();
+    h.run("/hostprobebufhold 5 /hostprobebufread;/hostprobebufrelease;/check");
+    CHECK(h.printed_line("[Probe] HostProbe read 5 5"));
+    CHECK(h.printed_line("[Probe] HostProbe still: same, read 5 5"));
+    REQUIRE(holds.size() == 1);
+    CHECK(holds[0].first);
+    CHECK_FALSE(h.plugins->bulk_buffer_for_test("HostProbe")->held);
+    // A release in the callback that acquired it ends the hold there.
+    holds.clear();
+    h.run("/hostprobebufpass /check");
+    REQUIRE(holds.size() == 1);
+    CHECK_FALSE(holds[0].first);
+
+    // From another thread: none, and the size says 0.
+    h.printed.clear();
+    h.run("/hostprobebufthread");
+    CHECK(h.printed_line("[Probe] HostProbe thread: none, size 0"));
+
+    // Unloading a plugin frees its buffer; the other keeps its own.
+    REQUIRE(h.plugins->unload("HostProbe"));
+    CHECK(h.plugins->bulk_buffers_for_test() == 1);
+    CHECK_FALSE(h.plugins->bulk_buffer_for_test("HostProbe"));
+    h.printed.clear();
+    h.run("/hostprobebbufread");
+    CHECK(h.printed_line("[Probe] HostProbeB read 22 22"));
+
+    // It needs no permission of its own ('read' is for the reads).
+    Host plain(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    plain.approve(plugin::kCapAll & ~plugin::kCapRead);
+    REQUIRE(plain.plugins->load("HostProbe"));
+    plain.run("/hostprobebuf");
+    CHECK(plain.printed_line("[Probe] HostProbe acquire: 2097152 bytes"));
 }
 TEST_CASE("native plugins: get_raid_data_bulk roster, pets, positions and edge cases") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);

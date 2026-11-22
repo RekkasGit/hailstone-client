@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -51,6 +52,7 @@
 #include "app/web_service.h"
 #include "mq/lua_mq.h"
 #include "plugin/policy.h"
+#include "plugin/ui_bridge.h"
 #include "web/browser_host.h"
 
 using namespace hailstone;
@@ -4688,6 +4690,7 @@ TEST_CASE("UI packs: the item display compares the item with what you wear") {
         hailstone::test::ScratchDir dir_scratch("ui_pack_item_compare_test");
         fs::path dir = dir_scratch.path();
         fs::create_directories(dir / "game");
+        std::ofstream(dir / "game" / "eqstr_us.txt") << "3029 (Combat)\n3036 Effect: %1 %2\n";
         fs::copy(src, dir / pack, fs::copy_options::recursive);
         ImGuiContext* ctx = ImGui::CreateContext();
         ImGui::GetIO().IniFilename = nullptr;
@@ -4721,6 +4724,8 @@ TEST_CASE("UI packs: the item display compares the item with what you wear") {
             helm.id = 1001;
             helm.name = "Iron Helm";
             helm.hp = 60;
+            helm.effects[net::kEffectProc].effect = -1;
+            helm.effects[net::kEffectProc].name = "Frost & Fire";
             std::vector<net::Item> displays{helm};
             std::vector<std::uint64_t> ids{1};
             s.host.item_displays = &displays;
@@ -4728,9 +4733,10 @@ TEST_CASE("UI packs: the item display compares the item with what you wear") {
             lua_State* L = s.lua.state();
             REQUIRE(luaL_dostring(L, R"(
                 test_seen = {}
-                local dt, tc = ui.DrawText, ui.TextColored
+                local dt, tc, tw = ui.DrawText, ui.TextColored, ui.TextWrapped
                 ui.DrawText = function(...) local a = { ... } test_seen[tostring(a[#a])] = true return dt(...) end
-                ui.TextColored = function(...) local a = { ... } test_seen[tostring(a[5])] = true return tc(...) end)") ==
+                ui.TextColored = function(...) local a = { ... } test_seen[tostring(a[5])] = true return tc(...) end
+                ui.TextWrapped = function(t, ...) test_seen[tostring(t)] = true return tw(t, ...) end)") ==
                     LUA_OK);
             auto seen = [&](const std::string& text) {
                 REQUIRE(luaL_dostring(L, ("return test_seen['" + text + "'] == true").c_str()) == LUA_OK);
@@ -4746,6 +4752,8 @@ TEST_CASE("UI packs: the item display compares the item with what you wear") {
             CHECK(seen("Upgrade"));
             CHECK(seen("60"));
             CHECK(seen("+50"));
+            CHECK(seen("Gains Proc: Frost & Fire"));
+            CHECK(seen("Effect: Frost & Fire (Combat)"));
             CHECK_FALSE(seen("+50 HP"));
             CHECK_FALSE(seen("+50 HP (" + std::to_string(ch.max_hp(true)) + " to " + std::to_string(ch.max_hp(true) + 50) + ")"));
             CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
@@ -4781,6 +4789,8 @@ TEST_CASE("UI packs: the item display compares the item with what you wear") {
             s.frames(2);
             CHECK_FALSE(seen(heading));
             CHECK_FALSE(seen("+50"));
+            CHECK_FALSE(seen("Gains Proc: Frost & Fire"));
+            CHECK(seen("Effect: Frost & Fire (Combat)"));
         }
         ImGui::DestroyContext(ctx);
     }
@@ -5604,47 +5614,76 @@ TEST_CASE("UI packs (modern): the Options window's Textures section picks the te
     ImGui::DestroyContext(ctx);
 }
 
-TEST_CASE("UI packs: Options changes the Find trail style and invisibility brackets") {
+TEST_CASE("UI packs: Options changes the Find trail style, Tab targeting and respects addon contributions to name plates") {
     for (const char* pack : {"modern", "gamepad"}) {
-        INFO(pack);
+        INFO(std::string(pack));
         test::ScratchDir scratch("ui_pack_display_options");
         const fs::path dir = scratch.path();
         fs::create_directories(dir / "game");
         fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / pack, dir / pack,
                  fs::copy_options::recursive);
-        ImGuiContext* ctx = ImGui::CreateContext();
+        ImGuiContext* prior_context = ImGui::GetCurrentContext();
+        auto destroy_context = [prior_context](ImGuiContext* context) {
+            ImGui::DestroyContext(context);
+            ImGui::SetCurrentContext(prior_context);
+        };
+        std::unique_ptr<ImGuiContext, decltype(destroy_context)> ctx(ImGui::CreateContext(), destroy_context);
+        ImGui::SetCurrentContext(ctx.get());
         ImGui::GetIO().IniFilename = nullptr;
         unsigned char* pixels = nullptr;
         int width = 0, height = 0;
         ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
         {
+            plugin::UiBridge bridge;
             Session s(dir, pack);
-            int selected = 0;
-            int brackets = 0;
-            std::vector<int> changes;
-            std::vector<int> bracket_changes;
+            s.host.plugin_ui = &bridge;
+            s.host.plugin_caps = [](std::string_view owner) {
+                return owner == "plugin:captions" || owner == "plugin:visibility"
+                    ? plugin::kCapUi | plugin::kCapExtend : 0u;
+            };
+            std::vector<std::pair<std::string, std::string>> actions;
+            s.host.submit_chat = [&](const std::string& line) { actions.emplace_back(plugin::caller_name(), line); };
+            std::map<std::string_view, int> settings{
+                {"find_trail_style", 0}, {"show_invis_undead", 0},
+                {"tab_target_through_walls", 0}, {"tab_target_offscreen", 0}};
+            std::map<std::string_view, std::vector<int>> changes;
             s.host.find_option = [&](std::string_view name) -> std::optional<int> {
-                if (name == "find_trail_style") return selected;
-                if (name == "show_invis_undead") return brackets;
+                if (auto it = settings.find(name); it != settings.end()) return it->second;
                 return std::nullopt;
             };
             s.host.set_option = [&](std::string_view name, int value) {
-                if (name == "find_trail_style") {
-                    changes.push_back(value);
-                    selected = value;
-                } else if (name == "show_invis_undead") {
-                    bracket_changes.push_back(value);
-                    brackets = value;
+                if (auto it = settings.find(name); it != settings.end()) {
+                    changes[it->first].push_back(value);
+                    it->second = value;
                 }
             };
             lua_State* L = s.lua.state();
             // Record real control coordinates without changing their activation or rendering.
             REQUIRE(luaL_dostring(L, R"lua(
                 widgets = {}
+                -- Keep the fixture's settings and the two notices in the Gamepad list's visible rows.
+                local supports = hs.UI.Supports
+                hs.UI.Supports = function(module, member)
+                    return (module ~= "interfaces" or member ~= "Status") and supports(module, member)
+                end
                 local combo, selectable, checkbox, text = ui.BeginCombo, ui.Selectable, ui.Checkbox, ui.DrawText
+                local button, wrapped = ui.Button, ui.TextWrapped
+                local buttons = { ["Open caption settings"] = "action", ["Open visibility settings"] = "visibility action" }
+                local notices = { ["captions: Captions are active."] = "section notice",
+                    ["captions: Captions own the brackets."] = "captions reason",
+                    ["visibility: Visibility owns the brackets."] = "visibility reason" }
                 local function record(name)
                     local x0, y0, x1, y1 = ui.GetItemRect()
                     widgets[name] = { (x0 + x1) / 2, (y0 + y1) / 2 }
+                end
+                ui.Button = function(label, ...)
+                    local clicked = button(label, ...)
+                    if buttons[label] then record(buttons[label]) end
+                    return clicked
+                end
+                ui.TextWrapped = function(label, ...)
+                    wrapped(label, ...)
+                    if notices[label] then record(notices[label]) end
                 end
                 ui.BeginCombo = function(label, ...)
                     local open = combo(label, ...)
@@ -5660,16 +5699,19 @@ TEST_CASE("UI packs: Options changes the Find trail style and invisibility brack
                 end
                 ui.Checkbox = function(label, ...)
                     local value, changed = checkbox(label, ...)
-                    if label == "##show_invis_undead" then record("Bracket Invis vs. Undead") end
+                    if label == "##show_invis_undead" then record("Bracket Invis vs. Undead")
+                    elseif label == "##tab_target_through_walls" then record("Target through walls and doors")
+                    elseif label == "##tab_target_offscreen" then record("Target off-screen") end
                     return value, changed
                 end
                 ui.DrawText = function(...)
                     local label = select(7, ...)
-                    if label == "Interface" or label == "Find trail"
-                        or label == "Bracket Invis vs. Undead" then
+                    local key = notices[label] or buttons[label]
+                    if key or label == "Interface" or label == "Find trail" or label == "Bracket Invis vs. Undead"
+                        or label == "Target through walls and doors" or label == "Target off-screen" then
                         local x, y = ...
                         local w, h = ui.CalcTextSize(label)
-                        widgets[label] = { x + w / 2, y + h / 2 }
+                        widgets[key or label] = { x + w / 2, y + h / 2 }
                     end
                     return text(...)
                 end
@@ -5679,7 +5721,7 @@ TEST_CASE("UI packs: Options changes the Find trail style and invisibility brack
             auto point = [&](const char* name) {
                 lua_getglobal(L, "widgets");
                 lua_getfield(L, -1, name);
-                REQUIRE_MESSAGE(lua_istable(L, -1), name);
+                REQUIRE_MESSAGE(lua_istable(L, -1), std::string(name));
                 lua_rawgeti(L, -1, 1);
                 const float x = static_cast<float>(lua_tonumber(L, -1));
                 lua_pop(L, 1);
@@ -5711,29 +5753,91 @@ TEST_CASE("UI packs: Options changes the Find trail style and invisibility brack
                 CHECK(changes.empty());
                 click(point("combo"));
                 click(point("rainbow"));
-                REQUIRE(selected == 1);
+                REQUIRE(settings.at("find_trail_style") == 1);
                 click(point("combo"));
                 click(point("navigation"));
             } else {
                 click(point("Interface"));
                 CHECK(changes.empty());
                 click(point("Find trail"));
-                REQUIRE(selected == 1);
+                REQUIRE(settings.at("find_trail_style") == 1);
                 click(point("Find trail"));
             }
-            CHECK(selected == 0);
-            REQUIRE(changes.size() == 2);
-            CHECK(changes[0] == 1);
-            CHECK(changes[1] == 0);
-            CHECK(bracket_changes.empty());
+            CHECK(settings.at("find_trail_style") == 0);
+            CHECK(changes["find_trail_style"] == std::vector<int>{1, 0});
+            CHECK_FALSE(changes.contains("show_invis_undead"));
             click(point("Bracket Invis vs. Undead"));
-            CHECK(brackets == 1);
+            CHECK(settings.at("show_invis_undead") == 1);
             click(point("Bracket Invis vs. Undead"));
-            CHECK(brackets == 0);
-            CHECK(bracket_changes == std::vector<int>{1, 0});
+            CHECK(settings.at("show_invis_undead") == 0);
+            CHECK(changes["show_invis_undead"] == std::vector<int>{1, 0});
+
+            REQUIRE(bridge.set_contribution({"captions", "status", "OptionsWindow", "section:nameplates",
+                                             "Captions are active.", {}, {}}));
+            REQUIRE(bridge.set_contribution({"captions", "brackets", "OptionsWindow", "setting:show_invis_undead",
+                                             "Captions own the brackets.", "Open caption settings", "/captions", true}));
+            REQUIRE(bridge.set_contribution({"visibility", "brackets", "OptionsWindow", "setting:show_invis_undead",
+                                             "Visibility owns the brackets.", "Open visibility settings", "/visibility", true}));
+            s.frames(3);
+            CHECK(point("section notice").y < point("Bracket Invis vs. Undead").y);
+            CHECK(point("captions reason").y < point("visibility reason").y);
+            click(point("Bracket Invis vs. Undead"));
+            CHECK(changes["show_invis_undead"] == std::vector<int>{1, 0});
+            click(point("action"));
+            CHECK(actions == std::vector<std::pair<std::string, std::string>>{{"plugin:captions", "/captions"}});
+
+            if (std::string_view(pack) == "modern") {
+                click(point("combo"));
+                click(point("rainbow"));
+            } else {
+                click(point("Find trail"));
+            }
+            CHECK(settings.at("find_trail_style") == 1);
+
+            // Releasing a click after its notice disappears must not run the action that moved into its row.
+            const auto removed_action = point("action");
+            auto& io = ImGui::GetIO();
+            io.AddMousePosEvent(removed_action.x, removed_action.y);
+            s.frames(1);
+            io.AddMouseButtonEvent(0, true);
+            s.frames(1);
+            REQUIRE(bridge.remove_contribution("captions", "brackets"));
+            s.frames(3);
+            io.AddMouseButtonEvent(0, false);
+            s.frames(3);
+            REQUIRE(actions.size() == 1);
+            click(point("visibility action"));
+            REQUIRE(actions.size() == 2);
+            CHECK(actions.back() == std::pair<std::string, std::string>{"plugin:visibility", "/visibility"});
+            click(point("Bracket Invis vs. Undead"));
+            CHECK(changes["show_invis_undead"] == std::vector<int>{1, 0});
+            REQUIRE(bridge.remove_contribution("visibility", "brackets"));
+            s.frames(3);
+            click(point("Bracket Invis vs. Undead"));
+            CHECK(changes["show_invis_undead"] == std::vector<int>{1, 0, 1});
+
+            CHECK_FALSE(changes.contains("tab_target_through_walls"));
+            CHECK_FALSE(changes.contains("tab_target_offscreen"));
+            click(point("Target through walls and doors"));
+            CHECK(settings.at("tab_target_through_walls") == 1);
+            CHECK(settings.at("tab_target_offscreen") == 0);
+            if (std::string_view(pack) == "gamepad") {
+                // The off-screen option is just below the visible rows at this window size.
+                ImGui::GetIO().AddMouseWheelEvent(0, -1);
+                s.frames(3);
+            }
+            click(point("Target off-screen"));
+            CHECK(settings.at("tab_target_through_walls") == 1);
+            CHECK(settings.at("tab_target_offscreen") == 1);
+            click(point("Target through walls and doors"));
+            CHECK(settings.at("tab_target_through_walls") == 0);
+            CHECK(settings.at("tab_target_offscreen") == 1);
+            click(point("Target off-screen"));
+            CHECK(settings.at("tab_target_offscreen") == 0);
+            CHECK(changes["tab_target_through_walls"] == std::vector<int>{1, 0});
+            CHECK(changes["tab_target_offscreen"] == std::vector<int>{1, 0});
             CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
         }
-        ImGui::DestroyContext(ctx);
     }
 }
 
@@ -5955,7 +6059,7 @@ end
     ImGui::DestroyContext(ctx);
 }
 
-TEST_CASE("UI packs (modern): the buff tray can show empty slots and number buff tooltips") {
+TEST_CASE("UI packs (modern): buff tray options preserve the default layout and old slot settings") {
     test::ScratchDir scratch("ui_pack_buff_tray_slots");
     const auto dir = scratch.path();
     fs::create_directories(dir / "game");
@@ -5970,6 +6074,15 @@ TEST_CASE("UI packs (modern): the buff tray can show empty slots and number buff
     {
         Session s(dir, "modern");
         auto* L = s.lua.state();
+        lua_pushcfunction(L, [](lua_State* state) {
+            const auto* window = ImGui::GetCurrentWindowRead();
+            const std::string_view name = window ? window->Name : "";
+            if (name.ends_with("###modern.BuffWindow")) lua_pushliteral(state, "BuffWindow");
+            else if (name.ends_with("###modern.ShortDurationBuffWindow")) lua_pushliteral(state, "ShortDurationBuffWindow");
+            else lua_pushnil(state);
+            return 1;
+        });
+        lua_setglobal(L, "testTrayWindow");
         auto run = [&](const char* code) {
             const int rc = luaL_dostring(L, code);
             INFO((rc == LUA_OK ? "" : lua_tostring(L, -1)));
@@ -5980,22 +6093,37 @@ TEST_CASE("UI packs (modern): the buff tray can show empty slots and number buff
         };
         run(R"lua(
 hs.ShowWindow('BuffWindow', true)
-ui.SetSetting('test.pos.BuffWindow', '600,160')
+hs.ShowWindow('ShortDurationBuffWindow', true)
+ui.SetSetting('hud.pos.BuffWindow', '600,160')
+ui.SetSetting('hud.pos.ShortDurationBuffWindow', '600,480')
 ui.SetSetting('hud.perRow.BuffWindow', 3)
-local names = { Buff2 = 'Spirit of Wolf', Buff4 = 'Holy Armor', Buff5 = 'Clarity' }
+local names = {
+  BuffWindow = { Buff2 = 'Spirit of Wolf', Buff4 = 'Holy Armor', Buff5 = 'Clarity' },
+  ShortDurationBuffWindow = { Buff0 = 'Chorus of the Singing Grove', Buff1 = 'Psalm' },
+}
 local slot, button, textColored, menuItem = hs.BuffSlot, ui.InvisibleButton, ui.TextColored, ui.MenuItem
+local drawText, drawRect, beginMenu, endMenu = ui.DrawText, ui.DrawRectFilled, ui.BeginMenu, ui.EndMenu
 hs.BuffSlot = function(win, id, overlays)
-  if win == 'BuffWindow' and names[id] then return 11, 60000, names[id], true end
+  local name = names[win] and names[win][id]
+  if name then return 11, id == 'Buff0' and 43000 or 60000, name, true end
   return slot(win, id, overlays)
 end
-buffRects = {}
+buffRects, songRects, menuRows = {}, {}, {}
+function clearTrayDraws()
+  trayText = { BuffWindow = {}, ShortDurationBuffWindow = {} }
+  trayPanel = {}
+end
+clearTrayDraws()
 ui.InvisibleButton = function(id, ...)
   local pressed = button(id, ...)
   local n = tonumber(id:match('^##Buff(%d+)$'))
-  if n then
+  local tray = n and testTrayWindow()
+  if tray == 'BuffWindow' then
     buffRects[n] = { ui.GetItemRect() }
     local _, h = ui.GetWindowSize()
     trayHeight = h
+  elseif tray == 'ShortDurationBuffWindow' then
+    songRects[n] = { ui.GetItemRect() }
   end
   return pressed
 end
@@ -6004,18 +6132,51 @@ ui.TextColored = function(r, g, b, a, label)
   return textColored(r, g, b, a, label)
 end
 ui.MenuItem = function(label, ...)
-  if label == pick then pick = nil; return true end
+  menuRows[label] = true
+  if label == pick then
+    pick = nil
+    ui.CloseCurrentPopup()
+    return true
+  end
   return menuItem(label, ...)
 end
+-- Exercise the layout choices in the live frame popup without depending on the submenu's hover delay.
+local forcedLayout
+ui.BeginMenu = function(label, ...)
+  if label == 'Layout' and (pick == 'Vertical' or pick == 'Horizontal') then
+    forcedLayout = true
+    return true
+  end
+  return beginMenu(label, ...)
+end
+ui.EndMenu = function()
+  if forcedLayout then forcedLayout = false; return end
+  return endMenu()
+end
+ui.DrawText = function(x, y, r, g, b, a, text, ...)
+  local tray = testTrayWindow()
+  if tray then trayText[tray][text] = { x, y } end
+  return drawText(x, y, r, g, b, a, text, ...)
+end
+ui.DrawRectFilled = function(x0, y0, x1, y1, ...)
+  local tray = testTrayWindow()
+  if tray then
+    local x, y = ui.GetWindowPos()
+    local w, h = ui.GetWindowSize()
+    if x0 == x and y0 == y and x1 == x + w and y1 == y + h then trayPanel[tray] = true end
+  end
+  return drawRect(x0, y0, x1, y1, ...)
+end
 )lua");
-        auto point_at_buff = [&] {
-            REQUIRE(luaL_dostring(L, "return buffRects[2][1] + 10, buffRects[2][2] + 10") == LUA_OK);
+        auto point_at_buff = [&](bool song = false) {
+            REQUIRE(luaL_dostring(L, song ? "return songRects[0][1] + 10, songRects[0][2] + 10"
+                                          : "return buffRects[2][1] + 10, buffRects[2][2] + 10") == LUA_OK);
             io.AddMousePosEvent(static_cast<float>(lua_tonumber(L, -2)), static_cast<float>(lua_tonumber(L, -1)));
             lua_settop(L, 0);
         };
-        auto toggle = [&](const char* label) {
+        auto choose = [&](const char* label, bool song = false) {
             run((std::string("pick = '") + label + "'").c_str());
-            point_at_buff();
+            point_at_buff(song);
             io.AddKeyEvent(ImGuiMod_Alt, true);
             io.AddMouseButtonEvent(1, true);
             s.frames(1);
@@ -6036,17 +6197,25 @@ end
         REQUIRE(run(R"lua(
 local a, b, c = buffRects[2], buffRects[4], buffRects[5]
 compactX, compactY, compactHeight, pitch = a[1], a[2], trayHeight, a[1] - b[1]
-return tostring(pitch > 0 and b[1] - c[1] == pitch and a[2] == b[2] and a[2] == c[2])
+local d, e = songRects[0], songRects[1]
+return tostring(pitch == 38 and a[3] - a[1] == 34 and b[1] - c[1] == pitch and a[2] == b[2] and a[2] == c[2]
+  and d[3] - d[1] == 26 and d[1] - e[1] == 30 and d[2] == e[2])
 )lua") == "true");
         CHECK(title() == "Spirit of Wolf");
+        CHECK(run(R"lua(
+local buffs, songs = trayText.BuffWindow, trayText.ShortDurationBuffWindow
+return tostring(buffs['1m'] and songs['1m'] and not buffs['Spirit of Wolf'] and not songs['Chorus of the Singing Grove']
+  and not buffs['#3'] and not buffs.Buffs and not songs.Songs
+  and not trayPanel.BuffWindow and not trayPanel.ShortDurationBuffWindow)
+)lua") == "true");
 
-        toggle("Show slot numbers in tooltips");
+        choose("Show slot numbers in tooltips");
         CHECK(run("return ui.GetSetting('hud.showSlotNumbers.BuffWindow')") == "1");
         CHECK(run("return tostring(buffRects[2][1] == compactX and trayHeight == compactHeight)") == "true");
         CHECK(title() == "Spirit of Wolf - Slot 3");
-        toggle("Show slot numbers in tooltips");
+        choose("Show slot numbers in tooltips");
 
-        toggle("Show empty slots");
+        choose("Show empty slots");
         CHECK(run("return ui.GetSetting('hud.showEmptySlots.BuffWindow')") == "1");
         CHECK(run(R"lua(
 local a, b, c = buffRects[2], buffRects[4], buffRects[5]
@@ -6056,6 +6225,135 @@ return tostring(a[1] == compactX - 2 * pitch and a[2] == compactY
   and buffRects[0] == nil and buffRects[1] == nil and buffRects[3] == nil)
 )lua") == "true");
         CHECK(title() == "Spirit of Wolf");
+        choose("Show empty slots");
+
+        // A bare right click keeps the spell actions. Window options opens the same frame menu as Alt+right-click.
+        run("menuRows = {}; pick = 'Window options'");
+        point_at_buff();
+        io.AddMouseButtonEvent(1, true);
+        s.frames(1);
+        io.AddMouseButtonEvent(1, false);
+        s.frames(2);
+        CHECK(run("return tostring(pick == nil and menuRows['Spell Info'] and menuRows.Remove"
+                  " and menuRows['Allow window resizing'])") == "true");
+        ImGui::ClosePopupsExceptModals();
+        s.frames(2);
+
+        ImGuiWindow* buffs = ImGui::FindWindowByName("Buffs###modern.BuffWindow");
+        ImGuiWindow* songs = ImGui::FindWindowByName("Songs###modern.ShortDurationBuffWindow");
+        REQUIRE(buffs);
+        REQUIRE(songs);
+        const ImVec2 defaultSize = buffs->Size;
+        const ImVec2 songSize = songs->Size;
+        auto drag = [&](ImVec2 start, float dx, float dy) {
+            io.AddMousePosEvent(start.x, start.y);
+            s.frames(2);
+            io.AddMouseButtonEvent(0, true);
+            s.frames(1);
+            for (int i = 1; i <= 4; ++i) {
+                io.AddMousePosEvent(start.x + dx * static_cast<float>(i) / 4,
+                                    start.y + dy * static_cast<float>(i) / 4);
+                s.frames(1);
+            }
+            io.AddMouseButtonEvent(0, false);
+            io.AddMousePosEvent(-1000, -1000);
+            s.frames(3);
+        };
+        auto leftEdge = [&] { return ImVec2(buffs->Pos.x + 2, buffs->Pos.y + buffs->Size.y / 2); };
+        auto bottomEdge = [&] { return ImVec2(buffs->Pos.x + buffs->Size.x / 2, buffs->Pos.y + buffs->Size.y - 2); };
+        drag(leftEdge(), 40, 0);
+        CHECK(run("return ui.GetSetting('hud.size.BuffWindow') or ''") == "");
+        CHECK(buffs->Size.x == defaultSize.x);
+        CHECK(buffs->Size.y == defaultSize.y);
+
+        choose("Allow window resizing");
+        CHECK(run("return ui.GetSetting('hud.buffResize.BuffWindow')") == "1");
+        const float anchoredRight = buffs->Pos.x + buffs->Size.x;
+        drag(leftEdge(), 40, 0);
+        const auto manualSize = run("return ui.GetSetting('hud.size.BuffWindow') or ''");
+        REQUIRE_FALSE(manualSize.empty());
+        CHECK(buffs->Size.x < defaultSize.x);
+        CHECK(buffs->Size.y > defaultSize.y);
+        CHECK(buffs->Pos.x + buffs->Size.x == doctest::Approx(anchoredRight).epsilon(0.002));
+        CHECK(songs->Size.x == songSize.x);
+        CHECK(songs->Size.y == songSize.y);
+        run("ui.SetSetting('hud.lock.BuffWindow', '1')");
+        drag(leftEdge(), -30, 0);
+        CHECK(run("return ui.GetSetting('hud.size.BuffWindow')") == manualSize);
+        CHECK(buffs->Pos.x + buffs->Size.x == doctest::Approx(anchoredRight).epsilon(0.002));
+        run("ui.SetSetting('hud.lock.BuffWindow', '0')");
+        choose("Allow window resizing");
+        const ImVec2 wrapped = buffs->Size;
+        drag(leftEdge(), -30, 0);
+        CHECK(run("return ui.GetSetting('hud.size.BuffWindow')") == manualSize);
+        CHECK(buffs->Size.x == wrapped.x);
+        CHECK(buffs->Size.y == wrapped.y);
+        choose("Reset size");
+        CHECK(run("return ui.GetSetting('hud.size.BuffWindow') or ''") == "");
+        CHECK(buffs->Size.x == defaultSize.x);
+        CHECK(buffs->Size.y == defaultSize.y);
+
+        choose("Vertical");
+        CHECK(run("return ui.GetSetting('hud.buffLayout.BuffWindow')") == "vertical");
+        CHECK(run(R"lua(
+local a, b, c = buffRects[2], buffRects[4], buffRects[5]
+return tostring(a[1] == b[1] and b[1] == c[1] and a[2] < b[2] and b[2] < c[2]
+  and songRects[0][2] == songRects[1][2])
+)lua") == "true");
+        choose("Allow window resizing");
+        drag(bottomEdge(), 0, -43);
+        CHECK(run(R"lua(
+local a, b, c = buffRects[2], buffRects[4], buffRects[5]
+return tostring(a[1] == b[1] and c[1] < a[1] and a[2] < b[2] and c[2] == a[2])
+)lua") == "true");
+
+        choose("Show spell names");
+        choose("Show slot numbers");
+        choose("Show remaining time");
+        choose("Show title bar");
+        CHECK(run("return ui.GetSetting('hud.buffNames.BuffWindow')") == "1");
+        CHECK(run("return ui.GetSetting('hud.buffSlotBadges.BuffWindow')") == "1");
+        CHECK(run("return ui.GetSetting('hud.buffHideTime.BuffWindow')") == "1");
+        CHECK(run("return ui.GetSetting('hud.buffTitleBar.BuffWindow')") == "1");
+        run("clearTrayDraws()");
+        s.frames(2);
+        CHECK(run(R"lua(
+local buffs, songs = trayText.BuffWindow, trayText.ShortDurationBuffWindow
+return tostring(buffs['Spirit of Wolf'] and buffs['#3'] and buffs.Buffs and not buffs['1m']
+  and songs['1m'] and not songs['Chorus of the Singing Grove'] and not songs.Songs and not trayPanel.BuffWindow)
+)lua") == "true");
+        run("pick = 'Show window background'");
+        io.AddMousePosEvent(buffs->Pos.x + buffs->Size.x / 2, buffs->Pos.y + 6);
+        io.AddMouseButtonEvent(1, true);
+        s.frames(1);
+        io.AddMouseButtonEvent(1, false);
+        s.frames(2);
+        CHECK(run("return tostring(pick == nil)") == "true");
+        CHECK(run("return ui.GetSetting('hud.buffBackground.BuffWindow')") == "1");
+        choose("Show title bar");
+        run("clearTrayDraws()");
+        s.frames(2);
+        CHECK(run("return tostring(trayPanel.BuffWindow and not trayText.BuffWindow.Buffs"
+                  " and not trayPanel.ShortDurationBuffWindow)") == "true");
+
+        // Songs can opt into a named horizontal ribbon while Buffs stays a vertical list.
+        choose("Show spell names", true);
+        run("clearTrayDraws()");
+        s.frames(2);
+        CHECK(run(R"lua(
+local a, b = songRects[0], songRects[1]
+return tostring(a[1] > b[1] and a[2] == b[2] and ui.GetSetting('hud.buffLayout.BuffWindow') == 'vertical')
+)lua") == "true");
+        CHECK(run(R"lua(
+local text = trayText.ShortDurationBuffWindow
+local timer, lines = text['43s'], {}
+if not timer then return 'false' end
+for label, pos in pairs(text) do
+  if pos[1] == timer[1] and pos[2] < timer[2] then lines[#lines + 1] = { label, pos[2] } end
+end
+table.sort(lines, function(a, b) return a[2] < b[2] end)
+return tostring(#lines == 2 and lines[1][1] .. ' ' .. lines[2][1] == 'Chorus of the Singing Grove')
+)lua") == "true");
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
     }
     ImGui::DestroyContext(ctx);

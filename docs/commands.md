@@ -90,7 +90,7 @@ follow the RoF2 client; the ones Hailstone adds are marked as Hailstone's. For t
 
 | Command | What it does |
 |---|---|
-| `/target <name \| id <#> \| clear \| mycorpse \| spawn search>` | Target by name or MacroQuest's spawn search (Hailstone's script layer answers `/target`; a plain name skips you). |
+| `/target <name \| id <#> \| clear \| mycorpse \| myself \| spawn search>` | Target by name or MacroQuest's spawn search (Hailstone's script layer answers `/target`). With nothing, or `myself`, targets you. A plain name picks as RoF2's own `/target` does, not MacroQuest's nearest match: a spawn whose whole name it is wins (a rider over the mount named after them, ``Name`s_Mount00``); otherwise the nearest player it matches, unless something else it matches is 50 or more units nearer. It skips you when something else matches, unless it is your whole name. Typed searches (`/target npc orc`, `/target mount Name`, `/target id 12`) keep MacroQuest's nearest match; `next` and `prev` walk their matches from the current target, nearest first. |
 | `/assist [name]` | Target what your target, or the named player, is fighting. |
 | `/attack [on\|off]` | Auto attack. |
 | `/autofire` | Auto fire (ranged). |
@@ -127,7 +127,7 @@ discipline's name may leave out its rank.
 | `/offlinemode` | Offline trader or buyer mode. |
 | `/corpse`, `/corpsedrag`, `/corpsedrop` | Pull your targeted corpse to you, drag a corpse, drop it. |
 | `/decaycorpse` | Let your targeted corpse decay, after a question. |
-| `/hidecorpses [all \| allbutgroup \| looted \| npc]` | Hide corpses; another word shows them again. |
+| `/hidecorpses [none \| all \| allbutgroup \| looted \| npc \| always]` | Choose which corpses to hide. The choice is saved per character and restored when logging in or zoning. `always` includes your own corpse. `none` shows corpses again. |
 | `/setstartcity <name>` | Set your start city (the server decides). |
 | `/servertransfer` | Ask the server for its transfer list. |
 
@@ -191,7 +191,8 @@ discipline's name may leave out its rank.
 | `/filter` | Chat filters. |
 | `/hotbutton <name> [colour] <text>` | Make a hot button from a line and put it on the cursor. |
 | `/loadskin <name> [keep]` | Load a UI skin. |
-| `/copylayout` | Copy another character's layout. Another ini is looked for by bare name beside the current layout file; paths are not accepted. |
+| `/copylayout` | Open Copy Layout to copy another character's layout and optionally their keyboard bindings. For a direct copy with arguments, use a bare file name beside the current layout file. |
+| `/import` | List character INIs in the configured game data folder and preview eligible socials and hotbar buttons for the active character. Apply and restore require confirmation in the dialog. |
 | `/fontface <name>` | The UI font. |
 | `/viewport reset`, `/viewport <x> <y> <w> <h> [scale]` | The 3D view's area on screen. |
 | `/fullscreen [on \| off \| toggle]` | Full screen or windowed. |
@@ -325,8 +326,8 @@ the number pad moves you and **D** ducks.
 
 | Action | Key | Second key |
 |---|---|---|
-| Target yourself | F1 | |
-| Target group member 1..5 | F2..F6 | |
+| Target yourself, then your pet | F1 | |
+| Target group member 1..5, then their pet | F2..F6 | |
 | Target nearest player | F7 | |
 | Target nearest NPC | Tab | F8 |
 | Consider | C | |
@@ -334,8 +335,11 @@ the number pad moves you and **D** ducks.
 | Auto attack | Q | |
 | Use (doors, objects) | U | |
 
-**Tab is Hailstone's change:** the original put Tab on "toggle target" and F8 on the nearest NPC. Tab and F8 skip
-NPCs you cannot see; Options > Display "Tab Needs Line of Sight" turns that off.
+**Tab is Hailstone's change:** the original put Tab on "toggle target" and F8 on the nearest NPC. Tab, F8 and the NPC
+cycle skip NPCs you cannot see, as the original's F8 does, and (Hailstone) NPCs off screen. In Modern, Options >
+Display has **Tab Target Through Walls and Doors** and **Tab Target Off-Screen**; in Gamepad, Options > Interface has
+**Target through walls and doors** and **Target off-screen**. Each turns its test off on its own
+(docs/mechanics.md "The NPC target keys").
 
 ### Hot buttons, spells and abilities
 

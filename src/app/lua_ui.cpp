@@ -39,8 +39,10 @@
 #include "app/lua_ui_plugins.h"
 #include "app/lua_ui_record.h"
 #include "app/lua_ui_extensions.h"
+#include "app/lua_ui_map_overlay.h"
 #include "plugin/lua_keep.h"
 #include "plugin/ui_bridge.h"
+#include "core/character_files.h"
 #include "core/ini_file.h"
 #include "core/log.h"
 #include "core/saturate.h"
@@ -84,6 +86,9 @@ struct UiApi::Impl {
         return host.plugin_caps ? host.plugin_caps(tag) : 0u;
     }};
     UiCallbackContext extensions_context{callback_lifetime, [this](std::string_view tag) {
+        return host.plugin_caps ? host.plugin_caps(tag) : 0u;
+    }};
+    UiCallbackContext map_overlay_context{callback_lifetime, [this](std::string_view tag) {
         return host.plugin_caps ? host.plugin_caps(tag) : 0u;
     }};
     std::vector<std::unique_ptr<StockWindow>> windows;
@@ -200,6 +205,8 @@ struct UiApi::Impl {
             if (!ini.load(file)) return;
             std::error_code ec;
             bool current = !layout_file.empty() && std::filesystem::equivalent(file, layout_file, ec);
+            bool has_key_bindings = !current && !dir.empty() &&
+                                    std::filesystem::is_regular_file(CharacterFiles{dir}.settings(), ec);
             for (const std::string& section : ini.sections())
                 for (const std::string& key : ini.keys(section)) {
                     if (key.size() < 4 || !game::same_no_case(std::string_view(key).substr(0, 4), "XPos")) continue;
@@ -207,7 +214,7 @@ struct UiApi::Impl {
                     if (current && game::same_no_case(mode, "Windowed")) continue;
                     bool listed = false;
                     for (const auto& o : out) listed = listed || (o.file == file && o.mode == mode);
-                    if (!listed) out.push_back({file, label, mode, dir, world});
+                    if (!listed) out.push_back({file, label, mode, dir, world, has_key_bindings});
                 }
         };
         if (!layout_file.empty() && layout_file.filename() == "UI.ini") {
@@ -251,6 +258,8 @@ struct UiApi::Impl {
     // ViewPort section, which this client does not have, and the HB_<n> hot button files.
     // Hailstone: the Chat and Options boxes also copy the source character's chat.ini and options.ini, which hold
     // what the original keeps in the shared eqclient.ini (net::GameConnection::copy_character_settings).
+    // Key Bindings copies the source character's keyboard map (its hailstone.ini) over this one's (ActionsUi::
+    // copy_key_bindings); the original's copy has no such box (0x55b930 copies only the sections above).
     std::optional<std::pair<std::uint32_t, std::vector<std::string>>> copy_layout(const UiHost::LayoutSource& from,
                                                                               const UiHost::LayoutCopyParts& parts) {
         const bool hot = parts.hot_buttons, loadouts = parts.loadouts, socials = parts.socials;
@@ -297,6 +306,8 @@ struct UiApi::Impl {
         // The user colours are read again with the layout (chat_layout_loaded), the filters and options at once.
         if (host.conn && !from.character_dir.empty() && (parts.chat || parts.options))
             host.conn->copy_character_settings(from.character_dir, parts.chat, parts.options);
+        if (host.actions && parts.key_bindings && !from.character_dir.empty())
+            host.actions->copy_key_bindings(CharacterFiles{from.character_dir}.settings());
         if (host.copy_ui_layout) host.copy_ui_layout(from.character_dir);
         reload_layout = true;
         return std::nullopt;
@@ -443,6 +454,23 @@ struct UiApi::Impl {
         auto it = ini_infos.find(name);
         if (it == ini_infos.end()) it = ini_infos.emplace(std::string(name), ui::window_ini_info(name)).first;
         return it->second;
+    }
+
+    void store_visibility() {
+        // A new connection at character select has no in-game window state to save for the last character.
+        if (!host.in_game || !layout.loaded()) return;
+        for (auto& w : windows) {
+            const std::string& name = w->screen();
+            if (name.rfind("Bag", 0) == 0) continue; // shown by its own rules
+            const ui::WindowIniInfo& info = ini_info(name);
+            if (!(info.flags & 0x100)) continue;
+            bool shown = w->shown(host);
+            auto [it, inserted] = last_shown.try_emplace(name, shown);
+            if (!inserted && it->second != shown) {
+                layout.store_shown(info, shown);
+                it->second = shown;
+            }
+        }
     }
 
     // A window's list as hs.ListInfo, hs.ListRow and hs.WindowList read it: StockWindow::list once a frame per
@@ -2337,6 +2365,15 @@ int SetOption(lua_State* L) {
     return 0;
 }
 
+// played = hs.PlaySoundTest(name)   -- plays one of the Individual Sounds options ("own_footsteps", "thunder", ...) once
+// at its volume; false for a name that is not one
+int PlaySoundTest(lua_State* L) {
+    auto& m = Impl::of(L);
+    const char* name = luaL_checkstring(L, 1);
+    lua_pushboolean(L, m.host.play_sound_test && m.host.play_sound_test(name));
+    return 1;
+}
+
 // choices = hs.OptionChoices(name)   -- the choices the client lists for an option ("resolution"), else empty
 int OptionChoices(lua_State* L) {
     auto& m = Impl::of(L);
@@ -2878,16 +2915,7 @@ void UiApi::begin_frame() {
     for (auto& [name, place] : m.last_place)
         m.layout.store(m.ini_info(name), place.first, static_cast<int>(ds.x), static_cast<int>(ds.y), place.second);
     m.last_place.clear();
-    for (auto& w : m.windows) {
-        const std::string& name = w->screen();
-        if (name.rfind("Bag", 0) == 0) continue; // shown by its own rules
-        const ui::WindowIniInfo& info = m.ini_info(name);
-        if (!(info.flags & 0x100)) continue;
-        bool shown = w->shown(m.host);
-        auto it = m.last_shown.find(name);
-        if (it != m.last_shown.end() && it->second != shown) m.layout.store_shown(info, shown);
-        m.last_shown[name] = shown;
-    }
+    m.store_visibility();
     m.layout.save_if_due(std::chrono::steady_clock::now());
 }
 
@@ -2904,15 +2932,19 @@ void UiApi::load_layout(const std::filesystem::path& defaults, const std::filesy
         const std::string& name = w->screen();
         if (name.rfind("Bag", 0) == 0) continue;
         const ui::WindowIniInfo& info = m.ini_info(name);
-        if (auto s = m.layout.shown(info)) w->set_shown(m.host, *s);
-        else if (info.flags & 0x100) w->set_shown(m.host, (info.flags & 0x200) != 0); // bInitVisibility
+        if (!(info.flags & 0x100)) continue;
+        w->set_shown(m.host, m.layout.shown(info).value_or((info.flags & 0x200) != 0)); // bInitVisibility
+        m.last_shown.emplace(name, w->shown(m.host));
     }
     for (auto& w : m.windows) w->ini_loaded(m.host, m.layout, file.parent_path());
     chat_layout_loaded(m.layout, m.host, file.parent_path());
     log::info("ui: window places from {} (defaults {})", file.string(), defaults.string());
 }
 
-void UiApi::save_layout() { impl_->layout.save(); }
+void UiApi::save_layout() {
+    impl_->store_visibility();
+    impl_->layout.save();
+}
 
 const std::filesystem::path& UiApi::layout_file() const { return impl_->layout_file; }
 
@@ -3253,6 +3285,7 @@ void UiApi::register_functions(lua_State* L) {
     lua_pushcclosure(L, CompassMarkers, 1);
     lua_setfield(L, -2, "CompassMarkers");
     register_map_api(L, impl_->host, impl_->windows);
+    register_map_overlay_api(L, impl_->map_overlay_context);
     register_plugins_api(L, impl_->host);
     register_ui_extensions(L, impl_->extensions_context);
     register_scripts_api(L, impl_->host);
@@ -3277,6 +3310,7 @@ void UiApi::register_functions(lua_State* L) {
         {"ChildRect", ChildRect}, {"WindowClient", WindowClient}, {"SizeWindow", SizeWindow},
         {"CursorAttachment", CursorAttachment}, {"StmlLink", StmlLink}, {"DebugTree", ReturnEmptyTable},
         {"SetSlider", SetSlider}, {"ComboInfo", ComboInfo}, {"ListHeaderClick", ListHeaderClick}, {"Option", Option}, {"SetOption", SetOption}, {"UiIni", UiIniGet}, {"SetUiIni", UiIniSet}, {"OptionChoices", OptionChoices},
+        {"PlaySoundTest", PlaySoundTest},
         {"InterfaceList", InterfaceList}, {"InterfaceLoadBase", InterfaceLoadBase}, {"InterfaceLoadData", InterfaceLoadData}, {"InterfaceStatus", InterfaceStatus},
         {"ComboSelect", ComboSelect}, {"BagInfo", BagInfo}, {"SortItems", SortItems}, {"SellJunk", SellJunk}, {"Parcels", Parcels}, {"RetrieveParcel", RetrieveParcel}, {"ClaimAllParcels", ClaimAllParcels}, {"SendParcel", SendParcel}, {"SendParcelMoney", SendParcelMoney}, {"ItemJob", ItemJob}, {"StopItemJob", StopItemJob}, {"FindItems", FindItems},
         {"InventorySpace", InventorySpace}, {"PlaceClick", PlaceClick}, {"BagSlotItem", BagSlotItem}, {"BagSlotClick", BagSlotClick},
@@ -3300,7 +3334,7 @@ void UiApi::register_functions(lua_State* L) {
         "GemInfo", "HoldingButton", "SlotItem", "ListInfo", "ListRow", "ChildState", "WindowTitle", "ChildGauge",
         "ChildColor", "TabPage", "ItemPreview",
         "ChildTooltip", "DebugScreens", "ChildUnder", "VoiceChat", "ChildRect", "WindowClient", "CursorAttachment",
-        "DebugTree", "ComboInfo", "Option", "UiIni", "OptionChoices", "BagInfo", "Parcels", "FindItems",
+        "DebugTree", "ComboInfo", "Option", "UiIni", "OptionChoices", "PlaySoundTest", "BagInfo", "Parcels", "FindItems",
         "InventorySpace", "BagSlotItem", "CascadeMenus", "GameMenus", "ContextMenus", "ItemJob", "InterfaceList", "InterfaceLoadBase", "InterfaceLoadData", "InterfaceStatus"};
     auto changes_lists = [](lua_State* L2) -> int {
         Impl::of(L2).lists_changed();
@@ -3325,7 +3359,7 @@ void UiApi::register_functions(lua_State* L) {
     lua_setfield(L, -2, "CursorSlot");
     // Last: the functions that act check a plugin's capabilities first (app/lua_ui_caps.h).
     gate_ui_calls(L);
-    for(const char* name:{"NameplateRegister","NameplateUnregister","NameplateMeasureText","UiHookRegister","UiHookRemove","UiHookList","ExtensionRegisterAction","ExtensionRegisterSection"}){lua_getfield(L,-1,name);ui::lua::LuaUi::source_generation_function(L,-1);lua_pop(L,1);}
+    for(const char* name:{"NameplateRegister","NameplateUnregister","NameplateMeasureText","UiHookRegister","UiHookRemove","UiHookList","ExtensionRegisterAction","ExtensionRegisterSection","MapOverlayRegister"}){lua_getfield(L,-1,name);ui::lua::LuaUi::source_generation_function(L,-1);lua_pop(L,1);}
     register_ui_api(L);
 }
 

@@ -165,6 +165,8 @@ void GameConnection::send_command(const std::string& typed) {
         if (word == "/camera" && client_commands_ && client_commands_("Hailstone_camera", std::string(rest))) return;
         if (word == "/chattabs" && client_commands_ && client_commands_("Hailstone_chattabs", std::string(rest)))
             return;
+        if (word == "/import" && client_commands_ && client_commands_("Hailstone_import", std::string(rest)))
+            return;
         if ((word == "/finditem" || word == "/advi") && client_commands_ &&
             client_commands_("Hailstone_finditem", std::string(rest)))
             return;
@@ -602,6 +604,7 @@ void GameConnection::social_emote(const game::SocialEmote& e, const std::string&
 // named speaker goes to the conversation journal when its journal mode is 2, or 1 and it is aimed at the player
 // (CJournalTextWnd's 0x6b3c00, while the journal window exists: take_journal_lines()).
 void GameConnection::handle_special_message(const SpecialMessage& m) {
+    handle_adventure_leave_denial(m);
     log::debug("special message: speak mode {} journal mode {} language {} type {} target {} from '{}'", m.speak_mode,
                m.journal_mode, m.language, m.type, m.target_spawn_id, m.sayer);
     std::uint32_t language = m.language > 0x1f ? 0 : m.language;
@@ -1202,6 +1205,9 @@ void GameConnection::apply_client_option(game::ClientOption id, int old_value) {
         break;
     case game::ClientOption::LootNoDrop: // the combo runs /lootnodrop with its word: "New Setting: ..."
         say_lootnodrop_setting(v);
+        break;
+    case O::HideCorpses:
+        send_hide_corpse_setting(static_cast<game::HideCorpseMode>(old_value));
         break;
     case O::Anonymous:
     case O::Roleplaying:
@@ -2446,15 +2452,22 @@ void GameConnection::handle_social(Op op, const AppPacket& p) {
                 // ranks.
                 set_raid_ability_ranks(u->leadership);
                 break;
-            case kRaidSetLeader:
+            case kRaidSetLeader: {
                 // CRaid_HandleSetLeader @0x47e850: CRaid::ChangeLeadership, the raid leader's ranks, then "You are now
                 // the leader of the raid." (5069) or "%1 is now the leader of your raid." (5070), colour 0x111, every
                 // time (EQEmu sends it at every zone-in).
-                raid_.leader = g.leader_name;
                 set_raid_ability_ranks(u->leadership);
-                if (iequals(g.leader_name, me)) system(5069, {}, 0x111);
-                else system(5070, {g.leader_name}, 0x111);
+                // RoF2 reads the +72 name alone; the +4 fallback matches RaidCreate (EQEmu puts the new leader in both
+                // name fields, so it never fires against a stock server). A deliberate change from RoF2: with both
+                // names empty the original clears the leader and prints 5070 with a blank name; here the update only
+                // supplies ranks and the known leader is kept.
+                const auto& leader = g.leader_name.empty() ? g.player_name : g.leader_name;
+                if (leader.empty()) break;
+                raid_.leader = leader;
+                if (iequals(leader, me)) system(5069, {}, 0x111);
+                else system(5070, {leader}, 0x111);
                 break;
+            }
             case kRaidSetLootType:
                 // CRaid::HandleSetLootType @0x47d270: the type (the parameter); types 1, 2 and 4 clear the looters.
                 raid_.loot_type = g.parameter;
