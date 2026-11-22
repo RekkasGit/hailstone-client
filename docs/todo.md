@@ -610,7 +610,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 
 ## 3. UI
 
-- [ ] Trace and fix the upstream gamepad all-pack smoke test's cursor-extent assertion with ImGui debug checks enabled (docs/unknowns.md "UI").
+- [x] Trace and fix the upstream gamepad all-pack smoke test's cursor-extent assertion with ImGui debug checks enabled (docs/unknowns.md "UI").
 
 - [x] **Group role controls in both packs.** Right-click member names or the player's own name (Y on a gamepad Group window row); server-confirmed role icons in the Group and Player windows; leader-only Main Tank / Main Assist / Puller changes, mercenaries restricted to tank. Not checked live.
 - [x] **AA names missing from dbstr_us.txt** (a live folder's renumbered titles, gaps in a server's export). The windows show the spell's name, else "Ability <group>" (GameConnection::aa_display_name); plugins and /alternateadv keep the raw title. Seen live.
