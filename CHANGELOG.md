@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Stackable items show their live quantity at the bottom of hotkeys in Modern and Gamepad.
 - With **Auto Target Attackers** enabled, an NPC that attacks you becomes your target if you have none, even when your Extended Target list is empty.
 - With a live EverQuest folder, Arena and Nektulos load the zone the server runs: the revamped zone when the server's safe point stands on it (PEQ's Arena, and Nektulos from expansion 10), the old zone otherwise. They always loaded the old zone before
 - Switching targets with Tab or other controls keeps auto attack and auto fire active. Enable **Red-Con Attack Guard** in Options to warn low-level players and stop their melee auto attack when they switch to much higher-level targets.

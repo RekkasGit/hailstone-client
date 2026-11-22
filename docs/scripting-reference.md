@@ -975,7 +975,7 @@ send a request. `OpenTask` changes the journal selection and visibility, not tas
 | HotButtonFace | (name, child) → {color={r,g,b}, lua, running, enabled, cooldown, overlay, tooltip} \| nil | A social's face extras | — |
 | HotButtonChecked | (name, child) → bool | Drawn pressed (a pet command that is on) | — |
 | HotButtonState | (name, child [, y0, y1]) → {checked, left, cooldown, top, color, tint} \| nil | Check and cool-down state | — |
-| HotButtonInfo | (name, child [, into [, y0, y1]]) → t | HotButton + Face + State in one table (kind, label, tex…, social, color, lua, running, enabled, faceCooldown, overlay, tooltip, state, checked, left, cooldown, top, tint, iconAlpha). `into` as GemInfo's | — |
+| HotButtonInfo | (name, child [, into [, y0, y1]]) → t | HotButton + Face + State in one table (kind, label, tex…, social, color, lua, running, enabled, faceCooldown, overlay, tooltip, state, checked, left, cooldown, top, tint, iconAlpha). `stackCount` is the carried total for a stackable item link, the current stack for an inventory-slot shortcut, or nil. `into` as GemInfo's | — |
 | ClickHotButton | (name, child [, "left"\|"right"\|"rightheld" [, x, y]]) → ok | Use the button, or open its menu (at x, y) | actions |
 | PickUp | (window, child [, row]) → ok | Drag from a child: its hotbutton goes on the cursor | actions |
 | PressButtonFrom | (window, child [, row]) → ok | Run the hotbutton a drag would make (a pad's "use"). Not for hot bars | actions |
