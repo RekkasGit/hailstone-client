@@ -947,7 +947,10 @@ void GameConnection::smooth(float dt, const game::WorldState::FloorFn& floor,
 void GameConnection::smooth_vehicles(float dt) { world_.smooth_vehicles(dt, steady_seconds()); }
 
 void GameConnection::apply_spawn(const Spawn& s) {
-    if (world_.spawns.contains(s.spawn_id)) forget_leadership_spawn(s.spawn_id);
+    if (world_.spawns.contains(s.spawn_id)) {
+        forget_leadership_spawn(s.spawn_id);
+        forget_auto_target_attacker(s.spawn_id);
+    }
     group_.mana_percent.erase(s.spawn_id);
     group_.endurance_percent.erase(s.spawn_id);
     spells_.others.erase(s.spawn_id);
@@ -1606,9 +1609,9 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 if (attack_until_xtarget_clear_ && auto_attack_ && xtarget_holds_spawn(*id)) attack_held_for_xtarget_ = true;
                 else set_auto_attack(false);
                 world_.target_id = 0;
-                auto_target_due_ = true;
+                auto_target_xtarget_due_ = true;
             }
-            std::erase(xtarget_attackers_, *id);
+            forget_auto_target_attacker(*id);
         }
         break;
     case Op::SetBodyType:
@@ -3002,17 +3005,7 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
                 update_player_consciousness(true);
             }
             report_successful_hit(*d, hit_reported(d->target, d->source));
-            // Hailstone (auto_target_xtarget): an NPC attacking the player, a pick due when there is no target.
-            if (d->target == me && d->source != me && d->source != 0)
-                if (auto* s = spawn(d->source); s && s->is_npc) {
-                    if (std::find(xtarget_attackers_.begin(), xtarget_attackers_.end(), d->source) ==
-                        xtarget_attackers_.end())
-                        xtarget_attackers_.push_back(d->source);
-                    if (world_.target_id == 0) {
-                        auto_target_due_ = true;
-                        auto_target_prefer_ = d->source;
-                    }
-                }
+            record_auto_target_attack(*d);
         }
         break;
     case Op::Death:
