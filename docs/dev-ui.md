@@ -46,7 +46,7 @@ The screens are `login`, `servers`, `chars`, `nochars`, `loading`, `game` and `i
 
 While the UI has keyboard or mouse focus, the camera ignores that input; holding the right mouse button still turns it.
 
-The UI has the keyboard only while an edit box is typed in, a modal dialog is open, or a window asks (`ui.CaptureKeyboard`). A click or drag on a button, slider, title bar or window background does not take it (`ui::keyboard_for_ui`), so held movement keys stay held, as in the original.
+Text editing, modal dialogs, active keyboard or gamepad controls, and explicit requests (`ui.CaptureKeyboard`) can take the keyboard. A click or drag on a button, slider, title bar or window background leaves the keyboard with the game through mouse release (`ui::keyboard_for_ui`), so held movement keys stay held, as in the original.
 
 ## Using it from an app loop
 
