@@ -128,10 +128,9 @@ Report the revision, evidence, skipped coverage and next check.
 5. For an authorized draft PR, state the behavior or documentation change,
    why it belongs in this repository, how it was checked and what the
    maintainers are being asked to verify. Use the public base and the
-   authorized head remote. When a maintainer requests shared editing and
-   you have write access, use a topic branch in this repository so
-   collaborators can contribute directly. Leave merging, publishing and
-   deploying to their respective authorized workflows.
+   authorized head remote. Pushing, approving and merging follow
+   [AGENTS.md, Git workflow](../../AGENTS.md#git-workflow): do them only
+   when the maintainer explicitly asks, each time.
 
 An independent reviewer can use the same steps. Begin with the original
 request and the diff. Trace the change and verify its assumptions against
@@ -139,49 +138,12 @@ the source, then flag actionable findings with a file, symbol or line,
 affected behavior and a way to confirm it. Inspect both the stock path
 and the path the change adds or fixes.
 
-## Review and fix an organization PR
+## Pushing, approving and merging
 
-[AGENTS.md, Git workflow](../../AGENTS.md#git-workflow) ("Review on the existing PR branch")
-says what a review assignment on a topic branch in this repository
-authorizes. These steps carry it out on that branch and PR throughout.
-For a fork or a branch outside this repository, follow its own
-authorization.
-
-1. **Confirm the PR and branch.** Check the GitHub repository, base, head
-   repository, head branch and latest commit. Fetch that head into an
-   isolated worktree. Read the original request and review discussion so
-   the fix stays within scope and preserves collaborators' work.
-   If the branch is already checked out elsewhere, use a detached
-   worktree at the verified head and push the resulting commit to the
-   existing remote topic branch.
-2. **Make and validate the fixes.** Edit code, tests or docs directly on
-   the PR branch. Run the relevant checks, review the combined diff and
-   push a normal commit to the existing head branch. If the branch moved
-   while you worked, inspect and incorporate the concurrent changes,
-   then revalidate the result before pushing.
-3. **Review the final head.** Verify that GitHub shows the commit you
-   tested and that the applicable checks cover it. Submit the review on
-   the existing PR. Approve it if it is ready and your account is
-   eligible. Record the fixes, validation and any remaining findings.
-   GitHub bars approval by the PR author. Repository rules may require an
-   independent reviewer for the latest push or invalidate older
-   approvals. If your account cannot supply a required approval, record
-   the result and identify the review still required.
-   [GitHub review rules](https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/approving-a-pull-request-with-required-reviews)
-4. **Complete an authorized merge.** Approval records the review decision.
-   When and how a merge is authorized, and what it requires, is in
-   [AGENTS.md, Git workflow](../../AGENTS.md#git-workflow). Preserve draft
-   status unless taking the PR out of draft is part of the assignment.
-   Honor branch protections and match the merge to the tested head SHA
-   when the GitHub tool supports it. If the head changes, review and
-   validate it again. When acceptance is blocked, leave the fixes on
-   the same PR and state exactly what remains pending.
-
-For example, if a maintainer asks you to review a Modern UI fix on an
-organization branch and you find the same issue in Gamepad, update both
-affected paths on the PR, verify the two packs and record your review
-against the new head. The same PR carries the original change, the
-review fixes and the acceptance evidence.
+The maintainer keeps control of pushing, approving and merging. A review
+ends in findings or local commits, not a push, an approval or a merge,
+unless the maintainer explicitly asks for that step, each time. The rules
+are in [AGENTS.md, Git workflow](../../AGENTS.md#git-workflow).
 
 ## Handoff
 
