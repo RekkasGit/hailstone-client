@@ -2112,6 +2112,17 @@ Eligible targets are still ordered by distance within the 500-unit range.
   compares squared x/y distances), where the client uses 3D distance, and gives the PC and corpse cycles the same
   sight test.
 
+#### Switching targets during combat
+
+Changing targets with Tab or other target controls keeps auto attack and auto fire active by default.
+
+**Red-Con Attack Guard** in Modern Options > General > Combat (**Red-con attack guard** in Gamepad Options > Game)
+restores the RoF2 target-change guard. With the guard enabled, changing targets during melee auto attack offers the
+red-con tip and turns off auto attack and auto fire if the player is level 10 or below and the new target is at least
+three levels higher. Group members and the last target that triggered the red-con tip are exempt. The setting is off
+by default and is stored in the character's `hailstone.ini` as `combat.red_con_attack_guard`. The Lua option is
+`red_con_attack_guard`.
+
 #### Target death and auto targeting
 
 The target's death clears the target and turns auto attack and auto fire off.

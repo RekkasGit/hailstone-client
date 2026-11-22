@@ -1313,7 +1313,8 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 - **File selection** browses folders, not the OS shell namespace.
 - **Context tips.**
   - Hooked: experience, group and guild invitations, consent, red con on the attack key and on a target change while
-    attacking, world containers, interactive objects, the Actions window's page on show, player customization.
+    the Red-Con Attack Guard is on, world containers, interactive objects, the Actions window's page on show,
+    player customization.
   - EQEmu never sends the experience tip's flag (the second dword 2).
   - Not hooked: the Actions window's page keys while it is already shown (0x614510's other callers) and its Abilities
     page function 0x613a20; the Options window's Display / Keyboard pages (COptionsWnd::WndNotification, 6 / 7); the hot

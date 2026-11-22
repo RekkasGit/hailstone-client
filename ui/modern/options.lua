@@ -286,6 +286,8 @@ local function generalTab()
       "Hailstone: when you have no target, an NPC on your extended target list that attacks you becomes your target, as does one still attacking you when your target dies.")
     check("face_on_attack", "Face Target On Attack",
       "Hailstone: on, the attack key and the attack buttons turn you to face your target when they turn auto attack on, as the original client does. Off: you keep facing where you were. /attack never turns you.")
+    check("red_con_attack_guard", "Red-Con Attack Guard",
+      "At level 10 or below, switching to a target more than two levels above you during auto attack can stop combat, as in the original client.")
   end)
   section("Social", function()
     check("guild_invites", "Receive Guild Invites", "Off: guild invitations are declined for you.")
