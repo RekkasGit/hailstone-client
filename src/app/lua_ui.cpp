@@ -1497,7 +1497,8 @@ int HotButtonState(lua_State* L) {
 // info = hs.HotButtonInfo(name, child [, into [, y0, y1]])   -- what hs.HotButton, hs.HotButtonFace and
 // hs.HotButtonState give, in one call (each of those works the button out again): the table `into` (kept by the caller
 // from frame to frame) filled, or a new one. Fields: kind, label (hs.HotButton's), tex, u0, v0, u1, v1 (its icon, nil
-// when none); social (true where hs.HotButtonFace gives a face) and with it color = {r, g, b}, lua, running, enabled,
+// when none); stackCount (total carried for a stackable item link, current stack for an inventory slot, nil
+// otherwise); social (true where hs.HotButtonFace gives a face) and with it color = {r, g, b}, lua, running, enabled,
 // faceCooldown (the face's cooldown), overlay, tooltip (nil otherwise); state (true where hs.HotButtonState gives
 // one: not empty) and with it checked, left, cooldown, top (with y0 / y1), and the spell gem's tint = {r, g, b,
 // iconAlpha} with iconAlpha (nil otherwise). The cool-down's colour is hs.CoolDownColor()'s. The color and tint
@@ -1515,10 +1516,16 @@ int HotButtonInfoFn(lua_State* L) {
     if (w) hb = w->hot_button(m.host, child);
     const HotButtonInfo empty;
     const HotButtonInfo& info = hb ? *hb : empty;
-    record::push(L, 3, 24);
+    record::push(L, 3, 25);
     // (the strings only when changed: no new ones each frame for a record the caller keeps)
     plugin::set_string_field(L, "kind", info.kind.c_str());
     plugin::set_string_field(L, "label", info.label.c_str());
+    if (info.stack_count > 0) {
+        lua_pushinteger(L, static_cast<lua_Integer>(info.stack_count));
+        lua_setfield(L, -2, "stackCount");
+    } else {
+        set_nil(L, "stackCount");
+    }
     if (info.icon) {
         push_cell(L, *info.icon);
         set_art_fields(L, 5);

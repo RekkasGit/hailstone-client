@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Stackable items show their live quantity at the bottom of hotkeys in Modern and Gamepad.
 - Server owners can set `[client] deny = on` in `hailstone.cfg` to deny Hailstone access and show a notice at login. Launcher and `--user` test logins now ask for that file too, so on a server without Hailstone's script their first zone-in waits 5 s, as a saved server's already did.
 - Completed LDoN adventures release the request controls even while the instance remains accessible. The Adventure window updates after the server confirms a leave, and Kind and Risk stay editable during the request cooldown.
 - `/target next` and `/target prev` cycle through a spawn search's matches, and `/target` with no argument or `myself` targets you, as in MacroQuest.
