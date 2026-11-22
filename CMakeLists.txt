@@ -874,6 +874,12 @@ target_include_directories(MQ2Example PRIVATE sdk)
 set_target_properties(MQ2Example PROPERTIES PREFIX "" LIBRARY_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/plugins$<0:>
                                             RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/plugins$<0:>)
 
+set(HSMONO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/plugins/hsmono")
+if(EXISTS "${HSMONO_DIR}/CMakeLists.txt")
+    message(STATUS "Found optional subproject: HSMono")
+    add_subdirectory("${HSMONO_DIR}")
+endif()
+
 # The example upscaler provider (plugins/example/upscaler): plain C against sdk/hailstone_upscaler.h, in
 # build/hailstone/upscalers/example/example.<so|dll|dylib> (render/upscaler_provider.h finds it by its folder's name).
 add_library(ExampleUpscaler MODULE plugins/example/upscaler/example.c)
@@ -1600,8 +1606,11 @@ if(HAILSTONE_BUILD_TESTS)
   target_compile_definitions(TestUpscaler_nodevice PRIVATE EXAMPLE_REFUSE_DEVICE)
   target_compile_definitions(TestUpscaler_failing PRIVATE EXAMPLE_FAIL_EVALUATE)
   add_dependencies(hailstone_tests MQ2Example ExtendTest ExtendTestV1 ExtendTestNew HostProbe HostProbeThrow hailstone_mock_web_helper)
-  target_compile_definitions(hailstone_tests PRIVATE HAILSTONE_EXAMPLE_PLUGIN="$<TARGET_FILE:MQ2Example>"
-    HAILSTONE_PROBE_PLUGIN="$<TARGET_FILE:HostProbe>" HAILSTONE_PROBE_THROW_PLUGIN="$<TARGET_FILE:HostProbeThrow>"
+    
+  target_compile_definitions(hailstone_tests PRIVATE 
+    HAILSTONE_EXAMPLE_PLUGIN="$<TARGET_FILE:MQ2Example>"
+    HAILSTONE_PROBE_PLUGIN="$<TARGET_FILE:HostProbe>" 
+    HAILSTONE_PROBE_THROW_PLUGIN="$<TARGET_FILE:HostProbeThrow>"
     HAILSTONE_SDK071_PLUGIN="$<TARGET_FILE:Sdk071Plugin>"
     HAILSTONE_EXTEND_PLUGIN="$<TARGET_FILE:ExtendTest>" HAILSTONE_EXTEND_PLUGIN_V1="$<TARGET_FILE:ExtendTestV1>"
     HAILSTONE_EXTEND_PLUGIN_NEW="$<TARGET_FILE:ExtendTestNew>"

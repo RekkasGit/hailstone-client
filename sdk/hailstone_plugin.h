@@ -94,6 +94,11 @@ extern "C" {
 #define GAMESTATE_LOGGINGIN 253
 #define GAMESTATE_UNLOADING 255
 
+/* command_exists' answers */
+#define HAILSTONE_COMMAND_NONE 0
+#define HAILSTONE_COMMAND_ADDED 1 /* AddCommand: a plugin's, a script's or the client's own (/echo, /plugin ...) */
+#define HAILSTONE_COMMAND_GAME 2  /* the game's own slash command */
+
 /* A TLO value the plugin gives back. */
 enum {
     HAILSTONE_NIL = 0,
@@ -1154,6 +1159,12 @@ typedef struct PluginHostApi {
      * permission loss or unload. Check HAILSTONE_HOST_HAS before use on older ABI 3 hosts. */
     int (*set_ui_contribution)(void* host, const HailstoneUiContribution* entry);
     int (*remove_ui_contribution)(void* host, const char* id);
+    /* Whether a typed "/name" would run a command, looked up as the line would be: HAILSTONE_COMMAND_ADDED when a
+     * plugin, a script or the client itself added it (AddCommand; these come first), else HAILSTONE_COMMAND_GAME when
+     * it is one of the game's own (whose table takes any prefix of its names, and its GM commands only for a GM),
+     * else HAILSTONE_COMMAND_NONE. The leading '/' is optional; a name with a space is none. Needs no capability; 0
+     * off the main thread. Added later in ABI 3: test HAILSTONE_HOST_HAS(host, command_exists) first. */
+    int (*command_exists)(void* host, const char* name);
 } PluginHostApi;
 /* What use_ability and ability_state take: the kinds of ability the Ability Book lists. The values are stable. */
 enum HS_AbilityKinds {

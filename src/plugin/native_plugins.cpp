@@ -35,6 +35,7 @@
 #include "game/item_links.h"
 #include "game/merchant.h"
 #include "game/server_ext_chain.h"
+#include "game/slash_commands.h"
 #include "game/spa_ids.h"
 #include "game/spell_effect_text.h"
 #include "game/spells.h"
@@ -1254,6 +1255,21 @@ int h_set_ui_contribution(void* h, const HailstoneUiContribution* entry) {
 int h_remove_ui_contribution(void* h, const char* id) {
     auto& l = Loaded::of(h);
     return l.host->env.ui && l.can(kCapUi | kCapExtend) && l.host->env.ui->remove_contribution_from_sdk(l.name, id);
+}
+
+// The order a typed line takes (Hooks::command before the game's table, as GameConnection's
+// parse_command_line), so the answer is what the line would run.
+int h_command_exists(void* h, const char* name) {
+    Loaded& l = Loaded::of(h);
+    if (!name) return HAILSTONE_COMMAND_NONE;
+    std::string n(name);
+    if (!n.empty() && n.front() != '/') n.insert(n.begin(), '/');
+    // "/" alone would be a prefix of every game command; a word with a space is never looked up as one.
+    if (n.size() < 2 || n.find_first_of(" \t") != std::string::npos) return HAILSTONE_COMMAND_NONE;
+    if (l.host->env.hooks->has_command(n)) return HAILSTONE_COMMAND_ADDED;
+    const net::GameConnection* c = connection_of(l);
+    if (game::find_slash_command(n, c && c->player_is_gm(), c ? &c->strings() : nullptr)) return HAILSTONE_COMMAND_GAME;
+    return HAILSTONE_COMMAND_NONE;
 }
 
 // The plugin's folder: plugins/<name>/ when its binary is there, else plugins/<name>/ beside the binary.
@@ -3388,6 +3404,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.get_spells_data_bulk = main_only<h_get_spells_data_bulk>;
     p.table.set_ui_contribution = main_only<h_set_ui_contribution>;
     p.table.remove_ui_contribution = main_only<h_remove_ui_contribution>;
+    p.table.command_exists = main_only<h_command_exists>;
     Hooks& hooks = *m.env.hooks;
     Loaded* lp = &p;
     // Each callback runs with the plugin's capabilities and counts as the plugin being busy (no unloading under it).

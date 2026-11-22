@@ -22,6 +22,7 @@
 //   /probeabilities [n]  get_ability_data_bulk the same way, through HS_Bulk_ListHeader and HS_Bulk_AbilityRecord
 //   /probespells n id...  get_spells_data_bulk for those ids into n bytes, through HS_Bulk_SpellFixedRecord and the
 //   strings and effect lines after each
+//   /probecommand <name>  command_exists with the rest of the line as it is, when the host table has it
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
 #include <cstddef>
@@ -52,6 +53,8 @@ static_assert(offsetof(PluginHostApi, select_raid_member) == offsetof(PluginHost
 static_assert(offsetof(PluginHostApi, set_class_name) == offsetof(PluginHostApi, get_map_policy) + sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, get_spells_data_bulk) ==
               offsetof(PluginHostApi, nameplate_spell_icon) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, command_exists) ==
+              offsetof(PluginHostApi, remove_ui_contribution) + sizeof(PluginHostApi::caps));
 
 namespace {
 
@@ -683,6 +686,15 @@ void probe_nameplate(void*, const char* args) {
     WriteChatf("[Probe] nameplate register %d", registered);
 }
 
+// /probecommand <name>: command_exists, added later in ABI 3, on the arguments as given (a space and all).
+void probe_command(void*, const char* args) {
+    if (!HAILSTONE_HOST_HAS(host, command_exists)) {
+        WriteChatf("[Probe] command: not in this client");
+        return;
+    }
+    WriteChatf("[Probe] command '%s' %d", args ? args : "", host->command_exists(host->host, args));
+}
+
 // /probeability <kind> <name>: ability_state then use_ability, both added later in ABI 3.
 void probe_ability(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, ability_state) || !HAILSTONE_HOST_HAS(host, use_ability)) {
@@ -910,6 +922,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probeability", probe_ability, nullptr);
     AddCommand("/probeabilities", probe_abilities, nullptr);
     AddCommand("/probespells", probe_spells, nullptr);
+    AddCommand("/probecommand", probe_command, nullptr);
     AddTopLevelObject("Probe", probe_tlo, nullptr);
 #ifdef HAILSTONE_PROBE_THROW_INIT
     throw std::runtime_error("InitializePlugin threw");
@@ -946,6 +959,7 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probenameplate");
     RemoveCommand("/probeability");
     RemoveCommand("/probeabilities");
+    RemoveCommand("/probecommand");
     RemoveTopLevelObject("Probe");
 }
 HAILSTONE_API void OnUpdateImGui(void) { throw std::runtime_error("OnUpdateImGui threw"); }

@@ -688,6 +688,11 @@ Host functions:
 
 - `WriteChatf`, `DoCommand(f)`;
 - `AddCommand` (needs `commands`; 0 for one of the client's own commands, as `mq.bind`), `RemoveCommand`;
+- `host->command_exists(host->host, name)`: whether a typed `/name` would run, and what: `HAILSTONE_COMMAND_ADDED`
+  (a plugin's, a script's or the client's own, such as `/echo`), `HAILSTONE_COMMAND_GAME` (the game's own, which
+  takes any prefix of its names, its GM commands only for a GM) or `HAILSTONE_COMMAND_NONE`. Added commands are
+  looked up first, as a typed line is. Needs no capability. Added later in ABI 3: test
+  `HAILSTONE_HOST_HAS(host, command_exists)` first;
 - `ParseMacroData` (`${...}`, any TLO);
 - `AddTopLevelObject`: a TLO with members the plugin answers; refused when the name is already a TLO (as in MQ);
 - `RemoveTopLevelObject` (only the plugin's own);

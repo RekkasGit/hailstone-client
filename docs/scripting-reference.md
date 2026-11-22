@@ -1425,6 +1425,7 @@ or -1 and say so in the chat window. Only call these on the client's thread, fro
 | `write_chat_color(text, color)` | | a chat line in one of the game's chat colours |
 | `do_command(line)` | per command | |
 | `add_command`, `remove_command` | `commands` | |
+| `command_exists(name)` | | whether a typed `/name` would run a command, in the order the line would: `HAILSTONE_COMMAND_ADDED` (1) when a plugin, a script or the client added it, else `HAILSTONE_COMMAND_GAME` (2) for the game's own (any prefix of its names; GM commands only for a GM), else 0. The `/` is optional; a name with a space is 0. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, command_exists)` |
 | `parse(text, out, size)` | `read` | |
 | `add_tlo`, `remove_tlo` | | |
 | `send_packet(stream, opcode, data, size)` | `packets` | to the server, through the other plugins' outgoing hooks |

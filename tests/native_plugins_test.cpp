@@ -2258,6 +2258,41 @@ TEST_CASE("native plugins: use_ability and ability_state, by kind and name, held
     CHECK(denied.checked.empty());
 }
 
+TEST_CASE("native plugins: command_exists answers as a typed line would run") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapCommands); // no other capability needed
+    REQUIRE(h.plugins->load("HostProbe"));
+    auto answer = [&](const std::string& name) {
+        h.printed.clear();
+        h.run("/probecommand " + name);
+        return h.printed.empty() ? std::string() : h.printed.back();
+    };
+    // Added ones: the plugin's own (any case, the '/' optional) and the client's MQ commands.
+    CHECK(answer("/probecommand") == "[Probe] command '/probecommand' 1");
+    CHECK(answer("PROBECOMMAND") == "[Probe] command 'PROBECOMMAND' 1");
+    CHECK(answer("/echo") == "[Probe] command '/echo' 1");
+    // The game's own, a prefix too ("/wh" runs /who).
+    CHECK(answer("sit") == "[Probe] command 'sit' 2");
+    CHECK(answer("/wh") == "[Probe] command '/wh' 2");
+    // None: unknown, "/" alone (a prefix of everything), a word with a space.
+    CHECK(answer("/nosuchcommandhere") == "[Probe] command '/nosuchcommandhere' 0");
+    CHECK(answer("/") == "[Probe] command '/' 0");
+    CHECK(answer("/sit down") == "[Probe] command '/sit down' 0");
+    // A GM command exists only for a GM.
+    CHECK(answer("/becomenpc") == "[Probe] command '/becomenpc' 0");
+    net::GameConnectionTestAccess::world(*h.world.conn).spawns.at(1).gm = true;
+    CHECK(answer("/becomenpc") == "[Probe] command '/becomenpc' 2");
+    // An added command comes before the game's, as Hooks::command runs it first.
+    const auto owner = h.hooks.new_owner("test");
+    REQUIRE(h.hooks.add_command(owner, "/sit", [](std::string_view) {}));
+    CHECK(answer("/sit") == "[Probe] command '/sit' 1");
+    h.hooks.remove(owner);
+    CHECK(answer("/sit") == "[Probe] command '/sit' 2");
+    // Unloaded, the plugin's command is gone.
+    REQUIRE(h.plugins->unload("HostProbe"));
+    CHECK_FALSE(h.hooks.has_command("/probecommand"));
+}
+
 TEST_CASE("native plugins: get_ability_data_bulk, its layout, truncation and the read gate") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);
