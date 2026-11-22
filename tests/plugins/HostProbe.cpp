@@ -6,24 +6,26 @@
 //   /probestate n  web_state(tab 1) with a struct whose size says n bytes, as a plugin built with a shorter one
 //   /probemessage n  web_message(tab 1) into a buffer of n bytes (0: no buffer)
 //   /probetcp port    tcp_open("127.0.0.1", port); /probetcpsend h  tcp_send(h, "hello") and tcp_state(h)
-//   /probebuffs, /probepetbuffs, /probespawns  get_buff_data_bulk / get_pet_buff_data_bulk / get_spawns_data_bulk
-//   into the whole shared bulk buffer (acquire_bulk_buffer), read through the SDK's HS_Bulk_* structs cast onto it
-//   /probextargets  get_xtarget_data_bulk the same way, through HS_Bulk_XTargetData
-//   /probetargetbuffs  get_target_buff_data_bulk the same way, through HS_Bulk_ListHeader,
+//   /probebuffs [n], /probepetbuffs [n], /probespawns [n]  get_buff_data_bulk / get_pet_buff_data_bulk /
+//   get_spawns_data_bulk into n bytes of the plugin's bulk buffer (acquire_bulk_buffer; all of it without n), read
+//   through the SDK's HS_Bulk_* structs cast onto it; with n, also how many bytes past the first n the host changed
+//   (guard bytes; 0 unless it wrote past the end). See BulkProbe.
+//   /probextargets [n]  get_xtarget_data_bulk the same way, through HS_Bulk_XTargetData
+//   /probetargetbuffs [n]  get_target_buff_data_bulk the same way, through HS_Bulk_ListHeader,
 //   HS_Bulk_TargetBuffFixedRecord and the caster's name after each
-//   /probeaas, /probediscs  get_avail_aa_data_bulk / get_avail_disc_data_bulk the same way, through
+//   /probeaas [n], /probediscs [n]  get_avail_aa_data_bulk / get_avail_disc_data_bulk the same way, through
 //   HS_Bulk_ListHeader and HAILSTONE_ID_NAME_RECORD
-//   /probebuffnames  get_buff_name_data_bulk the same way, through HS_Bulk_BuffNameFixedRecord and the caster's
+//   /probebuffnames [n]  get_buff_name_data_bulk the same way, through HS_Bulk_BuffNameFixedRecord and the caster's
 //   name after each
-//   /proberaid  get_raid_data_bulk the same way, through HS_Bulk_RaidHeader / HS_Bulk_RaidData
+//   /proberaid [n]  get_raid_data_bulk the same way, through HS_Bulk_RaidHeader / HS_Bulk_RaidData
 //   /probecursor   cursor_origin, when the host table has it
 //   /probeability <kind> <name>  ability_state then use_ability, when the host table has them
-//   /probeabilities  get_ability_data_bulk the same way, through HS_Bulk_ListHeader and HS_Bulk_AbilityRecord
-//   /probespells id...  get_spells_data_bulk for those ids, through HS_Bulk_SpellFixedRecord and the strings and
-//   effect lines after each
-//   /probespellsbyname name  get_spells_by_name_data_bulk for that name into the whole shared bulk buffer, printed
-//   as /probespells does
-//   /<name>buf ... (the plugin's own name, lower case, so two copies loaded at once each have theirs): the shared bulk
+//   /probeabilities [n]  get_ability_data_bulk the same way, through HS_Bulk_ListHeader and HS_Bulk_AbilityRecord
+//   /probespells n id...  get_spells_data_bulk for those ids into n bytes, through HS_Bulk_SpellFixedRecord and the
+//   strings and effect lines after each
+//   /probespellsbyname [n] name  get_spells_by_name_data_bulk for that name the same way, printed as /probespells
+//   does
+//   /<name>buf ... (the plugin's own name, lower case, so two copies loaded at once each have theirs): the bulk
 //   buffer, acquire_bulk_buffer / release_bulk_buffer; see probe_buffer
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
@@ -126,22 +128,71 @@ void probe_tcp_send(void*, const char* args) {
     WriteChatf("[Probe] tcp send %lld state %d", sent, static_cast<int>(host->tcp_state(host->host, handle)));
 }
 
+// A bulk read's buffer size: the command's number, or -1 (the whole buffer) without one (no argument, only spaces, or
+// no number at its start).
+long long size_arg(const char* args) {
+    if (!args) return -1;
+    char* end = nullptr;
+    const unsigned long long n = std::strtoull(args, &end, 10);
+    if (end == args) return -1; // nothing read as a number
+    return n < static_cast<unsigned long long>(HS_BULK_BUFFER_SIZE) ? static_cast<long long>(n) : HS_BULK_BUFFER_SIZE;
+}
+
+// A bulk probe's buffer: this plugin's bulk buffer (acquire_bulk_buffer), released when the probe returns. The read
+// is handed its first n bytes: `requested`, at most the whole buffer, or the whole buffer for -1. Below the whole,
+// the bytes past n are guard bytes first, and past_end says how many the host changed (0 unless it wrote past the
+// end).
+class BulkProbe {
+public:
+    BulkProbe(const char* what, long long requested) : what_(what) {
+        std::int32_t room = 0;
+        buf = host->acquire_bulk_buffer(host->host, &room);
+        if (!buf) {
+            WriteChatf("[Probe] %s: no buffer", what);
+            return;
+        }
+        room_ = room;
+        n = requested < 0 || requested > room ? room : static_cast<std::int32_t>(requested);
+        if (requested >= 0) std::memset(buf + n, kGuard, static_cast<std::size_t>(room_ - n));
+        guarded_ = requested >= 0;
+    }
+    ~BulkProbe() {
+        if (buf) host->release_bulk_buffer(host->host);
+    }
+    BulkProbe(const BulkProbe&) = delete;
+    BulkProbe& operator=(const BulkProbe&) = delete;
+    explicit operator bool() const { return buf != nullptr; }
+    void past_end() const {
+        if (!guarded_) return;
+        std::size_t changed = 0;
+        for (std::int32_t i = n; i < room_; ++i) changed += buf[i] != kGuard;
+        WriteChatf("[Probe] %s past the end %zu", what_, changed);
+    }
+
+    unsigned char* buf = nullptr;
+    std::int32_t n = 0;
+
+private:
+    static constexpr unsigned char kGuard = 0xA5;
+    const char* what_;
+    std::int32_t room_ = 0;
+    bool guarded_ = false;
+};
+
 static_assert(sizeof(HS_Bulk_BuffData) == HAILSTONE_BUFF_RECORD_SIZE);
 static_assert(sizeof(HS_Bulk_PetBuffData) == HAILSTONE_PET_BUFF_RECORD_SIZE);
 
 // The occupied slots one line each; the empty ones only counted, and only when laid out as empty.
-void probe_buffs(void*, const char*) {
+void probe_buffs(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, release_bulk_buffer)) {
         WriteChatf("[Probe] buffs: not in this client");
         return;
     }
-    std::int32_t room = 0;
-    unsigned char* buf = host->acquire_bulk_buffer(host->host, &room);
-    if (!buf) {
-        WriteChatf("[Probe] buffs: no buffer");
-        return;
-    }
-    const std::int32_t r = host->get_buff_data_bulk(host->host, buf, room);
+    const BulkProbe probe("buffs", size_arg(args));
+    if (!probe) return;
+    unsigned char* buf = probe.buf;
+    const std::int32_t r = host->get_buff_data_bulk(host->host, buf, probe.n);
+    probe.past_end();
     const std::size_t count = r > 0 ? static_cast<std::size_t>(r) / sizeof(HS_Bulk_BuffData) : 0;
     const auto* recs = reinterpret_cast<const HS_Bulk_BuffData*>(buf);
     int empty = 0;
@@ -157,25 +208,22 @@ void probe_buffs(void*, const char*) {
             rec->counterType, rec->counterTotal, static_cast<unsigned>(rec->slotType)); // HAILSTONE_BUFF_SLOT_*
     }
     WriteChatf("[Probe] buffs %d bytes, %d empty", r, empty);
-    host->release_bulk_buffer(host->host);
 }
 
 static_assert(sizeof(HS_Bulk_BuffNameFixedRecord) == HAILSTONE_BUFF_NAME_RECORD_SIZE);
 
 // get_buff_name_data_bulk: the occupied slots one line each, as /probebuffs but with the caster's name; the empty
 // ones only counted. Each record is followed by its caster's name, so they are walked one by one.
-void probe_buff_names(void*, const char*) {
+void probe_buff_names(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, release_bulk_buffer)) {
         WriteChatf("[Probe] buff names: not in this client");
         return;
     }
-    std::int32_t room = 0;
-    unsigned char* buf = host->acquire_bulk_buffer(host->host, &room);
-    if (!buf) {
-        WriteChatf("[Probe] buff names: no buffer");
-        return;
-    }
-    const std::int32_t r = host->get_buff_name_data_bulk(host->host, buf, room);
+    const BulkProbe probe("buff names", size_arg(args));
+    if (!probe) return;
+    unsigned char* buf = probe.buf;
+    const std::int32_t r = host->get_buff_name_data_bulk(host->host, buf, probe.n);
+    probe.past_end();
     const std::size_t size = r > 0 ? static_cast<std::size_t>(r) : 0;
     std::size_t at = 0;
     int empty = 0;
@@ -196,21 +244,18 @@ void probe_buff_names(void*, const char*) {
             rec->counterType, rec->counterTotal, static_cast<unsigned>(rec->slotType)); // HAILSTONE_BUFF_SLOT_*
     }
     WriteChatf("[Probe] buff names %d bytes, %d empty, %zu bytes left", r, empty, size - at);
-    host->release_bulk_buffer(host->host);
 }
 
-void probe_pet_buffs(void*, const char*) {
+void probe_pet_buffs(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, release_bulk_buffer)) {
         WriteChatf("[Probe] pet buffs: not in this client");
         return;
     }
-    std::int32_t room = 0;
-    unsigned char* buf = host->acquire_bulk_buffer(host->host, &room);
-    if (!buf) {
-        WriteChatf("[Probe] pet buffs: no buffer");
-        return;
-    }
-    const std::int32_t r = host->get_pet_buff_data_bulk(host->host, buf, room);
+    const BulkProbe probe("pet buffs", size_arg(args));
+    if (!probe) return;
+    unsigned char* buf = probe.buf;
+    const std::int32_t r = host->get_pet_buff_data_bulk(host->host, buf, probe.n);
+    probe.past_end();
     const std::size_t count = r > 0 ? static_cast<std::size_t>(r) / sizeof(HS_Bulk_PetBuffData) : 0;
     const auto* recs = reinterpret_cast<const HS_Bulk_PetBuffData*>(buf);
     for (std::size_t i = 0; i < count; ++i) {
@@ -218,7 +263,6 @@ void probe_pet_buffs(void*, const char*) {
         WriteChatf("[Probe] pet buff: spell %d, tics %d, spell type %d", rec->id, rec->duration, rec->spellType);
     }
     WriteChatf("[Probe] pet buffs %d bytes", r);
-    host->release_bulk_buffer(host->host);
 }
 
 static_assert(sizeof(HS_Bulk_SpawnHeader) == HS_BULK_SPAWN_HEADER_SIZE);
@@ -226,21 +270,18 @@ static_assert(sizeof(HS_Bulk_SpawnFixedRecord) == HS_BULK_SPAWN_RECORD_SIZE);
 
 // The header, then each spawn one line (id, level, class, race, HP percent, con colour, name), then the bytes left
 // over after the records the header counts (0 when every record's strings are framed right).
-void probe_spawns(void*, const char*) {
+void probe_spawns(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, release_bulk_buffer)) {
         WriteChatf("[Probe] spawns: not in this client");
         return;
     }
-    std::int32_t room = 0;
-    unsigned char* buf = host->acquire_bulk_buffer(host->host, &room);
-    if (!buf) {
-        WriteChatf("[Probe] spawns: no buffer");
-        return;
-    }
-    const std::int32_t r = host->get_spawns_data_bulk(host->host, buf, room);
+    const BulkProbe probe("spawns", size_arg(args));
+    if (!probe) return;
+    unsigned char* buf = probe.buf;
+    const std::int32_t r = host->get_spawns_data_bulk(host->host, buf, probe.n);
+    probe.past_end();
     if (r <= 0 || static_cast<std::size_t>(r) < sizeof(HS_Bulk_SpawnHeader)) {
         WriteChatf("[Probe] spawns %d bytes", static_cast<int>(r));
-        host->release_bulk_buffer(host->host);
         return;
     }
     const auto size = static_cast<std::size_t>(r);
@@ -268,23 +309,20 @@ void probe_spawns(void*, const char*) {
     }
     WriteChatf("[Probe] spawns %u, player %.2f %.2f %.2f, %zu bytes left", header->spawnCount,
         header->playerX, header->playerY, header->playerZ, size - at);
-    host->release_bulk_buffer(host->host);
 }
 static_assert(sizeof(HS_Bulk_XTargetData) == HS_BULK_XTARGET_RECORD_SIZE);
 
 // Each extended target slot one line: slot, type (HS_BULK_XTARGET_*), spawn id, aggro percent, HP percent.
-void probe_xtargets(void*, const char*) {
+void probe_xtargets(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, release_bulk_buffer)) {
         WriteChatf("[Probe] xtargets: not in this client");
         return;
     }
-    std::int32_t room = 0;
-    unsigned char* buf = host->acquire_bulk_buffer(host->host, &room);
-    if (!buf) {
-        WriteChatf("[Probe] xtargets: no buffer");
-        return;
-    }
-    const std::int32_t r = host->get_xtarget_data_bulk(host->host, buf, room);
+    const BulkProbe probe("xtargets", size_arg(args));
+    if (!probe) return;
+    unsigned char* buf = probe.buf;
+    const std::int32_t r = host->get_xtarget_data_bulk(host->host, buf, probe.n);
+    probe.past_end();
     const std::size_t count = r > 0 ? static_cast<std::size_t>(r) / sizeof(HS_Bulk_XTargetData) : 0;
     const auto* recs = reinterpret_cast<const HS_Bulk_XTargetData*>(buf);
     for (std::size_t slot = 0; slot < count; ++slot) {
@@ -293,7 +331,6 @@ void probe_xtargets(void*, const char*) {
             rec->targetType, rec->id, rec->aggroPct, rec->pctHPs);
     }
     WriteChatf("[Probe] xtargets %d bytes", static_cast<int>(r));
-    host->release_bulk_buffer(host->host);
 }
 
 static_assert(sizeof(HS_Bulk_TargetBuffFixedRecord) == HAILSTONE_TARGET_BUFF_RECORD_SIZE);
@@ -303,22 +340,19 @@ static_assert(sizeof(HS_Bulk_TargetBuffFixedRecord) == HAILSTONE_TARGET_BUFF_REC
 // host sends none, so the count shows one sent again. Then the header's count and total, the records read after it
 // (at most the count; fewer only when the header and the bytes disagree) and the bytes left over after the last whole
 // record (0 when the count and every name are framed right).
-void probe_target_buffs(void*, const char*) {
+void probe_target_buffs(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, release_bulk_buffer)) {
         WriteChatf("[Probe] target buffs: not in this client");
         return;
     }
-    std::int32_t room = 0;
-    unsigned char* buf = host->acquire_bulk_buffer(host->host, &room);
-    if (!buf) {
-        WriteChatf("[Probe] target buffs: no buffer");
-        return;
-    }
-    const std::int32_t r = host->get_target_buff_data_bulk(host->host, buf, room);
+    const BulkProbe probe("target buffs", size_arg(args));
+    if (!probe) return;
+    unsigned char* buf = probe.buf;
+    const std::int32_t r = host->get_target_buff_data_bulk(host->host, buf, probe.n);
+    probe.past_end();
     const std::size_t size = r > 0 ? static_cast<std::size_t>(r) : 0;
     if (size < sizeof(HS_Bulk_ListHeader)) {
         WriteChatf("[Probe] target buffs %d bytes", static_cast<int>(r));
-        host->release_bulk_buffer(host->host);
         return;
     }
     const auto* header = reinterpret_cast<const HS_Bulk_ListHeader*>(buf);
@@ -344,7 +378,6 @@ void probe_target_buffs(void*, const char*) {
     WriteChatf("[Probe] target buffs count %d, total %d, %d bytes, %d records, %d empty, %zu bytes left",
         static_cast<int>(header->count), static_cast<int>(header->total), static_cast<int>(r), count, empty,
         size - at);
-    host->release_bulk_buffer(host->host);
 }
 
 static_assert(sizeof(HAILSTONE_ID_NAME_RECORD) == HAILSTONE_ID_NAME_RECORD_SIZE);
@@ -353,22 +386,19 @@ static_assert(sizeof(HS_Bulk_ListHeader) == HS_BULK_LIST_HEADER_SIZE);
 // get_avail_aa_data_bulk, the owned alternate abilities: each record one line by its position (id, name), then the
 // header's count and total, the bytes and the bytes left over after the records it counts (0 when the count and
 // every name are framed right).
-void probe_aa(void*, const char*) {
+void probe_aa(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, release_bulk_buffer)) {
         WriteChatf("[Probe] aas: not in this client");
         return;
     }
-    std::int32_t room = 0;
-    unsigned char* buf = host->acquire_bulk_buffer(host->host, &room);
-    if (!buf) {
-        WriteChatf("[Probe] aas: no buffer");
-        return;
-    }
-    const std::int32_t r = host->get_avail_aa_data_bulk(host->host, buf, room);
+    const BulkProbe probe("aas", size_arg(args));
+    if (!probe) return;
+    unsigned char* buf = probe.buf;
+    const std::int32_t r = host->get_avail_aa_data_bulk(host->host, buf, probe.n);
+    probe.past_end();
     const std::size_t size = r > 0 ? static_cast<std::size_t>(r) : 0;
     if (size < sizeof(HS_Bulk_ListHeader)) {
         WriteChatf("[Probe] aas %d bytes", static_cast<int>(r));
-        host->release_bulk_buffer(host->host);
         return;
     }
     const auto* header = reinterpret_cast<const HS_Bulk_ListHeader*>(buf);
@@ -386,28 +416,24 @@ void probe_aa(void*, const char*) {
     }
     WriteChatf("[Probe] aas count %d, total %d, %d bytes, %zu bytes left", static_cast<int>(header->count),
         static_cast<int>(header->total), static_cast<int>(r), size - at);
-    host->release_bulk_buffer(host->host);
 }
 
 // get_avail_disc_data_bulk, the combat abilities: each record one line by its position (id, name), then the
 // header's count and total, the bytes and the bytes left over after the records it counts (0 when the count and
 // every name are framed right).
-void probe_disc(void*, const char*) {
+void probe_disc(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, release_bulk_buffer)) {
         WriteChatf("[Probe] discs: not in this client");
         return;
     }
-    std::int32_t room = 0;
-    unsigned char* buf = host->acquire_bulk_buffer(host->host, &room);
-    if (!buf) {
-        WriteChatf("[Probe] discs: no buffer");
-        return;
-    }
-    const std::int32_t r = host->get_avail_disc_data_bulk(host->host, buf, room);
+    const BulkProbe probe("discs", size_arg(args));
+    if (!probe) return;
+    unsigned char* buf = probe.buf;
+    const std::int32_t r = host->get_avail_disc_data_bulk(host->host, buf, probe.n);
+    probe.past_end();
     const std::size_t size = r > 0 ? static_cast<std::size_t>(r) : 0;
     if (size < sizeof(HS_Bulk_ListHeader)) {
         WriteChatf("[Probe] discs %d bytes", static_cast<int>(r));
-        host->release_bulk_buffer(host->host);
         return;
     }
     const auto* header = reinterpret_cast<const HS_Bulk_ListHeader*>(buf);
@@ -425,7 +451,6 @@ void probe_disc(void*, const char*) {
     }
     WriteChatf("[Probe] discs count %d, total %d, %d bytes, %zu bytes left", static_cast<int>(header->count),
         static_cast<int>(header->total), static_cast<int>(r), size - at);
-    host->release_bulk_buffer(host->host);
 }
 
 static_assert(sizeof(HS_Bulk_RaidHeader) == HS_BULK_RAID_HEADER_SIZE);
@@ -433,21 +458,18 @@ static_assert(sizeof(HS_Bulk_RaidData) == HS_BULK_RAID_RECORD_SIZE);
 
 // The header, then each member one line: slot, name, spawn id, group, flags, level, class, HP/mana/endurance
 // percent, pet spawn id and pet HP percent.
-void probe_raid(void*, const char*) {
+void probe_raid(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, get_raid_data_bulk) || !HAILSTONE_HOST_HAS(host, release_bulk_buffer)) {
         WriteChatf("[Probe] raid: not in this client");
         return;
     }
-    std::int32_t room = 0;
-    unsigned char* buf = host->acquire_bulk_buffer(host->host, &room);
-    if (!buf) {
-        WriteChatf("[Probe] raid: no buffer");
-        return;
-    }
-    const std::int32_t r = host->get_raid_data_bulk(host->host, buf, room);
+    const BulkProbe probe("raid", size_arg(args));
+    if (!probe) return;
+    unsigned char* buf = probe.buf;
+    const std::int32_t r = host->get_raid_data_bulk(host->host, buf, probe.n);
+    probe.past_end();
     if (r < static_cast<std::int32_t>(sizeof(HS_Bulk_RaidHeader))) {
         WriteChatf("[Probe] raid %d bytes", r);
-        host->release_bulk_buffer(host->host);
         return;
     }
     const auto* header = reinterpret_cast<const HS_Bulk_RaidHeader*>(buf);
@@ -460,7 +482,6 @@ void probe_raid(void*, const char*) {
     if (header->recordSize < sizeof(HS_Bulk_RaidData)) {
         WriteChatf("[Probe] raid record size %u, smaller than this reader's %zu", header->recordSize,
             sizeof(HS_Bulk_RaidData));
-        host->release_bulk_buffer(host->host);
         return;
     }
     for (std::uint32_t i = 0; i < header->count && at + header->recordSize <= static_cast<std::size_t>(r); ++i) {
@@ -471,7 +492,6 @@ void probe_raid(void*, const char*) {
         WriteChatf("[Probe] raid pos %u: %.2f %.2f %.2f %.2f", i, rec->x, rec->y, rec->z, rec->distance);
         at += header->recordSize;
     }
-    host->release_bulk_buffer(host->host);
 }
 
 void probe_cursor(void*, const char*) {
@@ -768,22 +788,19 @@ static_assert(sizeof(HS_Bulk_AbilityRecord) == HAILSTONE_ABILITY_RECORD_SIZE);
 
 // get_ability_data_bulk: each entry one line (kind, id, ready, remaining and reuse ms, name), then the header's
 // count and total, the bytes, the records read and the bytes left over.
-void probe_abilities(void*, const char*) {
+void probe_abilities(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, get_ability_data_bulk) || !HAILSTONE_HOST_HAS(host, release_bulk_buffer)) {
         WriteChatf("[Probe] abilities: not in this client");
         return;
     }
-    std::int32_t room = 0;
-    unsigned char* buf = host->acquire_bulk_buffer(host->host, &room);
-    if (!buf) {
-        WriteChatf("[Probe] abilities: no buffer");
-        return;
-    }
-    const std::int32_t r = host->get_ability_data_bulk(host->host, buf, room);
+    const BulkProbe probe("abilities", size_arg(args));
+    if (!probe) return;
+    unsigned char* buf = probe.buf;
+    const std::int32_t r = host->get_ability_data_bulk(host->host, buf, probe.n);
+    probe.past_end();
     const std::size_t size = r > 0 ? static_cast<std::size_t>(r) : 0;
     if (size < sizeof(HS_Bulk_ListHeader)) {
         WriteChatf("[Probe] abilities %d bytes", static_cast<int>(r));
-        host->release_bulk_buffer(host->host);
         return;
     }
     const auto* header = reinterpret_cast<const HS_Bulk_ListHeader*>(buf);
@@ -803,7 +820,6 @@ void probe_abilities(void*, const char*) {
     }
     WriteChatf("[Probe] abilities count %d, total %d, %d bytes, %d records, %zu bytes left", header->count,
                header->total, static_cast<int>(r), count, size - at);
-    host->release_bulk_buffer(host->host);
 }
 
 static_assert(sizeof(HS_Bulk_SpellFixedRecord) == HS_BULK_SPELL_RECORD_SIZE);
@@ -902,34 +918,35 @@ void print_spells(const unsigned char* buf, std::int32_t r) {
 // it (its level not 0 or 255), its
 // description (the ninth string), the target type's, resist type's and categories' names (the tenth to fourteenth)
 // and each effect line, stepping by recordSize; then the bytes left over after the last record (0 when every record is framed
-// right). The numbers are the spell ids, read into the whole shared bulk buffer.
+// right). The first number is the buffer size (at most the bulk buffer's), the rest the spell ids; also how many bytes
+// past the first n the host changed.
 void probe_spells(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, get_spells_data_bulk) || !HAILSTONE_HOST_HAS(host, release_bulk_buffer)) {
         WriteChatf("[Probe] spells: not in this client");
         return;
     }
-    std::vector<std::int32_t> ids;
+    std::vector<std::int32_t> nums;
     for (const char* p = args ? args : "";;) {
         char* end = nullptr;
         const long v = std::strtol(p, &end, 10);
         if (end == p) break;
-        ids.push_back(static_cast<std::int32_t>(v));
+        nums.push_back(static_cast<std::int32_t>(v));
         p = end;
     }
-    std::int32_t room = 0;
-    unsigned char* buf = host->acquire_bulk_buffer(host->host, &room);
-    if (!buf) {
-        WriteChatf("[Probe] spells: no buffer");
-        return;
-    }
+    std::vector<std::int32_t> ids;
+    if (nums.size() > 1) ids.assign(nums.begin() + 1, nums.end());
+    const BulkProbe probe("spells", nums.empty() || nums[0] < 0 ? 0 : nums[0]);
+    if (!probe) return;
+    unsigned char* buf = probe.buf;
     const std::int32_t r =
-        host->get_spells_data_bulk(host->host, ids.data(), static_cast<std::int32_t>(ids.size()), buf, room);
+        host->get_spells_data_bulk(host->host, ids.data(), static_cast<std::int32_t>(ids.size()), buf, probe.n);
+    probe.past_end();
     print_spells(buf, r);
-    host->release_bulk_buffer(host->host);
 }
 
-// /probespellsbyname name: get_spells_by_name_data_bulk for the name (the whole line, spaces and all) into the shared
-// bulk buffer, all of it, printed as /probespells prints its records.
+// /probespellsbyname [n] name: get_spells_by_name_data_bulk for the name (the rest of the line, spaces and all) into
+// the bulk buffer, printed as /probespells prints its records. With n (a number first), only n bytes of it, and how
+// many bytes past them the host changed; the whole buffer without.
 void probe_spells_by_name(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, get_spells_by_name_data_bulk) || !HAILSTONE_HOST_HAS(host, release_bulk_buffer)) {
         WriteChatf("[Probe] spells by name: not in this client");
@@ -937,14 +954,19 @@ void probe_spells_by_name(void*, const char* args) {
     }
     const char* name = args ? args : "";
     while (*name == ' ') ++name;
-    std::int32_t room = 0;
-    unsigned char* buf = host->acquire_bulk_buffer(host->host, &room);
-    if (!buf) {
-        WriteChatf("[Probe] spells by name: no buffer");
-        return;
+    long long requested = -1;
+    if (std::isdigit(static_cast<unsigned char>(*name))) {
+        char* end = nullptr;
+        requested = std::strtoll(name, &end, 10);
+        name = end;
+        while (*name == ' ') ++name;
     }
-    print_spells(buf, host->get_spells_by_name_data_bulk(host->host, name, buf, room));
-    host->release_bulk_buffer(host->host);
+    const BulkProbe probe("spells", requested);
+    if (!probe) return;
+    unsigned char* buf = probe.buf;
+    const std::int32_t r = host->get_spells_by_name_data_bulk(host->host, name, buf, probe.n);
+    probe.past_end();
+    print_spells(buf, r);
 }
 
 // The shared bulk buffer, under commands named after this copy of the plugin (/<name>buf...), so that a second copy
