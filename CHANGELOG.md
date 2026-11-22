@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The target ring no longer tints the target's own body: a wolf's belly and legs stayed in the ring's colour where they stood over it. Ground and steps still take it
 - The out-of-combat regeneration indicator and countdown resume after camping and logging back in.
 - The Potion Belt remembers whether you left it open or closed when you camp and log back in.
 - Fixed automatic AFK while standing still, including automatic tribute shutoff on servers that offer it.
