@@ -2059,6 +2059,29 @@ TEST_CASE("native plugins: get_spells_by_name_data_bulk, every spell of the name
     h.run("/probespellsbyname 16384 Third Spire of Necromancy");
     CHECK(h.printed == by_id);
     CHECK(h.printed_line("[Probe] spells past the end 0"));
+    // Too small for all three: only whole records, lowest id first, and nothing past the end. Each record here is 926
+    // bytes (2782 for the count and three), so 2781 holds two.
+    REQUIRE(h.printed_line("[Probe] spells count 3, 2782 bytes, 0 bytes left"));
+    h.printed.clear();
+    h.run("/probespellsbyname 2781 Third Spire of Necromancy");
+    CHECK(has_record(0, 16290, 10));
+    CHECK(has_record(1, 16291, 20));
+    CHECK_FALSE(has_record(2, 16292, 30));
+    CHECK(h.printed_line("[Probe] spells count 2, 1856 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] spells past the end 0"));
+    h.printed.clear();
+    h.run("/probespellsbyname 930 Third Spire of Necromancy"); // the count and the first record exactly
+    CHECK(has_record(0, 16290, 10));
+    CHECK(h.printed_line("[Probe] spells count 1, 930 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] spells past the end 0"));
+    h.printed.clear();
+    h.run("/probespellsbyname 929 Third Spire of Necromancy"); // a byte short of the first: the count alone
+    CHECK(h.printed_line("[Probe] spells count 0, 4 bytes, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] spells past the end 0"));
+    h.printed.clear();
+    h.run("/probespellsbyname 3 Third Spire of Necromancy"); // not even the count: nothing
+    CHECK(h.printed_line("[Probe] spells 0 bytes"));
+    CHECK(h.printed_line("[Probe] spells past the end 0"));
     // One spell of its name: that one alone.
     h.printed.clear();
     h.run("/probespellsbyname Test Heal");
