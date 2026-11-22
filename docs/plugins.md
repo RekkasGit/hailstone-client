@@ -1940,7 +1940,8 @@ for example `[autocombat] hunter = off`.
 
 `[client] deny = on` makes Hailstone stop before completing its first zone-in and show a notice directing the
 player to the server owner. The client checks the policy received through the server's file service on that login.
-This check relies on successful policy delivery and an up-to-date, unmodified client.
+When none comes (a server without the script) or the download fails, an earlier login's copy does not count and the
+client goes in. This check relies on successful policy delivery and an up-to-date, unmodified client.
 
 ```ini
 [client]

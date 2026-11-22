@@ -107,6 +107,9 @@ public:
 
     using Limits = ServerFileLimits;
     enum class Scope { All, ConfigOnly };
+    // ConfigOnly takes hailstone.cfg alone, so it is bounded far below Limits: a login that saves nothing of the
+    // server's must not let it write a large file.
+    static constexpr std::uint64_t kConfigOnlyMaxBytes = std::uint64_t{1} << 20;
 
     // ConfigOnly uses a separate folder so a transient login leaves the full download's files and record alone.
     ServerFileSync(std::filesystem::path profile_dir, Send send, Limits limits = {}, Scope scope = Scope::All);

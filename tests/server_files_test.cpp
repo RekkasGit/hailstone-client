@@ -182,7 +182,7 @@ TEST_CASE("server files: the current server can refuse Hailstone before zone ent
         CHECK(rig.conn.error().empty());
         CHECK_FALSE(fs::exists(cfg));
     }
-    SUBCASE("a failed transfer leaves a cached refusal") {
+    SUBCASE("a failed transfer allows Hailstone, though an earlier refusal stays cached") {
         updated_files.damage = true;
         test::Rig rig(test::MockConfig::standard(), options);
         serve_files(rig, updated_files);
@@ -232,6 +232,23 @@ TEST_CASE("server files: access-only sync checks hailstone.cfg without downloadi
     } else {
         CHECK(rig.conn.error() == "This server does not allow Hailstone. Please contact the server owner.");
     }
+}
+
+TEST_CASE("server files: access-only sync refuses a hailstone.cfg over its bound") {
+    test::ScratchDir cache("server_access_bound");
+    auto options = test::quick_options();
+    options.server_access_dir = cache.path();
+    FakeServer files;
+    std::string cfg = "[client]\ndeny = on\n";
+    cfg.append(ServerFileSync::kConfigOnlyMaxBytes, ';');
+    files.files["hailstone.cfg"] = cfg;
+
+    test::Rig rig(test::MockConfig::standard(), options);
+    serve_files(rig, files);
+    REQUIRE(rig.to_zone());
+    CHECK(rig.conn.error().empty());
+    CHECK(files.pieces == 0);
+    CHECK_FALSE(fs::exists(cache.path() / "hailstone.cfg"));
 }
 
 TEST_CASE("server files: packets round trip") {

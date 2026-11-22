@@ -69,7 +69,8 @@ client_files/
 
 ### Deny Hailstone access
 
-Set the following in `client_files/hailstone.cfg` and keep the Lua script's client file service enabled.
+Set the following in `client_files/hailstone.cfg`, and leave the script's `enabled` and `client_files` settings at 1
+(the defaults; see Settings below): the client reads it from the files the script sends.
 
 ```ini
 [client]

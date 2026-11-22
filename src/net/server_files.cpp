@@ -159,7 +159,12 @@ bool asset_counts(const std::set<std::string>& only, std::string_view normalized
 }
 
 ServerFileSync::ServerFileSync(fs::path profile_dir, Send send, Limits limits, Scope scope)
-    : dir_(std::move(profile_dir)), send_(std::move(send)), limits_(limits), scope_(scope) {}
+    : dir_(std::move(profile_dir)), send_(std::move(send)), limits_(limits), scope_(scope) {
+    if (scope_ == Scope::ConfigOnly) {
+        limits_.max_file = std::min(limits_.max_file, kConfigOnlyMaxBytes);
+        limits_.max_total = std::min(limits_.max_total, kConfigOnlyMaxBytes);
+    }
+}
 
 ServerFileSync::~ServerFileSync() = default;
 
