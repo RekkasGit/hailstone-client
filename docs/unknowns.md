@@ -1199,14 +1199,6 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 
 ## UI
 
-- **ImGui assertion in the all-pack smoke test.**
-  - With ImGui debug assertions enabled, `ui_pack_windows_test.cpp` ("every script of the shipped UIs loads") aborts in
-    the gamepad pass on `ErrorCheckUsingSetCursorPosToExtendParentBoundaries`, also with the unchanged upstream
-    gamepad UI. The item display is not open in that fixture.
-  - The offending window's cursor layout still needs tracing.
-  - Release-mode Windows tests pass. Keep assertions on when reproducing; do not treat the aborted full Debug
-    sanitizer run as a pass.
-
 - **Quest Journal and Quest Tracker** (modern).
   - Not checked live: quest updates across zoning, timed quest expiry, shared roster updates and membership actions,
     mouse move/resize.
