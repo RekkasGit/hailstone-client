@@ -863,7 +863,7 @@ The bulk reads give packed records (Buff, spawn, extended target, ability and ra
 | `get_raid_data_bulk` | the raid roster |
 | `get_spells_data_bulk` | spells by id, with their effects as text |
 | `get_spells_by_name_data_bulk` | every spell of a name, laid out as `get_spells_data_bulk`'s |
-| `acquire_bulk_buffer`, `release_bulk_buffer` | a shared 2 MiB buffer for the reads above, one plugin at a time |
+| `acquire_bulk_buffer`, `release_bulk_buffer` | the plugin's own 2 MiB buffer for the reads above |
 
 #### Actions
 
@@ -981,18 +981,23 @@ Hailstone runs on), unaligned.
 - write nothing and return 0 below the header's size. With nothing to list, the header alone goes out, `count` 0 and
   `total` 0.
 
-**The shared bulk buffer.** `acquire_bulk_buffer(host, &size)` lends the plugin the client's one bulk buffer,
-`HS_BULK_BUFFER_SIZE` (2 MiB) bytes, to pass the reads as `out`, so a plugin need not allocate a buffer of its own for
-each read. `release_bulk_buffer(host)` gives it back.
+**The bulk buffer.** `acquire_bulk_buffer(host, &size)` lends the plugin its own bulk buffer, `HS_BULK_BUFFER_SIZE`
+(2 MiB) bytes, to pass the reads as `out`, so it need not allocate a buffer of its own for each read.
+`release_bulk_buffer(host)` ends the loan.
 
-- One plugin holds it at a time. While another does, `acquire_bulk_buffer` returns NULL and sets `size` to 0; so it
-  does outside the plugin's own callbacks, from another thread among them. `size` may be NULL.
-- The holder asking again gets the same buffer.
-- It is the plugin's only while the plugin runs: until it releases it or, at the latest, until the callback it
-  acquired it in returns, when the client takes it back. Never keep the pointer past that. Release it as soon as the
-  read's results are copied out, since a plugin your code calls into (a command run with `DoCommand`, say) gets none
-  while you hold it.
-- It is never zeroed: it holds whatever its last holder left. Zero what you need zeroed yourself.
+- Each plugin has its own: made at its first `acquire_bulk_buffer`, kept between calls, freed when the plugin unloads.
+  No plugin waits on another.
+- Outside the plugin's own callbacks, from another thread among them, `acquire_bulk_buffer` returns NULL and sets
+  `size` to 0. `size` may be NULL.
+- The pointer is the plugin's from `acquire_bulk_buffer` until the first of: `release_bulk_buffer`, the end of the
+  callback it was acquired in, or the plugin's unload. Never keep it past that.
+- Asked again meanwhile it gives the same buffer, also in one of the plugin's callbacks nested inside that one (its
+  own command run with `DoCommand`, say). A `release_bulk_buffer` in such a nested callback does nothing: the outer
+  callback still holds it. The nested callback's reads do write into the same bytes, so copy out what the outer one
+  still needs before running code that may read into it.
+- To keep two reads' results side by side, give the second the rest of the buffer: read the first into `buf`, then
+  the second into `buf + n` with `size - n`, where `n` is the bytes the first returned.
+- It is never zeroed: it holds whatever the plugin last left. Zero what you need zeroed yourself.
 - It needs no permission; the reads still need `read`.
 - It came later in ABI 3: test `HAILSTONE_HOST_HAS(host, acquire_bulk_buffer)` first.
 

@@ -170,11 +170,6 @@ struct NativePlugins::Impl {
         bool operator==(const ReadyInputs&) const = default;
     };
     mutable std::optional<ReadyInputs> ready_inputs;
-    // The shared bulk buffer (acquire_bulk_buffer): HS_BULK_BUFFER_SIZE bytes, made at the first request and kept for
-    // the client's life, never zeroed. One plugin holds it at a time, until it releases it or the callback it
-    // acquired it in returns (Busy).
-    std::unique_ptr<unsigned char[]> bulk_buffer;
-    const Loaded* bulk_holder = nullptr;
     mutable bool ready_answer = true;
     mutable std::string ready_problem;
 
@@ -304,6 +299,11 @@ struct Loaded {
     // The packet OnPacket is looking at (resize_packet's target).
     net::AppPacket* current_packet = nullptr;
     int busy = 0;              // inside one of its callbacks
+    // Its own bulk buffer (acquire_bulk_buffer): HS_BULK_BUFFER_SIZE bytes, made at its first acquire, never zeroed,
+    // freed with it. bulk_held_at is the callback depth (busy) it was acquired at, 0 while not held: a release in a
+    // deeper (nested) callback leaves it held, and it goes back when the callback it was acquired in returns (Busy).
+    std::unique_ptr<unsigned char[]> bulk_buffer;
+    int bulk_held_at = 0;
     bool unload_pending = false; // unload asked for while busy: done at the next pulse
     bool host_threw_warned = false; // (host_threw)
     bool map_policy_running = false; // get_map_policy cannot recursively invoke its caller's policy hook
@@ -338,8 +338,8 @@ struct Loaded {
 struct Busy {
     explicit Busy(Loaded& l) : l_(l), scope_(l.caps, l.name) { ++l_.busy; }
     ~Busy() {
-        // Out of its code altogether: the bulk buffer is only the plugin's while it runs, so it goes back for others.
-        if (--l_.busy == 0 && l_.host && l_.host->bulk_holder == &l_) l_.host->bulk_holder = nullptr;
+        // The callback its bulk buffer was acquired in has returned: the pointer is no longer the plugin's to use.
+        if (--l_.busy < l_.bulk_held_at) l_.bulk_held_at = 0;
     }
     Busy(const Busy&) = delete;
     Busy& operator=(const Busy&) = delete;
@@ -2461,10 +2461,11 @@ int32_t h_get_spells_by_name_data_bulk(void* h, const char* name, unsigned char*
 static_assert(HS_BULK_BUFFER_SIZE == 2 * 1024 * 1024);
 
 /// <summary>
-/// The shared bulk buffer, HS_BULK_BUFFER_SIZE bytes for the *_data_bulk reads, so a plugin need not allocate its
-/// own. One plugin holds it at a time: null while another does (it is that plugin's until it releases it or its
-/// callback returns), and null outside the plugin's own callbacks, where nothing would give it back. The holder asking
-/// again gets the same buffer. Its bytes are whatever the last holder left: never zeroed.
+/// The plugin's own bulk buffer, HS_BULK_BUFFER_SIZE bytes for the *_data_bulk reads, so it need not allocate its
+/// own: made at its first acquire and kept until it unloads, never zeroed. Each plugin has its own, so no plugin waits
+/// on another. Null outside the plugin's own callbacks, where nothing would end its hold. Held from the first acquire
+/// until release_bulk_buffer at the same callback depth or the end of that callback; asked again meanwhile (from a
+/// nested callback too) it gives the same buffer.
 /// </summary>
 /// <param name="h">host</param>
 /// <param name="size">set to the buffer's size, 0 when there is none (may be null)</param>
@@ -2473,19 +2474,19 @@ unsigned char* h_acquire_bulk_buffer(void* h, int32_t* size)
 {
     Loaded& l = Loaded::of(h);
     if (size) *size = 0;
-    NativePlugins::Impl& m = *l.host;
-    if (!l.busy || (m.bulk_holder && m.bulk_holder != &l)) return nullptr;
-    if (!m.bulk_buffer) m.bulk_buffer.reset(new unsigned char[HS_BULK_BUFFER_SIZE]); // left as it comes: not zeroed
-    m.bulk_holder = &l;
+    if (!l.busy) return nullptr;
+    if (!l.bulk_buffer) l.bulk_buffer.reset(new unsigned char[HS_BULK_BUFFER_SIZE]); // left as it comes: not zeroed
+    if (!l.bulk_held_at) l.bulk_held_at = l.busy;
     if (size) *size = HS_BULK_BUFFER_SIZE;
-    return m.bulk_buffer.get();
+    return l.bulk_buffer.get();
 }
 
-// Gives the bulk buffer back for other plugins; nothing when this plugin does not hold it.
+// Ends the hold acquire_bulk_buffer began; nothing when not held, or from a callback nested inside the one that
+// acquired it (that one is still using it).
 void h_release_bulk_buffer(void* h)
 {
     Loaded& l = Loaded::of(h);
-    if (l.host->bulk_holder == &l) l.host->bulk_holder = nullptr;
+    if (l.bulk_held_at && l.busy <= l.bulk_held_at) l.bulk_held_at = 0;
 }
 
 int32_t h_get_raid_data_bulk(void* h, unsigned char* data, int32_t datamax) {
@@ -3214,6 +3215,17 @@ std::uint32_t NativePlugins::loaded_caps(std::string_view name) const {
     return l && l->name == name ? l->caps : 0;
 }
 
+std::optional<NativePlugins::BulkBufferState> NativePlugins::bulk_buffer_for_test(std::string_view name) const {
+    const Loaded* l = impl_->find(name);
+    if (!l) return std::nullopt;
+    return BulkBufferState{l->bulk_buffer.get(), l->bulk_held_at != 0};
+}
+
+std::size_t NativePlugins::bulk_buffers_for_test() const {
+    return static_cast<std::size_t>(std::count_if(impl_->loaded.begin(), impl_->loaded.end(),
+                                                  [](const auto& l) { return l->bulk_buffer != nullptr; }));
+}
+
 namespace {
 // Takes a plugin out of the client: its ShutdownPlugin (when `shutdown`), everything it registered, then its library.
 void discard(NativePlugins::Impl& m, std::unique_ptr<Loaded> l, bool shutdown) {
@@ -3230,7 +3242,6 @@ void discard(NativePlugins::Impl& m, std::unique_ptr<Loaded> l, bool shutdown) {
         if (m.env.extensions) m.env.extensions->remove(l->chain_id);
     }
     game::clear_class_name_overrides(l->class_names_owner);
-    if (m.bulk_holder == l.get()) m.bulk_holder = nullptr; // (Busy gives it back first; never left to a freed plugin)
     for (const auto& t : std::vector<std::string>(l->tlos)) h_remove_tlo(l.get(), t.c_str());
     platform::unload_library(l->lib);
 }

@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <deque>
 #include <fstream>
+#include <functional>
 #include <thread>
 #include <stdexcept>
 
@@ -131,10 +132,14 @@ struct Host {
         r.server_files.push_back({plugin::FileKind::Plugin, "plugins/MQ2Example", hash()});
         policy.set(r);
     }
+    // Called with each line no command took (after it goes into `sent`), so a test can look in from inside a
+    // plugin's DoCommand.
+    std::function<void(const std::string&)> on_sent;
     void run(const std::string& line) {
         std::string l = line;
         if (hooks.command(l)) return;
         sent.push_back(l);
+        if (on_sent) on_sent(l);
     }
     std::string p(std::string_view text) { return mq::parse_macro_data(ctx, text); }
     bool printed_line(const std::string& t) const { return std::find(printed.begin(), printed.end(), t) != printed.end(); }
@@ -2109,7 +2114,7 @@ TEST_CASE("native plugins: get_spells_by_name_data_bulk, every spell of the name
     CHECK(denied.printed_line("[Probe] spells 0 bytes"));
     CHECK(denied.printed_line("[Plugin] HostProbe: get_spells_by_name_data_bulk needs the server's 'read' permission"));
 }
-TEST_CASE("native plugins: the shared bulk buffer, one plugin at a time and never zeroed") {
+TEST_CASE("native plugins: each plugin's own bulk buffer, its hold, nesting and unload") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);
     // A second copy of the probe beside the first: its commands are /hostprobeb..., the first's /hostprobe....
@@ -2118,51 +2123,73 @@ TEST_CASE("native plugins: the shared bulk buffer, one plugin at a time and neve
     fs::copy_file(h.file, h.file.parent_path() / second, fs::copy_options::overwrite_existing);
     REQUIRE(h.plugins->load("HostProbe"));
     REQUIRE(h.plugins->load("HostProbeB"));
+    // /check (no such command) records, from inside a plugin's command, whether each copy holds its buffer.
+    std::vector<std::pair<bool, bool>> holds;
+    h.on_sent = [&](const std::string& line) {
+        if (line != "/check") return;
+        holds.emplace_back(h.plugins->bulk_buffer_for_test("HostProbe")->held,
+                           h.plugins->bulk_buffer_for_test("HostProbeB")->held);
+    };
 
-    // 2 MiB, and the holder asking again gets the same buffer.
+    // None until asked for.
+    CHECK(h.plugins->bulk_buffers_for_test() == 0);
+    CHECK(h.plugins->bulk_buffer_for_test("HostProbe")->data == nullptr);
+    // 2 MiB, and asked again the same buffer.
     h.run("/hostprobebuf");
     CHECK(h.printed_line("[Probe] HostProbe acquire: 2097152 bytes"));
     CHECK(h.printed_line("[Probe] HostProbe again: same, 2097152 bytes"));
-    // Never released by the command, but its callback has returned: free for the other plugin.
-    h.printed.clear();
-    h.run("/hostprobebbuf");
-    CHECK(h.printed_line("[Probe] HostProbeB acquire: 2097152 bytes"));
+    CHECK(h.plugins->bulk_buffers_for_test() == 1);
+    // Never released by the command, but the hold ends with the callback it began in; the buffer stays.
+    auto a = h.plugins->bulk_buffer_for_test("HostProbe");
+    REQUIRE(a);
+    CHECK(a->data != nullptr);
+    CHECK_FALSE(a->held);
 
-    // While one plugin holds it, the other gets none: here from inside the holder's command (DoCommand), and the
-    // holder keeps it.
+    // Both plugins hold their own at once: the second's, asked from inside the first's command, is another buffer,
+    // and writing it leaves the first's alone.
     h.printed.clear();
-    h.run("/hostprobebufhold /hostprobebbuf");
-    CHECK(h.printed_line("[Probe] HostProbe acquire: 2097152 bytes"));
-    CHECK(h.printed_line("[Probe] HostProbeB acquire: none, size 0"));
-    CHECK(h.printed_line("[Probe] HostProbe still: same"));
-    h.printed.clear();
-    h.run("/hostprobebbufhold /hostprobebuf");
-    CHECK(h.printed_line("[Probe] HostProbe acquire: none, size 0"));
-    CHECK(h.printed_line("[Probe] HostProbeB still: same"));
-    // Released, it is the other's at once.
-    h.printed.clear();
-    h.run("/hostprobebufpass /hostprobebbuf");
+    h.run("/hostprobebufhold 11 /hostprobebbufwrite 22;/check");
     CHECK(h.printed_line("[Probe] HostProbeB acquire: 2097152 bytes"));
-
-    // Never zeroed: the next holder finds what the last one left, at both ends.
+    CHECK(h.printed_line("[Probe] HostProbe still: same, read 11 11"));
+    REQUIRE(holds.size() == 1);
+    CHECK(holds[0] == std::pair{true, false}); // the second's own command released it
+    CHECK(h.plugins->bulk_buffers_for_test() == 2);
+    CHECK(h.plugins->bulk_buffer_for_test("HostProbe")->data != h.plugins->bulk_buffer_for_test("HostProbeB")->data);
+    CHECK_FALSE(h.plugins->bulk_buffer_for_test("HostProbe")->held);
     h.printed.clear();
-    h.run("/hostprobebufwrite 90");
-    h.run("/hostprobebbufread");
-    CHECK(h.printed_line("[Probe] HostProbeB read 90 90"));
-    h.run("/hostprobebbufwrite 7");
     h.run("/hostprobebufread");
-    CHECK(h.printed_line("[Probe] HostProbe read 7 7"));
+    h.run("/hostprobebbufread");
+    CHECK(h.printed_line("[Probe] HostProbe read 11 11"));
+    CHECK(h.printed_line("[Probe] HostProbeB read 22 22")); // never zeroed: what each left
+
+    // Nested in its own command, the plugin gets the same buffer (it reads what the outer wrote), and a release
+    // there leaves the outer's hold alone.
+    holds.clear();
+    h.printed.clear();
+    h.run("/hostprobebufhold 5 /hostprobebufread;/hostprobebufrelease;/check");
+    CHECK(h.printed_line("[Probe] HostProbe read 5 5"));
+    CHECK(h.printed_line("[Probe] HostProbe still: same, read 5 5"));
+    REQUIRE(holds.size() == 1);
+    CHECK(holds[0].first);
+    CHECK_FALSE(h.plugins->bulk_buffer_for_test("HostProbe")->held);
+    // A release in the callback that acquired it ends the hold there.
+    holds.clear();
+    h.run("/hostprobebufpass /check");
+    REQUIRE(holds.size() == 1);
+    CHECK_FALSE(holds[0].first);
 
     // From another thread: none, and the size says 0.
     h.printed.clear();
     h.run("/hostprobebufthread");
     CHECK(h.printed_line("[Probe] HostProbe thread: none, size 0"));
 
-    // The plugin that last held it unloaded: the other still gets it.
+    // Unloading a plugin frees its buffer; the other keeps its own.
     REQUIRE(h.plugins->unload("HostProbe"));
+    CHECK(h.plugins->bulk_buffers_for_test() == 1);
+    CHECK_FALSE(h.plugins->bulk_buffer_for_test("HostProbe"));
     h.printed.clear();
-    h.run("/hostprobebbuf");
-    CHECK(h.printed_line("[Probe] HostProbeB acquire: 2097152 bytes"));
+    h.run("/hostprobebbufread");
+    CHECK(h.printed_line("[Probe] HostProbeB read 22 22"));
 
     // It needs no permission of its own ('read' is for the reads).
     Host plain(false, nullptr, HAILSTONE_PROBE_PLUGIN);

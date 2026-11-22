@@ -969,21 +969,23 @@ void probe_spells_by_name(void*, const char* args) {
     print_spells(buf, r);
 }
 
-// The shared bulk buffer, under commands named after this copy of the plugin (/<name>buf...), so that a second copy
+// The plugin's bulk buffer, under commands named after this copy of the plugin (/<name>buf...), so that a second copy
 // loaded beside it can be asked from inside the first's command with DoCommand. Each line starts "[Probe] <name>".
-//   buf            acquire, then acquire again (the same buffer?); kept, never released here
-//   bufwrite v     acquire, set the first and last 16 bytes to v, release
-//   bufread        acquire, print the first and last byte, release (what the last holder left: never zeroed)
-//   bufhold cmd    acquire, run cmd, then whether this copy still has the same buffer; release
-//   bufpass cmd    acquire, release, run cmd
-//   bufthread      acquire from another thread
+//   buf              acquire, then acquire again (the same buffer?); kept, never released here
+//   bufwrite v       acquire, set the first and last 16 bytes to v, release
+//   bufread          acquire, print the first and last byte, release (what this plugin last left: never zeroed)
+//   bufrelease       acquire, release
+//   bufhold v cmds   acquire, set the first and last 16 bytes to v, run each of cmds (split at ';'), then whether a
+//                    fresh acquire gives the same buffer and its first and last byte; release
+//   bufpass cmd      acquire, release, run cmd
+//   bufthread        acquire from another thread
 std::string own_name() { return host->name(host->host); }
 std::string own_command(const char* what) {
     std::string c = "/" + own_name() + what;
     for (char& ch : c) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
     return c;
 }
-const char* const buffer_commands[] = {"buf", "bufwrite", "bufread", "bufhold", "bufpass", "bufthread"};
+const char* const buffer_commands[] = {"buf", "bufwrite", "bufread", "bufrelease", "bufhold", "bufpass", "bufthread"};
 
 void print_acquired(const char* what, const unsigned char* buf, std::int32_t size) {
     if (buf) WriteChatf("[Probe] %s %s: %d bytes", own_name().c_str(), what, static_cast<int>(size));
@@ -1016,20 +1018,30 @@ void probe_buffer(void* user, const char* args) {
         const unsigned char* again = host->acquire_bulk_buffer(host->host, &again_size);
         WriteChatf("[Probe] %s again: %s, %d bytes", name.c_str(), again == buf ? "same" : "other",
                    static_cast<int>(again_size));
-        return; // kept: the host takes it back when this command returns
+        return; // kept: the host ends the hold when this command returns
     }
-    if (what == "bufwrite") {
-        const auto v = static_cast<unsigned char>(std::strtoul(rest, nullptr, 10));
+    if (what == "bufwrite" || what == "bufhold") {
+        char* end = nullptr;
+        const auto v = static_cast<unsigned char>(std::strtoul(rest, &end, 10));
+        rest = end;
         std::memset(buf, v, 16);
         std::memset(buf + n - 16, v, 16);
         WriteChatf("[Probe] %s wrote %d", name.c_str(), static_cast<int>(v));
-    } else if (what == "bufread") {
+    }
+    if (what == "bufread") {
         WriteChatf("[Probe] %s read %d %d", name.c_str(), static_cast<int>(buf[0]), static_cast<int>(buf[n - 1]));
     } else if (what == "bufhold") {
-        DoCommand(rest);
+        for (std::string cmds = rest; !cmds.empty();) {
+            const std::size_t cut = cmds.find(';');
+            std::string cmd = cmds.substr(0, cut);
+            cmds = cut == std::string::npos ? std::string() : cmds.substr(cut + 1);
+            while (!cmd.empty() && cmd.front() == ' ') cmd.erase(cmd.begin());
+            if (!cmd.empty()) DoCommand(cmd.c_str());
+        }
         std::int32_t again_size = -1;
         const unsigned char* again = host->acquire_bulk_buffer(host->host, &again_size);
-        WriteChatf("[Probe] %s still: %s", name.c_str(), again == buf ? "same" : "other");
+        WriteChatf("[Probe] %s still: %s, read %d %d", name.c_str(), again == buf ? "same" : "other",
+                   static_cast<int>(buf[0]), static_cast<int>(buf[n - 1]));
     } else if (what == "bufpass") {
         host->release_bulk_buffer(host->host);
         DoCommand(rest);
