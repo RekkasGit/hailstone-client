@@ -9,6 +9,7 @@
 - Door clicks while controlling Eye of Zomm use the Eye's reach, and the Eye no longer intercepts first-person clicks.
 - Press F1–F6 again while the corresponding player is targeted to select their pet. Click the green pet bar in the Modern Group window to select that pet directly.
 - `/hidecorpses` remembers your choice per character across restarts and zone changes. Use `always` to hide every corpse, including your own, or `none` to show corpses again.
+- Item, say, and achievement links in chat work during the camp countdown.
 - **Linux arm64 release package** (`hailstone-<version>-linux-arm64.zip`) for arm64 handhelds, boards and laptops with a Vulkan 1.3 driver, such as Mesa's Turnip on Snapdragon; it updates itself like the x64 one. So far it has only been tested on a Qualcomm Snapdragon 8 Elite (an AYN Odin 3 Max)
 - Modern Player Info: right-click the frame to show mana and endurance percentages, current / maximum values, or both. Each readout defaults to off.
 - `/consider` with no target says "Consider whom?", and considering a ship or boat says "You can't consider that." without asking the server, as in the original client.
