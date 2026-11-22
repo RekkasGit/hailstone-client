@@ -2065,7 +2065,9 @@ The zone owns the idle and AFK timers.
 - While set, a tell gets the away reply (1418 and the /afk message, or 1419).
 
 "You are now AFK." / "You are no longer AFK." come from EQEmu's zone (`Client::CheckAutoIdleAFK`,
-Character:EnableAutoAFK, SecondsBeforeAFK{Combat,NonCombat}Zone 1800 / 600 s, SecondsBeforeIdle* 1700 / 640 s). An
+Character:EnableAutoAFK, off by default; SecondsBeforeAFK{Combat,NonCombat}Zone 1800 / 600 s and
+SecondsBeforeIdle{Combat,NonCombat}Zone 600 / 60 s are the rule defaults in ruletypes.h, which a server's database may
+change). An
 OP_ClientUpdate at the last position more than the AFK time after `ResetAFKTimer` sets AFK. Only OP_CastSpell,
 OP_ChannelMessage, OP_MoveItem, auto attack and OP_SpawnAppearance AFK reset that timer, not walking, so a player who
 only runs and clicks goes AFK at his next stop (seen live).
