@@ -2651,15 +2651,6 @@ void GameConnection::set_target(std::uint32_t spawn_id) {
     }
     if (state_ != ConnectionState::InZone) return;
     send_zone(encode_target(false, spawn_id));
-    // Newbie guard (DoPassageOfTime @0x45dcb1): below level 11, switching to a
-    // target more than 2 levels higher turns attacking and auto fire off.
-    if ((auto_attack_ || auto_fire_) && spawn_id) {
-        auto it = world_.spawns.find(spawn_id);
-        if (it != world_.spawns.end() && pstatus_.level < 11 && static_cast<int>(it->second.level) - pstatus_.level > 2) {
-            set_auto_attack(false);
-            set_auto_fire(false);
-        }
-    }
 }
 
 void GameConnection::target_by_name(const std::string& name) {

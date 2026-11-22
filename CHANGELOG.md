@@ -3,6 +3,7 @@
 ## Unreleased
 
 - With a live EverQuest folder, Arena and Nektulos load the zone the server runs: the revamped zone when the server's safe point stands on it (PEQ's Arena, and Nektulos from expansion 10), the old zone otherwise. They always loaded the old zone before
+- Switching targets with Tab or other controls keeps auto attack and auto fire active. Enable **Red-Con Attack Guard** in Options to warn low-level players and stop their melee auto attack when they switch to much higher-level targets.
 - Scripts can ask whether you or your target is poisoned, diseased, cursed or corrupted: `Me.Poisoned`, `Target.Diseased`, `.Cursed` and `.Corrupted` give the buff responsible, as in MacroQuest
 - Windows: when the graphics device fails mid-game, the client no longer crashes while closing with a plugin loaded, so the device error itself reaches the log and an error box
 - The target ring no longer tints the target's own body: a wolf's belly and legs stayed in the ring's colour where they stood over it. Ground and steps still take it
