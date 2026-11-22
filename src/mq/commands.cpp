@@ -31,6 +31,20 @@ std::string_view trim_target(std::string_view s) {
     return s;
 }
 
+// Whether one of the words of `s` (split at a space or a tab) is `word`, case-insensitively.
+bool has_word(std::string_view s, std::string_view word) {
+    while (!s.empty()) {
+        const std::size_t start = s.find_first_not_of(" \t");
+        if (start == std::string_view::npos) return false;
+        s.remove_prefix(start);
+        const std::size_t end = s.find_first_of(" \t");
+        if (iequals(s.substr(0, end), word)) return true;
+        if (end == std::string_view::npos) return false;
+        s.remove_prefix(end);
+    }
+    return false;
+}
+
 std::string first_word(std::string_view line) {
     line = trim(line);
     return std::string(line.substr(0, line.find(' ')));
@@ -126,9 +140,10 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
             if (!ctx.conn || !env_.set_target) return;
             args = trim_target(args);
             const game::WorldState& world = ctx.conn->world();
-            // MQ: /target with nothing, or with "myself", targets the player. Words split at a space or a tab, as
-            // in a spawn search, and whatever follows myself is no search.
-            if (args.empty() || iequals(args.substr(0, args.find_first_of(" \t")), "myself")) {
+            // MQ: /target with nothing, or with "myself" among its words, targets the player (MQCommands.cpp
+            // Target: myself anywhere wins over the rest of the search). Words split at a space or a tab, as in a
+            // spawn search.
+            if (args.empty() || has_word(args, "myself")) {
                 env_.set_target(world.player_id);
                 return;
             }

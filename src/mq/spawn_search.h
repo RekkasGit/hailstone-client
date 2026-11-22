@@ -102,8 +102,8 @@ std::vector<const game::Spawn*> find_spawns(std::string_view text, const net::Ga
 // list; a target that is no match starts from its own distance, next taking the first match farther away and prev
 // the last one nearer. At either end of the list there is none: MQ does not wrap around, and neither do we.
 // Hailstone also leaves the local player out while another spawn matches, in every direction (Hailstone's rule,
-// rather than MQ's), and measures from the player in distance order, where MQ measures from the old target and walks
-// its spawn list (docs/plugins.md).
+// rather than MQ's), and measures the search from the player in 3D distance order, where MQ measures it from the old
+// target and walks its spawn list sorted by flat (XY) distance from the player (docs/plugins.md).
 const game::Spawn* pick_target(const SpawnSearch& search, const std::vector<const game::Spawn*>& found,
                                const game::WorldState& world);
 

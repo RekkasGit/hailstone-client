@@ -945,7 +945,7 @@ TEST_CASE("MQ commands: /target, ${} for typed lines, /noparse, /squelch") {
     CHECK(h.printed.size() == before);
     h.run("/target nobody_here");
     CHECK(h.printed.back() == "There are no spawns matching: (nobody_here)");
-    // With nothing, or with myself, it targets you, whatever follows myself (a tab ends the word too).
+    // With nothing, or with myself, it targets you, whatever else the line holds (a tab ends the word too).
     h.run("/target id 12");
     CHECK(h.target == 12);
     h.run("/target");
@@ -961,6 +961,11 @@ TEST_CASE("MQ commands: /target, ${} for typed lines, /noparse, /squelch") {
     h.run("/target id 12");
     CHECK(h.target == 12);
     h.run("/target myself\tnpc");
+    CHECK(h.target == 1);
+    // MQ takes myself from anywhere in the line, not only first.
+    h.run("/target id 12");
+    CHECK(h.target == 12);
+    h.run("/target npc MySelf");
     CHECK(h.target == 1);
     // A tab before myself, or a tab alone, is whitespace too.
     h.run("/target id 12");

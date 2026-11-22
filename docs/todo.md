@@ -595,7 +595,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] **Spawn searches follow MacroQuest's words and matching rules** (`mq/spawn_search.h`): spawn types, pets, 3D radius, named test, group, raid, guild, xtarget, light, player state.
 - [x] **The alerts key** (CMD_HISTORIC_ALERTS, __ExecuteCmd case 168) toggles AlertHistoryWnd in both packs; listed with its Shift+H default. Seen live in the Modern pack.
 - [ ] **MacroQuest's alert lists:** `/alert`, and the spawn search's `alert`, `noalert`, `nearalert`, `notnearalert`. None kept yet, so those words act as with an empty list.
-- [x] **The spawn search's `next` / `prev`** walk `/target`'s matches from the current target, nearest first; MQ measures from the old target and walks its spawn list in spawn order (docs/plugins.md).
+- [x] **The spawn search's `next` / `prev`** walk `/target`'s matches from the current target, nearest first; MQ measures from the old target and sorts by flat distance (docs/plugins.md).
 - [x] **`mq.event` patterns match as MacroQuest's Lua events do (Blech)** (`mq/event_pattern.h`).
   - Case-insensitive; every `#...#` up to the first place the next literal is.
   - `#name#`, `|${...}|`, `##` / `||`; arguments by number with gaps.

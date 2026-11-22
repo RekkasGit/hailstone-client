@@ -419,8 +419,9 @@ Differences from MQ:
 - No alert lists are kept, so `nearalert` finds nothing and the other alert words ask nothing (as MQ with no list).
 - `fellowship` matches the server-supplied roster, including expanded rosters of up to 64 members.
 - `los` keeps a spawn while the zone's collision is not loaded.
-- `/target next` and `/target prev` measure from the player and walk the matches nearest first, where MQ measures from
-  the old target and walks its spawn list in spawn order.
+- `/target next` and `/target prev` measure `radius`, `zradius` and `nopcnear` from the player, where MQ measures them
+  from the old target. Both walk the spawns nearest the player first, but MQ sorts by flat (XY) distance
+  (`UpdateMQ2SpawnSort`, refreshed every pulse) and Hailstone by 3D distance, as its other searches do.
 - `/target` leaves you out while another spawn matches, in every direction: a typed search, `next` and `prev` alike.
   A bare name without `next` or `prev` is the exception, because RoF2's choice takes your exact name even then. That
   is Hailstone's own rule, not MQ's.
