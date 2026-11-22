@@ -2022,7 +2022,7 @@ and repeats only the looted action at zone-in. Hailstone extensions, beyond RoF2
 - `always` is local: it clears the server's filter (action 0) and hides every corpse, the player's own too.
 - Changing to npc or looted after a broader mode sends action 0 first. EQEmu ignores looted and, for npc, does not
   send back the player corpses the broader mode hid (EntityList::HideCorpses).
-- With no argument, a line naming the current mode follows the original's usage lines.
+- With no argument, two lines follow the original's usage lines: what `always` does and the current mode.
 
 #### Actor property sets
 
