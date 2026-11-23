@@ -877,7 +877,8 @@ typedef struct PluginHostApi {
     const char* (*name)(void* host);           /* the plugin's name */
     void (*log)(void* host, int level, const char* text); /* the client's log: 0 debug .. 3 error */
 
-    /* MQ's WriteChatColor: a line in the chat window (color 0xRRGGBB, 0 the default). */
+    /* MQ's WriteChatColor: a line in the chat window (color 0xRRGGBB, 0 the default). MacroQuest's colour codes in the
+     * text (BEL and a letter, "\ag" ... "\ax", "\a#rrggbb") colour its parts (docs/plugins.md "Colour codes"). */
     void (*write_chat)(void* host, const char* text, uint32_t color);
     /* MQ's DoCommand: a command line, as typed (${...} parsed), held to the plugin's capabilities. */
     void (*do_command)(void* host, const char* line);

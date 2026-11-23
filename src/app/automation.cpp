@@ -13,6 +13,7 @@
 #include "app/addon_install.h"
 #include "core/log.h"
 #include "game/eq_names.h"
+#include "game/mq_colors.h"
 #include "game/nameplate_canvas.h"
 #include "mq/commands.h"
 #include "mq/lua_mq.h"
@@ -76,7 +77,7 @@ struct Automation::Impl {
 
     void print(const std::string& text, std::uint32_t rgb = 0) {
         if (net::GameConnection* c = conn()) c->ui_message(text, rgb);
-        else log::info("{}", text);
+        else log::info("{}", game::strip_mq_colors(text)); // the log is plain text (game/mq_colors.h)
     }
 
     // A command line as the player's would go (the hooks first: GameConnection::send_command).

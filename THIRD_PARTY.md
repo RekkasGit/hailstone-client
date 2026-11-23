@@ -127,6 +127,9 @@ files in MacroQuest's repository.
   and `Spawn::IsNamed`, `GetSpawnType`, `GetTypeDesc` and `GetRaceIDName` follow MacroQuest's eqlib constants and
   `src/main/MQ2Utilities.cpp` almost line for line. `IsNamed` was changed in Hailstone and mixes MacroQuest's older
   and newer tests.
+- `src/game/mq_colors.h`, `mq_colors.cpp`: the chat colour codes (`\a` and a letter, its dark shade, `\a#rrggbb`,
+  `\ax`), their colours and when a colour opens follow `MQToSTML` in `src/main/MQ2Utilities.cpp`. Hailstone gives the
+  pieces to its own STML; an `\ax` with nothing open does nothing there, and colours left open are closed.
 - `src/game/dbstr_types.h`: the dbstr_us.txt string types (`eDatabaseStringType`) are copied from
   `src/eqlib/include/eqlib/game/EQClasses.h`.
 - `src/game/spell_effect_text.cpp`: a spell effect slot's text is ported from `src/main/MQ2Spells.cpp`:

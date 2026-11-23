@@ -702,7 +702,7 @@ Callbacks:
 
 Host functions:
 
-- `WriteChatf`, `DoCommand(f)`;
+- `WriteChatf` (MacroQuest's colour codes work: "Colour codes" below), `DoCommand(f)`;
 - `AddCommand` (needs `commands`; 0 for one of the client's own commands, as `mq.bind`), `RemoveCommand`;
 - `host->command_exists(host->host, name)`: whether a typed `/name` would run, and what: `HAILSTONE_COMMAND_ADDED`
   (a plugin's, a script's or the client's own, such as `/echo`), `HAILSTONE_COMMAND_GAME` (the game's own, which
@@ -756,6 +756,29 @@ Only C function pointers and `void*` cross into the client: the callables stay i
 binary, so a plugin built with the wrapper loads in any client of its ABI, whatever compiler built either. A handler
 may remove or replace itself while it runs, and the wrapper catches what a handler throws. Call it on the client's
 thread, as the rest of the host table; remove what captures an object before the object goes.
+
+#### Colour codes
+
+A line a plugin or script writes (`WriteChatf`, `write_chat`, `write_chat_color`, Lua's `print`) may colour its parts
+with MacroQuest's colour codes, as `WriteChatColor` takes them: BEL (`\a` in C, C++, C# and Lua) and what follows it.
+
+| Code | Colour |
+|---|---|
+| `\ay` `\ao` `\ag` `\au` `\ar` `\at` `\am` `\ap` `\aw` | yellow, orange, green, blue, red, teal, magenta, purple, white |
+| `\ab` | black |
+| `\a-` and one of the letters above | its dark shade (`\a-w` grey) |
+| `\a#rrggbb` | that colour (six hex digits) |
+| `\ax` | back to the colour before the last code |
+
+- The chat windows draw them as STML colours, as MacroQuest's `MQToSTML` does; the chat log, the client's log and
+  copied text get the line without them.
+- Each code but `\ax` starts a colour and `\ax` ends the last one started. Unlike MacroQuest, an `\ax` with no colour
+  started does nothing (MacroQuest's would end the line's own colour), and colours still started at the end of the
+  line end there.
+- A code for the colour already showing starts nothing, an unknown letter changes nothing, and `\a#` without six hex
+  digits changes nothing.
+- Only plugins and scripts can colour a line: in a server's message or a player's text, a BEL is taken out when the
+  line comes, before any hook sees it.
 
 #### Chat hooks
 

@@ -448,7 +448,7 @@ The global `mq` (also `require('mq')`) in every script, Lua social and Lua plugi
 | `mq.web.*` | `web` | the script's own browser tabs (below) |
 | `mq.luaDir` | | the script folder the script was found in |
 | `mq.configDir` | | the folder `mq.pickle` writes to: `scripts/config/`, or `scripts/config/<script>/` for a script without every capability |
-| `print(...)`, `printf(fmt, ...)` | | a line in the chat window |
+| `print(...)`, `printf(fmt, ...)` | | a line in the chat window; MacroQuest's colour codes (`\ag`, `\ax` ...) colour it (docs/plugins.md "Colour codes") |
 | `require(name)` | | `mq`, `ImGui`, `hailstone`, or a module file next to the script or in the script folders |
 
 **Event patterns** (`mq/event_pattern.h`): the pattern must match the whole line. `#*#` matches any text, as much as
