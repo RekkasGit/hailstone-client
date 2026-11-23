@@ -59,8 +59,6 @@ static_assert(offsetof(PluginHostApi, select_raid_member) == offsetof(PluginHost
 static_assert(offsetof(PluginHostApi, set_class_name) == offsetof(PluginHostApi, get_map_policy) + sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, get_spells_data_bulk) ==
               offsetof(PluginHostApi, nameplate_spell_icon) + sizeof(PluginHostApi::caps));
-static_assert(offsetof(PluginHostApi, command_exists) ==
-              offsetof(PluginHostApi, remove_ui_contribution) + sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, set_ui_contribution) ==
               offsetof(PluginHostApi, get_spells_data_bulk) + sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, remove_ui_contribution) ==
@@ -71,6 +69,8 @@ static_assert(offsetof(PluginHostApi, acquire_bulk_buffer) ==
               offsetof(PluginHostApi, get_spells_by_name_data_bulk) + sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, release_bulk_buffer) ==
               offsetof(PluginHostApi, acquire_bulk_buffer) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, command_exists) ==
+              offsetof(PluginHostApi, release_bulk_buffer) + sizeof(PluginHostApi::caps));
 
 namespace {
 
