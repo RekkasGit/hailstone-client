@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Spells that require line of sight now report “You cannot see your target” before casting through a solid door or moving obstacle.
 - Warrior epic glows and other attached particle effects stay aligned as weapons, characters and objects move.
 - Hailstone loads and uses spell IDs above the original client's 45,000 ceiling. Item details can show the effects and duration of custom spells from the server's spell file when authored descriptions are missing.
 - Clicking Train or the background in Modern Alternate Advancement keeps held movement keys active.

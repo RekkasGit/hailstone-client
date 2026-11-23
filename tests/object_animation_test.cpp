@@ -238,12 +238,19 @@ TEST_CASE("Animated objects: the moving parts block where the animation has them
     game::AnimatedObjects moving = game::AnimatedObjects::build(zone);
     REQUIRE_FALSE(moving.empty());
     CHECK(moving.definition_count() == 1);
+    const glm::vec3 from{10, 0, 2}, to{0, 0, 2};
+    const auto can_see = [&] {
+        return app::world_geometry_line_of_sight(&mesh, &moving, [](const auto&, const auto&) { return true; }, from, to);
+    };
     // At 0 the slab stands at x 5..6: a walk along -x from x 10 meets it.
     moving.set_time(0);
+    CHECK(mesh.line_of_sight(from, to));
+    CHECK_FALSE(can_see());
     CHECK(blocked(moving, {10, 0, 2}, {0, 0, 2}));
     CHECK_FALSE(blocked(moving, {-10, 0, 2}, {0, 0, 2}));
     // A quarter turn later it stands at y 5..6.
     moving.set_time(100);
+    CHECK(can_see());
     CHECK_FALSE(blocked(moving, {10, 0, 2}, {0, 0, 2}));
     CHECK(blocked(moving, {0, 10, 2}, {0, 0, 2}));
     // Half a turn: at x -6..-5.

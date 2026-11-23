@@ -561,7 +561,10 @@ target-type-needs-target, language garbling, profanity filter, partial name look
   as they were. OP_RestState packets update both during play.
 - Casting runs MakeMeVisible(0xb0, 1) unless the spell is a sneak attack or CastNotStanding; a sitting caster stands
   (ChangePosition 100).
-- Line of sight uses the app's collision (eqstr 108).
+- For a spell that requires a visible target, the sight line starts at the caster and tests terrain, solid objects,
+  doors and animated geometry in their current poses. A blocked cast displays eqstr 108 before starting or sending a
+  cast request. Targeted detrimental spells and dispels require sight. Ordinary beneficial casts and optional-target
+  projectiles can start through obstructions. A ground-targeted cast checks sight to the chosen point.
 - The target-type switch measures 2D distance against Range + focus (at most 5 x Range), MinRange (4602), targeted
   AE's 39.99 height and the spawn's body type.
 
