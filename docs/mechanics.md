@@ -998,6 +998,9 @@ before the scan stays unchanged.
 Closing after Loot All waits for every outstanding loot reply. The original's close timing for that overlap is
 untraced (docs/unknowns.md).
 
+Done, Loot All and movement share one pending close per loot session. Like CLootWnd::AboutToHide @0x6bcd40,
+Hailstone waits for OP_LootComplete after sending OP_EndLootRequest. A close that cannot be sent can be retried.
+
 ## Leaving an NPC interaction
 
 Each service window closes when its NPC is more than 20 units away in 3D (exactly 20 stays open), or the NPC or local

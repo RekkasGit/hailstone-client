@@ -1848,6 +1848,7 @@ public:
         net::Coins money;
         bool open = false;     // the server accepted the request
         bool complete = false; // every item sent
+        bool close_pending = false; // awaiting OP_LootComplete
         std::size_t pending_requests = 0; // OP_LootItem requests awaiting an answer, including individual loots
     };
     void loot(std::uint32_t corpse_id);
