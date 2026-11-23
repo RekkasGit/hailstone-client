@@ -3,8 +3,16 @@
 ## Unreleased
 
 - Clicking Train or the background in Modern Alternate Advancement keeps held movement keys active.
-- Dear ImGui is 1.93.0 (it was 1.91.9). **Plugin authors:** the SDK is ABI 4. A plugin built for ABI 3 still loads, but its `OnUpdateImGui` is not called and `imgui_context` and `web_view` give it nothing, since the Dear ImGui context it draws into changed. Rebuild it against this SDK and Dear ImGui 1.93.0. Lines, outlines and circles that scripts draw (`ui.DrawLine`, `ui.DrawCircle`, nameplate canvas commands) keep their old pixel placement; rectangle outlines now sit inside the rectangle, and filled rectangles at fractional positions get smooth edges.
+- Dear ImGui is 1.93.0 (it was 1.91.9). **Plugin authors:** the SDK is ABI 4. A plugin built for ABI 3 still loads, but its `OnUpdateImGui` is not called and `imgui_context` and `web_view` give it nothing, since the Dear ImGui context it draws into changed. Rebuild it against this SDK and Dear ImGui 1.93.0. Lines, outlines, rectangle outlines and circles that scripts draw (`ui.DrawLine`, `ui.DrawRect`, `ui.DrawCircle`, nameplate canvas commands) keep their old pixel placement, and filled rectangles at fractional positions get smooth edges.
 - Stackable items show their live quantity at the bottom of hotkeys in Modern and Gamepad.
+- Gamepad merchant parcels: each send asks Yes / No first, "sent to" shows only once the item has left, and a cancelled or refused send says it was not sent.
+- Gamepad: a window or popup over a list, tab row or text box no longer passes the mouse wheel or clicks to it, and only the focused item is highlighted while the pad drives. The Friends and Ignore tabs take mouse clicks.
+- Gamepad Who strips a name to one word before it goes into `/invite`, `/target` or a tell; the on-screen chat keyboard stops at the input's length.
+- Modern: the Menu Size slider shows "125 %" (it showed "125 %%"), the Titles window keeps its tab when the list fills in, the target's health bar no longer drains from the previous target, and the Lua social editor closes on a camp or character switch instead of saving into the next character's slot.
+- Modern merchant send notes and coin prompts start fresh for each merchant and character, and Studio and New badges on Marketplace tiles no longer overlap.
+- Negative numbers in the achievement browser and point merchants read "-123,456" (they could read "-,123").
+- Fixed a hang in the Options interface status text on malformed UTF-8, an error in the zone finder's route banner for a route of one zone, and slowdowns on server text with many unclosed colour tags.
+- Bazaar, guild, mail, merchant, bank, AA, Advanced Inventory, achievements and several gamepad HUD windows do less work each frame.
 - With **Auto Target Attackers** enabled, an NPC that attacks you becomes your target if you have none, even when your Extended Target list is empty.
 - With a live EverQuest folder, Arena and Nektulos load the zone the server runs: the revamped zone when the server's safe point stands on it (PEQ's Arena, and Nektulos from expansion 10), the old zone otherwise. They always loaded the old zone before
 - Switching targets with Tab or other controls keeps auto attack and auto fire active. Enable **Red-Con Attack Guard** in Options to warn low-level players and stop their melee auto attack when they switch to much higher-level targets.
