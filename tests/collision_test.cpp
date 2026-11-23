@@ -9,6 +9,7 @@
 
 #include "assets/character.h"
 #include "assets/zone.h"
+#include "game/animated_objects.h"
 #include "game/collision.h"
 #include "game/object_collision.h"
 #include "game/world_state.h"
@@ -95,6 +96,32 @@ TEST_CASE("qeynos2 has floors under its streets" * doctest::skip(!hailstone::tes
     auto mesh = CollisionMesh::build(zone);
     CHECK(mesh.triangle_count() > 10000);
     CHECK(mesh.floor_below({400, -300, 100}, 4).has_value());
+}
+
+TEST_CASE("Warsliks Woods: pine branches near Field of Bone are passable" * doctest::skip(!hailstone::test::game_dir())) {
+    using namespace hailstone::game;
+    const auto zone = hailstone::assets::load_classic_zone(*hailstone::test::game_dir(), "warslikswood");
+    const auto mesh = CollisionMesh::build(zone);
+    const auto animated = AnimatedObjects::build(zone);
+    const auto blocked = [&](const glm::vec3& from, const glm::vec3& to) {
+        auto sweep = SphereSweep::make(from, to, 1.78f); // a human player's sweep radius
+        mesh.sweep_sphere(sweep);
+        animated.sweep_sphere(sweep);
+        return sweep.collided;
+    };
+
+    // Zone-file coordinates. At its first key the branch crossed this path in both directions.
+    const glm::vec3 path_start(3156.941f, -1917.668f, 14.881f);
+    const glm::vec3 path_end(3160.366f, -1922.595f, 14.881f);
+    CHECK_FALSE(blocked(path_start, path_end));
+    CHECK_FALSE(blocked(path_end, path_start));
+    CHECK(mesh.line_of_sight(path_start, path_end));
+
+    const glm::vec3 trunk_start(3166.0f, -1950.0f, 5.0f);
+    const glm::vec3 trunk_end(3181.0f, -1950.0f, 5.0f);
+    CHECK(blocked(trunk_start, trunk_end));
+    CHECK(blocked(trunk_end, trunk_start));
+    CHECK_FALSE(mesh.line_of_sight(trunk_start, trunk_end));
 }
 
 TEST_CASE("line_of_sight is blocked by solid geometry") {

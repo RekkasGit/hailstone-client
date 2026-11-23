@@ -369,12 +369,13 @@ and felwithea.
 
 #### Animated zone objects
 
-A placed object whose skeleton plays its own animation (Ssraeshza Temple's turning rings, swaying branches) is solid
-where the animation has it (`game/animated_objects.h`; docs/formats/wld.md, "Placed-object animation").
+A placed WLD actor with an authored skeleton collision volume uses that volume for movement and scene geometry
+queries. It follows the placement's translation, rotation and scale. Its sprites still draw in their current
+pose. This lets swaying branches pass over players while the tree trunk stays solid.
 
-In the original, `CS3DFile::CreateZoneActorFromActorInst` (0x1001cad0) gives a zone object volume type 1 only with
-placement flag 0x80 (none shipped), and a WLD skeleton's line-segment test takes its per-part mesh path (0x100c66e0).
-The sphere test is taken to work the same way (not traced, docs/unknowns.md).
+The original hierarchical model's sphere sweep (0x1004a9b0) and line-segment test (0x1004aad0) choose the explicit
+collision volume when present. Without one, they test the parts. In Hailstone, animated objects without a volume
+include Ssraeshza Temple's turning rings (`game/animated_objects.h`; docs/formats/wld.md, "Placed-object animation").
 
 Here:
 

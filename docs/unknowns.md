@@ -465,12 +465,10 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     measured, so the phase may differ by that much.
   - Keys: D3DX compresses each animation set (lossiness 0.1) and the original samples the compressed keys; the authored
     keys are sampled here, so a long track (the rings' 121 keys) may move a little differently between keys.
-  - Contact: only the player's sweep, floor test and the boats' hull probes meet the moving parts. The other spawns'
-    probes, line of sight, picking and the navigation mesh use the static mesh, so /nav may plan through a ring.
+  - Contact without an authored volume: only the player's sweep, floor test and the boats' hull probes meet the
+    moving parts. The other spawns' probes, line of sight, picking and the navigation mesh use the static mesh, so
+    /nav may plan through a ring.
   - A triangle across two moving nodes is carried whole by its first moving corner's node for collision.
-  - That the sweep meets the parts where the animation has them is read from the line-segment test's per-part mesh
-    path (0x100c66e0); the sphere test's polygon path (`CActorData::FindIntersectionSphere` @0x10045840 for a
-    hierarchical actor) was not traced.
   - Settle: a live session in Ssraeshza Temple with a non-GM player going through the rings, and a recording of the
     original's phase against its clock.
 
