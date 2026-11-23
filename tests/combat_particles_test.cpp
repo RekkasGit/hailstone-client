@@ -277,7 +277,7 @@ TEST_CASE("Find trail visibility retains both routes and keeps ordinary spell ef
     const auto& emitters = particles.simulation().emitters();
     REQUIRE(emitters.size() == 3);
     CHECK(std::count_if(emitters.begin(), emitters.end(), [](const auto& emitter) { return emitter.still; }) == 2);
-    const auto spell_key = (cast.caster << 16) | cast.spell;
+    const auto spell_key = game::EmitterKey::spell(cast.caster, cast.spell);
     particles.set_paths_visible(false);
     particles.update(rig.conn, {}, {}, nullptr, 0.01f);
     REQUIRE(emitters.size() == 1);
@@ -490,7 +490,7 @@ TEST_CASE("Spell landing packets use the source actor and its level for impact-s
     REQUIRE(emitters.size() == 2);
     CHECK(emitters[0].actor == 333);
     CHECK(emitters[1].actor == 334);
-    CHECK(emitters[0].key == ((333u << 16) | 600u));
+    CHECK(emitters[0].key == game::EmitterKey::spell(333, 600));
     CHECK(near(emitters[0].origin, rig.conn.world().spawns.at(333).position));
     CHECK(near(emitters[1].origin, rig.conn.world().spawns.at(334).position));
     REQUIRE(emitters[0].particles.size() == 1);
@@ -1250,7 +1250,7 @@ TEST_CASE("Actor Particle Density: a change keeps the running emitters' particle
     };
     for (int i = 0; i < 5; ++i) particles.update(0.05f, std::span(&actor, 1), pose, {});
     REQUIRE(particles.simulation().emitters().size() == 2);
-    const std::uint32_t key = particles.simulation().emitters()[0].key;
+    const auto key = particles.simulation().emitters()[0].key;
     const std::size_t before = particles.simulation().emitters()[0].particles.size();
     REQUIRE(before > 0u);
 

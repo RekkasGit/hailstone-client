@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Warrior epic glows and other attached particle effects stay aligned as weapons, characters and objects move.
+- Hailstone loads and uses spell IDs above the original client's 45,000 ceiling. Item details can show the effects and duration of custom spells from the server's spell file when authored descriptions are missing.
 - Clicking Train or the background in Modern Alternate Advancement keeps held movement keys active.
 - Dear ImGui is 1.93.0 (it was 1.91.9). **Plugin authors:** the SDK is ABI 4. A plugin built for ABI 3 still loads, but its `OnUpdateImGui` is not called and `imgui_context` and `web_view` give it nothing, since the Dear ImGui context it draws into changed. Rebuild it against this SDK and Dear ImGui 1.93.0. Lines, outlines, rectangle outlines and circles that scripts draw (`ui.DrawLine`, `ui.DrawRect`, `ui.DrawCircle`, nameplate canvas commands) keep their old pixel placement, and filled rectangles at fractional positions get smooth edges.
 - Stackable items show their live quantity at the bottom of hotkeys in Modern and Gamepad.
