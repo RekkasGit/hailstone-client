@@ -520,7 +520,11 @@ void SpellParticles::play_effect(net::GameConnection& conn, const game::SpellEff
 }
 
 void SpellParticles::prepare() {
-    if (renderer_) renderer_->prepare(particles_);
+    if (renderer_) renderer_->upload_textures();
+}
+
+void SpellParticles::request_textures() {
+    if (renderer_) renderer_->request_textures(particles_);
 }
 
 void SpellParticles::draw(const render::FrameInfo& frame, const glm::mat4& view_proj, const glm::mat4& view,
