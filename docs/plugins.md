@@ -758,8 +758,10 @@ cl /LD /I path\to\hailstone\sdk MyPlugin.c                                    # 
 MacroQuest's plugin sources do not build as they are: they read the game executable's memory layouts
 (`pLocalPlayer`, `PSPAWNINFO`, ...). Port them to TLO reads (`ParseMacroData`) and the callbacks above.
 
-A plugin that draws with Dear ImGui must be built with the client's Dear ImGui version and call
-`ImGui::SetCurrentContext(host->imgui_context(host->host))`.
+A plugin that draws with Dear ImGui must be built with the client's Dear ImGui version (1.93.0 since ABI 4) and call
+`ImGui::SetCurrentContext(host->imgui_context(host->host))`. Dear ImGui 1.92 changed the context's layout (fonts, textures,
+the draw callbacks), so the client does not call `OnUpdateImGui` of a plugin built for an older ABI (it logs that when the
+plugin loads), and `imgui_context` and `web_view` give such a plugin nothing. Rebuild it against this SDK.
 
 ### Server extensions (ABI 2)
 
@@ -916,8 +918,9 @@ Several plugins may extend the client at once: they are asked in load order and 
 
 **Compatibility.** The host table and the hook table carry their size and only grow at their end.
 
-- A plugin built for an older ABI loads in a newer client, not the reverse. This SDK reports ABI 3 (which added the
-  web pages, `web_*`, "Web pages" below).
+- A plugin built for an older ABI loads in a newer client, not the reverse. This SDK reports ABI 4 (which moved the
+  client to Dear ImGui 1.93.0: no `OnUpdateImGui`, `imgui_context` or `web_view` for a plugin of ABI 3 or before). ABI 3
+  added the web pages, `web_*`, "Web pages" below.
 - Calls added since keep ABI 3: test `HAILSTONE_HOST_HAS(host, open_bank)` before such a call, since an older client
   has a shorter table. `use_ability`, `ability_state`, `get_ability_data_bulk` and the other calls under "added later
   in ABI 3" in `sdk/hailstone_plugin.h` are such calls.

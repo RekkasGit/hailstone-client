@@ -240,9 +240,7 @@ TEST_CASE("Lua slot reads: both packs' hot bars, spell gems and buff trays draw 
         fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / pack, dir / pack, fs::copy_options::recursive);
         ImGuiContext* ctx = ImGui::CreateContext();
         ImGui::GetIO().IniFilename = nullptr;
-        unsigned char* px = nullptr;
-        int w = 0, h = 0;
-        ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+        ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures; // 1.92: the atlas is built by NewFrame
         {
             GameDir game(dir / "game");
             net::GameConnection conn(game, {});

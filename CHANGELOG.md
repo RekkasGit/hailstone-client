@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Clicking Train or the background in Modern Alternate Advancement keeps held movement keys active.
+- Dear ImGui is 1.93.0 (it was 1.91.9). **Plugin authors:** the SDK is ABI 4. A plugin built for ABI 3 still loads, but its `OnUpdateImGui` is not called and `imgui_context` and `web_view` give it nothing, since the Dear ImGui context it draws into changed. Rebuild it against this SDK and Dear ImGui 1.93.0. Lines, outlines and circles that scripts draw (`ui.DrawLine`, `ui.DrawCircle`, nameplate canvas commands) keep their old pixel placement; rectangle outlines now sit inside the rectangle, and filled rectangles at fractional positions get smooth edges.
 - Stackable items show their live quantity at the bottom of hotkeys in Modern and Gamepad.
 - With **Auto Target Attackers** enabled, an NPC that attacks you becomes your target if you have none, even when your Extended Target list is empty.
 - With a live EverQuest folder, Arena and Nektulos load the zone the server runs: the revamped zone when the server's safe point stands on it (PEQ's Arena, and Nektulos from expansion 10), the old zone otherwise. They always loaded the old zone before

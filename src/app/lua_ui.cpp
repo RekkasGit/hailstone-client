@@ -2673,7 +2673,7 @@ int GameMenus(lua_State* L) {
     auto& m = Impl::of(L);
     const float scale = std::clamp(static_cast<float>(luaL_optnumber(L, 1, 1.0)), 0.5f, 3.0f);
     ImFont* font = ui::ui_font(2);
-    const float fs = (font ? font->FontSize : ImGui::GetFontSize()) * scale;
+    const float fs = (font ? font->LegacySize : ImGui::GetFontSize()) * scale;
     const float width = static_cast<float>(luaL_optnumber(L, 2, 0.0));
     const float row_height = static_cast<float>(luaL_optnumber(L, 3, fs));
     const float separator_height = static_cast<float>(luaL_optnumber(L, 4, 1.0));
