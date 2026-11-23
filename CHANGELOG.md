@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Warrior epic glows and other attached particle effects stay aligned as weapons, characters and objects move.
 - Clicking Train or the background in Modern Alternate Advancement keeps held movement keys active.
 - Stackable items show their live quantity at the bottom of hotkeys in Modern and Gamepad.
 - With **Auto Target Attackers** enabled, an NPC that attacks you becomes your target if you have none, even when your Extended Target list is empty.
