@@ -1571,13 +1571,17 @@ if(HAILSTONE_BUILD_TESTS)
   add_library(HostProbe MODULE tests/plugins/HostProbe.cpp)
   add_library(HostProbeThrow MODULE tests/plugins/HostProbe.cpp)
   target_compile_definitions(HostProbeThrow PRIVATE HAILSTONE_PROBE_THROW_INIT)
+  # A C++ test plugin built with the SDK's C++ wrapper (tests/plugins/CppWrapper.cpp, sdk/hailstone_plugin.hpp), with
+  # the client's warnings: the header must compile cleanly in a plugin.
+  add_library(CppWrapper MODULE tests/plugins/CppWrapper.cpp)
+  target_compile_options(CppWrapper PRIVATE ${HAILSTONE_WARNINGS})
   # A plugin built against the 0.7.1-beta SDK header (a frozen copy): released plugins must keep loading.
   add_library(Sdk071Plugin MODULE tests/plugins/Sdk071Plugin.c)
   target_include_directories(Sdk071Plugin PRIVATE tests/plugins/sdk071)
   target_compile_options(Sdk071Plugin PRIVATE ${HAILSTONE_WARNINGS})
   set_target_properties(Sdk071Plugin PROPERTIES PREFIX "")
   add_dependencies(hailstone_tests Sdk071Plugin)
-  foreach(p ExtendTest ExtendTestV1 ExtendTestNew HostProbe HostProbeThrow)
+  foreach(p ExtendTest ExtendTestV1 ExtendTestNew HostProbe HostProbeThrow CppWrapper)
     target_include_directories(${p} PRIVATE sdk)
     set_target_properties(${p} PROPERTIES PREFIX "")
   endforeach()
@@ -1605,12 +1609,14 @@ if(HAILSTONE_BUILD_TESTS)
   target_compile_definitions(TestUpscaler_newer PRIVATE EXAMPLE_ABI=99)
   target_compile_definitions(TestUpscaler_nodevice PRIVATE EXAMPLE_REFUSE_DEVICE)
   target_compile_definitions(TestUpscaler_failing PRIVATE EXAMPLE_FAIL_EVALUATE)
-  add_dependencies(hailstone_tests MQ2Example ExtendTest ExtendTestV1 ExtendTestNew HostProbe HostProbeThrow hailstone_mock_web_helper)
+  add_dependencies(hailstone_tests MQ2Example ExtendTest ExtendTestV1 ExtendTestNew HostProbe HostProbeThrow CppWrapper
+                   hailstone_mock_web_helper)
     
   target_compile_definitions(hailstone_tests PRIVATE 
     HAILSTONE_EXAMPLE_PLUGIN="$<TARGET_FILE:MQ2Example>"
     HAILSTONE_PROBE_PLUGIN="$<TARGET_FILE:HostProbe>" 
     HAILSTONE_PROBE_THROW_PLUGIN="$<TARGET_FILE:HostProbeThrow>"
+    HAILSTONE_CPP_PLUGIN="$<TARGET_FILE:CppWrapper>"
     HAILSTONE_SDK071_PLUGIN="$<TARGET_FILE:Sdk071Plugin>"
     HAILSTONE_EXTEND_PLUGIN="$<TARGET_FILE:ExtendTest>" HAILSTONE_EXTEND_PLUGIN_V1="$<TARGET_FILE:ExtendTestV1>"
     HAILSTONE_EXTEND_PLUGIN_NEW="$<TARGET_FILE:ExtendTestNew>"

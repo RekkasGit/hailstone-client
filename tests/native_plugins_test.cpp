@@ -2293,6 +2293,56 @@ TEST_CASE("native plugins: command_exists answers as a typed line would run") {
     CHECK_FALSE(h.hooks.has_command("/probecommand"));
 }
 
+TEST_CASE("native plugins: the SDK's C++ wrapper, capturing lambdas as commands and TLOs") {
+    Host h(false, nullptr, HAILSTONE_CPP_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("CppWrapper"));
+    auto only = [&](const std::string& line) {
+        h.printed.clear();
+        h.run(line);
+        return h.printed;
+    };
+    using Lines = std::vector<std::string>;
+
+    // One handler for two names: each call sees `this` and the name it was added under.
+    CHECK(only("/cppgreet one two") == Lines{"[Cpp] hi /cppgreet 'one two' 1"});
+    CHECK(only("/CPPHELLO") == Lines{"[Cpp] hi /cpphello '' 2"});
+
+    // A handler that replaces or removes itself finishes its call; the next call finds the change.
+    CHECK(only("/cppreplace") == Lines{"[Cpp] original"});
+    CHECK(only("/cppreplace") == Lines{"[Cpp] replaced"});
+    CHECK(only("/cppremoveself") == Lines{"[Cpp] removed 1"});
+    CHECK_FALSE(h.hooks.has_command("/cppremoveself"));
+
+    // An exception stays in the plugin.
+    CHECK(only("/cppthrow").empty());
+    CHECK(h.plugins->loaded("CppWrapper"));
+    CHECK(only("/cppgreet") == Lines{"[Cpp] hi /cppgreet '' 3"});
+
+    // TLOs: the answer, an index, an unknown member, and an answer replaced in place (any case of the name).
+    CHECK(h.p("${CppWrap}") == "first");
+    CHECK(h.p("${CppWrap[abc].Index}") == "abc");
+    CHECK(h.p("${CppWrap.Nope}") == "NULL");
+    CHECK(only("/cppretlo second") == Lines{"[Cpp] retlo 1"});
+    CHECK(h.p("${CppWrap}") == "second");
+
+    // The readers fill the size themselves.
+    CHECK(only("/cppplayer") == Lines{"[Cpp] player Tester 1 spawn yes"});
+    CHECK(only("/cppexists /cppgreet") == Lines{"[Cpp] exists 1"});
+    CHECK(only("/cppexists sit") == Lines{"[Cpp] exists 2"});
+    CHECK(only("/cppexists /nosuchcommandhere") == Lines{"[Cpp] exists 0"});
+
+    // hs::Commands takes its commands with it; the others stay.
+    CHECK(only("/cppdrop") == Lines{"[Cpp] dropped"});
+    CHECK_FALSE(h.hooks.has_command("/cppgreet"));
+    CHECK_FALSE(h.hooks.has_command("/cpphello"));
+    CHECK(h.hooks.has_command("/cppreplace"));
+
+    REQUIRE(h.plugins->unload("CppWrapper"));
+    CHECK_FALSE(h.hooks.has_command("/cppreplace"));
+    CHECK_FALSE(h.reg.has_tlo("CppWrap"));
+}
+
 TEST_CASE("native plugins: get_ability_data_bulk, its layout, truncation and the read gate") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);

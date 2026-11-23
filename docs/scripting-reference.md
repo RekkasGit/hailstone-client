@@ -1365,6 +1365,8 @@ return `true` while nothing changed. Reading a view draws that screen in the cli
 A plugin is a `.dll`, `.so` or `.dylib` built against `sdk/hailstone_plugin.h` (plain C, MIT licensed). docs/plugins.md
 "Compiled plugins" has a full example and the build commands, and `plugins/example/MQ2Example.c` uses every part.
 `sdk/hailstone_byte_io.h` (C++20, header only) gives the `ByteReader` and `ByteWriter` the client uses for packets.
+`sdk/hailstone_plugin.hpp` (C++20, header only) takes capturing lambdas as commands and TLOs and fills the readers'
+sizes (docs/plugins.md "C++ plugins: the wrapper").
 
 ```c
 #include "hailstone_plugin.h"

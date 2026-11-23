@@ -698,6 +698,46 @@ Host functions:
 - `RemoveTopLevelObject` (only the plugin's own);
 - `host->send_packet`, `host->resize_packet`, `host->config_dir`, `host->caps`, `host->imgui_context`.
 
+#### C++ plugins: the wrapper
+
+A C++ plugin may also include `sdk/hailstone_plugin.hpp` (C++20, header only, MIT). It takes any callable for a
+command or a TLO, a capturing lambda among them, as MacroQuest's `mq::AddCommand` does:
+
+```cpp
+#include "hailstone_plugin.h"
+#include "hailstone_plugin.hpp"
+HAILSTONE_PLUGIN
+
+class Bot {
+public:
+    Bot() {
+        for (std::string name : {"/follow", "/stay"})
+            commands_.add(name, [this, name](const char* args) { order(name, args); });
+    }
+private:
+    void order(const std::string& name, const char* args) { WriteChatf("%s %s", name.c_str(), args); }
+    hs::Commands commands_; // last: its commands go before what they capture
+};
+static std::unique_ptr<Bot> bot;
+
+HAILSTONE_API void InitializePlugin(void) { bot = std::make_unique<Bot>(); }
+HAILSTONE_API void ShutdownPlugin(void) { bot.reset(); hs::RemoveAllCommands(); hs::RemoveAllTopLevelObjects(); }
+```
+
+| In `hs::` | What |
+|---|---|
+| `AddCommand(name, fn)`, `RemoveCommand(name)`, `RemoveAllCommands()` | `fn(const char* args)`; adding a name the plugin has replaces it |
+| `Commands` | commands removed with their holder: a member of the object the lambdas capture |
+| `CommandExists(name)` | `command_exists`, empty on a client without it |
+| `AddTopLevelObject(name, fn)`, `RemoveTopLevelObject`, `RemoveAllTopLevelObjects()` | `fn(index, member, member_index, HailstoneValue& out)`, true with `out` filled; `member` is null for `${Name}` itself. Adding the plugin's own name again replaces its answer |
+| `Bool`, `Int`, `Float`, `String` | `HailstoneValue`s for a TLO's `out` (a string must live until the TLO returns) |
+| `GetPlayer()`, `GetSpawn(id)`, `NextSpawn(after_id)` | the readers with the struct's `size` filled in, as `std::optional` |
+
+Only C function pointers and `void*` cross into the client: the callables stay in the plugin, one registry per plugin
+binary, so a plugin built with the wrapper loads in any client of its ABI, whatever compiler built either. A handler
+may remove or replace itself while it runs, and the wrapper catches what a handler throws. Call it on the client's
+thread, as the rest of the host table; remove what captures an object before the object goes.
+
 #### Chat hooks
 
 `OnIncomingChat` and `OnFilterChat` get the server's lines and the client's own, not those a script or plugin writes
