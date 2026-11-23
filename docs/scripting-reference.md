@@ -199,8 +199,9 @@ character's name.
 | `Buff[n\|name]` | `buff` | the nth long buff, or one by name; with no index, the count |
 | `Song[n\|name]` | `buff` | the same for short buffs (songs) |
 | `CountBuffs`, `CountSongs` | int | |
-| `MaxBuffSlots` | int | 42 |
-| `FreeBuffSlots` | int | 42 minus the long buffs |
+| `MaxBuffSlots` | int | the buff window's slots: RoF2's 42, whatever the character's level or AAs |
+| `MaxSongSlots` | int | the song (short buff) window's slots: RoF2's 20 |
+| `FreeBuffSlots` | int | `MaxBuffSlots` minus the long buffs |
 | `Gem[n]` | `spell` | the spell in gem n |
 | `Gem[name]` | int | the gem that holds that spell |
 | `NumGems` | int | how many gems the player can use |

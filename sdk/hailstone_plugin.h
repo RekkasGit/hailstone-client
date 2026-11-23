@@ -185,7 +185,7 @@ typedef struct HS_Bulk_BuffData {
     int32_t hitcount;
     int32_t spelltype;
     int32_t counterType;
-    int32_t counterTotal;
+    int32_t counterTotal; /* that counter effect's counters left once known, else the spell's base (docs/plugins.md) */
     uint8_t slotType; /* HAILSTONE_BUFF_SLOT_BUFF / _SONG / _DISC*/
 } HS_BulkBuffData;
 /* get_buff_name_data_bulk: HS_Bulk_BuffData with the caster's name in place of its spawn id. One record per buff slot,
@@ -198,7 +198,7 @@ typedef struct HS_Bulk_BuffNameFixedRecord {
     int32_t hitcount;
     int32_t spelltype;
     int32_t counterType;
-    int32_t counterTotal;
+    int32_t counterTotal; /* as get_buff_data_bulk's: the counters left once known, else the spell's base */
     uint8_t slotType; /* HAILSTONE_BUFF_SLOT_BUFF / _SONG / _DISC*/
 } HS_Bulk_BuffNameFixedRecord;
 typedef struct HS_Bulk_PetBuffData {

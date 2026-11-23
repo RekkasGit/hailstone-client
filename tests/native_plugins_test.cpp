@@ -1527,6 +1527,24 @@ TEST_CASE("native plugins: get_buff_data_bulk and get_pet_buff_data_bulk, laid o
     CHECK(h.printed_line("[Probe] buff slot 62: spell 99999, caster 0, tics 9, hits 0, spell type 0, counter type -1, "
                          "counters 0, slot type 2"));
     CHECK(h.printed_line("[Probe] buffs 1827 bytes, 58 empty")); // slots 0-62 of 29 bytes
+    // The counters left, once the client knows them: the counter effect's slot data (Test Plague's disease counter is
+    // its second slot). Before that (the profile, a zone-in list), the counters the spell starts with, 4 above.
+    sp.buffs[5].slot_data[1] = 2;
+    h.printed.clear();
+    h.run("/probebuffs");
+    CHECK(h.printed_line("[Probe] buff slot 5: spell 3004, caster 10, tics 5, hits 2, spell type 0, counter type 0, "
+                         "counters 4, slot type 0"));
+    sp.buffs[5].counters_known = true;
+    h.printed.clear();
+    h.run("/probebuffs");
+    CHECK(h.printed_line("[Probe] buff slot 5: spell 3004, caster 10, tics 5, hits 2, spell type 0, counter type 0, "
+                         "counters 2, slot type 0"));
+    sp.buffs[5].slot_data[1] = 0; // every counter cured, the buff still on
+    h.printed.clear();
+    h.run("/probebuffs");
+    CHECK(h.printed_line("[Probe] buff slot 5: spell 3004, caster 10, tics 5, hits 2, spell type 0, counter type 0, "
+                         "counters 0, slot type 0"));
+    sp.buffs[5].counters_known = false;
     // Nothing counts down while the buff timers are on hold (SPA 436): the count as the server sent it.
     sp.buff_timers_on_hold = true;
     h.printed.clear();
@@ -1618,6 +1636,14 @@ TEST_CASE("native plugins: get_buff_name_data_bulk, laid out as docs/plugins.md 
                          "counter type -1, counters 0, slot type 2"));
     // slots 0-62 of 29 bytes, and the names "Groupie" and "Tester"
     CHECK(h.printed_line("[Probe] buff names 1840 bytes, 58 empty, 0 bytes left"));
+    // The counters left once known, as get_buff_data_bulk's.
+    sp.buffs[5].slot_data[1] = 3;
+    sp.buffs[5].counters_known = true;
+    h.printed.clear();
+    h.run("/probebuffnames");
+    CHECK(h.printed_line("[Probe] buff name slot 5: spell 3004, caster Groupie, tics 5, hits 2, spell type 0, "
+                         "counter type 0, counters 3, slot type 0"));
+    sp.buffs[5].counters_known = false;
     // get_buff_data_bulk is unchanged: the caster's id, 29 bytes a slot.
     h.run("/probebuffs");
     CHECK(h.printed_line("[Probe] buff slot 5: spell 3004, caster 12, tics 5, hits 2, spell type 0, counter type 0, "

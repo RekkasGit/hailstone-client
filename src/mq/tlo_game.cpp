@@ -656,9 +656,16 @@ void register_character() {
     me_member("CountSongs", [](const Context& ctx, const GameConnection&, std::string_view) {
         return V::integer(static_cast<std::int64_t>(buff_slots(ctx, true).size()));
     });
-    me_member("MaxBuffSlots", [](const Context&, const GameConnection&, std::string_view) { return V::integer(42); });
+    // The buff and song windows' slots: RoF2's 42 and 20, whatever the character's level or AAs.
+    me_member("MaxBuffSlots", [](const Context&, const GameConnection&, std::string_view) {
+        return V::integer(game::kLongBuffSlots);
+    });
+    me_member("MaxSongSlots", [](const Context&, const GameConnection&, std::string_view) {
+        return V::integer(game::kShortBuffSlots);
+    });
     me_member("FreeBuffSlots", [](const Context& ctx, const GameConnection&, std::string_view) {
-        return V::integer(std::max<std::int64_t>(0, 42 - static_cast<std::int64_t>(buff_slots(ctx, false).size())));
+        return V::integer(std::max<std::int64_t>(
+            0, std::int64_t{game::kLongBuffSlots} - static_cast<std::int64_t>(buff_slots(ctx, false).size())));
     });
     me_member("Gem", [](const Context& ctx, const GameConnection& c, std::string_view index) -> V {
         const auto& gems = c.spell_state().gems;

@@ -115,6 +115,8 @@ TEST_CASE("TLO: spells, gems and buffs") {
     CHECK(f.p("${Me.Buff[2]}") == "NULL");           // the song is not a buff
     CHECK(f.p("${Me.Song[1]}") == "Selo's Accelerando");
     CHECK(f.p("${Me.CountBuffs} ${Me.CountSongs}") == "1 1");
+    // The buff and song windows' slots (RoF2's 42 and 20), and the buff slots one long buff leaves.
+    CHECK(f.p("${Me.MaxBuffSlots} ${Me.MaxSongSlots} ${Me.FreeBuffSlots}") == "42 20 41");
     // 10 ticks = 60 s, counted from when it arrived.
     auto secs = std::stoi(f.p("${Me.Buff[1].Duration.TotalSeconds}"));
     CHECK(secs >= 59);

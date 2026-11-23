@@ -3,6 +3,8 @@
 ## Unreleased
 
 - C++ plugins can include the SDK's new `hailstone_plugin.hpp` to register commands and TLOs as lambdas that capture `this` and other values, as MacroQuest's `mq::AddCommand` does.
+- New TLO member `${Me.MaxSongSlots}`: the song window's slots (RoF2's 20), beside `${Me.MaxBuffSlots}` (42).
+- `get_buff_data_bulk` and `get_buff_name_data_bulk` now report a buff's disease, poison, curse or corruption counters left, as MQ2Mono does, where they gave the counters it started with. A buff whose counters the client does not know yet (one from the profile or a zone-in list, until the spell lands again) still gives the starting count.
 - Plugins can lend the client's thread to their own threads with the SDK's new `lend_thread`, while their callback waits for them, so a script runtime whose scripts run on a thread of their own (MQ2Mono-style C# scripts) can read TLOs and run commands from there.
 - Plugins can ask whether a command exists with the SDK's new `command_exists`. It says whether a plugin, a script or the client added the command, or whether it is one of the game's own.
 - Clicking Train or the background in Modern Alternate Advancement keeps held movement keys active.

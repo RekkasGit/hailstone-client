@@ -1107,12 +1107,18 @@ slots, then the one discipline slot, always last.
   | 12 | i32 | hits left |
   | 16 | i32 | the spell's type: 0 detrimental, 1 beneficial, 2 beneficial group-only (0 for a spell not in spells_us.txt) |
   | 20 | i32 | counter type of the spell's first counter effect: -1 none, 0 disease, 1 poison, 2 curse, 3 corruption. An empty slot also has 0 here, so test the spell id before reading it as disease |
-  | 24 | i32 | that effect's base: the counters the buff starts with (MacroQuest's `Spell.CounterNumber`); 0 with no counter effect |
+  | 24 | i32 | that effect's counters left, once the client knows them; until then its base, the counters the buff starts with (MacroQuest's `Spell.CounterNumber`); 0 with no counter effect. See the note below |
   | 28 | u8 | the slot's window: 0 buff (`HAILSTONE_BUFF_SLOT_BUFF`, RoF2's slots 0 to 41), 1 song (`HAILSTONE_BUFF_SLOT_SONG`, 42 to 61), 2 discipline (`HAILSTONE_BUFF_SLOT_DISC`, the last slot, 62); 0 in an empty slot. Taken from the slot, not the spell |
 
 Tics left is the server's count less the 6 s ticks since it came (none while the buff timers are on hold). A permanent
 buff is negative, the server's count as sent, never counted down (EQEmu: -1 for duration formula 50, -4 for an aura's
-buff, formula 51, -1000 for one a script made permanent). The counters left are not included.
+buff, formula 51, -1000 for one a script made permanent).
+
+The counters left are the counter effect's slot data, as MQ2Mono reports them and the buff window's counter overlay
+draws them: a cure that spends some lowers them, and 0 means every counter is cured while the buff is still on. The
+client knows them once the spell lands on the player (it fills the slot data then, as the original client does), or
+once the server sends the buff with slot data that is not all zero (`OP_Buff`; EQEmu sends zeros, so on EQEmu it is the
+landing). A buff that came with the profile or a zone-in list has none yet, and reads its base until then.
 
 ##### `get_buff_name_data_bulk`
 

@@ -1886,7 +1886,11 @@ int h_get_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
                     default:                           match = false;       break;
                     }
                     if (match) { // the first counter effect only
-                        rec->counterTotal = spell->base[i];
+                        // The counters left (the effect's slot data, as MQ2Mono's SlotData and the buff window's
+                        // counter overlay), once the client knows them; until then (a zone-in list or the profile
+                        // fills no slot data) the counters the spell starts with.
+                        rec->counterTotal = buff.counters_known && i < buff.slot_data.size() ? buff.slot_data[i]
+                                                                                              : spell->base[i];
                         break;
                     }
                 }
@@ -1979,7 +1983,11 @@ int32_t h_get_buff_name_data_bulk(void* h, unsigned char* data, int32_t datamax)
                     default:                           match = false;       break;
                     }
                     if (match) { // the first counter effect only
-                        rec->counterTotal = spell->base[i];
+                        // The counters left (the effect's slot data, as MQ2Mono's SlotData and the buff window's
+                        // counter overlay), once the client knows them; until then (a zone-in list or the profile
+                        // fills no slot data) the counters the spell starts with.
+                        rec->counterTotal = buff.counters_known && i < buff.slot_data.size() ? buff.slot_data[i]
+                                                                                              : spell->base[i];
                         break;
                     }
                 }
