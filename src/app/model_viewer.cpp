@@ -378,8 +378,6 @@ int run_model_viewer(const ModelViewerOptions& opts) {
                               [&](std::uint32_t id, std::string_view code, float& time) {
             return id >= 1 && id <= draws.size() && render::ActorRenderer::playing(draws[id - 1], code, time);
         });
-        actor_emitters.simulate_async(dt, emitter_bone);
-        actor_emitters.prepare();
         if (particle_renderer) {
             if (t >= next_effect) {
                 next_effect = t + 3.0;

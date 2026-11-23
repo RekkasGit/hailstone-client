@@ -892,8 +892,8 @@ private:
     void abilities_test(MovementKeys& mk);
     void melee_test(MovementKeys& mk);
     void face_target();
-    // The frame's lighting for every renderer: the scene light, and in the modern mode the daylight at the sky clock's
-    // The sky, the player's carried light and the zone's lights near the camera.
+    // The frame's lighting for every renderer: the scene light, and in the modern mode the daylight `sky`, the
+    // player's carried light and the zone's lights near the camera.
     // `moving`, when given: the carried light and the spells' as the light list has them, for their shadows
     // (render::PointShadows::set_dynamic).
     render::SceneLighting scene_lighting(const game::SceneLight& scene, const render::Daylight& sky,
@@ -1615,7 +1615,8 @@ private:
     GuidePath guide_;
     std::string guide_zone_; // the zone it was started in: zoning ends it (spawn ids are the zone's)
     void update_guide();
-    void update_scene_particles(float dt, bool in_game, bool pre_game);
+    // `eye`: the camera without OP_CameraEffect's shake, for the emitters' reach and density.
+    void update_scene_particles(float dt, bool in_game, bool pre_game, const glm::vec3& eye);
     // The server's level-up effects (OP_LevelAppearance): started on the spawns' spell points.
     void update_level_effects(net::GameConnection& conn);
     game::ZoneLineTrigger zone_line_;

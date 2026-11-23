@@ -396,7 +396,7 @@ int ClientApp::run() {
             if (automation_) automation_->world_unavailable();
             ui_.end_frame_without_render();
             // Age effects and consume cues even without a new render pose.
-            update_scene_particles(dt, in_world, pre_game);
+            update_scene_particles(dt, in_world, pre_game, camera_.position);
             continue;
         }
         lap = core::frame_sections::Lap();
@@ -496,7 +496,8 @@ int ClientApp::run() {
                     lap.mark("actors prepare_spawns");
                 }
                 emitter_view_proj_ = plain_vp;
-                update_scene_particles(dt, in_game, pre_game);
+                // The emitters see the game camera: the shake is only in the image.
+                update_scene_particles(dt, in_game, pre_game, unshaken_camera);
                 lap.mark("attached particles step");
 
                 // Modern or classic (/lighting, display.lighting): the same scene light for every renderer.
@@ -1234,7 +1235,7 @@ void ClientApp::report_world_geometry() {
     world_recorded_.clear();
 }
 
-void ClientApp::update_scene_particles(float dt, bool in_game, bool pre_game) {
+void ClientApp::update_scene_particles(float dt, bool in_game, bool pre_game, const glm::vec3& eye) {
     if (actor_emitters_ && actor_renderer_ && ((in_game && conn_) || pre_game)) {
         actor_emitter_list_.clear();
         const auto& world = pre_game ? *pre_game_world_ : conn_->world();
@@ -1244,7 +1245,7 @@ void ClientApp::update_scene_particles(float dt, bool in_game, bool pre_game) {
         const bool hold = particle_offscreen_hold_ && emitter_view_proj_.has_value();
         const render::Frustum frustum = render::frustum_from(hold ? *emitter_view_proj_ : glm::mat4(1.0f));
         const bool classic_reach = lighting_mode_ != render::LightingMode::Modern;
-        const glm::vec3 eye = camera_.position, ahead = camera_.forward();
+        const glm::vec3 ahead = camera_.forward();
         auto in_view = [&](std::uint32_t id) {
             glm::vec3 center;
             float radius = 0.0f;
