@@ -10,6 +10,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "core/build_info.h"
 #include "game/combat.h"
 #include "game/counter_spas.h"
 #include "game/coords.h"
@@ -1141,6 +1142,19 @@ void register_misc_types() {
     };
     add(g.macroquest, "Path", path);
     add(g.hailstone, "Path", path);
+    // Members neither has are EverQuest's, as MQ's MacroQuest type passes them on (MQ2MacroQuestType::GetMember):
+    // MacroQuest.Server is EverQuest.Server, the server the player logged in to; GameState too.
+    const_cast<Type&>(*g.macroquest).parent = g.everquest;
+    const_cast<Type&>(*g.hailstone).parent = g.everquest;
+    // Build is MQ's build target, an int (BuildTarget: 1 Live, 2 Test, 3 Beta, 4 Emu), not a version: Hailstone is an
+    // emulator client, so 4. E3 reads it as its MQBuild and takes any other value for live. BuildDate is the day the
+    // client was built as yyyymmdd (MQ's is MQ2Main.dll's file date); Version Hailstone's release version
+    // ("0.7.2-beta"), where MQ gives its own file version. Hailstone's members are the same.
+    for (const Type* t : {g.macroquest, g.hailstone}) {
+        add(t, "Build", [](const Context&, const Value&, std::string_view) { return V::integer(4); });
+        add(t, "BuildDate", [](const Context&, const Value&, std::string_view) { return V::integer(build_date()); });
+        add(t, "Version", [](const Context&, const Value&, std::string_view) { return V::string(release_version()); });
+    }
 
     Type& win = const_cast<Type&>(*g.window);
     win.to_value = [](const Context& c, const Value& v) {

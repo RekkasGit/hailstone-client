@@ -308,7 +308,10 @@ clipboard may hold a password, and what a script puts there is pasted where the 
 `Me`, `Target`, `Spawn[...]`, `SpawnCount[...]`, `NearestSpawn[n, ...]`, `Group`, `Zone`, `Spell[id|name]`, `Cursor`,
 `FindItem[name|=exact]`, `FindItemCount[...]`, `Pet`, `Window[name]` (`.Open`), `Plugin[name]` (`.IsLoaded`), `Time`,
 `GameTime`, `EverQuest` (`.GameState`, `.Server`), `MacroQuest` (`.Path[config]`: `scripts/config/` in Hailstone's
-folder, without a trailing separator; MQ's other folder names are NULL), `Hailstone` (`.Path[config]`, the same),
+folder, without a trailing separator; MQ's other folder names are NULL. `.Build`: MQ's build target, 4 for Emu.
+`.BuildDate`: the day the client was built, as an int, yyyymmdd. `.Version`: Hailstone's release version. Other
+members are `EverQuest`'s, as in MQ, so `.Server` is the server's name), `Hailstone` (the same members as
+`MacroQuest`),
 `Heading[deg]`, `Int`, `Float`, `Bool`, `String`, `Select`, `Math`,
 `If`, `Range`, `LineOfSight[...]`, `Navigation` and `Stick` (below). Compiled plugins can add more.
 

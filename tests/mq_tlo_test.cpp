@@ -1,6 +1,7 @@
 // mq/tlo.h, mq/spawn_search.h and mq/parse.h: MacroQuest's TLOs over a small world (tests/mq_test_world.h).
 #include <doctest/doctest.h>
 
+#include "core/build_info.h"
 #include "manual_clock.h"
 #include "mq/parse.h"
 #include "mq/spawn_search.h"
@@ -500,6 +501,18 @@ TEST_CASE("TLO: Group, items, Zone and the rest") {
     // Hailstone.Path is the same member under the client's name (TLO names take any case).
     CHECK(f.p("${Hailstone.Path[config]} ${HailStone.Path[Config]}") == "/data/scripts/config /data/scripts/config");
     CHECK(f.p("${Hailstone.Path[macros]} ${Hailstone.Path}") == "NULL NULL");
+    // Their other members are EverQuest's, as in MQ: the server's name, the game state.
+    CHECK(f.p("${MacroQuest.Server} ${Hailstone.Server}") == "TestServer TestServer");
+    CHECK(f.p("${MacroQuest.Server.Equal[testserver]} ${MacroQuest.GameState}") == "TRUE INGAME");
+    // Build is MQ's build target (4, Emu), a number E3 casts; BuildDate the build's yyyymmdd, Version Hailstone's.
+    CHECK(f.p("${MacroQuest.Build} ${Hailstone.Build}") == "4 4");
+    const std::string date = std::to_string(build_date());
+    CHECK(date.size() == 8);
+    CHECK(build_date() >= 20260101);
+    CHECK(f.p("${MacroQuest.BuildDate}") == date);
+    CHECK(f.p("${Hailstone.BuildDate}") == date);
+    CHECK(f.p("${MacroQuest.Version}") == release_version());
+    CHECK(f.p("${Hailstone.Version}") == release_version());
     CHECK(f.p("${Int[7.9]} ${Float[2].Deci} ${Bool[0]} ${Bool[yes]}") == "7 2.0 FALSE TRUE");
     // No whole number for NaN, an infinity or one past int64 (the cast would be undefined); in range is cut as before.
     CHECK(f.p("${Int[nan]} ${Int[inf]} ${Int[-inf]} ${Int[1e300]} ${Int[-1e300]}") == "NULL NULL NULL NULL NULL");
