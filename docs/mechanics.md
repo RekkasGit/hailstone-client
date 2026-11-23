@@ -838,6 +838,13 @@ It stops, said in chat ("Combining stopped after N combines: why."), when:
 
 Vectors in `tests/spell_gems_vectors_test.cpp`, replayed call for call.
 
+Hailstone stores spells by ID, including IDs above RoF2's original 45,000 ceiling. The usable range is the positive
+signed 32-bit range of item-effect and casting-state fields, with the existing poison-proc and unknown-spell
+sentinels (65534 and 65535) reserved. Loading a spell keeps its per-record cast checksum. The checksums sent on
+zone entry still describe the complete files. Outgoing rank substitutions respect the connection's wire limit or
+the ID the server already supplied for that cast. A server may opt into a wider wire range through its add-on
+([Extended spell IDs](plugins.md#extended-spell-ids)).
+
 #### Gem and recovery times
 
 - Gem timers (`SpellGem::ready`, gems 0..11 and 12 for items / AAs) and the recovery lock (`SpellState::recovery_ready`)
@@ -2316,7 +2323,7 @@ instrument song per "Bone groups" below. The local player's OP_Animation is sent
 
 - An item missile with a target does not sweep the zone; spell missiles sweep and also check the target segment.
 - Source despawn ends its missiles; target despawn removes homing.
-- Item type 9 needs a loaded spell id in 1..45000.
+- Item type 9 needs a loaded spell with a valid ID.
 - Duration uses normalized AE duration (capped at 14 s except first-slot SPA 76), otherwise 30 s for travel type 3
   or 50 ms.
 - Area target types 8, 21, 22, 23, 28 and 45 stay at the target or destination and play stage 2; other spell

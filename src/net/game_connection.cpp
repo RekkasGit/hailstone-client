@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <iterator>
 #include <random>
+#include <utility>
 
 #include "core/ascii_case.h"
 #include "core/game_dir.h"
@@ -135,6 +136,8 @@ void GameConnection::reload_game_files() {
     auto table = std::make_shared<game::SpellTable>();
     if (!table->load(game_)) log::warn("spells_us.txt not found; spell names and rules are unavailable");
     spell_table_ = std::move(table);
+    if (spell_id_limit_ > game::kRof2StockMaxSpellId && !spell_data_ready())
+        log::warn("Reloaded spells_us.txt does not support the current zone's spell ID limit {}", spell_id_limit_);
     // SetHeights' data: racedata.txt's default heights and moddat.ini's ROffsets (game/spawn_heights.h).
     auto text = [&](std::string_view file) {
         auto bytes = game_.read(file);
@@ -154,6 +157,21 @@ void GameConnection::reload_game_files() {
 
 GameConnection::~GameConnection() { disconnect(); }
 
+void GameConnection::select_zone_spell_limit() {
+    spell_id_limit_ = game::kRof2StockMaxSpellId;
+    const auto requested = server_ext().spell_id_limit(*this);
+    if (!requested) return;
+    if (requested <= game::kRof2StockMaxSpellId || !std::in_range<std::int32_t>(requested)) {
+        log::warn("Unsupported server extension spell ID limit {}", requested);
+        return;
+    }
+    if (!spell_table_->compatible_with_wire_limit(requested)) {
+        log::warn("spells_us.txt cannot support the requested server extension spell ID limit {}", requested);
+        return;
+    }
+    spell_id_limit_ = requested;
+}
+
 void GameConnection::fail(std::string message) {
     close_evolving_transfer();
     reset_fellowship();
@@ -163,6 +181,7 @@ void GameConnection::fail(std::string message) {
     capture_bank();
     error_ = std::move(message);
     state_ = ConnectionState::Disconnected;
+    spell_id_limit_ = game::kRof2StockMaxSpellId;
     respawn_.reset();
     clear_hover_rez();
     respawn_spawn_pending_ = false;
@@ -206,6 +225,7 @@ void GameConnection::start(const WorldTicket& ticket) {
     reset_tribute_donations();
     reset_tribute_bonuses();
     reset_guild_permissions(kTributeNone);
+    spell_id_limit_ = game::kRof2StockMaxSpellId;
     ticket_ = ticket;
     camped_out_.reset();
     link_death_.reset();
@@ -280,6 +300,8 @@ void GameConnection::update() {
     if (zone_session_) {
         zone_session_->update();
         if (zone_session_->state() == SessionState::Connected && state_ == ConnectionState::ZoneConnecting) {
+            // World identity is known now. Publish readiness before the outgoing packet hook runs.
+            select_zone_spell_limit();
             ZoneEntryRequest entry;
             entry.name = character_;
             // GetZoneInfoFromNetwork @0x539480: the spell files' checksums (ClientSpellManager +0x2bf40/+0x2bf44).
@@ -2548,6 +2570,7 @@ void GameConnection::send_eye_position(bool force) {
 void GameConnection::leave_zone_dropped() {
     reset_achievements();
     reset_rewards();
+    spell_id_limit_ = game::kRof2StockMaxSpellId;
     // The zone has dropped the link (or was closed after the wait).
     ZoneExit exit = std::exchange(zone_exit_, ZoneExit::None);
     if (exit == ZoneExit::Zoning) {
@@ -2633,6 +2656,7 @@ void GameConnection::disconnect() {
     zone_session_.reset();
     world_session_.reset();
     discard_questions(); // nothing is left to answer them to
+    spell_id_limit_ = game::kRof2StockMaxSpellId;
     if (state_ != ConnectionState::Disconnected) state_ = ConnectionState::Disconnected;
 }
 

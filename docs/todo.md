@@ -237,6 +237,7 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
 - [x] **Blood spurts on supported WLD actors:** landed local sharp-weapon hits, exact authored blood attachment, the player's single-frame blood sprite. Missing attachments or unsupported sprite data omit the effect.
 - [x] **Spell particles: the impact stage's caster is the packet's source;** nothing when the source is unknown, as DoSpellEffect. The actor's opacity and the point model's PESFactor on actor emitters. Checked: EQPlayer::TriggerSpellEffect @0x593eb0.
 - [ ] **Spell particles: two open questions** (unknowns.md).
+- [x] Read spell IDs beyond RoF2's ceiling and show generated item spell descriptions when authored text is absent. The stock and extended zone-entry paths have mock-server coverage.
   - Whether an actor's world matrix rows carry its scale (normalised here).
   - What makes a floor-flag actor emitter again as the actor moves (kept on the actor here).
 - [x] Linked spell timers and discipline timers from the player profile.

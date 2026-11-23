@@ -116,7 +116,8 @@ bool ActorEmitters::start_effect(const Effect& effect) {
     if (!point_world_(effect.actor, static_cast<int>(effect.slot), point)) return false;
     game::SpellEmitterRequest r;
     r.emitter = static_cast<std::int32_t>(effect.effect);
-    r.key = next_key_++;
+    const auto key = next_key_++;
+    r.key = key;
     // vf126 gives an actor's emitter 5,000,000 ms like the always-on ones; this one is not persistent, so it ends
     // with the definition's own duration.
     r.duration_ms = game::kActorEmitterDurationMs;
@@ -144,7 +145,7 @@ bool ActorEmitters::start_effect(const Effect& effect) {
         particles_.stop_keys(std::span(&oldest, 1));
         effects_.erase(effects_.begin());
     }
-    effects_.push_back({r.key, effect.actor});
+    effects_.push_back({key, effect.actor});
     return true;
 }
 
@@ -174,7 +175,8 @@ void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWo
         if (!bone_world(a.id, me.bone, bone)) return std::nullopt;
         game::SpellEmitterRequest r;
         r.emitter = static_cast<std::int32_t>(me.emitter.emitter);
-        r.key = next_key_++;
+        const auto key = next_key_++;
+        r.key = key;
         // CActor::vf126 @0x1003a950 creates an actor's emitter for 5,000,000 ms (past 4,000 s the DLL keeps it
         // going), at the actor density and opacity, scale 1; the entry's own +0x58 is not passed. It sets the
         // particle capacity and what a lifetime below 0 lasts; the emitter itself lasts as long as the actor.
@@ -200,10 +202,10 @@ void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWo
             r.density = 1.0f;
             r.opacity = me.cloud->scale2;
             clouds_.create(r);
-            return r.key;
+            return key;
         }
         particles_.create(r);
-        return r.key;
+        return key;
     };
     // An actor whose mesh changed (or whose EDD entries are made again at a new density) and an actor gone lose their
     // emitters first, all in one pass over each system (stop_actors), before any are made again: a stop by actor

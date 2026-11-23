@@ -26,6 +26,7 @@
 #include "net/player_packets.h"
 #include "net/tribute_packets.h"
 #include "platform/udp_socket.h"
+#include "plugin/hooks.h"
 
 using namespace hailstone;
 using namespace hailstone::net;
@@ -171,6 +172,86 @@ TEST_CASE("mock server: world auth, character select and zone-in, with the origi
     // The only test that keeps the default SessionOptions: 150 ms multi-buffer hold, 20 ms service pass.
     Rig rig(MockConfig::standard(), ConnectionOptions{});
     check_full_zone_in(rig);
+}
+
+TEST_CASE("mock server: extended spell capability is ready before ZoneEntry only for compatible data and an opt-in") {
+    struct Extension final : game::ServerExtension {
+        std::uint32_t limit = 90000;
+        bool identified = false;
+        std::uint32_t spell_id_limit(const GameConnection&) const override { return identified ? limit : 0; }
+    };
+    auto extension = std::make_shared<Extension>();
+    plugin::Hooks hooks;
+    const auto owner = hooks.new_owner("spell capability test");
+    auto options = quick_options();
+    options.hooks = &hooks;
+    options.plugins = extension;
+    Rig rig(MockConfig::standard(), std::move(options));
+    hooks.on_packet(owner, plugin::Stream::World, plugin::Direction::In, to_wire(Op::LogServer), [&](AppPacket&) {
+        extension->identified = true;
+        return plugin::Flow::Continue;
+    });
+    std::uint32_t outgoing_limit = 0;
+    bool outgoing_ready = false;
+    hooks.on_packet(owner, plugin::Stream::Zone, plugin::Direction::Out, to_wire(Op::ZoneEntry), [&](AppPacket&) {
+        outgoing_limit = rig.conn.spell_id_limit();
+        outgoing_ready = rig.conn.spell_data_ready();
+        return plugin::Flow::Continue;
+    });
+
+    const auto path = rig.dir.path() / "spells_us.txt";
+    std::string fields = "^Fixture Proc";
+    for (int column = 2; column < 237; ++column) fields += "^0";
+    auto write_spell_file = [&](std::uint32_t id, bool duplicate) {
+        std::ofstream file(path, std::ios::binary);
+        file << id << fields << '\n';
+        if (duplicate) file << id << fields << '\n';
+        file.close();
+        rig.game.rescan();
+        rig.conn.reload_game_files();
+    };
+    std::uint32_t id = 70000;
+    bool expect_ready = false;
+    bool duplicate = false;
+    std::filesystem::create_directory(rig.dir.path() / "Resources");
+    std::ofstream(rig.dir.path() / "Resources/SpellRequirementAssociations.txt") << "test associations\n";
+    SUBCASE("selected with compatible data") { expect_ready = true; }
+    SUBCASE("selected with duplicate records") { duplicate = true; }
+    SUBCASE("selected with a limit below a loaded ID") { extension->limit = 60000; }
+    SUBCASE("selected with stock-only data") { id = 1234; }
+    SUBCASE("no extension requests a limit") { extension->limit = 0; }
+    write_spell_file(id, duplicate);
+    REQUIRE(rig.conn.spell_table().get(id));
+    CHECK(rig.conn.spell_id_limit() == game::kRof2StockMaxSpellId);
+    CHECK_FALSE(rig.conn.spell_data_ready());
+
+    REQUIRE(rig.to_zone());
+    CHECK(outgoing_limit == (expect_ready ? extension->limit : game::kRof2StockMaxSpellId));
+    CHECK(outgoing_ready == expect_ready);
+    REQUIRE_FALSE(rig.server.zone_log.empty());
+    ZoneEntryRequest stock_entry;
+    stock_entry.name = "Gennro";
+    stock_entry.spell_crc = rig.conn.spell_table().file_crc();
+    stock_entry.spell_assoc_crc = rig.conn.spell_table().assoc_file_crc();
+    CHECK(from_wire(rig.server.zone_log.front().opcode) == Op::ZoneEntry);
+    CHECK(rig.server.zone_log.front().data == encode(stock_entry).data);
+
+    if (expect_ready) {
+        write_spell_file(70000, true);
+        CHECK(rig.conn.spell_id_limit() == extension->limit);
+        CHECK_FALSE(rig.conn.spell_data_ready());
+        write_spell_file(70000, false);
+        CHECK(rig.conn.spell_data_ready());
+    } else {
+        // A later file can replace local spell data but cannot change an existing stream's capability.
+        write_spell_file(70000, false);
+        CHECK(rig.conn.spell_id_limit() == game::kRof2StockMaxSpellId);
+        CHECK_FALSE(rig.conn.spell_data_ready());
+    }
+    rig.conn.disconnect();
+    CHECK(rig.conn.spell_id_limit() == game::kRof2StockMaxSpellId);
+    CHECK_FALSE(rig.conn.spell_data_ready());
+    CHECK(rig.conn.spell_table().get(70000));
 }
 
 TEST_CASE("mock server: a session key too long for OP_SendLoginInfo fails the world login, nothing sent") {

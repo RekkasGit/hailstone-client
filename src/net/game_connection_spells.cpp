@@ -511,7 +511,7 @@ public:
     void set_item_ready_time(std::uint32_t ready, bool) override {
         if (item_) item_->last_cast_time = ready;
     }
-    bool is_valid_spell_id(std::int32_t id) override { return id >= 1 && id <= 45000; }
+    bool is_valid_spell_id(std::int32_t id) override { return game::is_spell_id(static_cast<std::uint32_t>(id)); }
     std::optional<std::pair<std::int32_t, std::int32_t>> spell_times(std::int32_t id) override {
         const game::SpellData* s = spells_.get(static_cast<std::uint32_t>(id));
         if (!s) return std::nullopt;
