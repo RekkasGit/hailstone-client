@@ -4,6 +4,7 @@
 
 - Plugins and scripts can colour their chat lines with MacroQuest's colour codes (`\ag`, `\a-w`, `\a#336699`, `\ax` ...), as `WriteChatColor` takes them. A server's message or a player's text cannot: its codes are left out.
 - C++ plugins can include the SDK's new `hailstone_plugin.hpp` to register commands and TLOs as lambdas that capture `this` and other values, as MacroQuest's `mq::AddCommand` does.
+- New TLOs `${MacroQuest.Path[config]}` and `${Hailstone.Path[config]}`: the folder for scripts' settings, `scripts/config` in Hailstone's folder. Plugins can also get it from the SDK's new `get_scripts_config_dir`.
 - New TLO member `${Me.MaxSongSlots}`: the song window's slots (RoF2's 20), beside `${Me.MaxBuffSlots}` (42).
 - `get_buff_data_bulk` and `get_buff_name_data_bulk` now report a buff's disease, poison, curse or corruption counters left, as MQ2Mono does, where they gave the counters it started with. A buff whose counters the client does not know yet (one from the profile or a zone-in list, until the spell lands again) still gives the starting count.
 - Plugins can lend the client's thread to their own threads with the SDK's new `lend_thread`, while their callback waits for them, so a script runtime whose scripts run on a thread of their own (MQ2Mono-style C# scripts) can read TLOs and run commands from there.

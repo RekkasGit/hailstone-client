@@ -307,7 +307,9 @@ clipboard may hold a password, and what a script puts there is pasted where the 
 
 `Me`, `Target`, `Spawn[...]`, `SpawnCount[...]`, `NearestSpawn[n, ...]`, `Group`, `Zone`, `Spell[id|name]`, `Cursor`,
 `FindItem[name|=exact]`, `FindItemCount[...]`, `Pet`, `Window[name]` (`.Open`), `Plugin[name]` (`.IsLoaded`), `Time`,
-`GameTime`, `EverQuest` (`.GameState`, `.Server`), `Heading[deg]`, `Int`, `Float`, `Bool`, `String`, `Select`, `Math`,
+`GameTime`, `EverQuest` (`.GameState`, `.Server`), `MacroQuest` (`.Path[config]`: `scripts/config/` in Hailstone's
+folder, without a trailing separator; MQ's other folder names are NULL), `Hailstone` (`.Path[config]`, the same),
+`Heading[deg]`, `Int`, `Float`, `Bool`, `String`, `Select`, `Math`,
 `If`, `Range`, `LineOfSight[...]`, `Navigation` and `Stick` (below). Compiled plugins can add more.
 
 The data types use MQ's member names and inheritance:
@@ -711,6 +713,10 @@ Host functions:
   `HAILSTONE_HOST_HAS(host, command_exists)` first;
 - `host->lend_thread(host->host, 1 / 0)`: lends the client's thread to the plugin's own threads while its callback
   waits for them (see **Threads** below). Added later in ABI 4: test `HAILSTONE_HOST_HAS(host, lend_thread)` first;
+- `host->get_scripts_config_dir(host->host, out, size)`: the scripts' settings folder, `scripts/config/` in
+  Hailstone's folder (`${MacroQuest.Path[config]}`, Lua's `mq.configDir`), shared by every plugin and script. Made
+  on demand and written as `config_dir` writes its folder; 0 when the client has none. Needs no capability. Added
+  later in ABI 4: test `HAILSTONE_HOST_HAS(host, get_scripts_config_dir)` first;
 - `ParseMacroData` (`${...}`, any TLO);
 - `AddTopLevelObject`: a TLO with members the plugin answers; refused when the name is already a TLO (as in MQ);
 - `RemoveTopLevelObject` (only the plugin's own);
@@ -926,6 +932,7 @@ ABI 3, so test `HAILSTONE_HOST_HAS(host, set_class_name)` first. Lua:
   - `character_config_dir` is the character's `characters/<world>/<character>/plugin-config/<name>/` (0 before there
     is one);
   - `config_dir` stays the folder for every server;
+  - `get_scripts_config_dir` is `scripts/config/`, the folder the scripts' settings share;
   - `write_chat_color` writes a line in one of the game's chat colours, and `zone_name` gives a zone's short name.
 - **read and write packets** with the SDK's `hailstone_byte_io.h` (C++20, header only): the client's own
   `ByteReader` and `ByteWriter`.

@@ -85,6 +85,7 @@ struct Host {
         ne.dirs = {plugin_dir};
         ne.cache_dir = world.dir / "cache";
         ne.config_dir = world.dir / "config";
+        ne.scripts_config_dir = world.dir / "scripts" / "config";
         ne.web = web;
         ne.connection = [this] { return world.conn.get(); };
         ne.extensions = extensions.get();
@@ -2531,6 +2532,19 @@ TEST_CASE("native plugins: command_exists answers as a typed line would run") {
     // Unloaded, the plugin's command is gone.
     REQUIRE(h.plugins->unload("HostProbe"));
     CHECK_FALSE(h.hooks.has_command("/probecommand"));
+}
+
+TEST_CASE("native plugins: get_scripts_config_dir gives the scripts' settings folder, made on demand") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapCommands); // only for /probescriptsdir: the function needs no capability
+    REQUIRE(h.plugins->load("HostProbe"));
+    const fs::path dir = h.world.dir / "scripts" / "config";
+    REQUIRE_FALSE(fs::exists(dir));
+    h.printed.clear();
+    h.run("/probescriptsdir");
+    const std::string text = dir.string();
+    CHECK(h.printed_line("[Probe] scripts dir " + std::to_string(text.size()) + " " + text));
+    CHECK(fs::is_directory(dir));
 }
 
 TEST_CASE("native plugins: the SDK's C++ wrapper, capturing lambdas as commands and TLOs") {

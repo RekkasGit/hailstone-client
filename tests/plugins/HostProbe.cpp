@@ -24,6 +24,7 @@
 //   /probespells n id...  get_spells_data_bulk for those ids into n bytes, through HS_Bulk_SpellFixedRecord and the
 //   strings and effect lines after each
 //   /probecommand <name>  command_exists with the rest of the line as it is, when the host table has it
+//   /probescriptsdir  get_scripts_config_dir, when the host table has it
 //   /probespellsbyname [n] name  get_spells_by_name_data_bulk for that name the same way, printed as /probespells
 //   does
 //   /<name>buf ... (the plugin's own name, lower case, so two copies loaded at once each have theirs): the bulk
@@ -77,6 +78,8 @@ static_assert(offsetof(PluginHostApi, command_exists) ==
               offsetof(PluginHostApi, spell_data_ready) + sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, lend_thread) ==
               offsetof(PluginHostApi, command_exists) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, get_scripts_config_dir) ==
+              offsetof(PluginHostApi, lend_thread) + sizeof(PluginHostApi::caps));
 
 namespace {
 
@@ -783,6 +786,17 @@ void probe_command(void*, const char* args) {
     WriteChatf("[Probe] command '%s' %d", args ? args : "", host->command_exists(host->host, args));
 }
 
+// /probescriptsdir: get_scripts_config_dir, added later in ABI 4, into a buffer that fits.
+void probe_scripts_dir(void*, const char*) {
+    if (!HAILSTONE_HOST_HAS(host, get_scripts_config_dir)) {
+        WriteChatf("[Probe] scripts dir: not in this client");
+        return;
+    }
+    char dir[1024];
+    const int n = host->get_scripts_config_dir(host->host, dir, sizeof dir);
+    WriteChatf("[Probe] scripts dir %d %s", n, n > 0 ? dir : "");
+}
+
 // /probelend: lend_thread, then a thread of the plugin calls the host while this waits for it, then the lending ends
 // and another thread is refused again. /probelend keep: lends and returns without ending it (the callback's return
 // ends it; /probelendafter checks).
@@ -1146,6 +1160,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probeabilities", probe_abilities, nullptr);
     AddCommand("/probespells", probe_spells, nullptr);
     AddCommand("/probecommand", probe_command, nullptr);
+    AddCommand("/probescriptsdir", probe_scripts_dir, nullptr);
     AddCommand("/probelend", probe_lend, nullptr);
     AddCommand("/probelendafter", probe_lend_after, nullptr);
     AddCommand("/probespellsbyname", probe_spells_by_name, nullptr);
@@ -1188,6 +1203,7 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probeability");
     RemoveCommand("/probeabilities");
     RemoveCommand("/probecommand");
+    RemoveCommand("/probescriptsdir");
     for (const char* what : buffer_commands) RemoveCommand(own_command(what).c_str());
     RemoveTopLevelObject("Probe");
 }

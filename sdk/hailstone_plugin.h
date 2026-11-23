@@ -1206,6 +1206,11 @@ typedef struct PluginHostApi {
      * callback. lend 0 returns 1. Needs no capability. Added later in ABI 4: test HAILSTONE_HOST_HAS(host, lend_thread)
      * first. */
     int (*lend_thread)(void* host, int lend);
+    /* The folder the scripts' settings go in, <Hailstone folder>/scripts/config/ (MacroQuest.Path[config]; Lua's
+     * mq.configDir), shared by every plugin and script, for every server. Created on demand and written to `out` as
+     * config_dir writes it (the full length returned; cut to fit), 0 when the client has none. Needs no capability.
+     * Added later in ABI 4: test HAILSTONE_HOST_HAS(host, get_scripts_config_dir) first. */
+    int (*get_scripts_config_dir)(void* host, char* out, size_t out_size);
 } PluginHostApi;
 /* What use_ability and ability_state take: the kinds of ability the Ability Book lists. The values are stable. */
 enum HS_AbilityKinds {

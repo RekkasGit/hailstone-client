@@ -492,6 +492,14 @@ TEST_CASE("TLO: Group, items, Zone and the rest") {
     CHECK(f.p("${Cursor}") == "NULL");
     CHECK(f.p("${Window[InventoryWindow].Open} ${Window[BankWnd].Open}") == "TRUE FALSE");
     CHECK(f.p("${EverQuest.GameState} ${EverQuest.Server}") == "INGAME TestServer");
+    // MacroQuest.Path[config] is the scripts' settings folder; MQ's other names stay NULL until settled.
+    CHECK(f.p("${MacroQuest.Path[config]}") == "NULL"); // no folder given
+    f.ctx.config_path = "/data/scripts/config";
+    CHECK(f.p("${MacroQuest.Path[config]} ${MacroQuest.Path[CONFIG]}") == "/data/scripts/config /data/scripts/config");
+    CHECK(f.p("${MacroQuest.Path[macros]} ${MacroQuest.Path}") == "NULL NULL");
+    // Hailstone.Path is the same member under the client's name (TLO names take any case).
+    CHECK(f.p("${Hailstone.Path[config]} ${HailStone.Path[Config]}") == "/data/scripts/config /data/scripts/config");
+    CHECK(f.p("${Hailstone.Path[macros]} ${Hailstone.Path}") == "NULL NULL");
     CHECK(f.p("${Int[7.9]} ${Float[2].Deci} ${Bool[0]} ${Bool[yes]}") == "7 2.0 FALSE TRUE");
     // No whole number for NaN, an infinity or one past int64 (the cast would be undefined); in range is cut as before.
     CHECK(f.p("${Int[nan]} ${Int[inf]} ${Int[-inf]} ${Int[1e300]} ${Int[-1e300]}") == "NULL NULL NULL NULL NULL");

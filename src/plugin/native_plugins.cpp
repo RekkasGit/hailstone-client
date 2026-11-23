@@ -2676,6 +2676,12 @@ void h_write_chat_color(void* h, const char* text, std::uint32_t color) {
     else if (l.host->env.print) l.host->env.print(text, 0);
 }
 
+int h_get_scripts_config_dir(void* h, char* out, std::size_t out_size) {
+    const Loaded& l = Loaded::of(h);
+    if (l.host->env.scripts_config_dir.empty()) return 0;
+    return dir_out(l.host->env.scripts_config_dir, out, out_size);
+}
+
 int h_server_config_dir(void* h, char* out, std::size_t out_size) {
     Loaded& l = Loaded::of(h);
     const Policy* policy = l.host->env.policy;
@@ -3590,6 +3596,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.spell_data_ready = main_only<h_spell_data_ready>;
     p.table.command_exists = main_only<h_command_exists>;
     p.table.lend_thread = main_only<h_lend_thread>;
+    p.table.get_scripts_config_dir = main_only<h_get_scripts_config_dir>;
     Hooks& hooks = *m.env.hooks;
     Loaded* lp = &p;
     // Each callback runs with the plugin's capabilities and counts as the plugin being busy (no unloading under it).

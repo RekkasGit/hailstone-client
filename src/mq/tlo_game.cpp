@@ -34,7 +34,7 @@ using net::GameConnection;
 
 struct Types {
     const Type *spawn, *character, *cls, *race, *heading, *spell, *buff, *timestamp, *item, *zone, *group, *member,
-        *everquest, *window, *plugin, *time, *gametime, *navigation, *stick;
+        *everquest, *macroquest, *hailstone, *window, *plugin, *time, *gametime, *navigation, *stick;
 };
 
 Types g; // set once by register_game_tlos (the types live in the registry that registered them)
@@ -1132,6 +1132,16 @@ void register_misc_types() {
     add(g.everquest, "Server", [](const Context& c, const Value&, std::string_view) { return V::string(c.server_name); });
     add(g.everquest, "UIScale", [](const Context&, const Value&, std::string_view) { return V::number(1.0); });
 
+    // MacroQuest.Path[name]: MQ's folders by name. Only "config" has a counterpart here (the scripts' settings
+    // folder); MQ's other names (root, macros, logs, plugins, ...) and no name answer nil until one is settled.
+    // Hailstone.Path[name] is the same member under the client's own name.
+    auto path = [](const Context& c, const Value&, std::string_view index) -> V {
+        if (iequals(index, "config") && !c.config_path.empty()) return V::string(c.config_path);
+        return V::nil();
+    };
+    add(g.macroquest, "Path", path);
+    add(g.hailstone, "Path", path);
+
     Type& win = const_cast<Type&>(*g.window);
     win.to_value = [](const Context& c, const Value& v) {
         return V::string(c.window_open && c.window_open(v.s) ? "TRUE" : "FALSE");
@@ -1508,6 +1518,8 @@ void register_game_tlos(Registry& r) {
     g.group = &r.type("group");
     g.member = &r.type("groupmember");
     g.everquest = &r.type("everquest");
+    g.macroquest = &r.type("macroquest");
+    g.hailstone = &r.type("hailstone");
     g.window = &r.type("window");
     g.plugin = &r.type("plugin");
     g.time = &r.type("time");
@@ -1631,6 +1643,8 @@ void register_game_tlos(Registry& r) {
         return c.conn && c.conn->time_of_day() ? V::object(g.gametime, 0) : V::nil();
     });
     r.add_tlo("EverQuest", [](const Context&, std::string_view) { return V::object(g.everquest, 0); });
+    r.add_tlo("MacroQuest", [](const Context&, std::string_view) { return V::object(g.macroquest, 0); });
+    r.add_tlo("Hailstone", [](const Context&, std::string_view) { return V::object(g.hailstone, 0); });
     r.add_tlo("Heading", [](const Context&, std::string_view index) -> V {
         double d = 0;
         return parse_float(index, d) && std::isfinite(d) ? heading_value(std::fmod(std::fmod(d, 360.0) + 360.0, 360.0)) : V::nil();
