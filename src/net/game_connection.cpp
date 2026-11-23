@@ -52,6 +52,12 @@ constexpr std::uint16_t kOpAttackUnlock = 0x4d09;
 // The original client sends its position at most every 280 ms while it can
 // move (CEverQuest::DoMainLoop @0x53e0c1).
 constexpr auto kPositionInterval = std::chrono::milliseconds(280);
+// Enhancement (not in RoF2): the original sends OP_ClientUpdate only while the position is dirty (DoMainLoop
+// @0x53e0c1), so a player who stands still sends nothing. EQEmu's auto idle / AFK (Client::CheckAutoIdleAFK) runs
+// only on an OP_ClientUpdate at an unchanged position, so Hailstone repeats it at the original's own resend interval
+// for a controlled spawn whose position has not changed (1300 ms, @0x53e410). The zone does not relay an unchanged
+// update to other players.
+constexpr auto kStationaryPositionInterval = std::chrono::milliseconds(1300);
 // RequestZoneChangeStatus @0x5203c0 waits up to 180 s for the answer to one OP_ZoneChange (@0x52050e).
 // RequestZoneChangeStatusBlocking @0x52cee0 sends it again 500 ms after a "not ready" answer (-1) while
 // MoveToZone's limit, 7 s from the first request (@0x541806), lasts.
@@ -864,6 +870,9 @@ std::optional<ServerProfile> GameConnection::saved_server() const {
 void GameConnection::enter_world(const std::string& name, bool return_home) {
     if (state_ != ConnectionState::CharacterSelect) return;
     adventure_ = {};
+    ++adventure_assignment_revision_;
+    adventure_requested_recruiter_ = 0;
+    adventure_offer_until_ms_ = adventure_accept_until_ms_ = adventure_leave_until_ms_ = 0;
     reset_shroud_selection();
     monster_mission_catalog_.reset();
     shroud_mode_ = ShroudMode::Normal;
@@ -938,7 +947,10 @@ void GameConnection::smooth(float dt, const game::WorldState::FloorFn& floor,
 void GameConnection::smooth_vehicles(float dt) { world_.smooth_vehicles(dt, steady_seconds()); }
 
 void GameConnection::apply_spawn(const Spawn& s) {
-    if (world_.spawns.contains(s.spawn_id)) forget_leadership_spawn(s.spawn_id);
+    if (world_.spawns.contains(s.spawn_id)) {
+        forget_leadership_spawn(s.spawn_id);
+        forget_auto_target_attacker(s.spawn_id);
+    }
     group_.mana_percent.erase(s.spawn_id);
     group_.endurance_percent.erase(s.spawn_id);
     spells_.others.erase(s.spawn_id);
@@ -1194,6 +1206,7 @@ void GameConnection::aggro_lock_toggle() {
 void GameConnection::finish_zone_in() {
     bool entered = state_ != ConnectionState::InZone;
     state_ = ConnectionState::InZone;
+    if (entered) last_position_send_ = options_.session.clock ? options_.session.clock() : Clock::now();
     status_.clear();
     report_state_ = 1; // Cmd_report's 0xddf640, set at each zone-in (the 0x345d step)
     // ProcessGame's zone-in after a death (CEverQuest +0x39580, set by 0x531730): the death tip, once.
@@ -1204,9 +1217,11 @@ void GameConnection::finish_zone_in() {
     // ProcessLocalPCIni sends the lists from the character ini after each zone-in (restore_blocked_buffs, which the
     // app calls once it has given the ini); without one, the lists this session has.
     if (!char_ini_get_) resend_blocked_buffs();
-    // CEverQuest's zone-in (before "Initialization complete."): with /hidecorpses looted on, OP_HideCorpse action 3
-    // again (the second word is a stack value in the original).
-    if (hide_looted_corpses_) send_zone(encode_hide_corpse(kHideCorpseLooted));
+    // The original repeats the looted action at zone-in. Hailstone also reapplies saved server hide modes here
+    // since the next zone starts with no corpse filter.
+    const auto corpse_mode = hide_corpse_mode();
+    if (entered && corpse_mode != game::HideCorpseMode::None && corpse_mode != game::HideCorpseMode::Always)
+        send_hide_corpse_setting();
     // Which plugins and scripts may run here, once the server's files are checked (back from character select they
     // were at the login's first zone-in).
     if (entered && (!server_rules_ || server_rules_->provisional) && (!server_files_ || server_files_->finished()))
@@ -1369,6 +1384,12 @@ void GameConnection::handle_zone(const AppPacket& p) {
         profile_ = decode_player_profile(p);
         if (profile_) drunkenness_ = static_cast<std::int32_t>(std::min(profile_->intoxication, 200u));
         if (profile_) {
+            // PcClient_ApplyPlayerProfileData @0x57a04a: a non-zero rest timer starts the downtime countdown from
+            // now; zero leaves the downtime and the combat flag (+0x31bc) as they were.
+            if (profile_->rest_timer != 0) {
+                rest_downtime_ = profile_->rest_timer;
+                rest_since_ms_ = now_ms();
+            }
             sync_shroud_mode();
             fellowship_.vitality.normal = profile_->fellowship_vitality_normal;
             fellowship_.vitality.aa = profile_->fellowship_vitality_aa;
@@ -1588,9 +1609,9 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 if (attack_until_xtarget_clear_ && auto_attack_ && xtarget_holds_spawn(*id)) attack_held_for_xtarget_ = true;
                 else set_auto_attack(false);
                 world_.target_id = 0;
-                auto_target_due_ = true;
+                auto_target_xtarget_due_ = true;
             }
-            std::erase(xtarget_attackers_, *id);
+            forget_auto_target_attacker(*id);
         }
         break;
     case Op::SetBodyType:
@@ -2420,8 +2441,9 @@ void GameConnection::send_position(bool force, glm::vec3 position, bool reliable
     if (!zone_session_ || world_.player_id == 0 || pstatus_.dead) return;
     reconcile_eye_control();
     send_eye_position(force);
-    auto now = Clock::now();
-    if (!force && (!motion_dirty_ || now - last_position_send_ < kPositionInterval)) return;
+    const auto now = options_.session.clock ? options_.session.clock() : Clock::now();
+    const auto interval = motion_dirty_ ? kPositionInterval : kStationaryPositionInterval;
+    if (!force && now - last_position_send_ < interval) return;
     // DoMainLoop: the sequence is the position tracker's sample count, then sample 2 is recorded.
     ClientPositionUpdate u;
     u.sequence = position_tracker_.sequence();
@@ -2632,15 +2654,6 @@ void GameConnection::set_target(std::uint32_t spawn_id) {
     }
     if (state_ != ConnectionState::InZone) return;
     send_zone(encode_target(false, spawn_id));
-    // Newbie guard (DoPassageOfTime @0x45dcb1): below level 11, switching to a
-    // target more than 2 levels higher turns attacking and auto fire off.
-    if ((auto_attack_ || auto_fire_) && spawn_id) {
-        auto it = world_.spawns.find(spawn_id);
-        if (it != world_.spawns.end() && pstatus_.level < 11 && static_cast<int>(it->second.level) - pstatus_.level > 2) {
-            set_auto_attack(false);
-            set_auto_fire(false);
-        }
-    }
 }
 
 void GameConnection::target_by_name(const std::string& name) {
@@ -2983,17 +2996,7 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
                 update_player_consciousness(true);
             }
             report_successful_hit(*d, hit_reported(d->target, d->source));
-            // Hailstone (auto_target_xtarget): an NPC attacking the player, a pick due when there is no target.
-            if (d->target == me && d->source != me && d->source != 0)
-                if (auto* s = spawn(d->source); s && s->is_npc) {
-                    if (std::find(xtarget_attackers_.begin(), xtarget_attackers_.end(), d->source) ==
-                        xtarget_attackers_.end())
-                        xtarget_attackers_.push_back(d->source);
-                    if (world_.target_id == 0) {
-                        auto_target_due_ = true;
-                        auto_target_prefer_ = d->source;
-                    }
-                }
+            record_auto_target_attack(*d);
         }
         break;
     case Op::Death:
