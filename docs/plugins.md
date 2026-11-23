@@ -1011,6 +1011,19 @@ Several plugins may extend the client at once: they are asked in load order and 
 A C++ allocation or provider exception at an SDK entry point returns the ordinary zero/void failure result. Side
 effects completed before it are not retried or undone.
 
+#### Extended spell IDs
+
+The optional `HailstoneHooks::spell_id_limit()` asks for an inclusive wire ceiling above 45,000 for the server
+the add-on is active on. It needs the `extend` capability, and zero abstains. The host selects a compatible
+limit before it sends ZoneEntry. This requires a native spell file with extended records that fit the request.
+The request has no effect on the local spell table's range.
+
+The host calls `spell_id_limit(host)` and `spell_data_ready(host)` need `read`. An add-on should check both with
+`HAILSTONE_HOST_HAS` before it sends any server-specific advertisement. A stock zone entry or an incompatible
+file at zone entry yields 45,000 and false. Reloading assets rechecks readiness, while the selected limit stays
+with the current stream. Hailstone preserves the stock ZoneEntry format and file checksums. An add-on owns its
+server's optional wire negotiation through the existing outgoing packet hook.
+
 #### The cursor item's origin
 
 `cursor_origin(host)` says how the item on the cursor got there, for a plugin that puts away or destroys what the

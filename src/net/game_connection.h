@@ -1462,6 +1462,10 @@ public:
 
     // ---- spells (game/spells.h; net/game_connection_spells.cpp) ----
     const game::SpellTable& spell_table() const { return *spell_table_; }
+    std::uint32_t spell_id_limit() const { return spell_id_limit_; }
+    bool spell_data_ready() const {
+        return spell_id_limit_ > game::kRof2StockMaxSpellId && spell_table_->compatible_with_wire_limit(spell_id_limit_);
+    }
     const game::SpellState& spell_state() const { return spells_; }
     // Whether the target buff list (OP_TargetBuffs) is the player's own, the player targeting itself: the player's
     // buff-timer hold (+0x22d) holds it then, as CTargetWnd::OnProcessFrame @0x76b1b4 hands Spell_IsBuffCountdownHeld
@@ -3465,6 +3469,8 @@ private:
 
     // Spells.
     std::shared_ptr<const game::SpellTable> spell_table_;
+    std::uint32_t spell_id_limit_ = game::kRof2StockMaxSpellId;
+    void select_zone_spell_limit();
     game::HitModes hit_modes_{};
     game::SpellHitModes spell_hit_modes_{};
     game::SpellState spells_;

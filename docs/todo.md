@@ -239,6 +239,7 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
 - [ ] **Spell particles: two open questions** (unknowns.md).
   - Whether an actor's world matrix rows carry its scale (normalised here).
   - What makes a floor-flag actor emitter again as the actor moves (kept on the actor here).
+- [x] Read spell IDs beyond RoF2's ceiling and show generated item spell descriptions when authored text is absent. The stock and extended zone-entry paths have mock-server coverage.
 - [x] Linked spell timers and discipline timers from the player profile.
 - [x] Combat Abilities: active discipline duration gauge 26 and seconds display in both UIs, icon cancellation (live acceptance open).
 - [x] **Combat Abilities: red reuse overlays and seconds in both UIs.** Shared timer groups stay marked even when the wait exceeds an ability's own recast, discipline hot buttons included. Live acceptance open.

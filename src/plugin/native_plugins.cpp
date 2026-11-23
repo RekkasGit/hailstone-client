@@ -425,6 +425,11 @@ public:
     std::uint64_t lifecycle_revision(const net::GameConnection&) const override {
         return l_ ? l_->lifecycle_generation : 0;
     }
+    std::uint32_t spell_id_limit(const net::GameConnection&) const override {
+        if (!active() || l_->unload_pending || !l_->can(kCapExtend) || !h().spell_id_limit) return 0;
+        const auto requested = run(h().spell_id_limit);
+        return active() && !l_->unload_pending && l_->can(kCapExtend) ? requested : 0;
+    }
 
     std::optional<game::FollowProfile> follow_profile(const net::GameConnection&) const override {
         if (!l_ || !active() || !l_->can(kCapExtend) || !h().follow_profile) return std::nullopt;
@@ -1341,6 +1346,16 @@ const net::GameConnection* readable(Loaded& l, const char* what) {
         return nullptr;
     }
     return connection_of(l);
+}
+
+std::uint32_t h_spell_id_limit(void* h) {
+    const auto* c = readable(Loaded::of(h), "spell_id_limit");
+    return c ? c->spell_id_limit() : 0;
+}
+
+int h_spell_data_ready(void* h) {
+    const auto* c = readable(Loaded::of(h), "spell_data_ready");
+    return c && c->spell_data_ready() ? 1 : 0;
 }
 
 int h_get_player(void* h, HailstonePlayer* out) {
@@ -3571,6 +3586,8 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.get_spells_by_name_data_bulk = main_only<h_get_spells_by_name_data_bulk>;
     p.table.acquire_bulk_buffer = acquire_bulk_buffer_entry;
     p.table.release_bulk_buffer = main_only<h_release_bulk_buffer>;
+    p.table.spell_id_limit = main_only<h_spell_id_limit>;
+    p.table.spell_data_ready = main_only<h_spell_data_ready>;
     p.table.command_exists = main_only<h_command_exists>;
     p.table.lend_thread = main_only<h_lend_thread>;
     Hooks& hooks = *m.env.hooks;

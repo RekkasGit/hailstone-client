@@ -42,10 +42,14 @@ std::string spell_line(std::initializer_list<std::pair<int, std::string>> set) {
 TEST_CASE("CastSpell over the live adapter: SPA 129 range focus from a worn item lets a cast past Range go out") {
     // A detrimental single-target nuke with Range 100 (cleric level 1), and a 5% range focus (SPA 129) on an
     // earring: GetFocusRangeModifier gives 100 x 5 x 0.01 = 5, so the reach is 105 (under the 5 x Range cap).
+    std::uint32_t spell_id = 6810;
+    SUBCASE("stock spell IDs") {}
+    SUBCASE("spell IDs above 16 bits") { spell_id = 106810; }
+    const auto focus_id = static_cast<std::int32_t>(spell_id + 1);
     auto table = std::make_shared<game::SpellTable>();
-    REQUIRE(table->parse(spell_line({{0, "6810"}, {1, "Range Bolt"}, {9, "100"}, {13, "1000"}, {20, "-10"},
+    REQUIRE(table->parse(spell_line({{0, std::to_string(spell_id)}, {1, "Range Bolt"}, {9, "100"}, {13, "1000"}, {20, "-10"},
                                      {83, "0"}, {86, "0"}, {98, "5"}, {105, "1"}, {213, "1"}, {214, "1"}}) +
-                         "\n" + spell_line({{0, "6811"}, {1, "Range Focus"}, {20, "5"}, {83, "1"}, {86, "129"}})) ==
+                         "\n" + spell_line({{0, std::to_string(focus_id)}, {1, "Range Focus"}, {20, "5"}, {83, "1"}, {86, "129"}})) ==
             2);
     MockConfig cfg = MockConfig::standard();
     cfg.characters[0].class_ = 2; // a cleric: pure melee classes get no focus
@@ -67,7 +71,7 @@ TEST_CASE("CastSpell over the live adapter: SPA 129 range focus from a worn item
         auto& sp = A::spells(conn);
         sp.casting = {};
         sp.pending = 0;
-        sp.gems[0].spell = 6810;
+        sp.gems[0].spell = spell_id;
         sp.gems[0].ready = 0;
         sp.recovery_ready = 0;
         const glm::vec3 here = A::position(conn);
@@ -87,7 +91,7 @@ TEST_CASE("CastSpell over the live adapter: SPA 129 range focus from a worn item
 
     // The earring in ear slot 1: the reach is 105.
     Item ear = make_item(2001, "Range Earring", 1);
-    ear.effects[kEffectFocus].effect = 6811;
+    ear.effects[kEffectFocus].effect = focus_id;
     REQUIRE(A::inventory(conn).put(ItemSlot::possessions(1), ear));
 
     // 106 is still past 105 (the bonus is the focus's 5, not the cap's 400).
@@ -98,7 +102,7 @@ TEST_CASE("CastSpell over the live adapter: SPA 129 range focus from a worn item
 
     // 101 is now in reach: the cast starts and OP_CastSpell goes out for the spell on the target.
     cast_at(101.0f);
-    CHECK(A::spells(conn).casting.spell == 6810);
+    CHECK(A::spells(conn).casting.spell == spell_id);
     REQUIRE(rig.until([&] { return casts() == 1; }));
     const AppPacket* sent = nullptr;
     for (const auto& p : rig.server.zone_log)
@@ -106,7 +110,8 @@ TEST_CASE("CastSpell over the live adapter: SPA 129 range focus from a worn item
     REQUIRE(sent);
     auto packet = decode_cast_spell(*sent);
     REQUIRE(packet);
-    CHECK(packet->spell_id == 6810);
+    CHECK(packet->spell_id == spell_id);
+    CHECK(packet->spell_crc == table->spell_crc(spell_id));
     CHECK(packet->target_id == kTarget);
 }
 

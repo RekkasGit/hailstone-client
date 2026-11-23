@@ -436,6 +436,41 @@ TEST_CASE("UI packs: the spell set editor is the character's: another character,
     }
 }
 
+TEST_CASE("UI packs (modern): the Lua social editor is the character's: another character, or a camp, closes it") {
+    PackRig r("modern");
+    // social 6 asked for once, its code editor's calls listed, and nothing saved behind the test's back
+    r.run(R"lua(
+fake.req = 5
+hs.LuaSocialEditRequest = function() local n = fake.req fake.req = nil return n end
+hs.LuaSocial = function(n) return { name = "Old", color = 0, press = "mq.cmd('/sit')", face = "", lua = true } end
+hs.SetLuaSocial = function(n) calls[#calls + 1] = "set " .. n end
+local CodeEditor = ui.CodeEditor
+ui.CodeEditor = function(...) calls[#calls + 1] = "code" return CodeEditor(...) end
+)lua");
+    r.s->frames(3);
+    r.run("calls = {}");
+    r.s->frames(1);
+    CHECK(r.called("code"));
+    r.run("fake.name = 'Bravo'");
+    r.s->frames(2);
+    r.run("calls = {}");
+    r.s->frames(1);
+    CHECK_FALSE(r.called("code"));
+    // opened again, then camped and back as the same name: gone too
+    r.run("fake.req = 5");
+    r.s->frames(3);
+    r.run("calls = {}");
+    r.s->frames(1);
+    CHECK(r.called("code"));
+    r.run("fake.inGame = false");
+    r.s->frames(2);
+    r.run("fake.inGame = true calls = {}");
+    r.s->frames(2);
+    CHECK_FALSE(r.called("code"));
+    CHECK_FALSE(r.called("set "));
+    CHECK(r.no_errors());
+}
+
 TEST_CASE("UI packs (gamepad): the spell book's bar is the scribe gauge while a scroll is scribed") {
     PackRig r("gamepad");
     r.run(R"lua(

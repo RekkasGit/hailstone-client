@@ -860,6 +860,9 @@ typedef struct HailstoneHooks {
     const char* (*zone_display_name)(uint32_t zone_id, uint32_t instance_id);
     /* UI + EXTEND. Nonzero supplies a validated map policy; zero abstains. */
     int (*map_policy)(HailstoneMapPolicy* out);
+    /* EXTEND. Requests an inclusive spell ID limit above the stock RoF2 range; 0 abstains. The host validates
+     * the spell file before selecting a limit for the next zone stream. Added later in ABI 4. */
+    uint32_t (*spell_id_limit)(void);
 } HailstoneHooks;
 
 
@@ -1179,6 +1182,12 @@ typedef struct PluginHostApi {
      * reads still need theirs). Added later in ABI 3: test HAILSTONE_HOST_HAS(host, acquire_bulk_buffer) first. */
     unsigned char* (*acquire_bulk_buffer)(void* host, int32_t* size);
     void (*release_bulk_buffer)(void* host);
+    /* READ. The limit selected for ZoneEntry and whether the currently loaded file supports that extension.
+     * Without a compatible request at ZoneEntry, the limit is 45000 and readiness is 0. With no connection or
+     * permission both calls return 0. Before advertising on the wire, check both results. Added later in ABI 4:
+     * check HAILSTONE_HOST_HAS for both fields. */
+    uint32_t (*spell_id_limit)(void* host);
+    int (*spell_data_ready)(void* host);
     /* Whether a typed "/name" would run a command, looked up as the line would be: HAILSTONE_COMMAND_ADDED when a
      * plugin, a script or the client itself added it (AddCommand; these come first), else HAILSTONE_COMMAND_GAME when
      * it is one of the game's own (whose table takes any prefix of its names, and its GM commands only for a GM),

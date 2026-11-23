@@ -946,11 +946,15 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   item unserialiser's write to +0x570 would settle it.
 
 - **ActorTagInfo.txt beyond the shield flag** (docs/formats/characters.md "ActorTagInfo.txt").
-  - Unknown: what fields 3 to 10 and kinds other than 1 (2, and a later file's 37 .. 64) mean. Their layout is known
-    (the loader @0x7f4130 keeps field 3 as an integer, fields 5 to 7 when field 4 is non-zero, fields 8 to 10 when all
-    are above 0); their use is not traced. How the loader reads a 9-field line's missing tenth field is not traced.
+  - Unknown: what fields 3 to 10 and kind 2 mean. Their layout is known (the loader @0x7f4130 keeps field 3 as an
+    integer, fields 5 to 7 when field 4 is non-zero, fields 8 to 10 when all are above 0); their use is not traced.
   - Now: only kind 1 is a shield; the other fields are not read.
   - Settle: trace the users of the record's +8, +0xc and +0x10 in the original.
+- **How a current live client finds its shields** (docs/formats/characters.md "ActorTagInfo.txt").
+  - Unknown: a current live install's file has 9 values a line and lacks the kind field (its field 2 is the 10-value
+    layout's field 3), so the live client must decide shields some other way.
+  - Now: a 9-value line is skipped, so with such a file the original's fixed list decides, as with no file.
+  - Settle: find the live client's shield check, or a 9-value file with a column that matches the 10-value kinds.
 - **Whether a RoF2 install ships ActorTagInfo.txt** (docs/formats/characters.md "ActorTagInfo.txt").
   - Unknown: the only copies at hand come from later live clients' folders.
   - Now: the file is read when present; without it the original's fixed list applies (`game::is_stock_shield_model`),

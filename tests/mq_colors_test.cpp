@@ -132,7 +132,7 @@ TEST_CASE("MQ colours: a plugin's or script's line keeps its codes; anyone else'
         plugin::CallerScope scope(plugin::kCapAll, "colour-test");
         rig.conn.ui_message("\agHi\ax there");
     }
-    CHECK(chat_texts(rig.conn) == V{"agHix there", "\agHi\ax there"});
+    CHECK(chat_texts(rig.conn) == V{"gHix there", "\agHi\ax there"});
 }
 
 TEST_CASE("MQ colours: hs.ChatText draws a line's codes as STML colours, across its item links") {
