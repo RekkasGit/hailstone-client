@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Clicking Train or the background in Modern Alternate Advancement keeps held movement keys active.
 - Stackable items show their live quantity at the bottom of hotkeys in Modern and Gamepad.
 - With **Auto Target Attackers** enabled, an NPC that attacks you becomes your target if you have none, even when your Extended Target list is empty.
 - With a live EverQuest folder, Arena and Nektulos load the zone the server runs: the revamped zone when the server's safe point stands on it (PEQ's Arena, and Nektulos from expansion 10), the old zone otherwise. They always loaded the old zone before

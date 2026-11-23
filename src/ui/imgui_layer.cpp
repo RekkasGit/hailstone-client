@@ -595,7 +595,10 @@ bool keyboard_for_ui(int requested) {
     if (!io.WantCaptureKeyboard) return false;
     if (requested == 1 || io.WantTextInput || ImGui::GetTopMostPopupModal()) return true;
     const ImGuiContext& g = *GImGui;
-    return g.ActiveId == 0 || g.ActiveIdSource != ImGuiInputSource_Mouse;
+    if (g.ActiveId != 0) return g.ActiveIdSource != ImGuiInputSource_Mouse;
+    // NewFrame computes capture before clearing a window's move ID on mouse release. With no active item,
+    // only enabled keyboard navigation can account for the remaining capture flag.
+    return io.NavActive && (io.ConfigFlags & ImGuiConfigFlags_NavEnableKeyboard) && io.ConfigNavCaptureKeyboard;
 }
 
 float ui_scale() { return g_ui_scale; }
