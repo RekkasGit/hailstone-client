@@ -38,6 +38,9 @@ namespace hailstone::net {
 
 namespace {
 
+constexpr std::string_view kAutosplitSection = "Hailstone";
+constexpr std::string_view kAutosplitKey = "Autosplit";
+
 bool iequals(std::string_view a, std::string_view b) {
     return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
                return std::tolower(static_cast<unsigned char>(x)) == std::tolower(static_cast<unsigned char>(y));
@@ -1115,7 +1118,13 @@ void GameConnection::load_chat_filters() {
 void GameConnection::load_client_options() {
     // CEverQuest::loadOptions @0x544be0 (eqclient.ini over defaults.ini): here the character's options.ini over the
     // asset folder's eqclient.ini, the defaults where both lack a key (before a character is chosen, eqclient.ini's).
-    client_options_.load(load_option_settings(game_, own_files().options_ini()));
+    const auto path = own_files().options_ini();
+    client_options_.load(load_option_settings(game_, path));
+    // EQEmu's RoF2 profile sends zero for Autosplit even when the server has it enabled.
+    // Remember the last choice from this character's own file, with no server write on login.
+    IniFile own;
+    own.load(path);
+    autosplit_ = own.get_int(kAutosplitSection, kAutosplitKey, 0) == 1;
     tracking_from_options();
     // Logging that was on goes on in the default log ("eqlog") once the character is known.
     open_chat_log("eqlog");
@@ -1145,10 +1154,11 @@ void GameConnection::copy_character_settings(const std::filesystem::path& from_d
         send_server_filter();
     }
     if (options) {
-        // Anonymous and Roleplaying share [Options] Anonymous: the character's public flags, not a preference.
+        // Keep the destination character's public flags and last Autosplit choice.
         const game::ClientOptionInfo& anon = game::client_option_info(game::ClientOption::Anonymous);
         auto skip = [&](const std::string& section, const std::string& key) {
-            return game::same_no_case(section, anon.section) && game::same_no_case(key, anon.key);
+            return (game::same_no_case(section, anon.section) && game::same_no_case(key, anon.key)) ||
+                   (game::same_no_case(section, kAutosplitSection) && game::same_no_case(key, kAutosplitKey));
         };
         if (merge(from_dir / own.options_ini().filename(), own.options_ini(), skip)) {
             game::ClientOptions before = client_options_;
@@ -1283,6 +1293,16 @@ std::optional<int> GameConnection::character_setting(std::string_view name) cons
     return std::nullopt;
 }
 
+void GameConnection::set_autosplit(bool checked, std::uint32_t message, std::uint32_t color) {
+    autosplit_ = checked;
+    system(message, {}, color);
+    const SpawnAppearance appearance{static_cast<std::uint16_t>(world_.player_id), 28, checked ? 1u : 0u};
+    if (!send_zone(encode(appearance))) return;
+    const auto path = own_files().options_ini();
+    if (!save_chat_setting(path, kAutosplitSection, kAutosplitKey, checked ? "1" : "0"))
+        log::warn("cannot write {}", path.string());
+}
+
 bool GameConnection::set_character_setting(std::string_view name, int value) {
     bool checked = value != 0;
     auto appearance = [&](std::uint16_t type, std::uint32_t parameter) {
@@ -1294,9 +1314,7 @@ bool GameConnection::set_character_setting(std::string_view name, int value) {
     };
     if (name == "loot_autosplit") {
         // +0x238: CharacterBase +0x46c, 0x2f04 / 0x2f05 (0x111), Send_OP_SpawnAppearance_00516c00 {me, 0x1c, flag}.
-        autosplit_ = checked;
-        system(autosplit_ ? 12036 : 12037, {}, 0x111);
-        appearance(28, autosplit_ ? 1 : 0);
+        set_autosplit(checked, checked ? 12036 : 12037, 0x111);
         return true;
     }
     int consent = name == "auto_consent_group" ? 0 : name == "auto_consent_raid" ? 1 : name == "auto_consent_guild" ? 2 : -1;
