@@ -148,6 +148,24 @@ inline std::optional<int> CommandExists(std::string_view name) {
     return host->command_exists(host->host, std::string(name).c_str());
 }
 
+// host->lend_thread for a scope: while it lives, the plugin's own threads may call the host (one call at a time) as
+// if on the client's thread, for a callback that waits on them. Make it inside a callback, on the client's thread.
+// ok() is false where the client refuses (see lend_thread) or lacks it. Nested in one that lends already, it lends too
+// and leaves the ending to the outer one.
+class LendThread {
+public:
+    LendThread() : state_(HAILSTONE_HOST_HAS(host, lend_thread) ? host->lend_thread(host->host, 1) : 0) {}
+    ~LendThread() {
+        if (state_ == 1) host->lend_thread(host->host, 0);
+    }
+    LendThread(const LendThread&) = delete;
+    LendThread& operator=(const LendThread&) = delete;
+    bool ok() const { return state_ != 0; }
+
+private:
+    int state_; // lend_thread(1)'s answer: 1 started here, 2 already lent, 0 refused
+};
+
 // ---- TLOs
 
 // MQ's AddTopLevelObject with a callable. False when the name is the client's or another plugin's TLO, or with no

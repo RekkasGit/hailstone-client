@@ -3,6 +3,7 @@
 ## Unreleased
 
 - C++ plugins can include the SDK's new `hailstone_plugin.hpp` to register commands and TLOs as lambdas that capture `this` and other values, as MacroQuest's `mq::AddCommand` does.
+- Plugins can lend the client's thread to their own threads with the SDK's new `lend_thread`, while their callback waits for them, so a script runtime whose scripts run on a thread of their own (MQ2Mono-style C# scripts) can read TLOs and run commands from there.
 - Plugins can ask whether a command exists with the SDK's new `command_exists`. It says whether a plugin, a script or the client added the command, or whether it is one of the game's own.
 - Clicking Train or the background in Modern Alternate Advancement keeps held movement keys active.
 - Dear ImGui is 1.93.0 (it was 1.91.9). **Plugin authors:** the SDK is ABI 4. A plugin built for ABI 3 still loads, but its `OnUpdateImGui` is not called and `imgui_context` and `web_view` give it nothing, since the Dear ImGui context it draws into changed. Rebuild it against this SDK and Dear ImGui 1.93.0. Lines, outlines and circles that scripts draw (`ui.DrawLine`, `ui.DrawCircle`, nameplate canvas commands) keep their old pixel placement; rectangle outlines now sit inside the rectangle, and filled rectangles at fractional positions get smooth edges.

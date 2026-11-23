@@ -1326,6 +1326,31 @@ TEST_CASE("native plugins: host functions from another thread do nothing; the ca
     CHECK(plugin::caller_name() == "script");
 }
 
+TEST_CASE("native plugins: lend_thread lets the plugin's own thread call the host while its callback waits") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+    // Lent: the thread's calls work (a nested lend from it is refused); ended, another thread is refused again.
+    h.run("/probelend");
+    CHECK(h.printed_line(
+        "[Probe] lend 1 2, thread: add_command 1, parse 4 'lent', lend 0; end 1, after: add_command 0"));
+    CHECK(h.printed_line("[Probe] written from the lent thread"));
+    CHECK(h.hooks.has_command("/fromlent"));
+    CHECK_FALSE(h.hooks.has_command("/afterlend"));
+    // Lent and never given back: it ends when the callback that lent it returns.
+    h.run("/probelend keep");
+    CHECK(h.printed_line("[Probe] lend keep 1"));
+    h.run("/probelendafter");
+    CHECK(h.printed_line("[Probe] after keep: add_command 0"));
+    CHECK_FALSE(h.hooks.has_command("/afterkeep"));
+    // The client's thread is the client's again, and only it.
+    CHECK(plugin::on_main_thread());
+    CHECK_FALSE(plugin::on_lent_thread());
+    bool other = true;
+    std::thread([&] { other = plugin::on_main_thread(); }).join();
+    CHECK_FALSE(other);
+}
+
 TEST_CASE("native plugins: a connection opened with 'net' closes when the policy takes 'net' away") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);

@@ -9,6 +9,7 @@
 #include <cstring>
 #include <format>
 #include <fstream>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <sstream>
@@ -306,6 +307,9 @@ struct Loaded {
     // deeper (nested) callback leaves it held, and it goes back when the callback it was acquired in returns (Busy).
     std::unique_ptr<unsigned char[]> bulk_buffer;
     int bulk_held_at = 0;
+    // The callback depth (busy) it lent the client's thread at (lend_thread), 0 while it lends nothing: the lending
+    // ends with lend_thread(0) or when that callback returns (Busy).
+    int lend_held_at = 0;
     bool unload_pending = false; // unload asked for while busy: done at the next pulse
     bool host_threw_warned = false; // (host_threw)
     bool map_policy_running = false; // get_map_policy cannot recursively invoke its caller's policy hook
@@ -338,12 +342,31 @@ struct Loaded {
     }
 };
 
+// lend_thread: the plugin lending the client's thread to its own threads, null while none does. One at a time: a
+// plugin lends from inside its callback, so the client's thread is in that plugin until it ends. While one lends,
+// every host call takes g_lend_mutex (the client's thread's own too), so they run one at a time on whatever thread.
+// Recursive: a host call from a lent thread may call into a plugin that calls the host again on that thread.
+namespace {
+std::recursive_mutex g_lend_mutex;
+std::atomic<Loaded*> g_lender{nullptr};
+
+// Ends l's lending, once the host call a lent thread may be making has returned (the lock).
+void end_lending(Loaded& l) {
+    if (g_lender.load() != &l) return;
+    std::lock_guard<std::recursive_mutex> lock(g_lend_mutex);
+    g_lender.store(nullptr);
+    l.lend_held_at = 0;
+}
+} // namespace
+
 // Inside a plugin's code: its capabilities, and it stays loaded until this ends.
 struct Busy {
     explicit Busy(Loaded& l) : l_(l), scope_(l.caps, l.name) { ++l_.busy; }
     ~Busy() {
         // The callback its bulk buffer was acquired in has returned: the pointer is no longer the plugin's to use.
         if (--l_.busy < l_.bulk_held_at) l_.bulk_held_at = 0;
+        // ... and the one it lent the client's thread in: its threads can no longer act for it.
+        if (l_.lend_held_at && l_.busy < l_.lend_held_at) end_lending(l_);
     }
     Busy(const Busy&) = delete;
     Busy& operator=(const Busy&) = delete;
@@ -1281,6 +1304,26 @@ int h_command_exists(void* h, const char* name) {
     const net::GameConnection* c = connection_of(l);
     if (game::find_slash_command(n, c && c->player_is_gm(), c ? &c->strings() : nullptr)) return HAILSTONE_COMMAND_GAME;
     return HAILSTONE_COMMAND_NONE;
+}
+
+// lend_thread (sdk/hailstone_plugin.h): from inside one of l's callbacks on the client's own thread, lends that
+// thread to l's other threads until lend_thread(0) or until the callback returns (Busy). Refused on a lent thread
+// (only the client's own thread lends itself), outside a callback, and while another plugin lends it (this callback
+// runs inside that plugin's). 2 when l already lends it: the caller did not start it, so must not end it.
+int h_lend_thread(void* h, int lend) {
+    Loaded& l = Loaded::of(h);
+    if (on_lent_thread()) return 0;
+    if (!lend) {
+        end_lending(l);
+        return 1;
+    }
+    if (l.busy == 0) return 0;
+    Loaded* const lender = g_lender.load();
+    if (lender == &l) return 2;
+    if (lender) return 0;
+    l.lend_held_at = l.busy;
+    g_lender.store(&l);
+    return 1;
 }
 
 // The plugin's folder: plugins/<name>/ when its binary is there, else plugins/<name>/ beside the binary.
@@ -2983,11 +3026,38 @@ void host_threw(void* h) noexcept {
         }
     }
 }
+// Whether a host call may run on this thread, held for the call: the client's thread, or (lend_thread) a thread of
+// the plugin that lends it the client's thread, which then acts as the client's for the call. While a plugin lends,
+// every host call takes g_lend_mutex, so they run one at a time whichever thread makes them.
+class HostThread {
+public:
+    explicit HostThread(void* h) {
+        if (on_main_thread()) {
+            if (g_lender.load()) lock_ = std::unique_lock<std::recursive_mutex>(g_lend_mutex);
+            ok_ = true;
+            return;
+        }
+        Loaded* l = h ? &Loaded::of(h) : nullptr;
+        if (!l || g_lender.load() != l) return;
+        lock_ = std::unique_lock<std::recursive_mutex>(g_lend_mutex);
+        if (g_lender.load() != l) return; // the lending ended while this waited
+        lent_.emplace();
+        ok_ = true;
+    }
+    bool ok() const { return ok_; }
+
+private:
+    std::unique_lock<std::recursive_mutex> lock_; // destroyed after lent_: the thread stops acting first
+    std::optional<ThreadLent> lent_;
+    bool ok_ = false;
+};
+
 template <auto F> struct MainOnly;
 template <typename R, typename... A, R (*F)(void*, A...)> struct MainOnly<F> {
     static R call(void* h, A... a) {
         try {
-            if (!on_main_thread()) {
+            HostThread thread(h);
+            if (!thread.ok()) {
                 off_thread(h);
                 if constexpr (std::is_void_v<R>) return;
                 else return R{};
@@ -3008,7 +3078,8 @@ template <auto F, auto Off> struct MainOnlyOr;
 template <typename R, typename... A, R (*F)(void*, A...), auto Off> struct MainOnlyOr<F, Off> {
     static R call(void* h, A... a) {
         try {
-            if (!on_main_thread()) {
+            HostThread thread(h);
+            if (!thread.ok()) {
                 off_thread(h);
                 return static_cast<R>(Off);
             }
@@ -3493,6 +3564,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.acquire_bulk_buffer = acquire_bulk_buffer_entry;
     p.table.release_bulk_buffer = main_only<h_release_bulk_buffer>;
     p.table.command_exists = main_only<h_command_exists>;
+    p.table.lend_thread = main_only<h_lend_thread>;
     Hooks& hooks = *m.env.hooks;
     Loaded* lp = &p;
     // Each callback runs with the plugin's capabilities and counts as the plugin being busy (no unloading under it).

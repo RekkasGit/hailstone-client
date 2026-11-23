@@ -709,6 +709,8 @@ Host functions:
   takes any prefix of its names, its GM commands only for a GM) or `HAILSTONE_COMMAND_NONE`. Added commands are
   looked up first, as a typed line is. Needs no capability. Added later in ABI 3: test
   `HAILSTONE_HOST_HAS(host, command_exists)` first;
+- `host->lend_thread(host->host, 1 / 0)`: lends the client's thread to the plugin's own threads while its callback
+  waits for them (see **Threads** below). Added later in ABI 4: test `HAILSTONE_HOST_HAS(host, lend_thread)` first;
 - `ParseMacroData` (`${...}`, any TLO);
 - `AddTopLevelObject`: a TLO with members the plugin answers; refused when the name is already a TLO (as in MQ);
 - `RemoveTopLevelObject` (only the plugin's own);
@@ -745,6 +747,7 @@ HAILSTONE_API void ShutdownPlugin(void) { bot.reset(); hs::RemoveAllCommands(); 
 | `AddCommand(name, fn)`, `RemoveCommand(name)`, `RemoveAllCommands()` | `fn(const char* args)`; adding a name the plugin has replaces it |
 | `Commands` | commands removed with their holder: a member of the object the lambdas capture |
 | `CommandExists(name)` | `command_exists`, empty on a client without it |
+| `LendThread` | `lend_thread` for a scope: lends while it lives; `ok()` false where refused or missing, and nested in a lending scope it leaves the ending to that one |
 | `AddTopLevelObject(name, fn)`, `RemoveTopLevelObject`, `RemoveAllTopLevelObjects()` | `fn(index, member, member_index, HailstoneValue& out)`, true with `out` filled; `member` is null for `${Name}` itself. Adding the plugin's own name again replaces its answer |
 | `Bool`, `Int`, `Float`, `String` | `HailstoneValue`s for a TLO's `out` (a string must live until the TLO returns) |
 | `GetPlayer()`, `GetSpawn(id)`, `NextSpawn(after_id)` | the readers with the struct's `size` filled in, as `std::optional` |
@@ -772,6 +775,16 @@ calling plugin.
 a hook, ...), on the client's thread: its state has no locks. From another thread a call does nothing and returns
 0 / NULL (logged once); `ability_state` returns -1 ("unknown"), since its 0 means "on reuse". Hand a worker thread's
 results over and act on them in `OnPulse`.
+
+A plugin whose callback waits while a thread of its own does the work (a script runtime whose script thread runs
+while `OnPulse` blocks, as MQ2Mono's C# scripts do) can lend that thread the client's: `lend_thread(host, 1)` from
+inside the callback, on the client's thread. Until `lend_thread(host, 0)`, or until that callback returns, the
+plugin's threads may call host functions as the client's thread would, with the plugin's capabilities. Every host call
+then takes one lock, the client's thread's own included, so the calls run one at a time; nothing else of the client
+runs meanwhile, since the client's thread is inside the plugin. `lend_thread(host, 1)` returns 1 when it started
+lending, 2 when the plugin already lends (a nested callback: leave the ending to the one that started it), and 0 on a
+lent thread, outside a callback, or inside another plugin's lending callback. `lend_thread(host, 0)` waits for a host
+call another thread is making, then returns 1. C++ plugins can hold an `hs::LendThread` for the waiting.
 
 **Exceptions.** A C++ plugin must not let an exception out of anything the client calls (callbacks, commands, TLOs,
 hooks, UI functions, options). The client catches what it can: the call counts as unanswered (a TLO is NULL, a hook

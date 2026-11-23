@@ -71,6 +71,8 @@ static_assert(offsetof(PluginHostApi, release_bulk_buffer) ==
               offsetof(PluginHostApi, acquire_bulk_buffer) + sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, command_exists) ==
               offsetof(PluginHostApi, release_bulk_buffer) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, lend_thread) ==
+              offsetof(PluginHostApi, command_exists) + sizeof(PluginHostApi::caps));
 
 namespace {
 
@@ -777,6 +779,42 @@ void probe_command(void*, const char* args) {
     WriteChatf("[Probe] command '%s' %d", args ? args : "", host->command_exists(host->host, args));
 }
 
+// /probelend: lend_thread, then a thread of the plugin calls the host while this waits for it, then the lending ends
+// and another thread is refused again. /probelend keep: lends and returns without ending it (the callback's return
+// ends it; /probelendafter checks).
+void probe_lend(void*, const char* args) {
+    if (!HAILSTONE_HOST_HAS(host, lend_thread)) {
+        WriteChatf("[Probe] lend: not in this client");
+        return;
+    }
+    if (args && std::strcmp(args, "keep") == 0) {
+        WriteChatf("[Probe] lend keep %d", host->lend_thread(host->host, 1));
+        return;
+    }
+    const int lent = host->lend_thread(host->host, 1);
+    const int again = host->lend_thread(host->host, 1); // already lent: 2
+    int added = -1, nested = -1, parsed_len = -1;
+    char parsed[32] = {};
+    std::thread t([&] {
+        added = host->add_command(host->host, "/fromlent", nothing, nullptr);
+        parsed_len = host->parse(host->host, "lent", parsed, sizeof parsed);
+        nested = host->lend_thread(host->host, 1); // only the client's own thread lends itself: 0
+        host->write_chat(host->host, "[Probe] written from the lent thread", 0);
+    });
+    t.join();
+    const int ended = host->lend_thread(host->host, 0);
+    int after = -1;
+    std::thread([&] { after = host->add_command(host->host, "/afterlend", nothing, nullptr); }).join();
+    WriteChatf("[Probe] lend %d %d, thread: add_command %d, parse %d '%s', lend %d; end %d, after: add_command %d", lent,
+               again, added, parsed_len, parsed, nested, ended, after);
+}
+
+void probe_lend_after(void*, const char*) {
+    int added = -1;
+    std::thread([&] { added = host->add_command(host->host, "/afterkeep", nothing, nullptr); }).join();
+    WriteChatf("[Probe] after keep: add_command %d", added);
+}
+
 // /probeability <kind> <name>: ability_state then use_ability, both added later in ABI 3.
 void probe_ability(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, ability_state) || !HAILSTONE_HOST_HAS(host, use_ability)) {
@@ -1104,6 +1142,8 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probeabilities", probe_abilities, nullptr);
     AddCommand("/probespells", probe_spells, nullptr);
     AddCommand("/probecommand", probe_command, nullptr);
+    AddCommand("/probelend", probe_lend, nullptr);
+    AddCommand("/probelendafter", probe_lend_after, nullptr);
     AddCommand("/probespellsbyname", probe_spells_by_name, nullptr);
     for (const char* what : buffer_commands)
         AddCommand(own_command(what).c_str(), probe_buffer, const_cast<char*>(what));
