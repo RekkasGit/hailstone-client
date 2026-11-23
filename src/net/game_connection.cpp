@@ -30,6 +30,7 @@
 #include "game/sound_rules.h"
 #include "game/spawn_heights.h"
 #include "game/coords.h"
+#include "game/mq_colors.h"
 #include "game/zone_names.h"
 #include "game/mechanics/tables.h"
 #include "game/mechanics/vehicle.h"
@@ -179,6 +180,14 @@ void GameConnection::fail(std::string message) {
 
 void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb, std::uint32_t color,
                           std::string peer, std::optional<std::string> display_text) {
+    // MacroQuest's colour codes (game/mq_colors.h) are for the plugins' and scripts' own lines: from anyone else (a
+    // server's message, a player's tell) a BEL is taken out, so their text cannot colour the chat. A hook below may
+    // still put codes into a line it rewrites, as the plugin's own.
+    if (plugin::caller_name().empty()) {
+        auto drop = [](std::string& t) { std::erase(t, game::kMqColorCode); };
+        drop(text);
+        if (display_text) drop(*display_text);
+    }
     if (options_.hooks) { // OnIncomingChat, OnFilterChat (a server's client may drop lines in dsp_chat)
         // A deliberate difference from MQ, whose hook hangs off dsp_chat and sees a hit line as displayed: hooks get
         // the full sentence whatever the hit mode (docs/plugins.md), so a parser matches one form.
@@ -192,8 +201,14 @@ void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t 
         rgb = line.color;
     }
     // Hit modes change presentation only: logs and incoming-chat parsers retain the complete sentence.
-    log::info("chat: {}", text);
-    if (chat_logging()) write_chat_log(text); // dsp_chat's OutputTextToLog (Log on)
+    if (text.find(game::kMqColorCode) == std::string::npos) {
+        log::info("chat: {}", text);
+        if (chat_logging()) write_chat_log(text); // dsp_chat's OutputTextToLog (Log on)
+    } else {
+        const std::string plain = game::strip_mq_colors(text); // the logs are plain text
+        log::info("chat: {}", plain);
+        if (chat_logging()) write_chat_log(plain);
+    }
     chat_.push_back({kind, display_text ? std::move(*display_text) : std::move(text), rgb, color, std::move(peer)});
     if (chat_.size() > 500) chat_.pop_front();
 }

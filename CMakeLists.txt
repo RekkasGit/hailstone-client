@@ -257,6 +257,7 @@ add_library(hailstone_engine STATIC
   src/game/server_ext.cpp
   src/game/server_ext_chain.cpp
   src/game/chat_text.cpp
+  src/game/mq_colors.cpp
   src/game/chat_windows.cpp
   src/game/client_options.cpp
   src/game/buff_overlays.cpp
@@ -1442,6 +1443,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/achievements_test.cpp
     tests/achievement_connection_test.cpp
     tests/achievement_chat_test.cpp
+    tests/mq_colors_test.cpp
     tests/stml_link_injection_test.cpp
     tests/achievement_chat_input_test.cpp
     tests/lua_ui_achievements_test.cpp
