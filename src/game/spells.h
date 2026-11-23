@@ -5,8 +5,11 @@
 // Spell records come from the game's spells_us.txt: one line per spell, 237
 // '^'-separated columns, using the original's SpellManager::LoadTextSpells
 // @0x5c1c30 / EQ_Spell_InitFromLine @0x4ae710 field map, which matches EQEmu's
-// spells_new columns. Hailstone also reads IDs past RoF2's original limit up
-// to the signed spell ID fields' range.
+// spells_new columns. Hailstone extension: the original stops the load at the
+// first ID above 45000 and IsValidSpellID takes 1..45000; here IDs up to the
+// signed spell ID fields' range load and are valid (is_spell_id). Rank
+// substitution stays within the connection's limit (45000 unless a server
+// add-on raises it), and the zone entry keeps RoF2's checksums.
 //
 // The rules (cast checks, cast time, memorize speed, chat lines) follow the
 // original's casting functions and CEverQuest::ReportSuccessfulHit @0x52ee40

@@ -242,6 +242,13 @@ TEST_CASE("Item descriptions show effect details from a spell record when dbstr 
     };
     CHECK(display().find("Spell Effect: An authored spell description.") != std::string::npos);
     CHECK(display().find("Increase Fire Resist") == std::string::npos);
+    { // the fallback window prefers the authored text too
+        const auto authored = net::decode_item_packet(net::encode_item_packet(false, packet));
+        REQUIRE(authored);
+        const auto lines = ui::item_info_lines(authored->item, {}, {}, ctx);
+        CHECK(std::ranges::find(lines, "An authored spell description.") != lines.end());
+        CHECK(std::ranges::find(lines, "Slot 1: Increase Fire Resist by 20") == lines.end());
+    }
     ctx.show_spell_descriptions = false;
     CHECK(display().find("Effect: Temper the Flesh") != std::string::npos);
     CHECK(display().find("Spell Effect:") == std::string::npos);

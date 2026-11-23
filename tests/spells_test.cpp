@@ -348,15 +348,20 @@ TEST_CASE("spells_us.txt: spell IDs fit the signed wire fields without treating 
     const std::string maximum = row("2147483647", "Custom Effect");
     std::string text = zero + "\r\n" + above_legacy_range + '\n' + row("100001", "Another Effect") + '\n' +
                        maximum + '\n';
-    for (const char* id : {"-1", "65534", "65535", "2147483648", "4294967303", "18446744073709551616", "2x"}) {
+    for (const char* id : {"-1", "65534", "65535", "2147483648", "4294967303", "18446744073709551616"}) {
         const std::string invalid = row(id, "Invalid");
         CHECK_FALSE(game::SpellTable::parse_line(invalid));
         text += invalid + '\n';
     }
+    // EQ_Spell_InitFromLine reads the ID with atoi: its leading digits.
+    const std::string trailing = row("2x", "Trailing");
+    REQUIRE(game::SpellTable::parse_line(trailing));
+    CHECK(game::SpellTable::parse_line(trailing)->id == 2);
+    text += trailing + '\n';
     text += row("7", "Late Row");
 
     game::SpellTable table;
-    REQUIRE(table.parse(text) == 5);
+    REQUIRE(table.parse(text) == 6);
     CHECK(table.get(0));
     CHECK_FALSE(game::is_spell_id(0));
     for (const auto id : {7u, 50820u, 65533u, 65536u, 100001u, 2147483647u}) CHECK(game::is_spell_id(id));
@@ -365,7 +370,8 @@ TEST_CASE("spells_us.txt: spell IDs fit the signed wire fields without treating 
     CHECK(table.get(7)->name == "Late Row");
     CHECK(table.get(100001));
     CHECK(table.get(2147483647u));
-    CHECK_FALSE(table.get(2));
+    REQUIRE(table.get(2));
+    CHECK(table.get(2)->name == "Trailing");
     CHECK_FALSE(table.get(65534));
     CHECK_FALSE(table.get(65535));
     const auto matches = table.find_all_by_name("custom effect");
@@ -408,7 +414,9 @@ TEST_CASE("spells_us.txt: optional wire compatibility requires native records wi
     CHECK(table.get(100001));
 
     const std::string embedded_nul = spell_line({{0, "3"}, {1, std::string("Bad\0Name", 8)}});
-    for (const std::string& invalid : {stock, std::string("3^short"), spell_line({{0, "65535"}}), embedded_nul}) {
+    const std::string trailing_id = spell_line({{0, "4x"}, {1, "Trailing"}});
+    for (const std::string& invalid :
+         {stock, std::string("3^short"), spell_line({{0, "65535"}}), embedded_nul, trailing_id}) {
         write(valid + invalid);
         REQUIRE(table.load(game));
         CHECK_FALSE(table.compatible_with_wire_limit(100000));

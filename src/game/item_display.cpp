@@ -413,6 +413,8 @@ std::vector<std::string> generated_spell_details(const SpellData& spell, const I
 }
 
 // Prefer GetSpellDescriptionText's authored text. Custom spells can supply effect records without a dbstr entry.
+// Hailstone extension: without authored text the original shows no block; here the effect slots and duration are
+// generated instead (docs/item-compare.md), for stock spells without a description too.
 std::string spell_details(const SpellData& spell, const ItemDisplayContext& ctx, net::ItemEffectKind kind,
                           std::uint32_t format_id) {
     if (ctx.db_string && spell.description_id > 0) {
@@ -593,6 +595,11 @@ std::vector<std::string> item_effect_detail_lines(const net::ItemEffect& effect,
     if (!ctx.show_spell_descriptions) return {};
     const SpellData* spell = effect_spell(effect, ctx.spells);
     if (!spell) return {};
+    if (ctx.db_string && spell->description_id > 0) {
+        const auto text = ctx.db_string(static_cast<std::uint32_t>(spell->description_id), 6);
+        const auto formatted = spell_description_text(*spell, text, ctx.character, ctx.player_level, ctx.player_class);
+        if (!formatted.empty()) return {description_plaintext(formatted)};
+    }
     return generated_spell_details(*spell, ctx, kind);
 }
 

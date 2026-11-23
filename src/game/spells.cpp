@@ -190,9 +190,10 @@ std::optional<SpellData> SpellTable::parse_line(std::string_view line) {
     auto b = [&](std::size_t c) { return to_int(f[c]) != 0; };
     SpellData s;
     const char* id_end = f[0].data() + f[0].size();
+    // The leading digits, as EQ_Spell_InitFromLine's atoi reads them (trailing characters are ignored).
     const auto id = std::from_chars(f[0].data(), id_end, s.id);
     // ID 0 is a placeholder record in stock files, with its own checksum.
-    if (id.ec != std::errc{} || id.ptr != id_end || (s.id != 0 && !is_spell_id(s.id))) return std::nullopt;
+    if (id.ec != std::errc{} || (s.id != 0 && !is_spell_id(s.id))) return std::nullopt;
     s.name = std::string(f[1]);
     s.player_1 = std::string(f[2]);
     s.teleport_zone = std::string(f[3]);
@@ -332,8 +333,12 @@ std::size_t SpellTable::parse_rows(std::string_view text, bool validate_wire_fil
         crcs_[id] = spell_record_crc(spell_record_from_line(line));
         const bool inserted = spells_.insert_or_assign(id, std::move(*s)).second;
         if (compatible) {
-            compatible = inserted && std::count(line.begin(), line.end(), '^') >=
-                                         static_cast<std::ptrdiff_t>(kColumns - 1);
+            // A wire-compatible file has plain decimal IDs only.
+            const std::string_view id_field = line.substr(0, line.find('^'));
+            compatible = inserted && !id_field.empty() &&
+                         std::all_of(id_field.begin(), id_field.end(),
+                                     [](char c) { return c >= '0' && c <= '9'; }) &&
+                         std::count(line.begin(), line.end(), '^') >= static_cast<std::ptrdiff_t>(kColumns - 1);
             max_id = std::max(max_id, id);
         }
         ++count;
