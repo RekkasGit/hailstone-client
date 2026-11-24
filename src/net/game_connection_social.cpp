@@ -102,6 +102,9 @@ std::string fmt_eq(const game::EqStrings& s, std::uint32_t id, std::vector<std::
 // Guild invitations lapse like the original's confirmation dialog (10 s, @0x4b9809).
 constexpr std::int64_t kGuildInviteMs = 10000;
 
+// EQEmu relays at most 512 bytes of the emote body, both for channel 22 and for OP_Emote.
+constexpr std::size_t kEmoteRelayMaxText = 512;
+
 } // namespace
 
 // ---------------------------------------------------------------- helpers
@@ -444,7 +447,7 @@ void GameConnection::send_channel(std::uint32_t channel, const std::string& targ
     m.language = lang;
     m.language_skill = static_cast<std::uint32_t>(std::max(0, skill));
     m.channel = channel;
-    m.message = text;
+    m.message = game::encode_chat_percents(text, channel == 22 ? kEmoteRelayMaxText : kChannelMessageMaxText);
     send_zone(encode(m));
 }
 
@@ -526,7 +529,8 @@ void GameConnection::reply_command(const std::string& args) {
         // the chat server
         std::string word = fmt_eq(strings_, 13974, {});
         if (!word.empty() && word[0] == '/') word.erase(0, 1);
-        send_chat_server_message(expand_chat_text(std::format("{}{} {} {}", to[0], word, to.substr(1), args)), false);
+        const auto text = expand_chat_text(std::format("{}{} {} {}", to[0], word, to.substr(1), args));
+        send_chat_server_message(game::encode_chat_percents(text, kChannelMessageMaxText), false);
         return;
     }
     send_tell(to, args);
@@ -586,7 +590,7 @@ void GameConnection::social_emote(const game::SocialEmote& e, const std::string&
     // line.
     text.others = expand_chat_text(text.others);
     text.echo = expand_chat_text(text.echo, false);
-    if (!text.others.empty()) send_zone(encode_social_emote(text.others));
+    if (!text.others.empty()) send_zone(encode_social_emote(game::encode_chat_percents(text.others, kEmoteRelayMaxText)));
     // The animation, when standing still (OP_Animation, speed 10).
     if (e.animation >= 0 && pstatus_.stand_state == 100 && !moving_ && world_.player_id) {
         Animation a;
@@ -733,7 +737,8 @@ void GameConnection::away_reply(const ChannelMessage& m) {
     ChannelMessage r;
     r.sender = character_;
     r.target = m.sender;
-    r.message = afk_message_.empty() ? fmt_eq(strings_, 1419, {}) : (prefix + afk_message_).substr(0, 0x7ff);
+    const auto text = afk_message_.empty() ? fmt_eq(strings_, 1419, {}) : prefix + afk_message_;
+    r.message = game::encode_chat_percents(text, kChannelMessageMaxText);
     r.channel = 7;
     r.language = chat_language_ < 32 ? chat_language_ : 0;
     std::uint32_t skill = profile_ && r.language < profile_->languages.size() ? profile_->languages[r.language] : 0;
@@ -1951,6 +1956,16 @@ void GameConnection::send_chat_server_message(const std::string& text, bool via_
         m.sender = character_;
         m.channel = 20;
         m.message = text;
+        const auto separator = text.find(' ');
+        const bool chat_body = text.size() > 1 && (text[0] == ';' ||
+            (text[0] == '[' && (text[1] == '#' || std::isdigit(static_cast<unsigned char>(text[1])))));
+        // Numbered and named channels carry chat after the first space. UCS commands such as join and password
+        // interpret their own argument bytes, including '%'.
+        if (chat_body && separator < kChannelMessageMaxText - 1) {
+            const auto body = separator + 1;
+            m.message.resize(body);
+            m.message += game::encode_chat_percents(std::string_view(text).substr(body), kChannelMessageMaxText - body);
+        }
         send_zone(encode(m));
         return;
     }
@@ -2085,12 +2100,13 @@ void GameConnection::handle_chat_server_event(const ChatServerEvent& e) {
         // our echo 0x134). The original sends it through the zone instead when neither "SPAM:" came, nor the sender
         // is empty or us; EQEmu's chat server always sends "SPAM:0:".
         std::string sender = after_last_dot(e.sender);
+        const std::string text = game::decode_chat_percents(e.text);
         bool me = iequals(sender, character_);
         std::uint32_t color = 0x122;
         std::string line;
         auto chans = chat_server_->channels();
         if (e.channel.empty()) {
-            line = e.text; // -1
+            line = text; // -1
         } else if (e.channel[0] == '$') {
             std::string to = after_last_dot(e.channel.substr(1));
             if (iequals(to, character_)) { // -4
@@ -2098,29 +2114,29 @@ void GameConnection::handle_chat_server_event(const ChatServerEvent& e) {
                 game::add_last_tell(social_, "[" + sender); // LastTell_Add
                 social_.last_tell_from = "[" + sender;
                 color = 0x101;
-                line = fmt_eq(strings_, 6721, {sender, e.text});
+                line = fmt_eq(strings_, 6721, {sender, text});
             } else if (me) { // -3
                 color = 0x134;
-                line = fmt_eq(strings_, 6719, {to, e.text});
+                line = fmt_eq(strings_, 6719, {to, text});
             } else {
-                line = fmt_eq(strings_, 6720, {sender, to, e.text});
+                line = fmt_eq(strings_, 6720, {sender, to, text});
             }
         } else {
             std::string name = after_last_dot(e.channel);
             auto it = std::find_if(chans.begin(), chans.end(), [&](const std::string& c) { return iequals(c, name); });
             if (it == chans.end()) { // -2
-                line = fmt_eq(strings_, 6723, {sender, "#" + name, e.text});
+                line = fmt_eq(strings_, 6723, {sender, "#" + name, text});
             } else {
                 int n = static_cast<int>(it - chans.begin());
                 std::string label = std::format("{}:{}", name, n + 1);
                 color = 0x123 + static_cast<std::uint32_t>(n);
-                if (sender.empty()) line = e.text;
+                if (sender.empty()) line = text;
                 else if (is_ignored(sender)) break;
                 else if (me) {
                     color = 0x13b + static_cast<std::uint32_t>(n);
-                    line = fmt_eq(strings_, 6722, {label, e.text});
+                    line = fmt_eq(strings_, 6722, {label, text});
                 } else {
-                    line = fmt_eq(strings_, 6723, {sender, label, e.text});
+                    line = fmt_eq(strings_, 6723, {sender, label, text});
                 }
             }
         }
@@ -2180,11 +2196,14 @@ void GameConnection::handle_social(Op op, const AppPacket& p) {
     const std::string me = character_;
     switch (op) {
     case Op::ChannelMessage:
-        if (auto m = decode_channel_message(p)) handle_channel_message(*m);
+        if (auto m = decode_channel_message(p)) {
+            m->message = game::decode_chat_percents(m->message);
+            handle_channel_message(*m);
+        }
         break;
     case Op::Emote:
         // Handle_OP_Emote @0x4b89f0.
-        if (auto e = decode_emote(p)) chat(ChatEvent::Kind::Emote, e->text);
+        if (auto e = decode_emote(p)) chat(ChatEvent::Kind::Emote, game::decode_chat_percents(e->text));
         break;
     case Op::WhoAllResponse:
         if (auto r = decode_who_response(p)) {

@@ -620,19 +620,21 @@ Chat codes (`game::expand_chat_variables`, CEverQuest::DoPercentConvert @0x51b60
   a target.
 - A code is a `%` less than two bytes past where the last conversion left off, or after a space or an apostrophe. That
   point is two bytes past the start of the last expansion, so a code straight after a long expansion is not one
-  (`%T%S` with a target "a gnoll" sends "a gnoll%S"). After eleven expansions every further code position gets `@`.
+  (`%T%S` with a target "a gnoll" shows "a gnoll%S"). After eleven expansions, further recognized codes start with
+  `@` and literal percent signs still display as `%`.
 - They are converted when the line runs, in text the client sends: SendNewText's channels (say, a targeted say,
   group, guild, raid, fellowship, shout, auction, OOC, tell, emote), the chat-server lines (`;` and `[` lines,
   `/1`..`/10` after the bad word filter, a chat-server `/reply`), the whole line a social emote sends, after its period
   (send_social @0x528cf2), and the names of `/assist` and `/shield`. Social hot buttons run their lines as typed, each
   when it runs.
 - The local echoes show the converted text: the channel echoes show the sent text; the emote echo and a social's own
-  line are converted as shown lines (dsp_chat, where a `%` that is no code is left as it is). Received chat is never
-  converted (msg_new_text shows it with dsp_chat's conversion off, @0x4c0e02).
+  line are converted as shown lines (dsp_chat, where a literal `%` is left as it is).
+- Outgoing chat encodes remaining percent signs as `&PCT;` before the packet is sent, protecting them through server
+  relays. Incoming zone chat, emotes and chat-server messages decode the escape once before display. Target and pet
+  variables use the sender's state. Link labels travel with the same transport encoding and keep their text. Emote
+  bodies fit the relay's 512-byte limit, keeping escape sequences whole.
 
-Differences: the original sends `&PCT;` for a `%` that is no code and its chat window shows it as `%`; Hailstone sends
-the `%` itself (docs/unknowns.md), and copies an item or achievement link whole, so a `%` in its label is never a code.
-`%M` is the pet window's pet, where the original takes the first spawn in its list whose owner is the player.
+`%M` uses the pet window's pet. Item and achievement links are kept whole during variable expansion.
 
 Melee lines (`game::damage_report`, `hit_line_shown`; tests `tests/combat_test.cpp`) follow ReportSuccessfulHit's
 chat filters; a filter hides when its mode is 1 (setting 0):
