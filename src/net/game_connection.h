@@ -1737,6 +1737,8 @@ public:
     bool memorizing_set() const { return set_mem_.mode == 2; }
     // Clicks off one of the player's buffs (OP_BuffRemoveRequest).
     void remove_buff(int slot);
+    // Clicks off a removable beneficial buff in the focused pet's server slot.
+    bool remove_pet_buff(std::uint32_t slot);
     // RemovePCAffectex(affect, 0) / NotifyPCAffectChange: the client drops a buff
     // itself (disarm while hidden, Sanctuary before an attack); no packet.
     void clear_buff_locally(int slot);
@@ -2031,6 +2033,7 @@ public:
     // The pet the native pet window shows (the local player's PetID), set by the client alone: the NMS add-on's
     // /petcycle (MultiPet::CyclePet) writes it without telling the server.
     void set_window_pet(std::uint32_t spawn_id) {
+        if (pets_.focused != spawn_id) pet_buffs_.clear();
         pets_.focused = spawn_id;
         update_pet_presence();
     }

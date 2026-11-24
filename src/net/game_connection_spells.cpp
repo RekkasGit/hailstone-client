@@ -873,6 +873,20 @@ void GameConnection::remove_buff(int slot) {
     send_zone(encode_buff_remove_request(static_cast<std::uint32_t>(slot), world_.player_id));
 }
 
+bool GameConnection::remove_pet_buff(std::uint32_t slot) {
+    const auto pet = pets_.focused;
+    if (state_ != ConnectionState::InZone || !pet || !world_.spawns.contains(pet)) return false;
+    const auto it = std::find_if(pet_buffs_.begin(), pet_buffs_.end(), [slot](const auto& entry) {
+        return entry.first == slot;
+    });
+    if (it == pet_buffs_.end() || it->second.empty()) return false;
+    const auto* spell = spell_table_->get(it->second.spell);
+    if (!spell || !spell->beneficial() || spell->no_remove) return false;
+    // The server's OP_PetBuffWindow update clears the icon after the request.
+    send_zone(encode_buff_remove_request(slot, pet));
+    return true;
+}
+
 void GameConnection::clear_buff_locally(int slot) {
     if (slot < 0 || slot >= game::kBuffSlots) return;
     spells_.buffs[static_cast<std::size_t>(slot)] = {};
