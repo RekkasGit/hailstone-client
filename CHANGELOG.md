@@ -12,6 +12,7 @@
 - Literal percent signs show correctly in chat, including tells and their echoes. Chat variables still expand when the message is sent
 - Two Hailstone windows started separately can no longer install or roll back an update at the same time, which could leave the UI folder half old and half new (chat without input, "is not in the UI's folder" in the log). The second one leaves the install to the first
 - Charged items stay in inventory and on the hotbar after spending a charge if the server keeps the item
+- Add-ons that hook HUD methods (`hs.UI.hooks` on `character.Gauge`, `character.Label` and the like) cost less per frame: a hooked call no longer checks every add-on's hooks or sorts them each time
 
 ## 0.7.3-beta (2026-11-23)
 
