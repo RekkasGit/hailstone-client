@@ -304,7 +304,8 @@ updater and the add-on manager otherwise run as usual.
    build/hailstone_sign sign <secret-key> release/hailstone-update.txt
    ```
 
-   Then check it:
+   An old signature line is replaced. A manifest with lines after its signature line is refused rather than signed
+   without them: move them above it. Then check it:
 
    ```sh
    build/hailstone_sign verify update-key.pub release/hailstone-update.txt
