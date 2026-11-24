@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Two Hailstone windows started separately can no longer install or roll back an update at the same time, which could leave the UI folder half old and half new (chat without input, "is not in the UI's folder" in the log). The second one leaves the install to the first
+
 ## 0.7.3-beta (2026-11-23)
 
 - Warrior epic glows and other attached particle effects stay aligned as weapons, characters and objects move
