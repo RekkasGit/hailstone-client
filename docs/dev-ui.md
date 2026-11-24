@@ -132,7 +132,7 @@ TaskSelectWnd has Preview Reward in both packs (`TSEL_PreviewRewardButton`, the 
 
 #### Shared tasks
 
-The header's Shared members control shows the roster count and opens a management popup over the native `STASK_MemberList` (Member, Role). Add target, Remove member, Make leader, Invite raid and Invite expedition use the native controls and their permission checks.
+The header's Shared members control shows the roster count and opens a management popup over the native `STASK_MemberList` (Member, Role). Add target, Remove member, Make leader, Invite raid and Invite expedition use the native controls and their permission checks. Make leader asks first, naming the member (Hailstone).
 
 #### The tracker
 
@@ -433,7 +433,7 @@ Helper: `lib/social.lua`.
 - **MailWindow**, **MailAddressBookWindow** and **MailCompositionWindow**.
 - **GroupSearchWnd**: your post (as player or group) beside sortable, searchable results; a group's members and wanted classes under it.
 - **GroupSearchFiltersWnd**, **GroupMentorWindow**.
-- **FellowshipWnd**: members and campsite pages. Its tab box is the script's own (the model keeps no page): `test.tab.FellowshipWnd.Subwindows=n`.
+- **FellowshipWnd**: members and campsite pages. Make Leader asks first, naming the selected member, in both packs (Hailstone). Its tab box is the script's own (the model keeps no page): `test.tab.FellowshipWnd.Subwindows=n`.
 - **SocialEditWnd**:
   - button preview, colour swatches;
   - each line's command with a kind badge, a wait box for its `/pause`, move / empty buttons;
