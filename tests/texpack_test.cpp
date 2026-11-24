@@ -489,6 +489,32 @@ TEST_CASE("texpack: scan, the scan's cache and a whole build") {
         CHECK(missing_files(*l, true, pack_contents(pack)) == std::vector<FileKind>{FileKind::Normal});
     }
 
+    SUBCASE("the textures between the reader and the encoders stay within the memory budget") {
+        // wall 64 x 64 (colour, normal, rough at 2x), leaf 32 x 32 with its masked variant (four files), dot 8 x 8
+        const std::uint64_t wall_bytes = 64 * 64 * 4 + 3 * (128 * 128 * 4);
+        const std::uint64_t leaf_bytes = 2 * (32 * 32 * 4) + 4 * (64 * 64 * 4);
+        for (std::uint64_t budget : {std::uint64_t{1}, wall_bytes, wall_bytes + leaf_bytes, std::uint64_t{0}}) {
+            CAPTURE(budget);
+            GpuWorker gpu([](std::string*) { return std::make_unique<FakeSet>(); });
+            JobOptions o;
+            o.pack_dir = dir.path() / "textures" / ("budget" + std::to_string(budget));
+            o.textures = r.textures;
+            o.settings = {2, true};
+            o.encoders = 2;
+            o.memory_budget = budget;
+            PackJob job(o, gpu);
+            REQUIRE(wait_for([&] { return job.finished(); }));
+            const JobStatus s = job.status();
+            CHECK(s.state == JobStatus::State::Done);
+            CHECK(s.files_written == 8);
+            CHECK(s.bytes_held == 0);
+            CHECK(s.bytes_held_peak >= wall_bytes); // (one texture always goes, even past the budget)
+            // One at a time when none fits beside another; never past the budget when it holds two.
+            if (budget == 1 || budget == wall_bytes) CHECK(s.bytes_held_peak == wall_bytes);
+            else if (budget) CHECK(s.bytes_held_peak <= budget);
+        }
+    }
+
     SUBCASE("a scan cache that cannot be put in place is refused, and no temporary file stays") {
         const fs::path cache = dir.path() / "cache" / "scan.txt";
         fs::create_directories(cache / "in-the-way"); // a folder where the file goes: the final rename fails

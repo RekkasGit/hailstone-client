@@ -2189,6 +2189,11 @@ Hailstone Texture Studio (projecthailstone/hailstone-texstudio, a tool add-on: d
 in one windowed program, on any GPU through ncnn's Vulkan compute, with no Python. `src/texpack` is shared by both
 (the scan, the upscale rules behind `texpack::Model`, the three-stage build and the pack's files).
 
+The three-stage build (`texpack::PackJob`: a reader, the GPU worker, a pool of encoders) bounds the textures between
+its reader and its encoders by their estimated bytes as well as their count: their sources and pack images may hold
+`JobOptions::memory_budget` at once (4 GiB by default; one texture always goes, however large). By count alone, 30
+of the largest textures held 10 to 30 GiB.
+
 1. `texpack export ASSETDIR WORK` writes each distinct texture once, keyed by `texture_content_hash` of its file
    (about 61,000 in the RoF2 install, in about a minute).
    - A member named `.bmp`, `.dds` or `.tga` is read whole; any other only when its first four bytes are a DDS or BMP
