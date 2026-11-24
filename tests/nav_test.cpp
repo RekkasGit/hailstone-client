@@ -30,6 +30,7 @@
 #include "nav/nav_mesh.h"
 #include "nav/path_follower.h"
 #include "nav/zone_nav.h"
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include "plugin/hooks.h"
 #include "plugin/policy.h"
@@ -1112,6 +1113,10 @@ struct FakeNav : nav::NavControl {
         calls.push_back({"spawn", {}, id, d, false});
         return {};
     }
+    std::string moveto_spawn(std::uint32_t id, float d) override {
+        calls.push_back({"moveto id", {}, id, d, true, true});
+        return {};
+    }
     std::string go_to_door(std::uint8_t id, bool click) override {
         calls.push_back({"door", {}, id, 0.0f, click});
         return {};
@@ -1285,6 +1290,8 @@ TEST_CASE("nav: /moveto walks straight") {
     h.run("/moveto dist 4");
     CHECK(h.printed.back() == "[Nav] /moveto stops within 4.");
     h.run("/moveto id 10");
+    CHECK(h.nav.calls.back().what == "moveto id");
+    CHECK(h.nav.calls.back().id == 10);
     CHECK(h.nav.calls.back().distance == 4.0f);
     CHECK(h.nav.calls.back().flag);
     CHECK(h.nav.calls.back().flat); // a spawn: height ignored (one levitating is reached from below)
@@ -1308,12 +1315,12 @@ TEST_CASE("nav: /moveto walks straight") {
     CHECK_FALSE(h.nav.calls.back().flat);
     CHECK(h.nav.calls.back().distance == 7.0f);
     h.run("/moveto id 10 mdist 8");
-    CHECK(h.nav.calls.back().what == "point");
+    CHECK(h.nav.calls.back().what == "moveto id");
     CHECK(h.nav.calls.back().distance == 8.0f);
     h.run("/moveto mdist 9 id 10");
     CHECK(h.nav.calls.back().distance == 9.0f);
     h.run("/moveto id mdist 4"); // the target, a_rat01 (10)
-    CHECK(h.nav.calls.back().what == "point");
+    CHECK(h.nav.calls.back().what == "moveto id");
     CHECK(h.nav.calls.back().distance == 4.0f);
     CHECK(h.p("${MoveTo.ArrivalDist}") == "4.00");
 }
@@ -1357,6 +1364,65 @@ TEST_CASE("nav: a /moveto's arrival sets MoveTo.Stopped, cleared by the next /mo
     CHECK_FALSE(h.nav.status().moveto_arrived);
     h.nav.stop("");
     CHECK_FALSE(h.nav.status().moveto_arrived);
+}
+
+TEST_CASE("nav: /moveto id takes its spawn's place again each second: it turns after it and looks at it") {
+    Scene scene = walled_room();
+    game::CollisionMesh collision = scene.collision();
+    game::Spawn rat;
+    rat.position = {20, 80, 6}; // at the player's own height (feet 0, height 6)
+    rat.incarnation = 7;
+    app::Navigator::Env e;
+    e.spawn = [&rat](std::uint32_t id) -> const game::Spawn* { return id == 10 ? &rat : nullptr; };
+    app::Navigator nav{std::move(e)};
+    nav.zone_loaded(collision, nullptr, {});
+    app::Navigator::Frame f;
+    f.feet = {20, 20, 0};
+    f.height = 6.0f;
+    nav.frame(f); // the player's feet, for the walk's start
+    CHECK_FALSE(nav.moveto_spawn(11, 3.0f).empty()); // no such spawn
+    REQUIRE(nav.moveto_spawn(10, 3.0f).empty());
+    CHECK(nav.status().moveto);
+    f.now = 0.05;
+    nav::SteerOutput o = nav.frame(f);
+    REQUIRE(o.active);
+    REQUIRE(o.pitch); // out of the water too: the look
+    CHECK(*o.pitch == doctest::Approx(0.0f));
+    CHECK(o.yaw == doctest::Approx(glm::half_pi<float>())); // north, at it
+    // The rat flies up and off east: under a second on, the walk still heads and looks where it was.
+    rat.position = {80, 80, 66};
+    f.now = 0.5;
+    o = nav.frame(f);
+    REQUIRE(o.pitch);
+    CHECK(*o.pitch == doctest::Approx(0.0f));
+    CHECK(o.yaw == doctest::Approx(glm::half_pi<float>()));
+    // A second on: its new place, so the walk turns after it and looks up at it.
+    f.now = 1.05;
+    o = nav.frame(f);
+    REQUIRE(o.pitch);
+    CHECK(*o.pitch > 0.5f);
+    CHECK(o.yaw == doctest::Approx(std::atan2(60.0f, 60.0f)).epsilon(0.01));
+    CHECK(nav.follower().points().back() == glm::vec3(80, 80, 66));
+    // Swimming: the swim's pitch towards it (under water, no regions: straight at it).
+    f.swimming = true;
+    f.head_under = true;
+    o = nav.frame(f);
+    REQUIRE(o.pitch);
+    CHECK(*o.pitch > 0.5f);
+    f.swimming = f.head_under = false;
+    // Another spawn in its id (a new incarnation): the last place is kept.
+    rat.incarnation = 8;
+    rat.position = {20, 20, 6};
+    f.now = 2.1;
+    nav.frame(f);
+    CHECK(nav.follower().points().back() == glm::vec3(80, 80, 66));
+    // A plain point walk neither takes a place again nor sets the look out of the water.
+    REQUIRE(nav.go_to_point({20, 80, 0}, 3.0f, "north", true, true).empty());
+    rat.incarnation = 7;
+    f.now = 3.5;
+    o = nav.frame(f);
+    CHECK_FALSE(o.pitch);
+    CHECK(nav.follower().points().back() == glm::vec3(20, 80, 0));
 }
 
 TEST_CASE("nav: a flat walk arrives whatever the point's height; one that checks height does not") {

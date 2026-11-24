@@ -284,6 +284,19 @@ std::string Navigator::go_to_point(const glm::vec3& world, float distance, std::
     return begin(std::move(g));
 }
 
+std::string Navigator::moveto_spawn(std::uint32_t id, float distance) {
+    const game::Spawn* s = env_.spawn ? env_.spawn(id) : nullptr;
+    if (!s) return "no such spawn";
+    const std::uint64_t incarnation = s->incarnation;
+    std::string err = go_to_point(s->display_valid ? s->display_position : s->position, distance, s->name, true, true);
+    if (!err.empty()) return err;
+    goal_.spawn = id;
+    goal_.incarnation = incarnation;
+    goal_.track_spawn = true;
+    goal_.track_at = now_ + kMoveToTrackSeconds;
+    return {};
+}
+
 std::string Navigator::walk_to_click(const glm::vec3& world, float distance) {
     stick_.reset();
     afollow_.reset();
@@ -1143,6 +1156,18 @@ nav::SteerOutput Navigator::walk_frame(const Frame& f) {
         }
     }
 
+    // A /moveto id: where the spawn is, again each second, so the walk turns after it and the look follows it up
+    // or down. A spawn gone, or another in its id, leaves the last place; the walk goes on to it.
+    if (goal_.track_spawn && f.now >= goal_.track_at) {
+        goal_.track_at = f.now + kMoveToTrackSeconds;
+        const game::Spawn* s = env_.spawn ? env_.spawn(goal_.spawn) : nullptr;
+        if (revision != goal_revision_) return {};
+        if (s && s->incarnation == goal_.incarnation) {
+            goal_.point = s->display_valid ? s->display_position : s->position;
+            follower_.set_end(goal_.point);
+        }
+    }
+
     if (revision != goal_revision_) return {};
 
     // Out of the swing of a door the walk clicked, until it has swung.
@@ -1327,6 +1352,13 @@ nav::SteerOutput Navigator::walk_frame(const Frame& f) {
     }
     if (out.active && follower_.next() < follower_.points().size())
         out.pitch = swim_pitch(f, follower_.points()[follower_.next()], follower_.ahead(f.feet, kSwimAhead));
+    // A /moveto id out of the water looks at the spawn (its place as last taken), from the player's own height:
+    // the pitch is only the view there, the walk keeps to the ground.
+    if (out.active && goal_.track_spawn && !f.swimming) {
+        const glm::vec3 to = goal_.point - (f.feet + glm::vec3(0.0f, 0.0f, f.height));
+        out.pitch = std::clamp(std::atan2(to.z, std::max(glm::length(glm::vec2(to)), 0.5f)), -kMoveToLookSteepest,
+                               kMoveToLookSteepest);
+    }
     // Logged once the change has held for a second (at the surface the body bobs in and out of the water).
     if (f.swimming == swim_logged_) swim_changed_at_ = -1.0;
     else if (swim_changed_at_ < 0.0) swim_changed_at_ = f.now;

@@ -138,6 +138,11 @@ public:
     std::string go_to_point(const glm::vec3& world, float distance, std::string label, bool straight,
                             bool flat = false) override;
     std::string go_to_spawn(std::uint32_t id, float distance) override;
+    std::string moveto_spawn(std::uint32_t id, float distance) override;
+    // How often a /moveto id takes its spawn's place again, and how far up or down it looks at it (Hailstone's own
+    // numbers; the look keys' own limit is 1.5).
+    static constexpr double kMoveToTrackSeconds = 1.0;
+    static constexpr float kMoveToLookSteepest = 1.4f;
     // A Find-owned walk: its caller must remain eligible before any destination read or movement. Ordinary
     // navigation never supplies this guard; replacing the goal also replaces its guard.
     std::string go_to_spawn_guarded(std::uint32_t id, float distance, std::function<bool()> eligible);
@@ -192,6 +197,8 @@ private:
         bool straight = false;
         bool flat = false;  // arrival ignores height (go_to_point's `flat`)
         bool moveto = false; // a /moveto: go_to_point with `straight` (a meshless click or a stick's walk is not one)
+        bool track_spawn = false; // a /moveto id: `spawn`'s place is taken again each kMoveToTrackSeconds
+        double track_at = 0.0;    // with track_spawn: when next
         bool quiet = false; // a click to move: no word in the chat when the mesh only goes part of the way
         bool trail = false;    // /afollow's walk: through `via`, zone lines allowed (the spawn walked into it)
         bool no_doors = false; // /afollow nodoor: the walk clicks no door

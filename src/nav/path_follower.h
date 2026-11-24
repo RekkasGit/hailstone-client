@@ -59,6 +59,10 @@ public:
     // how near its new end it finishes. The walk carries on as it is: its corner, stall clock and counters kept.
     void extend(const std::vector<glm::vec3>& more) { points_.insert(points_.end(), more.begin(), more.end()); }
     void set_arrive(float arrive) { arrive_ = arrive; }
+    // Moves the last point (a goal that is taken again as it moves, Navigator::moveto_spawn).
+    void set_end(const glm::vec3& end) {
+        if (!points_.empty()) points_.back() = end;
+    }
     // Progress of another kind (a door clicked and opened): the stall clock and the unstick and new-path counts
     // start again, and a walk that asked for a new path carries on along this one.
     void forgive(double now);

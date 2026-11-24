@@ -315,7 +315,10 @@ Not yet: `/nav item`, waypoints (`/nav waypoint`, `/nav recordwaypoint`).
 - `/moveto loc <y> <x> [z]` (or `y,x`). Without a Z only Y and X count: it arrives within the distance on the flat,
   whatever the height. With a Z it must also be within 8 of that height, as a `/nav` walk's end.
 - `/moveto id [#]`: the spawn's place (the target without a number). Only Y and X count, as for a `loc` without a
-  Z: a spawn levitating or on a ledge above is reached from under it.
+  Z: a spawn levitating or on a ledge above is reached from under it. Each second the walk takes the spawn's place
+  again: it turns after a spawn that moves, and looks up or down at it (out of the water the view alone, from the
+  player's own height, at most 1.4 radians; swimming, the swim's pitch towards it). A spawn gone leaves the last
+  place, and the walk goes on to it.
 - `/moveto dist <n>` (or MQ2MoveUtils' `mdist`): how near, on the flat, the walks after it count as arrived. 10 until
   set, as in MQ2MoveUtils, for the session.
 - `mdist <n>` (or `dist <n>`) may also come inline, as in MQ2MoveUtils: after `loc <y> <x> [z]` or `id [#]`, or before

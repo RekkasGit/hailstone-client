@@ -326,11 +326,15 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
                 return;
             }
             const game::Spawn* s = nullptr;
+            std::uint32_t spawn_id = 0;
             if (iequals(w[0], "id")) {
                 auto id = w.size() >= 2 ? id_number<std::uint32_t>(w, 1) : std::optional<std::uint32_t>(conn->world().target_id);
                 if (id) {
                     auto it = conn->world().spawns.find(*id);
-                    if (it != conn->world().spawns.end() && it->first != conn->world().player_id) s = &it->second;
+                    if (it != conn->world().spawns.end() && it->first != conn->world().player_id) {
+                        s = &it->second;
+                        spawn_id = it->first;
+                    }
                 }
             }
             if (!s) {
@@ -338,8 +342,9 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
                 return;
             }
             // Flat, height ignored: a spawn levitating or on a ledge above is reached once within the distance on
-            // the flat, where a height check left the player circling under it.
-            std::string err = nav->go_to_point(spawn_position(*s), mdist, s->name, true, true);
+            // the flat, where a height check left the player circling under it. Its place is taken again each
+            // second (NavControl::moveto_spawn): the walk turns after it and looks up or down at it.
+            std::string err = nav->moveto_spawn(spawn_id, mdist);
             if (!err.empty()) out(err);
         },
         plugin::kCapMove);

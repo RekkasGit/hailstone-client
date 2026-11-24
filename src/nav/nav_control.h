@@ -60,6 +60,10 @@ public:
     // loc without a Z, whose height is only the player's own when it started; a /moveto id, whose spawn may levitate).
     virtual std::string go_to_point(const glm::vec3& world, float distance, std::string label, bool straight = false,
                                     bool flat = false) = 0;
+    // /moveto id: straight at where the spawn stands, flat (its height is not checked), as go_to_point. Each second
+    // the walk takes the spawn's place again: it turns after a spawn that moves, and the look pitch follows it up
+    // or down (out of the water the view alone; swimming, the way it swims).
+    virtual std::string moveto_spawn(std::uint32_t id, float distance) = 0;
     // A spawn, followed as it moves.
     virtual std::string go_to_spawn(std::uint32_t id, float distance) = 0;
     // A door or switch; `click` uses it on arrival.
