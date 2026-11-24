@@ -22,6 +22,7 @@
 #include <lua.hpp>
 
 #include "app/lua_ui_windows.h"
+#include "core/lua_keep.h"
 #include "core/server_profile.h"
 #include "game/eq_names.h"
 #include "game/zone_names.h"
@@ -895,9 +896,10 @@ int CharacterSelect(lua_State* L) {
 }
 
 // ok = hs.CharacterSelectDo(action [, arg]): "select", i (the scene shows that character); "enter" [, i] (enter the
-// world with the picked one, or row i); "create" (character creation); "delete" (the picked one, permanently: ask
-// first); "home" (Return Home: the picked one enters the world in its home city, when its canGoHome allows; ask first
-// with its homeQuestion); "back" / "logout" (to the login screen).
+// world with the picked one, or row i); "create" (character creation); "delete" (the picked one, permanently: the
+// shipped packs' own code asks first and this deletes; for any other caller this asks the client's confirmation
+// naming the character, and only its Yes deletes); "home" (Return Home: the picked one enters the world in its home
+// city, when its canGoHome allows; ask first with its homeQuestion); "back" / "logout" (to the login screen).
 int CharacterSelectDo(lua_State* L) {
     UiHost& h = host_of(L);
     bool ok = false;
@@ -917,7 +919,28 @@ int CharacterSelectDo(lua_State* L) {
             if (ok && what == "enter") action = A::EnterWorld;
         } else if (what == "create") action = A::Create;
         else if (what == "delete") {
-            if (picked) action = A::Delete;
+            // Deleting is permanent, so the client owns the question. The shipped packs' own code asks first in its
+            // own look (ui/*/charselect.lua) and takes this as its answer; any other caller (an interface Hailstone
+            // does not ship) gets the client's ConfirmationDialogBox naming the character, and only its Yes deletes,
+            // and only while the same character is still picked.
+            if (picked && h.trusted_ui && ui::lua::pack_code(L)) action = A::Delete;
+            else if (picked && !h.confirm) {
+                core::cxx_guard(L, [&h, &v] {
+                    std::string name = v.characters[static_cast<std::size_t>(v.selected)].name;
+                    UiHost::Confirm c;
+                    c.text = "Delete " + name + " permanently? This cannot be undone.";
+                    c.done = [&h, name = std::move(name)](bool yes) {
+                        const ui::CharacterSelectView* now = h.char_select;
+                        if (!yes || !now || now->busy || now->selected < 0 ||
+                            now->selected >= static_cast<int>(now->characters.size()) ||
+                            now->characters[static_cast<std::size_t>(now->selected)].name != name)
+                            return;
+                        h.char_select_action = static_cast<int>(A::Delete);
+                    };
+                    h.confirm = std::move(c);
+                });
+                ok = true;
+            }
         } else if (what == "home") {
             if (picked && v.characters[static_cast<std::size_t>(v.selected)].can_go_home) action = A::ReturnHome;
         } else {

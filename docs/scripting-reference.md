@@ -1357,7 +1357,7 @@ return `true` while nothing changed. Reading a view draws that screen in the cli
 | ServerSelect | ([revision]) → {revision, busy, status, server, servers={{name, status, canJoin, favorite}}, selected, last, addonHint}\|true\|nil | Server select view | self |
 | ServerSelectDo | (action [, i]) → ok | "select", "play", "favorite" or "back" | self |
 | CharacterSelect | ([revision]) → {revision, busy, status, world, server, scene, selected, characters={{name, level, race, raceName, classes, className, classShort, zone, canGoHome, homeQuestion}}}\|true\|nil | Character select view | self |
-| CharacterSelectDo | (action [, arg]) → ok | "select", "enter", "create", "delete", "home", "back" or "logout" | self |
+| CharacterSelectDo | (action [, arg]) → ok | "select", "enter", "create", "delete", "home", "back" or "logout". "delete" from code other than a shipped pack's asks the client's confirmation first | self |
 | CharacterCreate | () → view\|nil | Creation view: name, gender, race/class/deity/city (+Name, +Index, lists), stats, pointsLeft, ready… | self |
 | CharacterCreateHelp | (kind, id) → text, title | Description of a race, class, deity, city or stat | self |
 | CharacterCreateDo | (action [, value]) → ok | "name", "randomName", "race", "class", "gender", "deity", "city", "statUp/Down/Max", "resetStats", "appearance", "create" or "cancel" | self |
