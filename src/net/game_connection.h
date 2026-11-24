@@ -1126,7 +1126,10 @@ public:
     bool re_can_sell(bool verbose);
     void re_sell();
     bool re_can_transfer(bool verbose);
-    void re_transfer();
+    // The plot to the player the confirmation named: `target` and its `name` as they were when it was asked. Hailstone:
+    // refused (nothing sent) when the target has changed since, where RealEstate_SendTransferPlot reads the target
+    // as it is at the Yes.
+    void re_transfer(std::uint32_t target, const std::string& name);
     void re_opt_out(bool opt_out);
     void re_escrow(ReEscrowAction action, std::vector<ReEscrow::Entry> entries = {});
     void re_save_access(std::uint32_t re, const ReAccess& access);

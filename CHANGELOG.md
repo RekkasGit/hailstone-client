@@ -30,6 +30,7 @@
 - A bag window's slot click from a script can no longer reach the bag itself or alias another slot with an out-of-range index
 - The Group Mentor window reads a typed percentage past the number range without undefined behaviour
 - The quantity dialog no longer overflows when "-2147483648" is typed
+- Transferring a real estate plot goes only to the player the question named: changing target while it is up cancels the transfer
 - **Plugin authors:** a table or function a plugin window hands the UI pack's code (an argument to a pack function, or what its callback returns or raises) now reaches the pack as a view, as what it writes into the pack's shared tables does, so a pack that keeps it and uses it later runs the plugin's code as the plugin, never with the player's authority. `next` and `rawget` see nothing through such a view, and the plugin's metamethods for `==`, `<`, `..`, calls and `tostring` no longer run from the pack's code
 
 ## 0.7.3-beta (2026-11-23)
