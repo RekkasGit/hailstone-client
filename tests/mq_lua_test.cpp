@@ -913,6 +913,35 @@ print('read', dofile('f1.lua').v)
     CHECK_FALSE(fs::exists(own / "more.lua"));
 }
 
+TEST_CASE("MQ Lua: mq.pickle's byte limit counts a replaced file once and the script's own new files") {
+    Host h(plugin::kCapRead | plugin::kCapCommands); // scripts/config/bytes/
+    const fs::path own = h.config_dir / "bytes";
+    fs::create_directories(own / "deep");
+    std::ofstream(own / "deep" / "pad.bin", std::ios::binary).close();
+    fs::resize_file(own / "deep" / "pad.bin", std::uintmax_t{56} << 20); // sparse: 56 of the 64 MiB
+    h.write("bytes.lua", R"(
+local mq = require('mq')
+local three = string.rep('a', 3 * 1024 * 1024)
+print('a', pcall(mq.pickle, 'a.lua', {s = three}))
+for i = 1, 6 do print('again' .. i, pcall(mq.pickle, 'a.lua', {s = three})) end
+print('b', pcall(mq.pickle, 'sub/b.lua', {s = three}))
+print('c', pcall(mq.pickle, 'c.lua', {s = three}))
+print('small', pcall(mq.pickle, 'a.lua', {v = 1}))
+print('c2', pcall(mq.pickle, 'c.lua', {s = three}))
+)");
+    REQUIRE(h.scripts->run("bytes", {}));
+    h.pulses(20); // (several 3 MiB pickles may take more than one slice)
+    CHECK(h.printed_line("a true"));
+    for (int i = 1; i <= 6; ++i) CHECK(h.printed_line("again" + std::to_string(i) + " true")); // 59 MiB, not 77
+    CHECK(h.printed_line("b true"));                                                     // 62 MiB
+    bool full = false;
+    for (const auto& l : h.printed) full |= l.rfind("c false", 0) == 0 && l.find("config directory is full") != std::string::npos;
+    CHECK(full); // 65 MiB: the count has b in it, written after it was taken
+    CHECK(h.printed_line("small true"));
+    CHECK(h.printed_line("c2 true")); // a's shrinking freed its room
+    CHECK(fs::exists(own / "sub" / "b.lua"));
+}
+
 TEST_CASE("MQ Lua: require of a huge name that is not there is a plain error, and the script goes on") {
     Host h;
     h.write("huge_require.lua", R"(

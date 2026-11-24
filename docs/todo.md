@@ -616,10 +616,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
   - Whether a server extension allowed mid-zone needs the next zone-in.
 - [x] **Plugin windows: the pack's global tables are views.** Plugin functions left in the pack's global tables (`GPSTATE`, `modern`, `ui_palette`) used to run as the player; the plugin now sees those tables through views that make what it writes run as the plugin (and stop when it unloads). The views refuse setmetatable, rawset and `__gc` (ui/lua/lua_host.cpp).
 - [x] **Plugin windows: the pack's functions are wrapped.** What they return or raise reaches the plugin as a view; the pack's arguments to a plugin's callbacks are views; `getmetatable` gives a view of a metatable the plugin did not set (ui/lua/lua_host.cpp).
-- [ ] **A function or table a plugin passes to the pack is not wrapped** (as an argument to a pack function, or returned from a callback).
-  - A pack function that keeps it and calls it later runs the plugin's code as the player.
-  - A full membrane (wrap every value crossing into pack code) would close it, at a cost on every call.
-  - The packs' shared libraries that keep callbacks should keep them per window instead.
+- [x] **A function or table a plugin passes to the pack is wrapped** (as an argument to a pack function, or returned or raised from a callback): it reaches the pack as what the plugin leaves in a shared table does (`push_export`: a table as an owned view, a function as the plugin's), so a pack function that keeps it and uses it later runs none of the plugin's code as the player (ui/lua/lua_host.cpp `call_pack`, `call_as`).
 - [x] **Auto-update:** the check at start (`addons.check_hours`), locally modified files, files moved only at the login screen, approval when the caps grow.
 - [x] Signatures: the key pinned at the first install, an update with another key (or unsigned) refused.
 - [x] **Suggested add-ons:** the signed add-on index (projecthailstone/hailstone-addon-index) and a server's `[addons] suggest`. A line on the server select; Look at it / Not now / Don't ask again on the login screen, in both packs and the client's own. A suggestion's card held to the index's name and key.
