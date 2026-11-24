@@ -662,8 +662,9 @@ private:
     void destroy_frame_gen();
     void bind_frame_gen();
     // Ends a frame-generation frame: the real frame composited into its image and, when one can be made, the
-    // in-between frame into a second image acquired here. Returns that image's index, or nullopt.
-    std::optional<std::uint32_t> finish_frame_gen(const FrameInfo& frame);
+    // in-between frame into a second image acquired here. Returns that image's index, or nullopt. `readback`: that
+    // image may be copied for a screenshot next (end_frame), so its move to PRESENT_SRC is chained to the copy stage.
+    std::optional<std::uint32_t> finish_frame_gen(const FrameInfo& frame, bool readback);
     void composite_into(VkCommandBuffer cmd, std::uint32_t image_index, VkDescriptorSet set);
     std::chrono::steady_clock::time_point fsr3_last_{}; // the last FSR 3.1 frame's time (its frame time)
     bool fsr3_fallback_logged_ = false;
