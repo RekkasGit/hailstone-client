@@ -171,6 +171,27 @@ TEST_CASE("trees: NaN and infinite leaf UVs read a texel, not past the image") {
     CHECK(true);
 }
 
+TEST_CASE("trees: a trunk or leaf point that is not a number or too far out is refused") {
+    // generate_tree divides each trunk length into pieces: a point at 1e30 made millions, a NaN an undefined count.
+    const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+    const Textures pine(true);
+    const std::size_t first_leaf = game_tree().vertices.size() - 8;
+    for (float bad : {nan, inf, -inf, 1e30f, 20001.0f, -25000.0f}) {
+        CAPTURE(bad);
+        for (std::size_t vertex : {std::size_t{4}, first_leaf + 2}) { // a trunk ring's corner, a leaf card's corner
+            assets::Mesh mesh = game_tree();
+            mesh.vertices[vertex].position.z = bad;
+            std::string why;
+            CHECK_FALSE(measure_tree(mesh, pine.lookup(), &why));
+            CHECK(why == "a point is not a number or too far out");
+        }
+    }
+    // Within the bound, a tall tree is measured.
+    assets::Mesh tall = game_tree();
+    tall.vertices[4].position.z = 19000.0f;
+    CHECK(measure_tree(tall, pine.lookup()));
+}
+
 TEST_CASE("trees: a tall trunk's short bottom prism is its own ring, so the tree stands on its foot") {
     // As Greater Faydark's NEKPINE1: rings at -8, 15 and 215 under leaves from 60 to 260. A first ring taken as a share
     // of the trunk's length swallowed the second ring, and the bark began halfway up the first prism, in the air.

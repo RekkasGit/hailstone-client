@@ -2343,7 +2343,7 @@ trunk of a few solid prisms under crossed cut-out cards. Each new tree is fitted
 
 - **Trunk:** the prisms' rings make the skeleton; a limb that is a prism of its own hangs from the ring nearest its
   root. The bark is a tube at 0.8 x the prism corners' distance, so a player stopped by the collision stands at the
-  bark.
+  bark. A model with a trunk or leaf point that is not a number or lies more than 20,000 units out is not regrown.
 - **Leaves:** points spread over the cards, kept where the texture is opaque, give the crown's shape. Colours are
   picked from the texture's opaque texels, then scaled to its mean, so an autumn tree keeps its yellows.
 - **Styles:**

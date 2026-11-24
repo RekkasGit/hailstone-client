@@ -86,6 +86,15 @@ float percentile(std::vector<float> v, float p) {
 
 constexpr float kWeld = 0.05f; // trunk corners nearer than this are one point (measure_tree)
 
+// The farthest a tree's point may lie from its model's origin: far past any game tree (the tallest are a few hundred
+// units), so a NaN or a damaged file's huge vertex is refused before generate_tree divides trunk lengths into pieces
+// (a point at 1e30 made millions of them, a NaN an undefined int conversion). As zone_flora.cpp bounds placements.
+constexpr float kMaxTreeCoord = 20000.0f;
+
+bool sane_point(const glm::vec3& p) {
+    return std::abs(p.x) <= kMaxTreeCoord && std::abs(p.y) <= kMaxTreeCoord && std::abs(p.z) <= kMaxTreeCoord; // NaN too
+}
+
 } // namespace
 
 std::optional<TreeShape> measure_tree(const assets::Mesh& mesh, const TreeTextureLookup& texture, std::string* why) {
@@ -167,6 +176,10 @@ std::optional<TreeShape> measure_tree(const assets::Mesh& mesh, const TreeTextur
     }
     if (welded.empty()) return fail("no solid trunk");
     if (leaves.empty()) return fail("no cut-out leaves");
+    if (!std::all_of(pts.begin(), pts.end(), sane_point) ||
+        !std::all_of(leaves.begin(), leaves.end(),
+                     [](const LeafTri& lt) { return sane_point(lt.p[0]) && sane_point(lt.p[1]) && sane_point(lt.p[2]); }))
+        return fail("a point is not a number or too far out");
     if (bark_n > 0) shape.bark_colour = glm::vec3(bark_sum / bark_n);
 
     // The trunk's skeleton: rings by their hop count from the bottom along the prisms' edges, split where a level's
@@ -1263,7 +1276,9 @@ GeneratedTree generate_tree(const TreeShape& shape, const TreeOptions& options) 
                 const auto& tn = shape.trunk[std::size_t(path[i])];
                 if (i > 0) {
                     const auto& pn = shape.trunk[std::size_t(path[i - 1])];
-                    const int pieces = std::max(1, int(glm::distance(pn.centre, tn.centre) / step));
+                    // (measure_tree refuses points too far out; bounded here too for a shape made elsewhere)
+                    const float span = glm::distance(pn.centre, tn.centre) / step;
+                    const int pieces = std::isfinite(span) ? std::clamp(int(std::min(span, 4096.0f)), 1, 4096) : 1;
                     for (int k = 1; k < pieces; ++k) {
                         const float t = float(k) / float(pieces);
                         nodes.push_back({glm::mix(pn.centre, tn.centre, t), prev, glm::mix(pn.radius, tn.radius, t) * kTrunkFit, true});
