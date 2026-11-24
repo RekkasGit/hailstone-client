@@ -211,7 +211,15 @@ public:
     void resize(std::uint16_t w, std::uint16_t h) {
         width_ = w;
         height_ = h;
+        popup_ = inside_view(popup_cef_);
+        if (popup_shown_) OnPopupShow(browser_, true); // its place in the new size
         if (browser_) browser_->GetHost()->WasResized();
+    }
+    // A point in the client's view to CEF's: over the popup, back to where CEF has it (inside_view may move it).
+    void to_cef(int& x, int& y) const {
+        if (!popup_shown_ || !popup_.Contains(x, y)) return;
+        x += popup_cef_.x - popup_.x;
+        y += popup_cef_.y - popup_.y;
     }
     // What the client sends before CEF has made the browser waits for it.
     void when_created(std::function<void(CefBrowser&)> f) {
@@ -237,6 +245,13 @@ public:
     }
     void OnPaint(CefRefPtr<CefBrowser>, PaintElementType type, const RectList& dirty, const void* buffer, int width,
                  int height) override {
+        if (width <= 0 || height <= 0) return;
+        const std::size_t stride = static_cast<std::size_t>(width) * 4;
+        // A popup is cut to its place inside the view (inside_view): the client takes no popup larger than the view.
+        if (type == PET_POPUP) {
+            width = std::min(width, popup_.width);
+            height = std::min(height, popup_.height);
+        }
         if (width <= 0 || height <= 0 || width > 0xffff || height > 0xffff) return;
         web::Frame f;
         f.tab = tab_;
@@ -244,7 +259,6 @@ public:
         f.width = static_cast<std::uint16_t>(width);
         f.height = static_cast<std::uint16_t>(height);
         const auto* px = static_cast<const std::byte*>(buffer);
-        const std::size_t stride = static_cast<std::size_t>(width) * 4;
         for (const CefRect& r : dirty) {
             const int x0 = std::max(0, r.x), y0 = std::max(0, r.y);
             const int x1 = std::min(width, r.x + r.width), y1 = std::min(height, r.y + r.height);
@@ -270,7 +284,8 @@ public:
                         static_cast<std::uint16_t>(std::max(0, popup_.height))});
     }
     void OnPopupSize(CefRefPtr<CefBrowser> b, const CefRect& rect) override {
-        popup_ = rect;
+        popup_cef_ = rect;
+        popup_ = inside_view(rect);
         if (popup_shown_) OnPopupShow(b, true);
     }
 
@@ -371,8 +386,19 @@ private:
     std::vector<std::string> allow_;
     CefRefPtr<CefBrowser> browser_;
     std::vector<std::function<void(CefBrowser&)>> waiting_;
-    CefRect popup_;
+    // A popup (a <select>'s list) where CEF has it, which may reach past the view, and where the client is told it
+    // is: no larger than the view and inside it, as CEF's own off-screen example draws it.
+    CefRect popup_cef_, popup_;
     bool popup_shown_ = false;
+
+    CefRect inside_view(CefRect r) const {
+        const int w = width_ ? width_ : 1, h = height_ ? height_ : 1;
+        r.width = std::clamp(r.width, 0, w);
+        r.height = std::clamp(r.height, 0, h);
+        r.x = std::clamp(r.x, 0, w - r.width);
+        r.y = std::clamp(r.y, 0, h - r.height);
+        return r;
+    }
 
     IMPLEMENT_REFCOUNTING(TabClient);
 };
@@ -397,6 +423,7 @@ public:
             CefMouseEvent ev;
             ev.x = w->x;
             ev.y = w->y;
+            if (auto* t = find(w->tab)) t->to_cef(ev.x, ev.y);
             ev.modifiers = event_flags(w->mods);
             const int dx = w->dx, dy = w->dy;
             with(w->tab, [ev, dx, dy](CefBrowser& b) { b.GetHost()->SendMouseWheelEvent(ev, dx, dy); });
@@ -525,6 +552,7 @@ private:
         CefMouseEvent ev;
         ev.x = m.x;
         ev.y = m.y;
+        if (auto* t = find(m.tab)) t->to_cef(ev.x, ev.y);
         ev.modifiers = event_flags(m.mods);
         const cef_mouse_button_type_t button = m.button == web::MouseButton::Middle  ? MBT_MIDDLE
                                                : m.button == web::MouseButton::Right ? MBT_RIGHT

@@ -111,7 +111,9 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
   - Each is a u32 length and a type byte, at most 64 MB. A broken one counts as the helper's death.
   - Frames carry only the changed rectangles (CEF's `OnPaint` dirty rects), BGRA, over the pipe; shared memory is
     the change to make if full-screen frames turn out too slow.
-  - A popup (`OnPopupShow`, select lists) is a second, smaller image.
+  - A popup (`OnPopupShow`, select lists) is a second, smaller image. The helper places it inside the view, no larger
+    than it, moving it in where CEF has it reaching past an edge (the mouse over it is moved back for CEF), as CEF's
+    own off-screen example does.
 - **The helper's life** (`web/browser_host.h`). Started at the first tab. A helper that exits or sends a broken
   message is restarted a second later, with every open tab at its last address and size. After four deaths within a
   minute the client gives up, closes the tabs and opens pages in the system's browser. One that answers the hello
@@ -183,6 +185,9 @@ Tabs and frames:
   them. A closed tab's images are let go when it closes.
 - A paint larger than 64 MB (a 4096x4096 tab's full frame is just over) goes from the helper as several Frames
   (`web::split_frame`: rectangles grouped, a too large one cut into bands of rows), with the protocol unchanged.
+- The client drops a view frame larger than the tab (a Frame's own size may be up to 65535 a side) and a popup
+  larger than the view, so a tab's images and textures stay within its size (at most 4096 a side). A paint still at
+  a tab's old size after it was made smaller is dropped too; the next comes at the new size.
 
 ### The helper (`tools/hailstone-web`)
 
