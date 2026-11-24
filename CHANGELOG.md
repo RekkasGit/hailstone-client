@@ -12,6 +12,11 @@
 - In-game browser: a script's, plugin's or server link's page whose cookie folder cannot be used is no longer opened with the player's own cookies; it closes instead. On Windows, a data folder whose name has characters outside the system's code page works with the browser
 - In-game browser: a faulty browser helper can no longer make the client reserve gigabytes of memory, or fail to make a texture, with an image larger than its tab. A drop-down list that reaches past the edge of a page is drawn inside it, and clicks on it still land on the right entry
 - In-game browser: a web page's process can no longer write messages into, or read, the client's connection to the browser helper. The helper keeps that connection to itself and gives the processes it starts nothing to read or write instead
+- **Server owners:** lists a server fills by ids or names of its choosing stop at generous caps (raid members and shared task members 1024, tributes, bazaar traders and search rows 4096), and group mana and endurance, other players' casts and augment solvent texts are kept only for a spawn the client knows or a window that asked, so a flood of made-up ids no longer grows the client's memory without end
+- An accepted duel opponent can be attacked (auto attack, kick, bash, backstab, detrimental spells) on a server without PvP, and beneficial spells on players outside the duel are refused while it runs, as in the original
+- A duel, running or only offered, ends when you change zones, as the server ends it; before, a player in the new zone who happened to get the old opponent's id counted as your opponent
+- Spell and level-up effects that arrived just as you changed zones no longer play on a creature in the new zone
+- In the bazaar, a purchase answer for no purchase of yours no longer lets a later Buy go before its predecessor's answer
 - A creature that despawns and is replaced under the same id in one moment no longer starts with the old one's animation sounds and loop
 - A ground item or object the server sends again under the same id with another model, place, rotation or size is redrawn there (it kept its old model and position)
 - Isometric camera and click to move: a walk or click under way when you zone, camp or switch characters no longer clicks a spawn, door or object of the old zone on arrival in the new one

@@ -762,6 +762,9 @@ void GameConnection::handle_world(const AppPacket& p) {
         spells_.others.clear();
         cast_stage_shown_.clear();
         effect_packets_.clear();
+        // Cues not yet taken name the old zone's spawn ids, which the new zone reuses for others.
+        effect_cues_.clear();
+        level_effect_cues_.clear();
         blood_spurts_.clear();
         spells_.target_buffs.clear();
         spells_.target_buffs_entity = 0;
@@ -985,6 +988,7 @@ void GameConnection::apply_spawn(const Spawn& s) {
     group_.mana_percent.erase(s.spawn_id);
     group_.endurance_percent.erase(s.spawn_id);
     spells_.others.erase(s.spawn_id);
+    cast_stage_shown_.erase(s.spawn_id);
     if (spells_.target_buffs_entity == s.spawn_id) {
         spells_.target_buffs_entity = 0;
         spells_.target_buffs.clear();
@@ -1624,6 +1628,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
             group_.mana_percent.erase(*id);
             group_.endurance_percent.erase(*id);
             spells_.others.erase(*id);
+            cast_stage_shown_.erase(*id);
             if (spells_.target_buffs_entity == *id) {
                 spells_.target_buffs_entity = 0;
                 spells_.target_buffs.clear();
@@ -2779,6 +2784,9 @@ bool GameConnection::allowed_to_attack(std::uint32_t target, std::int32_t spell)
     in.my_level = static_cast<std::uint8_t>(pstatus_.level);
     in.zone = static_cast<std::uint32_t>(zone_id()) | (static_cast<std::uint32_t>(zone_instance()) << 16);
     in.rules.pvp_rules = pvp_rules_;
+    // The duel globals AllowedToAttack reads: 0xddf7ec (the fight is on) and 0xddf7e4 (the opponent).
+    in.rules.dueling = duel_.active;
+    in.rules.duel_target_id = duel_.challenged;
     in.self_or_group_member = [this](const std::string& name) { return group_.has_member(name); };
     return game::allowed_to_attack(in);
 }

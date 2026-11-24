@@ -194,6 +194,15 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - The original checks `bCanGoHome` and `bUseable` (`CCharacterListWnd::EnableButtons` @0x42f4b0); that `bUseable`
     comes from the list's `enabled` byte is assumed. Stock EQEmu always sends `enabled = 1`.
   - Settle: tracing where OP_SendCharInfo's handler fills `CharSelectInfo` +0x15c.
+- **Caps on server-keyed lists.** Lists the server fills by ids or names of its own choosing stop taking new entries
+  at generous caps, against a flood of made-up keys.
+  - Now: tributes and their descriptions, personal and guild, 4096 ids each (`net::kTributesKept`); bazaar traders and
+    search rows, 4096 each (`game::kBazaarTradersKept`, `kBazaarResultsKept`); the shared task's members, 1024
+    (`game::kSharedTaskMembersKept`); raid members, 1024 (`game::kRaidMembersKept`, an extension past RoF2's 72,
+    CRaid::AddRaidMember). Group mana and endurance, other casters' casts and augment solvent texts are kept only for
+    a spawn the client knows or a window that asked.
+  - Unknown: what the original holds of the tributes, bazaar traders and rows and shared task members.
+  - Settle: the original's containers for them (CTributeManager, CBazaarSearchWnd, CTaskManager's member list).
 - **Undefined zone-in packets.** The client does not send the zone-in packets EQEmu's RoF2 table does not define
   (tribute, social post and similar). EQEmu servers do not need them.
 - **Unnamed packets get no answer.**

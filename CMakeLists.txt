@@ -1540,6 +1540,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/hover_respawn_test.cpp
     tests/tracking_death_test.cpp
     tests/mock_eqemu_compat_test.cpp
+    tests/server_keyed_caps_test.cpp
     tests/item_use_test.cpp
     tests/game_connection_cast_test.cpp
     tests/game_connection_buff_test.cpp
