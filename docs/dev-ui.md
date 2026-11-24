@@ -879,7 +879,7 @@ Ctrl+Shift+P, `/perf`, or `ui.perf_window=1`. It shows frame times, the main loo
 
 **With frame generation** (docs/graphics.md "Frame generation"): the headline shows rendered and displayed rates (`app::frame_rates`); a section adds the share of frames with an in-between frame, totals and skip reasons (a cut or resize; no free swapchain image), present mode and image count, the last wait for the second image, and frame generation's GPU time where the device can time it. The graph and phases stay per real frame.
 
-**Log hitches** (`ui.perf_log_hitches=1`) logs every frame over 2.5 times the typical frame time (20 ms at least) as `perf: hitch ...`, phases longest first, then sections of 1 ms or more (`; in it: ...`).
+**Log hitches** (`ui.perf_log_hitches=1`) logs every frame over 2.5 times the typical frame time (20 ms at least) as `perf: hitch ...`, phases longest first, then sections of 1 ms or more (`; in it: ...`). The typical frame time is a running average of the frames that were not hitches; after 30 hitches in a row it starts again from the latest frame, so a lasting drop in frame rate (a heavier zone, a slower power state) is not logged as a hitch every frame.
 
 **Frame sections** are laps marked by the main loop and `LuaUi::frame` (`core/frame_sections.h`): the Update, UI and Record phases' main calls (Update: connection, automation, world objects, player, spawn smoothing), the Record phase's cover and water maps, each Lua window and the map views' parts, the script scan and Lua GC. The "Frame sections" table shows each one's 60-frame average and slowest frame, with a filter (`app::SectionAverages`).
 
