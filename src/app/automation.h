@@ -46,6 +46,8 @@ struct AutomationEnv {
     std::string autoload = "*";       // plugins.autoload
     std::string script_autoload;      // scripts.autoload: the player's scripts started when the rules allow them
     std::function<net::GameConnection*()> connection;
+    std::function<std::optional<plugin::WorldPlacementScene>()> world_placement_scene;
+    std::function<bool()> world_placement_input_allowed;
     std::function<std::string()> server_name;
     std::function<std::string()> server_profile; // the saved server's id (servers/<id>/), "" for a test login
     std::function<std::string()> profile_name;   // the saved server's name as the player knows it ("" none)
@@ -132,6 +134,9 @@ public:
     void world_recorded(std::size_t batch, std::uint32_t vertices);
     void world_finish(bool submitted, bool presented);
     void world_unavailable();
+    bool world_placement_aiming() const;
+    void world_placement_update(std::optional<plugin::WorldPlacementPoint> ground, bool pressed, bool released);
+    void world_placement_cancel();
     void shutdown();
 
     struct Impl;

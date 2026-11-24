@@ -1019,6 +1019,7 @@ int ClientApp::run() {
                 pick_camera_.fov_ratio = fov.v != 0.0f ? fov.h / fov.v : 1.0f;
                 pick_camera_.yon = view_.far_plane;
                 pick_camera_valid_ = view_area_.w > 0.0f && view_area_.h > 0.0f;
+                pick_camera_epoch_ = world_epoch_;
                 if (pick_camera_valid_) target_view_projection_ = plain_proj * camera_.view();
                 else target_view_projection_.reset();
             }
@@ -1064,10 +1065,11 @@ int ClientApp::run() {
 }
 
 void ClientApp::retire_world_geometry() {
-    if (automation_) automation_->world_unavailable();
+    if (automation_) automation_->world_placement_cancel();
     world_anchors_.clear();
     world_scene_ = {};
     if (++world_epoch_ == 0) ++world_epoch_;
+    if (automation_) automation_->world_unavailable();
     if (++world_collision_revision_ == 0) ++world_collision_revision_;
     world_floor_generation_ = world_objects_ ? world_objects_->visual_generation() : 0;
     world_animation_time_ = animated_objects_ ? animated_objects_->visual_time() : 0;
