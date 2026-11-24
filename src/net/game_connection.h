@@ -14,6 +14,7 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <deque>
 #include <filesystem>
@@ -3205,7 +3206,11 @@ private:
     std::filesystem::path chat_log_path_;
     // The open log and the path it was opened for: one open per file, not per line (a raid's hundreds of lines a
     // second). Reopened when /log names another file; closed when /log goes off.
-    std::unique_ptr<std::ofstream> chat_log_;
+    // A C file (platform::open_c_file): not passed on to the browser helper, which would hold it open.
+    struct CloseChatLog {
+        void operator()(std::FILE* f) const noexcept;
+    };
+    std::unique_ptr<std::FILE, CloseChatLog> chat_log_;
     std::filesystem::path chat_log_open_path_;
     bool seconds_log_ = false;
     float distance_to(std::uint32_t spawn_id) const;

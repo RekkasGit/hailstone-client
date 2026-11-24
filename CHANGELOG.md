@@ -8,6 +8,10 @@
 - Spell, nimbus and server-timed effects on a creature that despawns stop with it, instead of hanging frozen in the air and jumping onto the next creature that reuses its id
 - Movement keys, `/keypress` releases and gamepad buttons let go while the client waits for a teleport zone point to answer no longer leave the character running or turning once the wait ends
 - `/face heading` with a value that is not a finite number (`nan`, `inf`) no longer leaves the character unable to turn; a heading past 360 is wrapped, and a heading or `loc` that is not a number turns nothing instead of facing the target
+- The in-game browser's helper no longer inherits the client's log and chat log files, so on Windows they can be moved or deleted after the client quits even while the helper is still closing
+- In-game browser: a script's, plugin's or server link's page whose cookie folder cannot be used is no longer opened with the player's own cookies; it closes instead. On Windows, a data folder whose name has characters outside the system's code page works with the browser
+- In-game browser: a faulty browser helper can no longer make the client reserve gigabytes of memory, or fail to make a texture, with an image larger than its tab. A drop-down list that reaches past the edge of a page is drawn inside it, and clicks on it still land on the right entry
+- In-game browser: a web page's process can no longer write messages into, or read, the client's connection to the browser helper. The helper keeps that connection to itself and gives the processes it starts nothing to read or write instead
 - A creature that despawns and is replaced under the same id in one moment no longer starts with the old one's animation sounds and loop
 - A ground item or object the server sends again under the same id with another model, place, rotation or size is redrawn there (it kept its old model and position)
 - Isometric camera and click to move: a walk or click under way when you zone, camp or switch characters no longer clicks a spawn, door or object of the old zone on arrival in the new one

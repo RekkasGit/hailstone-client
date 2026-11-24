@@ -630,7 +630,9 @@ TEST_CASE("browser host: a 4096x4096 full paint, split, reaches the tab") {
     f.rects.push_back(std::move(all));
     REQUIRE(frame_body_size(f) > kMaxMessage);
     Rig r;
-    auto id = r.host.open("https://example.org/", {});
+    TabOptions largest;
+    largest.width = largest.height = 4096;
+    auto id = r.host.open("https://example.org/", largest);
     REQUIRE(id == 1);
     r.helper.reply(Ready{});
     auto parts = split_frame(std::move(f));
@@ -647,6 +649,53 @@ TEST_CASE("browser host: a 4096x4096 full paint, split, reaches the tab") {
     REQUIRE(r.host.tab(id));
     REQUIRE(r.host.tab(id)->view.width == 4096);
     CHECK(r.host.tab(id)->view.bgra.back() == std::byte{0x11});
+}
+
+// The helper's frames are checked against their own size only (up to 65535 a side, 17 GB of image): the host takes
+// no view larger than the tab and no popup larger than the view, so its images and the textures made from them stay
+// within the tab's size.
+TEST_CASE("browser host: frames larger than the tab are dropped") {
+    Rig r;
+    TabOptions o = script();
+    o.width = 64;
+    o.height = 32;
+    auto id = r.host.open("https://example.org/", o);
+    r.helper.reply(Ready{});
+    auto empty_frame = [&](Layer layer, std::uint16_t w, std::uint16_t h) {
+        Frame f;
+        f.tab = id;
+        f.layer = layer;
+        f.width = w;
+        f.height = h;
+        r.helper.reply(f);
+        r.host.poll(0);
+    };
+    const Tab* t = r.host.tab(id);
+    REQUIRE(t);
+    empty_frame(Layer::View, 65535, 65535);
+    CHECK(t->view.width == 0);
+    CHECK(t->view.bgra.empty());
+    empty_frame(Layer::View, 65, 32);
+    empty_frame(Layer::View, 64, 33);
+    CHECK(t->view.width == 0);
+    empty_frame(Layer::View, 64, 32);
+    CHECK(t->view.width == 64);
+    CHECK(t->view.bgra.size() == std::size_t{64} * 32 * 4);
+    empty_frame(Layer::Popup, 65535, 10);
+    empty_frame(Layer::Popup, 10, 33);
+    CHECK(t->popup.width == 0);
+    CHECK(t->popup.bgra.empty());
+    empty_frame(Layer::Popup, 20, 10);
+    CHECK(t->popup.width == 20);
+    // Made smaller: a paint still at the old size is dropped, the tab keeps its image until one at the new size.
+    r.host.resize(id, 32, 16);
+    empty_frame(Layer::View, 64, 32);
+    CHECK(t->view.width == 64);
+    CHECK(t->view.serial == 1);
+    empty_frame(Layer::View, 32, 16);
+    CHECK(t->view.width == 32);
+    CHECK(r.helper.alive);
+    CHECK_FALSE(t->closed);
 }
 
 // A script's tab is closed (Refused, the reason kept for its owner) once its owner lost 'web' or the server's
@@ -974,6 +1023,36 @@ TEST_CASE("browser host: the stand-in helper: large evals in one frame leave it 
     CHECK(got == std::vector<std::string>{"echo:after"});
     CHECK(host.last_error().empty());
     CHECK_FALSE(host.tab(id)->closed);
+    host.shutdown();
+}
+
+// The helper speaks over private copies of its pipes: a process it starts (CEF's renderers) gets neither, and what
+// that process prints on its standard output goes nowhere instead of into the client's stream.
+TEST_CASE("browser host: the helper's children do not inherit its pipes") {
+    BrowserHost host([] { return process_transport({HAILSTONE_MOCK_WEB_HELPER}); });
+    auto id = host.open("https://example.org/", script());
+    REQUIRE(id != 0);
+    const Tab* t = host.tab(id);
+    REQUIRE(pump(host, 0, [&] { return t->view.width != 0; }));
+    auto console_has = [&](const std::string& text) {
+        for (const auto& c : t->console)
+            if (c.text == text) return true;
+        return false;
+    };
+    host.eval(id, "streams");
+    REQUIRE(pump(host, 0, [&] { return !t->console.empty(); }));
+    CHECK(t->console.back().text == "in:0 out:0");
+    host.eval(id, "child");
+    REQUIRE(pump(host, 0, [&] { return console_has("child done") || !host.last_error().empty(); }));
+    CHECK(host.last_error().empty());
+    CHECK_FALSE(t->closed);
+    host.post(id, "after");
+    std::vector<std::string> got;
+    REQUIRE(pump(host, 0, [&] {
+        for (auto& m : host.take_messages(id)) got.push_back(m);
+        return !got.empty();
+    }));
+    CHECK(got == std::vector<std::string>{"echo:after"});
     host.shutdown();
 }
 
