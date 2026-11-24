@@ -215,6 +215,34 @@ TEST_CASE("hs API: the session's menus and dialogs go when the connection does")
     CHECK_FALSE(ran);
 }
 
+// The quantity dialog's Accept reads the box's number less the minimum in 64 bits: int's least value less a minimum
+// of 1 does not overflow, it is held to the slider's start.
+TEST_CASE("hs API: the quantity dialog holds a typed number past int's range to its slider") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().DisplaySize = ImVec2(1600, 900);
+    app::UiHost host;
+    host.in_game = host.ui_ready = true;
+    app::UiApi api(host);
+    std::optional<std::int32_t> got;
+    auto open = [&] {
+        got.reset();
+        app::UiHost::UiQuantity q;
+        q.min = 1, q.max = 20, q.slider = 5;
+        q.done = [&](std::int32_t n) { got = n; };
+        q.serial = ++host.quantity_serial;
+        host.quantity = std::move(q);
+        REQUIRE(api.shown("QuantityWnd"));
+    };
+    for (const auto& [text, want] : {std::pair{"-2147483648", 1}, std::pair{"2147483647", 20}, std::pair{"7", 7},
+                                     std::pair{"0", 1}}) {
+        open();
+        REQUIRE(api.set_child_text("QuantityWnd", "QTYW_SliderInput", text));
+        REQUIRE(api.click_child("QuantityWnd", "QTYW_Accept_Button"));
+        CHECK(got == want);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 TEST_CASE("plugin values: deep tables both ways stop at the depth limit, with room on the stack") {
     lua_State* L = luaL_newstate();
     // A UiValue nested 1000 arrays deep (a plugin's answer): only kMaxValueDepth levels become tables.
