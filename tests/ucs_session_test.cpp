@@ -506,6 +506,45 @@ TEST_CASE("UCS pre-login byte limit rejects one large event independently of its
     CHECK_FALSE(chat.poll());
 }
 
+TEST_CASE("UCS events after the login wait in the session while the event queue is full, and none is lost") {
+    for (bool by_bytes : {false, true}) {
+        CAPTURE(by_bytes);
+        ManualClock clock;
+        clock.hold();
+        SoeEndpoint peer(SoeEndpoint::default_params(), 1);
+        auto opt = options(clock);
+        if (by_bytes) opt.max_event_bytes = 1; // one event at a time: the limit is checked before each packet
+        else opt.max_events = 3;
+        const std::size_t per_update = by_bytes ? 1 : 3;
+        ChatServer chat(std::move(opt));
+        chat.connect(identity(peer.port()));
+        auto step = [&] { chat.update(); peer.poll(); };
+        REQUIRE(pump(step, [&] { return !peer.inbox.empty(); }));
+        peer.send_reliable(mailbox_reply());
+        REQUIRE(pump(step, [&] { return chat.connected(); }));
+        while (chat.poll()) {}
+        for (int i = 0; i < 7; ++i)
+            peer.send_reliable(strings(0x03, {"$SOE.EQ.test.Hero", "SOE.EQ.test.Friend", std::to_string(i), "SPAM:0:"}));
+        REQUIRE(pump(step, [&] { return peer.unacked() == 0; }));
+        for (int i = 0; i < 5; ++i) step(); // nothing polled: the queue stays at its limit
+        std::vector<std::string> texts;
+        while (true) {
+            std::size_t got = 0;
+            while (auto e = chat.poll()) {
+                REQUIRE(e->kind == ChatServerEvent::Kind::Message);
+                texts.push_back(e->text);
+                ++got;
+            }
+            CHECK(got <= per_update);
+            if (texts.size() == got) CHECK(got == per_update); // the first round fills the queue to its limit
+            if (texts.size() >= 7 || got == 0) break;
+            step();
+        }
+        CHECK(texts == std::vector<std::string>{"0", "1", "2", "3", "4", "5", "6"});
+        CHECK(chat.connected());
+    }
+}
+
 TEST_CASE("UCS late replies from an abandoned endpoint cannot authenticate its replacement") {
     UcsRig rig;
     REQUIRE(rig.start());

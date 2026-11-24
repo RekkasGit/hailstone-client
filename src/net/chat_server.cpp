@@ -272,6 +272,7 @@ void ChatServer::fail(std::string error, bool retry) {
     else channels_until_disconnect_polled_ = true;
     ChatServerEvent event;
     event.kind = ChatServerEvent::Kind::Disconnected;
+    events_bytes_ += event_bytes(event);
     events_.push_back(std::move(event));
     retry_pending_ = active_ && retry && options_.reconnect_delay.count() > 0 && retries_ < options_.max_reconnect_attempts;
     if (retry_pending_) {
@@ -292,6 +293,7 @@ void ChatServer::accept_event(ChatServerEvent event) {
         if (!event.text.empty())
             for (auto& c : split(event.text, ',')) channels_.push_back(trim(c));
     }
+    events_bytes_ += event_bytes(event);
     events_.push_back(std::move(event));
 }
 
@@ -334,7 +336,10 @@ void ChatServer::update() {
         login_sent_ = true;
         login_started_ = now();
     }
-    while (auto p = session_->receive()) {
+    // After the login, a full event queue stops the receiving here; the rest waits in the session for the next update.
+    while (!logged_in_ || (events_.size() < options_.max_events && events_bytes_ < options_.max_event_bytes)) {
+        auto p = session_->receive();
+        if (!p) break;
         auto e = decode_chat_server_packet(*p);
         if (!e) {
             log::debug("chat server: opcode 0x{:02x} ({} bytes)", p->opcode, p->data.size());
@@ -408,6 +413,7 @@ std::optional<ChatServerEvent> ChatServer::poll() {
     if (events_.empty()) return std::nullopt;
     auto e = std::move(events_.front());
     events_.pop_front();
+    events_bytes_ -= std::min(events_bytes_, event_bytes(e));
     if (e.kind == ChatServerEvent::Kind::Disconnected && channels_until_disconnect_polled_) {
         channels_.clear();
         channels_until_disconnect_polled_ = false;
@@ -434,6 +440,7 @@ void ChatServer::disconnect() {
     before_login_.clear();
     before_login_bytes_ = 0;
     events_.clear();
+    events_bytes_ = 0;
     channels_.clear();
     channels_until_disconnect_polled_ = false;
 }
