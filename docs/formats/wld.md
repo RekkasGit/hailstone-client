@@ -304,6 +304,11 @@ A skeletal object whose node tracks have more than one key plays them everywhere
 turning rings, swaying tree branches (75 zones; most placements are trees). The rules are from OpenEQ's
 `docs/WLD_OBJECT_ANIMATION.md` (a later EQGraphicsDX9.dll), the interval rules checked again in RoF2's.
 
+**Collision volumes.** A 0x10 skeleton can reference a 0x18 → 0x17 polyhedron. Its vertices are in actor space and
+take the placement transform without a sprite's mesh centre or any bone's motion. For placed zone actors, a valid
+volume supplies collision in place of both the still and the animated sprite faces. Warsliks Woods' pines use
+narrow trunk volumes even though some of their masked branch polygons carry solid flags.
+
 **Keys and interval.** Key i of a track stands at i × interval ms. The interval is the 0x13 fragment's timing word
 when its flag 1 is set, else 100 (`0x1001b0bc`, `0x1001b116`).
 
