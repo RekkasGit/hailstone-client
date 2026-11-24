@@ -405,7 +405,9 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     standing-still shortcut skips the sweep; not checked against the original).
 - **Teleport zone points.** Zone points that request a teleport by index send 0xcadf and wait for the server's 0xcadf;
   untested, as EQEmu never sets them. While waiting the player neither acts nor moves, but the window keeps drawing;
-  the original blocks the whole client, with no time limit.
+  the original blocks the whole client, with no time limit. Keys, `/keypress` and pad buttons let go during the wait
+  still end their movement (presses are dropped), so nothing stays held after it; whether the original delivers the
+  queued key messages after its wait is not checked.
 - **Sense heading.**
   - The message reads the true heading, not the compass's; its bands are 64 units wide (225 to 288 is "South", 256
     due south); a negative heading gives an empty direction. Checked: UseSkill @0x45c85f.
@@ -602,6 +604,11 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - Alpha test: whether particles pass it (ALPHAREF 1, compare function not set by the particle render state) is
     not known; none is done.
   - The animation-started entries' timing is an approximation (docs/formats/particles.md).
+- **Spell, effect and nimbus emitters of a spawn that leaves** (`app/spell_particles.cpp` stop_gone_actors). The
+  client stops every emitter (but a missile's) hanging from a spawn that despawned, or whose id came back as another
+  spawn, and drops its OP_SpellEffect timer entries, so nothing freezes in place or moves to the new spawn. What the
+  original does with a deleted actor's spell emitters and timer entries was not traced; settle by reading
+  the actor's teardown and SpellEffectTimers_Update's spawn lookup.
 - **CalcTickHPChange's PvP scaling** (75% / 70% of a loss).
   - The original asks that the caster spawn's +0x2cc be set and its type be 0.
   - Now: any player caster counts (as CacheBuffSlotEffects reads it, without +0x2cc). If +0x2cc is set only for the

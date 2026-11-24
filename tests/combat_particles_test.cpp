@@ -989,6 +989,77 @@ TEST_CASE("Local sharp-weapon damage produces asset-backed blood only at a suppo
     CHECK(rig.conn.take_blood_spurts().empty());
 }
 
+TEST_CASE("Spell, effect-timer and nimbus emitters stop with their spawn, and do not move to a new one under its id") {
+    using namespace net;
+    using namespace test;
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    rig.server.add_spawn(make_spawn("FixtureReused", 334, 1, 1, 80, 90, 8));
+    rig.server.add_spawn(make_spawn("FixtureGone", 335, 1, 1, 20, 30, 8));
+    REQUIRE(rig.until([&] { return rig.conn.world().spawns.contains(334) && rig.conn.world().spawns.contains(335); }));
+    auto table = std::make_shared<game::SpellTable>();
+    REQUIRE(table->parse(spell_line(600)) == 1);
+    rig.conn.set_spell_table_for_test(table);
+    assets::SpellEffect effect;
+    effect.stages[0].slots[0] = {1, 0, 1, 8}; // the cast stage on the caster
+    effect.stages[2].slots[0] = {1, 0, 1, 8}; // the impact stage on the caster (a nimbus, a timer's last stage)
+    app::SpellParticles particles({assets::EmitterDefinition{}, dot()}, {assets::SpellEffect{}, effect});
+    const std::uint32_t me = rig.conn.world().player_id;
+    std::vector<SpellEffectCue> casts(3);
+    casts[0].caster = 334;
+    casts[1].caster = 335;
+    casts[2].caster = me;
+    for (auto& c : casts) {
+        c.spell = 600;
+        c.duration_ms = 5000;
+    }
+    std::vector<EffectPacketCue> packets(3);
+    packets[0].kind = EffectPacketCue::Kind::Add; // a timed effect: its impact stage plays 200 ms on
+    packets[0].effect = 1;
+    packets[0].caster = packets[0].target = 334;
+    packets[0].stage1_ms = 100;
+    packets[0].stage1_length_ms = 100;
+    packets[0].stage2_length_ms = 1000;
+    packets[1] = packets[0];
+    packets[1].caster = packets[1].target = 335;
+    packets[2].kind = EffectPacketCue::Kind::AddNimbus;
+    packets[2].effect = 1;
+    packets[2].caster = 334;
+    particles.update(rig.conn, casts, packets, nullptr, 0.01f);
+    const auto& emitters = particles.simulation().emitters();
+    auto on = [&](std::uint32_t id) {
+        return std::count_if(emitters.begin(), emitters.end(), [&](const game::Emitter& e) { return e.actor == id; });
+    };
+    REQUIRE(on(334) >= 3); // the cast, the timer's cast stage and the nimbus
+    REQUIRE(on(335) >= 2);
+    REQUIRE(on(me) == 1);
+    // 335 despawns; 334 despawns and another spawn takes its id within the frame.
+    auto& spawns = rig.conn.world_for_test().spawns;
+    spawns.erase(335);
+    game::Spawn reused = spawns.at(334);
+    spawns.erase(334);
+    reused.incarnation = core::next_process_identity();
+    spawns[334] = reused;
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    CHECK(on(334) == 0);
+    CHECK(on(335) == 0);
+    CHECK(on(me) == 1);
+    // The timers went with them: their impact stage plays on neither the new spawn nor a spawn that comes back.
+    game::Spawn back = reused;
+    back.id = 335;
+    back.incarnation = core::next_process_identity();
+    rig.conn.world_for_test().spawns[335] = back;
+    particles.update(rig.conn, {}, {}, nullptr, 0.3f);
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    CHECK(on(334) == 0);
+    CHECK(on(335) == 0);
+    // An emitter made on the new spawn stays.
+    casts[0].caster = 334;
+    particles.update(rig.conn, std::span(&casts[0], 1), {}, nullptr, 0.01f);
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    CHECK(on(334) == 1);
+}
+
 TEST_CASE("A valid spell missile packet creates its stage at the missile and releases missile-owned emitters") {
     using namespace net;
     using namespace test;

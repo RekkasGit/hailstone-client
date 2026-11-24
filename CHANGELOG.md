@@ -3,6 +3,11 @@
 ## Unreleased
 
 - Under a Barbarian, Troll or Ogre citizen illusion (races 90, 92 and 93), Slam and Bash need the Bash skill and a shield, as in the original client, instead of sending an attack the server ignores
+- Perf window: **Log hitches** no longer calls every frame a hitch after the frame rate drops for good (a heavier zone, a slower power state); after 30 hitches in a row the typical frame time starts again from the latest frame
+- **Script and plugin authors:** `${Spawn[N]}`, `${Spell[N]}`, `${Me.Inventory[N]}`, an item's `Item[N]`, `${Group.Member[N]}` and `${Me.SpellReady[N]}` give NULL (or FALSE) for a number too large for what it indexes, instead of wrapping round to another spawn, spell, slot or gem
+- Spell, nimbus and server-timed effects on a creature that despawns stop with it, instead of hanging frozen in the air and jumping onto the next creature that reuses its id
+- Movement keys, `/keypress` releases and gamepad buttons let go while the client waits for a teleport zone point to answer no longer leave the character running or turning once the wait ends
+- `/face heading` with a value that is not a finite number (`nan`, `inf`) no longer leaves the character unable to turn; a heading past 360 is wrapped, and a heading or `loc` that is not a number turns nothing instead of facing the target
 - A creature that despawns and is replaced under the same id in one moment no longer starts with the old one's animation sounds and loop
 - A ground item or object the server sends again under the same id with another model, place, rotation or size is redrawn there (it kept its old model and position)
 - Isometric camera and click to move: a walk or click under way when you zone, camp or switch characters no longer clicks a spawn, door or object of the old zone on arrival in the new one

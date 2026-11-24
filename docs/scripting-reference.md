@@ -405,7 +405,7 @@ them. These commands come from MacroQuest rather than the game:
 |---|---|
 | `/echo text` | a line in the chat window |
 | `/target id N` \| `clear` \| `mycorpse` \| `myself` \| a search | targets (nothing, or `myself`: you) |
-| `/face` [target] \| `id N` \| `heading H` \| `loc y,x` \| a search [`fast`] | turns to face |
+| `/face` [target] \| `id N` \| `heading H` \| `loc y,x` \| a search [`fast`] | turns to face (a heading is taken modulo 360; a heading or loc that is not a finite number turns nothing) |
 | `/keypress <command> [hold\|release]` | presses a key command by the game's name: `forward`, `jump`, `hot1_1`, ... |
 | `/squelch <cmd>` | runs the command without its chat output |
 | `/docommand <cmd>` | runs the command (useful after `${...}` builds it) |
