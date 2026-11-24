@@ -20,6 +20,7 @@
 // the mesh is still unfinished waits for its tiles (and asks the server again) rather than giving up.
 
 #include <cstdint>
+#include <deque>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -147,6 +148,12 @@ public:
     std::string walk_to_click(const glm::vec3& world, float distance);
     std::string stick(std::uint32_t id, const nav::StickOptions& options) override;
     void unstick(std::string_view why) override;
+    std::string afollow(std::uint32_t id, const nav::AFollowOptions& options) override;
+    void afollow_off(std::string_view why) override;
+    // /afollow's trail: a point each time the spawn has moved this far from the last (MQ2AdvPath's spacing); a move
+    // further than kAFollowWarp from one frame to the next is a warp (a gate, a summon, a teleporter), not a walk.
+    static constexpr float kAFollowSpacing = 5.0f;
+    static constexpr float kAFollowWarp = 100.0f;
     void stop(std::string_view why) override;
     void set_paused(bool paused) override;
     // /stick's default distance: this share of the melee range, so the spawn's small moves and the position updates'
@@ -186,6 +193,9 @@ private:
         bool flat = false;  // arrival ignores height (go_to_point's `flat`)
         bool moveto = false; // a /moveto: go_to_point with `straight` (a meshless click or a stick's walk is not one)
         bool quiet = false; // a click to move: no word in the chat when the mesh only goes part of the way
+        bool trail = false;    // /afollow's walk: through `via`, zone lines allowed (the spawn walked into it)
+        bool no_doors = false; // /afollow nodoor: the walk clicks no door
+        std::vector<glm::vec3> via; // a straight walk's points before `point`, in order (/afollow's trail)
         float distance = 2.0f;
         std::string label;
         std::function<bool()> eligible;
@@ -196,9 +206,30 @@ private:
         nav::StickOptions options;
         std::string label;
     };
+    // /afollow: the spawn, its trail (after_warp: recorded after it warped away from the point before), and what the
+    // walk saw of the player last frame (a jump further than kAFollowWarp is the player's own warp).
+    struct TrailPoint {
+        glm::vec3 at{0.0f};
+        bool after_warp = false;
+    };
+    struct AFollow {
+        std::uint32_t spawn = 0;
+        std::uint64_t incarnation = 0, context = 0;
+        nav::AFollowOptions options;
+        std::string label;
+        std::deque<TrailPoint> trail;
+        std::optional<glm::vec3> last_leader, last_feet;
+        bool leader_gone = false;
+        bool waiting_warp = false;
+        bool dirty = false; // the trail changed since the walk was planned
+    };
     std::string begin(Goal g);
     nav::SteerOutput walk_frame(const Frame& f);
     nav::SteerOutput stick_frame(const Frame& f);
+    nav::SteerOutput afollow_frame(const Frame& f);
+    bool afollow_current() const; // the spawn followed is still the one given, in this zone
+    float afollow_left(const glm::vec3& feet) const; // the trail's flat length from the feet, and the gap to the spawn
+    bool doors_on() const { return options_.open_doors && !goal_.no_doors; }
     bool stick_current() const;
     float stick_distance() const;
     bool plan(const glm::vec3& from);
@@ -258,6 +289,7 @@ private:
     double follow_retry_at_ = 0.0;      // after a detour failed, the original's step alone until then
     Goal goal_;
     std::optional<Stick> stick_;
+    std::optional<AFollow> afollow_;
     std::string last_finish_; // finish()'s message: a stick's walk that ended with one (no path, stuck) ends the stick
     bool paused_ = false;
     bool overlay_ = false;

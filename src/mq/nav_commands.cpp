@@ -418,6 +418,77 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
                             opt.behind ? ", behind" : "", st.stick_distance));
         },
         plugin::kCapMove);
+
+    // /afollow (MQ2AdvPath's words; Hailstone's own walk, NavControl::afollow): follow the target, or a spawn by id,
+    // along the trail it leaves. The distance and door words are kept for the follows after them, as MQ2AdvPath keeps
+    // them, and each starts a follow of the target too (E3 sends "/afollow on nodoor <distance>").
+    //  - /afollow alone: stops a follow, else follows the target;
+    //  - on: follows the target; spawn <id>: that spawn; off: stops; pause / unpause;
+    //  - <distance> (at least 1; 10 at first), door / nodoor (open doors in the way or not; door at first);
+    //  - help.
+    auto settings = std::make_shared<nav::AFollowOptions>();
+    h.add_command(
+        owner, "/afollow",
+        [context, say, settings](std::string_view args) {
+            const Context& ctx = context();
+            nav::NavControl* nav = ctx.nav;
+            const net::GameConnection* conn = ctx.conn;
+            if (!nav || !conn || !conn->world().player()) return;
+            const std::vector<std::string> w = words(args);
+            if (w.empty() && nav->status().afollow_spawn != 0) {
+                nav->afollow_off("[AFollow] Off.");
+                return;
+            }
+            if (!w.empty() && (iequals(w[0], "off") || iequals(w[0], "stop"))) {
+                nav->afollow_off("[AFollow] Off.");
+                return;
+            }
+            if (!w.empty() && iequals(w[0], "pause")) {
+                nav->set_paused(true);
+                return;
+            }
+            if (!w.empty() && iequals(w[0], "unpause")) {
+                nav->set_paused(false);
+                return;
+            }
+            if (!w.empty() && iequals(w[0], "help")) {
+                say("[AFollow] /afollow [on] [<distance>] [door|nodoor] [spawn <id>] | off | pause | unpause");
+                say("[AFollow] Follows your target (or the spawn) the way it walks; your movement keys stop it.");
+                return;
+            }
+            std::uint32_t id = conn->world().target_id;
+            for (std::size_t i = 0; i < w.size(); ++i) {
+                if (iequals(w[i], "on")) {
+                    // follow (below)
+                } else if (iequals(w[i], "door")) {
+                    settings->doors = true;
+                } else if (iequals(w[i], "nodoor")) {
+                    settings->doors = false;
+                } else if (iequals(w[i], "spawn") && id_number<std::uint32_t>(w, i + 1)) {
+                    id = *id_number<std::uint32_t>(w, ++i);
+                } else if (auto d = number(w, i)) {
+                    settings->distance = std::max(*d, 1.0f);
+                } else {
+                    say("Usage: /afollow [on] [<distance>] [door|nodoor] [spawn <id>] | off | pause | unpause");
+                    return;
+                }
+            }
+            if (id == 0 || id == conn->world().player_id) {
+                say("[AFollow] You must have a target to follow.");
+                return;
+            }
+            const std::string err = nav->afollow(id, *settings);
+            if (!err.empty()) {
+                say("[AFollow] " + err + ".");
+                return;
+            }
+            const auto& spawns = conn->world().spawns;
+            const auto it = spawns.find(id);
+            say(std::format("[AFollow] Following {} ({:.0f}{}).",
+                            it != spawns.end() ? game::display_name(it->second.name) : std::string("it"),
+                            settings->distance, settings->doors ? "" : ", no doors"));
+        },
+        plugin::kCapMove);
 }
 
 } // namespace hailstone::mq

@@ -363,6 +363,31 @@ as in MQ2MoveUtils:
 - `.Behind`: `.Stopped`, and the player within 45 degrees of the spawn's back, by where the player stands (the arc
   `behind` holds to). MQ2MoveUtils compares the player's and the spawn's headings instead.
 
+**/afollow** (MQ2AdvPath's words; Hailstone's own walk, `NavControl::afollow`) follows the target, or a spawn, along
+the way it walks rather than straight at it: the spawn leaves a trail, a point each 5 units it moves, and the player
+walks the trail, so it goes round the corners the spawn went round, up its ramps, through its doors and into the zone
+line it took.
+
+- It holds still once the trail left, and the gap to the spawn, is within the distance, and walks on as the spawn
+  moves away. A point near the player further along the trail (the spawn came back past) cuts off the loop before it.
+- The trail is walked on the flat: a levitating spawn's points are reached from under it.
+- The spawn gone (dead, zoned, out of range): the trail is walked to its end, zone lines included, then the follow
+  ends with a chat line.
+- The spawn warped (it moved more than 100 at once: a gate, a summon, a teleporter): the trail is walked to where it
+  warped, and the player waits there until it warps too (moves more than 100 at once) or the spawn comes within 100.
+- `/afollow off`, the player's own movement keys, a `/nav`, `/moveto` or `/stick`, or a zone change end it.
+- These are Hailstone's choices: MQ2AdvPath was the guide, not the source.
+
+`/afollow` alone stops a follow, else follows the target. `/afollow on` follows the target, `/afollow spawn <id>` a
+spawn, `/afollow off` stops, `/afollow pause` and `unpause` hold and release it. A distance (at least 1; 10 at first)
+and `door` / `nodoor` (whether it opens doors in its way; `door` at first) are kept for the follows after them, and
+each also starts a follow of the target (E3 sends `/afollow on nodoor <distance>`). `/afollow help` lists them.
+
+`${AdvPath}` (TRUE), `.Active` (TRUE), `.State` (1 following, else 0), `.Status` (0 off, 1 on, 2 paused),
+`.Following`, `.Paused`, `.WaitingWarp`, `.Waypoints` (the trail's points left), `.Length` (its flat length, with the
+gap to the spawn), `.Monitor` (the spawn followed); `.Playing` and `.Recording` are FALSE. Not yet: MQ2AdvPath's
+`/play` and `/record` paths, and its path members (`.Path`, `.CheckPoint`, `.X`/`.Y`/`.Z`, `.Flag1`-`9` ...).
+
 ### The Navigation TLO
 
 `${Navigation}` (TRUE while walking), `.Active`, `.Paused`, `.MeshLoaded`, `.PathExists[<dest>]`,

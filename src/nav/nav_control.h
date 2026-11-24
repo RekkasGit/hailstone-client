@@ -30,6 +30,19 @@ struct NavStatus {
     // (MoveTo.Stopped: MQ2MoveUtils' StoppedMoveto, cleared by the next /moveto, not by /moveto off).
     bool moveto = false;
     bool moveto_arrived = false;
+    // /afollow (NavControl::afollow): the spawn followed, 0 none; how near it stops; the trail's points left and their
+    // length (with the gap to the spawn); waiting where the spawn warped.
+    std::uint32_t afollow_spawn = 0;
+    float afollow_distance = 0.0f;
+    std::size_t afollow_waypoints = 0;
+    float afollow_length = 0.0f;
+    bool afollow_waiting_warp = false;
+};
+
+// /afollow's options (MQ2AdvPath's words, mq/nav_commands.cpp).
+struct AFollowOptions {
+    float distance = 10.0f; // stops when the trail left, and the gap to the spawn, is this short
+    bool doors = true;      // opens doors in its way (nodoor: not)
 };
 
 // /stick's options (MQ2MoveUtils' words, mq/nav_commands.cpp).
@@ -55,6 +68,11 @@ public:
     // of sight) whenever it is further than the distance, and faces it while near enough. A walk ends it.
     virtual std::string stick(std::uint32_t id, const StickOptions& options) = 0;
     virtual void unstick(std::string_view why) = 0;
+    // Follows a spawn along the trail it leaves (MQ2AdvPath's /afollow): walks where it walked, not straight at it,
+    // until afollow_off, the player's own movement keys, or the spawn gone and its trail walked. A walk or a stick
+    // ends it, and it ends them.
+    virtual std::string afollow(std::uint32_t id, const AFollowOptions& options) = 0;
+    virtual void afollow_off(std::string_view why) = 0;
     // Ends the walk and the stick.
     virtual void stop(std::string_view why) = 0;
     virtual void set_paused(bool paused) = 0;

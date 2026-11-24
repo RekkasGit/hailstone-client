@@ -149,3 +149,7 @@ files in MacroQuest's repository.
   `include/mq/base/String.h`), and the `Math`, `If` and `Range` TLOs and the int, float and string members in
   `src/mq/tlo.cpp` and `src/mq/tlo_game.cpp` (`MQ2MathType.cpp`, `MQ2Data.cpp`, `MQ2BasicTypes.cpp`): written for
   Hailstone from MQ's behaviour; none is copied.
+- MacroQuest plugins' commands and TLOs that scripts such as E3 use, written for Hailstone from their behaviour, none
+  copied: MQ2AdvPath (github.com/RedGuides/MQ2AdvPath; `/afollow` and `${AdvPath}`, `src/app/navigator.cpp` and
+  `src/mq/nav_commands.cpp`), MQ2MoveUtils (`/stick`, `/moveto`, `${Stick}`, `${MoveTo}`) and MQ2Exchange
+  (`/exchange`, `/unequip`, `src/game/exchange.h`).

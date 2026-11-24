@@ -109,6 +109,7 @@ manifest's `caps` (docs/addons.md).
 | `Navigation` | | `navigation` | the client's navigation (docs/navigation.md) |
 | `Stick` | | `stick` | `/stick`'s state (docs/navigation.md) |
 | `MoveTo` | | `moveto` | `/moveto`'s state (docs/navigation.md) |
+| `AdvPath` | | `advpath` | `/afollow`'s state (docs/navigation.md) |
 | `Int` | number | int | the number cut toward zero; NULL for NaN, infinity or a number beyond 64 bits |
 | `Float` | number | float | the number |
 | `Bool` | text | bool | false for empty, `false`, `null` or `0`; true otherwise |
@@ -338,6 +339,7 @@ name.
 | `stick` | `ON` or `OFF` | `Active`, `Status` (`ON`, `PAUSED` or `OFF`), `Distance`, `StickTarget` (spawn id, 0 none), `StickTargetName`, `Stopped` (within the stick's distance), `Behind` (and at the spawn's back); docs/navigation.md |
 | `bandolier` | its name | `Active` (each of its four items is the one worn in its slot, an empty one an empty slot), `Index` (1..20), `Name`, `Item[1..4]` (primary, secondary, range, ammo; clamped). A set without a name is NULL to every member. To switch sets: `/bandolier activate <name>` |
 | `bandolieritem` | its name | `ID`, `IconID`, `Name` |
+| `advpath` | `TRUE` | `Active`, `State` (1 following, 0 not), `Status` (0 off, 1 on, 2 paused), `Following`, `Paused`, `WaitingWarp`, `Waypoints`, `Length`, `Monitor` (spawn), `Playing` and `Recording` (FALSE); docs/navigation.md |
 | `moveto` | `ON`, `PAUSED` or `OFF` | `Moving`, `Stopped` (the last `/moveto` arrived), `ArrivalDist`, `Broken` (always FALSE); docs/navigation.md |
 | `math` | NULL | `Calc[expr]`, `Sqrt`, `Abs`, `Sin`, `Cos`, `Tan`, `Asin`, `Acos`, `Atan` (degrees), `Rand[max]` or `Rand[min,max]`, `Not`, `Hex`, `Dec[hex]`, `Clamp[n,min,max]`, `Distance[y,x,z:y,x,z]` (a missing point or coordinate is the player's) |
 

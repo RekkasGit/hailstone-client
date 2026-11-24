@@ -37,7 +37,7 @@ using net::GameConnection;
 struct Types {
     const Type *spawn, *character, *cls, *race, *heading, *spell, *buff, *timestamp, *item, *zone, *group, *member,
         *everquest, *macroquest, *hailstone, *window, *plugin, *time, *gametime, *navigation, *stick, *debuff, *moveto,
-        *bandolier, *bandolier_item;
+        *bandolier, *bandolier_item, *advpath;
 };
 
 Types g; // set once by register_game_tlos (the types live in the registry that registered them)
@@ -1489,6 +1489,54 @@ const game::BandolierSet* bandolier_set(const Context& c, std::int64_t index) {
     return s.name.empty() ? nullptr : &s;
 }
 
+// The AdvPath TLO (MQ2AdvPath's members, over the client's /afollow: NavStatus::afollow_*): its text is TRUE, as
+// MQ2AdvPath's. Active: TRUE (the follow is there). State: 1 following, 0 not (MQ2AdvPath's 2 playing and 3 recording
+// are paths, not here). Status: 0 off, 1 on, 2 paused. Following, Paused, WaitingWarp; Playing and Recording FALSE.
+// Waypoints: the trail's points left; Length: its flat length with the gap to the spawn; Monitor: the spawn followed.
+// MQ2AdvPath's path members (Path, CheckPoint, X/Y/Z, Flag1-9 ...) are not here.
+void register_advpath() {
+    auto status = [](const Context& c) { return c.nav ? std::optional(c.nav->status()) : std::nullopt; };
+    auto on = [status](const Context& c) {
+        auto s = status(c);
+        return s && s->afollow_spawn != 0 ? s : std::nullopt;
+    };
+    add(g.advpath, "Active", [](const Context&, const Value&, std::string_view) { return V::boolean(true); });
+    add(g.advpath, "State", [on](const Context& c, const Value&, std::string_view) {
+        return V::integer(on(c) ? 1 : 0);
+    });
+    add(g.advpath, "Status", [on](const Context& c, const Value&, std::string_view) {
+        auto s = on(c);
+        return V::integer(!s ? 0 : s->paused ? 2 : 1);
+    });
+    add(g.advpath, "Following", [on](const Context& c, const Value&, std::string_view) {
+        return V::boolean(on(c).has_value());
+    });
+    add(g.advpath, "Paused", [on](const Context& c, const Value&, std::string_view) {
+        auto s = on(c);
+        return V::boolean(s && s->paused);
+    });
+    add(g.advpath, "WaitingWarp", [on](const Context& c, const Value&, std::string_view) {
+        auto s = on(c);
+        return V::boolean(s && s->afollow_waiting_warp);
+    });
+    add(g.advpath, "Playing", [](const Context&, const Value&, std::string_view) { return V::boolean(false); });
+    add(g.advpath, "Recording", [](const Context&, const Value&, std::string_view) { return V::boolean(false); });
+    add(g.advpath, "Waypoints", [on](const Context& c, const Value&, std::string_view) {
+        auto s = on(c);
+        return V::integer(s ? static_cast<std::int64_t>(s->afollow_waypoints) : 0);
+    });
+    add(g.advpath, "Length", [on](const Context& c, const Value&, std::string_view) {
+        auto s = on(c);
+        return V::number(s ? s->afollow_length : 0.0);
+    });
+    add(g.advpath, "Monitor", [on](const Context& c, const Value&, std::string_view) -> V {
+        auto s = on(c);
+        return s ? spawn_value(spawn_of(c, s->afollow_spawn)) : V::nil();
+    });
+    Type& t = const_cast<Type&>(*g.advpath);
+    t.to_value = [](const Context&, const Value&) { return V::string("TRUE"); };
+}
+
 void register_bandolier() {
     me_member("Bandolier", [](const Context&, const GameConnection& c, std::string_view index) -> V {
         std::int64_t n = 0;
@@ -1756,6 +1804,7 @@ void register_game_tlos(Registry& r) {
     g.moveto = &r.type("moveto");
     g.bandolier = &r.type("bandolier");
     g.bandolier_item = &r.type("bandolieritem");
+    g.advpath = &r.type("advpath");
     g.debuff = &r.type("debuff");
     register_spawn();
     register_character();
@@ -1769,6 +1818,7 @@ void register_game_tlos(Registry& r) {
     register_stick();
     register_moveto();
     register_bandolier();
+    register_advpath();
 
     // MQ's LineOfSight[y,x,z:y,x,z]: two points in the server's coordinates (MQ's Loc order).
     r.add_tlo("LineOfSight", [](const Context& c, std::string_view index) -> V {
@@ -1805,6 +1855,9 @@ void register_game_tlos(Registry& r) {
     });
     r.add_tlo("Stick", [](const Context& c, std::string_view) -> V { return c.nav ? V::object(g.stick, 0) : V::nil(); });
     r.add_tlo("MoveTo", [](const Context& c, std::string_view) -> V { return c.nav ? V::object(g.moveto, 0) : V::nil(); });
+    r.add_tlo("AdvPath", [](const Context& c, std::string_view) -> V {
+        return c.nav ? V::object(g.advpath, 0) : V::nil();
+    });
     r.add_tlo("Me", [](const Context& c, std::string_view) -> V {
         return c.conn && c.conn->world().player() ? V::object(g.character, c.conn->world().player_id) : V::nil();
     });
