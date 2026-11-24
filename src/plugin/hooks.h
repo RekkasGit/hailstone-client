@@ -95,9 +95,10 @@ public:
     bool has_packet_hooks(Stream stream, Direction dir) const;
     Flow packet(Stream stream, Direction dir, net::AppPacket& p);
     Flow chat(ChatLine& line);
-    // Runs the line filters and then a registered command; true when the line was taken (dropped by a filter or run
-    // by a command). `line` holds the rewritten text when it was not.
-    bool command(std::string& line);
+    // Runs the line filters, then checks policy for the matched registration before invoking it. True when the
+    // line was taken, including a denial, so a denied registration cannot fall through to an RoF2 abbreviation.
+    // `line` holds the rewritten text when it was not taken.
+    bool command(std::string& line, const std::function<bool(std::string_view name)>& allow = {});
     bool has_command(std::string_view name) const;
     // The owner of the latest live registration of `name`, and whether it is a guest (a plugin's or script's).
     std::optional<Owner> command_owner(std::string_view name) const;

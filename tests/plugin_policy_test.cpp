@@ -46,6 +46,90 @@ TEST_CASE("hailstone.cfg: [client] deny is off by default and can deny Hailstone
     CHECK(warnings.front() == "[client] deny: \"maybe\" is not on or off");
 }
 
+TEST_CASE("hailstone.cfg: command permissions are opt-in and resolve aliases, groups and conflicts") {
+    CHECK(plugin::parse_server_cfg("[scripts]\nplayer = on\n").commands.allowed("/nav"));
+    CHECK_FALSE(plugin::parse_server_cfg("[commands]\n").commands.enabled);
+    std::vector<std::string> warnings;
+    const auto rules = plugin::parse_server_cfg(R"(
+[Commands]
+default = deny
+allow_groups = movement_automation, addon_commands
+block_groups = Non_ROF2, not_a_group
+allow = /advi, /time, /TGB
+block = /finditem, /exchange
+blocked_message = "Ask the GM in #Support; they said "please"." ; comment
+custom_key = keep
+[management]
+min_status = 150
+)", &warnings);
+    REQUIRE(rules.commands.enabled);
+    CHECK_FALSE(rules.commands.default_allow);
+    CHECK(rules.commands.denial_message() == "Ask the GM in #Support; they said \"please\".");
+    CHECK(rules.management_min_status == 150);
+    CHECK(rules.script_sections.at("commands").at("custom_key") == "keep");
+    CHECK(rules.script_sections.at("commands").at("default") == "deny");
+    CHECK(rules.script_sections.at("management").at("min_status") == "150");
+    CHECK_FALSE(rules.commands.allowed("/STICK")); // the broader block wins over another group
+    CHECK(rules.commands.decision("/stick").reason == "non_rof2");
+    CHECK(rules.commands.allowed("time"));
+    CHECK(rules.commands.allowed("/targetgroupbuff"));
+    CHECK_FALSE(rules.commands.allowed("/who"));
+    CHECK_FALSE(rules.commands.allowed("advi")); // the alias shares the canonical explicit block
+    CHECK(rules.commands.decision("/advi").reason == "Explicit block");
+    CHECK_FALSE(rules.commands.allowed("/exchange"));
+    CHECK(rules.commands.allowed("/addoncommand"));
+    CHECK(warnings.size() == 3); // unknown group, custom key, explicit alias conflict
+    CHECK_FALSE(plugin::parse_server_cfg("[commands]\nblock = /loc\n").commands.allowed("/LOCATION"));
+    CHECK_FALSE(plugin::parse_server_cfg("[commands]\nblock = /msg\n").commands.allowed("/send"));
+    CHECK(plugin::parse_server_cfg("[commands]\nblock = /face\n").commands.allowed("/facepick"));
+    CHECK_FALSE(plugin::parse_server_cfg("[commands]\nblock = /pause, /timer\n").commands.allowed("/timer"));
+}
+
+TEST_CASE("hailstone.cfg: blocked command notices keep literal text and bound its size") {
+    CHECK(plugin::parse_server_cfg("[commands]\nblocked_message = \"\"\n").commands.denial_message() ==
+          plugin::kDefaultCommandBlockedMessage);
+    CHECK(plugin::parse_server_cfg("[commands]\nblocked_message = Please Ask a GM. ; old note\n").commands.denial_message() ==
+          "Please Ask a GM.");
+    CHECK(plugin::parse_server_cfg("[commands]\nblocked_message = \"#; \\\"\"\n").commands.denial_message() == "#; \\\"");
+    const std::string longest(plugin::kCommandBlockedMessageMaxBytes, 'm');
+    CHECK(plugin::parse_server_cfg("[commands]\nblocked_message = " + longest).commands.denial_message() == longest);
+    std::vector<std::string> warnings;
+    CHECK(plugin::parse_server_cfg("[commands]\nblocked_message = " + longest + "m\n", &warnings).commands.denial_message() ==
+          plugin::kDefaultCommandBlockedMessage);
+    CHECK(plugin::parse_server_cfg("[commands]\nblocked_message = one\ttwo\n", &warnings).commands.denial_message() ==
+          plugin::kDefaultCommandBlockedMessage);
+    CHECK(plugin::parse_server_cfg("[commands]\nblocked_message = \"unterminated\n", &warnings).commands.denial_message() ==
+          plugin::kDefaultCommandBlockedMessage);
+    CHECK(warnings.size() == 3);
+    CHECK(plugin::parse_server_cfg("[management]\nmin_status = 0\n", &warnings).management_min_status == 200);
+    CHECK(plugin::parse_server_cfg("[management]\nmin_status = 32768\n", &warnings).management_min_status == 200);
+    CHECK(warnings.size() == 5);
+}
+
+TEST_CASE("command catalog: stock aliases, extended commands, and live add-on registrations") {
+    const std::vector<std::string> registered{"/nav", "/target", "/raidnotes"};
+    const auto rows = plugin::command_catalog(registered);
+    auto find = [&](std::string_view name) {
+        return std::find_if(rows.begin(), rows.end(), [&](const auto& row) { return row.name == name; });
+    };
+    auto finditem = find("/finditem");
+    REQUIRE(finditem != rows.end());
+    CHECK(finditem->origin == plugin::CommandOrigin::Extended);
+    CHECK(finditem->aliases == std::vector<std::string>{"/advi"});
+    CHECK(find("/advi") == rows.end());
+    CHECK(find("/exchange") == rows.end());
+    auto target = find("/target");
+    REQUIRE(target != rows.end());
+    CHECK(target->origin == plugin::CommandOrigin::Stock);
+    auto dynamic = find("/raidnotes");
+    REQUIRE(dynamic != rows.end());
+    CHECK(dynamic->origin == plugin::CommandOrigin::Addon);
+    CHECK(dynamic->groups == std::vector<std::string>{"addon_commands"});
+    CHECK(find("/pause") != rows.end());
+    CHECK(find("/timer") != rows.end());
+    CHECK(find("/servermanagement") != rows.end());
+}
+
 TEST_CASE("hailstone.cfg: every setting, defaults for the rest, warnings for what it does not know") {
     std::vector<std::string> warnings;
     auto r = plugin::parse_server_cfg(R"(

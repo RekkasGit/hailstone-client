@@ -3701,6 +3701,168 @@ end
     }
 }
 
+TEST_CASE("Modern Server Management uses authorized snapshots and submits only reviewed edits") {
+    const fs::path source = fs::path(__FILE__).parent_path().parent_path() / "ui/modern";
+    hailstone::test::ScratchDir scratch("ui_server_management_");
+    const fs::path dir = scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(source, dir / "modern", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    {
+        Session session(dir, "modern");
+        bool authorized = false;
+        int saves = 0;
+        int full_snapshots = 0;
+        app::ServerManagementView snapshot;
+        snapshot.serial = 1;
+        snapshot.revision = "42";
+        snapshot.file_revision = "20261124T010000Z-zone-1";
+        snapshot.minimum_status = 210;
+        snapshot.fields = {{"commands", "block_groups", "movement_automation"},
+                           {"addons", "required", "example/hud:1.0.0"}, {"local_extension", "keep_me", "original"}};
+        snapshot.commands = {{"/nav", "Walk a route", "extended", {}, {"movement_automation", "non_rof2"}},
+                             {"/finditem", "Search your inventory", "extended", {"/advi"}, {"non_rof2"}},
+                             {"/follow", "Follow a player", "stock", {}, {}},
+                             {"/notes", "Add-on notes", "addon", {}, {"addon_commands"}}};
+        session.host.server_management_available = [] { return true; };
+        session.host.server_management = [&](std::uint32_t known) -> std::optional<app::ServerManagementView> {
+            if (!authorized) return std::nullopt;
+            if (known != snapshot.serial) {
+                ++full_snapshots;
+                return snapshot;
+            }
+            app::ServerManagementView metadata;
+            metadata.serial = snapshot.serial;
+            metadata.revision = snapshot.revision;
+            metadata.file_revision = snapshot.file_revision;
+            metadata.saving = snapshot.saving;
+            metadata.message = snapshot.message;
+            return metadata;
+        };
+        session.host.save_server_management = [&](std::string_view revision, const auto& edits) {
+            ++saves;
+            CHECK(revision == "42");
+            REQUIRE(edits.size() == 1);
+            CHECK(edits[0].section == "commands");
+            CHECK(edits[0].key == "blocked_message");
+            CHECK(edits[0].value == "This command was blocked by your server admin.");
+            snapshot.saving = true;
+            return true;
+        };
+        auto visible = [] {
+            ImGuiWindow* win = ImGui::FindWindowByName("Server Management###modern.ServerManagement");
+            return win && win->WasActive;
+        };
+        lua_State* L = session.lua.state();
+        REQUIRE(luaL_dostring(L, R"lua(
+local draftModel = dofile("lib/server_management.lua")
+local draft = draftModel.new({
+  fields = {
+    { section = "commands", key = "allow", value = "ephemeral, /ADVI, :" },
+    { section = "commands", key = "block_groups", value = "non_rof2" },
+    { section = "addons", key = "allow", value = "https://github.com/example/hud, example/keep" },
+    { section = "addons", key = "required", value = "example/hud : V1.2.0-rc.10+written, example/hud:1.2.0-rc.2, " ..
+      "example/hud:1.2.0-rc.10+equal, example/release:2.0.0+release, example/release:2.0.0-rc.1, " ..
+      "example/text:3.1.0-alpha.zz, example/text:3.1.0-alpha.100, example/text:3.1.0-alpha" },
+    { section = "addons", key = "suggest", value = "example/other@v1.3.0" }
+  },
+  commands = {
+    { name = "/finditem", description = "Search inventory", origin = "extended", aliases = { "/advi" }, groups = { "non_rof2" } },
+    { name = "/emote", description = "Emote", origin = "stock", aliases = { ":" }, groups = {} }
+  }
+})
+local command = assert(draftModel.filterCommands(draft, "extended", "AdVi")[1])
+assert(draftModel.commandEffective(draftModel.commandRules(draft), command) == "allow")
+assert(draftModel.commandRules(draft).commands["/emote"] == "allow")
+draftModel.setCommandRule(draft, "/advi", "", false)
+assert(draftModel.commandEffective(draftModel.commandRules(draft), command) == "block")
+assert(draftModel.get(draft, "commands.allow") == "ephemeral, :")
+local _, byId = draftModel.addons(draft)
+local addon = assert(byId["example/hud"])
+assert(addon.mode == "required" and addon.minimum == "V1.2.0-rc.10+written")
+assert(byId["example/release"].minimum == "2.0.0+release")
+assert(byId["example/text"].minimum == "3.1.0-alpha.zz")
+assert(draft.edits["addons.required"] == nil)
+draftModel.setAddonMinimum(draft, addon, "2.0.1")
+assert(draftModel.get(draft, "addons.required") == "example/hud:2.0.1, example/release:2.0.0+release, " ..
+  "example/release:2.0.0-rc.1, example/text:3.1.0-alpha.zz, example/text:3.1.0-alpha.100, example/text:3.1.0-alpha")
+assert(draftModel.get(draft, "addons.allow") == "https://github.com/example/hud, example/keep")
+assert(draftModel.get(draft, "addons.suggest") == "example/other@v1.3.0")
+
+local button, input, select, color = ui.Button, ui.InputTextWithHint, ui.Selectable, ui.TextColored
+ui.Button = function(label, ...)
+  local clicked = button(label, ...)
+  if clickManagement == label then clickManagement = nil return true end
+  return clicked
+end
+ui.InputTextWithHint = function(label, ...)
+  local value, changed = input(label, ...)
+  if label == "##commands.blocked_message" and managementText then
+    value, changed, managementText = managementText, true, nil
+  end
+  return value, changed
+end
+ui.Selectable = function(label, ...)
+  local clicked = select(label, ...)
+  if label == visitManagement then visitManagement = nil return true end
+  return clicked
+end
+ui.TextColored = function(r, g, b, a, text)
+  if text == "GM access / 210+" then managementRankSeen = true end
+  if text == "Blocked" then managementBlockSeen = true end
+  color(r, g, b, a, text)
+end
+)lua") == LUA_OK);
+        session.frames(2);
+        CHECK_FALSE(visible());
+        authorized = true;
+        session.frames(3);
+        CHECK(visible());
+        CHECK(full_snapshots == 1);
+        REQUIRE(luaL_dostring(L, "assert(managementRankSeen and managementBlockSeen)") == LUA_OK);
+        // Exercise all controls' immediate-mode window paths, including the add-on list and smaller viewport.
+        for (const char* label : {"Client & gameplay", "Add-ons", "Scripts & plugins", "Socials", "Assets & web", "Commands"}) {
+            lua_pushstring(L, label);
+            lua_setglobal(L, "visitManagement");
+            session.frames(2);
+            REQUIRE(luaL_dostring(L, "assert(visitManagement == nil)") == LUA_OK);
+        }
+        session.display_size = {800, 560};
+        session.frames(2);
+        REQUIRE(luaL_dostring(L, R"lua(
+managementText = "This command was blocked by your server admin."
+clickManagement = "Review changes##sm"
+)lua") == LUA_OK);
+        session.frames(2);
+        REQUIRE(luaL_dostring(L, "clickManagement = 'Save policy##sm'") == LUA_OK);
+        session.frames(2);
+        CHECK(saves == 1);
+        snapshot.saving = false;
+        snapshot.message = "Policy changed; try again.";
+        REQUIRE(luaL_dostring(L, "clickManagement = 'Save policy##sm'") == LUA_OK);
+        session.frames(2);
+        CHECK(saves == 2);
+        snapshot.serial = 2;
+        snapshot.saving = false;
+        snapshot.revision = "43";
+        snapshot.fields.push_back({"commands", "blocked_message", "This command was blocked by your server admin."});
+        session.frames(2);
+        CHECK(full_snapshots == 2);
+        session.host.trusted_ui = false;
+        session.frames(2);
+        CHECK_FALSE(visible());
+        REQUIRE(luaL_dostring(L, R"lua(
+assert(not hs.UI.serverManagement.Available())
+assert(not hs.UI.serverManagement.Save("43", {}))
+)lua") == LUA_OK);
+        CHECK(saves == 2);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 // A click meant for something else the instant the question pops up must not answer it: both buttons wait a
 // second after the question shows. The real loading cover must leave both answers reachable afterward.
 TEST_CASE("UI packs: both plugin answers arm and remain reachable above the loading cover") {

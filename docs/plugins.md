@@ -2090,6 +2090,42 @@ mounts stay passable), climbing passable ladders and solid ladders (docs/mechani
 rules, not the original client's. Each is on unless `[movement]` turns it off; the player has no switch. A change
 reaches players at their next login.
 
+### Command policy
+
+`[commands]` applies to commands executed by Hailstone from chat, ordinary socials, and add-on calls. It can cover
+RoF2 commands, Hailstone extensions, add-on commands, and the `/pause` and `/timer` social directives. The client
+checks the command that dispatch actually resolves, including abbreviations, aliases, and nested commands. A rule
+names the whole command and applies to all forms of it. For instance, blocking `/target` blocks regular targeting
+by name and extended spawn searches through that command. UI actions and APIs that perform an action directly have
+their own controls. EQEmu handles `#` commands.
+
+```ini
+[commands]
+default = allow
+block_groups = movement_automation, command_helpers
+allow = /echo
+block = /follow, /random
+blocked_message = "This command is blocked here. Ask a GM if you need it unblocked."
+```
+
+Command names are case-insensitive. Individual rules override group rules, and a block wins when two rules at the
+same level disagree. The built-in groups are:
+
+| Group | Commands |
+|---|---|
+| `non_rof2` | Hailstone's built-in extended commands |
+| `movement_automation` | `/nav`, `/moveto`, `/stick`, `/face`, `/keypress` |
+| `command_helpers` | `/docommand`, `/echo`, `/noparse`, `/squelch` |
+| `addon_commands` | Commands registered by add-ons |
+
+Use `default = deny` and `allow` or `allow_groups` for an allowlist. Without command rules, all commands retain
+their ordinary behavior. `blocked_message` is an optional single line up to 240 UTF-8 bytes. Use whole-value quotes
+to include semicolons or hash characters. An empty value uses the client's default notice.
+
+Run `hailstone_check --list-commands` for the built-in catalog or `hailstone_check client_files/ --commands` for
+effective rules. A GM can also review and edit them in [Server Management](../server/README.md#in-game-server-management).
+These rules depend on an up-to-date, unmodified Hailstone client.
+
 ### Opt-in add-on policies
 
 A server can require, allow or block add-ons by GitHub repository: any add-on the manager installs (scripts, compiled

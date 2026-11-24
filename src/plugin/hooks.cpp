@@ -216,7 +216,7 @@ Flow Hooks::chat(ChatLine& line) {
     return dropped ? Flow::Drop : Flow::Continue;
 }
 
-bool Hooks::command(std::string& line) {
+bool Hooks::command(std::string& line, const std::function<bool(std::string_view)>& allow) {
     if (impl_->command_depth >= kMaxCommandDepth) {
         log::warn("plugin commands: commands run from commands nest too deep, '{}' dropped", line.substr(0, 64));
         return true;
@@ -242,6 +242,7 @@ bool Hooks::command(std::string& line) {
     for (const auto& e : impl_->lists[kCommand])
         if (e->alive && e->name == word) found = e;
     if (!found) return false;
+    if (allow && !allow(found->name)) return true;
     std::string held(args); // the line may change under the command
     ++impl_->depth;
     try {

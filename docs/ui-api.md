@@ -417,6 +417,21 @@ API 1.6 adds `addons.Policy()` and `addons.PolicyAction(action, serial)` (flat `
 - Both are for the client's own interfaces: add-on or hand-placed interfaces and plugin or script code get nil and
   false, and cannot replace the "AddonPolicy" window (docs/plugins.md "Opt-in add-on policies").
 
+## Server Management
+
+The built-in Modern pack uses `serverManagement` for GM policy editing. The encounter grants access using the
+account's server-side status. This module is closed to add-on code and custom interface packs.
+
+- `Available()` reports whether the client can request the server's policy. `Open()` starts the request and returns
+  whether it was sent. The window waits for `View()` before showing policy data.
+- `View([known_serial])` returns `nil` without an authorized snapshot. The result has `serial`, `revision`, `file_revision`,
+  `message` and `saving`. A new serial also has `minimum_status`, `fields` (an array of `{section, key, value}`),
+  and `commands` (an array of `{name, description, origin, aliases, groups}`).
+- `Save(revision, edits)` sends only edited `{section, key, value}` records and returns whether submission started.
+  Success supplies a new snapshot serial. A failure can leave the current serial in place with an explanation so
+  the window can retain the draft. An empty value is an explicit edit.
+- `Close()` clears the visible management session. The client can request a fresh snapshot on the next open.
+
 ## Class names
 
 API 1.7 adds `character.ClassName(id[, short])` (flat `hs.ClassName`) and `character.ClassNamesRevision()`
