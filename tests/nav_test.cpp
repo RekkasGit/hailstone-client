@@ -999,12 +999,14 @@ struct FakeNav : nav::NavControl {
         std::uint32_t id = 0;
         float distance = 0.0f;
         bool flag = false;
+        bool flat = false; // go_to_point's
     };
     std::vector<Call> calls;
     nav::PathOptions opts;
     bool paused = false, shown = false;
-    std::string go_to_point(const glm::vec3& w, float d, std::string, bool straight) override {
-        calls.push_back({"point", w, 0, d, straight});
+    bool moveto_walk = false, moveto_done = false; // NavStatus::moveto, moveto_arrived
+    std::string go_to_point(const glm::vec3& w, float d, std::string, bool straight, bool flat) override {
+        calls.push_back({"point", w, 0, d, straight, flat});
         return {};
     }
     std::string go_to_spawn(std::uint32_t id, float d) override {
@@ -1032,6 +1034,8 @@ struct FakeNav : nav::NavControl {
         }
         s.active = !calls.empty() && calls.back().what != "stop" && calls.back().what != "unstick";
         s.paused = paused;
+        s.moveto = moveto_walk;
+        s.moveto_arrived = moveto_done;
         s.goal = "a_rat01";
         s.tiles_done = 3;
         s.tiles_total = 4;
@@ -1041,6 +1045,8 @@ struct FakeNav : nav::NavControl {
         return glm::length(w) < 1000.0f ? std::optional(glm::length(w)) : std::nullopt;
     }
     nav::PathOptions& options() override { return opts; }
+    float moveto_dist = 10.0f;
+    float& moveto_distance() override { return moveto_dist; }
     void rebuild() override { calls.push_back({"rebuild"}); }
     void set_overlay(bool on) override { shown = on; }
     bool overlay() const override { return shown; }
@@ -1158,13 +1164,106 @@ TEST_CASE("nav: /moveto walks straight") {
     CHECK(h.nav.calls[0].what == "point");
     CHECK(h.nav.calls[0].flag); // straight
     CHECK(h.nav.calls[0].at == game::server_to_world({6, 5, 0}));
-    CHECK(h.nav.calls[0].distance == 10.0f);
-    h.run("/moveto mdist 4");
+    CHECK(h.nav.calls[0].distance == 10.0f); // the default
+    CHECK(h.nav.calls[0].flat);             // no Z: only Y and X count
+    h.run("/moveto loc 5 6 7");
+    CHECK(h.nav.calls.back().at == game::server_to_world({6, 5, 7}));
+    CHECK_FALSE(h.nav.calls.back().flat);
+    h.run("/moveto dist 4");
+    CHECK(h.printed.back() == "[Nav] /moveto stops within 4.");
     h.run("/moveto id 10");
     CHECK(h.nav.calls.back().distance == 4.0f);
     CHECK(h.nav.calls.back().flag);
+    CHECK(h.nav.calls.back().flat); // a spawn: height ignored (one levitating is reached from below)
+    h.run("/moveto mdist 6"); // MQ2MoveUtils' word
+    h.run("/moveto loc 1 2");
+    CHECK(h.nav.calls.back().distance == 6.0f);
     h.run("/moveto off");
     CHECK(h.nav.calls.back().what == "stop");
+
+    // mdist inline, as E3 sends it: after loc y x [z], after id [#], or before id. It sets this walk's distance and
+    // the later ones', and is not read as a Z.
+    h.run("/squelch /moveto loc 100.5 -20.25 mdist 5");
+    CHECK(h.nav.calls.back().what == "point");
+    CHECK(h.nav.calls.back().at == game::server_to_world({-20.25f, 100.5f, 0}));
+    CHECK(h.nav.calls.back().flat); // no Z
+    CHECK(h.nav.calls.back().distance == 5.0f);
+    h.run("/moveto loc 1 2");
+    CHECK(h.nav.calls.back().distance == 5.0f); // kept
+    h.run("/moveto loc 1 2 3 mdist 7");
+    CHECK(h.nav.calls.back().at == game::server_to_world({2, 1, 3}));
+    CHECK_FALSE(h.nav.calls.back().flat);
+    CHECK(h.nav.calls.back().distance == 7.0f);
+    h.run("/moveto id 10 mdist 8");
+    CHECK(h.nav.calls.back().what == "point");
+    CHECK(h.nav.calls.back().distance == 8.0f);
+    h.run("/moveto mdist 9 id 10");
+    CHECK(h.nav.calls.back().distance == 9.0f);
+    h.run("/moveto id mdist 4"); // the target, a_rat01 (10)
+    CHECK(h.nav.calls.back().what == "point");
+    CHECK(h.nav.calls.back().distance == 4.0f);
+    CHECK(h.p("${MoveTo.ArrivalDist}") == "4.00");
+}
+
+TEST_CASE("nav: the MoveTo TLO") {
+    MqHost h;
+    CHECK(h.p("${MoveTo}") == "OFF");
+    CHECK(h.p("${MoveTo.Moving} ${MoveTo.Stopped} ${MoveTo.Broken}") == "FALSE FALSE FALSE");
+    CHECK(h.p("${MoveTo.ArrivalDist}") == "10.00");
+    h.nav.moveto_walk = true;
+    h.run("/moveto loc 5 6");
+    CHECK(h.p("${MoveTo} ${MoveTo.Moving}") == "ON TRUE");
+    h.nav.paused = true;
+    CHECK(h.p("${MoveTo}") == "PAUSED");
+    h.nav.paused = false;
+    h.nav.moveto_walk = false; // arrived
+    h.nav.moveto_done = true;
+    CHECK(h.p("${MoveTo} ${MoveTo.Moving} ${MoveTo.Stopped}") == "OFF FALSE TRUE");
+    h.ctx.nav = nullptr; // no navigation: no MoveTo
+    CHECK(h.p("${MoveTo}") == "NULL");
+}
+
+TEST_CASE("nav: a /moveto's arrival sets MoveTo.Stopped, cleared by the next /moveto; other walks leave it") {
+    NavHarness h;
+    h.nav.zone_loaded(h.collision, nullptr, {});
+    CHECK_FALSE(h.nav.status().moveto_arrived);
+    REQUIRE(h.nav.go_to_point({20, 40, 0}, 3.0f, "north", true, true).empty());
+    CHECK(h.nav.status().moveto);
+    CHECK_FALSE(h.nav.status().moveto_arrived);
+    for (int i = 0; i < 200 && h.nav.status().active; ++i) h.frame(); // 10 s; a straight walk builds no mesh
+    CHECK_FALSE(h.nav.status().active);
+    CHECK_FALSE(h.nav.status().moveto);
+    CHECK(h.nav.status().moveto_arrived);
+    // A walk that is not a /moveto (over the mesh) neither counts as one nor clears it.
+    REQUIRE(h.nav.go_to_point({20, 30, 0}, 2.0f, "south", false).empty());
+    CHECK_FALSE(h.nav.status().moveto);
+    CHECK(h.nav.status().moveto_arrived);
+    h.nav.stop("");
+    // The next /moveto clears it; /moveto off (stop) does not set it.
+    REQUIRE(h.nav.go_to_point({20, 60, 0}, 3.0f, "far north", true, true).empty());
+    CHECK_FALSE(h.nav.status().moveto_arrived);
+    h.nav.stop("");
+    CHECK_FALSE(h.nav.status().moveto_arrived);
+}
+
+TEST_CASE("nav: a flat walk arrives whatever the point's height; one that checks height does not") {
+    {
+        NavHarness h;
+        h.nav.zone_loaded(h.collision, nullptr, {});
+        REQUIRE(h.nav.go_to_point({20, 60, 30}, 3.0f, "north", true, true).empty());
+        for (int i = 0; i < 200 && h.nav.status().active; ++i) h.frame(); // 10 s; a straight walk builds no mesh
+        CHECK_FALSE(h.nav.status().active);
+        CHECK(h.chat.empty()); // arrived: no word of a stop
+        CHECK(glm::length(glm::vec2(h.feet) - glm::vec2(20, 60)) <= 3.0f);
+    }
+    {
+        NavHarness h;
+        h.nav.zone_loaded(h.collision, nullptr, {});
+        REQUIRE(h.nav.go_to_point({20, 60, 30}, 3.0f, "north", true).empty());
+        for (int i = 0; i < 200 && h.nav.status().active; ++i) h.frame(); // 10 s; a straight walk builds no mesh
+        // 30 above the floor it walks on: never arrived (still trying, or given up with a word why).
+        CHECK((h.nav.status().active || !h.chat.empty()));
+    }
 }
 
 TEST_CASE("nav: /stick's words and the Stick TLO") {
@@ -1191,7 +1290,41 @@ TEST_CASE("nav: /stick's words and the Stick TLO") {
     h.run("/stick off");
     CHECK(h.nav.calls.back().what == "unstick");
     CHECK(h.p("${Stick.Status}") == "OFF");
-    const std::size_t n = h.nav.calls.size();
+    // E3's lines: MQ2MoveUtils' words it sends are taken. hold, uw, delaystrafe and moveback change nothing yet;
+    // snaproll [rear] is behind.
+    h.run("/squelch /stick hold moveback behind 10 uw delaystrafe");
+    CHECK(h.nav.calls.back().what == "stick");
+    CHECK(h.nav.calls.back().id == 10);
+    CHECK(h.nav.calls.back().distance == 10.0f);
+    CHECK(h.nav.calls.back().flag); // behind
+    h.run("/stick id 11 snaproll uw");
+    CHECK(h.nav.calls.back().id == 11);
+    CHECK(h.nav.calls.back().flag);
+    h.run("/stick snaproll rear");
+    CHECK(h.nav.calls.back().id == 10);
+    CHECK(h.nav.calls.back().flag);
+    h.run("/stick hold moveback 35");
+    CHECK(h.nav.calls.back().distance == 35.0f);
+    CHECK_FALSE(h.nav.calls.back().flag);
+    h.run("/stick 15 underwater hold");
+    CHECK(h.nav.calls.back().distance == 15.0f);
+    // pause / unpause hold and release it; imsafe does nothing.
+    h.run("/stick pause");
+    CHECK(h.nav.paused);
+    h.run("/stick unpause");
+    CHECK_FALSE(h.nav.paused);
+    std::size_t n = h.nav.calls.size();
+    h.run("/squelch /stick imsafe");
+    CHECK(h.nav.calls.size() == n);
+    // The positions not supported yet say so, and do not stick.
+    for (const char* line : {"/stick hold front 10 uw", "/stick hold moveback !front 10", "/stick pin 10",
+                             "/stick behindonce 10"}) {
+        h.run(line);
+        CHECK(h.nav.calls.size() == n);
+        CHECK(h.printed.back().ends_with("is not supported yet."));
+    }
+    h.run("/stick off");
+    n = h.nav.calls.size();
     h.run("/stick sideways");
     CHECK(h.nav.calls.size() == n);
     CHECK(h.printed.back().starts_with("Usage: /stick"));
@@ -1199,6 +1332,35 @@ TEST_CASE("nav: /stick's words and the Stick TLO") {
     h.run("/stick");
     CHECK(h.nav.calls.size() == n);
     CHECK(h.printed.back() == "You must have a target to stick to.");
+}
+
+TEST_CASE("nav: Stick.Stopped and Stick.Behind, about the stick's spawn or else the target") {
+    MqHost h;
+    auto& w = net::GameConnectionTestAccess::world(*h.world.conn);
+    // The player stands at the origin; a_rat01 (10, the target) 50 away.
+    CHECK(h.p("${Stick.Stopped} ${Stick.Behind}") == "FALSE FALSE");
+    // No stick: the target, within its MaxRangeTo (14 here). 5 north of the player, facing north: the player is at its
+    // back.
+    w.spawns[10].position = {0, 5, 0};
+    w.spawns[10].heading = 128.0f; // yaw pi/2: facing +y
+    CHECK(h.p("${Stick.Stopped} ${Stick.Behind}") == "TRUE TRUE");
+    w.spawns[10].heading = 384.0f; // facing -y, at the player
+    CHECK(h.p("${Stick.Stopped} ${Stick.Behind}") == "TRUE FALSE");
+    w.spawns[10].heading = 128.0f + 20.0f; // 14 degrees off its back (512 units a turn): still behind
+    CHECK(h.p("${Stick.Behind}") == "TRUE");
+    w.spawns[10].heading = 128.0f + 70.0f; // 49 degrees off: past the 45-degree arc
+    CHECK(h.p("${Stick.Behind}") == "FALSE");
+    w.spawns[10].heading = 128.0f;
+    // Sticking: the stick's spawn and distance.
+    h.run("/stick 4 id 10");
+    CHECK(h.p("${Stick.Stopped} ${Stick.Behind}") == "FALSE FALSE"); // 5 away, the stick's distance 4
+    h.run("/stick 6 id 10");
+    CHECK(h.p("${Stick.Stopped} ${Stick.Behind}") == "TRUE TRUE");
+    w.spawns[11].position = {0, 3, 0}; // another spawn, near; the stick is still a_rat01's
+    w.target_id = 11;
+    CHECK(h.p("${Stick.Stopped}") == "TRUE");
+    h.run("/stick 4 id 10");
+    CHECK(h.p("${Stick.Stopped}") == "FALSE");
 }
 
 TEST_CASE("nav: the Navigation TLO") {

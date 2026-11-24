@@ -9,6 +9,7 @@
 #include <random>
 
 #include <glm/geometric.hpp>
+#include <glm/trigonometric.hpp>
 
 #include "core/build_info.h"
 #include "game/combat.h"
@@ -35,7 +36,7 @@ using net::GameConnection;
 
 struct Types {
     const Type *spawn, *character, *cls, *race, *heading, *spell, *buff, *timestamp, *item, *zone, *group, *member,
-        *everquest, *macroquest, *hailstone, *window, *plugin, *time, *gametime, *navigation, *stick, *debuff;
+        *everquest, *macroquest, *hailstone, *window, *plugin, *time, *gametime, *navigation, *stick, *debuff, *moveto;
 };
 
 Types g; // set once by register_game_tlos (the types live in the registry that registered them)
@@ -1429,8 +1430,65 @@ void register_stick() {
         const game::Spawn* sp = s ? spawn_of(c, s->stick_spawn) : nullptr;
         return sp ? V::string(sp->name) : V::nil();
     });
+    // Behind and Stopped (MQ2MoveUtils'): about the stick's spawn while sticking, else the target, as MQ2MoveUtils
+    // reads its held spawn or the target. Stopped: within the stick's distance on the flat (without a stick, the
+    // target's MaxRangeTo, where MQ2MoveUtils falls back on the melee range). Behind: Stopped, and the player within
+    // 45 degrees of the spawn's back by where it stands, the arc /stick behind holds to (MQ2MoveUtils compares the
+    // two headings, within 45 of its 512 units: Hailstone's own measure).
+    struct Place {
+        float away = 0.0f, reach = 0.0f;
+        bool behind = false;
+    };
+    auto place = [status](const Context& c) -> std::optional<Place> {
+        auto s = status(c);
+        if (!s || !c.conn) return std::nullopt;
+        const game::Spawn* me = c.conn->world().player();
+        const game::Spawn* sp = spawn_of(c, s->stick_spawn ? s->stick_spawn : c.conn->world().target_id);
+        if (!me || !sp || sp == me) return std::nullopt;
+        Place p;
+        p.reach = s->stick_spawn ? s->stick_distance : std::max(sp->melee_radius, 14.0f);
+        const glm::vec2 to_me = glm::vec2(spawn_position(*me) - spawn_position(*sp));
+        p.away = glm::length(to_me);
+        const float yaw = game::heading_to_yaw(sp->display_valid ? sp->display_heading : sp->heading);
+        const glm::vec2 facing(std::cos(yaw), std::sin(yaw));
+        p.behind = p.away > 0.01f && glm::dot(to_me / p.away, -facing) >= std::cos(glm::radians(45.0f));
+        return p;
+    };
+    add(g.stick, "Stopped", [place](const Context& c, const Value&, std::string_view) {
+        auto p = place(c);
+        return V::boolean(p && p->away <= p->reach);
+    });
+    add(g.stick, "Behind", [place](const Context& c, const Value&, std::string_view) {
+        auto p = place(c);
+        return V::boolean(p && p->away <= p->reach && p->behind);
+    });
     Type& t = const_cast<Type&>(*g.stick);
     t.to_value = [on](const Context& c, const Value&) { return V::string(on(c) ? "ON" : "OFF"); };
+}
+
+// The MoveTo TLO (MQ2MoveUtils' members, over the client's /moveto: NavStatus::moveto): Moving, Stopped (the last
+// /moveto arrived; cleared by the next one), ArrivalDist, Broken; "ON", "PAUSED" or "OFF" as its text. Broken is
+// MQ2MoveUtils' walk ended by aggro or a hit, which Hailstone's never is: always FALSE. UseWalk, ArrivalDistY and
+// ArrivalDistX are not here.
+void register_moveto() {
+    auto status = [](const Context& c) { return c.nav ? std::optional(c.nav->status()) : std::nullopt; };
+    add(g.moveto, "Moving", [status](const Context& c, const Value&, std::string_view) {
+        auto s = status(c);
+        return V::boolean(s && s->moveto);
+    });
+    add(g.moveto, "Stopped", [status](const Context& c, const Value&, std::string_view) {
+        auto s = status(c);
+        return V::boolean(s && s->moveto_arrived);
+    });
+    add(g.moveto, "ArrivalDist", [](const Context& c, const Value&, std::string_view) -> V {
+        return c.nav ? V::number(c.nav->moveto_distance()) : V::nil();
+    });
+    add(g.moveto, "Broken", [](const Context&, const Value&, std::string_view) { return V::boolean(false); });
+    Type& t = const_cast<Type&>(*g.moveto);
+    t.to_value = [status](const Context& c, const Value&) {
+        auto s = status(c);
+        return V::string(!s || !s->moveto ? "OFF" : s->paused ? "PAUSED" : "ON");
+    };
 }
 
 // MQ's DegToRad is 180/pi: Sin[x] takes degrees, Asin gives them.
@@ -1616,6 +1674,7 @@ void register_game_tlos(Registry& r) {
     g.gametime = &r.type("gametime");
     g.navigation = &r.type("navigation");
     g.stick = &r.type("stick");
+    g.moveto = &r.type("moveto");
     g.debuff = &r.type("debuff");
     register_spawn();
     register_character();
@@ -1627,6 +1686,7 @@ void register_game_tlos(Registry& r) {
     register_misc_types();
     register_navigation();
     register_stick();
+    register_moveto();
 
     // MQ's LineOfSight[y,x,z:y,x,z]: two points in the server's coordinates (MQ's Loc order).
     r.add_tlo("LineOfSight", [](const Context& c, std::string_view index) -> V {
@@ -1662,6 +1722,7 @@ void register_game_tlos(Registry& r) {
         return c.nav ? V::object(g.navigation, 0) : V::nil();
     });
     r.add_tlo("Stick", [](const Context& c, std::string_view) -> V { return c.nav ? V::object(g.stick, 0) : V::nil(); });
+    r.add_tlo("MoveTo", [](const Context& c, std::string_view) -> V { return c.nav ? V::object(g.moveto, 0) : V::nil(); });
     r.add_tlo("Me", [](const Context& c, std::string_view) -> V {
         return c.conn && c.conn->world().player() ? V::object(g.character, c.conn->world().player_id) : V::nil();
     });

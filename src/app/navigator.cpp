@@ -194,9 +194,9 @@ bool Navigator::plan(const glm::vec3& from) {
     }
     if (revision != goal_revision_) return false;
     if (follower_.state() == nav::FollowState::Moving || follower_.state() == nav::FollowState::NeedsPath)
-        follower_.replace(std::move(points));
+        follower_.replace(std::move(points), !goal_.flat);
     else
-        follower_.start(std::move(points), goal_.distance);
+        follower_.start(std::move(points), goal_.distance, !goal_.flat);
     retire_server_path(); // a local mesh result supersedes its still-pending server fallback
     return true;
 }
@@ -266,13 +266,17 @@ std::string Navigator::begin(Goal g) {
     return {};
 }
 
-std::string Navigator::go_to_point(const glm::vec3& world, float distance, std::string label, bool straight) {
+std::string Navigator::go_to_point(const glm::vec3& world, float distance, std::string label, bool straight,
+                                   bool flat) {
     stick_.reset();
     Goal g;
     g.kind = GoalKind::Point;
     g.point = world;
     g.distance = distance > 0.0f ? distance : 2.0f;
     g.straight = straight;
+    g.flat = flat;
+    g.moveto = straight;
+    if (straight) moveto_arrived_ = false; // a new /moveto: not arrived yet (MQ2MoveUtils clears StoppedMoveto)
     g.label = std::move(label);
     return begin(std::move(g));
 }
@@ -509,6 +513,8 @@ nav::NavStatus Navigator::status() const {
         s.stick_distance = stick_distance();
     }
     s.paused = paused_;
+    s.moveto = s.active && goal_.moveto;
+    s.moveto_arrived = moveto_arrived_;
     s.goal = goal_.label;
     s.remaining = follower_.remaining(feet_);
     return s;
@@ -1015,6 +1021,7 @@ nav::SteerOutput Navigator::walk_frame(const Frame& f) {
             return {};
         }
         finish("");
+        if (done.moveto) moveto_arrived_ = true;
         if (done.kind == GoalKind::Door && done.click && env_.use_door) env_.use_door(done.door);
         log::info("nav: arrived at {}", done.label);
         return {};

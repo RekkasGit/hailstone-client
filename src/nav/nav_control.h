@@ -26,6 +26,10 @@ struct NavStatus {
     // /stick (NavControl::stick): the spawn kept to, 0 none, and how near.
     std::uint32_t stick_spawn = 0;
     float stick_distance = 0.0f;
+    // /moveto (a go_to_point with `straight`): one is being walked (MoveTo.Moving), and the last one arrived
+    // (MoveTo.Stopped: MQ2MoveUtils' StoppedMoveto, cleared by the next /moveto, not by /moveto off).
+    bool moveto = false;
+    bool moveto_arrived = false;
 };
 
 // /stick's options (MQ2MoveUtils' words, mq/nav_commands.cpp).
@@ -38,9 +42,11 @@ class NavControl {
 public:
     virtual ~NavControl() = default;
     // Each returns "" when the walk started, or why not (for the chat).
-    // A point, world coordinates; done within `distance` (flat) of it. `straight`: no mesh, walk straight at it
-    // (/moveto).
-    virtual std::string go_to_point(const glm::vec3& world, float distance, std::string label, bool straight = false) = 0;
+    // A point, world coordinates; done within `distance` (flat) of it, and in height within the follower's vertical
+    // reach. `straight`: no mesh, walk straight at it (/moveto). `flat`: its height is not checked at all (a /moveto
+    // loc without a Z, whose height is only the player's own when it started; a /moveto id, whose spawn may levitate).
+    virtual std::string go_to_point(const glm::vec3& world, float distance, std::string label, bool straight = false,
+                                    bool flat = false) = 0;
     // A spawn, followed as it moves.
     virtual std::string go_to_spawn(std::uint32_t id, float distance) = 0;
     // A door or switch; `click` uses it on arrival.
@@ -56,6 +62,9 @@ public:
     // The path's length from the player to a point over the mesh; nullopt when there is no path.
     virtual std::optional<float> path_length(const glm::vec3& world) const = 0;
     virtual PathOptions& options() = 0;
+    // /moveto's arrival distance (flat; MoveTo.ArrivalDist), kept for the walks after it is set (MQ2MoveUtils' dist
+    // and mdist). 10 until then, as MQ2MoveUtils' default. Not saved.
+    virtual float& moveto_distance() = 0;
     // Builds the zone's mesh again from its geometry, ignoring the cache.
     virtual void rebuild() = 0;
     virtual void set_overlay(bool on) = 0;

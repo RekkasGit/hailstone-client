@@ -263,8 +263,8 @@ one, the server's add-on rules decide whether it may.
 | `/lua run <script> [args...]`, `/lua stop [script]`, `/lua pause [script]`, `/lua list` | Lua scripts. |
 | `/plugin list`, `/plugin <name> [load\|unload]` | Compiled plugins. |
 | `/nav ...` | Walk along the navigation mesh: `/nav target`, `/nav id <#>`, `/nav loc <y> <x> <z>`, `/nav door <name> [click]`, `/nav stop`, `/nav status`, `/nav option ...`, `/nav help`. |
-| `/moveto loc <y> <x> [z] \| id [#] \| mdist <n> \| off` | Walk in a straight line, without the mesh. |
-| `/stick [<distance>] [behind] [id <#>]`, `/stick off` | Stay with the target or a spawn. |
+| `/moveto loc <y> <x> [z] \| id [#] \| dist <n> \| off` | Walk in a straight line, without the mesh; it stops within 10 unless `dist` (or `mdist`, also inline after `loc` or `id`) set another distance. |
+| `/stick [<distance>] [behind] [id <#>]`, `/stick off`, `/stick pause`, `/stick unpause` | Stay with the target or a spawn. MQ2MoveUtils' `hold`, `snaproll`, `uw`, `delaystrafe`, `moveback` and `imsafe` are taken too (docs/navigation.md). |
 | `/target ...`, `/face ...` | Target or face by MacroQuest's spawn search (`/target` is above). |
 | `/keypress <command> [hold\|release]` | Press a key command by name. |
 | `/echo <text>` | Print a line to chat. |

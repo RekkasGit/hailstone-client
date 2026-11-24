@@ -309,8 +309,23 @@ jumps) when the floor 4 to either side is more than 5 under the feet, so it neve
 
 Not yet: `/nav item`, waypoints (`/nav waypoint`, `/nav recordwaypoint`).
 
-`/moveto` (MQ2MoveUtils' straight walk, no mesh): `/moveto loc <y> <x> [z]` (or `y,x`), `/moveto id [#]` (the target
-without a number), `/moveto mdist <n>` (where it stops, default 10), `/moveto off`.
+`/moveto` (MQ2MoveUtils' straight walk, no mesh) turns the player to the spot and holds forward until it arrives,
+`/moveto off`, or the player's own movement keys:
+
+- `/moveto loc <y> <x> [z]` (or `y,x`). Without a Z only Y and X count: it arrives within the distance on the flat,
+  whatever the height. With a Z it must also be within 8 of that height, as a `/nav` walk's end.
+- `/moveto id [#]`: the spawn's place (the target without a number). Only Y and X count, as for a `loc` without a
+  Z: a spawn levitating or on a ledge above is reached from under it.
+- `/moveto dist <n>` (or MQ2MoveUtils' `mdist`): how near, on the flat, the walks after it count as arrived. 10 until
+  set, as in MQ2MoveUtils, for the session.
+- `mdist <n>` (or `dist <n>`) may also come inline, as in MQ2MoveUtils: after `loc <y> <x> [z]` or `id [#]`, or before
+  `id`. It sets the distance for that walk and the ones after it. E3 sends `/moveto loc <y> <x> mdist <n>`.
+- `/moveto off`.
+
+`${MoveTo}` (MQ2MoveUtils' TLO): `ON`, `PAUSED` or `OFF` as its text; `.Moving` (a `/moveto` is walking),
+`.Stopped` (the last `/moveto` arrived; the next `/moveto` clears it, `/moveto off` and the movement keys do not set
+it), `.ArrivalDist` (the distance above), `.Broken` (always FALSE: MQ2MoveUtils' walk ended by aggro or a hit, which
+Hailstone's never is). Not yet: `.UseWalk`, `.ArrivalDistY`, `.ArrivalDistX`, `.CampStopped`.
 
 **/stick** (MQ2MoveUtils' words; Hailstone's own walk, `NavControl::stick`) keeps to the target until `/stick off`, the
 player's own movement keys, or the spawn dying or leaving. Near enough it holds still and faces the spawn. Further, it
@@ -326,11 +341,27 @@ off it).
 - It keeps to the spawn it was given, whatever is targeted later (MQ2MoveUtils' `hold`). `/stick` again moves it to
   the new target.
 - A `/nav` or `/moveto` walk ends a stick, and a stick ends a walk.
+- `/stick pause` holds the stick (and any walk) where it is, `/stick unpause` lets it go on; a new `/stick` starts
+  unpaused. `pause lock` is taken as `pause`.
 
-Not yet: MQ2MoveUtils' `pin`, `!front`, `moveback`, `uw` and percent distances.
+MQ2MoveUtils' other words that E3 sends are taken, so its lines stick:
+
+- `hold`: what Hailstone's stick always does.
+- `snaproll` (or `snaproll rear`): taken as `behind`. MQ2MoveUtils runs round to the spawn's back once and faces it;
+  E3 sends it only to get there before its own stick. `snaproll left`, `right` and `face` are not taken.
+- `imsafe`: lifts MQ2MoveUtils' lock after a GM or summon break, which Hailstone has none of; it does nothing.
+- `uw` (`underwater`), `delaystrafe` and `moveback` are accepted but change nothing yet: looking up and down at the
+  spawn, a pause before strafing back into place, backing off a spawn that comes nearer than the distance.
+
+Not yet: `front`, `!front`, `pin` and `behindonce` (each says so and does not stick), and percent distances.
 
 `${Stick}` (ON / OFF), `.Active`, `.Status` (ON, PAUSED, OFF), `.Distance`, `.StickTarget` (the spawn's id, 0 none),
-`.StickTargetName`.
+`.StickTargetName`, `.Stopped` and `.Behind`. These two are about the stick's spawn, or the target without a stick,
+as in MQ2MoveUtils:
+
+- `.Stopped`: within the stick's distance on the flat (without a stick, the target's `MaxRangeTo`).
+- `.Behind`: `.Stopped`, and the player within 45 degrees of the spawn's back, by where the player stands (the arc
+  `behind` holds to). MQ2MoveUtils compares the player's and the spawn's headings instead.
 
 ### The Navigation TLO
 

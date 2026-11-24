@@ -134,7 +134,8 @@ public:
     void draw_overlay(ImDrawList* dl, const glm::mat4& view_proj, const glm::vec4& area) const;
 
     // NavControl
-    std::string go_to_point(const glm::vec3& world, float distance, std::string label, bool straight) override;
+    std::string go_to_point(const glm::vec3& world, float distance, std::string label, bool straight,
+                            bool flat = false) override;
     std::string go_to_spawn(std::uint32_t id, float distance) override;
     // A Find-owned walk: its caller must remain eligible before any destination read or movement. Ordinary
     // navigation never supplies this guard; replacing the goal also replaces its guard.
@@ -158,6 +159,7 @@ public:
     // path ends where it gets nearest.
     std::optional<std::vector<glm::vec3>> plan_between(const glm::vec3& from, const glm::vec3& to);
     nav::PathOptions& options() override { return options_; }
+    float& moveto_distance() override { return moveto_distance_; }
     void rebuild() override;
     void set_overlay(bool on) override {
         overlay_ = on;
@@ -181,6 +183,8 @@ private:
         std::uint8_t door = 0;
         bool click = false;
         bool straight = false;
+        bool flat = false;  // arrival ignores height (go_to_point's `flat`)
+        bool moveto = false; // a /moveto: go_to_point with `straight` (a meshless click or a stick's walk is not one)
         bool quiet = false; // a click to move: no word in the chat when the mesh only goes part of the way
         float distance = 2.0f;
         std::string label;
@@ -245,6 +249,8 @@ private:
     std::uint64_t server_owner_ = 0;
     game::ServerPathLease server_lease_;
     nav::PathOptions options_;
+    float moveto_distance_ = 10.0f;
+    bool moveto_arrived_ = false; // NavStatus::moveto_arrived
     nav::PathFollower follower_;
     nav::PathFollower follow_path_;     // /follow's detour (assist_follow), apart from /nav's walk
     glm::vec3 follow_planned_to_{0.0f}; // where the spawn stood when the detour was planned
