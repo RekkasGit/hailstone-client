@@ -132,7 +132,7 @@ TaskSelectWnd has Preview Reward in both packs (`TSEL_PreviewRewardButton`, the 
 
 #### Shared tasks
 
-The header's Shared members control shows the roster count and opens a management popup over the native `STASK_MemberList` (Member, Role). Add target, Remove member, Make leader, Invite raid and Invite expedition use the native controls and their permission checks.
+The header's Shared members control shows the roster count and opens a management popup over the native `STASK_MemberList` (Member, Role). Add target, Remove member, Make leader, Invite raid and Invite expedition use the native controls and their permission checks. Make leader asks first, naming the member (Hailstone).
 
 #### The tracker
 
@@ -265,6 +265,8 @@ The CLOSE_TOP_WINDOW key (Escape unless rebound) closes one ticked window per pr
 #### Controls
 
 Controls (`lib/widgets.lua`): buttons, check boxes, button rows, edit and combo boxes, sliders, gauges, lists, STML text, item slots and grids, tabs and coins. A list is a virtual table over `hs.ListInfo` / `hs.ListRow`, sortable and filterable.
+
+A button with `opts.ask` (a function giving the question) opens a Yes / Cancel question on a click, and only its Yes clicks the child. The question goes away when `ask` gives a different question (another member selected), or the child is disabled or hidden.
 
 Each control is bound to a game window's child by its ScreenID (the layout's `id`, not `name`): it reads what the child shows and hands clicks to it (`hs.ClickChild`, `hs.ListClick`, `hs.SetWindowText`, `hs.ComboSelect`, `hs.SetSlider`, `hs.SetTabPage`, `hs.PickUp`), so the window's own handler runs.
 
@@ -423,15 +425,15 @@ Testing: `test.open.<screen>=<seconds>`, `test.select.<window>.<list>=<row>`.
 Helper: `lib/social.lua`.
 
 - **FriendsWindow**: friends and ignored, add, Who / Remove.
-- **RaidWindow**: twelve reflowing group cards, ungrouped players above, roles, search, the invitation banner.
+- **RaidWindow**: twelve reflowing group cards, ungrouped players above, roles, search, the invitation banner. Leave and Make Leader ask first, Make Leader naming the selected member (Hailstone, as the gamepad pack).
   - A member dropped on a card, or "Move here", is selected in the game's list and that group's button pressed. The game enables those buttons only in a locked raid, so an unlocked raid's leader gets it locked first. A full group refuses the drop.
 - **RaidOptionsWindow**, **LFGuildWnd**.
-- **GuildManagementWnd**: roster, notes, message of the day, ranks.
+- **GuildManagementWnd**: roster, notes, message of the day, ranks. Promote, Demote, Make Leader and Remove ask first, naming the selected member; selecting another member puts the question away (Hailstone, as the gamepad pack).
 - **InspectWnd**: worn grid and gear by name.
 - **MailWindow**, **MailAddressBookWindow** and **MailCompositionWindow**.
 - **GroupSearchWnd**: your post (as player or group) beside sortable, searchable results; a group's members and wanted classes under it.
 - **GroupSearchFiltersWnd**, **GroupMentorWindow**.
-- **FellowshipWnd**: members and campsite pages. Its tab box is the script's own (the model keeps no page): `test.tab.FellowshipWnd.Subwindows=n`.
+- **FellowshipWnd**: members and campsite pages. Make Leader asks first, naming the selected member, in both packs (Hailstone). Its tab box is the script's own (the model keeps no page): `test.tab.FellowshipWnd.Subwindows=n`.
 - **SocialEditWnd**:
   - button preview, colour swatches;
   - each line's command with a kind badge, a wait box for its `/pause`, move / empty buttons;

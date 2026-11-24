@@ -6587,3 +6587,125 @@ GPSTATE.whoOpen = true
     }
     ImGui::DestroyContext(ctx);
 }
+
+// The gamepad pack's LB is Loot All's own key: it does nothing while the stock window has Loot All disabled.
+TEST_CASE("UI packs (gamepad): LB loots everything only while Loot All is enabled") {
+    test::ScratchDir scratch("ui_gamepad_loot_all_test");
+    const auto dir = scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / "gamepad", dir / "gamepad",
+             fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_HasGamepad;
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures; // 1.92: the atlas is built by NewFrame
+    {
+        Session s(dir, "gamepad");
+        auto* L = s.lua.state();
+        auto run = [&](const char* code) {
+            const int rc = luaL_dostring(L, code);
+            INFO((rc == LUA_OK ? "" : lua_tostring(L, -1)));
+            REQUIRE(rc == LUA_OK);
+            const std::string result = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
+            lua_settop(L, 0);
+            return result;
+        };
+        run(R"lua(
+padPress, lootShown, lootAllEnabled, lootAlls = nil, false, false, 0
+hs.gamepad = {
+  connected = function() return true end,
+  type = function() return 'xbox' end,
+  mode = function() return 'menu' end,
+  set_mode = function() return 'menu' end,
+  pressed = function(b) return b == padPress end,
+  down = function(b) return b == padPress end,
+  released = function() return false end,
+  axis = function() return 0 end,
+  glyph = function(b) return string.upper(b) end,
+  takes_b = function() end,
+  request_focus = function(window) ui.SetWindowFocus(window) end,
+}
+local shown, state, slot, click = hs.WindowShown, hs.ChildState, hs.SlotItem, hs.ClickChild
+hs.WindowShown = function(win) if win == "LootWnd" then return lootShown end return shown(win) end
+hs.ChildState = function(win, id, ...)
+  if win == "LootWnd" and id == "LootAllButton" then return lootAllEnabled end
+  return state(win, id, ...)
+end
+hs.SlotItem = function(win, child, ...)
+  if win == "LootWnd" then
+    if child == "LW_LootSlot0" then return { name = "Rusty Dagger", icon = 0, count = 1 } end
+    return nil
+  end
+  return slot(win, child, ...)
+end
+hs.ClickChild = function(win, id, button)
+  if win == "LootWnd" then
+    if id == "LootAllButton" then lootAlls = lootAlls + 1 end
+    return true
+  end
+  return click(win, id, button)
+end
+)lua");
+        s.frames(240); // the pack takes the pad's focus for a window only from 3 seconds after zoning in
+        run("lootShown = true");
+        s.frames(30);
+        auto press_lb = [&] {
+            run("padPress = 'lb'");
+            s.frames(1);
+            run("padPress = nil");
+            s.frames(2);
+        };
+        press_lb();
+        CHECK(run("return tostring(lootAlls)") == "0");
+        run("lootAllEnabled = true");
+        s.frames(2);
+        press_lb();
+        CHECK(run("return tostring(lootAlls)") == "1");
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// The gamepad pack's question before a character is deleted starts on Cancel (its rule for every question): an A
+// carried over from the Delete press must not answer it.
+TEST_CASE("UI packs (gamepad): the delete question starts on Cancel") {
+    test::ScratchDir scratch("ui_gamepad_delete_focus_test");
+    const auto dir = scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / "gamepad", dir / "gamepad",
+             fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures; // 1.92: the atlas is built by NewFrame
+    {
+        Session s(dir, "gamepad", {}, false);
+        ui::CharacterSelectView chars;
+        chars.server_name = "World One";
+        chars.characters = {{"Bob", 12, 1, {1}, "North Qeynos"}, {"Cid", 50, 2, {5, 2}, "Kaladim"}};
+        chars.selected = 0;
+        s.host.ui_ready = true;
+        s.host.game_state = 1;
+        s.host.char_select = &chars;
+        auto* L = s.lua.state();
+        REQUIRE(luaL_dostring(L, R"lua(
+forced, focused = {}, {}
+local invisible = ui.InvisibleButton
+ui.InvisibleButton = function(id, ...)
+  local hit = invisible(id, ...)
+  focused[id] = ui.IsItemFocused()
+  if forced[id] then forced[id] = nil return true end
+  return hit
+end
+)lua") == LUA_OK);
+        s.frames(30);
+        REQUIRE(luaL_dostring(L, "forced['##delete'] = true") == LUA_OK);
+        s.frames(6);
+        CHECK(s.lua.run_for_test("", "return tostring(focused['##delno'] == true and focused['##delyes'] == false)") ==
+              "true");
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        s.host.char_select = nullptr;
+    }
+    ImGui::DestroyContext(ctx);
+}
