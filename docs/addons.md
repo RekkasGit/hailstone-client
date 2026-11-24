@@ -325,7 +325,8 @@ build/hailstone_sign sign <secret-key-file> release/hailstone-addon.txt
 - The script checks the client's rules for what a package may hold before it makes anything:
   - the names its zip reader takes (no `\`, `:` or control character, no part ending in `.` or a space, no Windows
     device name such as `aux.lua`);
-  - the version as the client parses it (no leading zeros).
+  - the version as the client parses it (no leading zeros);
+  - one `--platform` a platform (a second would overwrite the first's zip and leave two package lines).
 - It leaves out files and folders whose name starts with `.`, stores a link as what it points to only when that lies
   inside the package's folder, and refuses an `--out` inside a package's folder, where old zips would be packed.
 - Its zips are reproducible (sorted, dated 1980-01-01), so an unchanged package keeps its hash.
