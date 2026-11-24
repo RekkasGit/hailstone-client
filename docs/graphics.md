@@ -711,7 +711,9 @@ original client. A server owner raises that rule to show the impact further away
 The server can play an effect by its spellsnew.eff number on a spawn (OP_SpellEffect, OP_AddNimbusEffect;
 `game/spell_effect_timers.h`). A nimbus (an item's or buff's aura of orbs or flames) is one.
 
-- Its emitters ask for a forced 5,000 s: it stays until OP_RemoveNimbusEffect or the zone changes.
+- Its emitters ask for a forced 5,000 s: it stays until OP_RemoveNimbusEffect, the zone changes or its spawn leaves.
+- A spawn that leaves (despawns, or its id comes back as another spawn in the same frame) takes its spell, effect and
+  nimbus emitters and its timed entries with it, so none stays frozen or moves to the new spawn (docs/unknowns.md).
 - An effect arriving before its spawn's model has loaded sits at the spawn's place until the model is drawn.
 - EQEmu sends a nimbus only to those in the zone when it is cast: a player zoning in later does not see it, on the
   original client either.

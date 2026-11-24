@@ -427,6 +427,7 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - Native WLD density setting and small-node suppression.
   - Animation-trigger timing.
   - Live comparison across equipment changes, zoning and supported model families.
+- [ ] **Spell emitters of a spawn that leaves.** The client stops them and drops their effect timers; trace what the original does with a deleted actor's spell emitters (docs/unknowns.md).
 - [ ] **Actor particle hold.** Measure how far the actors' own effects' particles reach from their point and set the 30-unit view margin from it (docs/unknowns.md).
 - [ ] **Other players' carried lights after an equipment change.** Stock EQEmu sends nothing for them (docs/unknowns.md); trace how the original updates a remote player's light.
 - [x] **Name plates: occlusion, draw order and fading.**

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Spell, nimbus and server-timed effects on a creature that despawns stop with it, instead of hanging frozen in the air and jumping onto the next creature that reuses its id
 - Movement keys, `/keypress` releases and gamepad buttons let go while the client waits for a teleport zone point to answer no longer leave the character running or turning once the wait ends
 - `/face heading` with a value that is not a finite number (`nan`, `inf`) no longer leaves the character unable to turn; a heading past 360 is wrapped, and a heading or `loc` that is not a number turns nothing instead of facing the target
 - A creature that despawns and is replaced under the same id in one moment no longer starts with the old one's animation sounds and loop

@@ -609,6 +609,11 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - Alpha test: whether particles pass it (ALPHAREF 1, compare function not set by the particle render state) is
     not known; none is done.
   - The animation-started entries' timing is an approximation (docs/formats/particles.md).
+- **Spell, effect and nimbus emitters of a spawn that leaves** (`app/spell_particles.cpp` stop_gone_actors). The
+  client stops every emitter (but a missile's) hanging from a spawn that despawned, or whose id came back as another
+  spawn, and drops its OP_SpellEffect timer entries, so nothing freezes in place or moves to the new spawn. What the
+  original does with a deleted actor's spell emitters and timer entries was not traced; settle by reading
+  the actor's teardown and SpellEffectTimers_Update's spawn lookup.
 - **CalcTickHPChange's PvP scaling** (75% / 70% of a loss).
   - The original asks that the caster spawn's +0x2cc be set and its type be 0.
   - Now: any player caster counts (as CacheBuffSlotEffects reads it, without +0x2cc). If +0x2cc is set only for the
