@@ -84,13 +84,13 @@ local function has(list, match)
 end
 
 -- Preserve the spelling and order of unrelated list entries, including names from newer clients.
-local function listUpdate(draft, id, commaOnly, match, add)
+local function listUpdate(draft, id, commaOnly, match, add, replace)
   local before = tokens(M.get(draft, id), commaOnly)
   local saved = tokens(draft.saved[id] or "", commaOnly)
   local after, found = {}, false
   for _, item in ipairs(before) do
     if match(item) then
-      if add and not found then after[#after + 1] = add end
+      if add and not found then after[#after + 1] = replace and replace(item) or add end
       found = true
     else after[#after + 1] = item end
   end
@@ -127,10 +127,15 @@ local function gmMinimum(status)
   if number and number >= 1 and number <= 32767 then return number end
 end
 
-function M.validCommandGmList(value)
+function M.validCommandGmList(value, original)
+  local retained = {}
+  for _, token in ipairs(tokens(original or "")) do retained[token] = (retained[token] or 0) + 1 end
   for _, token in ipairs(tokens(value)) do
     local name, status = gmEntry(token)
-    if name == "/" or not gmMinimum(status) then return false end
+    if name == "/" or not gmMinimum(status) then
+      if (retained[token] or 0) == 0 then return false end
+      retained[token] = retained[token] - 1
+    end
   end
   return true
 end
@@ -168,19 +173,37 @@ function M.commandEffective(state, command)
   return state.default == "deny" and "block" or "allow", "Default policy"
 end
 
+local coreCommands = { ["/camp"] = true, ["/quit"] = true, ["/exit"] = true, ["/servermanagement"] = true }
+
+function M.restrictedCoreCommands(draft, state)
+  local restricted = {}
+  for _, command in ipairs(draft.commands) do
+    if coreCommands[command.name] and M.commandEffective(state, command) ~= "allow" then
+      restricted[#restricted + 1] = command.name
+    end
+  end
+  return restricted
+end
+
+local function keepSpelling(item) return item end
+
 function M.setCommandRule(draft, name, rule, group, minimum)
   local canonical = group and name or commandName(draft, name)
   local match = group and function(item) return item:lower() == canonical end
     or function(item) return commandName(draft, item) == canonical end
   for _, policy in ipairs({ "allow", "block" }) do
-    listUpdate(draft, "commands." .. policy .. (group and "_groups" or ""), false, match, rule == policy and canonical or nil)
+    listUpdate(draft, "commands." .. policy .. (group and "_groups" or ""), false, match,
+      rule == policy and canonical or nil, keepSpelling)
   end
   if not group then
-    local entry = rule == "gm" and (canonical .. ":" .. tostring(minimum or DEFAULT_GM_MINIMUM)) or nil
+    local suffix = ":" .. tostring(minimum or DEFAULT_GM_MINIMUM)
     listUpdate(draft, "commands.gm", false, function(item)
       local command = gmEntry(item)
       return commandName(draft, command) == canonical
-    end, entry)
+    end, rule == "gm" and canonical .. suffix or nil, function(item)
+      local spelling = gmEntry(item)
+      return spelling .. suffix
+    end)
   end
 end
 

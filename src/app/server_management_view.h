@@ -26,6 +26,7 @@ struct ServerManagementView {
     bool reload_required = false;
     bool reloading = false;
     bool reloaded = false;
+    bool paused = false;
     std::vector<ServerManagementField> fields;
     std::vector<ServerManagementCommand> commands;
 };

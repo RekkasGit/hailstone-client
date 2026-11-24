@@ -4,7 +4,8 @@
 // (docs/plugins.md). A server without one sets no rules: everything runs with every capability. A server with one
 // always runs its own plugins and scripts (those it sent into servers/<profile>/plugins and scripts, named by their
 // SHA-256), with every capability; the player's own run only when the file allows them, with the capabilities it
-// grants. Optional command rules apply to both players and add-ons independently of capabilities.
+// grants. The optional [commands] section is a server-opted extension to RoF2 behavior. It advises Hailstone's
+// slash-command dispatch for players and add-ons. The game server still owns authorization for gameplay actions.
 
 #include <cstdint>
 #include <filesystem>

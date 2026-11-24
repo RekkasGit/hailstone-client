@@ -208,3 +208,48 @@ TEST_CASE("mock server management gates the editor and correlates snapshots and 
     CHECK_FALSE(r.conn.server_management_snapshot());
     CHECK(test::has_line(r.chat(), "Your account no longer has access."));
 }
+
+TEST_CASE("server management pauses for zone transfer and needs a snapshot from the destination") {
+    test::Rig r;
+    REQUIRE(r.to_zone());
+    auto offer_management = [&] {
+        r.server.zone.send_reliable(encode(HailstoneSettings{kServerManagementOffered, 200}));
+        return r.until([&] { return r.conn.server_management_available(); });
+    };
+
+    REQUIRE(offer_management());
+    REQUIRE(r.conn.open_server_management());
+    REQUIRE(r.until([&] { return management_requests(r) == 1; }));
+    const std::string cfg = "[commands]\nblock=/nav\n";
+    r.server.zone.send_reliable(management_reply(ServerManagementAction::Open, 1, ServerManagementStatus::Ok, 42, cfg));
+    REQUIRE(r.until([&] { return r.conn.server_management_snapshot().has_value(); }));
+
+    r.server.request_zone_change(1, 0.0f, 0.0f, 5.0f);
+    REQUIRE(r.until([&] { return r.conn.server_management_paused(); }));
+    CHECK_FALSE(r.conn.server_management_available());
+    CHECK(r.conn.server_management_snapshot()->revision == 42);
+    REQUIRE(r.until([&] { return r.server.zone_entries == 2 && r.conn.state() == ConnectionState::InZone; }));
+    CHECK(r.conn.server_management_paused());
+    CHECK(management_requests(r) == 1);
+    const std::array edits{ServerManagementEdit{"commands", "blocked_message", "Ask a GM."}};
+    CHECK_FALSE(r.conn.save_server_management(42, edits));
+
+    REQUIRE(offer_management());
+    CHECK_FALSE(r.conn.server_management_paused());
+    CHECK(r.conn.server_management_reloading());
+    CHECK_FALSE(r.conn.save_server_management(42, edits));
+    REQUIRE(r.until([&] { return management_requests(r) == 2; }));
+    r.server.zone.send_reliable(management_reply(ServerManagementAction::Open, 2, ServerManagementStatus::Ok, 43, cfg));
+    REQUIRE(r.until([&] { return r.conn.server_management_reloaded(); }));
+    CHECK(r.conn.server_management_snapshot()->revision == 43);
+    CHECK_FALSE(r.conn.save_server_management(42, edits));
+
+    r.server.request_zone_change(2, -285.0f, -148.0f, 3.5f);
+    REQUIRE(r.until([&] { return r.server.zone_entries == 3 && r.conn.state() == ConnectionState::InZone; }));
+    CHECK(r.conn.server_management_paused());
+    r.server.zone.send_reliable(encode(HailstoneSettings{0, 199}));
+    REQUIRE(r.until([&] { return !r.conn.server_management_snapshot(); }));
+    CHECK_FALSE(r.conn.server_management_available());
+    CHECK_FALSE(r.conn.server_management_paused());
+    CHECK(management_requests(r) == 2);
+}

@@ -72,18 +72,25 @@ std::uint32_t known_serial(lua_State* L, int arg) {
     return serial > 0 && serial <= std::numeric_limits<std::uint32_t>::max() ? static_cast<std::uint32_t>(serial) : 0u;
 }
 
-// The pack can keep its draft when only the command catalog changes.
+// The pack can keep its draft during zoning and when only the command catalog changes.
 int ServerManagementViewFn(lua_State* L) {
     const UiHost& host = host_of(L);
-    if (!trusted(L, host) || !host.server_management) return 0;
+    if (!host.trusted_ui || !ui::lua::pack_code(L) || !host.server_management) return 0;
     const auto serial = known_serial(L, 1);
     const auto catalog_serial = known_serial(L, 2);
     core::LuaScratch<std::optional<ServerManagementView>> scratch(L);
     auto& view = *scratch;
     core::cxx_guard(L, [&] { view = host.server_management(serial, catalog_serial); });
-    if (!view) {
+    if (!view || (!view->paused && !host.in_game)) {
         scratch.release();
         return 0;
+    }
+    if (view->paused) {
+        lua_createtable(L, 0, 1);
+        lua_pushboolean(L, true);
+        lua_setfield(L, -2, "paused");
+        scratch.release();
+        return 1;
     }
     lua_createtable(L, 0, 12);
     record::text(L, "revision", view->revision);

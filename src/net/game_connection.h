@@ -562,6 +562,7 @@ public:
     const std::optional<ServerManagementReply>& server_management_snapshot() const { return server_management_snapshot_; }
     std::uint32_t server_management_serial() const { return server_management_serial_; }
     bool server_management_saving() const;
+    bool server_management_paused() const;
     bool server_management_reloading() const;
     bool server_management_reload_required() const { return server_management_reload_required_; }
     bool server_management_reloaded() const { return server_management_reloaded_; }
@@ -3334,6 +3335,7 @@ private:
     void request_hailstone_settings();
     void update_command_account_status();
     void update_server_management();
+    void pause_server_management_for_zone();
     void handle_server_management(const AppPacket& p);
     bool send_server_management(const AppPacket& p, std::uint32_t id, ServerManagementAction action);
     bool guild_world_invites_ = false; // OP_HailstoneGuildReply's hello this zone-in (server/'s script)
@@ -3953,6 +3955,7 @@ private:
     std::optional<ServerManagementReply> server_management_snapshot_;
     bool server_management_reload_required_ = false;
     bool server_management_reloaded_ = false;
+    bool server_management_waiting_for_zone_ = false;
     std::string server_management_message_;
     std::uint32_t server_management_request_id_ = 0;
     std::uint32_t server_management_serial_ = 0;

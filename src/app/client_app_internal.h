@@ -554,6 +554,7 @@ public:
         automation_->hooks().add_command(plugin::Hooks::kClient, "/servermanagement", [this](std::string_view args) {
             if (!conn_ || !plugin::caller_name().empty()) return;
             if (!args.empty()) return conn_->ui_message("Usage: /servermanagement");
+            if (!server_management_ui()) return conn_->ui_message("Server Management is available in the Modern interface.");
             if (!conn_->open_server_management()) conn_->ui_message("Server Management is unavailable on this session.");
         });
         actions_ui_ = std::make_unique<ActionsUi>(config_, config_path_);
@@ -906,6 +907,7 @@ private:
                                          render::DynamicShadowLights* moving = nullptr) const;
     void lighting_command(std::string_view args);
     void lua_social_command(std::string_view args); // /luasocial (app/client_app_draw.cpp)
+    bool server_management_ui() const { return lua_ui_ && ui_host_.trusted_ui && ui_name_ == "modern"; }
     // Config::get_float: NaN and the infinities are the fallback, so a bad hailstone.ini value never reaches a
     // matrix or a clamp that lets NaN through.
     float config_float(std::string_view key, float fallback) const { return config_.get_float(key, fallback); }

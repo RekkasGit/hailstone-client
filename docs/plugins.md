@@ -2204,12 +2204,15 @@ reaches players at their next login.
 
 ### Command policy
 
-`[commands]` applies to commands executed by Hailstone from chat, ordinary socials, and add-on calls. It can cover
-RoF2 commands, Hailstone extensions, add-on commands, and the `/pause` and `/timer` social directives. The client
-checks the command that dispatch actually resolves, including abbreviations, aliases, and nested commands. A rule
-names the whole command and applies to all forms of it. For instance, blocking `/target` blocks regular targeting
-by name and extended spawn searches through that command. UI actions and APIs that perform an action directly have
-their own controls. EQEmu handles `#` commands.
+`[commands]` is **advisory client policy**. Stock RoF2, older Hailstone builds and modified clients can ignore it.
+Add-on APIs and UI controls that perform an action directly can still use that action. Enforce account permissions
+and gameplay restrictions on the server.
+
+The server opts into this extension by setting command rules in `hailstone.cfg`. Blocking a stock command changes
+RoF2 behavior on supporting Hailstone clients. The client checks slash commands from chat, ordinary socials and
+add-on calls, including abbreviations, aliases and nested commands. Rules also cover Hailstone extensions,
+registered add-on commands, and the `/pause` and `/timer` social directives. Blocking `/target`, for example,
+blocks regular targeting by name and extended spawn searches through that command. EQEmu handles `#` commands.
 
 ```ini
 [commands]
@@ -2232,8 +2235,8 @@ The built-in groups are:
 | Group | Commands |
 |---|---|
 | `non_rof2` | Hailstone's built-in extended commands |
-| `movement_automation` | `/nav`, `/moveto`, `/stick`, `/face`, `/keypress` |
-| `command_helpers` | `/docommand`, `/echo`, `/noparse`, `/squelch` |
+| `movement_automation` | `/nav`, `/afollow`, `/moveto`, `/stick`, `/face`, `/keypress` |
+| `command_helpers` | `/docommand`, `/echo`, `/noparse`, `/squelch`, `/timed` |
 | `addon_commands` | Commands registered by add-ons |
 
 Use `default = deny` and `allow` or `allow_groups` for an allowlist. Without command rules, all commands retain

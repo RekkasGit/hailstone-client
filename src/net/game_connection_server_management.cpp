@@ -24,6 +24,11 @@ bool GameConnection::server_management_saving() const {
     return server_management_pending_ && server_management_pending_->action == ServerManagementAction::Save;
 }
 
+bool GameConnection::server_management_paused() const {
+    return server_management_snapshot_ && (server_management_waiting_for_zone_ ||
+           (state_ == ConnectionState::InZone && zone_change_pending_));
+}
+
 bool GameConnection::server_management_reloading() const {
     return server_management_snapshot_ && server_management_pending_ &&
            server_management_pending_->action == ServerManagementAction::Open;
@@ -54,7 +59,15 @@ void GameConnection::close_server_management() {
     server_management_snapshot_.reset();
     server_management_reload_required_ = false;
     server_management_reloaded_ = false;
+    server_management_waiting_for_zone_ = false;
     server_management_message_.clear();
+}
+
+void GameConnection::pause_server_management_for_zone() {
+    server_management_offered_ = false;
+    server_management_pending_.reset();
+    server_management_waiting_for_zone_ = server_management_snapshot_.has_value();
+    server_management_reload_required_ = server_management_waiting_for_zone_;
 }
 
 bool GameConnection::send_server_management(const AppPacket& packet, std::uint32_t id, ServerManagementAction action) {
@@ -73,11 +86,18 @@ bool GameConnection::send_server_management(const AppPacket& packet, std::uint32
 }
 
 void GameConnection::update_server_management() {
+    const auto now = options_.session.clock ? options_.session.clock() : Clock::now();
     if (!server_management_available()) {
-        close_server_management();
+        const bool zone_unavailable = server_management_waiting_for_zone_ && state_ == ConnectionState::InZone &&
+                                      now - settings_requested_at_ >= kManagementTimeout;
+        if (!server_management_paused() || zone_unavailable || state_ == ConnectionState::Camping) close_server_management();
         return;
     }
-    const auto now = options_.session.clock ? options_.session.clock() : Clock::now();
+    if (server_management_waiting_for_zone_) {
+        // The destination zone must issue its own snapshot before this draft can be saved.
+        server_management_waiting_for_zone_ = false;
+        open_server_management();
+    }
     if (!server_management_pending_ || now < server_management_pending_->deadline) return;
     const bool saving = server_management_saving();
     server_management_pending_.reset();

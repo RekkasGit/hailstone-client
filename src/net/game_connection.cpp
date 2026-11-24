@@ -174,6 +174,7 @@ void GameConnection::select_zone_spell_limit() {
 }
 
 void GameConnection::fail(std::string message) {
+    close_server_management();
     close_evolving_transfer();
     reset_fellowship();
     reset_achievements();
@@ -709,7 +710,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         command_account_status_.reset();
         settings_requested_at_ = {};
         command_account_status_received_at_ = {};
-        close_server_management();
+        if (!server_management_waiting_for_zone_) close_server_management();
         send_world(make_empty(Op::WorldComplete));
         world_drop_pending_ = true;
         world_drop_deadline_ = Clock::now() + kWorldDropWait;
@@ -1379,8 +1380,10 @@ void GameConnection::handle_zone(const AppPacket& p) {
             hailstone_script_ = true;
             command_account_status_ = v->account_status;
             command_account_status_received_at_ = options_.session.clock ? options_.session.clock() : Clock::now();
-            server_management_offered_ = (v->flags & kServerManagementOffered) != 0;
-            if (!server_management_offered_) close_server_management();
+            if (state_ == ConnectionState::InZone) {
+                server_management_offered_ = (v->flags & kServerManagementOffered) != 0;
+                if (!server_management_offered_) close_server_management();
+            }
         } else {
             log::warn("server settings: a bad OP_HailstoneSettings ({} bytes) ignored", p.data.size());
         }
@@ -2303,6 +2306,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 // while zoning (a link death then is not in game).
                 camp_started_ = {};
                 camp_kind_ = 0;
+                pause_server_management_for_zone();
                 state_ = ConnectionState::Zoning;
                 reset_fellowship(true);
                 reset_guild_banner();
@@ -2680,6 +2684,7 @@ void GameConnection::simulate_link_loss() {
 }
 
 void GameConnection::disconnect() {
+    close_server_management();
     close_evolving_transfer();
     reset_fellowship();
     capture_bank();

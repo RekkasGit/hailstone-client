@@ -173,12 +173,21 @@ local function commandGroups(state)
   ui.EndTable()
 end
 
+local function warnRestrictedCommands(state)
+  local restricted = M.restrictedCoreCommands(draft, state)
+  if #restricted > 0 then
+    wrap("This policy restricts " .. table.concat(restricted, ", ") .. ". Review these rules before saving.", C.gold)
+  end
+end
+
 local function commands(s)
-  heading("Command permissions", "Set what players can run on this server.")
+  heading("Command permissions", "Set which slash commands Hailstone accepts on this server.")
   ui.Text("Default policy")
   ui.SameLine()
   ui.SetNextItemWidth(105 * s)
   drawField({ id = "commands.default", choices = DEFAULT, fallback = "allow" })
+  local state = M.commandRules(draft)
+  warnRestrictedCommands(state)
   ui.Text("Blocked command message")
   ui.SetNextItemWidth(-1)
   drawField(input("commands.blocked_message", "", "", nil, 240, "Use Hailstone's default message"))
@@ -200,9 +209,9 @@ local function commands(s)
     page = math.min(page, math.max(1, math.ceil(#results / PAGE_SIZE)))
   end
 
-  commandGroups(M.commandRules(draft))
+  commandGroups(state)
   if ui.CollapsingHeader("Command lists") then drawFields(COMMAND_LISTS) end
-  local state = M.commandRules(draft)
+  state = M.commandRules(draft)
   if #results == 0 then
     ui.Spacing()
     K.Caption(search ~= "" and "No matching commands." or "No add-on commands are registered in this session.")
@@ -341,6 +350,7 @@ end
 
 local function review(changes)
   heading("Review changes", "Saved policy takes effect on players' next login.")
+  warnRestrictedCommands(M.commandRules(draft))
   for _, change in ipairs(changes) do
     local field = fieldsById[change.id]
     local previous = change.previous or (field and field.fallback) or "(unset)"
@@ -424,7 +434,7 @@ local function body(_, _, _, _, s)
   end
   local hasConflicts = next(conflicts) ~= nil
   local gmEdits = draft.edits["commands.gm"]
-  local invalidGm = gmEdits ~= nil and not M.validCommandGmList(gmEdits)
+  local invalidGm = gmEdits ~= nil and not M.validCommandGmList(gmEdits, draft.saved["commands.gm"])
   local footerTable = width >= 585 * s and ui.BeginTable("##smfooter", 2, ui.TableFlags.SizingStretchProp)
   if footerTable then
     ui.TableSetupColumn("Policy", ui.TableColumnFlags.WidthStretch, 1)
@@ -492,8 +502,10 @@ local opts = {
 }
 
 ui.window("Server Management", function()
-  active = manager and API.session.InGame() and manager.View(serial or 0, catalogSerial or 0) or nil
+  active = manager and manager.View(serial or 0, catalogSerial or 0) or nil
+  if active and active.paused then return end
   if not active then draft, serial, catalogSerial = nil, nil, nil return end
+  if not API.session.InGame() then return end
   if active.serial ~= serial then
     if active.reloaded and draft then
       draft, conflicts = M.rebase(draft, active, conflicts)

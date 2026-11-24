@@ -159,6 +159,33 @@ TEST_CASE("hailstone.cfg: blocked command notices keep literal text and bound it
     CHECK(warnings.size() == 5);
 }
 
+TEST_CASE("hailstone.cfg: repeated command keys use the last assignment") {
+    const auto rules = plugin::parse_server_cfg(R"(
+[commands]
+default = deny
+allow = /follow
+block = /target
+gm = /map:250, /camp:250
+allow_groups = movement_automation
+block_groups = command_helpers
+
+[COMMANDS]
+Allow = /TARG
+Block = /NAV
+GM = /Map:180, /MAP:190
+Allow_Groups = command_helpers
+Block_Groups = addon_commands
+)").commands;
+    CHECK(rules.allow == std::vector<std::string>{"/target"});
+    CHECK(rules.block == std::vector<std::string>{"/nav"});
+    REQUIRE(rules.gm.size() == 1);
+    CHECK(rules.gm.at("/map") == 190);
+    CHECK(rules.allow_groups == std::vector<std::string>{"command_helpers"});
+    CHECK(rules.block_groups == std::vector<std::string>{"addon_commands"});
+    CHECK(rules.allowed("/target"));
+    CHECK_FALSE(rules.allowed("/follow"));
+}
+
 TEST_CASE("command catalog: stock aliases, extended commands, and live add-on registrations") {
     const std::vector<std::string> registered{"/nav", "/target", "/raidnotes"};
     const auto rows = plugin::command_catalog(registered);
@@ -170,7 +197,17 @@ TEST_CASE("command catalog: stock aliases, extended commands, and live add-on re
     CHECK(finditem->origin == plugin::CommandOrigin::Extended);
     CHECK(finditem->aliases == std::vector<std::string>{"/advi"});
     CHECK(find("/advi") == rows.end());
-    CHECK(find("/exchange") == rows.end());
+    for (const auto* name : {"/afollow", "/exchange", "/timed", "/unequip"}) {
+        const auto extended = find(name);
+        REQUIRE(extended != rows.end());
+        CHECK(extended->origin == plugin::CommandOrigin::Extended);
+        CHECK(plugin::known_extended_command(name));
+    }
+    const auto groups = plugin::parse_server_cfg("[commands]\nblock_groups = movement_automation, command_helpers\n").commands;
+    CHECK_FALSE(groups.allowed("/afollow", 250));
+    CHECK_FALSE(groups.allowed("/timed", 250));
+    CHECK(groups.allowed("/exchange", 250));
+    CHECK(groups.allowed("/unequip", 250));
     auto target = find("/target");
     REQUIRE(target != rows.end());
     CHECK(target->origin == plugin::CommandOrigin::Stock);

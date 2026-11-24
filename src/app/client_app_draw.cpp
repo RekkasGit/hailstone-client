@@ -417,16 +417,17 @@ void ClientApp::update_ui_host() {
         h.addon_policy = &addon_policy_view_;
         h.retry_required_addons = [this] { retry_required_addons(); };
         h.server_management_available = [this] {
-            return conn_ && conn_->server_management_available();
+            return server_management_ui() && conn_ && conn_->server_management_available();
         };
         h.open_server_management = [this] {
-            return conn_ && conn_->open_server_management();
+            return server_management_ui() && conn_ && conn_->open_server_management();
         };
         h.close_server_management = [this] {
             if (conn_) conn_->close_server_management();
         };
         h.save_server_management = [this](std::string_view revision, const std::vector<ServerManagementEdit>& changes) {
-            if (!conn_ || revision.empty() || changes.size() > net::kServerManagementMaxEdits) return false;
+            if (!server_management_ui() || !conn_ || revision.empty() || changes.size() > net::kServerManagementMaxEdits)
+                return false;
             std::uint32_t token = 0;
             auto [end, ec] = std::from_chars(revision.data(), revision.data() + revision.size(), token);
             if (ec != std::errc() || end != revision.data() + revision.size()) return false;
@@ -437,10 +438,15 @@ void ClientApp::update_ui_host() {
         };
         h.server_management = [this](std::uint32_t known_serial,
                                      std::uint32_t known_catalog_serial) -> std::optional<ServerManagementView> {
-            if (!conn_ || !conn_->server_management_available() || !conn_->server_management_snapshot()) return std::nullopt;
+            if (!server_management_ui() || !conn_ || !conn_->server_management_snapshot()) return std::nullopt;
+            ServerManagementView view;
+            if (conn_->server_management_paused()) {
+                view.paused = true;
+                return view;
+            }
+            if (!conn_->server_management_available()) return std::nullopt;
             const auto& snapshot = *conn_->server_management_snapshot();
             const auto* hooks = automation_ ? &automation_->hooks() : nullptr;
-            ServerManagementView view;
             view.serial = conn_->server_management_serial();
             view.catalog_serial = hooks ? hooks->command_catalog_serial() : 1u;
             view.revision = std::to_string(snapshot.revision);
@@ -475,24 +481,8 @@ void ClientApp::update_ui_host() {
                         raw.resize(std::min(raw.size(), raw.find_first_of(";#")));
                         const auto start = raw.find_first_not_of(" \t");
                         raw = start == std::string::npos ? std::string{} : raw.substr(start, raw.find_last_not_of(" \t") - start + 1);
-                        if (lower_section == "commands" && lower_key == "blocked_message") {
+                        if (lower_section == "commands" && lower_key == "blocked_message")
                             raw = parsed.commands.blocked_message;
-                        } else if (lower_section == "commands" && (lower_key == "allow" || lower_key == "block")) {
-                            // The config accepts RoF2 abbreviations. Show the resolved policy in the editor.
-                            const auto& names = lower_key == "allow" ? parsed.commands.allow : parsed.commands.block;
-                            raw.clear();
-                            for (const auto& name : names) {
-                                if (!raw.empty()) raw += ", ";
-                                raw += name;
-                            }
-                        } else if (lower_section == "commands" && lower_key == "gm") {
-                            raw.clear();
-                            for (const auto& [name, minimum] : parsed.commands.gm) {
-                                if (!raw.empty()) raw += ", ";
-                                raw += name + ":";
-                                if (minimum) raw += std::to_string(*minimum);
-                            }
-                        }
                         view.fields.push_back({std::move(lower_section), std::move(lower_key), std::move(raw)});
                     }
                 }

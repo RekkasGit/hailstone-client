@@ -3713,6 +3713,7 @@ TEST_CASE("Modern Server Management uses authorized snapshots and submits only r
     {
         Session session(dir, "modern");
         bool authorized = false;
+        bool paused = false;
         int saves = 0;
         int reloads = 0;
         int full_snapshots = 0;
@@ -3725,16 +3726,22 @@ TEST_CASE("Modern Server Management uses authorized snapshots and submits only r
         snapshot.minimum_status = 210;
         snapshot.fields = {{"commands", "block_groups", "movement_automation"},
                            {"commands", "gm", "/nav:200"},
-                           {"addons", "required", "example/hud:1.0.0"}, {"local_extension", "keep_me", "original"}};
+                           {"addons", "required", "example/hud:1.0.0"}, {"local_extension", "keep_me", "original"},
+                           {"commands", "default", "deny"}};
         snapshot.commands = {{"/nav", "Walk a route", "extended", {}, {"movement_automation", "non_rof2"}},
                              {"/moveto", "Walk to a location", "extended", {}, {"movement_automation", "non_rof2"}},
                              {"/finditem", "Search your inventory", "extended", {"/advi"}, {"non_rof2"}},
                              {"/follow", "Follow a player", "stock", {}, {}},
                              {"/target", "Select a target", "stock", {}, {}},
+                             {"/camp", "Camp", "stock", {}, {}},
+                             {"/quit", "Quit", "stock", {}, {}},
+                             {"/exit", "Exit", "stock", {}, {}},
+                             {"/servermanagement", "Open this window", "extended", {}, {"non_rof2"}},
                              {"/notes", "Add-on notes", "addon", {}, {"addon_commands"}}};
         session.host.server_management_available = [] { return true; };
         session.host.server_management = [&](std::uint32_t known, std::uint32_t known_catalog) -> std::optional<app::ServerManagementView> {
             if (!authorized) return std::nullopt;
+            if (paused) return app::ServerManagementView{.paused = true};
             if (known != snapshot.serial) {
                 ++full_snapshots;
                 return snapshot;
@@ -3763,7 +3770,7 @@ TEST_CASE("Modern Server Management uses authorized snapshots and submits only r
         };
         session.host.save_server_management = [&](std::string_view revision, const auto& edits) {
             ++saves;
-            CHECK(revision == (saves == 1 ? "42" : saves == 2 ? "43" : "44"));
+            CHECK(revision == (saves == 1 ? "43" : saves == 2 ? "44" : "45"));
             REQUIRE(edits.size() == (saves <= 2 ? 2 : 1));
             if (saves <= 2) {
                 CHECK(edits.front().section == "commands");
@@ -3772,7 +3779,7 @@ TEST_CASE("Modern Server Management uses authorized snapshots and submits only r
             }
             CHECK(edits.back().section == "commands");
             CHECK(edits.back().key == "gm");
-            CHECK(edits.back().value == "/nav:253, /target:205");
+            CHECK(edits.back().value == "/nav:253, /targ:205");
             snapshot.saving = true;
             return true;
         };
@@ -3785,8 +3792,9 @@ TEST_CASE("Modern Server Management uses authorized snapshots and submits only r
 local draftModel = dofile("lib/server_management.lua")
 local draft = draftModel.new({
   fields = {
-    { section = "commands", key = "allow", value = "ephemeral, /ADVI, :" },
+    { section = "commands", key = "allow", value = "Ephemeral, /ADVI, :, /" },
     { section = "commands", key = "block_groups", value = "non_rof2" },
+    { section = "commands", key = "gm", value = "/Retained:typo" },
     { section = "addons", key = "allow", value = "https://github.com/example/hud, example/keep" },
     { section = "addons", key = "required", value = "example/hud : V1.2.0-rc.10+written, example/hud:1.2.0-rc.2, " ..
       "example/hud:1.2.0-rc.10+equal, example/release:2.0.0+release, example/release:2.0.0-rc.1, " ..
@@ -3803,13 +3811,17 @@ assert(draftModel.commandEffective(draftModel.commandRules(draft), command) == "
 assert(draftModel.commandRules(draft).commands["/emote"] == "allow")
 draftModel.setCommandRule(draft, "/advi", "", false)
 assert(draftModel.commandEffective(draftModel.commandRules(draft), command) == "block")
-assert(draftModel.get(draft, "commands.allow") == "ephemeral, :")
-draftModel.set(draft, "commands.gm", "/ADVI:200, /finditem:150, ::210, /unlisted:75")
+assert(draftModel.get(draft, "commands.allow") == "Ephemeral, :, /")
+draftModel.set(draft, "commands.gm", "/ADVI:200, /finditem:150, ::210, /Unlisted:75, /Retained:typo")
 local rule, _, status = draftModel.commandEffective(draftModel.commandRules(draft), command)
 assert(rule == "gm" and status == 200)
 assert(draftModel.commandRules(draft).gm["/emote"].minimum == 210)
 draftModel.setCommandRule(draft, "/advi", "gm", false, 253)
-assert(draftModel.get(draft, "commands.gm") == "/finditem:253, ::210, /unlisted:75")
+local retained = draftModel.get(draft, "commands.gm")
+assert(retained == "/ADVI:253, ::210, /Unlisted:75, /Retained:typo")
+assert(draftModel.validCommandGmList(retained, draft.saved["commands.gm"]))
+assert(not draftModel.validCommandGmList(retained .. ", /Retained:typo", draft.saved["commands.gm"]))
+assert(not draftModel.validCommandGmList(retained .. ", /Other:typo", draft.saved["commands.gm"]))
 draftModel.set(draft, "commands.block", "/ADVI")
 assert(draftModel.commandEffective(draftModel.commandRules(draft), command) == "block")
 draftModel.set(draft, "commands.block", "")
@@ -3817,7 +3829,7 @@ draftModel.set(draft, "commands.gm", "/ADVI:oops, /finditem:150")
 rule, _, status = draftModel.commandEffective(draftModel.commandRules(draft), command)
 assert(rule == "gm" and status == nil)
 draftModel.setCommandRule(draft, "/advi", "gm")
-assert(draftModel.get(draft, "commands.gm") == "/finditem:200")
+assert(draftModel.get(draft, "commands.gm") == "/ADVI:200")
 draftModel.setCommandRule(draft, "/advi", "allow")
 assert(draftModel.get(draft, "commands.gm") == "")
 assert(draftModel.commandEffective(draftModel.commandRules(draft), command) == "allow")
@@ -3848,7 +3860,7 @@ draftModel.set(prefixDraft, "commands.gm", "/TARG:204")
 rule, _, status = draftModel.commandEffective(draftModel.commandRules(prefixDraft), target)
 assert(rule == "gm" and status == 204)
 draftModel.setCommandRule(prefixDraft, "/target", "gm", false, 205)
-assert(draftModel.get(prefixDraft, "commands.gm") == "/target:205" and resolves == 1)
+assert(draftModel.get(prefixDraft, "commands.gm") == "/TARG:205" and resolves == 1)
 
 local button, input, select, color, invisibleButton, header =
   ui.Button, ui.InputTextWithHint, ui.Selectable, ui.TextColored, ui.InvisibleButton, ui.CollapsingHeader
@@ -3892,12 +3904,15 @@ ui.TextColored = function(r, g, b, a, text)
   if text == "GM 204+" then managementPrefixSeen = true end
   if text == "GM 205+" then managementCanonicalSeen = true end
   if text == "Review changes" then managementReviewSeen = true end
+  if text == "This policy restricts /camp, /quit, /exit, /servermanagement. Review these rules before saving." then
+    if managementReviewSeen then managementReviewWarningSeen = true else managementWarningSeen = true end
+  end
   if text == "GM rules require command:status with a status from 1 to 32767." then managementValidationSeen = true end
   if text == "/notes" then managementNotesSeen = true end
   if text == "/freshaddon" then managementFreshAddonSeen = true end
   if text == "The editor snapshot expired. Reload before saving." then managementExpiredSeen = true end
   if text == "Reloading policy..." then managementReloadingSeen = true end
-  if text == "/nav:195 -> /nav:253, /target:205" then managementServerValueSeen = true end
+  if text == "/nav:195 -> /nav:253, /targ:205" then managementServerValueSeen = true end
   if text == "Resolve the changed server values before saving." then managementConflictSeen = true end
   color(r, g, b, a, text)
 end
@@ -3908,7 +3923,7 @@ end
         session.frames(3);
         CHECK(visible());
         CHECK(full_snapshots == 1);
-        REQUIRE(luaL_dostring(L, "assert(managementRankSeen and managementBlockSeen and managementInitialRuleSeen)") == LUA_OK);
+        REQUIRE(luaL_dostring(L, "assert(managementRankSeen and managementBlockSeen and managementInitialRuleSeen and managementWarningSeen)") == LUA_OK);
         // Exercise all controls' immediate-mode window paths, including the add-on list and smaller viewport.
         for (const char* label : {"Client & gameplay", "Add-ons", "Scripts & plugins", "Socials", "Assets & web", "Commands"}) {
             lua_pushstring(L, label);
@@ -3951,6 +3966,19 @@ managementGmList = "/nav:253, /targ:204"
 clickManagement = "Review changes##sm"
 )lua") == LUA_OK);
         session.frames(2);
+        REQUIRE(luaL_dostring(L, "assert(managementReviewWarningSeen)") == LUA_OK);
+        paused = true;
+        session.host.in_game = false;
+        session.frames(2);
+        CHECK_FALSE(visible());
+        paused = false;
+        session.host.in_game = true;
+        snapshot.serial = 2;
+        snapshot.revision = "43";
+        snapshot.reloaded = true;
+        session.frames(2);
+        CHECK(visible());
+        CHECK(full_snapshots == 2);
         REQUIRE(luaL_dostring(L, "clickManagement = 'Save policy##sm'") == LUA_OK);
         session.frames(2);
         CHECK(saves == 1);
@@ -3964,14 +3992,14 @@ clickManagement = "Review changes##sm"
         session.frames(2);
         CHECK(reloads == 1);
         REQUIRE(luaL_dostring(L, "assert(managementReloadingSeen)") == LUA_OK);
-        snapshot.serial = 2;
-        snapshot.revision = "43";
+        snapshot.serial = 3;
+        snapshot.revision = "44";
         snapshot.reload_required = false;
         snapshot.reloading = false;
         snapshot.reloaded = true;
         snapshot.message.clear();
         session.frames(2);
-        CHECK(full_snapshots == 2);
+        CHECK(full_snapshots == 3);
         REQUIRE(luaL_dostring(L, "clickManagement = 'Save policy##sm'") == LUA_OK);
         session.frames(2);
         CHECK(saves == 2);
@@ -3983,14 +4011,14 @@ clickManagement = "Review changes##sm"
         REQUIRE(luaL_dostring(L, "clickManagement = 'Reload policy##sm'") == LUA_OK);
         session.frames(2);
         CHECK(reloads == 2);
-        snapshot.serial = 3;
-        snapshot.revision = "44";
+        snapshot.serial = 4;
+        snapshot.revision = "45";
         snapshot.reload_required = false;
         snapshot.reloading = false;
         snapshot.fields.push_back({"commands", "blocked_message", "This command was blocked by your server admin."});
         snapshot.fields[1].value = "/nav:195";
         session.frames(2);
-        CHECK(full_snapshots == 3);
+        CHECK(full_snapshots == 4);
         REQUIRE(luaL_dostring(L, R"lua(
 assert(managementConflictSeen and managementServerValueSeen)
 clickManagement = 'Save policy##sm'
@@ -4004,19 +4032,19 @@ clickManagement = 'Save policy##sm'
         session.frames(2);
         CHECK(saves == 3);
 
-        snapshot.serial = 4;
+        snapshot.serial = 5;
         snapshot.saving = false;
         snapshot.reloaded = false;
-        snapshot.revision = "45";
-        snapshot.fields[1].value = "/nav:253, /target:205";
+        snapshot.revision = "46";
+        snapshot.fields[1].value = "/nav:253, /targ:205";
         session.frames(2);
-        CHECK(full_snapshots == 4);
+        CHECK(full_snapshots == 5);
         session.host.trusted_ui = false;
         session.frames(2);
         CHECK_FALSE(visible());
         REQUIRE(luaL_dostring(L, R"lua(
 assert(not hs.UI.serverManagement.Available())
-assert(not hs.UI.serverManagement.Save("45", {}))
+assert(not hs.UI.serverManagement.Save("46", {}))
 )lua") == LUA_OK);
         CHECK(saves == 3);
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);

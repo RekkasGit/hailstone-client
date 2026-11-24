@@ -20,6 +20,7 @@ struct ExtendedCommand {
 
 constexpr ExtendedCommand kExtended[] = {
     {"/abilitybook", "Open the Ability Book or toggle autoskill."},
+    {"/afollow", "Follow a target or spawn along its path.", kMovement},
     {"/camera", "Change camera mode and settings."},
     {"/chattabs", "Manage tabs and windows in chat."},
     {"/debug_animinfo", "Inspect model and animation state."},
@@ -27,6 +28,7 @@ constexpr ExtendedCommand kExtended[] = {
     {"/destroycursor", "Destroy a cursor item after checking its ID."},
     {"/docommand", "Run another command.", kHelpers},
     {"/echo", "Print a line to your chat.", kHelpers},
+    {"/exchange", "Move an item from your packs into a worn slot."},
     {"/face", "Turn toward a target, coordinate, or heading.", kMovement},
     {"/finditem", "Search items across your inventory.", {}, "/advi"},
     {"/import", "Import eligible socials and hot buttons."},
@@ -44,6 +46,8 @@ constexpr ExtendedCommand kExtended[] = {
     {"/squelch", "Run a command without showing its chat output.", kHelpers},
     {"/stick", "Maintain distance and position relative to a target.", kMovement},
     {"/stowcursor", "Pack a cursor item after checking its ID."},
+    {"/timed", "Run a command after a delay.", kHelpers},
+    {"/unequip", "Move an item from a worn slot into your packs."},
     {"/web", "Open the in-game browser."},
 };
 
