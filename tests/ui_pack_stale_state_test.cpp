@@ -852,3 +852,27 @@ GPSTATE.whoOpen = true
     CHECK(r.saw("SELECT A PLAYER ON THE LEFT"));
     CHECK(r.no_errors());
 }
+
+TEST_CASE("UI packs (gamepad): a merchant's Buy asked on its last frame does not press the next merchant's") {
+    PackRig r("gamepad");
+    r.run(kStockWindows);
+    r.run(R"lua(
+fake.shown.MerchantWnd = true
+fake.lists.MerchantWnd = { ItemList = { sel = -1, rows = { { "", "Bread", "", "0", "0", "1", "0", "1" } } } }
+hs.Parcels = function() return nil end
+)lua");
+    r.s->frames(30);
+    // A on a row selects it, and presses Buy the frame after
+    r.run("calls = {} forced['##row'] = true");
+    r.s->frames(2);
+    CHECK(r.called("click MW_Buy_Button"));
+    // the window closes on the frame after the row's A: no Buy, then or when a merchant opens again
+    r.run("calls = {} forced['##row'] = true");
+    r.s->frames(1);
+    r.run("fake.shown.MerchantWnd = false");
+    r.s->frames(1);
+    r.run("fake.shown.MerchantWnd = true");
+    r.s->frames(3);
+    CHECK_FALSE(r.called("click MW_Buy_Button"));
+    CHECK(r.no_errors());
+}
