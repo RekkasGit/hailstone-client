@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -353,6 +354,30 @@ TEST_CASE("zip_write: no more files than the end record can count, and dates pas
     CHECK((date >> 9) == 127);
     CHECK(((date >> 5) & 15) == 3);
     CHECK((date & 31) == 4);
+}
+
+TEST_CASE("zip_write: finished_size is the finished archive's size after every add, and add_within holds to it") {
+    std::tm when{};
+    when.tm_year = 100;
+    when.tm_mday = 1;
+    ZipWriter z;
+    CHECK(z.finished_size() == ZipWriter(z).finish().size());
+    for (int i = 0; i < 40; ++i) {
+        const std::string name = std::string(static_cast<std::size_t>(i % 7 + 1), 'n') + std::to_string(i);
+        REQUIRE(z.add(name, std::string(static_cast<std::size_t>(i * 13), static_cast<char>('a' + i % 5)), when));
+        ZipWriter copy(z);
+        const std::size_t predicted = copy.finished_size();
+        CHECK(predicted == copy.finish().size());
+        CHECK(copy.finished_size() == predicted);
+    }
+    // One stored file of 10 bytes named "x": 30 + 1 + 10 local, 46 + 1 central. At exactly the limit it goes in.
+    const std::string body = "0123456789";
+    const std::size_t limit = z.finished_size() + 30 + 1 + 10 + 46 + 1;
+    ZipWriter over(z);
+    CHECK_FALSE(over.add_within("x", std::as_bytes(std::span(body.data(), body.size())), when, limit - 1));
+    REQUIRE(z.add_within("x", std::as_bytes(std::span(body.data(), body.size())), when, limit));
+    CHECK(z.finished_size() == limit);
+    CHECK(z.finish().size() == limit);
 }
 
 TEST_CASE("zip_read: truncated and non-zip input is refused cleanly") {

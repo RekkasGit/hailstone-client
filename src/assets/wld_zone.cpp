@@ -1,11 +1,13 @@
 // Classic zone loading: WLD fragments -> model.h meshes, placements, lights.
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <filesystem>
 #include <iterator>
 #include <limits>
+#include <map>
 #include <memory>
 #include <numbers>
 #include <optional>
@@ -118,7 +120,9 @@ Mesh build_mesh(const WldFile& wld, const MeshDef& def, std::string name) {
     // Polygons are stored in runs of {count, material slot}; gather them per
     // slot so each material is one draw.
     // Passable polygons (flag 0x10: no collision) go in their own parts.
-    std::vector<std::vector<std::uint32_t>> buckets(slots * 2);
+    // Keyed by the slots the runs name (a u16, so at most 65536 of them), not
+    // sized by the palette: a crafted palette can hold millions of entries.
+    std::map<std::size_t, std::array<std::vector<std::uint32_t>, 2>> buckets;
     std::size_t cursor = 0, bad_slot = 0, bad_index = 0;
     auto add_run = [&](std::size_t count, std::size_t slot) {
         std::size_t end = std::min(cursor + count, def.polygons.size());
@@ -129,7 +133,7 @@ Mesh build_mesh(const WldFile& wld, const MeshDef& def, std::string name) {
                 ++bad_index;
                 continue;
             }
-            auto& b = buckets[slot * 2 + ((p.flags & kPolygonPassable) ? 1 : 0)];
+            auto& b = buckets[slot][(p.flags & kPolygonPassable) ? 1 : 0];
             b.insert(b.end(), {p.v[0], p.v[1], p.v[2]});
         }
     };
@@ -142,12 +146,11 @@ Mesh build_mesh(const WldFile& wld, const MeshDef& def, std::string name) {
 
     // Zone meshes share one palette of every zone material; build only the
     // slots this mesh draws, in slot order (not the whole palette per mesh).
-    for (std::size_t slot = 0; slot < slots; ++slot) {
-        if (buckets[slot * 2].empty() && buckets[slot * 2 + 1].empty()) continue;
+    for (const auto& [slot, slot_buckets] : buckets) {
         auto material = static_cast<std::uint32_t>(out.materials.size());
         out.materials.push_back(build_material(wld, list->materials[slot]));
         for (std::size_t passable = 0; passable < 2; ++passable) {
-            const auto& b = buckets[slot * 2 + passable];
+            const auto& b = slot_buckets[passable];
             if (b.empty()) continue;
             MeshPart part;
             part.first_index = static_cast<std::uint32_t>(out.indices.size());
