@@ -152,8 +152,9 @@ and the plugins are gone):
    `tools/make_update.py`'s copy of it) are:
    - the files `hailstone.ini`, `hailstone-windows.ini` and `notes.txt`;
    - the folders `update/`, `servers/`, `logs/`, `cache/`, `screenshots/`, `bug-reports/`, `maps/`, `scripts/`,
-     `textures/`, `web/`, `addons/` and `tools/` (the last two the add-ons', docs/addons.md), and `ui-data/` and
-     `ui-addons/` (the player's interface data and the UI add-ons);
+     `textures/`, `web/`, `addons/`, `tools/` and `upscalers/` (the last three the add-ons', docs/addons.md), and
+     `ui-data/` and `ui-addons/` (the player's interface data and the UI add-ons). So every add-on kind's folder but
+     a plugin's is out of an update's reach, whatever its name (an upscaler add-on named `example` included);
    - `ui/settings/` and `ui/loadingbackgrounds/`.
 
    An update never writes or removes any of them.

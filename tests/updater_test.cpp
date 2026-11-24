@@ -196,12 +196,27 @@ TEST_CASE("update install: the player's files are never an update's") {
                           "scripts/a.lua", "textures/default/a.dds", "web/a/b", "notes.txt", "Servers/x",
                           "tools/texstudio/texstudio", "Tools/x/data.txt", "ui-data/modern/lib/style.lua",
                           "UI-DATA/addon.bundle.skin/lib/compiled/window.lua", "ui-data/", "ui-data", "UI-DATA",
-                          "ui-addons/skin/ui/dark/ui.ini", "UI-ADDONS/skin/ui/dark/window.lua", "ui-addons"})
+                          "ui-addons/skin/ui/dark/ui.ini", "UI-ADDONS/skin/ui/dark/window.lua", "ui-addons",
+                          "upscalers/example/example.so", "Upscalers/x/notice.txt"})
         CHECK_MESSAGE(is_player_path(p), p);
     for (const char* p : {"hailstone", "hailstone.exe", "shaders/a.spv", "ui/modern/login.lua", "browser/libcef.so",
                           "plugins/nms/nms.so", "icons/hailstone.png", "servers.txt", "ui-data-copy/file.lua",
-                          "ui-database/file.lua", "ui-data.lua", "ui-addons.lua"})
+                          "ui-database/file.lua", "ui-data.lua", "ui-addons.lua", "upscalers.txt"})
         CHECK_MESSAGE(!is_player_path(p), p);
+}
+
+TEST_CASE("update install: every add-on kind's folder but a plugin's is the player's") {
+    // A plugin folder an add-on installed into is left out by addon_owns_folder; every other kind of add-on has a
+    // folder of its own that no update writes or removes, whatever its name (upscalers/example/ included).
+    test::ScratchDir dir("updater_addon_kinds");
+    for (AddonKind kind : {AddonKind::Script, AddonKind::Tool, AddonKind::Upscaler, AddonKind::Ui}) {
+        const std::string file =
+            addon_folder(dir.path(), kind, "example").lexically_relative(dir.path()).generic_string() + "/a.txt";
+        CHECK_MESSAGE(is_player_path(file), file);
+    }
+    CHECK_FALSE(is_player_path(
+        addon_folder(dir.path(), AddonKind::Plugin, "example").lexically_relative(dir.path()).generic_string() +
+        "/a.txt"));
 }
 
 TEST_CASE("updater: check, download, install, start and the next update") {
@@ -515,6 +530,18 @@ TEST_CASE("update install: nothing is installed or rolled back while another pro
     fs::remove(inst / "update/state.txt");
     CHECK(install_staged_update(inst, "0.1.0").ok); // the lock went with its owner
     CHECK(get(inst / "hailstone") == "new");
+}
+
+TEST_CASE("update install: an upscaler add-on's folder is never written or removed by an update") {
+    test::ScratchDir dir("updater_upscaler_folder");
+    const fs::path inst = dir.path();
+    put(inst / "hailstone", "old");
+    put(inst / "upscalers/example/example.so", "the add-on's");
+    // A core package that ships upscalers/example/ is refused whole, before anything moves.
+    stage_one(inst, "core", zip_of({{"hailstone", "new"}, {"upscalers/example/example.so", "the release's"}}));
+    CHECK_FALSE(install_staged_update(inst, "0.1.0").ok);
+    CHECK(get(inst / "hailstone") == "old");
+    CHECK(get(inst / "upscalers/example/example.so") == "the add-on's");
 }
 
 TEST_CASE("update install: each move is in the journal, written before it") {

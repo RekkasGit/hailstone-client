@@ -148,7 +148,8 @@ bool is_directory_entry(const fs::path& p) {
 }
 
 // Whether `name` is in a plugin's folder (plugins/<x>/...) that an add-on installed into (docs/addons.md): the
-// add-on's files, which no package of an update writes or takes out.
+// add-on's files, which no package of an update writes or takes out. Every other add-on kind's folder (scripts/,
+// tools/, upscalers/, ui-addons/) is one of the player's paths (is_player_path), which no update touches at all.
 bool owned_by_addon(const fs::path& install_dir, std::string_view name) {
     constexpr std::string_view plugins = "plugins/";
     if (lower(name.substr(0, plugins.size())) != plugins) return false;
@@ -316,7 +317,7 @@ bool is_player_path(std::string_view path) {
     const std::string_view first = std::string_view(p).substr(0, p.find('/'));
     static const std::set<std::string_view> folders = {"update", "servers", "logs",  "cache", "screenshots",
                                                        "bug-reports", "maps", "scripts", "textures", "web",
-                                                       "addons", "tools", "ui-data", "ui-addons"};
+                                                       "addons", "tools", "upscalers", "ui-data", "ui-addons"};
     static const std::set<std::string_view> files = {"hailstone.ini", "hailstone-windows.ini", "notes.txt"};
     if (first.size() < p.size() && folders.count(first)) return true;
     if (files.count(p)) return true;

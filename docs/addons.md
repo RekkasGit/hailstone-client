@@ -174,6 +174,8 @@ next start (docs/graphics.md "Upscaler providers").
     header is checked for this platform; none is loaded at the install.
 - **While it runs** the client has a copy loaded (`cache/upscalers/`), so an update or removal takes effect at the
   next start.
+- **Hailstone's own updates** never write or remove anything in `upscalers/` (docs/updater.md "The install"), so a
+  release cannot replace an upscaler add-on that shares a name with one it might ship.
 
 An older Hailstone refuses an upscaler's manifest ("the kind is script, plugin or tool").
 
@@ -516,7 +518,8 @@ ui-addons/<addon>/ an installed interface add-on (its ui/<pack>/ folders, UI pac
 - **A removal** takes out the add-on's files and record. The player's files stay; the folder goes once empty.
 - **A cut-off install or removal** (the client died between moves) is undone at the next start from the journal.
 - **The core updater** (docs/updater.md) never writes `addons/`. It skips its optional plugin package for a folder an
-  add-on installed (checked at download and again at install). `scripts/` and `tools/` are the player's to it already.
+  add-on installed (checked at download and again at install). `scripts/`, `tools/`, `upscalers/` and `ui-addons/`
+  are the player's to it already.
   Its `core` package's files in such a plugin folder are left out of the install, and those it shipped there before
   are not taken out.
 
