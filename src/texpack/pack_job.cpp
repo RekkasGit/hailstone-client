@@ -6,6 +6,7 @@
 #include <exception>
 #include <fstream>
 
+#include "core/atomic_file.h"
 #include "core/build_info.h"
 #include "core/config.h"
 #include "platform/local_time.h"
@@ -140,7 +141,8 @@ std::set<std::string> pack_contents(const fs::path& pack_dir) {
     std::error_code ec;
     for (fs::directory_iterator it(pack_dir / "by-hash", ec), end; !ec && it != end; it.increment(ec)) {
         const fs::path& p = it->path();
-        if (p.extension() != ".dds") continue;
+        std::error_code type_ec;
+        if (p.extension() != ".dds" || !it->is_regular_file(type_ec)) continue; // (a folder of that name is no file made)
         out.insert(p.stem().string());
     }
     return out;
@@ -199,16 +201,10 @@ std::string now_text() {
     return buf;
 }
 
+// Through a temporary file checked after its last write and flush (core/atomic_file.h): a short file is never renamed
+// into the pack, where a resumed build would take it as made.
 bool write_bytes(const fs::path& path, const std::vector<std::byte>& data) {
-    const fs::path tmp = path.string() + ".tmp";
-    {
-        std::ofstream out(tmp, std::ios::binary);
-        out.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
-        if (!out) return false;
-    }
-    std::error_code ec;
-    fs::rename(tmp, path, ec);
-    return !ec;
+    return write_file_atomic(path, std::string_view(reinterpret_cast<const char*>(data.data()), data.size()));
 }
 
 constexpr std::size_t kInGpu = 6;       // textures read and waiting for (or on) the GPU

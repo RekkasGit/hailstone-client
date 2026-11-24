@@ -2229,6 +2229,11 @@ in one windowed program, on any GPU through ncnn's Vulkan compute, with no Pytho
    Each file is stored in the rows the WLD meshes read: a BMP source's are flipped, and its normal map's green
    inverted with them, so every pack normal map has green toward +v (PBRify's normals are DirectX's way).
 
+   Every pack file, the studio's scan cache and the PNGs of `texpack export` are checked after their last write and
+   flush, the first two through a temporary file renamed into place (`core/atomic_file.h`). A failed write counts
+   as a failure and leaves no short file a resumed build would take as made; a folder named like a pack file is not
+   one.
+
 Set up once (Linux, AMD):
 
     uv venv -p 3.12 venv && uv pip install -p venv/bin/python --index-url https://download.pytorch.org/whl/rocm7.2 torch torchvision

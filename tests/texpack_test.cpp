@@ -489,6 +489,38 @@ TEST_CASE("texpack: scan, the scan's cache and a whole build") {
         CHECK(missing_files(*l, true, pack_contents(pack)) == std::vector<FileKind>{FileKind::Normal});
     }
 
+    SUBCASE("a scan cache that cannot be put in place is refused, and no temporary file stays") {
+        const fs::path cache = dir.path() / "cache" / "scan.txt";
+        fs::create_directories(cache / "in-the-way"); // a folder where the file goes: the final rename fails
+        CHECK_FALSE(save_scan(cache, archives, r.textures));
+        CHECK(fs::is_directory(cache));
+        for (const auto& e : fs::directory_iterator(cache.parent_path()))
+            CHECK_MESSAGE(e.path() == cache, e.path().string()); // no scan.txt.tmp left beside it
+    }
+
+    SUBCASE("a pack file that cannot be written counts as a failure and leaves no temporary file") {
+        const fs::path pack = dir.path() / "textures" / "blocked";
+        // A folder where the wall's colour file goes: its write fails, the other textures are made.
+        fs::create_directories(pack / "by-hash" / (hash_name(w->hash) + ".dds") / "in-the-way");
+        GpuWorker gpu([](std::string*) { return std::make_unique<FakeSet>(); });
+        JobOptions o;
+        o.pack_dir = pack;
+        o.textures = r.textures;
+        o.settings = {2, true};
+        o.encoders = 2;
+        PackJob job(o, gpu);
+        REQUIRE(wait_for([&] { return job.finished(); }));
+        const JobStatus s = job.status();
+        CHECK(s.state == JobStatus::State::Done);
+        CHECK(s.failures == 1);
+        REQUIRE(s.errors.size() == 1);
+        CHECK(s.errors[0].find("cannot write") != std::string::npos);
+        for (const auto& e : fs::directory_iterator(pack / "by-hash"))
+            CHECK_MESSAGE(e.path().extension() == ".dds", e.path().string());
+        // The leaf's four files are there; the wall's colour is still missing, so a resumed build makes it again.
+        CHECK(missing_files(*w, true, pack_contents(pack)).size() == 3);
+    }
+
     SUBCASE("a build stops when cancelled, and failing models fail each texture") {
         GpuWorker broken([](std::string* why) -> std::unique_ptr<ModelSet> {
             *why = "no GPU here";
