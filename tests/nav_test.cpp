@@ -1031,7 +1031,7 @@ TEST_CASE("nav: /afollow walks the spawn's trail round the wall, holds near it, 
     CHECK(h.nav.status().afollow_spawn == 7);
     // It walks on: after it again.
     h.mob.position = {80, 10, 0};
-    bool walked = false;
+    bool walked = h.frame().forward; // the frame that sees it move
     for (int i = 0; i < 400 && h.nav.status().afollow_length > 10.0f; ++i) walked |= h.frame().forward;
     CHECK(walked);
     CHECK(h.nav.status().afollow_length <= 10.0f);
@@ -1490,7 +1490,8 @@ TEST_CASE("nav: /afollow's words, as E3 sends them, and the AdvPath TLO") {
     CHECK_FALSE(h.nav.calls[0].flag); // nodoor
     CHECK(h.printed.back() == "[AFollow] Following a rat (15, no doors).");
     CHECK(h.p("${AdvPath.State} ${AdvPath.Status} ${AdvPath.Following} ${AdvPath.Paused}") == "1 1 TRUE FALSE");
-    CHECK(h.p("${AdvPath.Monitor} ${AdvPath.Waypoints} ${AdvPath.Length}") == "a_rat01 3 12.50");
+    CHECK(h.p("${AdvPath.Monitor} ${AdvPath.Monitor.Name} ${AdvPath.Waypoints} ${AdvPath.Length}") ==
+          "a rat a_rat01 3 12.50");
     CHECK(h.p("${AdvPath.Playing} ${AdvPath.Recording} ${AdvPath.WaitingWarp}") == "FALSE FALSE FALSE");
     h.nav.warping = true;
     CHECK(h.p("${AdvPath.WaitingWarp}") == "TRUE");
