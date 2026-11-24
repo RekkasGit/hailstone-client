@@ -335,6 +335,7 @@ UI_METHOD("ScriptStop", "scripts", "Stop", 0)
 
 // serverManagement
 UI_METHOD("ServerManagementAvailable", "serverManagement", "Available", 0)
+UI_METHOD("ServerManagementCanonicalCommandName", "serverManagement", "CanonicalCommandName", 0)
 UI_METHOD("ServerManagementClose", "serverManagement", "Close", 0)
 UI_METHOD("ServerManagementOpen", "serverManagement", "Open", 0)
 UI_METHOD("ServerManagementSave", "serverManagement", "Save", 0)

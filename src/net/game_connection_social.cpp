@@ -142,7 +142,8 @@ void GameConnection::reset_social_for_zone() {
 void GameConnection::say(const std::string& text) { send_command(text); }
 
 bool GameConnection::allow_server_command(std::string_view name) {
-    if (!server_rules_ || server_rules_->provisional || server_rules_->commands.allowed(name)) return true;
+    if (!server_rules_ || server_rules_->provisional || server_rules_->commands.allowed(name, command_account_status_))
+        return true;
     // Denials are local literal notices. They stay visible when a command wrapper filters its own chat output.
     chat(ChatEvent::Kind::System, std::string(server_rules_->commands.denial_message()), 0, 15, {}, std::nullopt, false);
     return false;

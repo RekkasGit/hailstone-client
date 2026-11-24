@@ -266,6 +266,7 @@ local descriptors = {
   {"SetScriptAutorun", "scripts", "SetAutorun", "function", 0, false},
   {"ScriptStop", "scripts", "Stop", "function", 0, false},
   {"ServerManagementAvailable", "serverManagement", "Available", "function", 0, false},
+  {"ServerManagementCanonicalCommandName", "serverManagement", "CanonicalCommandName", "function", 0, false},
   {"ServerManagementClose", "serverManagement", "Close", "function", 0, false},
   {"ServerManagementOpen", "serverManagement", "Open", "function", 0, false},
   {"ServerManagementSave", "serverManagement", "Save", "function", 0, false},

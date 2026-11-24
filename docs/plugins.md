@@ -2105,11 +2105,17 @@ default = allow
 block_groups = movement_automation, command_helpers
 allow = /echo
 block = /follow, /random
+gm = /nav:200, /exampleaddon:150
 blocked_message = "This command is blocked here. Ask a GM if you need it unblocked."
 ```
 
-Command names are case-insensitive. Individual rules override group rules, and a block wins when two rules at the
-same level disagree. The built-in groups are:
+Command names are case-insensitive. Individual rules override group rules. For a command in multiple explicit
+lists, `block` takes priority, followed by `gm` and then `allow`. A GM rule uses the minimum numeric EQEmu account
+status from 1 through 32767. Hailstone receives that status from the encounter at zone-in and requests a refresh
+every 30 seconds while GM rules are active. A GM rule denies execution if the status is unavailable or expires.
+Groups can allow or block commands, with block taking priority when groups disagree.
+
+The built-in groups are:
 
 | Group | Commands |
 |---|---|

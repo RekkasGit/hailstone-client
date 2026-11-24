@@ -6,6 +6,7 @@
 
 #include "app/lua_ui_record.h"
 #include "core/lua_keep.h"
+#include "plugin/policy.h"
 #include "ui/lua/lua_host.h"
 
 namespace hailstone::app {
@@ -49,45 +50,71 @@ int ServerManagementClose(lua_State* L) {
     return 0;
 }
 
-// Known serial lets the built-in window retain the snapshot and read its save status without rebuilding the catalog.
+int ServerManagementCanonicalCommandName(lua_State* L) {
+    if (!trusted(L, host_of(L))) return 0;
+    std::size_t size = 0;
+    const char* text = luaL_checklstring(L, 1, &size);
+    if (size > 8192) return 0;
+    core::LuaScratch<std::string> scratch(L);
+    auto& name = *scratch;
+    core::cxx_guard(L, [&] { name = plugin::canonical_command_name({text, size}); });
+    if (name.empty()) {
+        scratch.release();
+        return 0;
+    }
+    lua_pushlstring(L, name.data(), name.size());
+    scratch.release();
+    return 1;
+}
+
+std::uint32_t known_serial(lua_State* L, int arg) {
+    const lua_Integer serial = luaL_optinteger(L, arg, 0);
+    return serial > 0 && serial <= std::numeric_limits<std::uint32_t>::max() ? static_cast<std::uint32_t>(serial) : 0u;
+}
+
+// The pack can keep its draft when only the command catalog changes.
 int ServerManagementViewFn(lua_State* L) {
     const UiHost& host = host_of(L);
     if (!trusted(L, host) || !host.server_management) return 0;
-    const lua_Integer requested = luaL_optinteger(L, 1, 0);
-    const auto serial = requested > 0 && requested <= std::numeric_limits<std::uint32_t>::max() ?
-        static_cast<std::uint32_t>(requested) : 0u;
+    const auto serial = known_serial(L, 1);
+    const auto catalog_serial = known_serial(L, 2);
     core::LuaScratch<std::optional<ServerManagementView>> scratch(L);
     auto& view = *scratch;
-    core::cxx_guard(L, [&] { view = host.server_management(serial); });
+    core::cxx_guard(L, [&] { view = host.server_management(serial, catalog_serial); });
     if (!view) {
         scratch.release();
         return 0;
     }
-    lua_createtable(L, 0, 8);
+    lua_createtable(L, 0, 9);
     record::text(L, "revision", view->revision);
     record::text(L, "file_revision", view->file_revision);
     record::text(L, "message", view->message);
     lua_pushinteger(L, static_cast<lua_Integer>(view->serial));
     lua_setfield(L, -2, "serial");
+    lua_pushinteger(L, static_cast<lua_Integer>(view->catalog_serial));
+    lua_setfield(L, -2, "catalog_serial");
     lua_pushboolean(L, view->saving);
     lua_setfield(L, -2, "saving");
-    if (serial == view->serial) {
+    const bool cfg_changed = serial != view->serial;
+    if (!cfg_changed && catalog_serial == view->catalog_serial) {
         scratch.release();
         return 1;
     }
-    lua_pushinteger(L, view->minimum_status);
-    lua_setfield(L, -2, "minimum_status");
     lua_Integer index = 0;
-    lua_createtable(L, static_cast<int>(view->fields.size()), 0);
-    for (const auto& field : view->fields) {
-        lua_createtable(L, 0, 3);
-        record::text(L, "section", field.section);
-        record::text(L, "key", field.key);
-        record::text(L, "value", field.value);
-        lua_rawseti(L, -2, ++index);
+    if (cfg_changed) {
+        lua_pushinteger(L, view->minimum_status);
+        lua_setfield(L, -2, "minimum_status");
+        lua_createtable(L, static_cast<int>(view->fields.size()), 0);
+        for (const auto& field : view->fields) {
+            lua_createtable(L, 0, 3);
+            record::text(L, "section", field.section);
+            record::text(L, "key", field.key);
+            record::text(L, "value", field.value);
+            lua_rawseti(L, -2, ++index);
+        }
+        lua_setfield(L, -2, "fields");
+        index = 0;
     }
-    lua_setfield(L, -2, "fields");
-    index = 0;
     lua_createtable(L, static_cast<int>(view->commands.size()), 0);
     for (const auto& command : view->commands) {
         lua_createtable(L, 0, 5);
@@ -148,6 +175,7 @@ int ServerManagementSave(lua_State* L) {
 
 void register_server_management_api(lua_State* L, UiHost& host) {
     static const luaL_Reg functions[] = {{"ServerManagementAvailable", ServerManagementAvailable},
+                                         {"ServerManagementCanonicalCommandName", ServerManagementCanonicalCommandName},
                                          {"ServerManagementClose", ServerManagementClose},
                                          {"ServerManagementOpen", ServerManagementOpen},
                                          {"ServerManagementSave", ServerManagementSave},

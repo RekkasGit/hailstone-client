@@ -96,6 +96,28 @@ TEST_CASE("server management uses bounded typed request and reply packets") {
         ServerManagementStatus::Ok, 1, std::string(kServerManagementMaxText + 1, 'a'))));
 }
 
+TEST_CASE("settings packets carry an optional server account status") {
+    auto legacy = encode(HailstoneSettings{kServerManagementOffered});
+    CHECK(legacy.data.size() == 10);
+    auto parsed = decode_hailstone_settings(legacy);
+    REQUIRE(parsed);
+    CHECK_FALSE(parsed->account_status);
+    CHECK(parsed->flags == kServerManagementOffered);
+
+    auto ranked = encode(HailstoneSettings{kServerManagementOffered, 200});
+    REQUIRE(ranked.data.size() == 12);
+    auto parsed_ranked = decode_hailstone_settings(ranked);
+    REQUIRE(parsed_ranked);
+    CHECK(parsed_ranked->account_status == 200);
+    CHECK(parsed_ranked->flags == (kServerManagementOffered | kServerAccountStatus));
+    auto rank_zero = decode_hailstone_settings(encode(HailstoneSettings{0, 0}));
+    REQUIRE(rank_zero);
+    CHECK(rank_zero->account_status == 0);
+    CHECK_FALSE(decode_hailstone_settings(encode(HailstoneSettings{0, 32768})));
+    ranked.data.pop_back();
+    CHECK_FALSE(decode_hailstone_settings(ranked));
+}
+
 TEST_CASE("mock server management gates the editor and correlates snapshots and saves") {
     test::ManualClock clock;
     auto options = test::quick_options();

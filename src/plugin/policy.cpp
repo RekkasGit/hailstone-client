@@ -366,6 +366,36 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
                     else warn(std::format("{}: expected one line of at most {} bytes", where, kCommandBlockedMessageMaxBytes));
                     continue;
                 }
+                if (key == "gm") {
+                    policy.enabled = true;
+                    std::string_view rest = v;
+                    while (!rest.empty()) {
+                        const auto end = rest.find_first_of(", \t");
+                        const auto token = rest.substr(0, end);
+                        rest = end == std::string_view::npos ? std::string_view() : rest.substr(end + 1);
+                        if (token.empty()) continue;
+                        // Split at the last colon so the emote alias ':' can be written as '::200'.
+                        const auto colon = token == ":" ? std::string_view::npos : token.rfind(':');
+                        auto name = canonical_command_name(token.substr(0, colon));
+                        std::optional<int> minimum;
+                        if (colon != std::string_view::npos) {
+                            const auto status = token.substr(colon + 1);
+                            int n = 0;
+                            const auto [p, ec] = std::from_chars(status.data(), status.data() + status.size(), n);
+                            if (ec == std::errc() && p == status.data() + status.size() && n >= 1 && n <= 32767)
+                                minimum = n;
+                        }
+                        if (!minimum || name.empty())
+                            warn(std::format("{}: expected command:status from 1 through 32767, got \"{}\"", where, token));
+                        if (name.empty()) continue;
+                        const auto [position, inserted] = policy.gm.try_emplace(std::move(name), minimum);
+                        if (inserted) continue;
+                        auto& previous = position->second;
+                        if (!minimum) previous.reset();
+                        else if (previous) previous = std::max(*previous, *minimum);
+                    }
+                    continue;
+                }
                 const bool groups = key == "allow_groups" || key == "block_groups";
                 if (groups || key == "allow" || key == "block") {
                     policy.enabled = true;
@@ -555,6 +585,13 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
     for (const auto& command : r.commands.block)
         if (std::find(r.commands.allow.begin(), r.commands.allow.end(), command) != r.commands.allow.end())
             warn(std::format("[commands] {} is both allowed and blocked; block wins", command));
+    for (const auto& entry : r.commands.gm) {
+        const auto& command = entry.first;
+        if (std::find(r.commands.block.begin(), r.commands.block.end(), command) != r.commands.block.end())
+            warn(std::format("[commands] {} has a GM rule and an explicit block; block wins", command));
+        else if (std::find(r.commands.allow.begin(), r.commands.allow.end(), command) != r.commands.allow.end())
+            warn(std::format("[commands] {} has a GM rule and an explicit allowance; the GM rule wins", command));
+    }
     for (const auto& group : r.commands.block_groups)
         if (std::find(r.commands.allow_groups.begin(), r.commands.allow_groups.end(), group) != r.commands.allow_groups.end())
             warn(std::format("[commands] group {} is both allowed and blocked; block wins", group));

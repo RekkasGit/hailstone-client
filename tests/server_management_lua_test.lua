@@ -127,10 +127,16 @@ local function save(handler, who, rev, status, ...)
 	return revision, data
 end
 
-local function flags(handler, who)
-	local response = transfer(handler, who, 0x1432, string.pack("<I4I2", 0x50534d4e, 1)).packet
-	assert(response:GetProtocolOpcode() == 0x1433)
-	return response:ReadInt32(6)
+local function settings_reply(handler, who, legacy)
+	local response = transfer(handler, who, legacy and 0x1424 or 0x1432, string.pack("<I4I2", 0x50534d4e, 1)).packet
+	assert(response:GetProtocolOpcode() == (legacy and 0x1425 or 0x1433))
+	local flags = response:ReadInt32(6)
+	if flags & 4 ~= 0 then
+		assert(not legacy and response:GetSize() == 12)
+		return flags, response:ReadInt16(10)
+	end
+	assert(response:GetSize() == 10)
+	return flags, nil
 end
 
 local function file_hash(handler, who)
@@ -144,7 +150,22 @@ mkdir("client_files")
 local opts = {}
 local a = zone("test_a", opts)
 local ordinary, low_gm, gm, other = client(1, 0), client(2, 199), client(3, 200), client(4, 250)
-assert(flags(a, ordinary) == 0 and flags(a, low_gm) == 0 and flags(a, gm) == 2)
+local flags, rank = settings_reply(a, ordinary)
+assert(flags == 4 and rank == 0)
+flags, rank = settings_reply(a, low_gm)
+assert(flags == 4 and rank == 199)
+flags, rank = settings_reply(a, gm)
+assert(flags == 6 and rank == 200)
+flags, rank = settings_reply(a, other, true)
+assert(flags == 2 and rank == nil, "old settings replies keep their original size")
+local missing_api = client(5, 250)
+missing_api.Admin = nil
+flags, rank = settings_reply(a, missing_api)
+assert(flags == 0 and rank == nil, "older server APIs still get a usable settings reply")
+flags, rank = settings_reply(a, client(6, 32768))
+assert(flags == 0 and rank == nil)
+flags, rank = settings_reply(a, client(7, -1))
+assert(flags == 4 and rank == 0)
 open(a, ordinary, 1)
 open(a, low_gm, 1)
 local packets = #gm.packets
@@ -157,7 +178,7 @@ write(path, "")
 local empty_rev, empty = open(a, gm)
 assert(empty_rev ~= rev and empty == "", "an existing empty file uses configured defaults")
 write(path, "[management]\nmin_status = 200\0\n")
-assert(flags(a, gm) == 0)
+assert(settings_reply(a, gm) == 4)
 open(a, gm, 4) -- fixed-length string decoders do not transport an embedded NUL
 assert(os.remove(path))
 rev = open(a, gm)
@@ -217,6 +238,9 @@ save(a, gm, rev, 2, edit("assets", "player", "on\n[client]"))
 save(a, gm, rev, 2, edit("commands", "blocked_message", ("x"):rep(241)))
 save(a, gm, rev, 2, edit("commands", "blocked_message", "bad \192\175"))
 save(a, gm, rev, 2, edit("commands", "blocked_message", "NUL\0inside"))
+for _, rule in ipairs({ "/nav:0", "/nav:32768", "/nav:bad", "/nav:-1", "/nav:200\n[client]", ":200", "/:200" }) do
+	save(a, gm, rev, 2, edit("commands", "gm", rule))
+end
 save(a, gm, rev, 2, edit("custom", "private", "1"))
 save(a, gm, rev, 2, edit("client", "deny", "on"), edit("client", "deny", "off"))
 save(a, gm, rev, 2, edit("addons", "block", "owner/old"))
@@ -227,13 +251,15 @@ save(a, gm, rev, 5, edit("assets", "player", "off"))
 rmdir(lock)
 assert(read(path) == current)
 rev, current = save(a, gm, rev, 0, edit("management", "min_status", "100"), edit("commands", "blocked_message", ""),
+	edit("commands", "gm", ""),
 	edit("addons", "suggest", "example/server-hud@1.0.0, https://github.com/example/other/tree/main"))
 assert(current:find("min_status = 100", 1, true) and current:find('blocked_message = ""', 1, true))
-assert(flags(b, low_gm) == 2)
+flags, rank = settings_reply(b, low_gm)
+assert(flags == 6 and rank == 199, "account rank and management eligibility travel separately")
 open(b, low_gm)
 write(path, current:gsub("min_status = 100", "min_status = typo"))
 open(a, other, 1)
-assert(flags(a, gm) == 0)
+assert(settings_reply(a, gm) == 4)
 write(path, current)
 
 -- Neither a busy lock nor a failing backup can change the active policy. Using a dedicated fresh zone also
@@ -258,9 +284,10 @@ conflict_rev, current = save(a, gm, conflict_rev, 0, edit("scripts", "run", "hud
 	edit("addons", "required", "another/hud:1.0.0-Alpha.1+build.0"), edit("addons", "block", "another/bot"),
 	edit("addons", "allow", "some/repo"), edit("commands", "allow_groups", "command_helpers"),
 	edit("commands", "block_groups", "movement_automation, non_rof2"), edit("commands", "allow", "/lua"),
-	edit("commands", "block", "', :, /face, /custom!"))
+	edit("commands", "block", "', :, /face, /custom!"), edit("commands", "gm", "/nav:200, /custom!:32767, ::150"))
 assert(read(path) == current and current:find("[::1]", 1, true))
 assert(current:find("another/hud:1.0.0-Alpha.1+build.0", 1, true))
+assert(current:find("gm = /nav:200, /custom!:32767, ::150", 1, true))
 now = now + 301
 save(a, gm, conflict_rev, 3, edit("client", "deny", "off"))
 

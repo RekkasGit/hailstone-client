@@ -106,6 +106,8 @@ public:
     // The latest registration's `required` (0 when there is none).
     std::uint32_t command_required(std::string_view name) const;
     std::vector<std::string> commands() const;
+    // Changes when a command is registered or removed, including an add-on unloading.
+    std::uint32_t command_catalog_serial() const;
     void pulse();
     void game_state(int state);
     void zone(ZonePhase phase);

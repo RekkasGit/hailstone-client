@@ -51,6 +51,7 @@ passable_ladders = on     ; walking or swimming into a ladder whose polygons are
 ;allow_groups = non_rof2 ; available groups also include addon_commands
 ;allow = /echo           ; command entries override groups
 ;block = /follow, /random
+;gm = /nav:200           ; each command requires at least this EQEmu account status (1 through 32767)
 ;blocked_message = "This command has been blocked by your server administrator."
                           ; up to 240 UTF-8 bytes. Leave empty for the default message.
 

@@ -85,6 +85,59 @@ min_status = 150
     CHECK_FALSE(plugin::parse_server_cfg("[commands]\nblock = /pause, /timer\n").commands.allowed("/timer"));
 }
 
+TEST_CASE("hailstone.cfg: GM command thresholds apply to aliases and registered add-ons") {
+    std::vector<std::string> warnings;
+    const auto cfg = plugin::parse_server_cfg(R"(
+[commands]
+default = deny
+block_groups = movement_automation
+allow = /Nav, /time
+block = /stick
+gm = /NAV:150 /advi:199, /FINDITEM:230, /stick:1, /exchange:200, ::125, /loc:99, /testcap:32767
+)", &warnings);
+    const auto& rules = cfg.commands;
+    REQUIRE(rules.enabled);
+    CHECK(warnings.size() == 2); // the named GM rules take precedence over Allow, and Block takes precedence over GM
+    CHECK_FALSE(rules.allowed("/nav"));
+    CHECK_FALSE(rules.allowed("/nav", 149));
+    CHECK(rules.allowed("/nav", 150));
+    CHECK(rules.decision("/nav", 151).minimum_status == 150);
+    CHECK_FALSE(rules.allowed("/stick", 32767));
+    CHECK_FALSE(rules.decision("/stick", 32767).minimum_status);
+    CHECK(rules.allowed("/time"));
+    CHECK_FALSE(rules.allowed("/who", 32767));
+
+    CHECK(rules.decision("/advi").minimum_status == 230);
+    CHECK_FALSE(rules.allowed("/finditem", 229));
+    CHECK(rules.allowed("/advi", 230));
+    CHECK_FALSE(rules.allowed("/exchange", 199));
+    CHECK(rules.allowed("/EXCHANGE", 200));
+    CHECK_FALSE(rules.allowed("/emote", 124));
+    CHECK(rules.allowed(":", 125));
+    CHECK(rules.allowed("/location", 99));
+    CHECK_FALSE(rules.allowed("/testcap", 32766));
+    CHECK(rules.allowed("/testcap", 32767));
+}
+
+TEST_CASE("hailstone.cfg: malformed GM command thresholds deny any command they can identify") {
+    std::vector<std::string> warnings;
+    const auto cfg = plugin::parse_server_cfg(R"(
+[commands]
+gm = /nav:0, /stick:32768 /exchange:+200, /who:200extra, /finditem:1, /advi:, /target, :, /:200
+)", &warnings);
+    const auto& rules = cfg.commands;
+    REQUIRE(rules.enabled);
+    CHECK(warnings.size() == 8);
+    for (std::string_view name : {"/nav", "/stick", "/exchange", "/who", "/advi", "/target", "/emote"}) {
+        CAPTURE(name);
+        CHECK_FALSE(rules.allowed(name, 32767));
+        CHECK_FALSE(rules.allowed(name));
+        CHECK(rules.decision(name).reason == "Invalid GM status rule");
+    }
+    CHECK(rules.allowed("/time"));
+    CHECK(rules.allowed("/knownaddon"));
+}
+
 TEST_CASE("hailstone.cfg: blocked command notices keep literal text and bound its size") {
     CHECK(plugin::parse_server_cfg("[commands]\nblocked_message = \"\"\n").commands.denial_message() ==
           plugin::kDefaultCommandBlockedMessage);
@@ -361,13 +414,13 @@ TEST_CASE("settings packets: request layout, answer round trip, later fields ign
     CHECK(req.data[4] == std::byte{1});
 
     net::HailstoneSettings v;
-    v.flags = 0x5; // no flag is defined now; any value goes through
+    v.flags = 0x9; // retired and unrecognized flags are preserved
     auto p = net::encode(v);
     CHECK(p.opcode == 0x1433);
     REQUIRE(p.data.size() == 10);
     auto d = net::decode_hailstone_settings(p);
     REQUIRE(d);
-    CHECK(d->flags == 0x5u);
+    CHECK(d->flags == 0x9u);
 
     auto longer = p;
     longer.data.push_back(std::byte{7}); // a later version's field

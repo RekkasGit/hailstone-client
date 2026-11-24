@@ -435,11 +435,14 @@ void ClientApp::update_ui_host() {
             for (const auto& change : changes) edits.push_back({change.section, change.key, change.value});
             return conn_->save_server_management(token, edits);
         };
-        h.server_management = [this](std::uint32_t known_serial) -> std::optional<ServerManagementView> {
+        h.server_management = [this](std::uint32_t known_serial,
+                                     std::uint32_t known_catalog_serial) -> std::optional<ServerManagementView> {
             if (!conn_ || !conn_->server_management_available() || !conn_->server_management_snapshot()) return std::nullopt;
             const auto& snapshot = *conn_->server_management_snapshot();
+            const auto* hooks = automation_ ? &automation_->hooks() : nullptr;
             ServerManagementView view;
             view.serial = conn_->server_management_serial();
+            view.catalog_serial = hooks ? hooks->command_catalog_serial() : 1u;
             view.revision = std::to_string(snapshot.revision);
             constexpr std::string_view marker = "; hailstone-policy-revision = ";
             if (snapshot.text.starts_with(marker)) {
@@ -451,39 +454,50 @@ void ClientApp::update_ui_host() {
             }
             view.saving = conn_->server_management_saving();
             view.message = conn_->server_management_message();
-            if (view.serial == known_serial) return view;
+            const bool cfg_changed = view.serial != known_serial;
+            if (!cfg_changed && view.catalog_serial == known_catalog_serial) return view;
 
             const plugin::Rules parsed = plugin::parse_server_cfg(snapshot.text);
             view.minimum_status = parsed.management_min_status;
-            IniFile cfg;
-            cfg.parse(snapshot.text);
-            for (const auto& section : cfg.sections()) {
-                for (const auto& key : cfg.keys(section)) {
-                    auto lower_section = section;
-                    auto lower_key = key;
-                    for (auto& c : lower_section) c = ascii_lower(c);
-                    for (auto& c : lower_key) c = ascii_lower(c);
-                    auto raw = cfg.get_string(section, key);
-                    raw.resize(std::min(raw.size(), raw.find_first_of(";#")));
-                    const auto start = raw.find_first_not_of(" \t");
-                    raw = start == std::string::npos ? std::string{} : raw.substr(start, raw.find_last_not_of(" \t") - start + 1);
-                    if (lower_section == "commands" && lower_key == "blocked_message") {
-                        raw = parsed.commands.blocked_message;
-                    } else if (lower_section == "commands" && (lower_key == "allow" || lower_key == "block")) {
-                        // The config accepts RoF2 abbreviations. Show the resolved policy in the editor.
-                        const auto& names = lower_key == "allow" ? parsed.commands.allow : parsed.commands.block;
-                        raw.clear();
-                        for (const auto& name : names) {
-                            if (!raw.empty()) raw += ", ";
-                            raw += name;
+            if (cfg_changed) {
+                IniFile cfg;
+                cfg.parse(snapshot.text);
+                for (const auto& section : cfg.sections()) {
+                    for (const auto& key : cfg.keys(section)) {
+                        auto lower_section = section;
+                        auto lower_key = key;
+                        for (auto& c : lower_section) c = ascii_lower(c);
+                        for (auto& c : lower_key) c = ascii_lower(c);
+                        auto raw = cfg.get_string(section, key);
+                        raw.resize(std::min(raw.size(), raw.find_first_of(";#")));
+                        const auto start = raw.find_first_not_of(" \t");
+                        raw = start == std::string::npos ? std::string{} : raw.substr(start, raw.find_last_not_of(" \t") - start + 1);
+                        if (lower_section == "commands" && lower_key == "blocked_message") {
+                            raw = parsed.commands.blocked_message;
+                        } else if (lower_section == "commands" && (lower_key == "allow" || lower_key == "block")) {
+                            // The config accepts RoF2 abbreviations. Show the resolved policy in the editor.
+                            const auto& names = lower_key == "allow" ? parsed.commands.allow : parsed.commands.block;
+                            raw.clear();
+                            for (const auto& name : names) {
+                                if (!raw.empty()) raw += ", ";
+                                raw += name;
+                            }
+                        } else if (lower_section == "commands" && lower_key == "gm") {
+                            raw.clear();
+                            for (const auto& [name, minimum] : parsed.commands.gm) {
+                                if (!raw.empty()) raw += ", ";
+                                raw += name + ":";
+                                if (minimum) raw += std::to_string(*minimum);
+                            }
                         }
+                        view.fields.push_back({std::move(lower_section), std::move(lower_key), std::move(raw)});
                     }
-                    view.fields.push_back({std::move(lower_section), std::move(lower_key), std::move(raw)});
                 }
             }
-            auto registered = automation_ ? automation_->hooks().commands() : std::vector<std::string>{};
+            auto registered = hooks ? hooks->commands() : std::vector<std::string>{};
             registered.insert(registered.end(), parsed.commands.allow.begin(), parsed.commands.allow.end());
             registered.insert(registered.end(), parsed.commands.block.begin(), parsed.commands.block.end());
+            for (const auto& [name, minimum] : parsed.commands.gm) registered.push_back(name);
             for (auto& command : plugin::command_catalog(registered)) {
                 view.commands.push_back({std::move(command.name), std::move(command.description),
                     std::string(plugin::command_origin_text(command.origin)), std::move(command.aliases), std::move(command.groups)});

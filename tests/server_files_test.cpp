@@ -361,6 +361,63 @@ TEST_CASE("server files: command policy also applies to a transient login") {
     CHECK(test::has_line(rig.chat(), "Ask the admin."));
 }
 
+TEST_CASE("server files: GM command policy needs current EQEmu account status") {
+    test::ScratchDir cache("gm_command_policy");
+    test::ManualClock clock;
+    plugin::Hooks hooks;
+    int runs = 0;
+    REQUIRE(hooks.add_command(hooks.new_guest("test addon"), "/exampleaddon", [&](std::string_view) { ++runs; }));
+    auto options = test::quick_options();
+    options.server_access_dir = cache.path();
+    options.session.clock = clock.source();
+    options.hooks = &hooks;
+    int settings_seen = 0;
+    options.zone_packet_tap = [&](const net::AppPacket& packet) {
+        if (packet.opcode == net::kOpHailstoneSettings) ++settings_seen;
+    };
+    FakeServer files;
+    files.files["hailstone.cfg"] = "[commands]\ngm = /exampleaddon:200\nblocked_message = GM status required.\n";
+
+    test::Rig rig(test::MockConfig::standard(), options);
+    serve_files(rig, files);
+    REQUIRE(rig.to_zone());
+    (void)rig.chat();
+    auto apply_rank = [&](std::optional<std::uint16_t> rank) {
+        const int expected = settings_seen + 1;
+        rig.server.zone.send_reliable(net::encode(net::HailstoneSettings{0, rank}));
+        return rig.until([&] { return settings_seen == expected; });
+    };
+    auto requests = [&] {
+        return std::count_if(rig.server.zone_log.begin(), rig.server.zone_log.end(), [](const net::AppPacket& packet) {
+            return packet.opcode == net::kOpHailstoneSettingsRequest;
+        });
+    };
+    REQUIRE(rig.until([&] { return requests() == 1; }));
+    REQUIRE(apply_rank(std::nullopt)); // Legacy replies carry no rank.
+    rig.conn.send_command("/exampleaddon");
+    CHECK(runs == 0);
+    CHECK(test::has_line(rig.chat(), "GM status required."));
+    REQUIRE(apply_rank(199));
+    rig.conn.send_command("/exampleaddon");
+    CHECK(runs == 0);
+    REQUIRE(apply_rank(200));
+    rig.conn.send_command("/EXAMPLEADDON");
+    CHECK(runs == 1);
+    REQUIRE(apply_rank(150)); // The next status from the zone supersedes the old value.
+    rig.conn.send_command("/exampleaddon");
+    CHECK(runs == 1);
+    REQUIRE(apply_rank(250));
+    clock.hold();
+    clock.advance(std::chrono::seconds(31));
+    REQUIRE(rig.until([&] { return requests() == 2; }));
+    rig.conn.send_command("/exampleaddon");
+    CHECK(runs == 2);
+    clock.advance(std::chrono::seconds(30));
+    REQUIRE(rig.until([&] { return requests() == 3; }));
+    rig.conn.send_command("/exampleaddon");
+    CHECK(runs == 2);
+}
+
 TEST_CASE("server files: packets round trip") {
     net::ServerFilesPage page{3, 5, 1, {{4, sha256("abcd"), "Resources/SkillCaps.txt"}}};
     auto p = net::encode(page);

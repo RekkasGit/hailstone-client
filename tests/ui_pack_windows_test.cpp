@@ -3715,19 +3715,24 @@ TEST_CASE("Modern Server Management uses authorized snapshots and submits only r
         bool authorized = false;
         int saves = 0;
         int full_snapshots = 0;
+        int catalog_refreshes = 0;
         app::ServerManagementView snapshot;
         snapshot.serial = 1;
+        snapshot.catalog_serial = 1;
         snapshot.revision = "42";
         snapshot.file_revision = "20261124T010000Z-zone-1";
         snapshot.minimum_status = 210;
         snapshot.fields = {{"commands", "block_groups", "movement_automation"},
+                           {"commands", "gm", "/nav:200"},
                            {"addons", "required", "example/hud:1.0.0"}, {"local_extension", "keep_me", "original"}};
         snapshot.commands = {{"/nav", "Walk a route", "extended", {}, {"movement_automation", "non_rof2"}},
+                             {"/moveto", "Walk to a location", "extended", {}, {"movement_automation", "non_rof2"}},
                              {"/finditem", "Search your inventory", "extended", {"/advi"}, {"non_rof2"}},
                              {"/follow", "Follow a player", "stock", {}, {}},
+                             {"/target", "Select a target", "stock", {}, {}},
                              {"/notes", "Add-on notes", "addon", {}, {"addon_commands"}}};
         session.host.server_management_available = [] { return true; };
-        session.host.server_management = [&](std::uint32_t known) -> std::optional<app::ServerManagementView> {
+        session.host.server_management = [&](std::uint32_t known, std::uint32_t known_catalog) -> std::optional<app::ServerManagementView> {
             if (!authorized) return std::nullopt;
             if (known != snapshot.serial) {
                 ++full_snapshots;
@@ -3735,19 +3740,27 @@ TEST_CASE("Modern Server Management uses authorized snapshots and submits only r
             }
             app::ServerManagementView metadata;
             metadata.serial = snapshot.serial;
+            metadata.catalog_serial = snapshot.catalog_serial;
             metadata.revision = snapshot.revision;
             metadata.file_revision = snapshot.file_revision;
             metadata.saving = snapshot.saving;
             metadata.message = snapshot.message;
+            if (known_catalog != snapshot.catalog_serial) {
+                ++catalog_refreshes;
+                metadata.commands = snapshot.commands;
+            }
             return metadata;
         };
         session.host.save_server_management = [&](std::string_view revision, const auto& edits) {
             ++saves;
             CHECK(revision == "42");
-            REQUIRE(edits.size() == 1);
+            REQUIRE(edits.size() == 2);
             CHECK(edits[0].section == "commands");
             CHECK(edits[0].key == "blocked_message");
             CHECK(edits[0].value == "This command was blocked by your server admin.");
+            CHECK(edits[1].section == "commands");
+            CHECK(edits[1].key == "gm");
+            CHECK(edits[1].value == "/nav:253, /target:205");
             snapshot.saving = true;
             return true;
         };
@@ -3779,6 +3792,27 @@ assert(draftModel.commandRules(draft).commands["/emote"] == "allow")
 draftModel.setCommandRule(draft, "/advi", "", false)
 assert(draftModel.commandEffective(draftModel.commandRules(draft), command) == "block")
 assert(draftModel.get(draft, "commands.allow") == "ephemeral, :")
+draftModel.set(draft, "commands.gm", "/ADVI:200, /finditem:150, ::210, /unlisted:75")
+local rule, _, status = draftModel.commandEffective(draftModel.commandRules(draft), command)
+assert(rule == "gm" and status == 200)
+assert(draftModel.commandRules(draft).gm["/emote"].minimum == 210)
+draftModel.setCommandRule(draft, "/advi", "gm", false, 253)
+assert(draftModel.get(draft, "commands.gm") == "/finditem:253, ::210, /unlisted:75")
+draftModel.set(draft, "commands.block", "/ADVI")
+assert(draftModel.commandEffective(draftModel.commandRules(draft), command) == "block")
+draftModel.set(draft, "commands.block", "")
+draftModel.set(draft, "commands.gm", "/ADVI:oops, /finditem:150")
+rule, _, status = draftModel.commandEffective(draftModel.commandRules(draft), command)
+assert(rule == "gm" and status == nil)
+draftModel.setCommandRule(draft, "/advi", "gm")
+assert(draftModel.get(draft, "commands.gm") == "/finditem:200")
+draftModel.setCommandRule(draft, "/advi", "allow")
+assert(draftModel.get(draft, "commands.gm") == "")
+assert(draftModel.commandEffective(draftModel.commandRules(draft), command) == "allow")
+assert(not draftModel.validCommandGmList("/finditem:0"))
+assert(not draftModel.validCommandGmList("/finditem:32768"))
+assert(not draftModel.validCommandGmList("/:200"))
+assert(draftModel.validCommandGmList("/finditem:32767, ::150"))
 local _, byId = draftModel.addons(draft)
 local addon = assert(byId["example/hud"])
 assert(addon.mode == "required" and addon.minimum == "V1.2.0-rc.10+written")
@@ -3791,7 +3825,21 @@ assert(draftModel.get(draft, "addons.required") == "example/hud:2.0.1, example/r
 assert(draftModel.get(draft, "addons.allow") == "https://github.com/example/hud, example/keep")
 assert(draftModel.get(draft, "addons.suggest") == "example/other@v1.3.0")
 
-local button, input, select, color = ui.Button, ui.InputTextWithHint, ui.Selectable, ui.TextColored
+local target = { name = "/target", description = "Select a target", origin = "stock", aliases = {}, groups = {} }
+local resolves = 0
+local prefixDraft = draftModel.new({ fields = {}, commands = { target } }, function(name)
+  assert(name == "/targ")
+  resolves = resolves + 1
+  return "/target"
+end)
+draftModel.set(prefixDraft, "commands.gm", "/TARG:204")
+rule, _, status = draftModel.commandEffective(draftModel.commandRules(prefixDraft), target)
+assert(rule == "gm" and status == 204)
+draftModel.setCommandRule(prefixDraft, "/target", "gm", false, 205)
+assert(draftModel.get(prefixDraft, "commands.gm") == "/target:205" and resolves == 1)
+
+local button, input, select, color, invisibleButton, header =
+  ui.Button, ui.InputTextWithHint, ui.Selectable, ui.TextColored, ui.InvisibleButton, ui.CollapsingHeader
 ui.Button = function(label, ...)
   local clicked = button(label, ...)
   if clickManagement == label then clickManagement = nil return true end
@@ -3801,17 +3849,40 @@ ui.InputTextWithHint = function(label, ...)
   local value, changed = input(label, ...)
   if label == "##commands.blocked_message" and managementText then
     value, changed, managementText = managementText, true, nil
+  elseif label == "##smgm/nav" and managementStatus then
+    value, changed, managementStatus = managementStatus, true, nil
+  elseif label == "##commands.gm" and managementGmList then
+    value, changed, managementGmList = managementGmList, true, nil
+  elseif label == "##smgm/target" and managementTargetStatus then
+    value, changed, managementTargetStatus = managementTargetStatus, true, nil
   end
   return value, changed
+end
+ui.CollapsingHeader = function(label, ...)
+  local open = header(label, ...)
+  return open or (label == "Command lists" and managementGmList ~= nil)
 end
 ui.Selectable = function(label, ...)
   local clicked = select(label, ...)
   if label == visitManagement then visitManagement = nil return true end
   return clicked
 end
+ui.InvisibleButton = function(label, ...)
+  local clicked = invisibleButton(label, ...)
+  if label == originManagement then originManagement = nil return true end
+  return clicked
+end
 ui.TextColored = function(r, g, b, a, text)
   if text == "GM access / 210+" then managementRankSeen = true end
   if text == "Blocked" then managementBlockSeen = true end
+  if text == "GM 200+" then managementInitialRuleSeen = true end
+  if text == "GM 253+" then managementUpdatedRuleSeen = true end
+  if text == "GM 204+" then managementPrefixSeen = true end
+  if text == "GM 205+" then managementCanonicalSeen = true end
+  if text == "Review changes" then managementReviewSeen = true end
+  if text == "GM rules require command:status with a status from 1 to 32767." then managementValidationSeen = true end
+  if text == "/notes" then managementNotesSeen = true end
+  if text == "/freshaddon" then managementFreshAddonSeen = true end
   color(r, g, b, a, text)
 end
 )lua") == LUA_OK);
@@ -3821,7 +3892,7 @@ end
         session.frames(3);
         CHECK(visible());
         CHECK(full_snapshots == 1);
-        REQUIRE(luaL_dostring(L, "assert(managementRankSeen and managementBlockSeen)") == LUA_OK);
+        REQUIRE(luaL_dostring(L, "assert(managementRankSeen and managementBlockSeen and managementInitialRuleSeen)") == LUA_OK);
         // Exercise all controls' immediate-mode window paths, including the add-on list and smaller viewport.
         for (const char* label : {"Client & gameplay", "Add-ons", "Scripts & plugins", "Socials", "Assets & web", "Commands"}) {
             lua_pushstring(L, label);
@@ -3832,7 +3903,35 @@ end
         session.display_size = {800, 560};
         session.frames(2);
         REQUIRE(luaL_dostring(L, R"lua(
+managementStatus = "0"
+clickManagement = "Review changes##sm"
+)lua") == LUA_OK);
+        session.frames(2);
+        REQUIRE(luaL_dostring(L, "assert(managementValidationSeen and not managementReviewSeen)") == LUA_OK);
+        REQUIRE(luaL_dostring(L, R"lua(
+managementStatus = "253"
 managementText = "This command was blocked by your server admin."
+)lua") == LUA_OK);
+        session.frames(2);
+        REQUIRE(luaL_dostring(L, R"lua(
+originManagement = '##smorigin1'
+managementGmList = "/nav:253, /targ:204"
+)lua") == LUA_OK);
+        session.frames(2);
+        REQUIRE(luaL_dostring(L, "assert(managementPrefixSeen); managementTargetStatus = '205'") == LUA_OK);
+        session.frames(2);
+        REQUIRE(luaL_dostring(L, "assert(managementCanonicalSeen)") == LUA_OK);
+        REQUIRE(luaL_dostring(L, "originManagement = '##smorigin3'") == LUA_OK);
+        session.frames(2);
+        REQUIRE(luaL_dostring(L, "assert(managementUpdatedRuleSeen and managementNotesSeen and not managementFreshAddonSeen)") == LUA_OK);
+        snapshot.catalog_serial = 2;
+        snapshot.commands.back() = {"/freshaddon", "Newly registered command", "addon", {}, {"addon_commands"}};
+        REQUIRE(luaL_dostring(L, "managementNotesSeen = nil") == LUA_OK);
+        session.frames(2);
+        CHECK(full_snapshots == 1);
+        CHECK(catalog_refreshes == 1);
+        REQUIRE(luaL_dostring(L, "assert(managementFreshAddonSeen and not managementNotesSeen)") == LUA_OK);
+        REQUIRE(luaL_dostring(L, R"lua(
 clickManagement = "Review changes##sm"
 )lua") == LUA_OK);
         session.frames(2);
@@ -3848,6 +3947,7 @@ clickManagement = "Review changes##sm"
         snapshot.saving = false;
         snapshot.revision = "43";
         snapshot.fields.push_back({"commands", "blocked_message", "This command was blocked by your server admin."});
+        snapshot.fields[1].value = "/nav:253, /target:205";
         session.frames(2);
         CHECK(full_snapshots == 2);
         session.host.trusted_ui = false;

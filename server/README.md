@@ -113,7 +113,9 @@ save. The default is 200. Set `[management] min_status` in `client_files/hailsto
 1–32767 disables management access until corrected on disk.
 
 Search the **Stock (RoF2)**, **Extended**, and **Add-on** command lists by name or alias. A rule can inherit the
-server's policy, allow the command, or block it. Set the message players get for a blocked command in the Commands
+server's policy, allow the command, block it, or require a minimum EQEmu GM account status. The **Add-on** list
+updates as plugins and Lua scripts register commands on the GM's client. Commands explicitly named in the policy
+also appear while the add-on is unloaded. Set the message players get for a blocked command in the Commands
 page. The window also edits the server's add-on rules, script and plugin permissions, Lua socials, assets, web
 hosts, Hailstone access, and gameplay settings. Review changes before saving. The server keeps custom sections and
 untouched settings in the file. Creating the first file through this editor retains the server's pre-existing
@@ -300,8 +302,8 @@ The client sends its requests on custom opcodes that no server's opcode table li
 
 So the zone passes them to the `event_unhandled_opcode` quest event, and the script replies with raw packets.
 Server Management replies on 0x143b, with bit 1 of the settings reply advertising availability to an eligible
-account. The [client packet definitions](../src/net/server_management_packets.h) document its bounded snapshot and
-typed edit messages.
+account. Bit 2 adds the receiving player's numeric account status for GM command rules.
+The [client packet definitions](../src/net/server_management_packets.h) document bounded snapshots and typed edits.
 
 Hailstone 0.7.0 and older send the same requests 0x0e lower (last column); the script answers those too, so
 updating the script first leaves older clients working. (On Project Triune's server 0x1422 is its own opcode, so

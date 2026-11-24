@@ -10,7 +10,7 @@ does not bypass a function's own caller, screen or server-state checks.
 `API.version`, `API.Supports(module[, member])` and `API.Describe([module[, member]])`
 provide contract version and structural discovery. They confer no permissions.
 
-Coverage: **352/352 method implementation links**, **226/352 adjacent binding comment excerpts**, and **6/6 constant implementation links**. Excerpts below are verbatim binding comments; they preserve any documented signatures and results, and do not invent omitted arguments or results. **See binding** marks an author documentation gap.
+Coverage: **353/353 method implementation links**, **226/353 adjacent binding comment excerpts**, and **6/6 constant implementation links**. Excerpts below are verbatim binding comments; they preserve any documented signatures and results, and do not invent omitted arguments or results. **See binding** marks an author documentation gap.
 
 Unresolved method implementations: none.
 Unresolved constant implementations: none.
@@ -433,10 +433,11 @@ called it, by priority and registration order.
 | Member | Documented signature / binding comment | Existing binding | Required capabilities | Hook policy |
 | --- | --- | --- | --- | --- |
 | `API.serverManagement.Available` | **See binding** | `hs.ServerManagementAvailable` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
+| `API.serverManagement.CanonicalCommandName` | **See binding** | `hs.ServerManagementCanonicalCommandName` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
 | `API.serverManagement.Close` | **See binding** | `hs.ServerManagementClose` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
 | `API.serverManagement.Open` | **See binding** | `hs.ServerManagementOpen` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
 | `API.serverManagement.Save` | **See binding** | `hs.ServerManagementSave` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
-| `API.serverManagement.View` | `Known serial lets the built-in window retain the snapshot and read its save status without rebuilding the catalog.` | `hs.ServerManagementView` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
+| `API.serverManagement.View` | `The pack can keep its draft when only the command catalog changes.` | `hs.ServerManagementView` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
 
 ## session
 

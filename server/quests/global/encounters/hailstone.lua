@@ -17,8 +17,8 @@
 --
 -- And it sends the server's settings for the client: after every zone-in Hailstone sends OP_HailstoneSettingsRequest (raw
 -- 0x1432): {u32 magic 'NMSP'; u16 version 1}, and this answers OP_HailstoneSettings (0x1433): {u32 magic; u16 version 1;
--- u32 flags (none defined now; bit 0 hid the player count, which no Hailstone UI shows any more)}. Clients older
--- than it never ask, so they never get it.
+-- u32 flags; optional u16 account status}. Bit 1 advertises Server Management. Bit 2 means the account status
+-- is present. Older clients ignore the appended field. Replies on the old opcodes keep their original size.
 --
 -- And it sends the server's client files: what the server owner puts in client_files/ (beside eqemu_config.json:
 -- hailstone.cfg, spells_us.txt, eqstr_us.txt ..., and the folders assets/, plugins/ and scripts/). At its first
@@ -1630,7 +1630,7 @@ local management = (function()
 		web = { allow = "hosts" },
 		addons = { enforce = "boolean", default = "mode", suggest = "suggest", required = "required",
 			allow = "repos", block = "repos" },
-		commands = { default = "mode", allow = "commands", block = "commands", allow_groups = "groups",
+		commands = { default = "mode", allow = "commands", block = "commands", gm = "gm_commands", allow_groups = "groups",
 			block_groups = "groups", blocked_message = "message" },
 		management = { min_status = "min_status" },
 	}
@@ -1713,7 +1713,9 @@ local management = (function()
 	end
 
 	local function account_status(client)
-		return client.Admin and client:Admin() or 0
+		local rank = client.Admin and client:Admin()
+		if type(rank) ~= "number" or rank % 1 ~= 0 or rank > 32767 then return nil end
+		return math.max(0, rank)
 	end
 
 	local function current_policy_filename()
@@ -1748,8 +1750,7 @@ local management = (function()
 		return raw, readable, name
 	end
 
-	local function advertised(client)
-		local rank = account_status(client)
+	local function advertised(rank)
 		if rank < 1 or setting("client_files") == 0 then return false end
 		local raw, readable = load_cfg()
 		return readable and permitted(rank, raw)
@@ -1892,6 +1893,10 @@ local management = (function()
 			if kind == "caps" and not capabilities[low] then return false end
 			if kind == "groups" and not groups[low] then return false end
 			if kind == "commands" and word == "/" then return false end
+			if kind == "gm_commands" then
+				local command, status = word:match("^(.+):([0-9]+)$")
+				if not command or command == "/" or not unsigned(status, 1, 32767) then return false end
+			end
 			if kind == "scripts" and (word:sub(1, 1) == "/" or word:find("..", 1, true) or word:find("\\", 1, true)) then
 				return false
 			end
@@ -2087,7 +2092,7 @@ if ([System.IO.File]::Exists($dst)) {
 	local function save_under_lock(client, previous, edits)
 		local raw, readable, name = load_cfg(true)
 		if not readable then return STORAGE, "Could not read hailstone.cfg." end
-		if not permitted(account_status(client), raw) then return DENIED, "Server Management access denied." end
+		if not permitted(account_status(client) or 0, raw) then return DENIED, "Server Management access denied." end
 		if raw ~= previous.raw or name ~= previous.name then
 			return STALE, "The server configuration changed. Reload before saving."
 		end
@@ -2143,7 +2148,7 @@ if ([System.IO.File]::Exists($dst)) {
 		if request == 0 or (action ~= OPEN and action ~= SAVE) then return end
 		local id = client:CharacterID()
 		if not allow(requests, id, 12) then return end
-		local rank = account_status(client)
+		local rank = account_status(client) or 0
 		if rank < 1 or setting("client_files") == 0 then
 			reply(client, action, request, DENIED, 0, "Server Management access denied.")
 			return
@@ -2191,22 +2196,34 @@ if ([System.IO.File]::Exists($dst)) {
 		reply(client, action, request, status, revision, data)
 	end
 
-	return { request = REQUEST, advertised = advertised, on_request = on_request, reset = function()
-		snapshots, requests = {}, limiter(10)
-	end }
+	return {
+		request = REQUEST,
+		advertised = advertised,
+		account_status = account_status,
+		on_request = on_request,
+		reset = function()
+			snapshots, requests = {}, limiter(10)
+		end,
+	}
 end)()
 
 -- The server's settings for the client. Bit 0, the retired player count setting, stays clear.
 -- Bit 1 advertises Server Management to an eligible account. The encounter still authorizes each request.
+-- Bit 2 carries the recipient's account status for command rules. Older replies do not carry the field.
 local function send_settings(client)
 	if setting("enabled") == 0 then
 		return
 	end
-	local flags = management.advertised(client) and 2 or 0
-	local p = Packet(reply_op(client, OP_SETTINGS), 10, true)
+	local opcode = reply_op(client, OP_SETTINGS)
+	local rank = management.account_status(client)
+	local flags = management.advertised(rank or 0) and 2 or 0
+	local include_rank = opcode == OP_SETTINGS and rank ~= nil
+	if include_rank then flags = flags + 4 end
+	local p = Packet(opcode, include_rank and 12 or 10, true)
 	p:WriteInt32(0, MAGIC)
 	p:WriteInt16(4, 1)
 	p:WriteInt32(6, flags)
+	if include_rank then p:WriteInt16(10, rank) end
 	client:QueuePacket(p)
 end
 

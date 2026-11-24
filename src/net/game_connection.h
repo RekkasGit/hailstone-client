@@ -3324,6 +3324,8 @@ private:
     std::optional<plugin::Rules> server_rules_;
     // Returns false when this login received a policy that denies Hailstone access.
     bool update_server_rules();
+    void request_hailstone_settings();
+    void update_command_account_status();
     void update_server_management();
     void handle_server_management(const AppPacket& p);
     bool send_server_management(const AppPacket& p, std::uint32_t id, ServerManagementAction action);
@@ -3931,6 +3933,9 @@ private:
     std::unordered_map<std::string, std::uint8_t> quest_npcs_;
     bool quest_npcs_asked_ = false;
     bool hailstone_script_ = false;   // a zone answered OP_HailstoneSettingsRequest
+    std::optional<int> command_account_status_;
+    std::chrono::steady_clock::time_point settings_requested_at_{};
+    std::chrono::steady_clock::time_point command_account_status_received_at_{};
     bool server_management_offered_ = false;
     struct PendingManagement {
         std::uint32_t id;

@@ -164,14 +164,19 @@ inline constexpr std::string_view kDefaultCommandBlockedMessage = "This command 
 struct CommandDecision {
     bool allowed;
     std::string_view reason;
+    std::optional<int> minimum_status;
 };
 
 struct CommandRules {
     bool enabled = false, default_allow = true;
     std::vector<std::string> allow, block, allow_groups, block_groups;
+    // A malformed entry with a known spelling remains a denial until it is corrected.
+    std::map<std::string, std::optional<int>, std::less<>> gm;
     std::string blocked_message;
-    CommandDecision decision(std::string_view name) const;
-    bool allowed(std::string_view name) const { return decision(name).allowed; }
+    CommandDecision decision(std::string_view name, std::optional<int> account_status = std::nullopt) const;
+    bool allowed(std::string_view name, std::optional<int> account_status = std::nullopt) const {
+        return decision(name, account_status).allowed;
+    }
     std::string_view denial_message() const {
         return blocked_message.empty() ? kDefaultCommandBlockedMessage : std::string_view(blocked_message);
     }

@@ -457,6 +457,7 @@ void GameConnection::update() {
         server_rules_.reset();
         ++server_rules_serial_;
     }
+    update_command_account_status();
     update_server_management();
     // The original reapplies the new-armor filter to a member who joins or leaves the group or raid
     // (PlayerClient_ApplyNewArmorFilterGroupMember / RaidMember); a new spawn has it made in apply_spawn.
@@ -690,6 +691,9 @@ void GameConnection::handle_world(const AppPacket& p) {
         zone_session_.reset();
         invalidate_interaction_context();
         server_management_offered_ = false;
+        command_account_status_.reset();
+        settings_requested_at_ = {};
+        command_account_status_received_at_ = {};
         close_server_management();
         send_world(make_empty(Op::WorldComplete));
         world_drop_pending_ = true;
@@ -1258,7 +1262,7 @@ void GameConnection::finish_zone_in() {
     guild_world_invites_ = false;
     if (entered) send_zone(encode_hailstone_guild({}));
     // And the server's settings for the client; a server without Hailstone's script does not answer.
-    if (entered) send_zone(encode_hailstone_settings_request());
+    if (entered) request_hailstone_settings();
     // The camera effect's reset @0x4939b0 runs on the zone-in: a new zone starts unshaken.
     camera_shake_.reset();
     // DoMainLoop after ReadyEnterWorld: the task window rebuilt and the task compass mark looked for (0x76ff50).
@@ -1273,6 +1277,20 @@ void GameConnection::request_quest_npcs() {
         !zone_ready_ || !hailstone_script_) return;
     quest_npcs_asked_ = true;
     send_zone(encode_quest_npcs_request());
+}
+
+void GameConnection::request_hailstone_settings() {
+    settings_requested_at_ = options_.session.clock ? options_.session.clock() : Clock::now();
+    send_zone(encode_hailstone_settings_request());
+}
+
+void GameConnection::update_command_account_status() {
+    if (state_ != ConnectionState::InZone || zone_change_pending_ || !server_rules_ || server_rules_->provisional ||
+        server_rules_->commands.gm.empty()) return;
+    const auto now = options_.session.clock ? options_.session.clock() : Clock::now();
+    // Ask the encounter again while this policy needs an account rank. An absent or expired rank denies GM rules.
+    if (now - command_account_status_received_at_ >= std::chrono::seconds(60)) command_account_status_.reset();
+    if (now - settings_requested_at_ >= std::chrono::seconds(30)) request_hailstone_settings();
 }
 
 std::optional<TimeOfDay> GameConnection::current_time_of_day() const {
@@ -1344,6 +1362,8 @@ void GameConnection::handle_zone(const AppPacket& p) {
         if (auto v = decode_hailstone_settings(p)) {
             log::info("server settings: flags {:#x}", v->flags);
             hailstone_script_ = true;
+            command_account_status_ = v->account_status;
+            command_account_status_received_at_ = options_.session.clock ? options_.session.clock() : Clock::now();
             server_management_offered_ = (v->flags & kServerManagementOffered) != 0;
             if (!server_management_offered_) close_server_management();
         } else {

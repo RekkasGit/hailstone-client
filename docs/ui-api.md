@@ -424,9 +424,11 @@ account's server-side status. This module is closed to add-on code and custom in
 
 - `Available()` reports whether the client can request the server's policy. `Open()` starts the request and returns
   whether it was sent. The window waits for `View()` before showing policy data.
-- `View([known_serial])` returns `nil` without an authorized snapshot. The result has `serial`, `revision`, `file_revision`,
-  `message` and `saving`. A new serial also has `minimum_status`, `fields` (an array of `{section, key, value}`),
-  and `commands` (an array of `{name, description, origin, aliases, groups}`).
+- `CanonicalCommandName(name)` resolves a command spelling as the policy parser does, including RoF2 abbreviations.
+- `View([known_serial[, known_catalog_serial]])` returns `nil` without an authorized snapshot. The result has
+  `serial`, `catalog_serial`, `revision`, `file_revision`, `message`, and `saving`. A new snapshot serial adds
+  `minimum_status` and `fields` (an array of `{section, key, value}`). A new snapshot or catalog serial adds
+  `commands` (an array of `{name, description, origin, aliases, groups}`). The catalog can update during a draft edit.
 - `Save(revision, edits)` sends only edited `{section, key, value}` records and returns whether submission started.
   Success supplies a new snapshot serial. A failure can leave the current serial in place with an explanation so
   the window can retain the draft. An empty value is an explicit edit.

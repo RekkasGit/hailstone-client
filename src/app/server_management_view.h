@@ -16,10 +16,11 @@ struct ServerManagementCommand {
     std::vector<std::string> aliases, groups;
 };
 
-// A snapshot authorized by the server. A matching serial needs only the metadata; the pack still has its fields.
+// The config snapshot and locally registered commands have independent revisions.
 struct ServerManagementView {
     std::string revision, file_revision, message;
     std::uint32_t serial = 0;
+    std::uint32_t catalog_serial = 0;
     int minimum_status = 200;
     bool saving = false;
     std::vector<ServerManagementField> fields;

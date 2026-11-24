@@ -40,14 +40,19 @@ void print_commands(const plugin::CommandRules* rules) {
     if (rules) {
         configured = rules->allow;
         configured.insert(configured.end(), rules->block.begin(), rules->block.end());
+        for (const auto& rule : rules->gm) configured.push_back(rule.first);
     }
     for (const auto& row : plugin::command_catalog(configured)) {
         auto origin = plugin::command_origin_text(row.origin);
         std::printf("  %-24s %-8.*s", row.name.c_str(), static_cast<int>(origin.size()), origin.data());
         if (rules) {
             auto decision = rules->decision(row.name);
-            std::printf(" %-8s %.*s", decision.allowed ? "allowed" : "blocked", static_cast<int>(decision.reason.size()),
-                        decision.reason.data());
+            if (decision.minimum_status) {
+                std::printf(" GM %d+", *decision.minimum_status);
+            } else {
+                std::printf(" %-8s %.*s", decision.allowed ? "allowed" : "blocked",
+                            static_cast<int>(decision.reason.size()), decision.reason.data());
+            }
         }
         for (const auto& alias : row.aliases) std::printf(" %s", alias.c_str());
         if (!row.description.empty()) std::printf("  %s", row.description.c_str());

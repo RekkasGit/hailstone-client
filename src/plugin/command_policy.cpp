@@ -209,25 +209,30 @@ std::vector<CommandCatalogEntry> command_catalog(std::span<const std::string> re
             addons.insert(std::move(spelling));
     }
     for (const auto& spelling : addons)
-        rows.push_back({spelling, "Provided by a loaded add-on.", CommandOrigin::Addon, {}, {std::string(kAddons)}, false});
+        rows.push_back({spelling, "Provided by an add-on.", CommandOrigin::Addon, {}, {std::string(kAddons)}, false});
     return rows;
 }
 
-CommandDecision CommandRules::decision(std::string_view name) const {
-    if (!enabled) return {true, "Command policy is off"};
+CommandDecision CommandRules::decision(std::string_view name, std::optional<int> account_status) const {
+    if (!enabled) return {true, "Command policy is off", std::nullopt};
     const auto canonical = canonical_command_name(name);
-    if (in_list(block, canonical)) return {false, "Explicit block"};
-    if (in_list(allow, canonical)) return {true, "Explicit allowance"};
+    if (in_list(block, canonical)) return {false, "Explicit block", std::nullopt};
+    if (const auto rule = gm.find(canonical); rule != gm.end()) {
+        const auto minimum = rule->second;
+        if (!minimum) return {false, "Invalid GM status rule", std::nullopt};
+        return {account_status && *account_status >= *minimum, "GM status rule", minimum};
+    }
+    if (in_list(allow, canonical)) return {true, "Explicit allowance", std::nullopt};
     const auto& entries = catalog().entries;
     const auto entry = entries.find(canonical);
     auto matches = [&](std::string_view group) {
         return entry == entries.end() ? group == kAddons : in_list(entry->second.groups, group);
     };
     if (auto it = std::find_if(block_groups.begin(), block_groups.end(), matches); it != block_groups.end())
-        return {false, *it};
+        return {false, *it, std::nullopt};
     if (auto it = std::find_if(allow_groups.begin(), allow_groups.end(), matches); it != allow_groups.end())
-        return {true, *it};
-    return {default_allow, "Default policy"};
+        return {true, *it, std::nullopt};
+    return {default_allow, "Default policy", std::nullopt};
 }
 
 } // namespace hailstone::plugin

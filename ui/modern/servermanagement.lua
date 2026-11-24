@@ -7,6 +7,7 @@ local M = dofile("lib/server_management.lua")
 local T, C = hud.T, hud.T.color
 local WINDOW = "ServerManagement"
 local RULES = { { "", "Inherit" }, { "allow", "Allow" }, { "block", "Block" } }
+local COMMAND_RULES = { RULES[1], RULES[2], { "block", "Deny" }, { "gm", "GM" } }
 local DEFAULT = { { "allow", "Allow" }, { "deny", "Block" } }
 local SWITCH = { { "on", "On" }, { "off", "Off" } }
 local ADDON_MODE = { { "", "Inherit" }, { "allow", "Allow" }, { "block", "Block" }, { "required", "Required" } }
@@ -57,7 +58,8 @@ local ADDONS = {
 }
 local COMMAND_LISTS = {
   input("commands.allow", "Allow by name", "", "Comma-separated command names, including commands from unloaded add-ons.", 8192, "/echo, /customcommand"),
-  input("commands.block", "Block by name", "", "Comma-separated command names. An explicit block wins over an allow.", 8192, "/nav, /follow"),
+  input("commands.block", "Block by name", "", "Comma-separated command names. An explicit block takes priority over GM and allow rules.", 8192, "/nav, /follow"),
+  input("commands.gm", "GM by name", "", "Comma-separated command:status entries. Minimum account status is 1 to 32767.", 8192, "/nav:200, /customcommand:150"),
 }
 local ADDON_LISTS = {
   input("addons.allow", "Allow", "", "Comma-separated repository IDs.", 8192, "example/hud"),
@@ -66,7 +68,7 @@ local ADDON_LISTS = {
   input("addons.suggest", "Suggest", "", "Repository IDs, release URLs, or repo@tag.", 8192, "example/hud@v1.2.0"),
 }
 
-local active, draft, serial, minimumStatus
+local active, draft, serial, catalogSerial, minimumStatus
 local section, origin, page, search = 1, 2, 1, ""
 local results, filteredText, filteredOrigin
 local reviewing, confirmClose, addPackage, localMessage
@@ -76,7 +78,7 @@ for _, collection in ipairs({ GAMEPLAY, SCRIPTS, SOCIALS, ASSETS, ADDONS }) do
 end
 local changeLabels = {
   ["commands.default"] = "Default command policy", ["commands.blocked_message"] = "Blocked command message",
-  ["commands.allow"] = "Allowed commands", ["commands.block"] = "Blocked commands",
+  ["commands.allow"] = "Allowed commands", ["commands.block"] = "Blocked commands", ["commands.gm"] = "GM command rules",
   ["commands.allow_groups"] = "Allowed command groups", ["commands.block_groups"] = "Blocked command groups",
   ["addons.allow"] = "Allowed add-ons", ["addons.block"] = "Blocked add-ons",
   ["addons.required"] = "Required add-ons and minimum versions", ["addons.suggest"] = "Suggested add-ons",
@@ -192,6 +194,9 @@ local function commands(s)
   if filteredText ~= search or filteredOrigin ~= origin then
     results, page = M.filterCommands(draft, ORIGINS[origin], search), 1
     filteredText, filteredOrigin = search, origin
+  elseif not results then
+    results = M.filterCommands(draft, ORIGINS[origin], search)
+    page = math.min(page, math.max(1, math.ceil(#results / PAGE_SIZE)))
   end
 
   commandGroups(M.commandRules(draft))
@@ -210,7 +215,7 @@ local function commands(s)
     ui.TableSetupColumn("Command", ui.TableColumnFlags.WidthStretch, 1.05)
     ui.TableSetupColumn("Description", ui.TableColumnFlags.WidthStretch, 2.15)
     ui.TableSetupColumn("Rule", ui.TableColumnFlags.WidthFixed, 83 * s)
-    ui.TableSetupColumn("Effective", ui.TableColumnFlags.WidthFixed, 66 * s)
+    ui.TableSetupColumn("Effective", ui.TableColumnFlags.WidthFixed, 82 * s)
     ui.TableHeadersRow()
     for i = first, last do
       local command = results[i]
@@ -226,16 +231,31 @@ local function commands(s)
       wrap(command.description ~= "" and command.description or "No description available.", C.muted)
       ui.TableNextColumn()
       ui.SetNextItemWidth(-1)
-      local nextValue = selectValue("##smcommand" .. command.name, RULES, state.commands[command.name] or "")
+      local nextValue = selectValue("##smcommand" .. command.name, COMMAND_RULES, state.commands[command.name] or "")
       if nextValue then
         M.setCommandRule(draft, command.name, nextValue)
-        state.commands[command.name] = nextValue ~= "" and nextValue or nil
+        state = M.commandRules(draft)
         localMessage = nil
       end
+      if state.commands[command.name] == "gm" then
+        ui.SetNextItemWidth(-1)
+        local rank, changed = ui.InputTextWithHint("##smgm" .. command.name, "Min. status",
+          state.gm[command.name].status, 5, ui.InputTextFlags.CharsDecimal)
+        if ui.IsItemHovered() then ui.SetTooltip("Minimum GM account status (1 to 32767)") end
+        if changed then
+          M.setCommandRule(draft, command.name, "gm", false, rank)
+          state = M.commandRules(draft)
+          localMessage = nil
+        end
+      end
       ui.TableNextColumn()
-      local effective, reason = M.commandEffective(state, command)
-      local blocked = effective == "block"
-      colored(blocked and "Blocked" or "Allowed", blocked and C.danger or C.pet)
+      local effective, reason, threshold = M.commandEffective(state, command)
+      if effective == "gm" then
+        colored(threshold and string.format("GM %d+", threshold) or "GM invalid", threshold and C.gold or C.danger)
+      else
+        local blocked = effective == "block"
+        colored(blocked and "Blocked" or "Allowed", blocked and C.danger or C.pet)
+      end
       if ui.IsItemHovered() then ui.SetTooltip(reason) end
     end
     ui.EndTable()
@@ -346,7 +366,6 @@ end
 
 local function body(_, _, _, _, s)
   local width, height = ui.GetContentRegionAvail()
-  local changes = M.changes(draft)
   colored("HAILSTONE", C.accent)
   ui.SameLine(math.max(106 * s, width - 115 * s))
   colored(string.format("GM access / %d+", minimumStatus), C.gold)
@@ -379,7 +398,7 @@ local function body(_, _, _, _, s)
   if confirmClose then
     heading("Discard unsaved changes?", "Closing this window discards your draft.")
   elseif reviewing then
-    review(changes)
+    review(M.changes(draft))
   else
     local entry = PAGES[section]
     if entry.draw then entry.draw(s)
@@ -387,6 +406,9 @@ local function body(_, _, _, _, s)
   end
   ui.EndChild()
   ui.Separator()
+  local changes = M.changes(draft)
+  local gmEdits = draft.edits["commands.gm"]
+  local invalidGm = gmEdits ~= nil and not M.validCommandGmList(gmEdits)
   local footerTable = width >= 585 * s and ui.BeginTable("##smfooter", 2, ui.TableFlags.SizingStretchProp)
   if footerTable then
     ui.TableSetupColumn("Policy", ui.TableColumnFlags.WidthStretch, 1)
@@ -397,10 +419,11 @@ local function body(_, _, _, _, s)
   local version = active.file_revision and active.file_revision ~= "" and "Revision " .. active.file_revision
     or "No saved revision"
   wrap("client_files/hailstone.cfg / " .. version .. " / Applies on next login", C.muted)
-  local status = localMessage or (active.message ~= "" and active.message) or
+  local status = (invalidGm and "GM rules require command:status with a status from 1 to 32767.") or
+    localMessage or (active.message ~= "" and active.message) or
     (active.saving and "Saving policy..." or (#changes == 0 and "No unsaved changes" or
       string.format("%d unsaved %s", #changes, #changes == 1 and "change" or "changes")))
-  wrap(status, (localMessage or (reviewing and active.message ~= "" and not active.saving)) and C.danger or C.muted)
+  wrap(status, (invalidGm or localMessage or (reviewing and active.message ~= "" and not active.saving)) and C.danger or C.muted)
   if footerTable then ui.TableNextColumn() end
   ui.BeginDisabled(active.saving)
   if confirmClose then
@@ -410,17 +433,19 @@ local function body(_, _, _, _, s)
   elseif reviewing then
     if ui.Button("Keep editing##smreview") then reviewing, localMessage = false, nil end
     ui.SameLine()
-    if primary("Save policy##sm") then
+    ui.BeginDisabled(invalidGm)
+    if primary("Save policy##sm") and not invalidGm then
       if manager.Save(active.revision, changes) then localMessage = nil
       else localMessage = "Could not send policy changes. Check the server connection and try again." end
     end
+    ui.EndDisabled()
   else
     ui.BeginDisabled(#changes == 0 and not next(draft.newAddons))
     if ui.Button("Discard##sm") then draft.edits, draft.newAddons, localMessage = {}, {}, nil end
     ui.EndDisabled()
     ui.SameLine()
-    ui.BeginDisabled(#changes == 0)
-    if primary("Review changes##sm") then reviewing, localMessage = true, nil end
+    ui.BeginDisabled(#changes == 0 or invalidGm)
+    if primary("Review changes##sm") and #changes > 0 and not invalidGm then reviewing, localMessage = true, nil end
     ui.EndDisabled()
   end
   ui.EndDisabled()
@@ -441,15 +466,19 @@ local opts = {
 }
 
 ui.window("Server Management", function()
-  active = manager and API.session.InGame() and manager.View(serial or 0) or nil
-  if not active then draft, serial = nil, nil return end
+  active = manager and API.session.InGame() and manager.View(serial or 0, catalogSerial or 0) or nil
+  if not active then draft, serial, catalogSerial = nil, nil, nil return end
   if active.serial ~= serial then
-    draft, serial = M.new(active), active.serial
+    draft, serial = M.new(active, manager.CanonicalCommandName), active.serial
     minimumStatus = active.minimum_status
     filteredText, filteredOrigin, addPackage = nil, nil, ""
     reviewing, confirmClose, localMessage = false, false, nil
     ui.SetNextWindowFocus()
+  elseif active.catalog_serial ~= catalogSerial then
+    M.setCommands(draft, active.commands)
+    results = nil
   end
+  catalogSerial = active.catalog_serial
   opts.shown = true
   hud.Dialog(WINDOW, "Server Management", opts, body)
 end)
