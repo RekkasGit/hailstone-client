@@ -13,6 +13,7 @@
 - Two Hailstone windows started separately can no longer install or roll back an update at the same time, which could leave the UI folder half old and half new (chat without input, "is not in the UI's folder" in the log). The second one leaves the install to the first
 - Charged items stay in inventory and on the hotbar after spending a charge if the server keeps the item
 - Add-ons that hook HUD methods (`hs.UI.hooks` on `character.Gauge`, `character.Label` and the like) cost less per frame: a hooked call no longer checks every add-on's hooks or sorts them each time
+- `mq.pickle` no longer counts every file in the script's config folder on each write. Files added or removed there outside the script count from the script's next start
 
 ## 0.7.3-beta (2026-11-23)
 

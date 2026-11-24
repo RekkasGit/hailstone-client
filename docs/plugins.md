@@ -283,7 +283,8 @@ A script whose `events` permission the server takes away gets no more lines: tho
 - `loadfile` hands back only what it returned, and refuses a file whose values are or hold a function (`nil` and why;
   `dofile` raises it).
 - A file is at most 8 MiB. A write that would leave `mq.configDir` holding more than 1000 files or 64 MiB is refused
-  (an error).
+  (an error). The folder is counted at a script's first write and kept up to date by the writes after it; files
+  added or removed there by other means count from the next script's start.
 
 #### Modules
 

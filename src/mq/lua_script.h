@@ -166,6 +166,16 @@ struct ScriptHost::Impl {
     mutable std::map<fs::path, HashEntry> hashes;
     std::optional<Sha256Digest> file_hash(const fs::path& file) const;
 
+    // What each config directory holds, for mq.pickle's limits (l_write_config), by canonical directory: counted
+    // once (a walk of the directory, stopping a little past kMaxConfigFiles), then kept by the writes themselves, so
+    // a write does not walk the directory again. open_state forgets the counts: files the player added or removed
+    // meanwhile count from a script's start.
+    struct ConfigUsage {
+        std::size_t files = 0;
+        std::uintmax_t bytes = 0;
+    };
+    std::map<fs::path, ConfigUsage> config_usage;
+
     // The Lua socials' states (press_button), by social.
     std::map<int, std::unique_ptr<Script>> buttons;
     std::map<int, std::pair<Sha256Digest, std::string>> broken; // socials whose code does not compile, by hash

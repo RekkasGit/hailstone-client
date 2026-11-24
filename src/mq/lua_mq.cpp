@@ -984,24 +984,25 @@ std::optional<fs::path> config_path(lua_State* L, const char* given) {
     return p;
 }
 
-// What the config directory holds: its files and their bytes, `except` left out (the file a write replaces). Stops
-// counting a little past kMaxConfigFiles.
-struct ConfigUsage {
-    std::size_t files = 0;
-    std::uintmax_t bytes = 0;
-};
-ConfigUsage config_usage(const fs::path& dir, const fs::path& except) {
-    ConfigUsage u;
+// What the config directory holds: its files and their bytes. Stops counting a little past kMaxConfigFiles (past
+// it every write is refused anyway).
+ScriptHost::Impl::ConfigUsage count_config(const fs::path& dir) {
+    ScriptHost::Impl::ConfigUsage u;
     std::error_code ec;
     for (fs::recursive_directory_iterator it(dir, fs::directory_options::skip_permission_denied, ec), end;
          !ec && it != end && u.files <= kMaxConfigFiles; it.increment(ec)) {
         std::error_code fec;
-        if (!it->is_regular_file(fec) || it->path() == except) continue;
+        if (!it->is_regular_file(fec)) continue;
         ++u.files;
         const auto size = it->file_size(fec);
         if (!fec) u.bytes += size;
     }
     return u;
+}
+
+bool path_within(const fs::path& dir, const fs::path& file) {
+    const fs::path rel = file.lexically_relative(dir);
+    return !rel.empty() && *rel.begin() != ".." && *rel.begin() != ".";
 }
 
 // mq._write_config(path, text): mq.pickle's file write, within kMaxConfigFileBytes for the file and kMaxConfigFiles
@@ -1025,15 +1026,43 @@ int l_write_config(lua_State* L) {
             return;
         }
         std::error_code ec;
-        const ConfigUsage used = config_usage(fs::weakly_canonical(script_config_dir(s), ec), *p);
-        if (used.files + 1 > kMaxConfigFiles || used.bytes + n > kMaxConfigBytes) {
+        const fs::path dir = fs::weakly_canonical(script_config_dir(s), ec);
+        auto& counts = s.host->config_usage;
+        auto it = counts.find(dir);
+        if (it == counts.end()) it = counts.emplace(dir, count_config(dir)).first;
+        // The file a write replaces is left out, as before it is written: one stat, never another walk.
+        std::error_code fec;
+        const bool replaces = fs::is_regular_file(*p, fec);
+        std::uintmax_t old_size = 0;
+        if (replaces) {
+            const auto size = fs::file_size(*p, fec);
+            if (!fec) old_size = size;
+        }
+        const auto& used = it->second;
+        const std::size_t other_files = used.files - std::min<std::size_t>(used.files, replaces ? 1 : 0);
+        const std::uintmax_t other_bytes = used.bytes - std::min(used.bytes, old_size);
+        if (other_files + 1 > kMaxConfigFiles || other_bytes + n > kMaxConfigBytes) {
             problem = 4;
             return;
         }
         fs::create_directories(p->parent_path(), ec);
         std::ofstream f(*p, std::ios::binary | std::ios::trunc);
         if (f) f.write(text, static_cast<std::streamsize>(n));
-        else problem = 2;
+        if (f) f.close();
+        // Every counted directory the file is in (the shared one holds each script's own folder) gets the write; one
+        // whose count is no longer known (a write that failed part way) is counted again at its next write.
+        for (auto c = counts.begin(); c != counts.end();) {
+            if (!path_within(c->first, *p)) {
+                ++c;
+            } else if (!f) {
+                c = counts.erase(c);
+            } else {
+                if (!replaces) ++c->second.files;
+                c->second.bytes = c->second.bytes - std::min(c->second.bytes, old_size) + n;
+                ++c;
+            }
+        }
+        if (!f) problem = 2;
     });
     if (problem == 1) return luaL_error(L, "mq.pickle: '%s' is outside the config directory", given);
     if (problem == 2) return luaL_error(L, "mq.pickle: cannot write '%s'", given);
@@ -1443,6 +1472,7 @@ ScriptHost::~ScriptHost() {
 }
 
 bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
+    config_usage.clear();
     sc.L = lua_newstate(limited_alloc, &sc, luaL_makeseed(nullptr));
     if (!sc.L) {
         why = "out of memory";
