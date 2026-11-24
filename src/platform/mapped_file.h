@@ -20,8 +20,9 @@ namespace hailstone::platform {
 // nothing replaces while they are mapped: assets::PfsArchive::storage_for maps the game folder's files and reads the
 // server overlay's (which the server files sync replaces) into memory.
 //
-// The underlying file must not be edited or truncated in place while mapped: a read of a page past the new end faults
-// (SIGBUS on POSIX, EXCEPTION_IN_PAGE_ERROR on Windows), and an edit shows through. See docs/hardening.md.
+// The underlying file must not be edited or truncated in place while mapped: on POSIX a read of a page past the new
+// end faults (SIGBUS; Windows refuses the truncation while the view exists, and faults only on a read error of the
+// disk), and an edit shows through. See docs/hardening.md.
 //
 // OS calls live here only; callers see a span. The Windows and POSIX spellings differ in their .cpp, nothing else.
 class MappedFile {

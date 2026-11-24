@@ -110,15 +110,19 @@ address space, a file system that cannot map, an empty file) is also read into t
 
 #### The cost of mapping
 
-A game file that another program truncates or rewrites in place while it is mapped can:
+A game file that another program truncates or rewrites in place while it is mapped (a patcher, launcher or sync
+tool writing into the game folder alongside the client) can:
 
-- crash the client with SIGBUS on Linux and macOS, or `EXCEPTION_IN_PAGE_ERROR` on Windows, when a member past the
-  new end is read;
+- crash the client with SIGBUS on Linux and macOS when a member past the new end is read. Windows refuses to shorten
+  a file while a view of it is mapped (`SetEndOfFile` fails with `ERROR_USER_MAPPED_FILE`, per Microsoft's
+  documentation; not tested here), so there the fault (`EXCEPTION_IN_PAGE_ERROR`) comes only from a read error of the
+  disk or share the file is on;
 - hand the parsers bytes that change under them.
 
-(a patcher, launcher or sync tool writing into the game folder alongside the client). The parsers bound every read
-against the mapping's length, so changed bytes are treated like any malformed file; a fault from a shrunk file is
-not caught.
+The parsers bound every read against the mapping's length, so changed bytes are treated like any malformed file; a
+fault from a shrunk file is not caught. Checking the file's size before each read would still leave the moment
+between the check and the read; catching the signal would mean jumping out of a parser in the middle of building its
+objects. Neither was done (docs/todo.md "Code health").
 
 It is accepted because:
 
