@@ -32,21 +32,29 @@ std::string display_name(const TextureInfo& info) {
 GpuWorker::GpuWorker(ModelSetFactory factory) : thread_([this, f = std::move(factory)]() mutable { run(std::move(f)); }) {}
 
 GpuWorker::~GpuWorker() {
+    std::deque<Queued> dropped;
     {
         std::lock_guard lock(mutex_);
         stop_ = true;
-        tasks_.clear();
+        dropped.swap(tasks_);
     }
     cv_.notify_all();
+    for (Queued& q : dropped)
+        if (q.dropped) q.dropped();
     thread_.join();
 }
 
-void GpuWorker::post(Task task, bool urgent) {
+void GpuWorker::post(Task task, bool urgent, std::function<void()> dropped) {
     {
         std::lock_guard lock(mutex_);
-        if (urgent) tasks_.push_front(std::move(task));
-        else tasks_.push_back(std::move(task));
+        if (!stop_) {
+            if (urgent) tasks_.push_front({std::move(task), std::move(dropped)});
+            else tasks_.push_back({std::move(task), std::move(dropped)});
+            dropped = nullptr;
+        }
     }
+    // (posted while the worker stops: it will never run)
+    if (dropped) dropped();
     cv_.notify_all();
 }
 
@@ -84,7 +92,7 @@ void GpuWorker::run(ModelSetFactory factory) {
             std::unique_lock lock(mutex_);
             cv_.wait(lock, [&] { return stop_ || !tasks_.empty(); });
             if (stop_) break;
-            task = std::move(tasks_.front());
+            task = std::move(tasks_.front().task);
             tasks_.pop_front();
         }
         // (a task runs without models when they failed: it sees null models and says so)
@@ -434,6 +442,17 @@ void PackJob::run() {
                     made_.push_back(item);
                     --in_gpu_;
                 }
+                cv_.notify_all();
+            }, false, [this, item] {
+                // The worker stopped before this texture's turn: it comes back with nothing made, and the build,
+                // which can no longer finish, ends as cancelled.
+                item->files.clear();
+                {
+                    std::lock_guard lock(mutex_);
+                    made_.push_back(item);
+                    --in_gpu_;
+                }
+                cancel();
                 cv_.notify_all();
             });
         }

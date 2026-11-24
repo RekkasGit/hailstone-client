@@ -40,12 +40,14 @@ using ModelSetFactory = std::function<std::unique_ptr<ModelSet>(std::string* err
 class GpuWorker {
 public:
     explicit GpuWorker(ModelSetFactory factory);
-    ~GpuWorker(); // finishes the task running, drops the rest
+    ~GpuWorker(); // finishes the task running, drops the rest (calling each one's `dropped`)
     GpuWorker(const GpuWorker&) = delete;
     GpuWorker& operator=(const GpuWorker&) = delete;
 
     using Task = std::function<void(const Models&)>;
-    void post(Task task, bool urgent = false);
+    // `dropped`, when given, runs instead of the task when the worker stops before it ran (on the stopping thread),
+    // so whoever waits for the task hears that it will not come: a PackJob's textures end as cancelled.
+    void post(Task task, bool urgent = false, std::function<void()> dropped = {});
     // Whether the models loaded (false until the thread has tried; error() says why they did not).
     bool ready() const { return ready_; }
     bool failed() const { return failed_; }
@@ -56,7 +58,11 @@ private:
     void run(ModelSetFactory factory);
     mutable std::mutex mutex_;
     std::condition_variable cv_;
-    std::deque<Task> tasks_;
+    struct Queued {
+        Task task;
+        std::function<void()> dropped;
+    };
+    std::deque<Queued> tasks_;
     bool stop_ = false;
     std::atomic<bool> ready_{false}, failed_{false};
     std::string error_;
@@ -129,7 +135,8 @@ struct JobOptions {
 // counts alone let the textures waiting for the GPU and the encoders hold tens of GiB.
 inline constexpr std::uint64_t kDefaultMemoryBudget = std::uint64_t{4} << 30;
 
-// One build, on threads of its own; the GPU stage runs on `gpu`, which must outlive it.
+// One build, on threads of its own; the GPU stage runs on `gpu`, which must outlive it (a worker that stops first
+// drops the textures it holds: the build then ends as cancelled instead of waiting for them).
 class PackJob {
 public:
     PackJob(JobOptions options, GpuWorker& gpu);

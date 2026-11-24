@@ -566,6 +566,67 @@ TEST_CASE("texpack: scan, the scan's cache and a whole build") {
     }
 }
 
+TEST_CASE("texpack: a build whose GPU worker stops first ends as cancelled, not waiting for ever") {
+    test::ScratchDir dir("texpack_gpu_gone");
+    const fs::path assets = dir.path() / "assets";
+    std::vector<std::pair<std::string, std::vector<std::byte>>> files;
+    for (int i = 0; i < 10; ++i) // ten different pictures: more than the GPU's queue holds
+        files.emplace_back("t" + std::to_string(i) + ".bmp",
+                           bmp8(16, 16, [i](std::uint32_t x, std::uint32_t y) { return 1 + (x + y + i * 7) % 200; }));
+    write(assets / "gpuzone.s3d", test::pfs_fixtures::make_pfs(files));
+    const auto archives = list_archives({assets});
+    ScanResult r = scan(archives, {.threads = 1});
+    REQUIRE(r.textures.size() == 10);
+
+    auto gpu = std::make_unique<GpuWorker>([](std::string*) { return std::make_unique<FakeSet>(); });
+    // The worker is busy with a task of its own until the build has heard its textures were dropped.
+    std::atomic<PackJob*> job_seen{nullptr};
+    std::atomic<bool> released{false};
+    gpu->post([&](const Models&) {
+        for (int i = 0; i < 4000 && !released; ++i) {
+            if (PackJob* j = job_seen.load(); j && j->status().state != JobStatus::State::Running) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+    });
+    JobOptions o;
+    o.pack_dir = dir.path() / "textures" / "gone";
+    o.textures = r.textures;
+    o.settings = {2, true};
+    o.encoders = 1;
+    PackJob job(o, *gpu);
+    job_seen = &job;
+    REQUIRE(wait_for([&] { return gpu->queued() == 6; })); // the build's share of the queue, the reader waiting
+    gpu.reset();                                            // drops them: the build must hear of it
+    released = true;
+    REQUIRE(wait_for([&] { return job.finished(); }));
+    const JobStatus s = job.status();
+    CHECK(s.state == JobStatus::State::Cancelled);
+    CHECK(s.files_written == 0);
+    CHECK(s.bytes_held == 0);
+}
+
+TEST_CASE("texpack: a GPU task a stopping worker drops calls its dropped callback instead") {
+    std::atomic<int> ran{0}, dropped{0};
+    std::atomic<bool> release{false};
+    auto gpu = std::make_unique<GpuWorker>([](std::string*) { return std::make_unique<FakeSet>(); });
+    gpu->post([&](const Models&) {
+        while (!release) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        ++ran;
+    });
+    for (int i = 0; i < 3; ++i) gpu->post([&](const Models&) { ++ran; }, false, [&] { ++dropped; });
+    gpu->post([&](const Models&) { ++ran; }); // dropped, with nothing to call
+    REQUIRE(wait_for([&] { return gpu->queued() == 4; }));
+    // The running task lets go once ~GpuWorker has dropped the queue (it waits for the running task after that).
+    std::thread let_go([&] {
+        while (dropped < 3) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        release = true;
+    });
+    gpu.reset();
+    let_go.join();
+    CHECK(ran == 1);
+    CHECK(dropped == 3);
+}
+
 TEST_CASE("texpack: urgent GPU tasks go first") {
     std::vector<int> order;
     std::mutex m;
