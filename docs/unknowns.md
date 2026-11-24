@@ -465,12 +465,10 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     measured, so the phase may differ by that much.
   - Keys: D3DX compresses each animation set (lossiness 0.1) and the original samples the compressed keys; the authored
     keys are sampled here, so a long track (the rings' 121 keys) may move a little differently between keys.
-  - Contact: only the player's sweep, floor test and the boats' hull probes meet the moving parts. The other spawns'
-    probes, line of sight, picking and the navigation mesh use the static mesh, so /nav may plan through a ring.
+  - Contact without an authored volume: only the player's sweep, floor test and the boats' hull probes meet the
+    moving parts. The other spawns' probes, line of sight, picking and the navigation mesh use the static mesh, so
+    /nav may plan through a ring.
   - A triangle across two moving nodes is carried whole by its first moving corner's node for collision.
-  - That the sweep meets the parts where the animation has them is read from the line-segment test's per-part mesh
-    path (0x100c66e0); the sphere test's polygon path (`CActorData::FindIntersectionSphere` @0x10045840 for a
-    hierarchical actor) was not traced.
   - Settle: a live session in Ssraeshza Temple with a non-GM player going through the rings, and a recording of the
     original's phase against its clock.
 
@@ -688,6 +686,10 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 
 ## Items, inventory and commerce
 
+- **Autosplit set outside this installation.** EQEmu saves the character's state but writes zero into the RoF2
+  profile's Autosplit byte (`PlayerProfileData +0x52b0` in the native client). Hailstone shows the last choice saved
+  locally. Reporting the server's actual state on a new installation or after a change elsewhere needs the server
+  to send that state with a way to distinguish a real off value from the stock zero.
 - **A bag's contents past its own BagSlots.**
   - Now: `game::Inventory::put` and `swap` accept any bag sub-slot below `net::kMaxBagContents` (1000), not only those
     below the bag's BagSlots, so an item the server puts at a sub-slot the bag lacks is kept (and shown nowhere).
@@ -1373,7 +1375,7 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     290, 348, 349). Those keep RoF2's channels here, and are in no menu.
   - Settle: a capture of an EQEmu server that sends these colours.
 
-- Chat codes (docs/mechanics.md "Chat codes"): where the original sends `&PCT;` for a `%` that is no code, Hailstone sends the `%` itself, as it did before, because it shows received chat as it comes and would print `&PCT;` from another Hailstone player. That an original client shows a received bare `%` as `%` is not checked. `%M` names the pet window's pet (the player's one pet on a stock server); the original takes the first spawn in its spawn list whose MasterID is the player, temporary pets included, and that list's order is not modelled, so with a swarm pet out the two may name different pets. A capture of what an original client shows for a received `%`, and its pick with a pet and a swarm pet out, would settle them.
+- Chat codes (docs/mechanics.md "Chat codes"): `%M` names the pet window's pet. The original takes the first spawn in its spawn list whose MasterID is the player, temporary pets included. A capture with a pet and a swarm pet out would settle which pet the original picks.
 
 ## Real estate
 

@@ -714,6 +714,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         quest_npcs_asked_ = false;
         world_.player_id = 0;
         world_.controlled_id = 0;
+        if (world_.eye_id) speed_run_ = 0.0f;
         world_.eye_id = world_.view_id = 0;
         eye_motion_dirty_ = false;
         last_eye_position_send_ = {};
@@ -2513,7 +2514,9 @@ void GameConnection::send_position(bool force, glm::vec3 position, bool reliable
     // PackPlayerPositionUpdate @0x4dd360: the animation field is SpeedRun (+0x7c, clamped to -12.8..12.7) x 40,
     // truncated (__ftol2_sse); other clients unpack it x 0.025 as the spawn's SpeedRun (its walk / run animation).
     // A ridden mount's (the controlled spawn's) goes out under the rider's id (DoMainLoop @0x53e28b).
-    float speed_run = std::clamp(speed_run_, -12.8f, 12.7f);
+    // While the Eye has the controls, SpeedRun belongs to its frame. The passive player has no run speed.
+    // Sending the Eye's speed under the player's ID makes observers extrapolate movement for the caster.
+    const float speed_run = std::clamp(world_.eye_id ? 0.0f : speed_run_, -12.8f, 12.7f);
     u.motion.animation = static_cast<std::int32_t>(speed_run * 40.0f);
     send_zone(encode(u), reliable);
     last_position_send_ = now;
@@ -2543,6 +2546,8 @@ void GameConnection::release_eye_control(bool remove_effect) {
             spells_.buffs[static_cast<std::size_t>(slot)] = {};
         }
     if (!game::release_eye_control(world_)) return;
+    // A position report can run before the next movement frame supplies the restored body's SpeedRun.
+    speed_run_ = 0.0f;
     eye_motion_dirty_ = false;
     last_eye_position_send_ = {};
     ByteWriter ack;

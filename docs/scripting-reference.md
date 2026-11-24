@@ -981,7 +981,7 @@ send a request. `OpenTask` changes the journal selection and visibility, not tas
 | GemOverlay | (name, child, y0, y1) → top, r, g, b, a \| nil | Gem cool-down rectangle | — |
 | GemInfo | (name, child [, into [, y0, y1]]) → t | All gem looks in one call: {shown, tooltip, tex,u0,v0,u1,v1, tintR..tintA, overlay, coolR..coolA, top}. `into` is filled only when it has no metatable (else a new table) | — |
 | ButtonCoolDown | (name, child, y0, y1) → top, r, g, b, a, remainingMs, reuseMs | A button's cool-down rectangle (nil when idle); combat ability buttons add remaining and focus-adjusted reuse ms (0 when idle or unknown). A shared timer's remaining time can exceed this ability's reuse | — |
-| BuffSlot | (name, child [, overlays]) → spellId, msLeft, name, beneficial, fade [, counter,cr,cg,cb, limit,lr,lg,lb] \| nil | Buff on a buff button. msLeft < 0 = permanent | — |
+| BuffSlot | (name, child [, overlays [, removalDetails]]) → spellId, msLeft, name, beneficial, fade [, counter,cr,cg,cb, limit,lr,lg,lb] [, petId, slot] \| nil | Buff on a buff button. msLeft < 0 = permanent. `removalDetails` appends the entity ID and server slot of a removable pet buff, or two nils. | — |
 | BuffOverlay | (name, child, "timer"\|"counter"\|"limit") → text, r, g, b \| nil | Overlay text on a buff button | — |
 | SpellGemClick | (child [, "left"\|"right"]) → ok | Cast, or forget (right) | actions |
 
