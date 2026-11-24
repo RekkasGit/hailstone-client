@@ -797,9 +797,15 @@ void probe_scripts_dir(void*, const char*) {
     WriteChatf("[Probe] scripts dir %d %s", n, n > 0 ? dir : "");
 }
 
+// /probelendinner: run by /probelend nested through do_command, a callback inside a host call the client's thread
+// makes while this plugin lends: lend_thread refuses there (a lent thread could not call the host until it returns).
+int g_inner_lend = -1;
+void probe_lend_inner(void*, const char*) { g_inner_lend = host->lend_thread(host->host, 1); }
+
 // /probelend: lend_thread, then a thread of the plugin calls the host while this waits for it, then the lending ends
 // and another thread is refused again. /probelend keep: lends and returns without ending it (the callback's return
-// ends it; /probelendafter checks).
+// ends it; /probelendafter checks). /probelend nested: lends, then runs /probelendinner through do_command; the
+// lending goes on after it (a thread's call still works).
 void probe_lend(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, lend_thread)) {
         WriteChatf("[Probe] lend: not in this client");
@@ -807,6 +813,16 @@ void probe_lend(void*, const char* args) {
     }
     if (args && std::strcmp(args, "keep") == 0) {
         WriteChatf("[Probe] lend keep %d", host->lend_thread(host->host, 1));
+        return;
+    }
+    if (args && std::strcmp(args, "nested") == 0) {
+        const int lent = host->lend_thread(host->host, 1);
+        g_inner_lend = -1;
+        host->do_command(host->host, "/probelendinner");
+        int added = -1;
+        std::thread([&] { added = host->add_command(host->host, "/afternested", nothing, nullptr); }).join();
+        const int ended = host->lend_thread(host->host, 0);
+        WriteChatf("[Probe] lend nested %d, inner %d, thread: add_command %d, end %d", lent, g_inner_lend, added, ended);
         return;
     }
     const int lent = host->lend_thread(host->host, 1);
@@ -1163,6 +1179,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probescriptsdir", probe_scripts_dir, nullptr);
     AddCommand("/probelend", probe_lend, nullptr);
     AddCommand("/probelendafter", probe_lend_after, nullptr);
+    AddCommand("/probelendinner", probe_lend_inner, nullptr);
     AddCommand("/probespellsbyname", probe_spells_by_name, nullptr);
     for (const char* what : buffer_commands)
         AddCommand(own_command(what).c_str(), probe_buffer, const_cast<char*>(what));

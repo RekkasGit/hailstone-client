@@ -1201,10 +1201,12 @@ typedef struct PluginHostApi {
      * plugin's capabilities. Every host call then runs one at a time, the client's thread's own included, so a thread
      * may call while the callback waits for it; the callback must only wait, not run the client meanwhile (it can't:
      * nothing of the client runs until it returns). lend 0 returns once a host call another thread is making has
-     * returned. lend 1 returns 1 when it started lending, 2 when the plugin already lends (a nested callback: leave
-     * the lend 0 to whoever started it), 0 on a lent thread, outside a callback, or inside another plugin's lending
-     * callback. lend 0 returns 1. Needs no capability. Added later in ABI 4: test HAILSTONE_HOST_HAS(host, lend_thread)
-     * first. */
+     * returned. While it lends, a host call the client's thread makes holds that lock until it returns, callbacks it
+     * runs included: such a callback must not wait for the plugin's threads (their calls wait for the lock). lend 1
+     * returns 1 when it started lending, 2 when the plugin already lends (a nested callback: leave the lend 0 to
+     * whoever started it), 0 on a lent thread, outside a callback, inside another plugin's lending callback, or inside
+     * a host call the client's thread makes while this plugin lends (do not wait there). lend 0 returns 1. Needs no
+     * capability. Added later in ABI 4: test HAILSTONE_HOST_HAS(host, lend_thread) first. */
     int (*lend_thread)(void* host, int lend);
     /* The folder the scripts' settings go in, <Hailstone folder>/scripts/config/ (MacroQuest.Path[config]; Lua's
      * mq.configDir), shared by every plugin and script, for every server. Created on demand and written to `out` as

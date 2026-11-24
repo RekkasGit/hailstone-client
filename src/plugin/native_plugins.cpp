@@ -349,6 +349,10 @@ struct Loaded {
 namespace {
 std::recursive_mutex g_lend_mutex;
 std::atomic<Loaded*> g_lender{nullptr};
+// How many host calls the client's own thread is making while holding g_lend_mutex (HostThread), nested ones counted;
+// read and written on that thread alone. Inside such a call a lent thread cannot get the lock until it returns, so a
+// callback it dispatches must not wait for one (h_lend_thread refuses there).
+int g_main_locked_calls = 0;
 
 // Ends l's lending, once the host call a lent thread may be making has returned (the lock).
 void end_lending(Loaded& l) {
@@ -363,6 +367,11 @@ void end_lending(Loaded& l) {
 struct Busy {
     explicit Busy(Loaded& l) : l_(l), scope_(l.caps, l.name) { ++l_.busy; }
     ~Busy() {
+        // While a plugin lends, a lent thread's host call may run this plugin's callbacks (their Busy) under
+        // g_lend_mutex at the same time: the counts change under it too. (A callback's return here may come while a
+        // lent call is in flight, when the lending ends with that callback.)
+        std::unique_lock<std::recursive_mutex> lock;
+        if (g_lender.load()) lock = std::unique_lock<std::recursive_mutex>(g_lend_mutex);
         // The callback its bulk buffer was acquired in has returned: the pointer is no longer the plugin's to use.
         if (--l_.busy < l_.bulk_held_at) l_.bulk_held_at = 0;
         // ... and the one it lent the client's thread in: its threads can no longer act for it.
@@ -1314,7 +1323,10 @@ int h_command_exists(void* h, const char* name) {
 // lend_thread (sdk/hailstone_plugin.h): from inside one of l's callbacks on the client's own thread, lends that
 // thread to l's other threads until lend_thread(0) or until the callback returns (Busy). Refused on a lent thread
 // (only the client's own thread lends itself), outside a callback, and while another plugin lends it (this callback
-// runs inside that plugin's). 2 when l already lends it: the caller did not start it, so must not end it.
+// runs inside that plugin's). 2 when l already lends it: the caller did not start it, so must not end it. Refused
+// too inside a host call the client's thread makes while l lends (a callback that call dispatched): that call holds
+// the lock until it returns, so the lent threads cannot call the host meanwhile and a callback waiting for them would
+// never return. This call itself is one such (main_only's HostThread), hence more than one.
 int h_lend_thread(void* h, int lend) {
     Loaded& l = Loaded::of(h);
     if (on_lent_thread()) return 0;
@@ -1324,7 +1336,7 @@ int h_lend_thread(void* h, int lend) {
     }
     if (l.busy == 0) return 0;
     Loaded* const lender = g_lender.load();
-    if (lender == &l) return 2;
+    if (lender == &l) return g_main_locked_calls > 1 ? 0 : 2;
     if (lender) return 0;
     l.lend_held_at = l.busy;
     g_lender.store(&l);
@@ -3062,7 +3074,11 @@ class HostThread {
 public:
     explicit HostThread(void* h) {
         if (on_main_thread()) {
-            if (g_lender.load()) lock_ = std::unique_lock<std::recursive_mutex>(g_lend_mutex);
+            if (g_lender.load()) {
+                lock_ = std::unique_lock<std::recursive_mutex>(g_lend_mutex);
+                counted_ = !on_lent_thread(); // the client's own thread (a lent one acts as it, but is not it)
+                if (counted_) ++g_main_locked_calls;
+            }
             ok_ = true;
             return;
         }
@@ -3073,12 +3089,18 @@ public:
         lent_.emplace();
         ok_ = true;
     }
+    ~HostThread() {
+        if (counted_) --g_main_locked_calls;
+    }
+    HostThread(const HostThread&) = delete;
+    HostThread& operator=(const HostThread&) = delete;
     bool ok() const { return ok_; }
 
 private:
     std::unique_lock<std::recursive_mutex> lock_; // destroyed after lent_: the thread stops acting first
     std::optional<ThreadLent> lent_;
     bool ok_ = false;
+    bool counted_ = false; // in g_main_locked_calls
 };
 
 template <auto F> struct MainOnly;

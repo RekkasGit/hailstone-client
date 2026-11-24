@@ -822,6 +822,14 @@ lending, 2 when the plugin already lends (a nested callback: leave the ending to
 lent thread, outside a callback, or inside another plugin's lending callback. `lend_thread(host, 0)` waits for a host
 call another thread is making, then returns 1. C++ plugins can hold an `hs::LendThread` for the waiting.
 
+A host call the client's thread makes while the plugin lends (a `do_command`, a `parse`, a `write_chat` from the
+waiting callback itself) holds that lock until it returns, the callbacks it runs included: a command's handler, a TLO,
+a chat event, in this plugin or another. Such a callback must not wait for the plugin's threads, whose calls wait for
+the lock: the client would hang. `lend_thread(host, 1)` returns 0 there (an `hs::LendThread`'s `ok()` is false), not 2.
+A lent thread may call any host function, commands included. A script runtime does well to keep its threads to reads
+and hand changes to the client's thread, as E3 does (its `MainProcessor` thread queues each command for `OnPulse`),
+and to have its callbacks only queue work, never wait.
+
 **Exceptions.** A C++ plugin must not let an exception out of anything the client calls (callbacks, commands, TLOs,
 hooks, UI functions, options). The client catches what it can: the call counts as unanswered (a TLO is NULL, a hook
 gives the stock answer), chat and log say so once, and one out of `InitializePlugin` or `hailstone_plugin_hooks`

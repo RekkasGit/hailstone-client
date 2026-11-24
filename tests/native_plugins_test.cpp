@@ -1344,6 +1344,12 @@ TEST_CASE("native plugins: lend_thread lets the plugin's own thread call the hos
     h.run("/probelendafter");
     CHECK(h.printed_line("[Probe] after keep: add_command 0"));
     CHECK_FALSE(h.hooks.has_command("/afterkeep"));
+    // A callback inside a host call the client's thread makes while the plugin lends (do_command running the plugin's
+    // own command) is refused a lend, not told 2: that call holds the lock, so waiting there for a lent thread would
+    // never end. The lending itself goes on after it.
+    h.run("/probelend nested");
+    CHECK(h.printed_line("[Probe] lend nested 1, inner 0, thread: add_command 1, end 1"));
+    CHECK(h.hooks.has_command("/afternested"));
     // The client's thread is the client's again, and only it.
     CHECK(plugin::on_main_thread());
     CHECK_FALSE(plugin::on_lent_thread());
