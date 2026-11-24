@@ -15,6 +15,10 @@
 - Modern Pet window: right-click a removable beneficial buff and choose **Remove** to click it off
 - Literal percent signs show correctly in chat, including tells and their echoes. Chat variables still expand when the message is sent
 - Two Hailstone windows started separately can no longer install or roll back an update at the same time, which could leave the UI folder half old and half new (chat without input, "is not in the UI's folder" in the log). The second one leaves the install to the first
+- Opening several windows of a newly updated Hailstone at once no longer rolls the update back as a failed start (and no longer keeps that release from being offered again). An update downloaded in one window installs at a quit when no other Hailstone runs from the folder, including windows started on their own, instead of replacing their files under them
+- Two Hailstone windows started separately no longer undo each other's add-on installs or lose an add-on from the installed list (which made its files count as installed by hand). While one installs or removes add-ons, the other waits or says to try again
+- Hailstone's updates never write or remove anything in `upscalers/`, so an upscaler add-on can no longer be replaced or removed by an update that ships a folder of the same name
+- On Linux and macOS, files an update installs never get group or world write permission from the update package
 - Charged items stay in inventory and on the hotbar after spending a charge if the server keeps the item
 - Spell effects no longer attach to the wrong bones of a character whose model was loaded after another was freed
 - Minimising the window on Windows can no longer stop the client with a swapchain error ("vkCreateSwapchainKHR")

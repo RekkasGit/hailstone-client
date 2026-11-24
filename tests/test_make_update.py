@@ -17,11 +17,12 @@ class PlayerPathTests(unittest.TestCase):
                   "textures/default/a.dds", "web/a/b", "notes.txt", "Servers/x", "tools/texstudio/texstudio",
                   "Tools/x/data.txt", "ui-data/modern/lib/style.lua",
                   "UI-DATA/addon.bundle.skin/lib/compiled/window.lua", "ui-data/", "ui-data", "UI-DATA",
-                  "ui-addons/skin/ui/dark/ui.ini", "UI-ADDONS/skin/ui/dark/window.lua", "ui-addons"):
+                  "ui-addons/skin/ui/dark/ui.ini", "UI-ADDONS/skin/ui/dark/window.lua", "ui-addons",
+                  "upscalers/example/example.so", "Upscalers/x/notice.txt"):
             self.assertTrue(make_update.is_player_path(p), p)
         for p in ("hailstone", "hailstone.exe", "shaders/a.spv", "ui/modern/login.lua", "browser/libcef.so",
                   "plugins/nms/nms.so", "icons/hailstone.png", "servers.txt", "ui-data-copy/file.lua",
-                  "ui-database/file.lua", "ui-data.lua", "ui-addons.lua"):
+                  "ui-database/file.lua", "ui-data.lua", "ui-addons.lua", "upscalers.txt"):
             self.assertFalse(make_update.is_player_path(p), p)
 
 

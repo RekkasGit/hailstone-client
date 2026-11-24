@@ -235,6 +235,31 @@ TEST_CASE("zip_read: Unix permission bits") {
 #endif
 }
 
+TEST_CASE("zip_read: an entry's group and world write bits are never given to the file") {
+    RawEntry open_exe{"hailstone", "#!", 3 << 8 | 20, 0106777u << 16}; // setuid, setgid, writable by all
+    RawEntry open_data{"ui/a.lua", "x", 3 << 8 | 20, 0100666u << 16};
+    RawEntry only_writable{"ui/b.lua", "x", 3 << 8 | 20, 0100022u << 16};
+    ZipReader zip;
+    REQUIRE(zip.open(build_zip({open_exe, open_data, only_writable})));
+    test::ScratchDir dir("zip_read_mode_mask");
+    for (const auto& e : zip.entries()) REQUIRE(zip.extract_to_file(e, dir.path() / e.name));
+#ifndef _WIN32
+    using std::filesystem::perms;
+    const auto writable = perms::group_write | perms::others_write;
+    const auto p = std::filesystem::status(dir.path() / "hailstone").permissions();
+    CHECK((p & writable) == perms::none);
+    CHECK((p & (perms::set_uid | perms::set_gid | perms::sticky_bit)) == perms::none);
+    CHECK((p & perms::others_exec) != perms::none); // the execute bits are kept
+    CHECK((p & perms::owner_write) != perms::none);
+    const auto q = std::filesystem::status(dir.path() / "ui/a.lua").permissions();
+    CHECK((q & writable) == perms::none);
+    CHECK((q & perms::others_read) != perms::none);
+    // Nothing left of the mode: the file keeps the permissions it was made with, readable by its owner.
+    const auto r = std::filesystem::status(dir.path() / "ui/b.lua").permissions();
+    CHECK((r & perms::owner_read) != perms::none);
+#endif
+}
+
 TEST_CASE("zip_read: unsafe names refuse the whole archive") {
     for (const char* bad : {"../evil", "/abs", "a\\b", "C:/x", "a//b", "./x", "ok/../../x", "x.lua.", "nul"}) {
         ZipReader zip;
