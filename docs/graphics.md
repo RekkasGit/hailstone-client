@@ -438,6 +438,9 @@ The readback is 4 bytes a pixel, so a screenshot is also refused unless the swap
 format, maybe FP16 or 10-bit HDR; one reporting no format fails the swapchain's creation.
 
 The swapchain is remade when the window's framebuffer size changes from the size it was made for.
+Before the old one is let go, the surface is asked for its size: while it has a zero side (Windows reports 0x0 for a
+minimised window, sometimes before SDL's window state says so) the frame is skipped, nothing is destroyed, and the
+swapchain is made on a later frame once the surface has a size (`render::surface_extent_empty`).
 
 #### Uploads: no waiting for the GPU
 
@@ -460,7 +463,8 @@ A recreated swapchain is made with `oldSwapchain`; the old one and its present s
 as `vkDeviceWaitIdle` does not cover a present's wait.
 
 The ImGui textures (`src/ui/imgui_vk_textures.h`: UI art, icon sheets, browser tabs) come from the client's own
-descriptor pools, a new one made when they fill. `ui::UiTextures` keeps at most 1024 files (`kMaxFiles`), retiring the
+descriptor pools, a new one made when they fill (a full one is not asked again) and one left empty destroyed unless
+it is the newest (`ui::DescriptorPoolBook`). `ui::UiTextures` keeps at most 1024 files (`kMaxFiles`), retiring the
 least recently asked for.
 
 #### Modern lighting: the translucent split
