@@ -268,14 +268,13 @@ updater and the add-on manager otherwise run as usual.
    `HAILSTONE_UPDATE_KEY`, and read `update-key.pub` only at the folder's first configure). A configure whose key
    differs from `update-key.pub`'s warns.
 
-   The build environment is pinned only in part. msvc-wine is pinned to a commit, and MSVC and the Windows SDK to
-   the release install's versions (Visual Studio 17.14, toolset 14.44.35207; SDK 10.0.26100.0;
-   `tools/docker/msvc_setup.sh`). Still open (docs/todo.md "Updates"):
-   - `linux.Dockerfile` starts `FROM ubuntu:24.04` by its tag, and its apt packages are whatever the archive has
-     when the image is built. The digest the release images were built from was not recorded (the base image is no
-     longer on the release machine); pin `ubuntu:24.04@sha256:...` at the next image build.
-   - Microsoft's manifest picks the servicing build within 17.14 and the SDK's revision; `msvc_setup.sh` warns when
-     the toolset installed is not 14.44.35207.
+   The build environment is pinned. msvc-wine is pinned to a commit, and MSVC and the Windows SDK to the release
+   install's versions (Visual Studio 17.14, toolset 14.44.35207; SDK 10.0.26100.0; `tools/docker/msvc_setup.sh`).
+   `linux.Dockerfile` starts from `ubuntu:24.04` by digest, and apt reads the archive as it was on the date in its
+   `APT_SNAPSHOT` (snapshot.ubuntu.com). Move both forward together, on purpose, when the image should take
+   updates: `docker pull ubuntu:24.04`, `docker image inspect ubuntu:24.04 --format '{{json .RepoDigests}}'`, and
+   a new snapshot date. What is left: Microsoft's manifest picks the servicing build within 17.14 and the SDK's
+   revision; `msvc_setup.sh` warns when the toolset installed is not 14.44.35207.
 2. Install each platform's client (without the server plugins, which are released as add-ons, each by a
    `tools/release.sh` in its own repository; this repository has none):
 
