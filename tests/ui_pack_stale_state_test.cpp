@@ -795,3 +795,31 @@ fake.lists.RaidWindow = { RAID_PlayerList = { sel = 1, rows = {
     CHECK_FALSE(r.saw("Make Beta the raid leader?"));
     CHECK(r.no_errors());
 }
+
+TEST_CASE("UI packs (gamepad): a friend's Remove removes that friend, or nobody once the name is gone") {
+    PackRig r("gamepad");
+    r.run(kStockWindows);
+    r.run(R"lua(
+fake.shown.FriendsWindow = true
+fake.lists.FriendsWindow = { FriendsList = { sel = 0, rows = { { "Alpha" }, { "Beta" } } }, IgnoreList = { sel = -1, rows = {} } }
+)lua");
+    r.s->frames(30);
+    r.run("calls = {} forced['##remove'] = true");
+    r.s->frames(2);
+    CHECK(r.saw("Remove Alpha from your friends list?"));
+    SUBCASE("the name has gone from the list") {
+        r.run("fake.lists.FriendsWindow.FriendsList = { sel = 0, rows = { { 'Beta' } } } forced['##confirmyes'] = true");
+        r.s->frames(2);
+        CHECK_FALSE(r.called("click DeleteButton"));
+        CHECK(r.saw("Alpha is no longer on the list."));
+    }
+    SUBCASE("the list moved: the name is selected again, then removed") {
+        r.run("fake.lists.FriendsWindow.FriendsList = { sel = 0, rows = { { 'Beta' }, { 'Alpha' } } } "
+              "forced['##confirmyes'] = true");
+        r.s->frames(2);
+        CHECK(r.called("listclick FriendsList 1"));
+        CHECK(r.called("click DeleteButton"));
+        CHECK(r.truth("fake.lists.FriendsWindow.FriendsList.sel == 1"));
+    }
+    CHECK(r.no_errors());
+}
