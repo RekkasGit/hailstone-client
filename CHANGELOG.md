@@ -32,6 +32,7 @@
 - `/target next` and `/target prev` cycle through a spawn search's matches, and `/target` with no argument or `myself` targets you, as in MacroQuest.
 - Mouse look and the gamepad can turn a summoned Eye while your character is sitting.
 - Door clicks while controlling Eye of Zomm use the Eye's reach, and the Eye no longer intercepts first-person clicks.
+- Autofollow stays with the caster's body while they steer Eye of Zomm.
 - Press F1–F6 again while the corresponding player is targeted to select their pet. Click the green pet bar in the Modern Group window to select that pet directly.
 - `/hidecorpses` remembers your choice per character across restarts and zone changes. Use `always` to hide every corpse, including your own, or `none` to show corpses again.
 - Item, say, and achievement links in chat work during the camp countdown.
