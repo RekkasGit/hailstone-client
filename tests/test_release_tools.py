@@ -10,6 +10,7 @@ import unittest
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+KEY = (ROOT / "update-key.pub").read_text().split()[0]  # what a release binary holds (make_update.py checks it)
 
 
 def load(name):
@@ -95,7 +96,7 @@ class PackageContentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             dist = Path(tmp) / "dist"
             dist.mkdir()
-            (dist / "hailstone").write_text("binary")
+            (dist / "hailstone").write_text("binary " + KEY)
             (dist / ".DS_Store").write_text("junk")
             (dist / ".git").mkdir()
             (dist / ".git" / "config").write_text("junk")

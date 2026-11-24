@@ -21,7 +21,7 @@ on pull requests to `main`:
     (`tests/test_migrate_ui_api.py`, `test_gen_ui_api_docs.py`, `test_make_addon_ui.py`,
     `test_make_addon_autoload.py`).
   - `tests/test_make_update.py`: `tools/make_update.py` keeps out of a package exactly the paths the client's
-    `is_player_path` refuses.
+    `is_player_path` refuses, and refuses a binary without the release key; `release_options.sh` names that key.
   - `tests/test_release_tools.py`: the release packers' versions, names and contents (`tools/make_addon.py` and
     `tools/make_update.py`).
 
@@ -205,6 +205,11 @@ tools/docker/build.sh all            # the three; --no-test after the platform s
   every build running on the machine within its cores.
 - `CMAKE_ARGS` adds configure options, split at whitespace (an option cannot hold a space), also to an existing
   build folder.
+- Every run configures the build folder again with the release's settings first (`tools/docker/release_options.sh`):
+  Release, the key of `update-key.pub` as `HAILSTONE_UPDATE_KEY`, no sanitizer, `HAILSTONE_ALLOW_IN_EQ_FOLDER` off
+  and the default feed, index and page addresses. `CMAKE_ARGS` comes after them, so it can change any of them, but
+  an option it no longer names does not stay from an earlier run. The script stops when `update-key.pub` holds no
+  key.
 
 #### Images and containers
 
