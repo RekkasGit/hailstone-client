@@ -875,6 +875,8 @@ target_include_directories(MQ2Example PRIVATE sdk)
 set_target_properties(MQ2Example PROPERTIES PREFIX "" LIBRARY_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/plugins$<0:>
                                             RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/plugins$<0:>)
 
+# HSMono (the MQ2Mono port), a repository of its own: built with the client when cloned into plugins/hsmono (ignored
+# here, as the server plugins below are).
 set(HSMONO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/plugins/hsmono")
 if(EXISTS "${HSMONO_DIR}/CMakeLists.txt")
     message(STATUS "Found optional subproject: HSMono")
