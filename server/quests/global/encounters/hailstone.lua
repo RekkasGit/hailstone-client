@@ -1712,6 +1712,10 @@ local management = (function()
 		return unsigned(minimum, 1, 32767) and rank >= tonumber(minimum)
 	end
 
+	local function account_status(client)
+		return client.Admin and client:Admin() or 0
+	end
+
 	local function current_policy_filename()
 		-- Open and Save do not trust the cached file list. A GM may have renamed the cfg or added another case
 		-- variant since that zone scanned, and an editor must not create or choose a competing policy.
@@ -1745,7 +1749,7 @@ local management = (function()
 	end
 
 	local function advertised(client)
-		local rank = client:Admin()
+		local rank = account_status(client)
 		if rank < 1 or setting("client_files") == 0 then return false end
 		local raw, readable = load_cfg()
 		return readable and permitted(rank, raw)
@@ -2083,7 +2087,7 @@ if ([System.IO.File]::Exists($dst)) {
 	local function save_under_lock(client, previous, edits)
 		local raw, readable, name = load_cfg(true)
 		if not readable then return STORAGE, "Could not read hailstone.cfg." end
-		if not permitted(client:Admin(), raw) then return DENIED, "Server Management access denied." end
+		if not permitted(account_status(client), raw) then return DENIED, "Server Management access denied." end
 		if raw ~= previous.raw or name ~= previous.name then
 			return STALE, "The server configuration changed. Reload before saving."
 		end
@@ -2139,7 +2143,7 @@ if ([System.IO.File]::Exists($dst)) {
 		if request == 0 or (action ~= OPEN and action ~= SAVE) then return end
 		local id = client:CharacterID()
 		if not allow(requests, id, 12) then return end
-		local rank = client:Admin()
+		local rank = account_status(client)
 		if rank < 1 or setting("client_files") == 0 then
 			reply(client, action, request, DENIED, 0, "Server Management access denied.")
 			return
