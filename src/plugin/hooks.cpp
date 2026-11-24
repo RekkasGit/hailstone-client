@@ -66,23 +66,27 @@ struct Hooks::Impl {
         dirty = false;
     }
 
-    // Calls fn(entry) for each live entry of kind k (a snapshot: hooks added meanwhile wait for the next event);
-    // stops when fn returns true.
+    // Calls fn(entry) for each live entry of kind k, as it was when the event started: hooks added meanwhile wait for
+    // the next event; stops when fn returns true. The list is not copied (this runs for every pulse, frame, spawn and
+    // chat line): while depth > 0 nothing is erased (sweep waits for 0, removal only marks an entry dead) and
+    // registration only appends, so the first `end` slots stay the same entries. An append may move the vector's
+    // pointers, never an Entry, so the entry is reached by index each time and held by reference only for its call.
     template <typename F> bool each(Kind k, F&& fn) {
         ++depth;
-        std::vector<EntryPtr> snapshot = lists[k];
+        const std::size_t end = lists[k].size();
         bool stopped = false;
-        for (const EntryPtr& e : snapshot) {
-            if (!e->alive) continue;
+        for (std::size_t i = 0; i < end; ++i) {
+            Entry& e = *lists[k][i];
+            if (!e.alive) continue;
             try {
-                if (fn(*e)) {
+                if (fn(e)) {
                     stopped = true;
                     break;
                 }
             } catch (const std::exception& ex) {
-                log::warn("plugin hook of {} failed: {}", owners[e->owner], ex.what());
+                log::warn("plugin hook of {} failed: {}", owners[e.owner], ex.what());
             } catch (...) {
-                log::warn("plugin hook of {} failed", owners[e->owner]);
+                log::warn("plugin hook of {} failed", owners[e.owner]);
             }
         }
         --depth;
