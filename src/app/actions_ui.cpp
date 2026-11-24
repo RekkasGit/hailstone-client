@@ -399,7 +399,8 @@ mech::SkillContext ActionsUi::context(net::GameConnection& conn, const mech::Cha
     ctx.speed_z = v.z;
     ctx.cursor_has_item = conn.inventory().at(net::ItemSlot::possessions(net::kSlotCursor)) != nullptr;
     ctx.can_see_target = view.can_see_target;
-    ctx.form_slam = mech::slam_innate(skill_race(conn, ch)); // current form; illusions can grant/lose Slam
+    ctx.form_race = skill_race(conn, ch);
+    ctx.form_slam = mech::slam_innate(ctx.form_race); // current form; illusions can grant/lose Slam
     if (ctx.target && !ctx.target_is_me) ctx.allowed_to_attack = conn.allowed_to_attack(world.target_id, -1);
     ctx.attack_locked = conn.attack_locked();
     ctx.backstab_either_hand = conn.server_ext().backstab_either_hand(conn);

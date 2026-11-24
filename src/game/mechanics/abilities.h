@@ -147,6 +147,7 @@ struct SkillContext {
     float speed_x = 0, speed_y = 0, speed_z = 0; // SpeedX/Y/Z (units per physics tick)
     bool cursor_has_item = false;     // the fishing check's slot 0x21
     std::int32_t form_slam = 0xff; // current appearance's innate Slam slot (0xff = unavailable)
+    std::uint32_t form_race = 0;   // the player spawn's race now (GetRace, vtable +0x88: +0xeb4); 0 = the profile's
     std::uint8_t pvp_ruleset = 0;     // 0xdcee70
     bool can_see_target = true;       // PlayerBase::CanSee (the zone's line of sight)
     bool tracking_window_open = false;

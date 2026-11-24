@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "core/wrap_math.h"
 #include "game/item_moves.h"
 #include "game/mechanics/character.h"
 #include "game/mechanics/item_stats.h"
@@ -54,15 +55,15 @@ std::int32_t attack_value(const Character& ch, std::uint32_t skill, bool spell_2
     return std::max(v + item + buff + ch.sheet().leadership_offense_bonus, 1);
 }
 
-std::int64_t shown_ac(const Character& ch) {
-    std::int64_t x = static_cast<std::int64_t>(ch.compute_defense(true)) + ch.stats().ac;
-    // x * 1000 / 847, the signed division by a multiply with 0x9abf9f49 and shifts, as the original computes it
-    std::int64_t v = x * 1000;
-    std::int64_t hi = (v * static_cast<std::int64_t>(static_cast<std::int32_t>(0x9abf9f49))) >> 32;
-    std::int64_t q = (hi + v) >> 9;
-    q += (q < 0) ? 1 : 0;
-    return q;
+std::int32_t shown_ac_value(std::int32_t defense, std::int32_t ac) {
+    // 0x580330 adds the two, multiplies by 1000 (imul r32, so the product keeps its low 32 bits and wraps past
+    // x = 2147483) and divides by 847 with the compiler's multiply by 0x9abf9f49, add, sar 9 and sign fix-up, which is
+    // the exact truncating signed division for every 32-bit dividend.
+    const std::uint32_t sum = static_cast<std::uint32_t>(defense) + static_cast<std::uint32_t>(ac);
+    return core::wrapped_div(sum * 1000u, 847);
 }
+
+std::int64_t shown_ac(const Character& ch) { return shown_ac_value(ch.compute_defense(true), ch.stats().ac); }
 
 std::int64_t shown_atk(const Character& ch, bool spell_2434) {
     std::uint32_t skill = attack_skill(ch);

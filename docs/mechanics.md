@@ -2021,6 +2021,11 @@ Skill 111, `slam_innate`. A deliberate change: Hailstone takes the innate Slam f
 with an illusion, and Bash without a shield uses the Slam path; both send `DoAttack(100, 10)`. The original uses the
 profile race (EQ_Character::InitInnates).
 
+That attack still goes through `CanUseCombatSkill` (@0x5a2f10), which lets Bash pass without the skill or a shield
+only when the spawn's `GetRace` (vtable +0x88, 0x58b4e0: the raw race an illusion sets) is 2, 9 or 10. The citizen
+races 90, 92 and 93 have the innate Slam but not that pass, so under their illusion Slam needs Bash and a shield,
+which is also all EQEmu accepts.
+
 #### More Hot Button States
 
 Enhancement (option `hotbutton_extras`, hailstone.ini `ui.hotbutton_extras`, Options > Display "More Hot Button

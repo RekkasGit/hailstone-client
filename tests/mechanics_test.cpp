@@ -16,6 +16,7 @@
 #include "game/mechanics/find_affect_slot.h"
 #include "game/mechanics/item_stats.h"
 #include "game/mechanics/sheet_builder.h"
+#include "game/mechanics/shown_stats.h"
 #include "game/mechanics/tables.h"
 #include "game/eq_strings.h"
 #include "game/spell_display.h"
@@ -821,6 +822,17 @@ TEST_CASE("Attributes, caps, base saves and the drunk INT/WIS scaling at both pr
     CHECK(d53.stats().stats.int_ == 101);
 }
 
+TEST_CASE("Shown AC: 0x580330's x 1000 wraps in 32 bits before the divide by 847") {
+    CHECK(shown_ac_value(362, 109) == 556);
+    CHECK(shown_ac_value(2147483, 0) == 2535399);   // 2147483000 still fits
+    CHECK(shown_ac_value(2147484, 0) == -2535399);  // 2147484000 wraps to -2147483296
+    CHECK(shown_ac_value(2147483, 1) == -2535399);  // the sum is the original's too
+    CHECK(shown_ac_value(-2147484, 0) == 2535399);  // and the other way
+    CHECK(shown_ac_value(-847, 0) == -1000);
+    CHECK(shown_ac_value(0, -1) == -1);             // -1000 / 847 truncates towards zero
+    CHECK(shown_ac_value(INT32_MAX, INT32_MAX) == -2);  // (-2) * 1000 = -2000, / 847
+}
+
 TEST_CASE("Armor class, defense, item haste and carried weight") {
     World w;
     CharacterSheet s = warrior(60);
@@ -833,6 +845,7 @@ TEST_CASE("Armor class, defense, item haste and carried weight") {
     // 30 * 4 / 3 = 40, + defense 200 / 3 = 66, + AGI 75 / 20 = 3
     CHECK(ch.stats().ac == 109);
     CHECK(ch.compute_defense() == 362); // 200 * 400 / 225 + (75 - 40) * 8000 / 36000
+    CHECK(shown_ac(ch) == 556); // (362 + 109) * 1000 / 847
 
     CharacterSheet h = warrior(30);
     net::Item gloves = item();

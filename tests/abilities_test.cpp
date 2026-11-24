@@ -326,7 +326,7 @@ TEST_CASE("CanIHit: range and facing with the original's messages") {
 }
 
 TEST_CASE("UseSkill: large player races use shieldless Bash through their innate Slam") {
-    for (std::uint32_t race : {2u, 9u, 10u, 90u, 92u, 93u}) {
+    for (std::uint32_t race : {2u, 9u, 10u}) {
         Fixture f;
         f.sheet.race = race;
         f.sheet.skills[skill::kBash] = 5;
@@ -372,6 +372,7 @@ TEST_CASE("UseSkill: Barbarian illusion grants shieldless Bash and Slam to a Dar
     f.sheet.race = 6; // Profile is Dark Elf; the local spawn is now Barbarian (2).
     f.sheet.class_id = 8;
     SkillContext c = f.context(1000000);
+    c.form_race = 2;
     c.form_slam = slam_innate(2);
     c.target = Fixture::rat(10.0f);
     SkillState st;
@@ -397,8 +398,9 @@ TEST_CASE("UseSkill: Barbarian illusion grants shieldless Bash and Slam to a Dar
 TEST_CASE("UseSkill: each large-race illusion exposes Slam regardless of base race") {
     Fixture f;
     f.sheet.race = 6; // Dark Elf without innate Slam.
-    for (std::uint32_t race : {2u, 9u, 10u, 90u, 92u, 93u}) {
+    for (std::uint32_t race : {2u, 9u, 10u}) {
         SkillContext c = f.context(1000000);
+        c.form_race = race;
         c.form_slam = slam_innate(race);
         c.target = Fixture::rat(10.0f);
         SkillState state;
@@ -411,11 +413,42 @@ TEST_CASE("UseSkill: each large-race illusion exposes Slam regardless of base ra
     }
 }
 
+TEST_CASE("CanUseCombatSkill: shieldless Bash is for races 2, 9 and 10 by GetRace, not their variants") {
+    Fixture f;
+    f.sheet.race = 6;
+    f.sheet.skills[skill::kBash] = 5;
+    for (std::uint32_t race : {90u, 92u, 93u}) {
+        SkillContext c = f.context(1000000);
+        c.form_race = race;
+        c.form_slam = slam_innate(race);
+        CHECK(c.form_slam != 0xff); // InitInnates still gives the variant its Slam slot
+        CHECK_FALSE(can_use_combat_skill(c, skill::kBash));
+        const auto skills = usable_skills(f.ch, true, race);
+        CHECK(std::find(skills.begin(), skills.end(), skill::kSlam) != skills.end());
+        c.target = Fixture::rat(10.0f);
+        SkillState state;
+        const SkillResult r = use_skill(c, state, skill::kBash);
+        CHECK(r.sends.empty()); // Slam's DoAttack(100, 10) stops at CanUseCombatSkill without a shield
+    }
+    // The race is the spawn's current one: a Troll illusion on a Dark Elf passes, a Dark Elf one on a Troll does not.
+    SkillContext c = f.context(1000000);
+    c.form_race = 9;
+    CHECK(can_use_combat_skill(c, skill::kBash));
+    Fixture troll;
+    troll.sheet.race = 9;
+    troll.sheet.skills[skill::kBash] = 5;
+    SkillContext t = troll.context(1000000);
+    CHECK(can_use_combat_skill(t, skill::kBash)); // no form race: the profile's
+    t.form_race = 6;
+    CHECK_FALSE(can_use_combat_skill(t, skill::kBash));
+}
+
 TEST_CASE("UseSkill: an illusion into a small race removes innate Slam until it ends") {
     Fixture f;
     f.sheet.race = 2; // Native Barbarian disguised as Dark Elf (6).
     f.sheet.skills[skill::kBash] = 5;
     SkillContext c = f.context(1000000);
+    c.form_race = 6;
     c.form_slam = slam_innate(6);
     c.target = Fixture::rat(10.0f);
     SkillState st;
