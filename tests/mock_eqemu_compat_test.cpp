@@ -4,8 +4,11 @@
 
 #include <doctest/doctest.h>
 #include <initializer_list>
+#include <memory>
 #include <string_view>
 
+#include "game/mechanics/attack_rules.h"
+#include "game/spells.h"
 #include "mock_server/harness.h"
 #include "net/group_packets.h"
 #include "net/market_packets.h"
@@ -197,6 +200,41 @@ TEST_CASE("mock server: a refusal while our own duel runs sends no EQEmu decline
     rig.run_for(50ms);
     CHECK(sent(rig, to_wire(Op::DuelDecline)).empty());
     CHECK(rig.conn.duel_state().active);
+}
+
+TEST_CASE("mock server: an accepted duel opponent is attackable without PvP or guilds, and beneficial spells stop") {
+    // PlayerZoneClient::AllowedToAttack @0x5a2360 reads the duel globals 0xddf7ec (on) and 0xddf7e4 (opponent).
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    REQUIRE(add_rival(rig));
+    constexpr std::uint32_t kBystander = 51;
+    rig.server.add_spawn(make_spawn("Other", kBystander, 0, 1, 12.0f, 12.0f, 3.0f, 0.0f));
+    REQUIRE(rig.until([&] { return rig.conn.world().spawns.count(kBystander) == 1; }));
+    // A beneficial spell (spells_us.txt column 83 = 1), single target.
+    std::vector<std::string> cols(237, "0");
+    for (int i = 1; i <= 8; ++i) cols[static_cast<std::size_t>(i)].clear();
+    for (int i = 86; i <= 97; ++i) cols[static_cast<std::size_t>(i)] = "254";
+    cols[0] = "300";
+    cols[1] = "Mend";
+    cols[83] = "1";
+    std::string line;
+    for (std::size_t i = 0; i < cols.size(); ++i) line += (i ? "^" : "") + cols[i];
+    auto table = std::make_shared<game::SpellTable>();
+    REQUIRE(table->parse(line) == 1);
+    rig.conn.set_spell_table_for_test(table);
+    // Unflagged and unguilded: no melee, beneficial spells land.
+    CHECK_FALSE(rig.conn.allowed_to_attack(kRival, game::mechanics::kMeleeAttack));
+    CHECK(rig.conn.allowed_to_attack(kBystander, 300));
+    rig.conn.set_target(kRival);
+    rig.conn.duel();
+    // Only challenged: not yet.
+    CHECK_FALSE(rig.conn.allowed_to_attack(kRival, game::mechanics::kMeleeAttack));
+    rig.server.zone.send_reliable(encode(DuelRequest{kRival, kRival}));
+    REQUIRE(rig.until([&] { return rig.conn.duel_state().active; }));
+    CHECK(rig.conn.allowed_to_attack(kRival, game::mechanics::kMeleeAttack));
+    CHECK_FALSE(rig.conn.allowed_to_attack(kBystander, game::mechanics::kMeleeAttack));
+    // While the duel runs, a beneficial spell on someone outside it is refused.
+    CHECK_FALSE(rig.conn.allowed_to_attack(kBystander, 300));
 }
 
 TEST_CASE("mock server: EQEmu's 1383 line from the challenged player ends our challenge") {
