@@ -438,6 +438,9 @@ The readback is 4 bytes a pixel, so a screenshot is also refused unless the swap
 format, maybe FP16 or 10-bit HDR; one reporting no format fails the swapchain's creation.
 
 The swapchain is remade when the window's framebuffer size changes from the size it was made for.
+Before the old one is let go, the surface is asked for its size: while it has a zero side (Windows reports 0x0 for a
+minimised window, sometimes before SDL's window state says so) the frame is skipped, nothing is destroyed, and the
+swapchain is made on a later frame once the surface has a size (`render::surface_extent_empty`).
 
 #### Uploads: no waiting for the GPU
 

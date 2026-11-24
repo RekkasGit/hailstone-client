@@ -493,9 +493,12 @@ private:
     void create_device();
     void create_pipeline_cache();
     void save_pipeline_cache_file();
-    void create_swapchain(VkSwapchainKHR old = VK_NULL_HANDLE);
+    // `caps`: the surface's capabilities when the caller has just asked for them (recreate_swapchain), else asked here.
+    void create_swapchain(VkSwapchainKHR old = VK_NULL_HANDLE, const VkSurfaceCapabilitiesKHR* caps = nullptr);
     void destroy_swapchain();
-    void recreate_swapchain();
+    // False, with nothing let go and resize_pending_ left set, while the surface has no size to make one at
+    // (render/swapchain_size.h surface_extent_empty): the frame is skipped.
+    bool recreate_swapchain();
     void create_frames();
     void localize_shared_textures();
     void create_scene_targets();

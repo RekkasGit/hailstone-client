@@ -815,9 +815,12 @@ void VkContext::save_pipeline_cache_file() {
         log::warn("could not write the pipeline cache {}", pipeline_cache_path_.string());
 }
 
-void VkContext::create_swapchain(VkSwapchainKHR old) {
+void VkContext::create_swapchain(VkSwapchainKHR old, const VkSurfaceCapabilitiesKHR* known_caps) {
     VkSurfaceCapabilitiesKHR caps;
-    vk_check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_, surface_, &caps), "surface capabilities");
+    if (known_caps)
+        caps = *known_caps;
+    else
+        vk_check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_, surface_, &caps), "surface capabilities");
 
     std::uint32_t count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(physical_, surface_, &count, nullptr);
@@ -1495,7 +1498,13 @@ void VkContext::destroy_swapchain() {
     swapchain_ = VK_NULL_HANDLE;
 }
 
-void VkContext::recreate_swapchain() {
+bool VkContext::recreate_swapchain() {
+    // Asked before anything is let go: a surface minimised since the window's state was last read (Windows: 0x0)
+    // cannot have a swapchain, and a throw from vkCreateSwapchainKHR would leave none and no scene targets. The
+    // frame is skipped and resize_pending_ stays set, so the next frame asks again.
+    VkSurfaceCapabilitiesKHR caps;
+    vk_check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_, surface_, &caps), "surface capabilities");
+    if (surface_extent_empty(Extent{caps.currentExtent.width, caps.currentExtent.height})) return false;
     wait_idle();
     destroy_scene_targets();
     for (VkImageView v : views_) vkDestroyImageView(device_, v, nullptr);
@@ -1512,8 +1521,9 @@ void VkContext::recreate_swapchain() {
         for (VkSemaphore s : semaphores) vkDestroySemaphore(device, s, nullptr);
         if (old) vkDestroySwapchainKHR(device, old, nullptr);
     });
-    create_swapchain(old);
+    create_swapchain(old, &caps);
     resize_pending_ = false;
+    return true;
 }
 
 void VkContext::create_frames() {
@@ -1725,7 +1735,7 @@ std::optional<FrameInfo> VkContext::begin_frame_commands() {
     }
     if (swapchain_outdated({w, h}, {made_for_.width, made_for_.height}, surface, {extent_.width, extent_.height}))
         resize_pending_ = true;
-    if (resize_pending_) recreate_swapchain();
+    if (resize_pending_ && !recreate_swapchain()) return std::nullopt;
     // The 3D view's rectangle (set_scene_rect): a new size makes the scene targets again, once it has settled
     // (render/swapchain_size.h SceneResizeDebounce): dragging a /viewport edge would otherwise wait for the device
     // and rebuild every target every frame. Until then the old rectangle is drawn whole; a move alone is taken at
