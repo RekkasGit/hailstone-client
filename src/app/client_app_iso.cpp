@@ -357,6 +357,14 @@ bool ClientApp::iso_click(const glm::vec2& at, const PickTarget& hit, bool right
     return true;
 }
 
+void ClientApp::cancel_iso_clicks() {
+    iso_pending_.reset();
+    iso_walking_ = iso_hold_ = false;
+    iso_marker_ = {};
+    left_click_pending_.reset();
+    left_click_.reset();
+}
+
 void ClientApp::update_iso_clicks(bool player_moved) {
     if (!nav_ || !conn_) return;
     const nav::NavStatus status = nav_->status();

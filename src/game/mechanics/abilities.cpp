@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdlib>
 
+#include "game/eq_strings.h"
 #include "game/mechanics/character.h"
 #include "game/mechanics/item_stats.h"
 #include "game/mechanics/tables.h"
@@ -566,12 +567,20 @@ std::optional<SkillMessage> check_hide_moved(const SkillContext& ctx, SkillState
     return SkillMessage{kMovedUnhidden, {}, kColorSkill};
 }
 
+std::string format_skill_message(const EqStrings& strings, const SkillMessage& m) {
+    std::vector<std::string> args = m.args;
+    for (std::size_t i = 0; i < args.size() && i < m.arg_eqstr.size(); ++i)
+        if (m.arg_eqstr[i]) args[i] = strings.format(*m.arg_eqstr[i], {});
+    return strings.format(m.eqstr, args);
+}
+
 namespace {
 
 // UseSkill's callees answered from a SkillContext (use_skill.h): the timers are SkillTimers, DoAttack(100, ...) is
 // do_attack_skill and CanIHit can_i_hit; messages and packets go to the SkillResult. A message is kept as its eqstr
-// id with its arguments: getString(id) hands out "@<id>" and build_token_string "@<id>\x1f<parameter>", which
-// dsp_chat turns back into a SkillMessage.
+// id with its arguments: getString(id) hands out "\0@<id>" and build_token_string "\0@<id>\x1f<parameter>", which
+// dsp_chat turns back into a SkillMessage. The leading NUL keeps those references apart from a name: a name comes
+// off the wire as a C string and cannot hold one, so a spawn called "@5" stays the text "@5".
 class ContextQueries final : public useskill::Queries {
 public:
     ContextQueries(const SkillContext& ctx, SkillState& state, SkillResult& out, useskill::Spawn& me,
@@ -587,13 +596,21 @@ public:
                               std::uint8_t a4) override {
         return ctx_.ch->total_effect(spa, a1 != 0, a2, a3 != 0, a4 != 0);
     }
-    std::string get_string(std::uint32_t id, std::int32_t) override { return "@" + std::to_string(id); }
+    std::string get_string(std::uint32_t id, std::int32_t) override { return ref(id); }
     void chat(const std::string& text, std::int32_t color, std::uint8_t, std::uint8_t) override {
         SkillMessage m;
         m.color = static_cast<std::uint32_t>(color);
-        std::size_t sep = text.find('\x1f');
-        m.eqstr = static_cast<std::uint32_t>(std::strtoul(text.c_str() + 1, nullptr, 10));
-        if (sep != std::string::npos) m.args.push_back(text.substr(sep + 1));
+        const std::size_t sep = text.find('\x1f');
+        m.eqstr = ref_id(text.substr(0, sep)).value_or(0);
+        if (sep != std::string::npos) {
+            std::string param = text.substr(sep + 1);
+            if (auto id = ref_id(param)) {
+                m.args.emplace_back();
+                m.arg_eqstr.emplace_back(*id);
+            } else {
+                m.args.push_back(std::move(param));
+            }
+        }
         out_.messages.push_back(std::move(m));
     }
     useskill::Handle get_pc_spell_affect(useskill::Obj, std::int32_t spa, std::int32_t* slot, bool) override {
@@ -684,7 +701,7 @@ public:
     }
     std::string trim_name(const std::string& name) override { return name; }
     std::string build_token_string(std::uint32_t id, const std::string& p1, std::int32_t) override {
-        return "@" + std::to_string(id) + '\x1f' + p1;
+        return ref(id) + '\x1f' + p1;
     }
     void change_position(useskill::Spawn&, std::uint8_t stand_state) override { out_.stand_state = stand_state; }
     void set_auto_attack(std::uint8_t on) override {
@@ -770,6 +787,17 @@ public:
     }
 
 private:
+    static std::string ref(std::uint32_t id) { return std::string(1, '\0') + '@' + std::to_string(id); }
+    // The id of a whole "\0@<id>" reference; nothing for any other text.
+    static std::optional<std::uint32_t> ref_id(const std::string& text) {
+        if (text.size() < 3 || text[0] != '\0' || text[1] != '@') return std::nullopt;
+        std::uint32_t id = 0;
+        for (std::size_t i = 2; i < text.size(); ++i) {
+            if (text[i] < '0' || text[i] > '9') return std::nullopt;
+            id = id * 10 + static_cast<std::uint32_t>(text[i] - '0');
+        }
+        return id;
+    }
     static SkillSend::Kind kind_of(std::uint16_t opcode, const std::vector<std::uint8_t>& payload) {
         using K = SkillSend::Kind;
         switch (opcode) {

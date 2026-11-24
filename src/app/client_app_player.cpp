@@ -417,9 +417,7 @@ void ClientApp::update_player(float dt) {
                 conn_->set_touching_switch(std::nullopt);
                 if (nav_) nav_->stop("");
                 // A stopped click walk must not run its pending interaction at the respawn destination.
-                iso_pending_.reset();
-                iso_walking_ = iso_hold_ = false;
-                iso_marker_ = {};
+                cancel_iso_clicks();
                 if (conn_->follow_target()) conn_->stop_follow(false);
                 follow_move_ = follow_run_ = follow_detour_ = follow_assist_strafed_ = false;
                 // Prime the new spawn's region state without treating the placement itself as walking into a line.

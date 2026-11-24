@@ -10,6 +10,7 @@
 
 #include "core/config.h"
 #include "core/ini_file.h"
+#include "game/eq_strings.h"
 #include "game/hotbuttons.h"
 #include "game/keymap.h"
 #include "game/mechanics/abilities.h"
@@ -461,6 +462,27 @@ TEST_CASE("UseSkill: bash needs a shield, taunt needs an NPC in melee range") {
     CHECK(st2.timers.is_available(skill::kTaunt)); // a failed check gives the skill back at once
 }
 
+TEST_CASE("UseSkill: a target's name is literal text, whatever it starts with") {
+    Fixture f;
+    f.sheet.skills[skill::kTaunt] = 5;
+    EqStrings strings;
+    strings.set(5, "five");
+    strings.set(12397, "You taunt %1 to ignore others and attack you!");
+    for (const char* name : {"@Lurker", "@5 Guard", "@5", "@"}) {
+        SkillState st;
+        SkillContext c = f.context(1000);
+        c.target = Fixture::rat(5.0f);
+        c.target->name = name;
+        SkillResult taunt = use_skill(c, st, skill::kTaunt);
+        REQUIRE(taunt.messages.size() == 1);
+        CHECK(taunt.messages[0].args == std::vector<std::string>{name});
+        CHECK(std::none_of(taunt.messages[0].arg_eqstr.begin(), taunt.messages[0].arg_eqstr.end(),
+                           [](const auto& id) { return id.has_value(); }));
+        CHECK(format_skill_message(strings, taunt.messages[0]) ==
+              std::string("You taunt ") + name + " to ignore others and attack you!");
+    }
+}
+
 TEST_CASE("UseSkill: the hide-moved check on a corrupt position: __ftol2's INT_MIN, a 32-bit z difference") {
     Fixture f;
     SkillContext c = f.context(1000);
@@ -536,7 +558,12 @@ TEST_CASE("UseSkill: sense heading and the no-skill gate") {
     SkillResult r = use_skill(c, st, skill::kSenseHeading);
     REQUIRE(r.messages.size() == 1);
     CHECK(r.messages[0].eqstr == 12435);
-    CHECK(r.messages[0].args == std::vector<std::string>{"@12433"});
+    CHECK(r.messages[0].args.size() == 1);
+    CHECK(r.messages[0].arg_eqstr == std::vector<std::optional<std::uint32_t>>{12433u});
+    EqStrings strings;
+    strings.set(12433, "North");
+    strings.set(12435, "You think you are heading %1.");
+    CHECK(format_skill_message(strings, r.messages[0]) == "You think you are heading North.");
     REQUIRE(r.sends.size() == 1);
     CHECK(r.sends[0].kind == SkillSend::Kind::SenseHeading);
     CHECK(r.compass_reset); // 0x65b650 on the compass window
@@ -548,7 +575,7 @@ TEST_CASE("UseSkill: sense heading and the no-skill gate") {
         SkillState fresh; // (the reuse timer)
         SkillResult h = use_skill(c, fresh, skill::kSenseHeading);
         REQUIRE(h.messages.size() == 1);
-        CHECK(h.messages[0].args == std::vector<std::string>{"@" + std::to_string(id)});
+        CHECK(h.messages[0].arg_eqstr == std::vector<std::optional<std::uint32_t>>{static_cast<std::uint32_t>(id)});
     }
     c.compass_window = false;
     SkillState fresh;

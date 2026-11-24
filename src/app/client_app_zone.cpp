@@ -376,6 +376,7 @@ void ClientApp::unload_zone() {
     }
     actor_library_.reset();
     if (nav_) nav_->zone_unloaded();
+    cancel_iso_clicks(); // the old zone's spawn, door or point must not be clicked in the next one
     collision_.reset();
     world_visual_collision_.reset();
     animated_objects_.reset();
@@ -555,6 +556,7 @@ void ClientApp::update_music() {
 void ClientApp::enter_zone() {
     local_body_movement_.reset();
     driven_eye_ = 0;
+    cancel_iso_clicks();
     const game::Spawn* me = conn_->world().player();
     if (!me) return;
     // AvatarHeight (+0x138): EQPlayer::SetHeights' moddat.ini ROffset (3.125 for the player races, which have
