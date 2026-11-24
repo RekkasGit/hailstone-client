@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <limits>
 #include <map>
 #include <set>
@@ -116,6 +117,8 @@ struct Textures {
         return [this](const assets::Material& m) { return m.blend == assets::BlendMode::Masked ? &leaf : &bark; };
     }
 };
+
+void write_text(const fs::path& p, const std::string& text) { std::ofstream(p, std::ios::binary) << text; }
 
 } // namespace
 
@@ -475,6 +478,39 @@ TEST_CASE("trees: the rules' tree lines") {
         CHECK_FALSE(parse_material_rules(materials, {{"z", line}}, &error));
         CHECK(error == "z.txt:1: a tree's actor is a name of letters, digits, '_' and '-'");
     }
+}
+
+TEST_CASE("trees: a rules file or a tree whose zone is not a zone name is refused") {
+    // A rules file named "...txt" is zone "..": its trees would go to models/../, the pack folder itself.
+    const std::string materials = "[bark]\nasset = bark_brown_02\nmetres = 1\n";
+    std::string error;
+    for (const char* zone : {"..", ".", "", "a/b", "a\\b", "c:x", "con", "zone name"}) {
+        CAPTURE(zone);
+        CHECK_FALSE(parse_material_rules(materials, {{zone, "tree tree1 = pine\n"}}, &error));
+        CHECK(error.find("not a zone's rules") != std::string::npos);
+    }
+    CHECK(parse_material_rules(materials, {{"QeyToQrg_2", "tree tree1 = pine\n"}}, &error));
+
+    test::ScratchDir dir("trees_zone_name");
+    write_text(dir.path() / "materials.txt", materials);
+    write_text(dir.path() / "...txt", "tree tree1 = pine\n");
+    CHECK_FALSE(load_material_rules(dir.path(), &error));
+    CHECK(error == "...txt: not a zone's rules (<zone>.txt, the zone's short name of letters, digits and '_')");
+
+    const assets::Mesh mesh = game_tree();
+    const Textures tex(true);
+    auto shape = measure_tree(mesh, tex.lookup());
+    REQUIRE(shape);
+    TreeOptions opt;
+    opt.leaf_size = opt.bark_size = 64;
+    const GeneratedTree tree = generate_tree(*shape, opt);
+    const fs::path pack = dir.path() / "pack";
+    for (const char* zone : {"..", "../..", "a/b"}) {
+        CAPTURE(zone);
+        CHECK_FALSE(write_tree(pack, zone, "TREE1_ACTORDEF", tree, 1, &error));
+        CHECK(error == std::string("not a zone name: ") + zone);
+    }
+    CHECK_FALSE(fs::exists(pack));
 }
 
 TEST_CASE("trees: Qeynos Hills' trees measured from the game files") {

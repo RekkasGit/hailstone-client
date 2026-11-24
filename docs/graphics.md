@@ -2268,7 +2268,9 @@ studio ships:
 - `materials.txt` names each material: Poly Haven asset, metres one repeat shows, magnification, detail strength,
   how much of the original's painted shading it keeps, and its colour in the art.
 - A file per zone (`qeytoqrg.txt`) gives each of the zone's textures one material or two
-  (`hhdrockgrass1 = grass greyrock`; `sharp` for small shapes such as a path's flagstones).
+  (`hhdrockgrass1 = grass greyrock`; `sharp` for small shapes such as a path's flagstones). Its name is the zone's
+  short name (letters, digits and `_`): any other `.txt` file beside `materials.txt` (`...txt`, zone `..`, would
+  put its trees in the pack folder itself) stops the rules from loading, and `write_tree` refuses such a zone too.
 - A zone file may set a material's colour in that zone's art (`colour grass = 0.30 0.27 0.12`), for its own tiles
   only, so one material (its photos loaded once) serves zones whose art differs.
 

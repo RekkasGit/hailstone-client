@@ -12,8 +12,9 @@
 
 #include "assets/gltf_mesh.h"
 #include "assets/zone.h"
-#include "core/game_dir.h"
 #include "core/atomic_file.h"
+#include "core/game_dir.h"
+#include "core/zone_name.h"
 #include "texpack/texpack.h"
 
 namespace hailstone::texpack {
@@ -1477,6 +1478,12 @@ std::string tree_texture_name(const std::string& actor, const char* what) {
 
 bool write_tree(const std::filesystem::path& pack_dir, const std::string& zone, const std::string& actor,
                 const GeneratedTree& tree, std::uint64_t source_hash, std::string* error) {
+    // A zone short name only (materials.cpp refuses other rules files): "..", or a path, would put the tree outside
+    // models/<zone>/.
+    if (!is_zone_short_name(zone)) {
+        if (error) *error = "not a zone name: " + zone;
+        return false;
+    }
     std::string z;
     for (char ch : zone) z += static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
     const std::filesystem::path dir = pack_dir / "models" / z;
