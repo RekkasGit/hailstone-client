@@ -122,14 +122,9 @@
 - The server can now change a spawn's last name while you watch
   - It shows wherever name plates and the target window show last names, following your name-plate settings, and your own is updated too
 - The level-up effect shows: when the server sends it, rings and sparkles play on your character (and on others who level up near you), at the actor particle density
-- Item comparison, in both interfaces: an item's tooltip and details window show what wearing it instead of what you wear would change
-  - Tooltips cover the inventory, bags, bank, loot, trade and a merchant's goods; the details window covers a linked item too
-  - In the details window each stat's change sits beside the item's value (+12 in green beside AC 20, say), with the verdict and what it is compared with above the stats
+- Item comparison, in both interfaces: each stat's change for you sits beside the item's value
+  - In the details window it reads +12 in green beside AC 20, say, with the verdict and what the item is compared with above the stats
   - A tooltip shows the verdict under the name and the changes beside its AC, HP and mana
-  - It shows your HP, mana, endurance, AC, ATK, haste, stats, resists and regeneration as the game works them out, stat caps included, plus the weapon's damage and delay, effects gained and lost, and why you cannot use it
-  - A verdict (Upgrade, Downgrade, Mixed) weighs the changes by what matters for your class
-  - For rings, earrings and bracers Shift shows the other slot
-  - Options > Display > Compare Items and Upgrade Verdict turn them off. Nothing about the game's rules changes
 - The Fiery Avenger shows its blade
   - Held by a player or an NPC it showed only its flames: its blade is in an older model format the client did not read
   - The same fix draws the hull of the ghost ship in Erud's Crossing, which was invisible
@@ -653,6 +648,12 @@
   - Options > Graphics > Horizon Hills turns it off
 - Fixed a crash on entering the world when a character's own settings chose a different texture pack from the one Hailstone started with (most likely with a large pack). The pack is now switched safely while the character's models load
 - Item details: with a live game folder, stats its string table lacks show their names instead of a bracketed number such as [13036]: Spell Shield, Combat Effects, Shielding, Damage Shield, DoT Shielding, DS Mitigation, Avoidance, Accuracy, Stun Resist, Strikethrough and "Potion Belt Enabled"
+- Item comparison, in both interfaces: an item's tooltip and details window show what wearing it instead of what you wear would change
+  - Tooltips cover the inventory, bags, bank, loot, trade and a merchant's goods; the details window covers a linked item too
+  - It shows your HP, mana, endurance, AC, ATK, haste, stats, resists and regeneration as the game works them out, stat caps included, plus the weapon's damage and delay, effects gained and lost, and why you cannot use it
+  - A verdict (Upgrade, Downgrade, Mixed) weighs the changes by what matters for your class
+  - For rings, earrings and bracers Shift shows the other slot
+  - Options > Display > Compare Items and Upgrade Verdict turn them off. Nothing about the game's rules changes
 - AA window: column headers and rows stay aligned at every window scale, including when the window or scroll bar changes size
   - Drag a header's right edge to resize its column (the ability column takes the room the others leave, so widening the window widens it), or drag the header to reorder it
   - **Reset columns** restores the default widths, order and name sort
