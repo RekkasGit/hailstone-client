@@ -120,10 +120,12 @@ untouched settings in the file. Creating the first file through this editor reta
 script, plugin, and Lua social defaults.
 
 Writes compare the revision opened by the GM before modifying the file. If another GM or a manual edit has changed
-it, reopen the window and review the latest policy before retrying. Successful saves carry a revision in the file's
-first comment and keep the previous bytes and editor metadata in `client_files/.hailstone-admin-history/`. The
+it, or the snapshot has expired after five minutes, reopen the window and review the latest policy before retrying.
+Successful saves carry a revision in the file's first comment and keep the previous bytes and editor metadata in
+`client_files/.hailstone-admin-history/`. The
 dot-prefixed directory is server-only. To restore a revision, copy the relevant previous file to `hailstone.cfg` and
-reload the encounter so zones relist it. The metadata records whether a file existed before that edit. Keep the
+reload the encounter so zones relist it. For a backup whose metadata says `previous_existed=false`, move the active
+`hailstone.cfg` out of `client_files/` before reloading to restore the server's original defaults. Keep the
 client files directory shared across zone processes if they run on separate hosts. The server account that runs the
 zone process needs permission to write the file, create the lock and history directories, and replace the file.
 If a stopped zone leaves `client_files/.hailstone-admin-lock` behind, remove that empty directory only after confirming
