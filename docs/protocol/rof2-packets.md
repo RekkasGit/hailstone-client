@@ -1329,6 +1329,7 @@ Mail commands go on the chat session as OP_Mail with the mail command text, the 
 | MailNew | UCS→C | 0x10 | strings: mailbox, id, time, status, from, subject → 4547 (another mailbox: 4533) |
 | MailDeliveryStatus | UCS→C | 0x12 | strings: sequence, recipient (failure), subject, "1" sent / "0" failed → 4530 / 4531 |
 
+- A mail packet with more than 64 strings is dropped (Hailstone's limit; the longest stock layout, MailHeader, has 8), so a packet of NULs cannot become one string per byte.
 - Delete in the inbox sends TRASH, in the trash DELETED. Purge sends DELETED for the trash.
 - The composition window's From is the current mailbox's address as MailLogin listed it.
 - The composition window opens and sends only with the membership feature 6.

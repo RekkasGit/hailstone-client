@@ -158,8 +158,13 @@ std::optional<ChatServerEvent> decode_chat_server_packet(const AppPacket& p) {
                      : p.opcode == ucs::kMailNew           ? ChatServerEvent::Kind::MailNew
                      : p.opcode == ucs::kMailDeliveryStatus ? ChatServerEvent::Kind::MailDelivery
                                                            : ChatServerEvent::Kind::MailboxChange;
-            // NUL-separated strings; the last one may lack its NUL (the body's "TO:" line).
+            // NUL-separated strings; the last one may lack its NUL (the body's "TO:" line). The longest stock layout
+            // is a header's eight fields (EQEmu ucs/database.cpp SendHeaders; the body sends six), and the reader uses
+            // at most those. Hailstone's own limit, not the original's: a packet of NULs would otherwise become one
+            // string per byte, some thirty times its size, so a packet with more than kMaxMailFields is refused.
+            constexpr std::size_t kMaxMailFields = 64;
             while (!r.empty()) {
+                if (e.fields.size() >= kMaxMailFields) throw std::out_of_range("too many UCS mail fields");
                 std::string f;
                 while (!r.empty()) {
                     auto c = static_cast<char>(r.le<std::uint8_t>());

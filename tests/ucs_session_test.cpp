@@ -126,6 +126,22 @@ TEST_CASE("UCS login replies require complete counted mailbox lists and expose r
     CHECK_FALSE(refusal->accepted);
 }
 
+TEST_CASE("UCS mail packets keep their stock fields and refuse a flood of empty ones") {
+    // EQEmu's header layout: mailbox, two numbers, id, time, status, "SOE.EQ.<short>.<from>", subject.
+    auto header = decode_chat_server_packet(
+        strings(0x0e, {"0", "0", "3", "17", "1700000000", "1", "SOE.EQ.test.Friend", "hello"}));
+    REQUIRE(header);
+    CHECK(header->kind == ChatServerEvent::Kind::MailHeader);
+    REQUIRE(header->fields.size() == 8);
+    CHECK(header->fields[7] == "hello");
+    for (int op : {0x0d, 0x0e, 0x0f, 0x10, 0x12, 0x14}) {
+        CAPTURE(op);
+        CHECK(decode_chat_server_packet(AppPacket(static_cast<std::uint16_t>(op), std::vector<std::byte>(64))));
+        CHECK_FALSE(decode_chat_server_packet(AppPacket(static_cast<std::uint16_t>(op), std::vector<std::byte>(65))));
+        CHECK_FALSE(decode_chat_server_packet(AppPacket(static_cast<std::uint16_t>(op), std::vector<std::byte>(1u << 20))));
+    }
+}
+
 TEST_CASE("UCS session requests retry at five seconds and an unanswered connection ends at thirty") {
     ManualClock clock;
     clock.hold();
