@@ -359,8 +359,19 @@ void ClientApp::update_player(float dt) {
     using platform::Key;
     // SendTeleportIndexRequestAndWait @0x506560: the original sleeps in a loop that only delivers the network's
     // packets until the server's 0xcadf ends the wait (+0x1f05), so nothing else of the game runs. Here the window
-    // keeps drawing and the packets are handled, but the player neither acts nor moves until then.
-    if (conn_ && conn_->waiting_for_port()) return;
+    // keeps drawing and the packets are handled, but the player neither acts nor moves until then. The keys, the
+    // scripts' /keypress and the pad are still read so that what is let go during the wait is let go: only the
+    // movement releases reach the controls, the presses are dropped.
+    if (conn_ && conn_->waiting_for_port()) {
+        std::vector<game::KeyMap::Event> released =
+            actions_ui_->process_keys(window_.input(), !ui_.wants_keyboard() && !zone_settling());
+        released.insert(released.end(), script_keys_.begin(), script_keys_.end());
+        script_keys_ = std::exchange(script_key_release_, {});
+        released.insert(released.end(), pad_events_.begin(), pad_events_.end());
+        pad_events_.clear();
+        movement_.apply_releases(released);
+        return;
+    }
     if (conn_ && driven_eye_ != conn_->eye_id()) {
         // An Eye takes only the controls and view. Keep the local physics body alive at its own position, with
         // gravity, air and environment damage, then return to that body on a fade, death or depop.

@@ -405,7 +405,9 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     standing-still shortcut skips the sweep; not checked against the original).
 - **Teleport zone points.** Zone points that request a teleport by index send 0xcadf and wait for the server's 0xcadf;
   untested, as EQEmu never sets them. While waiting the player neither acts nor moves, but the window keeps drawing;
-  the original blocks the whole client, with no time limit.
+  the original blocks the whole client, with no time limit. Keys, `/keypress` and pad buttons let go during the wait
+  still end their movement (presses are dropped), so nothing stays held after it; whether the original delivers the
+  queued key messages after its wait is not checked.
 - **Sense heading.**
   - The message reads the true heading, not the compass's; its bands are 64 units wide (225 to 288 is "South", 256
     due south); a negative heading gives an empty direction. Checked: UseSkill @0x45c85f.
