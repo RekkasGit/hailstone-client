@@ -1159,7 +1159,11 @@ Also Hailstone's own: selected rows can be sold, donated as tribute, destroyed o
 - Withdraw, at an open bank: each item goes through the cursor into the first free general slot, else a bag with room
   (`stow_cursor_in_packs`, never equipped). A bag and its children move once. Closing the bank stops the job.
 - Destroy: each item is destroyed from the cursor (OP_MoveItem to nowhere), with one confirmation for the batch. A
-  non-empty bag and No Destroy items are left out, rechecked just before each pickup.
+  non-empty bag and No Destroy items are left out, rechecked just before each pickup. The client owns the confirmation:
+  the Modern pack's own window asks it; any other caller of `hs.BulkItems("destroy", ...)` gets the client's question
+  with the count and how many are No Trade or attuned, and the job starts on Yes only if the same items (slot, ID,
+  serial, quantity) are still there. Options' Fast Item Destroy skips the client's question, as it does the single
+  item's.
 
 The window shows beforehand how many items each action takes. A job stops, with a chat line and the cursor put away,
 if the items change under it. The selection records each item's ID, serial and quantity, which must still match, so a
