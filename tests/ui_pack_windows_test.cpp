@@ -6666,3 +6666,46 @@ end
     }
     ImGui::DestroyContext(ctx);
 }
+
+// The gamepad pack's question before a character is deleted starts on Cancel (its rule for every question): an A
+// carried over from the Delete press must not answer it.
+TEST_CASE("UI packs (gamepad): the delete question starts on Cancel") {
+    test::ScratchDir scratch("ui_gamepad_delete_focus_test");
+    const auto dir = scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / "gamepad", dir / "gamepad",
+             fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures; // 1.92: the atlas is built by NewFrame
+    {
+        Session s(dir, "gamepad", {}, false);
+        ui::CharacterSelectView chars;
+        chars.server_name = "World One";
+        chars.characters = {{"Bob", 12, 1, {1}, "North Qeynos"}, {"Cid", 50, 2, {5, 2}, "Kaladim"}};
+        chars.selected = 0;
+        s.host.ui_ready = true;
+        s.host.game_state = 1;
+        s.host.char_select = &chars;
+        auto* L = s.lua.state();
+        REQUIRE(luaL_dostring(L, R"lua(
+forced, focused = {}, {}
+local invisible = ui.InvisibleButton
+ui.InvisibleButton = function(id, ...)
+  local hit = invisible(id, ...)
+  focused[id] = ui.IsItemFocused()
+  if forced[id] then forced[id] = nil return true end
+  return hit
+end
+)lua") == LUA_OK);
+        s.frames(30);
+        REQUIRE(luaL_dostring(L, "forced['##delete'] = true") == LUA_OK);
+        s.frames(6);
+        CHECK(s.lua.run_for_test("", "return tostring(focused['##delno'] == true and focused['##delyes'] == false)") ==
+              "true");
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        s.host.char_select = nullptr;
+    }
+    ImGui::DestroyContext(ctx);
+}
