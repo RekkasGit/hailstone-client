@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Script and plugin authors:** `${Spawn[N]}`, `${Spell[N]}`, `${Me.Inventory[N]}`, an item's `Item[N]`, `${Group.Member[N]}` and `${Me.SpellReady[N]}` give NULL (or FALSE) for a number too large for what it indexes, instead of wrapping round to another spawn, spell, slot or gem
 - Spell, nimbus and server-timed effects on a creature that despawns stop with it, instead of hanging frozen in the air and jumping onto the next creature that reuses its id
 - Movement keys, `/keypress` releases and gamepad buttons let go while the client waits for a teleport zone point to answer no longer leave the character running or turning once the wait ends
 - `/face heading` with a value that is not a finite number (`nan`, `inf`) no longer leaves the character unable to turn; a heading past 360 is wrapped, and a heading or `loc` that is not a number turns nothing instead of facing the target
