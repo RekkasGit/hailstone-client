@@ -1327,6 +1327,33 @@ TEST_CASE("native plugins: host functions from another thread do nothing; the ca
     CHECK(plugin::caller_name() == "script");
 }
 
+TEST_CASE("native plugins: chat written from a plugin's own thread shows at the next pulse") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+    h.run("/probechatthread");
+    // The worker's other host call is refused; its chat lines wait for the client's thread.
+    CHECK(h.printed_line("[Probe] chat thread: add_command 0"));
+    CHECK_FALSE(h.hooks.has_command("/fromworker"));
+    // write_chat goes to the chat as printed; write_chat_color, with a connection, into its chat as a game colour.
+    auto colour_line = [&] {
+        bool found = false;
+        while (auto e = h.world.conn->poll_chat())
+            if (e->text == "[Probe] chat from a worker 2") found = true;
+        return found;
+    };
+    CHECK_FALSE(h.printed_line("[Probe] chat from a worker 1"));
+    CHECK_FALSE(colour_line());
+    h.hooks.pulse();
+    CHECK(h.printed_line("[Probe] chat from a worker 1"));
+    CHECK(colour_line());
+    // Shown once.
+    const auto shown = h.printed.size();
+    h.hooks.pulse();
+    CHECK(h.printed.size() == shown);
+    CHECK_FALSE(colour_line());
+}
+
 TEST_CASE("native plugins: lend_thread lets the plugin's own thread call the host while its callback waits") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);
@@ -1344,6 +1371,12 @@ TEST_CASE("native plugins: lend_thread lets the plugin's own thread call the hos
     h.run("/probelendafter");
     CHECK(h.printed_line("[Probe] after keep: add_command 0"));
     CHECK_FALSE(h.hooks.has_command("/afterkeep"));
+    // A callback inside a host call the client's thread makes while the plugin lends (do_command running the plugin's
+    // own command) is refused a lend, not told 2: that call holds the lock, so waiting there for a lent thread would
+    // never end. The lending itself goes on after it.
+    h.run("/probelend nested");
+    CHECK(h.printed_line("[Probe] lend nested 1, inner 0, thread: add_command 1, end 1"));
+    CHECK(h.hooks.has_command("/afternested"));
     // The client's thread is the client's again, and only it.
     CHECK(plugin::on_main_thread());
     CHECK_FALSE(plugin::on_lent_thread());

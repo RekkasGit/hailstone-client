@@ -810,7 +810,10 @@ calling plugin.
 **Threads.** Call host functions only from inside the plugin's callbacks (`InitializePlugin`, `OnPulse`, a command,
 a hook, ...), on the client's thread: its state has no locks. From another thread a call does nothing and returns
 0 / NULL (logged once); `ability_state` returns -1 ("unknown"), since its 0 means "on reuse". Hand a worker thread's
-results over and act on them in `OnPulse`.
+results over and act on them in `OnPulse`. The one exception is chat: `write_chat` and `write_chat_color` (and so
+`WriteChatf`) from another thread queue the line, and the client shows it at the next pulse, in order, as MacroQuest's
+`WriteChatColor` does. At most 1000 lines wait per plugin; past that they are dropped (logged once), and lines still
+waiting when the plugin unloads are not shown.
 
 A plugin whose callback waits while a thread of its own does the work (a script runtime whose script thread runs
 while `OnPulse` blocks, as MQ2Mono's C# scripts do) can lend that thread the client's: `lend_thread(host, 1)` from
@@ -821,6 +824,14 @@ runs meanwhile, since the client's thread is inside the plugin. `lend_thread(hos
 lending, 2 when the plugin already lends (a nested callback: leave the ending to the one that started it), and 0 on a
 lent thread, outside a callback, or inside another plugin's lending callback. `lend_thread(host, 0)` waits for a host
 call another thread is making, then returns 1. C++ plugins can hold an `hs::LendThread` for the waiting.
+
+A host call the client's thread makes while the plugin lends (a `do_command`, a `parse`, a `write_chat` from the
+waiting callback itself) holds that lock until it returns, the callbacks it runs included: a command's handler, a TLO,
+a chat event, in this plugin or another. Such a callback must not wait for the plugin's threads, whose calls wait for
+the lock: the client would hang. `lend_thread(host, 1)` returns 0 there (an `hs::LendThread`'s `ok()` is false), not 2.
+A lent thread may call any host function, commands included. A script runtime does well to keep its threads to reads
+and hand changes to the client's thread, as E3 does (its `MainProcessor` thread queues each command for `OnPulse`),
+and to have its callbacks only queue work, never wait.
 
 **Exceptions.** A C++ plugin must not let an exception out of anything the client calls (callbacks, commands, TLOs,
 hooks, UI functions, options). The client catches what it can: the call counts as unanswered (a TLO is NULL, a hook
