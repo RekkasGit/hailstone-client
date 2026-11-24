@@ -35,6 +35,16 @@
 - Minimising the window on Windows can no longer stop the client with a swapchain error ("vkCreateSwapchainKHR")
 - Add-ons that hook HUD methods (`hs.UI.hooks` on `character.Gauge`, `character.Label` and the like) cost less per frame: a hooked call no longer checks every add-on's hooks or sorts them each time
 - `mq.pickle` no longer counts every file in the script's config folder on each write. Files added or removed there outside the script count from the script's next start
+- Deleting a character always asks first: an interface other than Modern or Gamepad now gets the client's own confirmation naming the character before anything is deleted
+- Bulk destroy from the Advanced Inventory asks the client's confirmation, with the count and a No Trade warning, when an add-on or other interface starts it (unless Fast Item Destroy is on), and does nothing if the items moved before you answer
+- A map right click or Find on a point that is not a number or lies far past any zone is no longer sent to the server
+- A bag window's slot click from a script can no longer reach the bag itself or alias another slot with an out-of-range index
+- The Group Mentor window reads a typed percentage past the number range without undefined behaviour
+- The quantity dialog no longer overflows when "-2147483648" is typed
+- Transferring a real estate plot goes only to the player the question named: changing target while it is up cancels the transfer
+- Group window gauges and labels find each member's spawn faster, and an NPC whose name matches a member's no longer stands in for them
+- The Gamepad abilities list costs much less per frame while a discipline cools down
+- Moving a slider that writes to the UI ini (Window Transparency, fades) no longer rewrites the file every frame; it is saved with the window places and on quit or camp
 - **Plugin authors:** a table or function a plugin window hands the UI pack's code (an argument to a pack function, or what its callback returns or raises) now reaches the pack as a view, as what it writes into the pack's shared tables does, so a pack that keeps it and uses it later runs the plugin's code as the plugin, never with the player's authority. `next` and `rawget` see nothing through such a view, and the plugin's metamethods for `==`, `<`, `..`, calls and `tostring` no longer run from the pack's code
 
 ## 0.7.3-beta (2026-11-23)

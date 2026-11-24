@@ -1159,7 +1159,11 @@ Also Hailstone's own: selected rows can be sold, donated as tribute, destroyed o
 - Withdraw, at an open bank: each item goes through the cursor into the first free general slot, else a bag with room
   (`stow_cursor_in_packs`, never equipped). A bag and its children move once. Closing the bank stops the job.
 - Destroy: each item is destroyed from the cursor (OP_MoveItem to nowhere), with one confirmation for the batch. A
-  non-empty bag and No Destroy items are left out, rechecked just before each pickup.
+  non-empty bag and No Destroy items are left out, rechecked just before each pickup. The client owns the confirmation:
+  the Modern pack's own window asks it; any other caller of `hs.BulkItems("destroy", ...)` gets the client's question
+  with the count and how many are No Trade or attuned, and the job starts on Yes only if the same items (slot, ID,
+  serial, quantity) are still there. Options' Fast Item Destroy skips the client's question, as it does the single
+  item's.
 
 The window shows beforehand how many items each action takes. A job stops, with a chat line and the cursor put away,
 if the items change under it. The selection records each item's ID, serial and quantity, which must still match, so a
@@ -2003,6 +2007,16 @@ instead (CItemExpTransferWnd::WndNotification @0x6b0230).
 Previews never enter the inventory and no success is reported locally: the server replaces both items on the cursor.
 A refusal changes nothing (EQEmu prints "Transfer Failed"). RoF2 clears both selections after sending (`0x6b00b0`).
 Zoning or disconnecting closes the window.
+
+#### Real estate: transferring a plot
+
+The packets and the original's checks are in docs/protocol/rof2-packets.md "Real estate". The Transfer button (the
+purchase and manage windows, `RealEstatePurchaseWnd` and `RealEstateManageWnd` in `app/lua_ui_realestate.cpp`) asks for a confirmation naming the current target.
+**Hailstone change:** the question keeps that target's spawn id and name, and its Yes sends the transfer only while the
+same spawn, with the same name, is still targeted (`GameConnection::re_transfer`); otherwise nothing is sent and the
+refusal is logged. RoF2's RealEstate_SendTransferPlot reads the target as it is at the Yes, so a target changed while
+the question was up received the plot. Not switchable: sending a plot to a player the question did not name is not
+behaviour worth keeping.
 
 #### Other rules
 

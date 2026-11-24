@@ -442,7 +442,41 @@ TEST_CASE("hs.CharacterSelect: the characters with their race and classes, and i
     CHECK_FALSE(ui.host.char_select_action); // the scene follows the pick; nothing to ask
     CHECK(ui("return hs.CharacterSelectDo('enter')") == "true");
     CHECK(ui.host.char_select_action == static_cast<int>(A::EnterWorld));
+    // Delete from code other than a shipped pack's own: the client asks, naming the character, and only Yes deletes
+    CHECK(ui("return hs.CharacterSelectDo('delete')") == "true");
+    CHECK(ui.host.char_select_action == static_cast<int>(A::EnterWorld));
+    REQUIRE(ui.host.confirm);
+    CHECK(ui.host.confirm->text == "Delete Cid permanently? This cannot be undone.");
+    CHECK(ui("return hs.CharacterSelectDo('delete')") == "false"); // the question is already up
+    auto no = std::move(ui.host.confirm->done);
+    ui.host.confirm.reset();
+    no(false);
+    CHECK(ui.host.char_select_action == static_cast<int>(A::EnterWorld));
     ui("hs.CharacterSelectDo('delete')");
+    REQUIRE(ui.host.confirm);
+    auto moved = std::move(ui.host.confirm->done);
+    ui.host.confirm.reset();
+    CHECK(ui("return hs.CharacterSelectDo('select', 1)") == "true"); // the pick moved before the answer
+    moved(true);
+    CHECK(ui.host.char_select_action == static_cast<int>(A::EnterWorld));
+    ui("hs.CharacterSelectDo('select', 2) hs.CharacterSelectDo('delete')");
+    REQUIRE(ui.host.confirm);
+    auto yes = std::move(ui.host.confirm->done);
+    ui.host.confirm.reset();
+    yes(true);
+    CHECK(ui.host.char_select_action == static_cast<int>(A::Delete));
+    // A shipped pack's own code asks in its own look first (ui/*/charselect.lua): its call deletes at once
+    ui.host.char_select_action.reset();
+    lua_pushboolean(ui.L, 1);
+    lua_setfield(ui.L, LUA_REGISTRYINDEX, ui::lua::kPackStateKey);
+    ui.host.trusted_ui = false; // ... but not an interface Hailstone does not ship
+    CHECK(ui("return hs.CharacterSelectDo('delete')") == "true");
+    CHECK_FALSE(ui.host.char_select_action);
+    CHECK(ui.host.confirm);
+    ui.host.confirm.reset();
+    ui.host.trusted_ui = true;
+    CHECK(ui("return hs.CharacterSelectDo('delete')") == "true");
+    CHECK_FALSE(ui.host.confirm);
     CHECK(ui.host.char_select_action == static_cast<int>(A::Delete));
     ui("hs.CharacterSelectDo('create')");
     CHECK(ui.host.char_select_action == static_cast<int>(A::Create));

@@ -231,6 +231,16 @@ TEST_CASE("Map lines: the minimap draws the lines that cross its circle, however
         CHECK(marked_vertices(L, "hs.DrawMinimap(300, 250, 100, 50, true)", kNear) > 0); // turned with the heading
         CHECK(marked_vertices(L, "hs.DrawMinimap(300, 250, 100, 50)", kFar) == 0);
         CHECK(marked_vertices(L, "hs.DrawZoneMap(0, 0, 600, 500, 1)", kFar) > 0); // the whole zone: both
+        // Numbers past any screen or map (a float cast of them is undefined): nothing drawn, nothing returned; a
+        // centre that is not finite falls back to the zone's middle.
+        CHECK(marked_vertices(L, "hs.DrawMinimap(1e300, 250, 100, 50)", kNear) == 0);
+        CHECK(marked_vertices(L, "hs.DrawMinimap(300, 250, 100, 0/0)", kNear) == 0);
+        CHECK(marked_vertices(L, "hs.DrawZoneMap(0, 0, math.huge, 500, 1)", kFar) == 0);
+        CHECK(marked_vertices(L, "hs.DrawZoneMap(0, 0, 600, 500, 1e300)", kFar) == 0);
+        CHECK(marked_vertices(L, "hs.DrawZoneMap(0, 0, 600, 500, 1, 0/0, 1e300)", kFar) > 0);
+        REQUIRE(luaL_dostring(L, "return select('#', hs.DrawMinimap(1e300, 0, 1, 1))") == LUA_OK);
+        CHECK(lua_tointeger(L, -1) == 0);
+        lua_settop(L, 0);
         lua_close(L);
     }
     ImGui::DestroyContext(ctx);

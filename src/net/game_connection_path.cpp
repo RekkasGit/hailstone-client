@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 
 #include "core/game_dir.h"
 #include "core/ini_file.h"
@@ -327,6 +328,10 @@ void GameConnection::find_map_location(const glm::vec3& at) {
     // MapViewMap::HandleRButtonDown @0x6c9680: PlayerPath_FindMapLocation(point, 1). EQEmu answers a request without
     // a spawn with an empty reply (the find fails).
     if (state_ != ConnectionState::InZone || !world_.player()) return;
+    // Hailstone: a point no zone holds (not finite, or past any map: the UI hands this through from Lua) is not sent.
+    constexpr float kMaxCoord = 1e6f;
+    for (int i = 0; i < 3; ++i)
+        if (!std::isfinite(at[i]) || std::fabs(at[i]) > kMaxCoord) return;
     cancel_server_path(shown_find_lease_); ++shown_find_generation_;
     npc_find_identity_.reset();
     send_find(path_.find_map_location(at, true, eq_time()));

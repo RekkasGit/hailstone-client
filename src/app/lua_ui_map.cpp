@@ -1248,15 +1248,24 @@ bool mark_shown(const game::MapView& v, const SpawnMark& m, std::optional<float>
 // A screen rectangle's four numbers from argument i on, as floats (true), or false when one is not a number or lies
 // past any screen: cast as they are they could overflow float (undefined) and carry the map's mapping past int's range
 // (the pan and the label layout are ints).
-bool rect_arg(lua_State* L, int i, float out[4]) {
-    constexpr double kMaxCoord = 1e6;
+constexpr double kMaxCoord = 1e6;
+// n numbers from argument i on, as floats (true), or false when one is not finite or lies past kMaxCoord (a screen
+// position, or a point of a zone's map: no zone reaches that far).
+bool coords_arg(lua_State* L, int i, int n, float* out) {
     bool sound = true;
-    for (int n = 0; n < 4; ++n) {
-        const double c = luaL_checknumber(L, i + n);
+    for (int k = 0; k < n; ++k) {
+        const double c = luaL_checknumber(L, i + k);
         sound = sound && std::isfinite(c) && std::fabs(c) <= kMaxCoord;
-        out[n] = sound ? static_cast<float>(c) : 0.0f;
+        out[k] = sound ? static_cast<float>(c) : 0.0f;
     }
     return sound;
+}
+bool rect_arg(lua_State* L, int i, float out[4]) { return coords_arg(L, i, 4, out); }
+// An optional coordinate at argument i (fallback when missing), or nullopt when it is not finite or out of range.
+std::optional<float> opt_coord_arg(lua_State* L, int i, float fallback) {
+    const double c = luaL_optnumber(L, i, fallback);
+    if (!std::isfinite(c) || std::fabs(c) > kMaxCoord) return std::nullopt;
+    return static_cast<float>(c);
 }
 // A scale (screen pixels per original pixel) from argument i: 1 when missing, not a number or outside 0.05..100.
 float scale_arg(lua_State* L, int i) {
@@ -1736,9 +1745,10 @@ void draw_zone_view(MapState& s, UiHost& h, const ZoneView& zv) {
 int DrawMinimap(lua_State* L) {
     MapState& s = *state_of(L);
     UiHost& h = *host_of(L);
-    const float cx = static_cast<float>(luaL_checknumber(L, 1)), cy = static_cast<float>(luaL_checknumber(L, 2));
-    const float r = static_cast<float>(luaL_checknumber(L, 3));
-    const float range = std::max(1.0f, static_cast<float>(luaL_checknumber(L, 4)));
+    float a[4];
+    if (!coords_arg(L, 1, 4, a)) return 0; // (not finite, or past any screen or map)
+    const float cx = a[0], cy = a[1], r = a[2];
+    const float range = std::max(1.0f, a[3]);
     const bool rotate = lua_toboolean(L, 5) != 0;
     // Map coordinates are screen-aligned (x right, y down, world_to_map); the heading turns counter-clockwise from
     // north, so turning the map by it puts the facing up.
@@ -1788,9 +1798,10 @@ int DrawMinimap(lua_State* L) {
 int DrawZoneMap(lua_State* L) {
     MapState& s = *state_of(L);
     UiHost& h = *host_of(L);
-    const float x0 = static_cast<float>(luaL_checknumber(L, 1)), y0 = static_cast<float>(luaL_checknumber(L, 2));
-    const float x1 = static_cast<float>(luaL_checknumber(L, 3)), y1 = static_cast<float>(luaL_checknumber(L, 4));
-    const float zoom = std::max(0.1f, static_cast<float>(luaL_checknumber(L, 5)));
+    float a[5];
+    if (!coords_arg(L, 1, 5, a)) return 0; // (not finite, or past any screen)
+    const float x0 = a[0], y0 = a[1], x1 = a[2], y1 = a[3];
+    const float zoom = std::max(0.1f, a[4]);
     const auto& v = s.view;
     if (!h.in_game || x1 <= x0 || y1 <= y0) return 0;
     auto feet = s.feet_z(h);
@@ -1808,7 +1819,8 @@ int DrawZoneMap(lua_State* L) {
     }
     const glm::vec2 mid = (lo + hi) * 0.5f, size = glm::max(hi - lo, glm::vec2(1.0f));
     const float k = std::min((x1 - x0) / size.x, (y1 - y0) / size.y) * 0.94f * zoom;
-    const float cx = static_cast<float>(luaL_optnumber(L, 6, mid.x)), cy = static_cast<float>(luaL_optnumber(L, 7, mid.y));
+    const std::optional<float> ocx = opt_coord_arg(L, 6, mid.x), ocy = opt_coord_arg(L, 7, mid.y);
+    const float cx = ocx.value_or(mid.x), cy = ocy.value_or(mid.y); // (a centre past any map: the zone's middle)
     lua_pushnumber(L, k);
     lua_pushnumber(L, mid.x);
     lua_pushnumber(L, mid.y);
@@ -1930,7 +1942,9 @@ int DrawAtlas(lua_State* L) {
 // click (PlayerPath_FindMapLocation, at the player's height); for the modern and gamepad maps.
 int FindMapLocation(lua_State* L) {
     UiHost& h = *host_of(L);
-    const float x = static_cast<float>(luaL_checknumber(L, 1)), y = static_cast<float>(luaL_checknumber(L, 2));
+    float p[2];
+    if (!coords_arg(L, 1, 2, p)) return 0; // (not finite, or past any map: nothing to find)
+    const float x = p[0], y = p[1];
     if (!h.in_game || !h.conn || !h.feet_valid) return 0;
     auto me = h.conn->world().player();
     float z = me ? me->position.z : h.feet[2];
@@ -2224,7 +2238,9 @@ int MapPanReset(lua_State* L) {
 int MapRightClick(lua_State* L) {
     MapState& s = *state_of(L);
     UiHost& h = *host_of(L);
-    const float x = static_cast<float>(luaL_checknumber(L, 1)), y = static_cast<float>(luaL_checknumber(L, 2));
+    float p[2];
+    if (!coords_arg(L, 1, 2, p)) return 0; // (not finite, or past any screen)
+    const float x = p[0], y = p[1];
     if (!drawn_now(s) || !h.conn || !h.feet_valid || !s.view.current_zone) return 0;
     if (s.area_w < 1.0f || s.area_h < 1.0f) return 0;
     // The point in the original's pixels, the integer mouse as the original's.
@@ -2503,7 +2519,9 @@ int ZoneRoute(lua_State* L) {
     const std::uint32_t from = lua_isstring(L, 2) ? game::zone_id_by_short_name(lua_tostring(L, 2))
                                : h.conn                ? h.conn->zone_id()
                                                        : 0u;
-    game::ZoneRoute r = s.routes.route(from, to, [&](std::uint32_t z) { return s.zone_allowed(h, z); });
+    // (the route in a box the state owns across the pushes: plugin/lua_keep.h)
+    auto& r = plugin::lua_keep<game::ZoneRoute>(L);
+    plugin::cxx_guard(L, [&] { r = s.routes.route(from, to, [&](std::uint32_t z) { return s.zone_allowed(h, z); }); });
     if (r.zones.empty()) {
         lua_pushnil(L);
         return 1;
