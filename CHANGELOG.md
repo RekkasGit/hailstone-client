@@ -10,6 +10,7 @@
 - Autofollow stays with the caster's body while they steer Eye of Zomm
 - Modern Pet window: right-click a removable beneficial buff and choose **Remove** to click it off
 - Literal percent signs show correctly in chat, including tells and their echoes. Chat variables still expand when the message is sent
+- Two Hailstone windows started separately can no longer install or roll back an update at the same time, which could leave the UI folder half old and half new (chat without input, "is not in the UI's folder" in the log). The second one leaves the install to the first
 
 ## 0.7.3-beta (2026-11-23)
 
