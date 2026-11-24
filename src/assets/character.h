@@ -267,9 +267,9 @@ struct MeshEmitter {
     std::uint32_t cloud_animation_node = 0;
 };
 
-// A number no other mesh made in this run has, so a mesh freed and another made at its address are told apart
-// (app/actor_emitters.h keys an actor's emitters by it). A copy is another mesh and gets a new one; a move keeps it
-// and leaves the source a new one.
+// A number no other mesh or model made in this run has, so a mesh freed and another made at its address are told
+// apart (app/actor_emitters.h keys an actor's emitters by it, SpellPoints a model's points). A copy is another mesh
+// and gets a new one; a move keeps it and leaves the source a new one.
 class MeshSerial {
 public:
     MeshSerial() : value_(next()) {}
@@ -364,6 +364,7 @@ struct CharacterModel {
     std::vector<ModelEmitter> emitters;
     // Classic skeleton clouds remain on their authored bones, so animations move their origins and axes too.
     std::vector<MeshEmitter> clouds;
+    MeshSerial serial; // tells this model from one later made at its address (SpellPoints keys by it)
 
     const AnimationClip* clip(std::string_view code) const;
     // The clip a spawn plays for `code`, `holding` when PlayerClient_UpdateHoldingAnimation gives it a column other
