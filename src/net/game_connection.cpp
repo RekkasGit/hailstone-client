@@ -679,6 +679,14 @@ void GameConnection::handle_world(const AppPacket& p) {
         }
         break;
     case Op::ZoneServerInfo: {
+        // The original reads the address only while it waits for it after OP_EnterWorld (StartNetworkGame, GameState
+        // 3), from the character select or after world's OP_EnterWorld while zoning; stock EQEmu sends it only in
+        // answer to the client's OP_EnterWorld (world Client::EnterWorld → Clearance). Anywhere else it would end the
+        // world and zone state and connect a zone with no character, so it is dropped.
+        if (state_ != ConnectionState::EnteringWorld && state_ != ConnectionState::Zoning) {
+            log::warn("world: OP_ZoneServerInfo while {}, ignored", to_string(state_));
+            break;
+        }
         auto info = decode_zone_server_info(p);
         if (!info) { fail("could not read the zone server address"); return; }
         zone_host_ = info->host.empty() ? ticket_.world_host : info->host;

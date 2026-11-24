@@ -832,6 +832,9 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - **Open work:** the Alt modifier on MKPW_DetailsIcon's right click; 0x5f8920 → 0x5f84c0 after a wallet or result
     (may send 0x7679); what the Results OK click's 0x88e060(1) does; the tree's starting state of a new branch (only the
     toggle of "All Items" was read).
+  - **Catalog size.** Whether MarketplaceItemList::Parse (0x7f90e0) limits the count of a catalog (0x1e9f) is not
+    read. Now: a count over 10,000 refuses the catalog (Hailstone's limit against a flood of near-empty entries).
+    Settle: the parse loop's bound in the disassembly, or the largest catalog a server sends.
   - **Shelf on reset.** The original's ResetView, SyncShelfToSelection and NavigateToEntry set the shelf to array[1]
     ("Player Studio") while they highlight "All Items". This client uses "All Items" (a deliberate difference, docs/mechanics.md).
 - **Merchant sell price for a unit price outside int32** (a tiny, negative or NaN rate). `game::sell_value` gives
