@@ -28,6 +28,8 @@ std::int32_t shown_ac_value(std::int32_t defense, std::int32_t ac);
 
 // Label case 0x16: ATK, 0x584f60(1): (offense + attack) x 1000 / 744.
 std::int64_t shown_atk(const Character& ch, bool spell_2434);
+// Its arithmetic, in the original's 32 bits: the sum and the x 1000 wrap, then the signed divide truncates.
+std::int32_t shown_atk_value(std::int32_t offense, std::int32_t attack);
 
 // Whether any of the sheet's buff slots holds spell 2434 (the sheet's own buffs, for a copy with no connection).
 bool has_spell_2434(const Character& ch);

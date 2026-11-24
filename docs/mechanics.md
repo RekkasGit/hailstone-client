@@ -43,7 +43,7 @@ time. They run on plain data (`CharacterSheet`) and are covered by recorded test
 | `attack_rules.*` | who may attack whom (the PvP rules) through `AttackQueries`; live in `game/attack_check.*` |
 | `spell_gems.*` | memorising, linked timers, the usable-slot rule, gem readiness; see "Spell gems and buff stacking" |
 | `find_affect_slot.*` | buff slot choice and stacking over `AffectQueries`; live callees `game/hit_landing.*` |
-| `shown_stats.*` | the AC and ATK the inventory window shows (label cases 0x15 / 0x16), shared with the item comparison (docs/item-compare.md) |
+| `shown_stats.*` | the AC and ATK the inventory window shows (label cases 0x15 / 0x16; 0x580330 and 0x584f60, whose x 1000 wraps in 32 bits before the divide by 847 / 744), shared with the item comparison (docs/item-compare.md) |
 | `sheet_builder.*` | the sheet from the live connection; see note 4 |
 
 Notes:

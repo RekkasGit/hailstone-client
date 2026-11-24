@@ -65,9 +65,17 @@ std::int32_t shown_ac_value(std::int32_t defense, std::int32_t ac) {
 
 std::int64_t shown_ac(const Character& ch) { return shown_ac_value(ch.compute_defense(true), ch.stats().ac); }
 
+std::int32_t shown_atk_value(std::int32_t offense, std::int32_t attack) {
+    // 0x584f60 adds the two (lea), multiplies by 1000 (imul r32, wrapping past a sum of 2147483) and divides by 744
+    // with the compiler's multiply by 0x2c0b02c1, sar 7 and sign fix-up: the truncating signed division, as for AC.
+    const std::uint32_t sum = static_cast<std::uint32_t>(offense) + static_cast<std::uint32_t>(attack);
+    return core::wrapped_div(sum * 1000u, 744);
+}
+
 std::int64_t shown_atk(const Character& ch, bool spell_2434) {
+    // 0x584f60 returns 0 when the character's +8 (its own player spawn) is null; the player always has one here.
     std::uint32_t skill = attack_skill(ch);
-    return (static_cast<std::int64_t>(offense_value(ch, skill, true)) + attack_value(ch, skill, spell_2434)) * 1000 / 744;
+    return shown_atk_value(offense_value(ch, skill, true), attack_value(ch, skill, spell_2434));
 }
 
 bool has_spell_2434(const Character& ch) {
