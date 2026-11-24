@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cmath>
 #include <filesystem>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <numbers>
@@ -455,6 +456,27 @@ void append_collision_hull(const wld::WldFile& w, const wld::MeshDef& mesh, std:
         for (const auto i : triangle) triangles.push_back(hull->positions[i] + mesh.center);
 }
 
+// These slime effects cross walkable floors. Inktu'ta and Riwwi reuse some models with solid server
+// collision, so scope the override to the layouts that use them as decoration.
+bool decorative_slime_mesh(std::string_view zone, std::string_view actor, const wld::MeshDef& def, const Mesh& mesh) {
+    if (mesh.materials.size() != 1) return false;
+    const Material& material = mesh.materials.front();
+    if (material.raw_render_method != 0x80000013) return false;
+    const bool veksar = zone == "veksar";
+    if (def.polyhedron == -2) { // the patches' empty collision reference
+        return ((veksar || zone == "mmca" || zone == "mirc") && actor == "VEKSLIME402_ACTORDEF" &&
+                material.name == "VEKSLIME402_MDF") ||
+               ((veksar || zone == "guka") && actor == "VEKSLIME403_ACTORDEF" && material.name == "VEKSLIME403_MDF");
+    }
+    if (def.polyhedron != 0) return false;
+    if (veksar)
+        return (actor == "VEKSLIME400_ACTORDEF" && material.name == "VEKSLIME400_MDF") ||
+               (actor == "VEKSLIME401_ACTORDEF" && material.name == "VEKSLIME401_MDF");
+    constexpr std::string_view layouts[] = {"mird", "mirf", "mmcd", "mmcg", "mmch", "mmci"};
+    return actor == "MIRSLIME700_ACTORDEF" && material.name == "VEKSLIME400_MDF" &&
+           std::ranges::find(layouts, zone) != std::end(layouts);
+}
+
 // Adds every static (mesh-sprite) actor definition of a WLD to the zone and
 // returns the fragment indices of the meshes they use. Skeletal actors' 0x34
 // particle nodes go to `particles`, also for an actor without a mesh. `own` is
@@ -484,6 +506,9 @@ std::unordered_set<const wld::Fragment*> add_actor_defs(Zone& zone, const wld::W
                 if (const auto* md = mesh_frag ? mesh_frag->get<wld::MeshDef>() : nullptr) {
                     used.insert(mesh_frag);
                     built = wld::build_mesh(w, *md, mesh_frag->name);
+                    if (decorative_slime_mesh(zone.name, key, *md, *built) &&
+                        !w.get<wld::PolyhedronRef>(md->polyhedron))
+                        for (auto& part : built->parts) part.solid = false;
                     if (new_mesh && md->polyhedron) append_collision_hull(w, *md, collision_hull);
                 }
             } else if (const auto* sref = sprite ? sprite->get<wld::SkeletonRef>() : nullptr) {

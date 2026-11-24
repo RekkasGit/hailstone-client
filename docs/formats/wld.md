@@ -110,6 +110,18 @@ u32 flags, ref 0x31 material palette, ref animation, unused ref, ref to 0x18 pol
 - **Vertex pieces:** {u16 vertex count, u16 skeleton node}.
 - **Render groups:** {u16 polygon count, u16 material slot}. Polygons are stored in group order.
 
+Some decorative slime meshes carry solid polygon flags and cross walkable floors. The static actor loader makes
+them passable in the layouts below when the expected masked material and empty collision reference match.
+
+| Layout | Decorative meshes |
+| --- | --- |
+| `veksar` | `VEKSLIME400`–`VEKSLIME403` |
+| `guka` | `VEKSLIME403` |
+| `mmca`, `mirc` | `VEKSLIME402` |
+| `mird`, `mirf`, `mmcd`, `mmcg`, `mmch`, `mmci` | `MIRSLIME700` |
+
+Inktu'ta and Riwwi reuse two of the meshes with solid server collision.
+
 `build_mesh` keeps empty and unresolved palette slots so render-group material numbers stay valid, and emits one
 `MeshPart` per used slot, in slot order (`Mesh::materials` keeps only the used slots). Zone meshes share one zone-wide
 palette of thousands of slots. Polygons with a bad slot or index are dropped with a warning.
