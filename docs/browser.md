@@ -190,6 +190,12 @@ Tabs and frames:
   folder below it. CEF writes nothing else (checked on Linux).
 - One program for all of CEF's processes. Each tab is an off-screen browser (`windowless_frame_rate` 30); a new
   window (`window.open`, `target=_blank`) opens in the same tab.
+- **The client's pipes are the browser process's alone.** Before `CefInitialize` it moves them to private copies,
+  closed across exec on POSIX and not inheritable on Windows, and points standard input and output (and Windows'
+  standard handles) at the null device (`platform::take_protocol_stdio`). CEF's renderers, GPU and utility
+  processes inherit standard input and output, so a page's process cannot write messages into the client's stream
+  or read the client's, and a stray print cannot break the framing. CEF's other processes run the same program and
+  return from `CefExecuteProcess` before this point.
 - **Navigation checks.**
   - `OnBeforeBrowse` holds every main-frame navigation to the tab's rules (`about:blank` and CEF's own error pages
     are let through), and, in a script's or plugin's tab, every frame's. A refusal is a console line.

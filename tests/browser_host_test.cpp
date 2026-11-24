@@ -977,6 +977,36 @@ TEST_CASE("browser host: the stand-in helper: large evals in one frame leave it 
     host.shutdown();
 }
 
+// The helper speaks over private copies of its pipes: a process it starts (CEF's renderers) gets neither, and what
+// that process prints on its standard output goes nowhere instead of into the client's stream.
+TEST_CASE("browser host: the helper's children do not inherit its pipes") {
+    BrowserHost host([] { return process_transport({HAILSTONE_MOCK_WEB_HELPER}); });
+    auto id = host.open("https://example.org/", script());
+    REQUIRE(id != 0);
+    const Tab* t = host.tab(id);
+    REQUIRE(pump(host, 0, [&] { return t->view.width != 0; }));
+    auto console_has = [&](const std::string& text) {
+        for (const auto& c : t->console)
+            if (c.text == text) return true;
+        return false;
+    };
+    host.eval(id, "streams");
+    REQUIRE(pump(host, 0, [&] { return !t->console.empty(); }));
+    CHECK(t->console.back().text == "in:0 out:0");
+    host.eval(id, "child");
+    REQUIRE(pump(host, 0, [&] { return console_has("child done") || !host.last_error().empty(); }));
+    CHECK(host.last_error().empty());
+    CHECK_FALSE(t->closed);
+    host.post(id, "after");
+    std::vector<std::string> got;
+    REQUIRE(pump(host, 0, [&] {
+        for (auto& m : host.take_messages(id)) got.push_back(m);
+        return !got.empty();
+    }));
+    CHECK(got == std::vector<std::string>{"echo:after"});
+    host.shutdown();
+}
+
 TEST_CASE("helper process: Shutdown and the end of its input let it quit by itself") {
     platform::HelperProcess p;
     std::string error;

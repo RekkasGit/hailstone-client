@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- In-game browser: a web page's process can no longer write messages into, or read, the client's connection to the browser helper. The helper keeps that connection to itself and gives the processes it starts nothing to read or write instead
 - A creature that despawns and is replaced under the same id in one moment no longer starts with the old one's animation sounds and loop
 - A ground item or object the server sends again under the same id with another model, place, rotation or size is redrawn there (it kept its old model and position)
 - Isometric camera and click to move: a walk or click under way when you zone, camp or switch characters no longer clicks a spawn, door or object of the old zone on arrival in the new one

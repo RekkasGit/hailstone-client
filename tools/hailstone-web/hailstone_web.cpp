@@ -1,14 +1,16 @@
 // hailstone-web: the in-game browser's helper (docs/browser.md). CEF's off-screen browser behind the messages of
 // src/web/browser_protocol.h: the client's on standard input, ours on standard output. The same program is CEF's
-// browser process (started by the client) and its other processes (renderers, GPU, utility: started by CEF).
+// browser process (started by the client) and its other processes (renderers, GPU, utility: started by CEF). The
+// browser process takes the two pipes off standard input and output before CEF starts (platform::take_protocol_stdio),
+// so the other processes, which inherit those, get the null device instead of the client's stream.
 //
 //   hailstone-web --data=<folder>   cookies and caches go under it (each tab's profile is a folder in it); CEF's log
 //                                   is <folder>/cef.log
 //                 [--sandbox=auto|on|off]   Chromium's sandbox for the pages' processes (auto, the default: on Linux
 //                                   where unprivileged user namespaces work; off elsewhere for now)
 //
-// Threads: a reader thread blocks on standard input and posts each message to CEF's UI thread, where everything else
-// runs (CEF calls the off-screen handlers there), so only the UI thread writes standard output. Built with CEF's
+// Threads: a reader thread blocks on the client's pipe and posts each message to CEF's UI thread, where everything
+// else runs (CEF calls the off-screen handlers there), so only the UI thread writes to the client. Built with CEF's
 // flags: no exceptions, no RTTI (the protocol's own code is the client's, in hailstone_web_protocol).
 
 #include <algorithm>
@@ -52,12 +54,15 @@ namespace {
 
 constexpr char kPostMessage[] = "hailstone.post";
 
+// The client's pipes, private to the browser process (set before CefInitialize, never changed after).
+hailstone::platform::ProtocolStreams g_client;
+
 // ---- output: the UI thread only ----
 
 void send(const web::Message& m) {
     std::vector<std::byte> b = web::encode_message(m);
-    std::fwrite(b.data(), 1, b.size(), stdout);
-    std::fflush(stdout);
+    std::fwrite(b.data(), 1, b.size(), g_client.out);
+    std::fflush(g_client.out);
 }
 
 // A console line for the client, cut to what it takes (web::kMaxConsoleText).
@@ -660,7 +665,12 @@ int run(const CefMainArgs& main_args, const std::vector<std::string>& args) {
     const int code = CefExecuteProcess(main_args, app, nullptr);
     if (code >= 0) return code;
 
-    hailstone::platform::binary_stdio();
+    // Only here, in the browser process: CEF's other processes returned above, and those it starts from now on
+    // inherit standard input and output.
+    if (!hailstone::platform::take_protocol_stdio(g_client)) {
+        std::fprintf(stderr, "hailstone-web: could not take the client's pipes off standard input and output\n");
+        return 2;
+    }
     std::string data = arg_value(args, "--data");
     if (data.empty()) {
         std::fprintf(stderr, "hailstone-web: --data=<folder> is required\n");
@@ -684,16 +694,17 @@ int run(const CefMainArgs& main_args, const std::vector<std::string>& args) {
     if (!CefInitialize(main_args, settings, app, nullptr)) return CefGetExitCode();
 
     Helper helper(data);
-    // The reader: whole messages to the UI thread; the end of input (the client gone) shuts the helper down.
+    // The reader: whole messages to the UI thread; the end of the client's pipe (the client gone) shuts the helper
+    // down.
     std::thread reader([&helper] {
         for (;;) {
             unsigned char len_bytes[4];
-            if (std::fread(len_bytes, 1, 4, stdin) != 4) break;
+            if (std::fread(len_bytes, 1, 4, g_client.in) != 4) break;
             const std::uint32_t len = std::uint32_t{len_bytes[0]} | std::uint32_t{len_bytes[1]} << 8 |
                                       std::uint32_t{len_bytes[2]} << 16 | std::uint32_t{len_bytes[3]} << 24;
             if (len == 0 || len > web::kMaxMessage) break;
             std::vector<std::byte> body(len);
-            if (std::fread(body.data(), 1, len, stdin) != len) break;
+            if (std::fread(body.data(), 1, len, g_client.in) != len) break;
             auto m = web::decode_message(body);
             if (!m) break;
             if (!g_running) return;
@@ -701,7 +712,7 @@ int run(const CefMainArgs& main_args, const std::vector<std::string>& args) {
         }
         if (g_running) on_ui([&helper] { helper.shutdown(); });
     });
-    reader.detach(); // it may still be blocked on standard input when CEF has shut down
+    reader.detach(); // it may still be blocked on the client's pipe when CEF has shut down
 
     CefRunMessageLoop();
     g_running = false;
