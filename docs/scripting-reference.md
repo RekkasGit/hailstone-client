@@ -424,6 +424,7 @@ them. These commands come from MacroQuest rather than the game:
 | `/squelch <cmd>` | runs the command without its chat output |
 | `/docommand <cmd>` | runs the command (useful after `${...}` builds it) |
 | `/noparse <cmd>` | runs the command without expanding `${...}` |
+| `/timed <deciseconds> <cmd>` | runs the command that many tenths of a second later, `${...}` expanded then, with the sender's permissions |
 | `/lua run <name> [args]` \| `stop [name]` \| `pause [name]` \| `list` | scripts |
 | `/plugin list` \| `/plugin <name> [load\|unload]` | compiled plugins |
 | `/nav`, `/moveto`, `/stick` | navigation (docs/navigation.md "Commands") |

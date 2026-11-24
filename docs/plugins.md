@@ -446,12 +446,13 @@ Not yet:
 `/echo`, `/target` (`id N`, `clear`, `mycorpse`, `myself`, or a spawn search; with nothing, yourself; `next` / `prev`
 walk the search's matches), `/face` (target, `id`, `heading H`, `loc y,x`,
 a search; `fast`), `/keypress <command> [hold|release]` (the game's key command names: `forward`, `jump`, `hot1_1`, ...),
-`/squelch <cmd>`, `/docommand <cmd>`, `/noparse <cmd>`, `/lua ...`, `/plugin ...`. `/nav` (MQ2Nav's commands),
+`/squelch <cmd>`, `/docommand <cmd>`, `/noparse <cmd>`, `/timed <deciseconds> <cmd>`, `/lua ...`, `/plugin ...`. `/nav` (MQ2Nav's commands),
 `/moveto` and `/stick` are built in (`docs/navigation.md`).
 
 `${...}` is parsed in every command line, typed or scripted, except:
 
 - `/noparse`;
+- `/timed`, whose line is parsed when it runs, as in MQ;
 - the lines the client's own windows send for a button (the guild window's Go to URL, Join Channel and Update MOTD, a
   member's or friend's name): their text is what other players and the server wrote.
 
