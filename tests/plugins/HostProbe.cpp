@@ -23,6 +23,8 @@
 //   /probeabilities [n]  get_ability_data_bulk the same way, through HS_Bulk_ListHeader and HS_Bulk_AbilityRecord
 //   /probespells n id...  get_spells_data_bulk for those ids into n bytes, through HS_Bulk_SpellFixedRecord and the
 //   strings and effect lines after each
+//   /probecommand <name>  command_exists with the rest of the line as it is, when the host table has it
+//   /probescriptsdir  get_scripts_config_dir, when the host table has it
 //   /probespellsbyname [n] name  get_spells_by_name_data_bulk for that name the same way, printed as /probespells
 //   does
 //   /<name>buf ... (the plugin's own name, lower case, so two copies loaded at once each have theirs): the bulk
@@ -68,6 +70,16 @@ static_assert(offsetof(PluginHostApi, acquire_bulk_buffer) ==
               offsetof(PluginHostApi, get_spells_by_name_data_bulk) + sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, release_bulk_buffer) ==
               offsetof(PluginHostApi, acquire_bulk_buffer) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, spell_id_limit) ==
+              offsetof(PluginHostApi, release_bulk_buffer) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, spell_data_ready) ==
+              offsetof(PluginHostApi, spell_id_limit) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, command_exists) ==
+              offsetof(PluginHostApi, spell_data_ready) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, lend_thread) ==
+              offsetof(PluginHostApi, command_exists) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, get_scripts_config_dir) ==
+              offsetof(PluginHostApi, lend_thread) + sizeof(PluginHostApi::caps));
 
 namespace {
 
@@ -765,6 +777,90 @@ void probe_nameplate(void*, const char* args) {
     WriteChatf("[Probe] nameplate register %d", registered);
 }
 
+// /probecommand <name>: command_exists, added later in ABI 3, on the arguments as given (a space and all).
+void probe_command(void*, const char* args) {
+    if (!HAILSTONE_HOST_HAS(host, command_exists)) {
+        WriteChatf("[Probe] command: not in this client");
+        return;
+    }
+    WriteChatf("[Probe] command '%s' %d", args ? args : "", host->command_exists(host->host, args));
+}
+
+// /probescriptsdir: get_scripts_config_dir, added later in ABI 4, into a buffer that fits.
+void probe_scripts_dir(void*, const char*) {
+    if (!HAILSTONE_HOST_HAS(host, get_scripts_config_dir)) {
+        WriteChatf("[Probe] scripts dir: not in this client");
+        return;
+    }
+    char dir[1024];
+    const int n = host->get_scripts_config_dir(host->host, dir, sizeof dir);
+    WriteChatf("[Probe] scripts dir %d %s", n, n > 0 ? dir : "");
+}
+
+// /probelendinner: run by /probelend nested through do_command, a callback inside a host call the client's thread
+// makes while this plugin lends: lend_thread refuses there (a lent thread could not call the host until it returns).
+int g_inner_lend = -1;
+void probe_lend_inner(void*, const char*) { g_inner_lend = host->lend_thread(host->host, 1); }
+
+// /probelend: lend_thread, then a thread of the plugin calls the host while this waits for it, then the lending ends
+// and another thread is refused again. /probelend keep: lends and returns without ending it (the callback's return
+// ends it; /probelendafter checks). /probelend nested: lends, then runs /probelendinner through do_command; the
+// lending goes on after it (a thread's call still works).
+void probe_lend(void*, const char* args) {
+    if (!HAILSTONE_HOST_HAS(host, lend_thread)) {
+        WriteChatf("[Probe] lend: not in this client");
+        return;
+    }
+    if (args && std::strcmp(args, "keep") == 0) {
+        WriteChatf("[Probe] lend keep %d", host->lend_thread(host->host, 1));
+        return;
+    }
+    if (args && std::strcmp(args, "nested") == 0) {
+        const int lent = host->lend_thread(host->host, 1);
+        g_inner_lend = -1;
+        host->do_command(host->host, "/probelendinner");
+        int added = -1;
+        std::thread([&] { added = host->add_command(host->host, "/afternested", nothing, nullptr); }).join();
+        const int ended = host->lend_thread(host->host, 0);
+        WriteChatf("[Probe] lend nested %d, inner %d, thread: add_command %d, end %d", lent, g_inner_lend, added, ended);
+        return;
+    }
+    const int lent = host->lend_thread(host->host, 1);
+    const int again = host->lend_thread(host->host, 1); // already lent: 2
+    int added = -1, nested = -1, parsed_len = -1;
+    char parsed[32] = {};
+    std::thread t([&] {
+        added = host->add_command(host->host, "/fromlent", nothing, nullptr);
+        parsed_len = host->parse(host->host, "lent", parsed, sizeof parsed);
+        nested = host->lend_thread(host->host, 1); // only the client's own thread lends itself: 0
+        host->write_chat(host->host, "[Probe] written from the lent thread", 0);
+    });
+    t.join();
+    const int ended = host->lend_thread(host->host, 0);
+    int after = -1;
+    std::thread([&] { after = host->add_command(host->host, "/afterlend", nothing, nullptr); }).join();
+    WriteChatf("[Probe] lend %d %d, thread: add_command %d, parse %d '%s', lend %d; end %d, after: add_command %d", lent,
+               again, added, parsed_len, parsed, nested, ended, after);
+}
+
+// /probechatthread: write_chat and write_chat_color from a thread of the plugin's own (not lent): queued for the next
+// pulse, where another host function from there is refused.
+void probe_chat_thread(void*, const char*) {
+    int added = -1;
+    std::thread([&] {
+        host->write_chat(host->host, "[Probe] chat from a worker 1", 0);
+        if (HAILSTONE_HOST_HAS(host, write_chat_color)) host->write_chat_color(host->host, "[Probe] chat from a worker 2", 15);
+        added = host->add_command(host->host, "/fromworker", nothing, nullptr);
+    }).join();
+    WriteChatf("[Probe] chat thread: add_command %d", added);
+}
+
+void probe_lend_after(void*, const char*) {
+    int added = -1;
+    std::thread([&] { added = host->add_command(host->host, "/afterkeep", nothing, nullptr); }).join();
+    WriteChatf("[Probe] after keep: add_command %d", added);
+}
+
 // /probeability <kind> <name>: ability_state then use_ability, both added later in ABI 3.
 void probe_ability(void*, const char* args) {
     if (!HAILSTONE_HOST_HAS(host, ability_state) || !HAILSTONE_HOST_HAS(host, use_ability)) {
@@ -1091,6 +1187,12 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probeability", probe_ability, nullptr);
     AddCommand("/probeabilities", probe_abilities, nullptr);
     AddCommand("/probespells", probe_spells, nullptr);
+    AddCommand("/probecommand", probe_command, nullptr);
+    AddCommand("/probescriptsdir", probe_scripts_dir, nullptr);
+    AddCommand("/probelend", probe_lend, nullptr);
+    AddCommand("/probelendafter", probe_lend_after, nullptr);
+    AddCommand("/probelendinner", probe_lend_inner, nullptr);
+    AddCommand("/probechatthread", probe_chat_thread, nullptr);
     AddCommand("/probespellsbyname", probe_spells_by_name, nullptr);
     for (const char* what : buffer_commands)
         AddCommand(own_command(what).c_str(), probe_buffer, const_cast<char*>(what));
@@ -1130,6 +1232,8 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probenameplate");
     RemoveCommand("/probeability");
     RemoveCommand("/probeabilities");
+    RemoveCommand("/probecommand");
+    RemoveCommand("/probescriptsdir");
     for (const char* what : buffer_commands) RemoveCommand(own_command(what).c_str());
     RemoveTopLevelObject("Probe");
 }

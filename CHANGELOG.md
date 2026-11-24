@@ -3,7 +3,26 @@
 ## Unreleased
 
 - Modern Server Management lets authorized GMs review and edit Hailstone policy, command permissions and add-on rules in game. Command rules can require a minimum GM account status, and the add-on command list updates as commands register. The encounter checks GM status and keeps a backup of each previous configuration. Servers can customize the notice shown when a command is blocked. If a save needs a fresh snapshot, **Reload policy** keeps the draft and shows settings that changed on the server.
-
+- Plugins and scripts can colour their chat lines with MacroQuest's colour codes (`\ag`, `\a-w`, `\a#336699`, `\ax` ...), as `WriteChatColor` takes them. A server's message or a player's text cannot: its codes are left out.
+- C++ plugins can include the SDK's new `hailstone_plugin.hpp` to register commands and TLOs as lambdas that capture `this` and other values, as MacroQuest's `mq::AddCommand` does.
+- New TLOs `${MacroQuest.Path[config]}` and `${Hailstone.Path[config]}`: the folder for scripts' settings, `scripts/config` in Hailstone's folder. Plugins can also get it from the SDK's new `get_scripts_config_dir`.
+- New TLO members `${MacroQuest.Server}` and `${Hailstone.Server}` (the server's name), `${MacroQuest.Build}` and `${Hailstone.Build}` (4, MacroQuest's number for an emulator build, which E3 checks), `${MacroQuest.BuildDate}` and `${Hailstone.BuildDate}` (the day the client was built, as 20261123), and `${MacroQuest.Version}` and `${Hailstone.Version}` (Hailstone's version).
+- `/moveto dist <n>` sets how near a `/moveto` stops (`mdist` still works; 10 by default). `/moveto loc <y> <x>` without a Z, and `/moveto id`, now arrive whatever the height, where on a slope or under a levitating spawn they could keep walking or circle. `mdist <n>` also works inline (`/moveto loc <y> <x> mdist <n>`, as E3 sends it), where it was ignored. `/moveto id` now takes the spawn's place again each second, turning after it and looking up or down at it, where it walked to where the spawn stood when the command was given.
+- New command `/afollow` and TLO `${AdvPath}`, as E3 uses them from MacroQuest's MQ2AdvPath: follow your target along the way it walks (round corners, through doors, into the zone line it takes) rather than straight at it, holding within a distance (`/afollow on nodoor 15`), with `off`, `pause` and `unpause`. Hailstone's own follow; `/play` and `/record` paths are not there.
+- New TLO member `${Me.Bandolier[name|#]}` (`.Active`, `.Index`, `.Name`, `.Item[1-4]`), as in MacroQuest: E3 checks `.Active` to know which bandolier set is on.
+- New command `/timed <deciseconds> <command>`, as in MacroQuest: the command runs that many tenths of a second later (E3 uses it to delay a pet's attack and ghold). A script's delayed command keeps the script's permissions.
+- New commands `/exchange "<item>" <slot>` and `/unequip <slot>`, as MacroQuest's MQ2Exchange has them (E3 uses them to swap masks, ammo and the like): an item from your packs into a worn slot, the old one into its place, and a worn item into your packs. `/exchange help` and `/exchange help list` give the commands and slot names.
+- `/stick` takes the MQ2MoveUtils words E3 sends (`hold`, `snaproll`, `uw`, `delaystrafe`, `moveback`, `imsafe`), where it refused the whole line, and has `/stick pause` and `/stick unpause`. `uw`, `delaystrafe` and `moveback` change nothing yet; `front`, `!front`, `pin` and `behindonce` are not supported yet.
+- New TLO members `${Stick.Stopped}` and `${Stick.Behind}`: within the stick's distance, and at the spawn's back.
+- New TLO `${MoveTo}` (`.Moving`, `.Stopped`, `.ArrivalDist`, `.Broken`), as in MQ2MoveUtils: E3 reads it to know a `/moveto` is walking or has arrived.
+- New TLO `${Debuff}`: the poison, disease, curse and corruption counters on you (`.Count`, `.Poisoned`, `.Diseased`, `.Cursed`, `.Corrupted`), and `${Debuff[pet]}` on your pet, as the MQ2Debuffs plugin gives them for E3. `${Debuff.Silenced}` is TRUE while you are silenced.
+- New TLO member `Silenced` (`${Me.Silenced}`, `${Target.Silenced}`, `${Spawn[...].Silenced}`): the buff that silences, NULL when none does, as in MacroQuest.
+- New TLO member `${Me.MaxSongSlots}`: the song window's slots (RoF2's 20), beside `${Me.MaxBuffSlots}` (42).
+- `get_buff_data_bulk` and `get_buff_name_data_bulk` now report a buff's disease, poison, curse or corruption counters left, as MQ2Mono does, where they gave the counters it started with. A buff whose counters the client does not know yet (one from the profile or a zone-in list, until the spell lands again) still gives the starting count.
+- A plugin's chat line written from a thread of its own now shows at the next pulse, as MacroQuest's `WriteChatColor` does, where it was dropped.
+- Plugins can lend the client's thread to their own threads with the SDK's new `lend_thread`, while their callback waits for them, so a script runtime whose scripts run on a thread of their own (MQ2Mono-style C# scripts) can read TLOs and run commands from there. Inside a host call the client makes while a plugin lends (a command it runs, say), `lend_thread` refuses, since waiting there for the plugin's threads would hang the client.
+- Plugins can ask whether a command exists with the SDK's new `command_exists`. It says whether a plugin, a script or the client added the command, or whether it is one of the game's own.
+- Modern Spell Gems has optional spell names, a background toggle, and resize grips that wrap the tiles into rows and columns. Icon size is adjustable, and existing layouts keep their defaults
 - Trees with authored collision hulls let players move through their branches while their trunks still block movement. This fixes the invisible walls near the Field of Bone entrance to Warsliks Woods and in other classic zones
 - Decorative slime no longer blocks movement over the Veksar ramp and doorway or through passages in several Lost Dungeons of Norrath layouts
 - Spells that require line of sight now report “You cannot see your target” before casting through a solid door or moving obstacle
@@ -12,6 +31,8 @@
 - Autofollow stays with the caster's body while they steer Eye of Zomm
 - Modern Pet window: right-click a removable beneficial buff and choose **Remove** to click it off
 - Literal percent signs show correctly in chat, including tells and their echoes. Chat variables still expand when the message is sent
+- Two Hailstone windows started separately can no longer install or roll back an update at the same time, which could leave the UI folder half old and half new (chat without input, "is not in the UI's folder" in the log). The second one leaves the install to the first
+- Charged items stay in inventory and on the hotbar after spending a charge if the server keeps the item
 
 ## 0.7.3-beta (2026-11-23)
 
