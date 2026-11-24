@@ -35,7 +35,7 @@ using net::GameConnection;
 
 struct Types {
     const Type *spawn, *character, *cls, *race, *heading, *spell, *buff, *timestamp, *item, *zone, *group, *member,
-        *everquest, *macroquest, *hailstone, *window, *plugin, *time, *gametime, *navigation, *stick;
+        *everquest, *macroquest, *hailstone, *window, *plugin, *time, *gametime, *navigation, *stick, *debuff;
 };
 
 Types g; // set once by register_game_tlos (the types live in the registry that registered them)
@@ -182,6 +182,56 @@ template <typename Pass> V buff_with_effect(const Context& c, const game::Spawn&
             if (d->effect[e] == spa && pass(d->base[e])) return b.value;
     }
     return V::nil();
+}
+
+// Debuff[...]: the disease, poison, curse and corruption counters on the player (Debuff) or the player's pet
+// (Debuff[pet]), summed over every buff. Each counter effect with a positive base (a cure's own is negative) adds
+// the counters left once the client knows them (the effect's slot data, as the buff window's counter overlay), else
+// the counters the spell starts with (a zone-in list or the profile fills no slot data). The pet's buffs
+// (OP_PetBuffWindow) carry no slot data, so they always count the starting counters.
+struct DebuffCounters {
+    std::int64_t poison = 0, disease = 0, curse = 0, corruption = 0;
+    std::int64_t total() const { return poison + disease + curse + corruption; }
+};
+DebuffCounters debuff_counters(const Context& c, bool pet) {
+    DebuffCounters out;
+    if (!c.conn) return out;
+    auto add_buff = [&](const game::BuffSlot& b) {
+        if (b.empty()) return;
+        const game::SpellData* d = spell_data(c, b.spell);
+        if (!d) return;
+        for (std::size_t e = 0; e < d->effect.size(); ++e) {
+            if (!game::is_counter_spa(d->effect[e]) || d->base[e] <= 0) continue;
+            const std::int64_t n = b.counters_known && e < b.slot_data.size() ? b.slot_data[e] : d->base[e];
+            switch (d->effect[e]) {
+            case game::kSpaPoisonCounter: out.poison += n; break;
+            case game::kSpaDiseaseCounter: out.disease += n; break;
+            case game::kSpaCurseCounter: out.curse += n; break;
+            default: out.corruption += n; break;
+            }
+        }
+    };
+    if (pet)
+        for (const auto& [slot, b] : c.conn->pet_buffs()) add_buff(b);
+    else
+        for (const auto& b : c.conn->spell_state().buffs) add_buff(b);
+    return out;
+}
+
+// Whether any of the player's (or the pet's) buffs has this spell effect: Debuff.Silenced (SPA 96).
+bool debuff_has_effect(const Context& c, bool pet, std::int32_t spa) {
+    if (!c.conn) return false;
+    auto has = [&](const game::BuffSlot& b) {
+        if (b.empty()) return false;
+        const game::SpellData* d = spell_data(c, b.spell);
+        return d && std::find(d->effect.begin(), d->effect.end(), spa) != d->effect.end();
+    };
+    if (pet) {
+        const auto& list = c.conn->pet_buffs();
+        return std::any_of(list.begin(), list.end(), [&](const auto& sb) { return has(sb.second); });
+    }
+    const auto& list = c.conn->spell_state().buffs;
+    return std::any_of(list.begin(), list.end(), has);
 }
 
 // Buff ticks are 6 s; the countdown the client keeps (BuffSlot::tics) is as the server last sent it. A held countdown
@@ -508,6 +558,9 @@ void register_spawn() {
     });
     spawn_member("Slowed", [](const Context& c, const game::Spawn& s, std::string_view) { // attack speed under 100%
         return buff_with_effect(c, s, 11, [](std::int32_t base) { return base < 100; });
+    });
+    spawn_member("Silenced", [](const Context& c, const game::Spawn& s, std::string_view) { // MQ's SPA_SILENCE test
+        return buff_with_effect(c, s, 96, [](std::int32_t) { return true; });
     });
     // What a cure takes off: a buff carrying counters of that kind (a positive base; a cure's own effect is negative).
     spawn_member("Poisoned", [](const Context& c, const game::Spawn& s, std::string_view) {
@@ -1156,6 +1209,29 @@ void register_misc_types() {
         add(t, "Version", [](const Context&, const Value&, std::string_view) { return V::string(release_version()); });
     }
 
+    // Debuff (MQ2Debuffs' TLO, which E3 reads): i 0 the player, 1 the pet (debuff_counters). Its text is Count.
+    Type& deb = const_cast<Type&>(*g.debuff);
+    deb.to_value = [](const Context& c, const Value& v) { return V::integer(debuff_counters(c, v.i != 0).total()); };
+    add(g.debuff, "Count", [](const Context& c, const Value& v, std::string_view) {
+        return V::integer(debuff_counters(c, v.i != 0).total());
+    });
+    add(g.debuff, "Poisoned", [](const Context& c, const Value& v, std::string_view) {
+        return V::integer(debuff_counters(c, v.i != 0).poison);
+    });
+    add(g.debuff, "Diseased", [](const Context& c, const Value& v, std::string_view) {
+        return V::integer(debuff_counters(c, v.i != 0).disease);
+    });
+    add(g.debuff, "Cursed", [](const Context& c, const Value& v, std::string_view) {
+        return V::integer(debuff_counters(c, v.i != 0).curse);
+    });
+    add(g.debuff, "Corrupted", [](const Context& c, const Value& v, std::string_view) {
+        return V::integer(debuff_counters(c, v.i != 0).corruption);
+    });
+    // Silenced: TRUE while a buff silences (SPA 96, as Me.Silenced); E3 asks it before casting.
+    add(g.debuff, "Silenced", [](const Context& c, const Value& v, std::string_view) {
+        return V::boolean(debuff_has_effect(c, v.i != 0, 96));
+    });
+
     Type& win = const_cast<Type&>(*g.window);
     win.to_value = [](const Context& c, const Value& v) {
         return V::string(c.window_open && c.window_open(v.s) ? "TRUE" : "FALSE");
@@ -1540,6 +1616,7 @@ void register_game_tlos(Registry& r) {
     g.gametime = &r.type("gametime");
     g.navigation = &r.type("navigation");
     g.stick = &r.type("stick");
+    g.debuff = &r.type("debuff");
     register_spawn();
     register_character();
     register_abilities();
@@ -1691,6 +1768,15 @@ void register_game_tlos(Registry& r) {
         for (const auto& [id, o] : c.conn->world().spawns)
             if (o.pet_owner_id == c.conn->world().player_id && !o.is_corpse) return spawn_value(&o);
         return V::nil();
+    });
+    // Debuff: the player's counters; Debuff[pet] the pet's, NULL without a pet (as the Pet TLO finds it). Other
+    // indexes are NULL.
+    r.add_tlo("Debuff", [](const Context& c, std::string_view index) -> V {
+        if (!c.conn) return V::nil();
+        if (index.empty()) return V::object(g.debuff, 0);
+        if (!iequals(index, "pet")) return V::nil();
+        const V pet = c.registry ? c.registry->tlo(c, "Pet") : V::nil();
+        return pet.kind == Value::Kind::Object ? V::object(g.debuff, 1) : V::nil();
     });
 }
 

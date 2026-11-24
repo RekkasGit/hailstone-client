@@ -161,6 +161,12 @@ struct World {
             f << spell_line({{0, "3004"}, {1, "Test Plague"}, {17, "10"}, {20, "-10"}, {21, "4"}, {83, "0"}, {86, "0"},
                              {87, "35"}})
               << "\n";
+            // A silence (SPA 96).
+            f << spell_line({{0, "3005"}, {1, "Test Silence"}, {17, "5"}, {20, "1"}, {83, "0"}, {86, "96"}}) << "\n";
+            // Poison (SPA 36, 3) and curse (116, 2) counters, and a disease effect with a negative base (a cure's).
+            f << spell_line({{0, "3006"}, {1, "Test Venom"}, {17, "10"}, {20, "3"}, {21, "2"}, {22, "-5"}, {83, "0"},
+                             {86, "36"}, {87, "116"}, {88, "35"}})
+              << "\n";
             // A bard song (the Bard level, column 111, 1).
             f << spell_line({{0, "3373"}, {1, "Test Chant"}, {13, "1000"}, {17, "3"}, {83, "0"}, {111, "1"}}) << "\n";
         }

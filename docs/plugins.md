@@ -313,7 +313,9 @@ folder, without a trailing separator; MQ's other folder names are NULL. `.Build`
 members are `EverQuest`'s, as in MQ, so `.Server` is the server's name), `Hailstone` (the same members as
 `MacroQuest`),
 `Heading[deg]`, `Int`, `Float`, `Bool`, `String`, `Select`, `Math`,
-`If`, `Range`, `LineOfSight[...]`, `Navigation` and `Stick` (below). Compiled plugins can add more.
+`If`, `Range`, `LineOfSight[...]`, `Debuff` and `Debuff[pet]` (`.Count`, `.Poisoned`, `.Diseased`, `.Cursed`,
+`.Corrupted`: the counters on the player or the pet; `.Silenced`; docs/scripting-reference.md), `Navigation` and `Stick` (below).
+Compiled plugins can add more.
 
 The data types use MQ's member names and inheritance:
 
@@ -384,8 +386,8 @@ The server sends target buffs only to some players (stock EQEmu: GMs, Inspect Bu
 - `Target.Buff[n|name]` (a buff: `.Duration`, `.Caster`, `.ID` the slot ...), `.BuffCount`, `.BuffDuration[name]`;
 - `.MyBuff[name]` and `.MyBuffDuration[name]` (cast by the player);
 - the state a buff puts it in, by spell effect (EQEmu's spdat.h): `.Mezzed` (SPA 31), `.Charmed` (22), `.Feared`
-  (23), `.Rooted` (99), `.Snared` (3, negative), `.Slowed` (11, under 100%); `.Poisoned` (36), `.Diseased` (35),
-  `.Cursed` (116), `.Corrupted` (369), a buff with counters of that kind.
+  (23), `.Rooted` (99), `.Snared` (3, negative), `.Slowed` (11, under 100%), `.Silenced` (96); `.Poisoned` (36),
+  `.Diseased` (35), `.Cursed` (116), `.Corrupted` (369), a buff with counters of that kind.
 
 #### Spawn searches
 

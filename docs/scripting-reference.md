@@ -92,6 +92,7 @@ manifest's `caps` (docs/addons.md).
 | `SpawnCount` | a search | int | how many spawns match (0 when not connected) |
 | `NearestSpawn` | `n`, `n,search` or `search` | `spawn` | the nth nearest that matches (1 the nearest) |
 | `Pet` | | `spawn` | the player's pet: the one the pet window shows, else the first pet the player owns |
+| `Debuff` | none, or `pet` | `debuff` | the disease, poison, curse and corruption counters on the player, or on the player's pet (NULL without one); below |
 | `Group` | | `group` | the player's group; NULL when not grouped |
 | `Zone` | | `zone` | the current zone |
 | `Spell` | id or exact name | `spell` | a spell from the spell file |
@@ -174,13 +175,14 @@ the clean name.
 | `Buff[n\|name]` | `buff` | the nth buff, or one by name (exact first, else a part of it; `=name` exact only). With no index, the count |
 | `MyBuff[n\|name]` | `buff` | the same, counting only buffs the player cast |
 | `BuffDuration[n\|name]`, `MyBuffDuration[n\|name]` | `timestamp` | time left on that buff |
-| `Mezzed`, `Charmed`, `Feared`, `Rooted`, `Snared`, `Slowed`, `Poisoned`, `Diseased`, `Cursed`, `Corrupted` | `buff` | the buff that puts it in that state; NULL when none does (below) |
+| `Mezzed`, `Charmed`, `Feared`, `Rooted`, `Snared`, `Slowed`, `Silenced`, `Poisoned`, `Diseased`, `Cursed`, `Corrupted` | `buff` | the buff that puts it in that state; NULL when none does (below) |
 
 A spawn's buffs are the player's own, or the target's as OP_TargetBuffs gave them. Stock EQEmu sends those only to
 GMs, players with the Inspect Buffs AA or leadership, or when its `AlwaysSendTargetsBuffs` rule is on. Check
 `BuffsPopulated` first. The states use the buff's spell effects (EQEmu's spdat.h): `Mezzed` SPA 31, `Charmed` 22,
-`Feared` 23, `Rooted` 99, `Snared` SPA 3 with a negative value, `Slowed` SPA 11 below 100%. `Poisoned`, `Diseased`,
-`Cursed` and `Corrupted` are a buff with poison (SPA 36), disease (35), curse (116) or corruption (369) counters.
+`Feared` 23, `Rooted` 99, `Snared` SPA 3 with a negative value, `Slowed` SPA 11 below 100%, `Silenced` 96. `Poisoned`,
+`Diseased`, `Cursed` and `Corrupted` are a buff with poison (SPA 36), disease (35), curse (116) or corruption (369)
+counters.
 
 ### character
 
@@ -327,11 +329,19 @@ name.
 | `everquest` | `EverQuest` | `GameState` (`INGAME`, `CHARSELECT` or `PRECHARSELECT`), `Server` (the server's name), `UIScale` (always 1.0) |
 | `window` | `TRUE` or `FALSE` | `Open`, `Name` |
 | `plugin` | its name when loaded, else NULL | `IsLoaded`, `Name` |
+| `debuff` | `Count` | `Count` (all four), `Poisoned`, `Diseased`, `Cursed`, `Corrupted`: counters, summed over every buff; `Silenced`: bool, a buff silences (SPA 96) |
 | `time` | `hh:mm:ss` | `Hour`, `Minute`, `Second`, `Day`, `Month`, `Year`, `DayOfWeek` (1 Sunday), `Date` (`MM/DD/YYYY`), `Time24`, `SecondsSinceMidnight`, `Night` (before 6:00 or from 19:00) |
 | `gametime` | `hh:mm` | `Hour`, `Minute`, `Day`, `Month`, `Year`, `Night`, `Time24` |
 | `navigation` | `Active` | `Active`, `Paused`, `MeshLoaded`, `MeshComplete`, `TilesBuilt`, `TilesTotal`, `Destination`, `Remaining`, `PathExists[dest]`, `PathLength[dest]` (-1 for no path); docs/navigation.md "The Navigation TLO" |
 | `stick` | `ON` or `OFF` | `Active`, `Status` (`ON`, `PAUSED` or `OFF`), `Distance`, `StickTarget` (spawn id, 0 none), `StickTargetName` |
 | `math` | NULL | `Calc[expr]`, `Sqrt`, `Abs`, `Sin`, `Cos`, `Tan`, `Asin`, `Acos`, `Atan` (degrees), `Rand[max]` or `Rand[min,max]`, `Not`, `Hex`, `Dec[hex]`, `Clamp[n,min,max]`, `Distance[y,x,z:y,x,z]` (a missing point or coordinate is the player's) |
+
+`Debuff` is the MQ2Debuffs plugin's TLO, which E3 reads. Each counter effect (SPA 35 disease, 36 poison, 116 curse,
+369 corruption) with a positive base adds the counters left once the client knows them (as the buff window's
+counter numbers), else the counters the spell starts with; a cure's own effect (a negative base) adds none. The
+pet's buffs come from the pet window's list, which carries no counters left, so `Debuff[pet]` always counts the
+starting counters. `Silenced` is TRUE while any of the buffs has SPA 96 (as `Me.Silenced`, which gives the buff).
+Only these members are here; MQ2Debuffs' others are missing.
 
 `Window[name]` asks the UI whether a window of that name is open. The names are the game's own window names, which
 the UI packs use too (`InventoryWindow`, `LootWnd`, `BankWnd`, `GroupWindow`, ...).
