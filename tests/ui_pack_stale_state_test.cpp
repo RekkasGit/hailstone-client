@@ -764,3 +764,34 @@ fake.lists.GuildManagementWnd = { MemberList = { sel = 0, rows = {
     CHECK_FALSE(r.called("click RemoveButton"));
     CHECK(r.no_errors());
 }
+
+TEST_CASE("UI packs (modern): the raid's Leave and Make Leader ask first") {
+    PackRig r("modern");
+    r.run(kStockWindows);
+    r.run(R"lua(
+fake.shown.RaidWindow = true
+hs.ContextMenus = function() return false end -- (the direct member buttons, Make Leader among them)
+fake.lists.RaidWindow = { RAID_PlayerList = { sel = 1, rows = {
+  { "1", "Alpha", "60", "Warrior", "", "Raid Leader" },
+  { "1", "Beta", "60", "Cleric", "", "" } } } }
+)lua");
+    r.s->frames(3);
+    r.run("calls = {} seen = {} forced['Leave##RAID_DisbandButton'] = true");
+    r.s->frames(2);
+    CHECK(r.saw("Leave the raid?"));
+    CHECK_FALSE(r.called("click RAID_DisbandButton"));
+    r.run("forced['Leave##askyesRAID_DisbandButton'] = true");
+    r.s->frames(2);
+    CHECK(r.called("click RAID_DisbandButton"));
+    r.run("calls = {} seen = {} forced['Make Leader##RAID_MakeLeaderButton'] = true");
+    r.s->frames(2);
+    CHECK(r.saw("Make Beta the raid leader?"));
+    CHECK_FALSE(r.called("click RAID_MakeLeaderButton"));
+    r.run("forced['Cancel##asknoRAID_MakeLeaderButton'] = true");
+    r.s->frames(2);
+    CHECK_FALSE(r.called("click RAID_MakeLeaderButton"));
+    r.run("seen = {}");
+    r.s->frames(1);
+    CHECK_FALSE(r.saw("Make Beta the raid leader?"));
+    CHECK(r.no_errors());
+}

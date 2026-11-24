@@ -425,7 +425,7 @@ Testing: `test.open.<screen>=<seconds>`, `test.select.<window>.<list>=<row>`.
 Helper: `lib/social.lua`.
 
 - **FriendsWindow**: friends and ignored, add, Who / Remove.
-- **RaidWindow**: twelve reflowing group cards, ungrouped players above, roles, search, the invitation banner.
+- **RaidWindow**: twelve reflowing group cards, ungrouped players above, roles, search, the invitation banner. Leave and Make Leader ask first, Make Leader naming the selected member (Hailstone, as the gamepad pack).
   - A member dropped on a card, or "Move here", is selected in the game's list and that group's button pressed. The game enables those buttons only in a locked raid, so an unlocked raid's leader gets it locked first. A full group refuses the drop.
 - **RaidOptionsWindow**, **LFGuildWnd**.
 - **GuildManagementWnd**: roster, notes, message of the day, ranks. Promote, Demote, Make Leader and Remove ask first, naming the selected member; selecting another member puts the question away (Hailstone, as the gamepad pack).
