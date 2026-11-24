@@ -3,7 +3,9 @@
 #include <doctest/doctest.h>
 
 #include <chrono>
+#include <cmath>
 #include <fstream>
+#include <limits>
 #include <thread>
 #include <utility>
 
@@ -12,6 +14,7 @@
 #include "core/ini_file.h"
 #include "core/log.h"
 #include "core/sha256.h"
+#include "game/coords.h"
 #include "mq/commands.h"
 #include "mq/lua_mq.h"
 #include "mq/lua_script.h" // ScriptRun, HostWork (the host's insides)
@@ -36,6 +39,7 @@ struct Host {
     mq::Context ctx;
     std::vector<std::string> printed, sent;
     std::vector<std::pair<std::string, int>> keys; // /keypress: the command and its mode (0 tap, 1 hold, 2 release)
+    std::vector<double> faced; // /face: the MQ degrees asked for
     std::uint32_t target = 0;
     std::int64_t clock = 0;
     std::unique_ptr<mq::Commands> commands;
@@ -59,6 +63,7 @@ struct Host {
             keys.emplace_back(command, mode);
             return true;
         };
+        ce.face = [this](double degrees, bool) { faced.push_back(degrees); };
         commands = std::make_unique<mq::Commands>(ce);
         mq::ScriptEnv se;
         se.hooks = &hooks;
@@ -1036,6 +1041,42 @@ TEST_CASE("MQ commands: /keypress reads hold only after a space") {
     h.run("/keypress forward hold\t");
     REQUIRE(h.keys.size() == 2);
     CHECK(h.keys.back().second == 0);
+}
+
+TEST_CASE("MQ commands: /face takes only a finite heading or loc") {
+    Host h;
+    h.run("/face heading 450");
+    REQUIRE(h.faced.size() == 1);
+    CHECK(h.faced.back() == doctest::Approx(90.0)); // one turn's degrees
+    h.run("/face heading -90");
+    REQUIRE(h.faced.size() == 2);
+    CHECK(h.faced.back() == doctest::Approx(270.0));
+    // "nan", "inf" and 1e300 parse as numbers; none turns the player, nor falls back to the target.
+    for (const char* bad : {"/face heading nan", "/face heading inf", "/face heading -inf",
+                            "/face loc nan,0", "/face loc 0,inf", "/face loc 1e300,0", "/face loc 1,x"})
+        h.run(bad);
+    CHECK(h.faced.size() == 2);
+    h.run("/face heading 1e300"); // finite but past float: wrapped, not cast
+    CHECK(h.faced.size() == 3);
+    CHECK(h.faced.back() >= 0.0);
+    CHECK(h.faced.back() < 360.0);
+    h.run("/face loc 10,0"); // the server's y first: due north of the player at the origin
+    REQUIRE(h.faced.size() == 4);
+    CHECK(h.faced.back() == doctest::Approx(0.0));
+}
+
+TEST_CASE("MQ degrees to an EQ heading: wrapped, and nothing for NaN or an infinity") {
+    CHECK(*game::mq_degrees_to_heading(0.0) == doctest::Approx(0.0f));
+    CHECK(*game::mq_degrees_to_heading(90.0) == doctest::Approx(384.0f)); // clockwise vs counter-clockwise
+    CHECK(*game::mq_degrees_to_heading(450.0) == doctest::Approx(384.0f));
+    CHECK(*game::mq_degrees_to_heading(-90.0) == doctest::Approx(128.0f));
+    auto huge = game::mq_degrees_to_heading(1e300);
+    REQUIRE(huge);
+    CHECK(*huge >= 0.0f);
+    CHECK(*huge < 512.0f);
+    CHECK_FALSE(game::mq_degrees_to_heading(std::nan("")));
+    CHECK_FALSE(game::mq_degrees_to_heading(std::numeric_limits<double>::infinity()));
+    CHECK_FALSE(game::mq_degrees_to_heading(-std::numeric_limits<double>::infinity()));
 }
 
 TEST_CASE("MQ commands: /target prefers an exact player name over a mount") {

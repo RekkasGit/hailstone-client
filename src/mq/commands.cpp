@@ -192,6 +192,7 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
             std::string search;
             std::optional<double> heading;
             std::optional<glm::vec3> loc;
+            bool bad_number = false; // a heading or loc that is not a finite number: no turn rather than the target
             std::string_view rest = trim(args);
             while (!rest.empty()) {
                 std::string w = first_word(rest);
@@ -202,20 +203,28 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
                 } else if (iequals(w, "heading")) {
                     std::string n = first_word(rest);
                     rest = trim(rest.substr(std::min(rest.size(), n.size())));
+                    // "nan", "inf" and 1e300 parse; only a finite heading counts, taken as one turn's degrees
                     double d = 0;
-                    if (parse_float(n, d)) heading = d;
+                    if (parse_float(n, d) && std::isfinite(d)) heading = std::fmod(std::fmod(d, 360.0) + 360.0, 360.0);
+                    else bad_number = true;
                 } else if (iequals(w, "loc")) {
                     // "loc y,x[,z]" in /loc order (the server's y first)
                     std::string n = first_word(rest);
                     rest = trim(rest.substr(std::min(rest.size(), n.size())));
                     auto parts = split_index(n);
                     double y = 0, x = 0;
-                    if (parts.size() >= 2 && parse_float(parts[0], y) && parse_float(parts[1], x))
-                        loc = game::server_to_world({static_cast<float>(x), static_cast<float>(y), 0.0f});
+                    std::optional<float> fy, fx; // (not NaN, an infinity or past float)
+                    if (parts.size() >= 2 && parse_float(parts[0], y) && parse_float(parts[1], x)) {
+                        fy = in_range<float>(y);
+                        fx = in_range<float>(x);
+                    }
+                    if (fy && fx) loc = game::server_to_world({*fx, *fy, 0.0f});
+                    else bad_number = true;
                 } else {
                     search += (search.empty() ? "" : " ") + w;
                 }
             }
+            if (bad_number) return;
             if (heading) {
                 env_.face(*heading, fast);
                 return;
