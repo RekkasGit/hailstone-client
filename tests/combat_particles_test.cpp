@@ -30,6 +30,7 @@
 #include "game/spells.h"
 #include "mock_server/harness.h"
 #include "net/movement_packets.h"
+#include "net/rename_packets.h"
 #include "net/spell_packets.h"
 #include "net/zone_packets.h"
 
@@ -1343,4 +1344,42 @@ TEST_CASE("Actor emitters out of view emit nothing, ask for no pose and start no
         CHECK(particles.simulation().emitters()[0].particles.size() <= 3u);
         CHECK_FALSE(particles.simulation().emitters()[0].particles.empty());
     }
+}
+
+TEST_CASE("Spell and level-up effect cues not yet taken do not survive a zone change") {
+    // The new zone reuses spawn ids for other spawns: an old zone's cue would play on one of them.
+    using namespace net;
+    using namespace test;
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    rig.server.add_spawn(make_spawn("FixtureCaster", 333, 1, 1, 50, 60, 7));
+    rig.server.add_spawn(make_spawn("FixtureTarget", 334, 1, 1, 80, 90, 8));
+    REQUIRE(rig.until([&] { return rig.conn.world().spawns.contains(333) && rig.conn.world().spawns.contains(334); }));
+    auto table = std::make_shared<game::SpellTable>();
+    REQUIRE(table->parse(spell_line(600)) == 1);
+    rig.conn.set_spell_table_for_test(table);
+    rig.conn.take_spell_effect_cues();
+    rig.conn.take_level_effect_cues();
+    Action hit;
+    hit.source = 333;
+    hit.target = 334;
+    hit.type = 231;
+    hit.spell_id = 600;
+    hit.spell_level = 50;
+    hit.effect_flag = 4;
+    rig.conn.receive_zone_packet_for_test(encode(hit));
+    LevelAppearance level;
+    level.spawn_id = 334;
+    level.groups[0] = {0x4d, 1, 0};
+    rig.conn.receive_zone_packet_for_test(encode(level));
+    // Both make cues; the same again is left untaken when the zone changes.
+    REQUIRE_FALSE(rig.conn.take_spell_effect_cues().empty());
+    REQUIRE(rig.conn.take_level_effect_cues().size() == 1);
+    rig.conn.receive_zone_packet_for_test(encode(hit));
+    rig.conn.receive_zone_packet_for_test(encode(level));
+    const auto entries = rig.server.zone_entries;
+    rig.server.request_zone_change(2, 0.0f, 0.0f, 3.0f);
+    REQUIRE(rig.until([&] { return rig.server.zone_entries == entries + 1 && rig.conn.state() == ConnectionState::InZone; }));
+    CHECK(rig.conn.take_spell_effect_cues().empty());
+    CHECK(rig.conn.take_level_effect_cues().empty());
 }

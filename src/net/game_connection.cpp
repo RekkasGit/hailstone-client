@@ -762,6 +762,9 @@ void GameConnection::handle_world(const AppPacket& p) {
         spells_.others.clear();
         cast_stage_shown_.clear();
         effect_packets_.clear();
+        // Cues not yet taken name the old zone's spawn ids, which the new zone reuses for others.
+        effect_cues_.clear();
+        level_effect_cues_.clear();
         blood_spurts_.clear();
         spells_.target_buffs.clear();
         spells_.target_buffs_entity = 0;
