@@ -21,7 +21,7 @@ What `src/net/world_packets.*` and `src/net/zone_packets.*` encode and decode, a
 3. C→W `OP_World_Client_CRC1/2/3` after each character list, and CRC1 again before every `OP_EnterWorld`.
 4. C→W `OP_WorldClientReady` (empty) once the character select screen is up, after the first list's checksums. EQEmu's world eats it.
 5. Character creation (section 3).
-6. C→W `OP_EnterWorld` (72 B). W→C `OP_MOTD`, `OP_SetChatServer`, `OP_SetChatServer2`, (an `OP_GroupUpdate` for grouped characters), then `OP_ZoneServerInfo` or `OP_ZoneUnavail`.
+6. C→W `OP_EnterWorld` (72 B). W→C `OP_MOTD`, `OP_SetChatServer`, `OP_SetChatServer2`, (an `OP_GroupUpdate` for grouped characters), then `OP_ZoneServerInfo` or `OP_ZoneUnavail`. An `OP_ZoneServerInfo` at any other time (before `OP_EnterWorld`, or a second one) is logged and ignored.
 7. C→W `OP_WorldComplete` (empty). World closes the connection (EQEmu: `eqs->Close()`). The client connects to the zone only after world has dropped the link, and gives up after 30 s ("World did not drop the connection"). Without it, EQEmu drops the idle world client about 3 s later.
 
 While zoning (`LoginInfo::zoning = true`), world skips the guild list and character list. The client re-sends CRC1 and `OP_EnterWorld` with the name world sent in its `OP_EnterWorld`.

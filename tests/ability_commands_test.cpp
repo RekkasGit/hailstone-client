@@ -320,7 +320,7 @@ TEST_CASE("a fresh zone clears the previous character body's unconscious or dead
         status.owner_status = previous;
         status.dead = previous == 4;
         status.stand_state = net::kStandLying;
-        c.receive_world_packet_for_test(net::encode(net::ZoneServerInfo{"127.0.0.1", 9000}));
+        net::GameConnectionTestAccess::zone_hand_off(c, 9000);
         CHECK(status.owner_status == 0);
         CHECK_FALSE(status.dead);
         CHECK(status.stand_state == net::kStandStanding);

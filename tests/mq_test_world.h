@@ -18,6 +18,7 @@
 #include "game/coords.h"
 #include "game/mechanics/tables.h"
 #include "net/game_connection.h"
+#include "net/world_packets.h"
 #include "scratch_dir.h"
 
 namespace hailstone::net {
@@ -74,6 +75,11 @@ struct GameConnectionTestAccess {
     static std::string& character(GameConnection& c) { return c.character_; }
     static bool& auto_attack(GameConnection& c) { return c.auto_attack_; }
     static ConnectionState& state(GameConnection& c) { return c.state_; }
+    // A zone hand-off as world makes it: the zone's address in answer to OP_EnterWorld (the only state that takes it).
+    static void zone_hand_off(GameConnection& c, std::uint16_t port = 9000) {
+        c.state_ = ConnectionState::EnteringWorld;
+        c.receive_world_packet_for_test(encode(ZoneServerInfo{"127.0.0.1", port}));
+    }
     static std::optional<NewZone>& new_zone(GameConnection& c) { return c.new_zone_; }
     static std::vector<ZonePoint>& zone_points(GameConnection& c) { return c.zone_points_; }
     static std::vector<game::Door>& doors(GameConnection& c) { return c.doors_; }
