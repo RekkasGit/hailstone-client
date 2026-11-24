@@ -1135,3 +1135,34 @@ TEST_CASE("TLO: Me's Invulnerable, Mount, favour, tribute, spell bonuses, PetBuf
     sp.buffs[6].received_ms = net::GameConnection::now_ms();
     CHECK(f.p("${Me.Buff[Test Plague].CounterType} ${Me.Buff[Test Plague].CounterNumber}") == "Disease 4");
 }
+
+TEST_CASE("TLO: Me.Pet and Pet read the pet window's buffs, targeted or not") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    f.world.add(14, "Tester`s_pet", true, 40, game::server_to_world({5, 5, 0}));
+    A::world(*f.world.conn).spawns[14].pet_owner_id = 1;
+    CHECK(f.p("${Me.Pet} ${Me.Pet.ID} ${Pet.ID} ${Me.Pet.Buff[1]}") == "Tester`s pet 14 14 NULL");
+    auto& pet = A::pet_buffs(*f.world.conn);
+    game::BuffSlot plague;
+    plague.spell = 3004; // Test Plague: 4 disease counters
+    plague.tics = 10;
+    plague.received_ms = net::GameConnection::now_ms();
+    game::BuffSlot armor;
+    armor.spell = 11; // Holy Armor
+    armor.tics = 20;
+    armor.received_ms = net::GameConnection::now_ms();
+    pet.emplace_back(2, armor);
+    pet.emplace_back(0, plague);
+    // Buff[n] is the pet window's slot n; Buff[name] the slot of the first whose name starts so.
+    CHECK(f.p("${Me.Pet.Buff[1]} ${Me.Pet.Buff[2]} ${Me.Pet.Buff[3]}") == "Test Plague NULL Holy Armor");
+    CHECK(f.p("${Me.Pet.Buff[Holy]} ${Me.Pet.Buff[Test Plague]} ${Me.Pet.Buff[Armor]}") == "3 1 NULL");
+    CHECK(f.p("${Me.Pet.Buff[1].CounterType} ${Me.Pet.Buff[1].CounterNumber} ${Me.Pet.Buff[3].ID}") == "Disease 4 3");
+    CHECK(f.p("${Pet.Buff[3]} ${Me.Pet.BuffCount}") == "Holy Armor 2");
+    const int secs = std::stoi(f.p("${Me.Pet.BuffDuration[Holy Armor].TotalSeconds}"));
+    CHECK(secs > 110);
+    CHECK(secs <= 120);
+    CHECK(f.p("${Me.Pet.BuffDuration[2]}") == "NULL");
+    // Targeted, with no target buffs from the server: still the pet window's.
+    A::world(*f.world.conn).target_id = 14;
+    CHECK(f.p("${Me.Pet.Buff[1]} ${Target.Buff[Test Plague]}") == "Test Plague Test Plague");
+}

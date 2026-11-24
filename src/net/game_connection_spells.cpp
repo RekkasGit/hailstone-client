@@ -258,16 +258,24 @@ std::int32_t GameConnection::spell_range_focus(const game::SpellData& s) const {
     return mod;
 }
 
+// with_character's Character has not run ProcessAllStats (its item totals and the bonuses from them are still
+// zero): these run it first, as the stats window does with its own.
 std::int32_t GameConnection::spell_shield_bonus() const {
     std::int32_t v = 0;
     // Before RoF2's cap of 35: a server may let it go higher. The stats window shows the capped one.
-    with_character([&](game::mechanics::Character& ch) { v = ch.stats().spell_shield_uncapped; });
+    with_character([&](game::mechanics::Character& ch) {
+        ch.process_all_stats();
+        v = ch.stats().spell_shield_uncapped;
+    });
     return v;
 }
 
 std::int32_t GameConnection::spell_damage_bonus() const {
     std::int32_t v = 0;
-    with_character([&](game::mechanics::Character& ch) { v = ch.stats().spell_damage; });
+    with_character([&](game::mechanics::Character& ch) {
+        ch.process_all_stats();
+        v = ch.stats().spell_damage;
+    });
     return v;
 }
 

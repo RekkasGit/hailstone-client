@@ -91,7 +91,7 @@ manifest's `caps` (docs/addons.md).
 | `Spawn` | id, or a [search](#spawn-searches) | `spawn` | the spawn with that id, or the nearest that matches |
 | `SpawnCount` | a search | int | how many spawns match (0 when not connected) |
 | `NearestSpawn` | `n`, `n,search` or `search` | `spawn` | the nth nearest that matches (1 the nearest) |
-| `Pet` | | `spawn` | the player's pet: the one the pet window shows, else the first pet the player owns |
+| `Pet` | | `pet` | the player's pet: the one the pet window shows, else the first pet the player owns |
 | `Debuff` | none, or `pet` | `debuff` | the disease, poison, curse and corruption counters on the player, or on the player's pet (NULL without one); below |
 | `Group` | | `group` | the player's group; NULL when not grouped |
 | `Raid` | | `raid` | the player's raid (always there: `Members` is 0 outside a raid; its plain value is NULL) |
@@ -249,7 +249,7 @@ character's name.
 | `ItemReady[name\|id]` | bool | a carried item (by id, `=exact name` or part of it) has a click effect that is ready |
 | `Inventory[slot]` | `item` | the item in a slot, by [name or number](#inventory-slots) |
 | `FreeInventory` | int | empty general slots plus empty bag slots |
-| `Pet` | `spawn` | as the `Pet` TLO |
+| `Pet` | `pet` | as the `Pet` TLO |
 | `Bandolier[name\|n]` | `bandolier` | a bandolier set by its name (any case) or number (1..20, clamped); NULL for a name no set has |
 | `AbilityReady[name\|number]` | bool | a skill's reuse timer has run out |
 | `CombatAbilityReady[name]` | bool | the same for a combat ability (a discipline); the name works without its "Rk. II" |
@@ -380,6 +380,18 @@ name.
 | `Present` | int | the members besides the player whose spawn is in this zone |
 | `Injured[pct]` | int | the members in the zone (the player too) with health above 0 and below the percent |
 | `LowMana[pct]` | int | the same for mana (the others' as the group's mana updates give it) |
+
+### pet
+
+The player's pet (`Pet`, `Me.Pet`): a `spawn` whose buffs are the pet window's (OP_PetBuffWindow), whether or not it
+is targeted. Its other members are the spawn's; its `BuffCount`, `Mezzed` and the like also use the pet window's buffs
+while the server has not sent the pet's buffs as a target's.
+
+| Member | Gives | What |
+|---|---|---|
+| `Buff[n]` | `buff` | the buff in pet window slot n (1-based); NULL for an empty slot |
+| `Buff[name]` | int | the slot of the first buff whose name starts with the text |
+| `BuffDuration[n\|name]` | `timestamp` | time left on that buff; NULL for none or a permanent one |
 
 ### raid and raidmember
 

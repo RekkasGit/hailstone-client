@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `${Me.Pet}` and `${Pet}` now read your pet's buffs from the pet window, as in MacroQuest (`.Buff[n]` the pet window's slot, `.Buff[name]` its slot number, `.BuffDuration`), where they needed the pet targeted and the server sending its buffs.
+- The Modern pack's Inventory window can be resized from its edges and corner (never smaller than it opens), and its stats page gives the item bonuses more room, so `current / cap` fits; a name too long for its column is shortened rather than running into its value.
 - The inventory's stats page shows the capped item bonuses as RoF2's stats window does, `current / cap` (Spell Shielding 42 / 35), with the items' whole total where it used to show the capped value: a server may allow more than RoF2's caps. Heal amount, spell damage and clairvoyance have no cap and show their value alone.
 - New TLO members E3 reads, as in MacroQuest:
   - on `${Me}`: `ItemReady[name]`, `PctAggro`, `SecondaryPctAggro`, `AltAbility[name|id]` (`.ID`, `.Name`, `.Rank`, `.ReuseTime`, `.Spell` ...), `ActiveDisc`, `AutoFire`, `Ability[name]`, `CombatAbility[#|name]`, `Endurance`, `GemTimer[#|name]`, `CastTimeLeft`, `AAPointsAssigned`, `AAPointsTotal`, `XTargetSlots` and `XTarget[n].PctAggro`;
