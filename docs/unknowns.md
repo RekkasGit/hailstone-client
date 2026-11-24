@@ -538,11 +538,6 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     Zoning while in combat leaves the crossed swords up until the next OP_RestState, if EQEmu sends none at zone-in.
   - Settle: whether the original clears +0x31bc elsewhere on zoning (the PcClient constructor or the zone-in path), or a
     capture of zoning while in combat against stock EQEmu.
-- **Slam under an illusion.**
-  - Now: granted for every race whose innate table has it (Barbarian, Troll, Ogre and their citizen models 90, 92, 93).
-  - EQEmu bypasses the Bash skill check only for races 2, 9 and 10, so under a 90 / 92 / 93 illusion a class without
-    Bash sends a Slam the server drops.
-  - Settle: trying it on a server, or a server change that adds those races.
 - **Leadership purchase costs.**
   - Now: RoF2's native progression (constructor `0x55d8e0`, next-cost getter `0x561750`): group Mark NPC costs 3/4/5,
     raid Delegate Main Assist (index 19) costs 6/7/8. Legacy EQEmu `zone/aa.h` charges 1/2/3 at index 0 and 6/6/6 at index 19.

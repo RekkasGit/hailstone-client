@@ -499,7 +499,11 @@ bool can_use_combat_skill(const SkillContext& ctx, std::uint32_t skill) {
     if (skill > 99) return false; // IsSkillIdBelow100
     if (skill_table_entry(skill).base_damage < 1) return false;
     const CharacterSheet& sheet = ctx.ch->sheet();
-    if (skill == skill::kBash && ctx.form_slam != 0xff) return true;
+    // Bash without the skill or a shield for races 9, 10 and 2 only: the original compares the spawn's GetRace
+    // (vtable +0x88, 0x58b4e0, the raw +0xeb4 an illusion's SetRace writes) with those three, so the variant races
+    // 90, 92 and 93, whose innate Slam slot InitInnates also sets, do not pass here.
+    const std::uint32_t race = ctx.form_race ? ctx.form_race : sheet.race;
+    if (skill == skill::kBash && (race == 9 || race == 10 || race == 2)) return true;
     if (adjusted_skill(*ctx.ch, skill) <= 0) return false; // CharacterZoneClient::HasSkill @0x44a1b0
     if (skill != skill::kBash || ctx.me.type != 0) return true;
     // Bash: a shield in the secondary slot, one of three primary items, or a two-hander with SPA 226.
@@ -509,6 +513,8 @@ bool can_use_combat_skill(const SkillContext& ctx, std::uint32_t skill) {
         const net::Item* primary = sheet.item(13);
         if (!primary || (primary->id != 11050 && primary->id != 10099 && primary->id != 14383)) allowed = false;
     }
+    // The original also requires the character's +8, its own player spawn (UseSkill reads the same field as the
+    // spawn), which is always there while the player acts.
     const net::Item* primary = sheet.item(13);
     if (primary && ctx.ch->total_effect(0xe2, true, 0, true, true) != 0 &&
         (primary->item_type == 1 || primary->item_type == 4 || primary->item_type == 35))
