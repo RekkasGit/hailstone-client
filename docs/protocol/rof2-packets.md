@@ -715,12 +715,12 @@ OP_TradeSkillCombine (above) goes out; the server's empty OP_TradeSkillCombine e
 | TaskDescription | Z→C | 0x3714 | u32 slot, u32 task id, u8 open journal, u32 type (0 task, 1 shared, 2 quest), u32 reward type; title; u32 duration, u32 duration code, u32 elapsed seconds (the RoF2 translator turns the start time into elapsed time); description; u8 has rewards, u32 coin, u32 xp, u32 faction; reward text; reward item link; u32 points; u8 reward selection |
 | TaskActivity | Z→C | 0x08d3 | u32 slot, u32 type, u32 task id, u32 element, u32 step; short form (25 B, a hidden element): u32 0xffffffff, u8 optional; else i32 element type, u8 optional, i32 0, target name, counted item list, i32 goal, counted skill list ("-1"), counted spell list ("0"), zones, i32 dz switch, description override, i32 done, u8 1, zones again |
 | CompletedTasks | Z→C | 0x4eba | u32 count, {u32 task id, title, u32 completed time} (the 50 most recent) |
-| TaskSelectWindow / SharedTaskSelectWindow | Z→C | 0x705b / 0x48a2 | u32 count, u32 type, u32 giver spawn; per task: u32 id, f32 reward multiplier, u32 duration, u32 duration code, title, description, u8 reward preview, u32 elements, per element: i32 index, i32 type, i32 0, target, counted items, i32 goal, counted skills, counted spells, zones, description, zones (up to 40 tasks) |
+| TaskSelectWindow / SharedTaskSelectWindow | Z→C | 0x705b / 0x48a2 | u32 count, u32 type, u32 giver spawn; per task: u32 id, f32 reward multiplier, u32 duration, u32 duration code, title, description, u8 reward preview, u32 elements, per element: i32 index, i32 type, i32 0, target, counted items, i32 goal, counted skills, counted spells, zones, description, zones (up to 40 tasks; more than 256 elements in a task refuses the packet, Hailstone's limit) |
 | AcceptNewTask | C→Z | 0x0a23 | 12 B: u32 the selection's type, u32 task id (0 declines), u32 giver |
 | SharedTaskAcceptNew | C→Z | 0x6646 | 20 B: 0, 0, u32 giver, u32 task id, f32 reward multiplier |
 | CancelTask | both | 0x39f0 | 8 B: u32 slot, u32 type. C→Z abandons; Z→C removes the task |
 | TaskHistoryRequest | C→Z | 0x5f1c | 4 B: the completed list index |
-| TaskHistoryReply | Z→C | 0x3d05 | u32 index, u32 count; per completed element: u32 type, target, counted items, u32 goal, counted "-1", counted "-1", zones, u32 0, description, u8 '1', zones |
+| TaskHistoryReply | Z→C | 0x3d05 | u32 index (50 or more is ignored), i32 count (the first 20 are read, as in the original); per completed element: u32 type, target, counted items, u32 goal, counted "-1", counted "-1", zones, u32 0, description, u8 '1', zones |
 | TaskActivityComplete | Z→C | 0x5e19 | 24 B: index, type, task id, element, completed (0 failed), stage completed. The client shows 6005 "Task Stage Completed", or 6003 / 6004 with the title, as large on-screen text |
 | TaskRequestTimer | Z→C | 0x7a48 | 4 B: milliseconds before another shared task request |
 | TaskTimers | C→Z | 0x2b0f | empty (/tasktimers) |
@@ -1342,7 +1342,7 @@ The in-game store (CMarketplaceWnd). Unit-tested and mock-server tested; not tri
 - Layouts are the original's readers and senders (NMS-Release-Extras' `offsets/Market.h` section 44, HandleWorldMessage's cases).
 - The funding pages (Add Funds, credit cards) used the publisher's web service and are not offered.
 
-The feeds are read as the original's `CUnSerializeBuffer` does, each field bounds-checked on its own, so a short packet leaves the missing fields at their defaults. Catalog strings are NUL-terminated and cut to the node's buffer (name 127, the 64-byte one 63, the rest 1023 characters) while the cursor skips the whole string. The state feed's string is a u32 length and the bytes.
+A catalog counting more than 10,000 entries is refused (Hailstone's limit; docs/unknowns.md). The feeds are read as the original's `CUnSerializeBuffer` does, each field bounds-checked on its own, so a short packet leaves the missing fields at their defaults. Catalog strings are NUL-terminated and cut to the node's buffer (name 127, the 64-byte one 63, the rest 1023 characters) while the cursor skips the whole string. The state feed's string is a u32 length and the bytes.
 
 | Packet | Dir | Opcode | Layout |
 |---|---|---|---|
