@@ -346,6 +346,7 @@ TEST_CASE("Item bonus labels: the sums before RoF2's caps (the *Bonus2 fields); 
     bool ran = false;
     A::with_character(*w.conn, [&](game::mechanics::Character& ch) {
         ran = true;
+        ch.process_all_stats(); // as the stats window does with the character the labels read
         host.character = &ch;
         // The rules use the capped copies; the labels show the sums.
         CHECK(ch.stats().spell_shield == 35);
