@@ -94,6 +94,9 @@ donation receipt when the cursor is empty. That receipt uses the server's reply.
   (behaviour flags 0x24/0x84/0x44 | 4). `Fpu` rounds every
   result as the FPU does at either precision; `-ffp-contract=off` stops fused operations. Example: drunkenness 64 and
   INT 150 give 102 at 24 bits, 101 at 53.
+- An invalid operation on non-NaN operands (inf - inf, 0 * inf, 0 / 0, a negative square root) gives the x87's
+  default NaN, the negative quiet NaN `0xfff8...` (`0xffc00000` stored as a float). `Fpu` sets it explicitly, since
+  ARM's own default NaN is positive; a NaN operand passes through as on x86-64 (the first one, quieted).
 - A deliberate difference where the original never ends: shadow step (SPA 379) walks its distance down by 2 as a float
   while above 5; from 2^25 up `distance - 2` can round back to `distance` and the original loops for ever. Hailstone
   stops at the first step that leaves the distance unchanged; every base that ends in the original ends at the same
