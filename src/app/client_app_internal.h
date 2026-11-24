@@ -1754,6 +1754,9 @@ private:
     bool iso_click(const glm::vec2& at, const PickTarget& hit, bool right);
     // Each frame: a key ends a click's walk, the held button aims it, an arrival makes its click.
     void update_iso_clicks(bool player_moved);
+    // Forgets a click's walk, its pending click and marker, and a left click still waiting for the button's release:
+    // they name spawns, doors and points of a world that is going (a zone change, a camp, a respawn elsewhere).
+    void cancel_iso_clicks();
     // How near a walk to spawn `id` goes before its click.
     float iso_spawn_arrive(std::uint32_t id) const;
     // Each step: the movement keys as a heading relative to the camera (turns the player) and the forward key the
