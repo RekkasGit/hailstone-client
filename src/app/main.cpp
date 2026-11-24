@@ -859,15 +859,22 @@ int main(int argc, char** argv) {
             // before it installs (app/updater.h kBoxChildArg).
             c.updates = app::run_has_updates(opts.frames, !opts.screenshot.empty(), opts.box_child);
             c.box_child = opts.box_child;
+            // While it runs, a player's run (a box set's window too) holds a claim on the folder: no other Hailstone
+            // installs or rolls back an update under it (app/update_install.h claim_running).
+            std::optional<platform::ScopedFileLock> running_claim;
             if (c.updates && app::update_at_start_allowed(opts.login_launch)) {
                 // A cut-off install, or an update that never reached the login screen, is put back first; when the
                 // folder then holds another version than this one, that one is started instead.
-                const app::StartNote note = app::update_at_start(platform::install_dir(), release_version());
+                app::StartNote note = app::update_at_start(platform::install_dir(), release_version());
                 if (note.restart) {
+                    note.running_claim.reset();
                     app::start_installed_client();
                     return 0;
                 }
                 c.update_note = note.message;
+                running_claim = std::move(note.running_claim);
+            } else if (c.updates || c.box_child) {
+                running_claim = app::claim_running(platform::install_dir());
             }
             c.game_dir = opts.game_dir;
             c.classic_dir = opts.classic_dir;
@@ -917,7 +924,7 @@ int main(int argc, char** argv) {
             c.moon_phase = opts.moon_phase;
             c.blood_moon = opts.blood_moon;
             c.aurora = opts.aurora;
-            return app::run_client(c);
+            return app::run_client(c, std::move(running_claim));
         }
 
         std::optional<assets::Zone> zone;

@@ -188,10 +188,36 @@ never write the same `.part` file, and a window that quits first never installs 
 
 ### Start and rollback
 
-One process at a time installs or rolls back in a folder: `install_staged_update` and `update_at_start` take an
-exclusive lock on `update/install.lock` (`platform::ScopedFileLock`, released when the process ends). A process that
-cannot get it leaves the work to the one that holds it: an install reports an error and `update_at_start` does
-nothing, so one process never undoes another's half-done install through the shared `journal.txt`.
+One process at a time installs, rolls back or ends a pending update in a folder: `install_staged_update`,
+`update_at_start`, `update_started_fine` and `retire_old_release_files` take an exclusive lock on
+`update/install.lock` (`platform::ScopedFileLock`, released when the process ends). A process that cannot get it
+leaves the work to the one that holds it, so one process never undoes another's half-done install through the
+shared `journal.txt`, nor removes `previous/` while another rolls back from it:
+
+- an install reports an error, and the update stays staged for a later quit;
+- `update_at_start` does nothing;
+- `update_started_fine` is tried again at the next frame of the login screen (the lock is held only for moments: no
+  install can run while this process does, see below);
+- `retire_old_release_files` waits for the next start.
+
+**Every Hailstone running from the folder holds `update/running.lock` shared** (`claim_running`): from its start
+(`update_at_start` takes it before it lets go of the install lock, so no other start counts in between; a box set's
+window and a launcher's ticket launch take it in `main`) until its window, browser helper and plugins are gone. Whatever
+would change the files of another running Hailstone, or take its start for a failed one, first needs the same lock
+exclusively, under the install lock:
+
+- **The install at quit** waits while any other Hailstone runs from the folder, a box set's window or one started on
+  its own: the update stays staged and goes in at a later quit when none does. A player who pressed Restart gets this
+  version back, with the update still waiting.
+- **`update_at_start`** counts a start of the pending version, rolls it back after two failed starts, or undoes a
+  cut-off install, only when no other Hailstone runs. Three windows of a new version opened at once count as one
+  start; the others are running it, which is no failure, and none of them rolls it back from under the rest (nor
+  writes `failed.txt`, which would keep that release from being offered again). A cut-off install is put back at a
+  start while no other one runs.
+
+A Hailstone that cannot take its claim (it started at the very moment another was installing, or the folder cannot be
+written) runs without one and says so in the log; the old behaviour, an install that does not wait for it, then
+applies to it.
 
 `update_at_start`, the first thing `main` does:
 
@@ -206,7 +232,7 @@ nothing, so one process never undoes another's half-done install through the sha
     `ui/`).
   - A file still in `previous/` after the undo (a damaged journal, a failed move back) may be the only copy, so
     `previous/` is renamed `kept-<time>/` with a warning, not removed.
-- **`pending`:** each start of the new version is counted, and reaching the login screen ends the count
+- **`pending`:** each start of the new version while no other Hailstone runs from the folder is counted, and reaching the login screen ends the count
   (`update_started_fine` removes `previous/`). If two starts never reached it, the third rolls the update back, writes
   `failed.txt`, starts the old version and quits. The old version shows why (`note.txt`).
 - **A different version than the pending one** (the player put one in by hand) ends the pending state.

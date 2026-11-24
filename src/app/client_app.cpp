@@ -1351,7 +1351,7 @@ void ClientApp::update_guide() {
 
 } // namespace client_internal
 
-int run_client(ClientOptions& options) {
+int run_client(ClientOptions& options, std::optional<platform::ScopedFileLock> running_claim) {
     resolve_login_launch(options.login_launch, options.auto_user, options.auto_password, options.account, false);
     int code = 0;
     client_internal::ClientApp::UpdateExit update;
@@ -1365,7 +1365,9 @@ int run_client(ClientOptions& options) {
         code = app->run();
         update = app->update_exit();
     }
-    // The client is gone (its window, the browser helper, the plugins): a downloaded update goes in now.
+    // The client is gone (its window, the browser helper, the plugins): a downloaded update goes in now, unless
+    // another Hailstone runs from the folder (install_staged_update checks, with this process's claim let go).
+    running_claim.reset();
     if (update.install) finish_update_at_exit(update.restart);
     return code;
 }
