@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Literal percent signs show correctly in chat, including tells and their echoes. Chat variables still expand when the message is sent.
 - Warrior epic glows and other attached particle effects stay aligned as weapons, characters and objects move.
 - Hailstone loads and uses spell IDs above the original client's 45,000 ceiling. Item details can show the effects and duration of custom spells from the server's spell file when authored descriptions are missing.
 - Clicking Train or the background in Modern Alternate Advancement keeps held movement keys active.
