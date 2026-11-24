@@ -94,6 +94,8 @@ manifest's `caps` (docs/addons.md).
 | `Pet` | | `spawn` | the player's pet: the one the pet window shows, else the first pet the player owns |
 | `Debuff` | none, or `pet` | `debuff` | the disease, poison, curse and corruption counters on the player, or on the player's pet (NULL without one); below |
 | `Group` | | `group` | the player's group; NULL when not grouped |
+| `Raid` | | `raid` | the player's raid (always there: `Members` is 0 outside a raid; its plain value is NULL) |
+| `Corpse` | | `corpse` | the corpse the loot window has open (always there: `Open` says whether one is) |
 | `Zone` | | `zone` | the current zone |
 | `Spell` | id or exact name | `spell` | a spell from the spell file |
 | `Cursor` | | `item` | the item on the cursor |
@@ -124,7 +126,7 @@ manifest's `caps` (docs/addons.md).
 
 A compiled plugin can add TLOs (`AddTopLevelObject`). It cannot replace one that exists. `Spell.StacksWithDiscs` is
 not given (docs/unknowns.md). MQ TLOs that are missing:
-`Raid`, `Mercenary`, `Corpse`, `Merchant`, `Ground`, `Macro`, and other MQ plugins' TLOs (`Navigation` and
+`Mercenary`, `Merchant`, `Ground`, `Macro`, and other MQ plugins' TLOs (`Navigation` and
 `Stick` are built in).
 
 ## Data types
@@ -182,6 +184,7 @@ the clean name.
 | `Aggressive` | bool | its PlayerState has 4 or 8, as MQ tests it |
 | `Primary`, `Secondary` | int | the model number of what it holds in the primary and secondary hand |
 | `Body` | `body` | its body type, by name (`Humanoid`, `Undead`, ...) |
+| `Mount` | `spawn` | the mount it rides; NULL when none |
 
 A spawn's buffs are the player's own, or the target's as OP_TargetBuffs gave them. Stock EQEmu sends those only to
 GMs, players with the Inspect Buffs AA or leadership, or when its `AlwaysSendTargetsBuffs` rule is on. Check
@@ -209,6 +212,12 @@ character's name.
 | `AAPointsAssigned` | int | the first of the profile's assigned AA points |
 | `AltAbility[name\|group]` | `altability` | an AA the player owns, by its name or its ability (group) id |
 | `PctAggro`, `SecondaryPctAggro` | int | the aggro meter's percentages for the player and for the secondary (below) |
+| `Invulnerable` | `buff` | the buff that makes the player invulnerable (SPA 40); NULL when none does |
+| `CurrentFavor`, `CareerFavor` | int | tribute favour |
+| `TributeActive` | bool | the player's tribute is on |
+| `SpellShieldBonus`, `SpellDamageBonus` | int | the items' spell shielding and spell damage. Spell shielding is the whole total, past RoF2's cap of 35 (which MQ applies, and the stats window shows), since a server may allow more |
+| `PetBuff[n]` | `spell` | the spell in the pet's buff slot n |
+| `PetBuff[name]` | int | the pet buff slot that holds that spell |
 | `Buff[n\|name]` | `buff` | the nth long buff, or one by name; with no index, the count |
 | `Song[n\|name]` | `buff` | the same for short buffs (songs) |
 | `CountBuffs`, `CountSongs` | int | |
@@ -297,6 +306,8 @@ The value of `Spell[...]`, `Me.Gem[n]`, `Me.Casting` and the like. Its plain val
 | `StacksWith[name]` | bool | it would land over a buff of that spell alone (MQ's WillStackWith) |
 | `StacksTarget` | bool | it is not too powerful for the target and stacks with each buff the target is known to have |
 | `WillLandPet` | int | 0 when one of the pet's buffs would block it, else the first empty pet buff slot + 1 |
+| `CounterType` | string | `Disease`, `Poison`, `Curse` or `Corruption`: the last counter effect it has; `None` |
+| `CounterNumber` | int | the first counter effect's base (the counters it starts with); 0 for none |
 | `TargetType` | string | `Single`, `Self`, `Group v1`, `PB AE`, `Targeted AE`, `Line of Sight`, ... |
 | `SpellType` | string | `Beneficial` or `Detrimental` |
 | `Beneficial` | bool | |
@@ -369,6 +380,44 @@ name.
 | `Present` | int | the members besides the player whose spawn is in this zone |
 | `Injured[pct]` | int | the members in the zone (the player too) with health above 0 and below the percent |
 | `LowMana[pct]` | int | the same for mana (the others' as the group's mana updates give it) |
+
+### raid and raidmember
+
+`Raid` is always there; outside a raid `Members` is 0 and the rest NULL.
+
+| `raid` member | Gives | What |
+|---|---|---|
+| `Members` | int | members, the player included |
+| `Member[n]` | `raidmember` | the nth member, in the raid list's order |
+| `Member[name]` | `raidmember` | that member |
+| `Leader`, `Target` | `raidmember` | the leader; the member the raid window has selected |
+| `Locked` | bool | |
+| `LootType` | int | 1 leader, 2 group leaders, 3 looters, 4 everyone |
+| `TotalLevels`, `AverageLevel` | int, float | |
+
+A `raidmember` has every `spawn` member (of its spawn when it is in the zone), and these. Its plain value is the
+name.
+
+| `raidmember` member | Gives | What |
+|---|---|---|
+| `Name`, `Level` | | |
+| `Class` | `class` | |
+| `Group` | int | its raid group, 1..12; 0 ungrouped |
+| `GroupLeader`, `RaidLeader` | bool | |
+| `Looter` | bool | it may loot: the leader, the group leaders with loot type 2, the looters with type 3 |
+| `Spawn` | `spawn` | NULL when it is not in this zone |
+
+### corpse
+
+`Corpse` is the corpse the loot window has open. It has every `spawn` member (the corpse's). Its plain value is
+`TRUE` while one is open, else `FALSE`.
+
+| Member | Gives | What |
+|---|---|---|
+| `Open` | bool | a corpse is open |
+| `Items` | int | the items in the window |
+| `Item[n]` | `item` | the item in loot window slot n (1-based) |
+| `Item[name]` | `item` | the first whose name contains the text; `=name` exact |
 
 ### target and xtarget
 

@@ -600,7 +600,8 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] `mq.TLO` values' metatable locked, so a script cannot swap in a `__gc`.
 - [x] **MQ's `Math` TLO (its Calculate arithmetic), `If` and `Range`,** and the rest of MQ's int, float and string members with MQ's edge cases (`mq/calc.h`).
 - [x] The TLO members E3 reads on `Me`, items, spells, `Target`, spawns and `Group` (aggro, AAs, disciplines, gem and cast timers, augments, item links, the client's own stacking rules for `StacksWith` / `WillLand`). Unit tests only; not tried with E3.
-- [ ] `Spell.StacksWithDiscs` (its spell column is not decoded) and MQ's `Raid`, `Corpse`, `Mercenary`, `Merchant`, `DoorTarget` and `Me.Bank` TLOs, which E3 also reads.
+- [ ] `Spell.StacksWithDiscs` (its spell column is not decoded) and MQ's `Mercenary`, `Merchant`, `DoorTarget`, `InvSlot` and `Me.Bank` TLOs and window controls (`Window.Child`, `/invoke`), which E3 also reads.
+- [x] MQ's `Raid` and `Corpse` TLOs, and `Me.Invulnerable`, `Mount`, `CurrentFavor`, `TributeActive`, `SpellShieldBonus`, `SpellDamageBonus`, `PetBuff`, and the spells' `CounterType` and `CounterNumber`. Unit tests only.
 - [x] **Spawn searches follow MacroQuest's words and matching rules** (`mq/spawn_search.h`): spawn types, pets, 3D radius, named test, group, raid, guild, xtarget, light, player state.
 - [x] **The alerts key** (CMD_HISTORIC_ALERTS, __ExecuteCmd case 168) toggles AlertHistoryWnd in both packs; listed with its Shift+H default. Seen live in the Modern pack.
 - [ ] **MacroQuest's alert lists:** `/alert`, and the spawn search's `alert`, `noalert`, `nearalert`, `notnearalert`. None kept yet, so those words act as with an empty list.

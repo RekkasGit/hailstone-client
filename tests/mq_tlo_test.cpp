@@ -1016,3 +1016,122 @@ TEST_CASE("TLO: spawns' Aggressive, Primary, Secondary and Body; the group's Pre
     CHECK(f.p("${Group.LowMana[5]}") == "0");
     CHECK(f.p("${Group.Injured}") == "0");
 }
+
+TEST_CASE("TLO: Raid and its members") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    // No raid: the TLO is there, with no members.
+    CHECK(f.p("${Raid}") == "NULL");
+    CHECK(f.p("${Raid.Members} ${Raid.Member[1]} ${Raid.Leader}") == "0 NULL NULL");
+    auto& raid = A::raid(*f.world.conn);
+    raid.active = true;
+    raid.leader = "Groupie";
+    raid.members = {mq_test::raid_member("Tester", 0, 2, 50, true), mq_test::raid_member("Groupie", 1, 1, 48),
+                    mq_test::raid_member("Faraway", 0xffffffff, 12, 60)};
+    raid.loot_type = 3;
+    raid.looters = {"Faraway"};
+    CHECK(f.p("${Raid.Members} ${Raid.TotalLevels} ${Raid.LootType}") == "3 158 3");
+    CHECK(f.p("${Raid.Member[1]} ${Raid.Member[2].Name} ${Raid.Member[Faraway]}") == "Tester Groupie Faraway");
+    CHECK(f.p("${Raid.Leader} ${Raid.Leader.RaidLeader} ${Raid.Member[1].RaidLeader}") == "Groupie TRUE FALSE");
+    CHECK(f.p("${Raid.Member[1].Group} ${Raid.Member[2].Group} ${Raid.Member[3].Group}") == "1 2 0");
+    CHECK(f.p("${Raid.Member[1].GroupLeader} ${Raid.Member[2].Level} ${Raid.Member[3].Class.ShortName}") == "TRUE 48 WIZ");
+    // Looters: the leader, and with loot type 3 the named looters.
+    CHECK(f.p("${Raid.Member[2].Looter} ${Raid.Member[3].Looter} ${Raid.Member[1].Looter}") == "TRUE TRUE FALSE");
+    // A member's other members are its spawn's, when it is in the zone.
+    CHECK(f.p("${Raid.Member[2].ID} ${Raid.Member[2].Spawn.ID}") == "12 12");
+    CHECK(f.p("${Raid.Member[3].Spawn} ${Raid.Member[3].ID}") == "NULL NULL");
+    CHECK(f.p("${Raid.Member[4]} ${Raid.Member[Nobody]}") == "NULL NULL");
+}
+
+TEST_CASE("TLO: Corpse, the loot window's corpse and its items") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    CHECK(f.p("${Corpse} ${Corpse.Open}") == "FALSE FALSE");
+    CHECK(f.p("${Corpse.Items} ${Corpse.Item[1]}") == "NULL NULL");
+    auto& loot = A::loot(*f.world.conn);
+    loot.emplace();
+    loot->corpse_id = 13; // a_rat02, a corpse
+    loot->corpse_name = "a_rat02";
+    loot->open = true;
+    net::Item fang;
+    fang.name = "Rat Fang";
+    fang.id = 13069;
+    fang.stack_count = 2;
+    fang.max_stack = 20;
+    fang.tradeskills = 1;
+    fang.no_drop = 255;
+    loot->items[net::kCorpseSlotBegin] = fang;
+    net::Item whisker;
+    whisker.name = "Rat Whisker";
+    whisker.id = 13070;
+    loot->items[net::kCorpseSlotBegin + 1] = whisker;
+    CHECK(f.p("${Corpse} ${Corpse.Open} ${Corpse.Items}") == "TRUE TRUE 2");
+    CHECK(f.p("${Corpse.Item[1]} ${Corpse.Item[1].ID} ${Corpse.Item[1].Stack} ${Corpse.Item[1].Tradeskills}") ==
+          "Rat Fang 13069 2 TRUE");
+    CHECK(f.p("${Corpse.Item[2].NoDrop} ${Corpse.Item[1].NoDrop} ${Corpse.Item[3]}") == "TRUE FALSE NULL");
+    CHECK(f.p("${Corpse.Item[Whisker]} ${Corpse.Item[=rat fang].ID} ${Corpse.Item[=Rat]}") == "Rat Whisker 13069 NULL");
+    CHECK(f.p("${Corpse.Item[1].ItemLink}").find("Rat Fang") != std::string::npos);
+    // Its other members are the corpse spawn's.
+    CHECK(f.p("${Corpse.ID} ${Corpse.Dead}") == "13 TRUE");
+    loot->open = false;
+    CHECK(f.p("${Corpse.Open} ${Corpse.Item[1]} ${Corpse.ID}") == "FALSE NULL NULL");
+}
+
+TEST_CASE("TLO: Me's Invulnerable, Mount, favour, tribute, spell bonuses, PetBuff; spells' counters") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    auto& sp = A::spells(*f.world.conn);
+    CHECK(f.p("${Me.Invulnerable}") == "NULL");
+    // Spell 3008 (the fixture's Test Aura) has SPA 40: invulnerable.
+    sp.buffs[5].spell = 3008;
+    sp.buffs[5].tics = 3;
+    sp.buffs[5].received_ms = net::GameConnection::now_ms();
+    CHECK(f.p("${Me.Invulnerable} ${Bool[${Me.Invulnerable}]}") == "Test Aura TRUE");
+    // Tribute.
+    auto& tribute = A::tribute(*f.world.conn);
+    tribute.points = 1500;
+    tribute.career = 9000;
+    CHECK(f.p("${Me.CurrentFavor} ${Me.CareerFavor} ${Me.TributeActive}") == "1500 9000 FALSE");
+    tribute.settings.active = true;
+    CHECK(f.p("${Me.TributeActive}") == "TRUE");
+    // The items' spell shielding and spell damage.
+    CHECK(f.p("${Me.SpellShieldBonus} ${Me.SpellDamageBonus}") == "0 0");
+    net::Item robe;
+    robe.name = "Shielding Robe";
+    robe.id = 7001;
+    robe.equip_slots = 1u << net::kSlotChest;
+    robe.races = 0xffffffffu; // every race: an item the character's race may not use adds nothing
+    robe.classes = 0xffff;
+    robe.spell_shield = 12;
+    robe.spell_dmg = 30;
+    A::inventory(*f.world.conn).put(net::ItemSlot::possessions(net::kSlotChest), robe);
+    CHECK(f.p("${Me.SpellShieldBonus} ${Me.SpellDamageBonus}") == "12 30");
+    // Past RoF2's cap of 35: the items' whole total (a server may allow it; MQ caps it).
+    net::Item legs = robe;
+    legs.name = "Shielding Leggings";
+    legs.id = 7002;
+    legs.equip_slots = 1u << net::kSlotLegs;
+    legs.spell_shield = 30;
+    legs.spell_dmg = 0;
+    A::inventory(*f.world.conn).put(net::ItemSlot::possessions(net::kSlotLegs), legs);
+    CHECK(f.p("${Me.SpellShieldBonus}") == "42");
+    // Mount: the spawn it rides.
+    CHECK(f.p("${Me.Mount}") == "NULL");
+    A::world(*f.world.conn).spawns[1].mount_id = 11;
+    CHECK(f.p("${Me.Mount.ID} ${Bool[${Me.Mount.ID}]}") == "11 TRUE");
+    // PetBuff: by slot, or a spell's slot.
+    auto& pet = A::pet_buffs(*f.world.conn);
+    game::BuffSlot b;
+    b.spell = 11; // Holy Armor
+    pet.emplace_back(2, b);
+    CHECK(f.p("${Me.PetBuff[3]} ${Me.PetBuff[Holy Armor]} ${Me.PetBuff[1]} ${Me.PetBuff[Minor Healing]}") ==
+          "Holy Armor 3 NULL NULL");
+    // CounterType and CounterNumber: the spell's (and so a buff's) counters.
+    CHECK(f.p("${Spell[Test Plague].CounterType} ${Spell[Test Plague].CounterNumber}") == "Disease 4");
+    CHECK(f.p("${Spell[Test Venom].CounterType} ${Spell[Test Venom].CounterNumber}") == "Disease 3");
+    CHECK(f.p("${Spell[Holy Armor].CounterType} ${Spell[Holy Armor].CounterNumber}") == "None 0");
+    sp.buffs[6].spell = 3004;
+    sp.buffs[6].tics = 3;
+    sp.buffs[6].received_ms = net::GameConnection::now_ms();
+    CHECK(f.p("${Me.Buff[Test Plague].CounterType} ${Me.Buff[Test Plague].CounterNumber}") == "Disease 4");
+}

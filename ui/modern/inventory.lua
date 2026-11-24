@@ -361,9 +361,13 @@ local function statsPage(x, y, s)
   yr = section(rx, yr, colW, "Item bonuses", s)
   local half = (colW - 16 * s) / 2
   local b1, b2 = {}, {}
+  local caps = st.bonusCaps or {}
   for i, b in ipairs(BONUSES) do
     local v, c = label(b[2])
-    local row = { b[1], v, (v ~= "0" and v ~= "") and (c or C.text) or C.faint }
+    local shown = v ~= nil and v ~= "0" and v ~= ""
+    -- RoF2's "current / cap" for the capped ones; the sum may be past the cap where the server allows it.
+    if caps[b[2]] and v and v ~= "" then v = v .. " / " .. caps[b[2]] end
+    local row = { b[1], v, shown and (c or C.text) or C.faint }
     if i <= math.ceil(#BONUSES / 2) then b1[#b1 + 1] = row else b2[#b2 + 1] = row end
   end
   local y1 = kv(rx, yr, half, b1, s)

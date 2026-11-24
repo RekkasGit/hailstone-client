@@ -39,7 +39,7 @@ using net::GameConnection;
 struct Types {
     const Type *spawn, *character, *cls, *race, *heading, *spell, *buff, *timestamp, *item, *zone, *group, *member,
         *everquest, *macroquest, *hailstone, *window, *plugin, *time, *gametime, *navigation, *stick, *debuff, *moveto,
-        *bandolier, *bandolier_item, *advpath, *target, *xtarget, *altability, *aug, *ticks, *body;
+        *bandolier, *bandolier_item, *advpath, *target, *xtarget, *altability, *aug, *ticks, *body, *raid, *raidmember, *corpse;
 };
 
 Types g; // set once by register_game_tlos (the types live in the registry that registered them)
@@ -272,6 +272,14 @@ net::ItemSlot unpack_slot(std::int64_t v) {
 const net::Item* item_of(const Context& c, const Value& v) {
     if (!c.conn) return nullptr;
     net::ItemSlot s = unpack_slot(v.i);
+    if (s.type == net::kInvCorpse) { // the open loot window's (Corpse.Item): not in the inventory
+        const auto& loot = c.conn->loot_session();
+        if (!loot || !loot->open || s.sub >= 0) return nullptr;
+        auto it = loot->items.find(s.slot);
+        if (it == loot->items.end()) return nullptr;
+        if (s.aug < 0) return &it->second;
+        return it->second.item_class == 0 ? it->second.content(static_cast<std::uint32_t>(s.aug)) : nullptr;
+    }
     const std::int16_t aug = s.aug;
     s.aug = -1;
     const net::Item* it = c.conn->inventory().at(s);
@@ -1715,7 +1723,7 @@ void register_e3_members() {
         net::ItemSlot at = unpack_slot(v.i);
         const std::int16_t n = at.aug;
         at.aug = -1;
-        const net::Item* host = c.conn ? c.conn->inventory().at(at) : nullptr;
+        const net::Item* host = item_of(c, V::object(g.item, pack_slot(at))); // a corpse's item too
         return host && n >= 0 && n < static_cast<std::int16_t>(host->aug_sockets.size())
                    ? &host->aug_sockets[static_cast<std::size_t>(n)] : nullptr;
     };
@@ -1806,6 +1814,211 @@ void register_e3_members() {
     add(g.member, "PctAggro", [](const Context& c, const Value& v, std::string_view) -> V {
         if (v.i < 0 || v.i >= 6) return V::nil();
         return aggro_pct(c, v.i == 0 ? net::kAggroPlayer : net::kAggroGroup1 + static_cast<int>(v.i) - 1);
+    });
+}
+
+// ---------------------------------------------------------------- Raid, Corpse and more of Me (MacroQuest's meanings)
+
+// A raid member by its value's name (the members' list moves as the raid changes; the name stays).
+const game::RaidMember* raid_member_of(const Context& c, const Value& v) {
+    if (!c.conn || !c.conn->raid().active) return nullptr;
+    for (const auto& m : c.conn->raid().members)
+        if (iequals(m.name, v.s)) return &m;
+    return nullptr;
+}
+
+V raid_member_value(const game::RaidMember& m, std::size_t index) {
+    return V::object(g.raidmember, static_cast<std::int64_t>(index) + 1, 0, m.name);
+}
+
+// The open loot window's corpse session, or null.
+const net::GameConnection::LootSession* open_loot(const Context& c) {
+    if (!c.conn) return nullptr;
+    const auto& l = c.conn->loot_session();
+    return l && l->open ? &*l : nullptr;
+}
+
+// The spell's counter effects (SPA 35, 36, 116, 369; game/counter_spas.h): MQ's CounterType names the last, its
+// CounterNumber is the first one's base.
+const char* counter_name(std::int32_t spa) {
+    switch (spa) {
+    case 35: return "Disease";
+    case 36: return "Poison";
+    case 116: return "Curse";
+    case 369: return "Corruption";
+    default: return nullptr;
+    }
+}
+
+void register_e3_members2() {
+    // ---- raid (MQ2RaidType): always there; its plain value is NULL, as MQ's
+    Type& raid = const_cast<Type&>(*g.raid);
+    raid.to_value = [](const Context&, const Value&) { return V::nil(); };
+    auto members = [](const Context& c) -> const std::vector<game::RaidMember>* {
+        return c.conn && c.conn->raid().active ? &c.conn->raid().members : nullptr;
+    };
+    add(g.raid, "Members", [members](const Context& c, const Value&, std::string_view) {
+        const auto* m = members(c);
+        return V::integer(m ? static_cast<std::int64_t>(m->size()) : 0);
+    });
+    add(g.raid, "Member", [members](const Context& c, const Value&, std::string_view index) -> V {
+        const auto* m = members(c);
+        if (!m || index.empty()) return V::nil();
+        std::int64_t n = 0;
+        if (parse_int(index, n)) {
+            if (n < 1 || n > static_cast<std::int64_t>(m->size())) return V::nil();
+            return raid_member_value((*m)[static_cast<std::size_t>(n - 1)], static_cast<std::size_t>(n - 1));
+        }
+        for (std::size_t i = 0; i < m->size(); ++i)
+            if (iequals((*m)[i].name, index)) return raid_member_value((*m)[i], i);
+        return V::nil();
+    });
+    add(g.raid, "Leader", [members](const Context& c, const Value&, std::string_view) -> V {
+        const auto* m = members(c);
+        if (!m) return V::nil();
+        for (std::size_t i = 0; i < m->size(); ++i)
+            if (iequals((*m)[i].name, c.conn->raid().leader)) return raid_member_value((*m)[i], i);
+        return V::nil();
+    });
+    add(g.raid, "Target", [members](const Context& c, const Value&, std::string_view) -> V {
+        const auto* m = members(c);
+        if (!m) return V::nil();
+        for (std::size_t i = 0; i < m->size(); ++i)
+            if (iequals((*m)[i].name, c.conn->raid().target)) return raid_member_value((*m)[i], i);
+        return V::nil();
+    });
+    add(g.raid, "Locked", [](const Context& c, const Value&, std::string_view) {
+        return V::boolean(c.conn && c.conn->raid().active && c.conn->raid().locked);
+    });
+    add(g.raid, "LootType", [](const Context& c, const Value&, std::string_view) {
+        return V::integer(c.conn && c.conn->raid().active ? c.conn->raid().loot_type : 0);
+    });
+    add(g.raid, "TotalLevels", [members](const Context& c, const Value&, std::string_view) {
+        std::int64_t sum = 0;
+        if (const auto* m = members(c))
+            for (const auto& r : *m) sum += r.level;
+        return V::integer(sum);
+    });
+    add(g.raid, "AverageLevel", [members](const Context& c, const Value&, std::string_view) {
+        const auto* m = members(c);
+        if (!m || m->empty()) return V::number(0.0);
+        double sum = 0;
+        for (const auto& r : *m) sum += r.level;
+        return V::number(sum / static_cast<double>(m->size()));
+    });
+
+    // ---- raidmember (MQ2RaidMemberType): its plain value is the name; other members are its spawn's (in the zone)
+    Type& rm = const_cast<Type&>(*g.raidmember);
+    rm.parent = g.spawn;
+    rm.convert = [](const Context& c, const Value& v) { return spawn_value(spawn_named(c, v.s)); };
+    rm.to_value = [](const Context& c, const Value& v) { return raid_member_of(c, v) ? V::string(v.s) : V::nil(); };
+    auto rmm = [](const char* name, auto fn) {
+        add(g.raidmember, name, [fn](const Context& c, const Value& v, std::string_view index) -> V {
+            const game::RaidMember* m = raid_member_of(c, v);
+            return m ? fn(c, *m, index) : V::nil();
+        });
+    };
+    rmm("Name", [](const Context&, const game::RaidMember& m, std::string_view) { return V::string(m.name); });
+    // 1..12; 0 ungrouped (MQ's GroupNumber + 1, with the ungrouped 0xffffffff wrapping to 0).
+    rmm("Group", [](const Context&, const game::RaidMember& m, std::string_view) {
+        return V::integer(m.group == 0xffffffffu ? 0 : std::int64_t{m.group} + 1);
+    });
+    rmm("GroupLeader", [](const Context&, const game::RaidMember& m, std::string_view) { return V::boolean(m.group_leader); });
+    rmm("RaidLeader", [](const Context& c, const game::RaidMember& m, std::string_view) {
+        return V::boolean(iequals(m.name, c.conn->raid().leader));
+    });
+    // MQ's Looter: the leader; with loot type 2 the group leaders; with 3 the named looters.
+    rmm("Looter", [](const Context& c, const game::RaidMember& m, std::string_view) {
+        const auto& r = c.conn->raid();
+        if (iequals(m.name, r.leader)) return V::boolean(true);
+        if (r.loot_type == 2) return V::boolean(m.group_leader);
+        if (r.loot_type == 3)
+            for (const auto& name : r.looters)
+                if (iequals(name, m.name)) return V::boolean(true);
+        return V::boolean(false);
+    });
+    rmm("Spawn", [](const Context& c, const game::RaidMember& m, std::string_view) { return spawn_value(spawn_named(c, m.name)); });
+    rmm("Level", [](const Context&, const game::RaidMember& m, std::string_view) { return V::integer(m.level); });
+    rmm("Class", [](const Context&, const game::RaidMember& m, std::string_view) { return V::object(g.cls, m.class_); });
+
+    // ---- corpse (MQ2CorpseType): the loot window's corpse; its plain value is TRUE while one is open. Other members
+    // are the corpse spawn's.
+    Type& corpse = const_cast<Type&>(*g.corpse);
+    corpse.parent = g.spawn;
+    corpse.convert = [](const Context& c, const Value&) {
+        const auto* l = open_loot(c);
+        return l ? spawn_value(spawn_of(c, l->corpse_id)) : V::nil();
+    };
+    corpse.to_value = [](const Context& c, const Value&) { return V::boolean(open_loot(c) != nullptr); };
+    add(g.corpse, "Open", [](const Context& c, const Value&, std::string_view) { return V::boolean(open_loot(c) != nullptr); });
+    add(g.corpse, "Items", [](const Context& c, const Value&, std::string_view) -> V {
+        const auto* l = open_loot(c);
+        return l ? V::integer(static_cast<std::int64_t>(l->items.size())) : V::nil();
+    });
+    // Item[n]: loot window slot n (1-based, as the window numbers its slots); Item[name], or [=name], by name.
+    add(g.corpse, "Item", [](const Context& c, const Value&, std::string_view index) -> V {
+        const auto* l = open_loot(c);
+        if (!l || index.empty()) return V::nil();
+        std::int64_t n = 0;
+        if (parse_int(index, n)) {
+            if (n < 1 || n > net::kCorpseSlotEnd - net::kCorpseSlotBegin + 1) return V::nil();
+            const auto slot = static_cast<std::int16_t>(net::kCorpseSlotBegin + n - 1);
+            return l->items.contains(slot) ? V::object(g.item, pack_slot(net::ItemSlot::corpse(slot))) : V::nil();
+        }
+        for (const auto& [slot, it] : l->items)
+            if (item_name_matches(it, index)) return V::object(g.item, pack_slot(net::ItemSlot::corpse(slot)));
+        return V::nil();
+    });
+
+    // ---- Me
+    // MQ: the buff that makes the player invulnerable (SPA 40), NULL when none does.
+    me_member("Invulnerable", [](const Context& ctx, const GameConnection&, std::string_view) -> V {
+        const game::Spawn* s = me(ctx);
+        return s ? buff_with_effect(ctx, *s, 40, [](std::int32_t) { return true; }) : V::nil();
+    });
+    me_member("CurrentFavor", [](const Context&, const GameConnection& c, std::string_view) { return V::integer(c.tribute().points); });
+    me_member("CareerFavor", [](const Context&, const GameConnection& c, std::string_view) { return V::integer(c.tribute().career); });
+    me_member("TributeActive", [](const Context&, const GameConnection& c, std::string_view) {
+        return V::boolean(c.tribute().settings.active);
+    });
+    me_member("SpellShieldBonus", [](const Context&, const GameConnection& c, std::string_view) { return V::integer(c.spell_shield_bonus()); });
+    me_member("SpellDamageBonus", [](const Context&, const GameConnection& c, std::string_view) { return V::integer(c.spell_damage_bonus()); });
+    // MQ: PetBuff[n] is the spell in pet buff slot n, PetBuff[name] the slot (1-based) that holds it.
+    me_member("PetBuff", [](const Context& ctx, const GameConnection& c, std::string_view index) -> V {
+        if (index.empty()) return V::nil();
+        std::int64_t n = 0;
+        if (parse_int(index, n)) {
+            if (n < 1) return V::nil();
+            for (const auto& [slot, b] : c.pet_buffs())
+                if (static_cast<std::int64_t>(slot) == n - 1 && !b.empty()) return spell_value(ctx, b.spell);
+            return V::nil();
+        }
+        for (const auto& [slot, b] : c.pet_buffs()) {
+            const game::SpellData* s = b.empty() ? nullptr : spell_data(ctx, b.spell);
+            if (s && iequals(s->name, index)) return V::integer(std::int64_t{slot} + 1);
+        }
+        return V::nil();
+    });
+    // MQ's spawn Mount: the spawn it rides.
+    spawn_member("Mount", [](const Context& c, const game::Spawn& s, std::string_view) -> V {
+        return s.mount_id ? spawn_value(spawn_of(c, s.mount_id)) : V::nil();
+    });
+
+    // ---- spell: the counters it carries
+    add(g.spell, "CounterType", [](const Context& c, const Value& v, std::string_view) -> V {
+        const game::SpellData* s = spell_data(c, v.i);
+        if (!s) return V::nil();
+        const char* name = "None";
+        for (std::int32_t spa : s->effect)
+            if (const char* n = counter_name(spa)) name = n;
+        return V::string(name);
+    });
+    add(g.spell, "CounterNumber", [](const Context& c, const Value& v, std::string_view) -> V {
+        const game::SpellData* s = spell_data(c, v.i);
+        if (!s) return V::nil();
+        for (std::size_t e = 0; e < s->effect.size(); ++e)
+            if (counter_name(s->effect[e])) return V::integer(s->base[e]);
+        return V::integer(0);
     });
 }
 
@@ -2311,6 +2524,9 @@ void register_game_tlos(Registry& r) {
     g.aug = &r.type("augtype");
     g.ticks = &r.type("ticks");
     g.body = &r.type("body");
+    g.raid = &r.type("raid");
+    g.raidmember = &r.type("raidmember");
+    g.corpse = &r.type("corpse");
     register_spawn();
     register_character();
     register_abilities();
@@ -2325,6 +2541,7 @@ void register_game_tlos(Registry& r) {
     register_bandolier();
     register_advpath();
     register_e3_members();
+    register_e3_members2();
 
     // MQ's LineOfSight[y,x,z:y,x,z]: two points in the server's coordinates (MQ's Loc order).
     r.add_tlo("LineOfSight", [](const Context& c, std::string_view index) -> V {
@@ -2465,6 +2682,10 @@ void register_game_tlos(Registry& r) {
             if (iequals(a[0], a[i])) return V::integer(static_cast<std::int64_t>(i));
         return V::integer(0);
     });
+    // MQ's Raid and Corpse are always there (Raid's members say whether there is a raid, Corpse.Open whether a
+    // corpse is open).
+    r.add_tlo("Raid", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.raid, 0) : V::nil(); });
+    r.add_tlo("Corpse", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.corpse, 0) : V::nil(); });
     r.add_tlo("Pet", [](const Context& c, std::string_view) -> V {
         if (!c.conn) return V::nil();
         if (c.conn->pets().focused) return spawn_value(spawn_of(c, c.conn->pets().focused));

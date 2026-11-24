@@ -2,12 +2,14 @@
 
 ## Unreleased
 
+- The inventory's stats page shows the capped item bonuses as RoF2's stats window does, `current / cap` (Spell Shielding 42 / 35), with the items' whole total where it used to show the capped value: a server may allow more than RoF2's caps. Heal amount, spell damage and clairvoyance have no cap and show their value alone.
 - New TLO members E3 reads, as in MacroQuest:
   - on `${Me}`: `ItemReady[name]`, `PctAggro`, `SecondaryPctAggro`, `AltAbility[name|id]` (`.ID`, `.Name`, `.Rank`, `.ReuseTime`, `.Spell` ...), `ActiveDisc`, `AutoFire`, `Ability[name]`, `CombatAbility[#|name]`, `Endurance`, `GemTimer[#|name]`, `CastTimeLeft`, `AAPointsAssigned`, `AAPointsTotal`, `XTargetSlots` and `XTarget[n].PctAggro`;
   - on items: `AugSlot[n]` (`.Name`, `.Item` ...), `Augs`, `ItemLink[CLICKABLE]`, `WornSlot[n|name]`, `Clicky`, `EffectType`, `FreeStack`, `NoTrade`, `Timer`, `StackCount`, `Tradeskills`;
   - on spells: `StacksWith[name]`, `StacksTarget`, `WillLand`, `WillLandPet` (by the client's own stacking rules), `Description`, `Subcategory`, `DurationWindow`, `MyRange`, `EnduranceCost`, `Base[n]`, `Dispellable`, `SlowPct`;
   - on `${Target}`: `PctAggro`, `SecondaryPctAggro`, `SecondaryAggroPlayer`; on spawns: `Aggressive`, `Primary`, `Secondary`, `Body.Name`;
   - on `${Group}`: `Present`, `Injured[pct]`, `LowMana[pct]`, and `Member[n].PctAggro`.
+- New TLOs `${Raid}` (`.Members`, `.Leader`, `.Member[n|name]` with `.Name`, `.Group`, `.Class` ... and the member's spawn) and `${Corpse}` (`.Open`, `.Items`, `.Item[n|name]` with every item member), as in MacroQuest, and new members `${Me.Invulnerable}`, `${Me.Mount}`, `${Me.CurrentFavor}`, `${Me.TributeActive}`, `${Me.SpellShieldBonus}`, `${Me.SpellDamageBonus}`, `${Me.PetBuff[n|name]}`, and a spell's or buff's `CounterType` and `CounterNumber`.
 - `${Spell[...].Duration}` is now in ticks at your level, as in MacroQuest, where it gave the spell file's longest duration in milliseconds.
 
 - Plugins and scripts can colour their chat lines with MacroQuest's colour codes (`\ag`, `\a-w`, `\a#336699`, `\ax` ...), as `WriteChatColor` takes them. A server's message or a player's text cannot: its codes are left out.
