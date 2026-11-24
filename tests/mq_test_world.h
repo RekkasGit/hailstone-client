@@ -51,6 +51,7 @@ struct GameConnectionTestAccess {
     static game::RaidState& raid(GameConnection& c) { return c.raid_; }
     static GameConnection::Leadership& leadership(GameConnection& c) { return c.leadership_; }
     static std::vector<std::pair<std::uint32_t, game::BuffSlot>>& pet_buffs(GameConnection& c) { return c.pet_buffs_; }
+    static std::vector<game::BandolierSet>& bandolier(GameConnection& c) { return c.bandolier_; }
     static game::Inventory& inventory(GameConnection& c) { return c.inventory_; }
     static void refresh_instrument_state(GameConnection& c) { c.refresh_instrument_state(); }
     static void move_item(GameConnection& c, const ItemSlot& from, const ItemSlot& to, std::uint32_t count) {

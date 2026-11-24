@@ -777,3 +777,55 @@ TEST_CASE("spawn search: random text parses and searches without fault") {
         CHECK_NOTHROW(mq::search_spawns(q, f.world.conn->world(), mq::sources_of(*f.world.conn)));
     }
 }
+
+TEST_CASE("TLO: Me.Bandolier[name|#] and .Active, .Index, .Name, .Item[n]") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    auto& sets = A::bandolier(*f.world.conn);
+    sets.assign(game::kBandolierSets, {});
+    auto belt = [](std::uint32_t id, const char* name) {
+        game::BeltItem b;
+        b.id = id;
+        b.icon = id + 1;
+        b.name = name;
+        return b;
+    };
+    sets[0].name = "Melee";
+    sets[0].items = {belt(5101, "Cudgel"), belt(5102, "Buckler"), belt(0, ""), belt(0, "")};
+    sets[2].name = "Bow";
+    sets[2].items = {belt(0, ""), belt(0, ""), belt(5103, "Longbow"), belt(5104, "Arrow")};
+    auto wear = [&](std::int16_t slot, std::uint32_t id) {
+        net::Item it;
+        it.id = id;
+        it.name = "worn";
+        A::inventory(*f.world.conn).put(net::ItemSlot::possessions(slot), it);
+    };
+
+    // By name (any case) or number; a name no set has is NULL.
+    CHECK(f.p("${Me.Bandolier[melee]} ${Me.Bandolier[MELEE].Index} ${Me.Bandolier[Bow].Index}") == "Melee 1 3");
+    CHECK(f.p("${Me.Bandolier[1].Name} ${Me.Bandolier[3].Name}") == "Melee Bow");
+    CHECK(f.p("${Me.Bandolier[Caster]}") == "NULL");
+    CHECK(f.p("${Me.Bandolier[Caster].Active}") == "NULL");
+    // A set without a name answers NULL; numbers are clamped to 1..20.
+    CHECK(f.p("${Me.Bandolier[2].Active} ${Me.Bandolier[2].Name}") == "NULL NULL");
+    CHECK(f.p("${Me.Bandolier[0].Name} ${Me.Bandolier[99].Name}") == "Melee NULL");
+
+    // Active: each of the four slots holds the set's item, an empty one an empty slot.
+    CHECK(f.p("${Me.Bandolier[Melee].Active} ${Me.Bandolier[Bow].Active}") == "FALSE FALSE");
+    wear(net::kSlotPrimary, 5101);
+    CHECK(f.p("${Me.Bandolier[Melee].Active}") == "FALSE"); // the Buckler is not on
+    wear(net::kSlotSecondary, 5102);
+    CHECK(f.p("${Me.Bandolier[Melee].Active} ${Me.Bandolier[Bow].Active}") == "TRUE FALSE");
+    wear(net::kSlotAmmo, 5104); // an item in a slot the set leaves empty
+    CHECK(f.p("${Me.Bandolier[Melee].Active}") == "FALSE");
+    (void)A::inventory(*f.world.conn).take(net::ItemSlot::possessions(net::kSlotPrimary));
+    (void)A::inventory(*f.world.conn).take(net::ItemSlot::possessions(net::kSlotSecondary));
+    wear(net::kSlotRange, 5103);
+    CHECK(f.p("${Me.Bandolier[Melee].Active} ${Me.Bandolier[Bow].Active}") == "FALSE TRUE");
+
+    // Item[n]: the set's items (1 primary .. 4 ammo, clamped).
+    CHECK(f.p("${Me.Bandolier[Melee].Item[1]} ${Me.Bandolier[Melee].Item[2].ID}") == "Cudgel 5102");
+    CHECK(f.p("${Me.Bandolier[Bow].Item[4].Name} ${Me.Bandolier[Bow].Item[4].IconID}") == "Arrow 5105");
+    CHECK(f.p("${Me.Bandolier[Bow].Item[9].Name} ${Me.Bandolier[Bow].Item[0].ID}") == "Arrow 0");
+    CHECK(f.p("${Me.Bandolier[Bow].Item}") == "NULL");
+}

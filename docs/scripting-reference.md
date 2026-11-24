@@ -225,6 +225,7 @@ character's name.
 | `Inventory[slot]` | `item` | the item in a slot, by [name or number](#inventory-slots) |
 | `FreeInventory` | int | empty general slots plus empty bag slots |
 | `Pet` | `spawn` | as the `Pet` TLO |
+| `Bandolier[name\|n]` | `bandolier` | a bandolier set by its name (any case) or number (1..20, clamped); NULL for a name no set has |
 | `AbilityReady[name\|number]` | bool | a skill's reuse timer has run out |
 | `CombatAbilityReady[name]` | bool | the same for a combat ability (a discipline); the name works without its "Rk. II" |
 | `AltAbilityReady[name\|group]` | bool | the same for an activated AA |
@@ -335,6 +336,8 @@ name.
 | `gametime` | `hh:mm` | `Hour`, `Minute`, `Day`, `Month`, `Year`, `Night`, `Time24` |
 | `navigation` | `Active` | `Active`, `Paused`, `MeshLoaded`, `MeshComplete`, `TilesBuilt`, `TilesTotal`, `Destination`, `Remaining`, `PathExists[dest]`, `PathLength[dest]` (-1 for no path); docs/navigation.md "The Navigation TLO" |
 | `stick` | `ON` or `OFF` | `Active`, `Status` (`ON`, `PAUSED` or `OFF`), `Distance`, `StickTarget` (spawn id, 0 none), `StickTargetName`, `Stopped` (within the stick's distance), `Behind` (and at the spawn's back); docs/navigation.md |
+| `bandolier` | its name | `Active` (each of its four items is the one worn in its slot, an empty one an empty slot), `Index` (1..20), `Name`, `Item[1..4]` (primary, secondary, range, ammo; clamped). A set without a name is NULL to every member. To switch sets: `/bandolier activate <name>` |
+| `bandolieritem` | its name | `ID`, `IconID`, `Name` |
 | `moveto` | `ON`, `PAUSED` or `OFF` | `Moving`, `Stopped` (the last `/moveto` arrived), `ArrivalDist`, `Broken` (always FALSE); docs/navigation.md |
 | `math` | NULL | `Calc[expr]`, `Sqrt`, `Abs`, `Sin`, `Cos`, `Tan`, `Asin`, `Acos`, `Atan` (degrees), `Rand[max]` or `Rand[min,max]`, `Not`, `Hex`, `Dec[hex]`, `Clamp[n,min,max]`, `Distance[y,x,z:y,x,z]` (a missing point or coordinate is the player's) |
 

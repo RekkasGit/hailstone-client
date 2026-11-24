@@ -36,7 +36,8 @@ using net::GameConnection;
 
 struct Types {
     const Type *spawn, *character, *cls, *race, *heading, *spell, *buff, *timestamp, *item, *zone, *group, *member,
-        *everquest, *macroquest, *hailstone, *window, *plugin, *time, *gametime, *navigation, *stick, *debuff, *moveto;
+        *everquest, *macroquest, *hailstone, *window, *plugin, *time, *gametime, *navigation, *stick, *debuff, *moveto,
+        *bandolier, *bandolier_item;
 };
 
 Types g; // set once by register_game_tlos (the types live in the registry that registered them)
@@ -1470,6 +1471,84 @@ void register_stick() {
 // /moveto arrived; cleared by the next one), ArrivalDist, Broken; "ON", "PAUSED" or "OFF" as its text. Broken is
 // MQ2MoveUtils' walk ended by aggro or a hit, which Hailstone's never is: always FALSE. UseWalk, ArrivalDistY and
 // ArrivalDistX are not here.
+void register_moveto();
+
+// Me.Bandolier[name|#] (MQ's CharacterMembers::Bandolier and MQ2BandolierType): a set by its name, any case, or its
+// number (1..20, clamped as MQ clamps it); NULL for a name no set has. A set without a name answers NULL to every
+// member, as MQ's GetMember fails on it. Its text is its name. i: the set's index (0..19).
+//  - Active: each of its four items (primary, secondary, range, ammo) is the one worn in that slot, an empty one
+//    matching an empty slot, as MQ compares the ids;
+//  - Index (1..20), Name, Item[1..4] (clamped): a bandolieritem (ID, IconID, Name; its text the name). i: set * 4 +
+//    item.
+// MQ's Activate method is not here: /bandolier activate <name> (the game's own command) does it.
+const game::BandolierSet* bandolier_set(const Context& c, std::int64_t index) {
+    if (!c.conn || index < 0 || index >= game::kBandolierSets) return nullptr;
+    const auto& sets = c.conn->bandolier();
+    if (index >= static_cast<std::int64_t>(sets.size())) return nullptr;
+    const game::BandolierSet& s = sets[static_cast<std::size_t>(index)];
+    return s.name.empty() ? nullptr : &s;
+}
+
+void register_bandolier() {
+    me_member("Bandolier", [](const Context&, const GameConnection& c, std::string_view index) -> V {
+        std::int64_t n = 0;
+        if (parse_int(index, n))
+            return V::object(g.bandolier, std::clamp<std::int64_t>(n, 1, game::kBandolierSets) - 1);
+        if (index.empty()) return V::nil();
+        const int found = c.bandolier_find(std::string(index));
+        return found >= 0 ? V::object(g.bandolier, found) : V::nil();
+    });
+    Type& t = const_cast<Type&>(*g.bandolier);
+    t.to_value = [](const Context& c, const Value& v) -> V {
+        const game::BandolierSet* s = bandolier_set(c, v.i);
+        return s ? V::string(s->name) : V::nil();
+    };
+    add(g.bandolier, "Active", [](const Context& c, const Value& v, std::string_view) -> V {
+        const game::BandolierSet* s = bandolier_set(c, v.i);
+        if (!s) return V::nil();
+        for (std::size_t k = 0; k < game::kBandolierSlots.size(); ++k) {
+            const net::Item* worn = c.conn->inventory().at(net::ItemSlot::possessions(game::kBandolierSlots[k]));
+            if (s->items[k].id != (worn ? worn->id : 0u)) return V::boolean(false);
+        }
+        return V::boolean(true);
+    });
+    add(g.bandolier, "Index", [](const Context& c, const Value& v, std::string_view) -> V {
+        return bandolier_set(c, v.i) ? V::integer(v.i + 1) : V::nil();
+    });
+    add(g.bandolier, "Name", [](const Context& c, const Value& v, std::string_view) -> V {
+        const game::BandolierSet* s = bandolier_set(c, v.i);
+        return s ? V::string(s->name) : V::nil();
+    });
+    add(g.bandolier, "Item", [](const Context& c, const Value& v, std::string_view index) -> V {
+        std::int64_t n = 0;
+        if (!bandolier_set(c, v.i) || index.empty()) return V::nil();
+        if (!parse_int(index, n)) n = 0; // MQ's GetIntFromString(Index, 0)
+        n = std::clamp<std::int64_t>(n - 1, 0, static_cast<std::int64_t>(game::kBandolierSlots.size()) - 1);
+        return V::object(g.bandolier_item, v.i * 4 + n);
+    });
+    auto item = [](const Context& c, const Value& v) -> const game::BeltItem* {
+        const game::BandolierSet* s = bandolier_set(c, v.i / 4);
+        return s ? &s->items[static_cast<std::size_t>(v.i % 4)] : nullptr;
+    };
+    Type& it = const_cast<Type&>(*g.bandolier_item);
+    it.to_value = [item](const Context& c, const Value& v) -> V {
+        const game::BeltItem* b = item(c, v);
+        return b ? V::string(b->name) : V::nil();
+    };
+    add(g.bandolier_item, "ID", [item](const Context& c, const Value& v, std::string_view) -> V {
+        const game::BeltItem* b = item(c, v);
+        return b ? V::integer(b->id) : V::nil();
+    });
+    add(g.bandolier_item, "IconID", [item](const Context& c, const Value& v, std::string_view) -> V {
+        const game::BeltItem* b = item(c, v);
+        return b ? V::integer(b->icon) : V::nil();
+    });
+    add(g.bandolier_item, "Name", [item](const Context& c, const Value& v, std::string_view) -> V {
+        const game::BeltItem* b = item(c, v);
+        return b ? V::string(b->name) : V::nil();
+    });
+}
+
 void register_moveto() {
     auto status = [](const Context& c) { return c.nav ? std::optional(c.nav->status()) : std::nullopt; };
     add(g.moveto, "Moving", [status](const Context& c, const Value&, std::string_view) {
@@ -1675,6 +1754,8 @@ void register_game_tlos(Registry& r) {
     g.navigation = &r.type("navigation");
     g.stick = &r.type("stick");
     g.moveto = &r.type("moveto");
+    g.bandolier = &r.type("bandolier");
+    g.bandolier_item = &r.type("bandolieritem");
     g.debuff = &r.type("debuff");
     register_spawn();
     register_character();
@@ -1687,6 +1768,7 @@ void register_game_tlos(Registry& r) {
     register_navigation();
     register_stick();
     register_moveto();
+    register_bandolier();
 
     // MQ's LineOfSight[y,x,z:y,x,z]: two points in the server's coordinates (MQ's Loc order).
     r.add_tlo("LineOfSight", [](const Context& c, std::string_view index) -> V {
