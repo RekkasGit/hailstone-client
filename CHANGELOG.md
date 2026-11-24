@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Server owners:** lists a server fills by ids or names of its choosing stop at generous caps (raid members and shared task members 1024, tributes, bazaar traders and search rows 4096), and group mana and endurance, other players' casts and augment solvent texts are kept only for a spawn the client knows or a window that asked, so a flood of made-up ids no longer grows the client's memory without end
 - An accepted duel opponent can be attacked (auto attack, kick, bash, backstab, detrimental spells) on a server without PvP, and beneficial spells on players outside the duel are refused while it runs, as in the original
 - A duel, running or only offered, ends when you change zones, as the server ends it; before, a player in the new zone who happened to get the old opponent's id counted as your opponent
 - Spell and level-up effects that arrived just as you changed zones no longer play on a creature in the new zone

@@ -988,6 +988,7 @@ void GameConnection::apply_spawn(const Spawn& s) {
     group_.mana_percent.erase(s.spawn_id);
     group_.endurance_percent.erase(s.spawn_id);
     spells_.others.erase(s.spawn_id);
+    cast_stage_shown_.erase(s.spawn_id);
     if (spells_.target_buffs_entity == s.spawn_id) {
         spells_.target_buffs_entity = 0;
         spells_.target_buffs.clear();
@@ -1627,6 +1628,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
             group_.mana_percent.erase(*id);
             group_.endurance_percent.erase(*id);
             spells_.others.erase(*id);
+            cast_stage_shown_.erase(*id);
             if (spells_.target_buffs_entity == *id) {
                 spells_.target_buffs_entity = 0;
                 spells_.target_buffs.clear();

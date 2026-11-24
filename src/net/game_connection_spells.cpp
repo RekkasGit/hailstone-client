@@ -11,6 +11,7 @@
 #include <ctime>
 #include <optional>
 
+#include "core/capped_map.h"
 #include "core/log.h"
 #include "game/appearance.h"
 #include "game/coords.h"
@@ -206,6 +207,11 @@ void GameConnection::update_spells_at(std::int64_t now) {
     }
     for (auto it = spells_.others.begin(); it != spells_.others.end();) {
         if (now - it->second.started_ms > static_cast<std::int64_t>(it->second.cast_time) + 1000) it = spells_.others.erase(it);
+        else ++it;
+    }
+    // A cast stage past its window shows again anyway (handle_spell_action): the entry is no longer needed.
+    for (auto it = cast_stage_shown_.begin(); it != cast_stage_shown_.end();) {
+        if (now > it->second.second) it = cast_stage_shown_.erase(it);
         else ++it;
     }
 }
@@ -947,7 +953,8 @@ void GameConnection::handle_spell_action(const Action& a, std::int64_t now, bool
                 cue.proc = true;
                 effect_cues_.push_back(cue);
                 // An area proc's other targets, landing with it, share this one.
-                cast_stage_shown_[a.source] = {a.spell_id, now + kProcLandingMs};
+                core::assign_capped(cast_stage_shown_, a.source,
+                                    std::pair<std::uint32_t, std::int64_t>{a.spell_id, now + kProcLandingMs}, kCastStagesKept);
             }
         }
     }
@@ -1080,7 +1087,9 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
                 sound_cues_.push_back(c);
                 // The cast stage's particles, for the cast time.
                 effect_cues_.push_back({0, b->caster_id, 0, b->spell_id, static_cast<std::int32_t>(b->cast_time)});
-                cast_stage_shown_[b->caster_id] = {b->spell_id, now + b->cast_time + kCastLandingSlackMs};
+                core::assign_capped(cast_stage_shown_, static_cast<std::uint32_t>(b->caster_id),
+                                    std::pair<std::uint32_t, std::int64_t>{b->spell_id, now + b->cast_time + kCastLandingSlackMs},
+                                    kCastStagesKept);
             }
             bool bard = it != world_.spawns.end() && it->second.class_id == 8;
             if (b->caster_id == me) {
@@ -1097,7 +1106,7 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
                     spells_.casting.cast_time = b->cast_time;
                 }
             } else {
-                spells_.others[b->caster_id] = {b->spell_id, now, b->cast_time};
+                if (it != world_.spawns.end()) spells_.others[b->caster_id] = {b->spell_id, now, b->cast_time};
                 if (it != world_.spawns.end() && b->spell_id != 0xffffffffu) {
                     std::string who = game::display_name(it->second.name);
                     std::string text;

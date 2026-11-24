@@ -371,6 +371,8 @@ public:
     void receive_world_packet_for_test(const AppPacket& p) { handle_world(p); }
     game::WorldState& world_for_test() { return world_; }
     void set_spell_table_for_test(std::shared_ptr<const game::SpellTable> t) { spell_table_ = std::move(t); }
+    std::size_t cast_stages_shown_for_test() const { return cast_stage_shown_.size(); }
+    static constexpr std::size_t cast_stages_kept_for_test() { return kCastStagesKept; }
     void expire_poison_timer_for_test() { if (poison_started_ms_) poison_started_ms_ = 1; } // as if 10 s had passed
 
     // Connects to the world server named in the ticket.
@@ -3596,6 +3598,9 @@ private:
     std::vector<std::uint32_t> blood_spurts_; // local player landed sharp-weapon hit target IDs
     // Per caster, the spell whose cast stage has played (its OP_BeginCast, or the one added for a proc) and until when
     // (now_ms) an OP_Action of it counts as that cast's landing rather than a proc.
+    // Pruned once past its window, with the spawn (apply_spawn, OP_DeleteSpawn) and at the zone change; at most
+    // kCastStagesKept casters (a cast time near 2^32 ms would otherwise keep an unknown caster's entry for weeks).
+    static constexpr std::size_t kCastStagesKept = 4096;
     std::unordered_map<std::uint32_t, std::pair<std::uint32_t, std::int64_t>> cast_stage_shown_;
     std::vector<game::MissilePacket> missiles_;
     LandingEffects landing_;
