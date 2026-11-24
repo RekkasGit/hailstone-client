@@ -394,7 +394,7 @@ TEST_CASE("mock server: chat, spawns, HP, items and position updates in zone") {
     CHECK(conn.state() == ConnectionState::InZone);
 }
 
-TEST_CASE("mock server: typed chat and socials expand chat variables") {
+TEST_CASE("mock server: typed chat and socials expand variables and preserve literal percents") {
     Rig rig;
     auto& conn = rig.conn;
     auto& server = rig.server;
@@ -440,11 +440,12 @@ TEST_CASE("mock server: typed chat and socials expand chat variables") {
     };
 
     const std::string link = game::make_item_link(1003, "Pendant %T", false);
+    const std::string wire_link = game::make_item_link(1003, "Pendant &PCT;T", false);
     conn.set_target(target.spawn_id);
     conn.send_command("/gsay %t | %M | %S | %o | %P | %r " + link);
-    const std::string expected = "Vivren | Fluffy | she | her | her | Dark Elf " + link;
-    check_sent(2, expected);
-    CHECK(has_line(rig.chat(), "YOU TELL THE GROUP: " + expected));
+    const std::string group_body = "Vivren | Fluffy | she | her | her | Dark Elf ";
+    check_sent(2, group_body + wire_link);
+    CHECK(has_line(rig.chat(), "YOU TELL THE GROUP: " + group_body + link));
 
     Config config;
     app::ActionsUi actions(config, rig.dir.path() / "hailstone.ini");
@@ -462,12 +463,39 @@ TEST_CASE("mock server: typed chat and socials expand chat variables") {
     check_sent(8, "Delvan is a Barbarian");
     conn.send_command("/say %T");
     check_sent(8, "Delvan");
-    conn.send_command("/tell Vivren %S brought %m");
-    check_sent(7, "he brought Fluffy", "Vivren");
-    conn.send_command("/emote waves to %T");
-    check_sent(22, "waves to Delvan.");
-    conn.send_command("/1 %t has a pet named %m");
-    check_sent(20, ";1 Delvan has a pet named Fluffy");
+    conn.send_command("/tell Vivren %S brought %m at 75% health");
+    const std::string tell_wire = "he brought Fluffy at 75&PCT; health";
+    check_sent(7, tell_wire, "Vivren");
+    conn.send_command("/emote has 93% health and waves to %T");
+    check_sent(22, "has 93&PCT; health and waves to Delvan.");
+    CHECK(has_line(rig.chat(), "Gennro has 93% health and waves to Delvan."));
+    const std::string emote_prefix(509, 'a');
+    conn.send_command("/emote " + emote_prefix + "%");
+    check_sent(22, emote_prefix);
+    CHECK(has_line(rig.chat(), "Gennro " + emote_prefix + "%"));
+    conn.send_command("/1 %t has a pet named %m at 95% health");
+    check_sent(20, ";1 Delvan has a pet named Fluffy at 95&PCT; health");
+    conn.send_command("/chat #general I'm at 95% health");
+    check_sent(20, "[#general I'm at 95&PCT; health");
+    conn.send_command(";1 I'm at 95% health");
+    check_sent(20, "[1 I'm at 95&PCT; health");
+    conn.send_command("/join general:part%part");
+    check_sent(20, "[join general:part%part");
+
+    // Decode the percent entity on receipt without interpreting it as a variable for the recipient's target.
+    server.chat("Gennro", 14, tell_wire, "Vivren");
+    server.chat("Vivren", 2, "Use &PCT;T at 80% health " + wire_link);
+    server.chat("Vivren", 20, "Vivren tells general:1, 'At 90&PCT;'");
+    server.zone.send_reliable(encode(Emote{0, "Vivren smiles at &PCT;T."}));
+    std::vector<ChatEvent> received;
+    REQUIRE(rig.until([&] {
+        for (auto& event : rig.chat()) received.push_back(std::move(event));
+        return received.size() >= 4;
+    }));
+    CHECK(has_line(received, "TOLD Vivren: he brought Fluffy at 75% health"));
+    CHECK(has_line(received, "GROUP Vivren: Use %T at 80% health " + link));
+    CHECK(has_line(received, "Vivren tells general:1, 'At 90%'"));
+    CHECK(has_line(received, "Vivren smiles at %T."));
 
     conn.set_target(pet.spawn_id);
     conn.send_command("/say %T has race %R");
@@ -480,6 +508,14 @@ TEST_CASE("mock server: typed chat and socials expand chat variables") {
     const auto pointed = decode_emote(*emote);
     REQUIRE(pointed);
     CHECK(pointed->text == " points at Fluffy and waves to it.");
+    conn.send_command("/point say " + emote_prefix + "%");
+    REQUIRE(rig.until([&] { return MockEqServer::count(server.zone_log, Op::Emote) == 2; }));
+    const auto long_emote = std::find_if(server.zone_log.rbegin(), server.zone_log.rend(),
+                                         [](const AppPacket& p) { return is_op(p, Op::Emote); });
+    REQUIRE(long_emote != server.zone_log.rend());
+    const auto long_pointed = decode_emote(*long_emote);
+    REQUIRE(long_pointed);
+    CHECK(long_pointed->text == " " + emote_prefix);
 
     conn.set_target(target.spawn_id);
     conn.send_command("/assist %t");

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Trees with authored collision hulls let players move through their branches while their trunks still block movement. This fixes the invisible walls near the Field of Bone entrance to Warsliks Woods and in other classic zones
+- Decorative slime no longer blocks movement over the Veksar ramp and doorway or through passages in several Lost Dungeons of Norrath layouts
+- Spells that require line of sight now report “You cannot see your target” before casting through a solid door or moving obstacle
+- The Autosplit checkbox remembers the last choice you made in Options or with `/autosplit` when you log back in on the same installation
+- Closing a loot window sends one request while waiting for the server, preventing duplicate corpse-not-found messages
+- Autofollow stays with the caster's body while they steer Eye of Zomm
+- Modern Pet window: right-click a removable beneficial buff and choose **Remove** to click it off
+- Literal percent signs show correctly in chat, including tells and their echoes. Chat variables still expand when the message is sent
+
 ## 0.7.3-beta (2026-11-23)
 
 - Warrior epic glows and other attached particle effects stay aligned as weapons, characters and objects move
