@@ -468,6 +468,8 @@ public:
         aenv.server_profile = [this] { return server_profile_.id; };
         aenv.profile_name = [this] { return server_profile_.name; };
         aenv.window_open = [this](std::string_view w) { return ui_api_ && ui_api_->shown(w); };
+        aenv.world_placement_scene = [this] { return world_placement_scene(); };
+        aenv.world_placement_input_allowed = [this] { return world_placement_input_allowed(); };
         aenv.face = [this](double degrees, bool) { face_degrees(degrees); };
         aenv.keypress = [this](std::string_view command, int mode) { return script_keypress(command, mode); };
         aenv.max_camera_distance = [this] { return max_camera_distance_; };
@@ -1086,6 +1088,9 @@ private:
     };
     // The zone's surface under a window point (the pick ray against the zone mesh), world coordinates.
     std::optional<glm::vec3> world_point_at(float x, float y);
+    std::optional<plugin::WorldPlacementScene> world_placement_scene() const;
+    bool world_placement_input_allowed() const;
+    std::optional<plugin::WorldPlacementPoint> world_placement_point_at(float x, float y) const;
     // Item placement mode (game/placement.h) each frame: the ghost under the mouse, re-validated.
     void update_placement();
     // `why` names the pick in the log; null picks quietly.
@@ -1394,6 +1399,7 @@ private:
     // less the heading, radians), which a left-button look turns.
     game::MouseLook mouse_look_;
     bool mouse_left_held_ = false, mouse_right_held_ = false;
+    bool world_placement_right_held_ = false;
     std::optional<glm::vec2> left_click_pending_;
     std::optional<glm::vec2> left_click_;
     bool right_click_ = false;
@@ -1848,6 +1854,7 @@ private:
     std::mt19937 pre_game_rng_{std::random_device{}()};
     game::PickCamera pick_camera_;   // last frame's, for mouse picking (CCamera as GetScreenRay reads it)
     bool pick_camera_valid_ = false;
+    std::uint32_t pick_camera_epoch_ = 0;
     std::optional<glm::mat4> target_view_projection_; // the same camera with the rendered scene's projection
 };
 

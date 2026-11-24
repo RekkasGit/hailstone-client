@@ -2603,6 +2603,27 @@ SHA-256, and FNV-1a64 with bit 63 cleared.
   admission. Owners come from the host, never the add-on.
 - Resubmit every batch each frame. Unloading, deactivation and permission loss retire owned geometry.
 
+#### Mouse-aimed ground placement
+
+Check `HAILSTONE_WORLD_PLACEMENT` through `world_capabilities` to identify the placement SDK layout, then
+check `HAILSTONE_HOST_HAS` for `world_placement_start`, `world_placement_get` and `world_placement_cancel`.
+The host advertises the bit in the zone even without an available render frame. Placement calls require an
+active native add-on with `ui` and `extend` on the client's own thread because they use window focus and input.
+
+- `start` arms one interactive aim in the loaded world. The active aim belongs to one add-on.
+  To switch tools, cancel the old aim first. A failed start preserves the active aim. Starting a new
+  aim clears the same owner's unread result.
+- Initialize `HailstoneWorldPlacement::size` before calling `get`. It returns the loaded zone and instance even
+  while inactive, and either an invalid aim or a valid preview in zone-file coordinates. Use the existing
+  world geometry API to draw a preview.
+- A world press and release on valid ground confirms one position. The host consumes the gesture before
+  regular targeting, object use and click-to-move. A window, sky, or blocked surface clears the pending gesture.
+- Escape, a world right click, loss of focus and scene retirement cancel aiming. `get` returns confirmation or
+  cancellation once to the owner. When the scene is unavailable, it returns zero unless returning a pending
+  cancellation with zero for the zone and instance. Deactivation, unload and permission loss discard owned state.
+- The aim resolves solid static ground the camera can see. Moving obstacles can block it. Nothing in the
+  host API sends game packets, syncs coordinates with players or records positions beyond the aim.
+
 #### The floor below
 
 `world_floor_below` returns the highest upward drawn opaque or masked surface at or below `seed_z` (the caller's

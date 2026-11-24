@@ -23,6 +23,7 @@ void ClientApp::update_mouse_look() {
     // down when they last were, 12095 every frame. A frozen player (StandState 0x66) returns before that check.
     // Behind the loading screen (zone_settle_) the same, without the message.
     if (zone_settling()) {
+        if (automation_) automation_->world_placement_cancel();
         plate_gesture_.clear();
         mouse_look_.cancel();
         left_click_pending_.reset();
@@ -30,6 +31,7 @@ void ClientApp::update_mouse_look() {
         return;
     }
     if (conn_->state() == net::ConnectionState::InZone && conn_->interface_locked()) {
+        if (automation_) automation_->world_placement_cancel();
         plate_gesture_.clear();
         mouse_look_.cancel();
         left_click_pending_.reset();
@@ -43,8 +45,24 @@ void ClientApp::update_mouse_look() {
     const game::ButtonEdges right = game::button_edges(in.right_clicked, in.right_button, mouse_right_held_);
     const bool left_pressed = left.pressed, left_released = left.released;
     const bool right_pressed = right.pressed, right_released = right.released;
+    if (right_pressed) world_placement_right_held_ = false;
+    const bool placement_right_release = right_released && std::exchange(world_placement_right_held_, false);
     mouse_left_held_ = in.left_button;
     mouse_right_held_ = in.right_button;
+    if (automation_ && automation_->world_placement_aiming()) {
+        if (right_pressed) world_placement_right_held_ = in.right_button;
+        if (!world_placement_input_allowed() || in.was_pressed(platform::Key::Escape) ||
+            (right_pressed && !ui_.wants_mouse())) {
+            automation_->world_placement_cancel();
+        } else {
+            automation_->world_placement_update(world_placement_point_at(in.mouse_x, in.mouse_y),
+                                                left_pressed, left_released);
+        }
+        plate_gesture_.clear();
+        left_click_pending_.reset();
+        iso_hold_ = false;
+        return;
+    }
     // __ProcessMouseEvents: dead or knocked out, mouse look ends and only the windows get the mouse.
     const bool down = conn_->state() == net::ConnectionState::InZone && conn_->player_down();
     if (down) {
@@ -102,7 +120,7 @@ void ClientApp::update_mouse_look() {
             }
             mouse_look_.right_down(options, now);
         }
-        if (right_released && (mouse_look_.active || !ui_.wants_mouse())) {
+        if (right_released && !placement_right_release && (mouse_look_.active || !ui_.wants_mouse())) {
             game::MouseLook::RightUp up = mouse_look_.right_up(now);
             // (up.center_cursor, CenterMouseCursor, sets only the game's copy of the cursor for the rest of the
             // frame: the cursor itself comes back where the look took it, platform/mouse_capture.h.)
@@ -458,6 +476,8 @@ void ClientApp::update_player(float dt) {
     // Behind the loading screen (zone_settle_) the keys and the pad do not reach the world.
     bool keys = !ui_.wants_keyboard() && !zone_settling();
     const auto& in = window_.input();
+    const bool placement_escape = in.was_pressed(platform::Key::Escape) && automation_ &&
+                                  automation_->world_placement_aiming();
     update_mouse_look();
 
     // The original's movement commands (default keys: CMD_FORWARD W, CMD_BACK
@@ -472,7 +492,13 @@ void ClientApp::update_player(float dt) {
     drive_pick_test(mk);
     // The key map's commands (KeypressHandler::HandleKeyDown / HandleKeyUp): movement is held while its key is
     // down; the rest acts once (key_command).
-    key_events_ = actions_ui_->process_keys(in, keys);
+    if (placement_escape) {
+        auto input = in;
+        std::erase_if(input.key_events, [](const auto& event) { return event.down && event.code == 0x01; });
+        key_events_ = actions_ui_->process_keys(input, keys);
+    } else {
+        key_events_ = actions_ui_->process_keys(in, keys);
+    }
     const std::size_t player_keys = key_events_.size(); // the player's own, before the scripts' and the gamepad's
     // /keypress from scripts and plugins: this frame's presses, then a tap's release on the next.
     key_events_.insert(key_events_.end(), script_keys_.begin(), script_keys_.end());

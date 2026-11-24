@@ -1,14 +1,51 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <optional>
+#include <unordered_map>
 #include <vector>
 
 #include "game/world_geometry.h"
 #include "hailstone_world_geometry.h"
 
 namespace hailstone::plugin {
+
+struct WorldPlacementScene {
+    std::uint32_t epoch;
+    std::uint32_t zone_id;
+    std::uint32_t instance_id;
+    bool operator==(const WorldPlacementScene&) const = default;
+};
+
+using WorldPlacementPoint = std::array<float, 3>;
+
+// The host owns the input gesture. Each owner can read its own result once.
+class WorldPlacementHost {
+public:
+    bool start(std::uint64_t owner, WorldPlacementScene scene);
+    bool get(std::uint64_t owner, std::optional<WorldPlacementScene> scene, HailstoneWorldPlacement* out);
+    bool aiming() const { return aim_.has_value(); }
+    void update(std::optional<WorldPlacementPoint> ground, bool pressed, bool released);
+    void cancel();
+    void cancel(std::uint64_t owner);
+    void retire(std::uint64_t owner);
+
+private:
+    struct Result {
+        WorldPlacementScene scene;
+        std::optional<WorldPlacementPoint> ground;
+    };
+    struct Aim {
+        std::uint64_t owner;
+        Result result;
+        bool pressed = false;
+    };
+    std::optional<Aim> aim_;
+    std::unordered_map<std::uint64_t, Result> results_;
+};
 
 struct WorldQueries {
     std::function<int(float, float, float, float&)> floor;
