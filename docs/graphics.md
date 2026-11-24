@@ -463,7 +463,8 @@ A recreated swapchain is made with `oldSwapchain`; the old one and its present s
 as `vkDeviceWaitIdle` does not cover a present's wait.
 
 The ImGui textures (`src/ui/imgui_vk_textures.h`: UI art, icon sheets, browser tabs) come from the client's own
-descriptor pools, a new one made when they fill. `ui::UiTextures` keeps at most 1024 files (`kMaxFiles`), retiring the
+descriptor pools, a new one made when they fill (a full one is not asked again) and one left empty destroyed unless
+it is the newest (`ui::DescriptorPoolBook`). `ui::UiTextures` keeps at most 1024 files (`kMaxFiles`), retiring the
 least recently asked for.
 
 #### Modern lighting: the translucent split
