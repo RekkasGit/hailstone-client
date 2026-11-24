@@ -166,7 +166,9 @@ and the plugins are gone):
      folder may hold files the update did not put there);
    - an update whose packages' declared sizes add up to more than 4 GiB.
 
-   Each unpacked file is flushed to the disk before it is renamed into `new/`.
+   Each unpacked file is flushed to the disk before it is renamed into `new/`. On Linux and macOS it takes the
+   package's permission bits without group or world write (and without setuid, setgid or sticky), so a package made
+   with loose permissions cannot leave a program others may change.
 2. Each old file is moved into `previous/` and its new one into place.
    - Each move's journal line is flushed before the move (write-ahead), so after a power cut every file in
      `previous/` has its line.
