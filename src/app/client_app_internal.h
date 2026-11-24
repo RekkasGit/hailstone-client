@@ -66,6 +66,7 @@
 #include "core/shared_file_cache.h"
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "core/path_utf8.h"
 #include "core/wipe.h"
 #include "app/nameplate_layer.h"
 #include "app/nameplate_input.h"
@@ -394,8 +395,9 @@ public:
         web_service_ = std::make_unique<WebService>(WebServiceEnv{
             [this] { return browser(); }, [this] { return web_textures_.get(); },
             [this] {
-                return (platform::data_dir() / "web" / (server_profile_.id.empty() ? "default" : server_profile_.id))
-                    .string();
+                // UTF-8, as the helper's --data= is (it holds each profile to that folder).
+                return path_utf8(platform::data_dir() / "web" /
+                                 (server_profile_.id.empty() ? "default" : server_profile_.id));
             },
             [this] {
                 const auto& rules = conn_ ? conn_->server_rules() : std::nullopt;

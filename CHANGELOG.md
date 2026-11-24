@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- In-game browser: a script's, plugin's or server link's page whose cookie folder cannot be used is no longer opened with the player's own cookies; it closes instead. On Windows, a data folder whose name has characters outside the system's code page works with the browser
 - In-game browser: a faulty browser helper can no longer make the client reserve gigabytes of memory, or fail to make a texture, with an image larger than its tab. A drop-down list that reaches past the edge of a page is drawn inside it, and clicks on it still land on the right entry
 - In-game browser: a web page's process can no longer write messages into, or read, the client's connection to the browser helper. The helper keeps that connection to itself and gives the processes it starts nothing to read or write instead
 - A creature that despawns and is replaced under the same id in one moment no longer starts with the old one's animation sounds and loop

@@ -124,6 +124,9 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
     the owner's name lower-cased, other than letters, digits, `-` and `_` as `_`, plus its FNV-1a hash), with its
     own request context, so an add-on's page never sees the player's sign-ins or another add-on's.
   - The server's links (OP_Weblink) have `server-links/` below it.
+  - The folders go to the helper as UTF-8 (`core/path_utf8.h`), `--data=` too. The helper opens a script's, plugin's
+    or server link's tab only on a profile under `--data` (`web::profile_within`: no `..`); any other is closed as
+    Failed rather than given the player's cookies. The player's own tab without one takes CEF's global context.
   - A generic user agent naming Hailstone; no hardware identifiers.
 - **Scripts and plugins** (docs/plugins.md "Web pages"): `mq.web` for scripts, `hs.Web*` in a plugin's windows,
   `web_*` in the host table (ABI 3). The page sees only `window.hailstone.post()` and `window.hailstone.onmessage`,

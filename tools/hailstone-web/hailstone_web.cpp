@@ -513,9 +513,12 @@ private:
     // A profile's request context: its own cookies and cache, in a folder under --data (CEF requires that). The
     // client gives each script and plugin a profile of its own, and the server links one (app/web_service.h); a
     // context made for such a tab holds the requests that come from no tab (service workers) to that tab's rules.
+    // Null for such a tab whose profile is not under --data: it is not opened rather than given the player's cookies
+    // (the global context). The player's own tab without one takes the global context.
     CefRefPtr<CefRequestContext> context(const web::Open& o) {
         const std::string& profile = o.profile;
-        if (profile.empty() || profile.rfind(data_, 0) != 0) return CefRequestContext::GetGlobalContext();
+        if (profile.empty() || !web::profile_within(profile, data_))
+            return o.rules == web::TabRules::Player ? CefRequestContext::GetGlobalContext() : nullptr;
         auto it = contexts_.find(profile);
         if (it != contexts_.end()) {
             if (it->second.rules && o.rules == web::TabRules::Sites) it->second.rules->set_allow(o.allow);
@@ -537,12 +540,17 @@ private:
             send(web::Closed{o.tab, web::CloseReason::Refused, o.url + " is not a page this tab may show"});
             return;
         }
+        CefRefPtr<CefRequestContext> request_context = context(o);
+        if (!request_context) {
+            send(web::Closed{o.tab, web::CloseReason::Failed, "its profile folder is not in the browser's data folder"});
+            return;
+        }
         CefWindowInfo info;
         info.SetAsWindowless(0);
         CefBrowserSettings settings;
         settings.windowless_frame_rate = 30;
         tabs_.emplace(o.tab, client);
-        if (!CefBrowserHost::CreateBrowser(info, client, o.url, settings, nullptr, context(o))) {
+        if (!CefBrowserHost::CreateBrowser(info, client, o.url, settings, nullptr, request_context)) {
             tabs_.erase(o.tab);
             send(web::Closed{o.tab, web::CloseReason::Failed, "CEF could not make the browser"});
         }
