@@ -260,6 +260,22 @@ updater and the add-on manager otherwise run as usual.
    leaves out the tests that only fail there (docs/ci.md "Builds in containers"): run those on Windows by hand.
 
    Run each platform's `hailstone_tests` (Windows under Wine) before going on; the macOS workflow runs its own.
+
+   `linux_build.sh` and `msvc_build.sh` configure every time with the release's settings before `CMAKE_ARGS`
+   (`tools/docker/release_options.sh`): `-DHAILSTONE_UPDATE_KEY=` the line of `update-key.pub`, Release, the
+   sanitizer and `HAILSTONE_ALLOW_IN_EQ_FOLDER` off, and the feed, index and page addresses back to their defaults.
+   A reused build folder therefore keeps none of an earlier configure's options (CMake caches
+   `HAILSTONE_UPDATE_KEY`, and read `update-key.pub` only at the folder's first configure). A configure whose key
+   differs from `update-key.pub`'s warns.
+
+   The build environment is pinned only in part. msvc-wine is pinned to a commit, and MSVC and the Windows SDK to
+   the release install's versions (Visual Studio 17.14, toolset 14.44.35207; SDK 10.0.26100.0;
+   `tools/docker/msvc_setup.sh`). Still open (docs/todo.md "Updates"):
+   - `linux.Dockerfile` starts `FROM ubuntu:24.04` by its tag, and its apt packages are whatever the archive has
+     when the image is built. The digest the release images were built from was not recorded (the base image is no
+     longer on the release machine); pin `ubuntu:24.04@sha256:...` at the next image build.
+   - Microsoft's manifest picks the servicing build within 17.14 and the SDK's revision; `msvc_setup.sh` warns when
+     the toolset installed is not 14.44.35207.
 2. Install each platform's client (without the server plugins, which are released as add-ons, each by a
    `tools/release.sh` in its own repository; this repository has none):
 
@@ -287,13 +303,18 @@ updater and the add-on manager otherwise run as usual.
    are left out. A symbolic link goes in as its target, which must lie inside `--dist` (a link out of it, or back into
    a folder holding it, stops the tool); `--out` may not lie inside `--dist`. A name the updater's zip reader would
    refuse (core/zip_read.cpp `is_safe_zip_path`) stops it too.
+
+   The `hailstone` (or `hailstone.exe`) binary must hold the public key of `update-key.pub` (or of `--key <file>`)
+   as CMake compiles it in: a binary built with another key, or none, is refused, since it would never take the
+   next release's update.
 4. Sign the manifest:
 
    ```sh
    build/hailstone_sign sign <secret-key> release/hailstone-update.txt
    ```
 
-   Then check it:
+   An old signature line is replaced. A manifest with lines after its signature line is refused rather than signed
+   without them: move them above it. Then check it:
 
    ```sh
    build/hailstone_sign verify update-key.pub release/hailstone-update.txt

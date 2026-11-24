@@ -789,6 +789,12 @@ private:
     using Lock = std::lock_guard<std::recursive_mutex>;
     mutable std::unordered_map<std::string, Cached<std::shared_ptr<const CharacterModel>>> cache_;
     mutable std::unordered_map<std::string, Cached<std::shared_ptr<const CharacterMesh>>> dress_cache_;
+    // Each distinct look holds a whole dressed mesh, and a zone can show many (NPC tints, armour sets): once the
+    // cache reaches this many, the meshes only it still holds (no actor wears them, no shared cache keeps them)
+    // are dropped, and the next sweep waits until it has twice as many as were left (remember_dress).
+    static constexpr std::size_t kDressSweep = 512;
+    mutable std::size_t dress_sweep_at_ = kDressSweep;
+    void remember_dress(std::string key, Cached<std::shared_ptr<const CharacterMesh>> entry) const;
     mutable std::unordered_map<std::uint32_t, Cached<std::optional<ItemMesh>>> item_cache_;
     // The 0x34 clouds' definitions by their WLD and name: a model built again (after its cache entry went) hands out
     // the same definition, so app::ActorEmitters, which registers each definition once by its address, does not

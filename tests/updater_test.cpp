@@ -175,6 +175,13 @@ TEST_CASE("update manifest: signature, records and refusals") {
     CHECK(!parse_update_manifest(body, k.pub, &error));
     CHECK(error.find("not signed") != std::string::npos);
     CHECK(!parse_update_manifest(sign(k, body) + "version 9.9.9\n", k.pub));
+    // What follows the signature line (hailstone_sign refuses to sign a manifest with text there, not to drop it).
+    CHECK(update_manifest_after_signature(body).empty());
+    CHECK(update_manifest_after_signature(sign(k, body)).empty());
+    CHECK(update_manifest_after_signature(sign(k, body) + "\n\n") == "\n\n");
+    CHECK(update_manifest_after_signature(sign(k, body) + "package x\n") == "package x\n");
+    CHECK(update_manifest_after_signature("a\nsignature 00").empty()); // the last line, no newline
+    CHECK(update_manifest_after_signature("a\nsignature 00\r\nb") == "b");
 
     auto refused = [&](const std::string& b) { return !parse_update_manifest(sign(k, b), k.pub); };
     CHECK(refused("hailstone-update 2\nversion 1.0.0\n"));

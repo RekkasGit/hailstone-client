@@ -325,11 +325,13 @@ build/hailstone_sign sign <secret-key-file> release/hailstone-addon.txt
 - The script checks the client's rules for what a package may hold before it makes anything:
   - the names its zip reader takes (no `\`, `:` or control character, no part ending in `.` or a space, no Windows
     device name such as `aux.lua`);
-  - the version as the client parses it (no leading zeros).
+  - the version as the client parses it (no leading zeros);
+  - one `--platform` a platform (a second would overwrite the first's zip and leave two package lines).
 - It leaves out files and folders whose name starts with `.`, stores a link as what it points to only when that lies
   inside the package's folder, and refuses an `--out` inside a package's folder, where old zips would be packed.
 - Its zips are reproducible (sorted, dated 1980-01-01), so an unchanged package keeps its hash.
-- `hailstone_sign sign` writes the key's line into the manifest and signs it; `verify` checks it.
+- `hailstone_sign sign` writes the key's line into the manifest and signs it (refusing a manifest with lines after
+  an old signature line, which it would otherwise drop); `verify` checks it.
 - Upload everything in `release/` to a GitHub release.
 
 The repository has to be public. A plugin whose source must stay private can be released from a second, public

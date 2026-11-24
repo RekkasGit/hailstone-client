@@ -762,6 +762,13 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/update-key.pub)
   file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/update-key.pub HAILSTONE_UPDATE_KEY_DEFAULT REGEX "^[0-9a-fA-F]+$" LIMIT_COUNT 1)
 endif()
 set(HAILSTONE_UPDATE_KEY "${HAILSTONE_UPDATE_KEY_DEFAULT}" CACHE STRING "The release key's public half (hex); empty: no updates")
+# The cache keeps the key of the build folder's first configure (or a -D given since): said at every configure, so a
+# folder that holds another key than update-key.pub's is noticed. Release builds name it each time
+# (tools/docker/release_options.sh), and tools/make_update.py refuses a binary without update-key.pub's.
+if(NOT HAILSTONE_UPDATE_KEY STREQUAL HAILSTONE_UPDATE_KEY_DEFAULT)
+  message(WARNING "HAILSTONE_UPDATE_KEY is not update-key.pub's key: this build takes no update signed with the "
+                  "release key (configure with -DHAILSTONE_UPDATE_KEY=<update-key.pub's line> to change it)")
+endif()
 set_property(SOURCE src/app/updater.cpp APPEND PROPERTY COMPILE_DEFINITIONS
              HAILSTONE_UPDATE_FEED="${HAILSTONE_UPDATE_FEED}" HAILSTONE_UPDATE_KEY="${HAILSTONE_UPDATE_KEY}"
              HAILSTONE_ADDON_INDEX="${HAILSTONE_ADDON_INDEX}" HAILSTONE_PROJECT_PAGE="${HAILSTONE_PROJECT_PAGE}")
