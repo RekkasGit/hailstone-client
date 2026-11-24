@@ -7,7 +7,10 @@ on pull requests to `main`:
   long strings and C++ raw strings count as code, and Objective-C++ and the ini, JSON and text files under those
   folders are scanned too.
   - The old names pass only in their own spellings (`nmsc`, `nmsc_`, `nmsc::`, `NMSC_`, the SDK's `Nmsc<Word>`,
-    `nms-client`), so `NMSChat` or `kNmsCombatOp` fails (tests/server_tools_test.cpp).
+    `nms-client`), so `NMSChat`, `kNmsCombatOp`, `HSNMS_OP` or `kHSNMSFlag` fails (tests/server_tools_test.cpp).
+  - A digit separator (`1'000`) opens no character literal, so a comment after it is still one.
+  - The build files and `tools/` are not scanned: `CMakeLists.txt` names the NMS plugin's clone on purpose
+    (`plugins/nms`, `HAILSTONE_NMS_*`), to build and test it beside the client.
   - The one exception, let through by file and exact line shape: the updater's table of files old releases shipped
     under `plugins/nms/` (`retired_release_files()` in `src/app/update_install.cpp`).
 - `wiki`: `tools/sync_wiki.py --check`. Every document of `docs/`, `CONTRIBUTING.md` and `server/README.md` has a
