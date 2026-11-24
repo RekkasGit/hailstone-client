@@ -8,6 +8,7 @@
 #include <string>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <thread>
 
 #include "app/navigator.h"
@@ -306,6 +307,23 @@ TEST_CASE("nav: a stray vertex far out does not size the tile grid; geometry wid
     CHECK(none->triangle_count() == 0);
     CHECK(none->tiles_x() == 0);
     CHECK(none->tile_triangles(0, 0).empty());
+}
+
+TEST_CASE("nav: a cast off the grid or at a coordinate that is not a number finds nothing") {
+    Scene s;
+    s.floor(0, 0, 100, 100, 0);
+    auto geo = s.geometry();
+    const glm::vec3 lo = geo->bmin();
+    CHECK(geo->cast_down(lo.x + 1.0f, lo.z + 1.0f, 10.0f, -10.0f));
+    CHECK(geo->cast_up(lo.x + 1.0f, lo.z + 1.0f, -10.0f, 10.0f));
+    // (InputGeometry::triangles_at's tile, which these look up, was a float-to-int cast out of range: undefined.)
+    const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+    for (auto [x, z] : {std::pair{nan, lo.z + 1.0f}, {lo.x + 1.0f, nan}, {nan, nan}, {inf, lo.z}, {lo.x, -inf},
+                        {1e30f, lo.z}, {lo.x, -1e30f}, {lo.x - 1000.0f, lo.z}, {lo.x + 1e6f, lo.z}}) {
+        CHECK_FALSE(geo->cast_down(x, z, 10.0f, -10.0f));
+        CHECK_FALSE(geo->cast_up(x, z, -10.0f, 10.0f));
+    }
+    CHECK_FALSE(geo->blocked({nan, 0.0f, 0.0f}, {lo.x + 1.0f, 0.0f, lo.z + 1.0f}));
 }
 
 TEST_CASE("nav: areas from the regions: water costs more and can be avoided, lava is never crossed") {

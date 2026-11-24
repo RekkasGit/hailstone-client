@@ -324,7 +324,11 @@ std::span<const std::uint32_t> InputGeometry::tile_triangles(int tx, int ty) con
 
 std::span<const std::uint32_t> InputGeometry::triangles_at(float x, float z) const {
     const float ts = params_.tile_size();
-    return tile_triangles(static_cast<int>(std::floor((x - bmin_.x) / ts)), static_cast<int>(std::floor((z - bmin_.z) / ts)));
+    const float fx = std::floor((x - bmin_.x) / ts), fz = std::floor((z - bmin_.z) / ts);
+    // Off the grid, or not a number (each comparison false): no tile. The casts below are then in range.
+    if (!(fx >= 0.0f && fx < static_cast<float>(tiles_x_) && fz >= 0.0f && fz < static_cast<float>(tiles_y_)))
+        return {};
+    return tile_triangles(static_cast<int>(fx), static_cast<int>(fz));
 }
 
 bool InputGeometry::in_water(const glm::vec3& r) const { return water_ && water_(to_world(&r.x)); }
