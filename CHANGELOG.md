@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A ground item or object the server sends again under the same id with another model, place, rotation or size is redrawn there (it kept its old model and position)
 - Isometric camera and click to move: a walk or click under way when you zone, camp or switch characters no longer clicks a spawn, door or object of the old zone on arrival in the new one
 - Taunting a target whose name starts with `@` ("@Lurker") no longer closes the client, and a name such as "@5 Guard" shows as it is
 - Trees with authored collision hulls let players move through their branches while their trunks still block movement. This fixes the invisible walls near the Field of Bone entrance to Warsliks Woods and in other classic zones
