@@ -326,6 +326,36 @@ TEST_CASE("nav: a cast off the grid or at a coordinate that is not a number find
     CHECK_FALSE(geo->blocked({nan, 0.0f, 0.0f}, {lo.x + 1.0f, 0.0f, lo.z + 1.0f}));
 }
 
+TEST_CASE("nav: a vertex that is not finite or is huge in the input geometry builds a defined grid") {
+    // The grid's tile indexes come from the vertices' bounds: a NaN, infinite or far-out vertex is left out with its
+    // triangle, and what remains is tiled with every index inside the grid.
+    const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+    Scene s;
+    s.floor(0, 0, 100, 100, 0);
+    const std::size_t floor_tris = s.verts.size() / 3;
+    s.verts.insert(s.verts.end(), {{nan, 10, 0}, {20, 10, 0}, {20, 20, 0}});
+    s.verts.insert(s.verts.end(), {{nan, nan, nan}, {nan, nan, nan}, {nan, nan, nan}});
+    s.verts.insert(s.verts.end(), {{10, 10, 0}, {inf, 10, 0}, {20, 20, 0}});
+    s.verts.insert(s.verts.end(), {{3e38f, 10, 0}, {20, 10, 0}, {20, 20, 0}});
+    s.verts.insert(s.verts.end(), {{10, -3e9f, 0}, {20, 10, 0}, {20, 20, 0}});
+    for (const auto& geo : {s.geometry(), nav::InputGeometry::from_collision(s.collision(), {})}) {
+        CHECK(geo->triangle_count() == floor_tris);
+        CHECK(std::isfinite(geo->bmin().x));
+        CHECK(std::isfinite(geo->bmax().z));
+        REQUIRE(geo->tiles_x() >= 1);
+        REQUIRE(geo->tiles_y() >= 1);
+        std::size_t tiled = 0;
+        for (int ty = 0; ty < geo->tiles_y(); ++ty)
+            for (int tx = 0; tx < geo->tiles_x(); ++tx)
+                for (std::uint32_t i : geo->tile_triangles(tx, ty)) {
+                    CHECK(i < floor_tris);
+                    ++tiled;
+                }
+        CHECK(tiled >= floor_tris);
+        CHECK(geo->cast_down(geo->bmin().x + 1.0f, geo->bmin().z + 1.0f, 10.0f, -10.0f));
+    }
+}
+
 TEST_CASE("nav: areas from the regions: water costs more and can be avoided, lava is never crossed") {
     Scene s;
     s.floor(0, 0, 100, 100, 0);
