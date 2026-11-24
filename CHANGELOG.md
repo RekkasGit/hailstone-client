@@ -33,6 +33,7 @@
 - Transferring a real estate plot goes only to the player the question named: changing target while it is up cancels the transfer
 - Group window gauges and labels find each member's spawn faster, and an NPC whose name matches a member's no longer stands in for them
 - The Gamepad abilities list costs much less per frame while a discipline cools down
+- Moving a slider that writes to the UI ini (Window Transparency, fades) no longer rewrites the file every frame; it is saved with the window places and on quit or camp
 - **Plugin authors:** a table or function a plugin window hands the UI pack's code (an argument to a pack function, or what its callback returns or raises) now reaches the pack as a view, as what it writes into the pack's shared tables does, so a pack that keeps it and uses it later runs the plugin's code as the plugin, never with the player's authority. `next` and `rawget` see nothing through such a view, and the plugin's metamethods for `==`, `<`, `..`, calls and `tostring` no longer run from the pack's code
 
 ## 0.7.3-beta (2026-11-23)

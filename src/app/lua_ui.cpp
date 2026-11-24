@@ -2308,11 +2308,16 @@ int UiIniGet(lua_State* L) {
     return 1;
 }
 
-// hs.SetUiIni(section, key, value)   -- writes a value to the character's UI ini (UIIni_WriteString) and saves it
+// hs.SetUiIni(section, key, value)   -- writes a value to the character's UI ini (UIIni_WriteString). The file is
+// written with the window places (UiIni::save_if_due, at most every 2 s) and at once on a quit, a camp, a return to
+// the login screen or another character's layout (UiApi::save_layout, load_layout), not on each call: a slider
+// dragged calls it every frame.
 int UiIniSet(lua_State* L) {
     auto& m = Impl::of(L);
-    m.layout.put(luaL_checkstring(L, 1), luaL_checkstring(L, 2), luaL_checkstring(L, 3));
-    m.layout.save();
+    const char* section = luaL_checkstring(L, 1);
+    const char* key = luaL_checkstring(L, 2);
+    const char* value = luaL_checkstring(L, 3);
+    plugin::cxx_guard(L, [&] { m.layout.put(section, key, value); });
     return 0;
 }
 

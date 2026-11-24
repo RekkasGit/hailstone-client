@@ -3,6 +3,8 @@
 // conversion that holds NaN and out-of-range values, and an UiApi takes its handlers off the host when it goes.
 #include <doctest/doctest.h>
 
+#include <fstream>
+#include <iterator>
 #include <limits>
 #include <optional>
 #include <string>
@@ -241,6 +243,32 @@ TEST_CASE("hs API: the quantity dialog holds a typed number past int's range to 
         CHECK(got == want);
     }
     ImGui::DestroyContext(ctx);
+}
+
+// hs.SetUiIni changes the character's UI ini in memory; the file is written with the window places (at most every
+// 2 s) and at once by UiApi::save_layout (a quit, a camp, back to the login screen), not on every call (a slider drag).
+TEST_CASE("hs API: SetUiIni does not write the file each call; save_layout writes it") {
+    test::ScratchDir dir("lua_ui_set_ui_ini");
+    app::UiHost host;
+    app::UiApi api(host);
+    const auto file = dir.path() / "UI_Test.ini";
+    api.load_layout(dir.path() / "defaults.ini", file, {});
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+    lua_newtable(L);
+    api.register_functions(L);
+    lua_setglobal(L, "hs");
+    auto text = [&] {
+        std::ifstream in(file);
+        return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    };
+    for (int i = 0; i < 50; ++i) run(L, "hs.SetUiIni('Main', 'GlobalAlpha', '" + std::to_string(100 + i) + "')");
+    CHECK(run(L, "return hs.UiIni('Main', 'GlobalAlpha')") == "149");
+    CHECK(text().find("GlobalAlpha") == std::string::npos);
+    api.save_layout();
+    CHECK(text().find("GlobalAlpha=149") != std::string::npos);
+    CHECK(run(L, "return hs.UiIni('Main', 'Nothing')") == "nil");
+    lua_close(L);
 }
 
 TEST_CASE("plugin values: deep tables both ways stop at the depth limit, with room on the stack") {

@@ -446,7 +446,7 @@ called it, by priority and registration order.
 | `API.settings.OptionChoices` | `choices = hs.OptionChoices(name)   -- the choices the client lists for an option ("resolution"), else empty` | `hs.OptionChoices` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |
 | `API.settings.PlaySoundTest` | `played = hs.PlaySoundTest(name)   -- plays one of the Individual Sounds options ("own_footsteps", "thunder", ...) once`<br>`at its volume; false for a name that is not one` | `hs.PlaySoundTest` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |
 | `API.settings.SetOption` | `hs.SetOption(name, value)   -- changes, applies and saves a client option` | `hs.SetOption` · [source](../src/app/lua_ui.cpp) | commands | closed |
-| `API.settings.SetUiIni` | `hs.SetUiIni(section, key, value)   -- writes a value to the character's UI ini (UIIni_WriteString) and saves it` | `hs.SetUiIni` · [source](../src/app/lua_ui.cpp) | commands | closed |
+| `API.settings.SetUiIni` | `hs.SetUiIni(section, key, value)   -- writes a value to the character's UI ini (UIIni_WriteString). The file is`<br>`written with the window places (UiIni::save_if_due, at most every 2 s) and at once on a quit, a camp, a return to`<br>`the login screen or another character's layout (UiApi::save_layout, load_layout), not on each call: a slider`<br>`dragged calls it every frame.` | `hs.SetUiIni` · [source](../src/app/lua_ui.cpp) | commands | closed |
 | `API.settings.UiIni` | `value = hs.UiIni(section, key)   -- a value of the character's UI ini (over defaults.ini), nil when neither has it` | `hs.UiIni` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |
 
 ## socials
