@@ -170,7 +170,8 @@ git clone https://github.com/mstorsjo/msvc-wine ~/opt/msvc-wine-src
 mkdir -p ~/opt/msvc ~/opt/msvc-home
 # once, about 3.3 GB: MSVC 2022 and the Windows SDK, then msvc-wine's wrappers (bin/x64/cl ...)
 docker run --rm -v ~/opt:/opt/host hailstone-linux-build:24.04 bash -c "apt-get update -qq && apt-get install -y -qq msitools \
-    && cd /opt/host/msvc-wine-src && python3 vsdownload.py --major 17 --accept-license --architecture x64 \
+    && cd /opt/host/msvc-wine-src && git checkout -q 514f8ea34842cd6d831804d0e9658d3a32870ae1 \
+    && python3 vsdownload.py --major 17 --msvc-version 17.14 --sdk-version 10.0.26100 --accept-license --architecture x64 \
        --with-asan no --with-atl no --dest /opt/host/msvc && chown -R $(id -u):$(id -g) /opt/host/msvc"
 docker run --rm --user $(id -u):$(id -g) -e HOME=$HOME/opt/msvc-home -v $HOME/opt:$HOME/opt hailstone-msvc-build:24.04 \
     $HOME/opt/msvc-wine-src/install.sh $HOME/opt/msvc
@@ -231,7 +232,8 @@ tools/docker/build.sh all            # the three; --no-test after the platform s
 - Windows uses an existing msvc-wine install, read-only: `MSVC_DIR`. By default that is `~/opt/msvc` when it has
   `bin/x64/cl` (the install above), else `.docker/msvc`.
   - With none there, `MSVC_ACCEPT_LICENSE=1` accepts Microsoft's license and downloads one into `MSVC_DIR`
-    (`tools/docker/msvc_setup.sh`, msvc-wine pinned to a commit). Without it the script stops.
+    (`tools/docker/msvc_setup.sh`: msvc-wine pinned to a commit, MSVC to 17.14 and the SDK to 10.0.26100, as the
+    release install has them). Without it the script stops.
   - Wine's home is `.docker/wine-home`, one per checkout.
 - The Windows tests run under Wine with Microsoft's runtime DLLs copied beside them. They leave out the cases that
   fail only under Wine:

@@ -561,6 +561,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] The box set's other windows (`--box-child`) have no updater and fetch no add-ons: only the first window downloads and installs (tests/updater_test.cpp).
 - [ ] A lock between Hailstone windows the client did not start (two copies opened by hand): each still has its own updater and add-on manager on the same `download/` and `addons/` files.
 - [ ] A release job in CI (packages, manifest, signature, upload).
+- [ ] **Release images pinned by digest.** `tools/docker/linux.Dockerfile` is `FROM ubuntu:24.04` by tag with unpinned apt packages; record the digest at the next image build (`docker image inspect ubuntu:24.04 --format '{{json .RepoDigests}}'`) and pin it. MSVC 17.14 and SDK 10.0.26100 are pinned in `msvc_setup.sh`; the servicing build within them is the manifest's (docs/updater.md "Making a release").
 - [x] **macOS arm64 releases:** a plain folder like Linux's with MoltenVK beside the binary; built, tested and signed ad hoc by the macOS workflow (docs/ci.md "macOS arm64"), packed and signed into the manifest locally. No Developer ID or notarization, by choice: players clear the quarantine (README.md).
 - [ ] **macOS on a Mac.** Only the build and headless tests have run.
   - The client on Apple Silicon: MoltenVK's device features, the window, input, audio, the Keychain.
