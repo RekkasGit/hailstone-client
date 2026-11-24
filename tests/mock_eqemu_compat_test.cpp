@@ -237,6 +237,31 @@ TEST_CASE("mock server: an accepted duel opponent is attackable without PvP or g
     CHECK_FALSE(rig.conn.allowed_to_attack(kBystander, 300));
 }
 
+TEST_CASE("mock server: a duel, running or only offered, ends with a zone change") {
+    // Hailstone: the original keeps its duel globals across a zone; EQEmu ends the duel when the client leaves.
+    for (bool accepted : {false, true}) {
+        CAPTURE(accepted);
+        Rig rig;
+        REQUIRE(rig.to_zone());
+        REQUIRE(add_rival(rig));
+        rig.conn.set_target(kRival);
+        rig.conn.duel();
+        if (accepted) {
+            rig.server.zone.send_reliable(encode(DuelRequest{kRival, kRival}));
+            REQUIRE(rig.until([&] { return rig.conn.duel_state().active; }));
+        }
+        REQUIRE(rig.conn.duel_state().pending());
+        const auto entries = rig.server.zone_entries;
+        rig.server.request_zone_change(2, 0.0f, 0.0f, 3.0f);
+        REQUIRE(rig.until([&] { return rig.server.zone_entries == entries + 1 && rig.conn.state() == ConnectionState::InZone; }));
+        CHECK_FALSE(rig.conn.duel_state().active);
+        CHECK_FALSE(rig.conn.duel_state().pending());
+        // A player with the old opponent's id in the new zone is a stranger.
+        REQUIRE(add_rival(rig));
+        CHECK_FALSE(rig.conn.allowed_to_attack(kRival, game::mechanics::kMeleeAttack));
+    }
+}
+
 TEST_CASE("mock server: EQEmu's 1383 line from the challenged player ends our challenge") {
     Rig rig;
     REQUIRE(rig.to_zone());
