@@ -19,6 +19,7 @@
 - Two Hailstone windows started separately no longer undo each other's add-on installs or lose an add-on from the installed list (which made its files count as installed by hand). While one installs or removes add-ons, the other waits or says to try again
 - Hailstone's updates never write or remove anything in `upscalers/`, so an upscaler add-on can no longer be replaced or removed by an update that ships a folder of the same name
 - On Linux and macOS, files an update installs never get group or world write permission from the update package
+- A zone where many differently dressed or tinted characters come and go no longer keeps the model of every look it has shown in memory until you leave it
 - Charged items stay in inventory and on the hotbar after spending a charge if the server keeps the item
 - Spell effects no longer attach to the wrong bones of a character whose model was loaded after another was freed
 - Minimising the window on Windows can no longer stop the client with a swapchain error ("vkCreateSwapchainKHR")
