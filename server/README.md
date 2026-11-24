@@ -107,32 +107,39 @@ will refuse. The checker is built with the client. Players get changes at their 
 
 ### In-game Server Management
 
-With the current encounter installed and client file delivery enabled, an eligible GM can open **Server Management**
-from the Modern menu or with `/servermanagement`. The encounter checks the account's numeric status on every read and
-save. The default is 200. Set `[management] min_status` in `client_files/hailstone.cfg` to change it. A value outside
-1–32767 disables management access until corrected on disk.
+Server Management is off by default. To enable it, set `server_management = 1` in the encounter's settings or set
+the `hailstone:server_management` data bucket to `1`. Client file delivery must be enabled. Eligible GMs can then open
+**Server Management** from the built-in Modern menu or with `/servermanagement`. The encounter checks account
+status on every read and save. The default is 200. Set `[management] min_status` in `client_files/hailstone.cfg`
+to change it. A value outside 1–32767 disables management access until corrected on disk.
 
 Search the **Stock (RoF2)**, **Extended**, and **Add-on** command lists by name or alias. A rule can inherit the
 server's policy, allow the command, block it, or require a minimum EQEmu GM account status. The **Add-on** list
 updates as plugins and Lua scripts register commands on the GM's client. Commands explicitly named in the policy
-also appear while the add-on is unloaded. Set the message players get for a blocked command in the Commands
+also appear while the add-on is unloaded. These are advisory rules for Hailstone commands. Enforce gameplay
+restrictions on the server. Set the message players get for a blocked command in the Commands
 page. The window also edits the server's add-on rules, script and plugin permissions, Lua socials, assets, web
 hosts, Hailstone access, and gameplay settings. Review changes before saving. The server keeps custom sections and
-untouched settings in the file. Creating the first file through this editor retains the server's pre-existing
-script, plugin, and Lua social defaults.
+untouched settings in the file. Command list edits preserve the spelling of retained entries. The editor warns
+if your policy restricts `/camp`, `/quit`, `/exit`, or `/servermanagement`. Creating the first file through this
+editor retains the server's pre-existing script, plugin, and Lua social defaults.
 
 The editor can stay open while you review. Writes compare the revision opened by the GM before modifying the file.
 If the policy changes or the server loses its snapshot, choose **Reload policy** in the window. It keeps your draft
-and asks you to resolve any settings that changed on the server before you save.
+and asks you to resolve any settings that changed on the server before you save. During a zone transfer, the window
+pauses and reloads the policy in the destination zone if that zone grants the same character access.
 Successful saves carry a revision in the file's first comment and keep the previous bytes and editor metadata in
-`client_files/.hailstone-admin-history/`. The
-dot-prefixed directory is server-only. To restore a revision, copy the relevant previous file to `hailstone.cfg` and
-reload the encounter so zones relist it. For a backup whose metadata says `previous_existed=false`, move the active
+`client_files/.hailstone-admin-history/`. The dot-prefixed directory is server-only. All backups are kept by default.
+Set `server_management_history` in the encounter or its data bucket to a positive number to keep that many recognized
+backup pairs. Pruning runs after a successful save and checks the audit and config revision tags in each pair.
+To restore a revision, copy the relevant previous file to `hailstone.cfg` and reload the encounter so zones relist it.
+For a backup whose metadata says `previous_existed=false`, move the active
 `hailstone.cfg` out of `client_files/` before reloading to restore the server's original defaults. Keep the
 client files directory shared across zone processes if they run on separate hosts. The server account that runs the
 zone process needs permission to write the file, create the lock and history directories, and replace the file.
-If a stopped zone leaves `client_files/.hailstone-admin-lock` behind, remove that empty directory only after confirming
-that no zone is writing policy. The editor supports configurations up to 16 KiB. Larger files can still be managed on disk.
+The editor reports a save lock as stale after 15 minutes. If a stopped zone leaves
+`client_files/.hailstone-admin-lock` behind, remove the directory and its `owner` marker after confirming that
+no zone is writing policy. The editor supports configurations up to 16 KiB. Larger files can still be managed on disk.
 
 Existing players receive the new policy on their next login. Setting `[client] deny = on` or raising the minimum
 above your own status can require editing the file on disk to regain access. The client-side command policy is
@@ -149,6 +156,8 @@ after `#reloadquest`.
 | `enabled` | 1 | answer at all (0: no request is answered, `client_files/` included, and the zone does not list or hash it at start) |
 | `guild_invites_world` | 1 | `/guildinvite` reaches Hailstone players in other zones |
 | `client_files` | 1 | send `client_files/` to Hailstone clients (0: they get an empty list) |
+| `server_management` | 0 | enable the in-game policy editor for eligible GMs (set to 1 to enable) |
+| `server_management_history` | 0 | number of recognized backup pairs to keep (0: keep all) |
 | `group_declines` | 1 | tell the inviter when a RoF2 client declines a group invitation |
 | `files_rescan` | 300 | seconds the `client_files/` list is kept before a player's request looks at the folder again (never under 30) |
 | `files_chunks_per_second` | 768 | file pieces (32 KB each) one player is sent in a second; more wait their turn (0: no limit) |

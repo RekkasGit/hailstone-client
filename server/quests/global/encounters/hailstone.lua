@@ -68,6 +68,8 @@ local settings = {
 	files_chunks_per_second_zone = 1024, -- the same for all of the zone's clients together; 0: no limit
 	quest_npcs             = 1,  -- tell Hailstone's Find window which of the zone's NPCs have quests (0: say nothing)
 	zone_links             = 1,  -- send the zone connections for the map's zone finder (0: never answered)
+	server_management      = 0,  -- 1 enables the in-game editor for authorized GM accounts
+	server_management_history = 0, -- keep all revisions unless the operator sets a positive retention limit
 }
 
 local OP_SETTINGS_REQUEST = 0x1432
@@ -1614,6 +1616,10 @@ local management = (function()
 	local LIMIT, MAX_EDITS, MAX_NAME, MAX_VALUE = 16384, 64, 48, 8192
 	local HISTORY = FILES_DIR .. "/.hailstone-admin-history"
 	local EDIT_LOCK = FILES_DIR .. "/.hailstone-admin-lock"
+	local EDIT_LOCK_OWNER = EDIT_LOCK .. "/owner"
+	local EDIT_LOCK_STALE = 900 -- seconds
+	local REVISION_TIME, REVISION_SEQUENCE = "%d%d%d%d%d%d%d%dT%d%d%d%d%d%dZ", "%d%d%d%d"
+	local REVISION_ID = REVISION_TIME .. "%-" .. REVISION_SEQUENCE
 	local MAX_SNAPSHOTS = 64
 	local snapshots, token, last_use = {}, 0, 0
 	local requests = limiter(10)
@@ -1675,7 +1681,13 @@ local management = (function()
 	-- timestamp and counter. The scratch process identifier is private to the file-service implementation.
 	local function next_revision(previous)
 		local timestamp = os.date("!%Y%m%dT%H%M%SZ", os.time())
-		for sequence = 1, 9999 do
+		local first = 1
+		if previous then
+			local last_time, last_sequence = previous:match("^(" .. REVISION_TIME .. ")%-(" .. REVISION_SEQUENCE .. ")$")
+			-- Retention can free lower sequence numbers. Leave the revision monotonic even if the clock retreats.
+			if last_time and last_time >= timestamp then timestamp, first = last_time, tonumber(last_sequence) + 1 end
+		end
+		for sequence = first, 9999 do
 			local name = string.format("%s-%04d", timestamp, sequence)
 			local backup = HISTORY .. "/" .. name
 			local cfg = history_file_exists(backup .. ".cfg")
@@ -1750,8 +1762,12 @@ local management = (function()
 		return raw, readable, name
 	end
 
+	local function enabled()
+		return setting("server_management") == 1 and setting("client_files") ~= 0
+	end
+
 	local function advertised(rank)
-		if rank < 1 or setting("client_files") == 0 then return false end
+		if rank < 1 or not enabled() then return false end
 		local raw, readable = load_cfg()
 		return readable and permitted(rank, raw)
 	end
@@ -1878,7 +1894,31 @@ local management = (function()
 		return result
 	end
 
-	local function valid_value(kind, value)
+	local function valid_command_word(kind, word)
+		if kind == "groups" then return groups[word:lower()] end
+		if kind == "commands" then return word ~= "/" end
+		local command, status = word:match("^(.+):([0-9]+)$")
+		return command and command ~= "/" and unsigned(status, 1, 32767)
+	end
+
+	local function valid_command_list(kind, value, original)
+		local existing
+		for word in value:gmatch("[^ ,]+") do
+			if not valid_command_word(kind, word) then
+				-- Another row may be edited without rewriting the author's malformed tokens. Only carry exact
+				-- tokens that appeared in this key of the snapshot, without adding copies.
+				if not existing then
+					existing = {}
+					for token in (original or ""):gmatch("[^,%s]+") do existing[token] = (existing[token] or 0) + 1 end
+				end
+				if (existing[word] or 0) == 0 then return false end
+				existing[word] = existing[word] - 1
+			end
+		end
+		return true
+	end
+
+	local function valid_value(kind, value, original)
 		if kind == "message" then return #value <= 240 and valid_utf8(value) end
 		if value:find("[%z\1-\31\127;#]") then return false end
 		local lower = value:lower()
@@ -1888,15 +1928,12 @@ local management = (function()
 		if kind == "press_commands" then return unsigned(value, 0, 2147483647) end
 		if kind == "min_status" then return unsigned(value, 1, 32767) end
 		if kind == "repos" or kind == "required" then return repositories(value, kind == "required") ~= nil end
+		if kind == "groups" or kind == "commands" or kind == "gm_commands" then
+			return valid_command_list(kind, value, original)
+		end
 		for word in value:gmatch("[^ ,]+") do
 			local low = word:lower()
 			if kind == "caps" and not capabilities[low] then return false end
-			if kind == "groups" and not groups[low] then return false end
-			if kind == "commands" and word == "/" then return false end
-			if kind == "gm_commands" then
-				local command, status = word:match("^(.+):([0-9]+)$")
-				if not command or command == "/" or not unsigned(status, 1, 32767) then return false end
-			end
 			if kind == "scripts" and (word:sub(1, 1) == "/" or word:find("..", 1, true) or word:find("\\", 1, true)) then
 				return false
 			end
@@ -1907,7 +1944,7 @@ local management = (function()
 		return true
 	end
 
-	local function read_edits(packet, size)
+	local function read_edits(packet, size, raw)
 		if size < 18 then return nil end
 		local count, pos = packet:ReadInt16(16), 18
 		if count < 1 or count > MAX_EDITS then return nil end
@@ -1927,8 +1964,9 @@ local management = (function()
 			section, key = section:lower(), key:lower()
 			local kind = schema[section] and schema[section][key]
 			local id = section .. "." .. key
+			local original = section == "commands" and read_control(raw or "", section, key) or nil
 			if not kind or seen[id] or value:find("[%z\1-\31\127]")
-				or not valid_value(kind, kind == "message" and value or trim(value)) then
+				or not valid_value(kind, kind == "message" and value or trim(value), original) then
 				return nil, "Invalid or duplicate setting: [" .. (schema[section] and section or "unknown") .. "]"
 			end
 			seen[id] = true
@@ -2034,9 +2072,74 @@ local management = (function()
 		return type(result) == "string" and trim(result) == "made"
 	end
 
-	local function unlock()
+	local function remove_file(path)
+		if windows then return trim(run('del /Q "' .. path:gsub("/", "\\") .. '" 2>NUL && echo removed') or "") == "removed" end
+		return trim(run("rm -f -- " .. sh_quote(path) .. " 2>/dev/null && echo removed") or "") == "removed"
+	end
+
+	local function remove_edit_lock()
+		remove_file(EDIT_LOCK_OWNER)
 		if windows then run('rmdir "' .. EDIT_LOCK:gsub("/", "\\") .. '" 2>NUL')
 		else run("rmdir " .. sh_quote(EDIT_LOCK)) end
+	end
+
+	local function take_edit_lock()
+		if mkdir(EDIT_LOCK) then
+			local owner = os.time() .. " " .. scratch() .. "\n"
+			if write(EDIT_LOCK_OWNER, owner) then return owner end
+			remove_edit_lock()
+			return nil, STORAGE, "Could not record the server policy lock owner."
+		end
+		local owner = read(EDIT_LOCK_OWNER, 512)
+		local timestamp = owner and tonumber(owner:match("^(%d+) [%w_-]+\n$"))
+		-- A slow or suspended zone may still hold the lock. Only the operator can confirm it is abandoned.
+		if timestamp and os.time() - timestamp >= EDIT_LOCK_STALE then
+			return nil, BUSY, "Server policy lock may be stale. Ask the server operator to check .hailstone-admin-lock."
+		end
+		return nil, BUSY, "The server policy is busy or not writable. Try again."
+	end
+
+	local function unlock(owner)
+		if read(EDIT_LOCK_OWNER, #owner) == owner then remove_edit_lock() end
+	end
+
+	local function owned_backup(base, revision)
+		local audit = read(base .. ".txt", 4096)
+		if not audit then return false end
+		local recorded, prior = audit:match("^revision=(" .. REVISION_ID .. ")\nprevious_revision=(" .. REVISION_ID ..
+			")\nprevious_existed=true\ncharacter_id=%d+\naccount_id=%d+\nedited=[%w_,.]+\n$")
+		if recorded ~= revision then return false end
+		local raw = read(base .. ".cfg", LIMIT)
+		return raw and policy_revision(raw) == prior
+	end
+
+	local function prune_history(newest)
+		local keep = setting("server_management_history")
+		if keep < 1 or keep % 1 ~= 0 then return end
+		local listing
+		if windows then listing = run('dir /b /a:-d-l "' .. HISTORY:gsub("/", "\\") .. '\\*" 2>NUL')
+		else listing = run("find " .. sh_quote(HISTORY) .. " -maxdepth 1 -type f -printf '%f\\n' 2>/dev/null") end
+		if not listing then return end
+		local configs, audits, older = {}, {}, {}
+		for name in listing:gmatch("[^\r\n]+") do
+			local revision, extension = name:match("^(" .. REVISION_ID .. ")%.([a-z]+)$")
+			if extension == "cfg" then configs[revision] = true end
+			if extension == "txt" then audits[revision] = true end
+		end
+		for revision in pairs(configs) do
+			if revision ~= newest and audits[revision] then older[#older + 1] = revision end
+		end
+		table.sort(older, function(a, b) return a > b end)
+		local count = 1 -- Always keep the backup created by this save, even if the clock moved backward.
+		for _, revision in ipairs(older) do
+			local base = HISTORY .. "/" .. revision
+			if owned_backup(base, revision) then
+				count = count + 1
+				if count > keep and (not remove_file(base .. ".txt") or not remove_file(base .. ".cfg")) then
+					log("management: could not prune revision " .. revision)
+				end
+			end
+		end
 	end
 
 	local PS_REPLACE = [[
@@ -2095,6 +2198,7 @@ if ([System.IO.File]::Exists($dst)) {
 	end
 
 	local function save_under_lock(client, previous, edits)
+		if not enabled() then return DENIED, "Server Management access denied." end
 		local raw, readable, name = load_cfg(true)
 		if not readable then return STORAGE, "Could not read hailstone.cfg." end
 		if not permitted(account_status(client) or 0, raw) then return DENIED, "Server Management access denied." end
@@ -2140,6 +2244,8 @@ if ([System.IO.File]::Exists($dst)) {
 		local latest, still_readable = read(path, LIMIT)
 		if not still_readable or latest ~= raw then return STALE, "The server configuration changed. Reload before saving." end
 		if not replace(tmp, path) or read(path, LIMIT) ~= updated then return STORAGE, "Could not replace hailstone.cfg." end
+		local pruned, prune_error = pcall(prune_history, revision)
+		if not pruned then log("management: could not prune policy history: " .. tostring(prune_error)) end
 		log(string.format("management: saved revision %s by account %d, character %d (%s)", revision,
 			client:AccountID(), client:CharacterID(), table.concat(keys, ", ")))
 		return OK, updated, updated, name
@@ -2154,11 +2260,13 @@ if ([System.IO.File]::Exists($dst)) {
 		local id = client:CharacterID()
 		if not allow(requests, id, 12) then return end
 		local rank = account_status(client) or 0
-		if rank < 1 or setting("client_files") == 0 then
+		if rank < 1 or not enabled() then
 			reply(client, action, request, DENIED, 0, "Server Management access denied.")
 			return
 		end
-		local raw, readable, name = load_cfg(true)
+		-- The existing file listing supplies the name for a direct read. Only admitted requests can cause a
+		-- filesystem scan, which still checks the authoritative name and policy before opening or writing.
+		local raw, readable = load_cfg()
 		if not readable then
 			reply(client, action, request, STORAGE, 0, "Could not read hailstone.cfg.")
 			return
@@ -2168,7 +2276,16 @@ if ([System.IO.File]::Exists($dst)) {
 			return
 		end
 		if action == OPEN and size == 12 then
-			reply(client, action, request, OK, snapshot(client, id, raw, name), raw or NO_POLICY)
+			local current, current_readable, name = load_cfg(true)
+			if not current_readable then
+				reply(client, action, request, STORAGE, 0, "Could not read hailstone.cfg.")
+				return
+			end
+			if not permitted(account_status(client) or 0, current) then
+				reply(client, action, request, DENIED, 0, "Server Management access denied.")
+				return
+			end
+			reply(client, action, request, OK, snapshot(client, id, current, name), current or NO_POLICY)
 			return
 		end
 		if action == OPEN or size < 18 then
@@ -2181,18 +2298,19 @@ if ([System.IO.File]::Exists($dst)) {
 			reply(client, action, request, STALE, 0, "The server no longer has this editor snapshot. Reload before saving.")
 			return
 		end
-		local edits, why = read_edits(packet, size)
+		local edits, why = read_edits(packet, size, previous.raw)
 		if not edits then
 			reply(client, action, request, INVALID, 0, why or "Malformed Server Management changes.")
 			return
 		end
 		mark_used(previous)
-		if not mkdir(EDIT_LOCK) then
-			reply(client, action, request, BUSY, 0, "The server policy is busy or not writable. Try again.")
+		local owner, lock_status, lock_message = take_edit_lock()
+		if not owner then
+			reply(client, action, request, lock_status, 0, lock_message)
 			return
 		end
 		local ok, status, data, after, filename = pcall(save_under_lock, client, previous, edits)
-		unlock()
+		unlock(owner)
 		if not ok then
 			log("management: save failed: " .. tostring(status))
 			reply(client, action, request, STORAGE, 0, "Could not save hailstone.cfg.")
