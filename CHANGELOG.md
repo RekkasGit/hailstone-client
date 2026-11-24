@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Taunting a target whose name starts with `@` ("@Lurker") no longer closes the client, and a name such as "@5 Guard" shows as it is
 - Trees with authored collision hulls let players move through their branches while their trunks still block movement. This fixes the invisible walls near the Field of Bone entrance to Warsliks Woods and in other classic zones
 - Decorative slime no longer blocks movement over the Veksar ramp and doorway or through passages in several Lost Dungeons of Norrath layouts
 - Spells that require line of sight now report “You cannot see your target” before casting through a solid door or moving obstacle

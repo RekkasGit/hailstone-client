@@ -27,6 +27,8 @@
 
 #include "game/mechanics/melee.h"
 
+namespace hailstone::game { class EqStrings; }
+
 namespace hailstone::game::mechanics {
 
 class Character;
@@ -165,11 +167,17 @@ struct SkillContext {
 };
 
 // A chat line: an eqstr id with %1.. arguments, in a chat colour (0x10e skills, 0xd, 0x12f, 0x111).
+// An argument is literal text (a spawn's name stays as it is, whatever it starts with) unless arg_eqstr gives it an
+// id: the original copies getString(id) into that argument, so it reads as that eqstr's text.
 struct SkillMessage {
     std::uint32_t eqstr = 0;
     std::vector<std::string> args;
     std::uint32_t color = 0x10e;
+    std::vector<std::optional<std::uint32_t>> arg_eqstr; // per argument; shorter than args when the rest are text
 };
+
+// The message's text from the string tables, with each eqstr argument looked up.
+std::string format_skill_message(const EqStrings& strings, const SkillMessage& m);
 
 // A packet UseSkill sends (the bytes are in net/ability_packets.h).
 struct SkillSend {

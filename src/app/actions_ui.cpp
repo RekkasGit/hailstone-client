@@ -301,13 +301,7 @@ bool ActionsUi::close_top_window() {
 }
 
 void ActionsUi::message(net::GameConnection& conn, const mech::SkillMessage& m) {
-    std::vector<std::string> args;
-    for (const std::string& a : m.args) {
-        // "@<id>": an eqstr text (the original copies getString(id) into the argument).
-        if (!a.empty() && a[0] == '@') args.push_back(conn.strings().format(static_cast<std::uint32_t>(std::stoul(a.substr(1))), {}));
-        else args.push_back(a);
-    }
-    messages_.push_back({conn.strings().format(m.eqstr, args), m.color});
+    messages_.push_back({mech::format_skill_message(conn.strings(), m), m.color});
     log::info("skill: {}", messages_.back().first);
 }
 
