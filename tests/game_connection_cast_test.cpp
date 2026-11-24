@@ -3,6 +3,7 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -11,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "game/collision.h"
 #include "game/spells.h"
 #include "mock_server/harness.h"
 #include "mq_test_world.h"
@@ -38,6 +40,78 @@ std::string spell_line(std::initializer_list<std::pair<int, std::string>> set) {
 }
 
 } // namespace
+
+TEST_CASE("Spell casts require sight only for spells that check the selected target") {
+    const char* target_type = "5";
+    const char* spell_type = "0";
+    const char* effect = "0";
+    bool requires_sight = true;
+    SUBCASE("direct damage") {}
+    SUBCASE("targeted area effect") { target_type = "8"; }
+    SUBCASE("dispel") { spell_type = "1"; effect = "27"; }
+    SUBCASE("heal") { spell_type = "1"; requires_sight = false; }
+    SUBCASE("optional-target projectile") { target_type = "1"; requires_sight = false; }
+    SUBCASE("self with a target selected") { target_type = "6"; spell_type = "1"; requires_sight = false; }
+    SUBCASE("point-blank area with a target selected") { target_type = "4"; requires_sight = false; }
+
+    constexpr std::int32_t kSpell = 6810;
+    constexpr std::uint32_t kTarget = 101;
+    MockConfig cfg = MockConfig::standard();
+    cfg.characters[0].class_ = 2;
+    Rig rig(cfg);
+    std::ofstream(rig.dir.path() / "eqstr_us.txt", std::ios::app) << "108 You cannot see your target.\n";
+    rig.game.rescan();
+    auto& conn = rig.conn;
+    conn.reload_game_files();
+    REQUIRE(rig.to_zone());
+
+    auto table = std::make_shared<game::SpellTable>();
+    REQUIRE(table->parse(spell_line({{0, std::to_string(kSpell)}, {1, "Sight Test"}, {9, "100"}, {13, "1000"},
+                                     {20, "-10"}, {83, spell_type}, {86, effect}, {98, target_type}, {105, "1"},
+                                     {122, "3"}, {213, "1"}, {214, "1"}})) == 1);
+    conn.set_spell_table_for_test(table);
+
+    auto& world = A::world(conn);
+    const auto here = A::position(conn);
+    world.spawns.at(kTarget).position = here + glm::vec3(6.0f, 0.0f, 0.0f);
+    world.target_id = kTarget;
+    auto& spells = A::spells(conn);
+    spells.gems[0].spell = kSpell;
+    spells.gems[0].ready = 0;
+    spells.recovery_ready = 0;
+
+    const auto wall = game::CollisionMesh::from_triangles({
+        game::CollisionTriangle::make(here + glm::vec3(3.0f, -3.0f, -3.0f), here + glm::vec3(3.0f, 3.0f, -3.0f),
+                                      here + glm::vec3(3.0f, 0.0f, 4.0f), 0),
+    });
+    bool obstructed = true;
+    int sight_checks = 0;
+    conn.set_line_of_sight([&](const glm::vec3& from, const glm::vec3& to) {
+        ++sight_checks;
+        return !obstructed || wall.line_of_sight(from, to);
+    });
+    const auto casts = [&] { return MockEqServer::count(rig.server.zone_log, Op::CastSpell); };
+
+    rig.chat();
+    conn.cast_gem(0);
+    const auto messages = rig.chat();
+    const auto refused = std::any_of(messages.begin(), messages.end(), [](const ChatEvent& e) {
+        return e.text == "You cannot see your target.";
+    });
+    CHECK(refused == requires_sight);
+    CHECK(sight_checks == (requires_sight ? 1 : 0));
+    if (requires_sight) {
+        CHECK_FALSE(spells.casting.casting());
+        CHECK(spells.gems[0].ready == 0);
+        CHECK(spells.recovery_ready == 0);
+        rig.run_for(std::chrono::milliseconds(50));
+        CHECK(casts() == 0);
+        obstructed = false;
+        conn.cast_gem(0);
+    }
+    CHECK(spells.casting.spell == kSpell);
+    REQUIRE(rig.until([&] { return casts() == 1; }));
+}
 
 TEST_CASE("CastSpell over the live adapter: SPA 129 range focus from a worn item lets a cast past Range go out") {
     // A detrimental single-target nuke with Range 100 (cleric level 1), and a 5% range focus (SPA 129) on an

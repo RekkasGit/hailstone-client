@@ -887,6 +887,7 @@ private:
     void player_customization_key();
     AbilityView ability_view() const;
     std::optional<bool> can_see_spawn(std::uint32_t id) const;
+    bool world_line_of_sight(const glm::vec3& from, const glm::vec3& to) const;
     void prepare_target_cycle();
     std::optional<float> melee_range_to(std::uint32_t id) const;
     void abilities_test(MovementKeys& mk);
