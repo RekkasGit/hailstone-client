@@ -238,6 +238,9 @@ These are not in the original client.
 | `/destroy` | Destroy the item on your cursor (the inventory's Destroy button). |
 | `/destroycursor <id>` | Destroy the item on your cursor without asking, only if its item id is `<id>`; never coin or a bag. For plugins (docs/plugins.md). |
 | `/stowcursor <id>` | Put the item on your cursor into your packs (never a worn slot), only if its item id is `<id>`. For plugins (docs/plugins.md). |
+| `/exchange "<item name\|id>" <slot>` | Put an item from your packs in a worn slot; what the slot held goes where the item was, or into your packs if it does not fit there (MQ2Exchange's command, which E3 uses). The name is exact, any case; the slots are MacroQuest's names (`/exchange help list`). |
+| `/unequip <slot>` | Take the item off a worn slot into the first free general slot or bag slot. |
+| `/exchange help`, `/exchange help list` (or `/exchange list`) | The commands, and the slot names and numbers. |
 | `/web [address]` | The in-game browser (docs/browser.md); with an address, it opens on a new tab. |
 | `/camera [iso \| first \| behind \| toggle]` | Switch to the isometric camera or back (docs/isometric.md); `/camera` alone shows the settings, `/camera pitch\|fov\|distance\|reveal <value>` and `/camera wasd camera\|classic` change them. |
 | `/luasocial [1..120 \| new]` | The Lua social editor. |

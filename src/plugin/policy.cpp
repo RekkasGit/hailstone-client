@@ -55,7 +55,7 @@ constexpr std::string_view kChat[] = {"Cmd_say",   "Cmd_gsay",     "Cmd_shout", 
 constexpr std::string_view kWeb[] = {"Cmd_url", "Cmd_www"};
 // Hailstone's own commands (not in RoF2's table; GameConnection::item_command) by their whole word, lower case: they
 // destroy or move items, so they need what using an item needs, not the generic 'commands'.
-constexpr std::string_view kOwnActions[] = {"/destroy", "/destroycursor", "/stowcursor"};
+constexpr std::string_view kOwnActions[] = {"/destroy", "/destroycursor", "/stowcursor", "/exchange", "/unequip"};
 
 template <std::size_t N> bool in(const std::string_view (&list)[N], std::string_view h) {
     return std::find(std::begin(list), std::end(list), h) != std::end(list);

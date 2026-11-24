@@ -3019,6 +3019,10 @@ private:
     // CEverQuest_ProcessCursorQueue @0x5321a0, once a frame (net/game_connection_items.cpp).
     void process_cursor_queue();
     bool item_command(const std::string& command, const std::string& args);
+    // Hailstone: MQ2Exchange's /exchange "<item name|id>" <slot> and /unequip <slot> (game/exchange.h), through the
+    // inventory's own clicks (click_slot) so the original's checks hold.
+    void exchange_command(const std::string& args);
+    void unequip_command(const std::string& args);
     void handle_commerce(Op op, const AppPacket& p);
     void commerce_item(std::uint32_t packet_type, Item item);
     bool commerce_command(const std::string& command, const std::string& args);
