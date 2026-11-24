@@ -7,6 +7,7 @@
 // below); the network side is net/game_connection_social.cpp.
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -255,13 +256,25 @@ struct RaidState {
     // Local lifetime token for UI actions; never serialized. Stock servers may leave the wire raid ID at zero.
     std::uint64_t generation = 0;
 
+    // The members by name folded to lower case, as an index into `members`, kept by add, remove and clear (a
+    // member list of any size costs one lookup per change). Code that writes `members` directly calls reindex();
+    // until then the lookups fall back to a walk through the list.
+    std::unordered_map<std::string, std::size_t> index;
+
     RaidMember* find(const std::string& name);
+    const RaidMember* find(const std::string& name) const;
     bool is_member(const std::string& name) const;
-    // Adds or updates a member (OP_RaidUpdate action 0). Returns true when new.
+    // Adds or updates a member (OP_RaidUpdate action 0). Returns true when new; false too for a new member past
+    // kRaidMembersKept, who is not added.
     bool add(const RaidMember& m);
     bool remove(const std::string& name);
     void clear();
+    void reindex();
 };
+
+// RoF2 holds 72 raid members (CRaid::AddRaidMember @0x47e4e0 ignores an add once RaidMemberCount is 0x48). Hailstone
+// extension: a server may offer bigger raids, so the list takes more, up to this cap against a flood of made-up names.
+inline constexpr std::size_t kRaidMembersKept = 1024;
 
 // ---------------------------------------------------------------- social state
 
