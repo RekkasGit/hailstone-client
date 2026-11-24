@@ -778,6 +778,11 @@ player. Auto-inventory equips only what passes it.
 
 #### Coin
 
+Autosplit is set on the server by Options or `/autosplit` using `OP_SpawnAppearance` type 28. Since EQEmu's RoF2
+profile sends zero in the Autosplit field, Hailstone remembers the last choice made here in the character's
+`options.ini` (`[Hailstone] Autosplit`). Modern and Gamepad read that value on login. Logging in sends no Autosplit
+update. On a profile with no saved choice, use `/autosplit on` or `/autosplit off` once to set the desired state.
+
 `move_money` (32-bit wrapping):
 
 - Conversion (int)10^|dcoin| only with the bank window up.

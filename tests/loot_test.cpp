@@ -11,6 +11,7 @@
 #include "net/packet_io.h"
 #include "net/trade_packets.h"
 #include "plugin/hooks.h"
+#include "scratch_dir.h"
 
 using namespace hailstone;
 using namespace hailstone::net;
@@ -127,7 +128,10 @@ TEST_CASE("loot: /loot without a target, a corpse too far, and the request") {
 }
 
 TEST_CASE("loot: Handle_OP_MoneyOnCorpse's answers") {
-    Rig rig(MockConfig::standard());
+    ScratchDir servers("loot-coin");
+    ConnectionOptions options = quick_options();
+    options.servers_dir = servers.path();
+    Rig rig(MockConfig::standard(), options);
     auto& conn = rig.conn;
     REQUIRE(rig.to_zone());
     std::uint32_t corpse = add_corpse(conn, 5.0f);

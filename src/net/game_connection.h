@@ -3260,6 +3260,7 @@ private:
     // (CEverQuest_ResetClientStateForZone @0x531b36) and by the server's opcode 0x5369 (HandleWorldMessage @0x4cb984).
     std::int64_t offline_mode_at_ = 0;
     void autosplit_command(const std::string& args);
+    void set_autosplit(bool checked, std::uint32_t message, std::uint32_t color = 0);
     void init_bandolier_from_profile();
     std::int32_t aa_effect_total(std::int32_t spa) const;
     std::optional<ItemSlot> find_item_for_bandolier(std::uint32_t item_id) const;

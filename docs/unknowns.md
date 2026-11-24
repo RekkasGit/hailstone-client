@@ -686,6 +686,10 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 
 ## Items, inventory and commerce
 
+- **Autosplit set outside this installation.** EQEmu saves the character's state but writes zero into the RoF2
+  profile's Autosplit byte (`PlayerProfileData +0x52b0` in the native client). Hailstone shows the last choice saved
+  locally. Reporting the server's actual state on a new installation or after a change elsewhere needs the server
+  to send that state with a way to distinguish a real off value from the stock zero.
 - **A bag's contents past its own BagSlots.**
   - Now: `game::Inventory::put` and `swap` accept any bag sub-slot below `net::kMaxBagContents` (1000), not only those
     below the bag's BagSlots, so an item the server puts at a sub-slot the bag lacks is kept (and shown nowhere).

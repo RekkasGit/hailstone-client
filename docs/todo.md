@@ -318,6 +318,7 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
 - [ ] The 0x2C loader in EQGraphicsDX9.dll: the fields read past and the polygon flags word (unknowns.md, World rendering).
 
 ### Items and commerce
+- [ ] **Autosplit across installations.** Read an authoritative server value when the server can distinguish it from the stock RoF2 placeholder (docs/unknowns.md).
 - [ ] **A bag sub-slot past the bag's own BagSlots.** Settle what the original does with an item placed there (docs/unknowns.md "Items, inventory and commerce"); `game::Inventory` keeps it for now.
 - [x] Evolving-item Final Result inspection: native action-4 request, ordinary read-only item reply, received progress updates and a focusable gamepad action.
 - [ ] **Evolving-item live acceptance.**
