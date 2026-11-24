@@ -823,3 +823,32 @@ fake.lists.FriendsWindow = { FriendsList = { sel = 0, rows = { { "Alpha" }, { "B
     }
     CHECK(r.no_errors());
 }
+
+TEST_CASE("UI packs (gamepad): Who's picked player follows a new reply, or the pick goes") {
+    PackRig r("gamepad");
+    r.run(kStockWindows);
+    r.run(R"lua(
+submitted = {}
+fake.who = { 1, { { name = "Alpha", line = "[50 Warrior] Alpha (Human)" }, { name = "Beta", line = "[40 Cleric] Beta (Elf)" } } }
+hs.WhoResults = function() return fake.who[1], fake.who[2] end
+hs.ChatSubmit = function(slot, line) submitted[#submitted + 1] = line end
+GPSTATE.whoOpen = true
+)lua");
+    r.s->frames(30);
+    r.run("forced['##row'] = true"); // the first row: Alpha
+    r.s->frames(2);
+    CHECK(r.saw("ALPHA"));
+    // a reply from elsewhere (the Friends window's Who, a typed /who) with Alpha second
+    r.run("fake.who = { 2, { { name = 'Gamma', line = '[10 Monk] Gamma' }, { name = 'Alpha', line = '[50 Warrior] Alpha' } } }");
+    r.s->frames(20); // (the reply is read again every 0.25 s)
+    r.run("forced['##invite'] = true");
+    r.s->frames(2);
+    CHECK(r.truth("submitted[#submitted] == '/invite Alpha'"));
+    // a reply without Alpha: nothing is picked
+    r.run("fake.who = { 3, { { name = 'Gamma', line = '[10 Monk] Gamma' } } }");
+    r.s->frames(20);
+    r.run("seen = {}");
+    r.s->frames(1);
+    CHECK(r.saw("SELECT A PLAYER ON THE LEFT"));
+    CHECK(r.no_errors());
+}
