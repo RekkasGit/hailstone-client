@@ -1647,6 +1647,14 @@ public:
         return profile_->disciplines[static_cast<std::size_t>(n)];
     }
     bool knows_discipline(std::uint32_t id) const;
+    // For the MQ TLOs (mq/tlo_game.cpp), with the stats port of with_character:
+    // a spell's duration in ticks at the player's level (SpellDuration; the record's cap without a profile);
+    std::int32_t spell_duration_ticks(const game::SpellData& s) const;
+    // the range focus on a spell (GetFocusRangeModifier), added to its range for Spell.MyRange;
+    std::int32_t spell_range_focus(const game::SpellData& s) const;
+    // FindAffectSlot's slot for the spell on the player (game::buff_landing_slot): over the player's buffs, or with
+    // `existing` over buffs holding only that spell (MQ's WillStackWith); -1 when it would not land.
+    int spell_landing_slot(std::uint32_t spell, std::optional<std::uint32_t> existing = std::nullopt) const;
     // PlayerBase::CanSee's zone test (the app's collision): true when nothing blocks the segment (world coordinates).
     void set_line_of_sight(std::function<bool(const glm::vec3&, const glm::vec3&)> los) { line_of_sight_ = std::move(los); }
     // True once the app has given this connection its hooks (line of sight, teleport, app commands): the app installs

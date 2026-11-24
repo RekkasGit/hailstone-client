@@ -829,3 +829,190 @@ TEST_CASE("TLO: Me.Bandolier[name|#] and .Active, .Index, .Name, .Item[n]") {
     CHECK(f.p("${Me.Bandolier[Bow].Item[9].Name} ${Me.Bandolier[Bow].Item[0].ID}") == "Arrow 0");
     CHECK(f.p("${Me.Bandolier[Bow].Item}") == "NULL");
 }
+
+TEST_CASE("TLO: the aggro meter's readings (Me, Target, XTarget, Group members)") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    CHECK(f.p("${Me.PctAggro} ${Target.PctAggro} ${Target.SecondaryPctAggro}") == "0 0 0");
+    CHECK(f.p("${Target.SecondaryAggroPlayer}") == "NULL");
+    auto& ag = A::aggro(*f.world.conn);
+    ag.pct[net::kAggroPlayer] = 45;
+    ag.pct[net::kAggroSecondary] = 30;
+    ag.pct[net::kAggroGroup1] = 12;
+    ag.pct[net::kAggroXTarget1 + 1] = 88;
+    ag.secondary_id = 12;
+    CHECK(f.p("${Me.PctAggro} ${Target.PctAggro} ${Target.SecondaryPctAggro} ${Me.SecondaryPctAggro}") == "45 45 30 30");
+    CHECK(f.p("${Target.SecondaryAggroPlayer.Name}") == "Groupie");
+    // Target is still a spawn: its members and plain value are a spawn's.
+    CHECK(f.p("${Target} ${Target.ID}") == "a rat 10");
+    // The group's members by index: 0 the player, then the group's entries.
+    CHECK(f.p("${Group.Member[0].PctAggro} ${Group.Member[1].PctAggro}") == "45 12");
+    // Me.XTarget[n] is the slot's spawn, with the slot's own reading.
+    auto& xt = A::xtargets(*f.world.conn);
+    xt.slots.resize(5);
+    xt.slots[1].spawn_id = 11;
+    CHECK(f.p("${Me.XTargetSlots}") == "5");
+    CHECK(f.p("${Me.XTarget[2]} ${Me.XTarget[2].ID} ${Me.XTarget[2].PctAggro}") == "Fippy Darkpaw 11 88");
+    CHECK(f.p("${Me.XTarget[1]}") == "NULL");
+}
+
+TEST_CASE("TLO: Me's endurance, AA points, auto fire, cast and gem timers, disciplines") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    CHECK(f.p("${Me.Endurance}") == "50");
+    CHECK(f.p("${Me.AutoFire}") == "FALSE");
+    A::profile(*f.world.conn)->aa_points_spent = 20;
+    A::alt_adv(*f.world.conn).assigned[0] = 20;
+    CHECK(f.p("${Me.AAPointsTotal} ${Me.AAPointsAssigned}") == "27 20");
+    // Nothing being cast: no time left.
+    CHECK(f.p("${Me.CastTimeLeft}") == "0");
+    auto& sp = A::spells(*f.world.conn);
+    sp.casting.spell = 200;
+    sp.casting.eta_ms = net::GameConnection::now_ms() + 2500;
+    const int cast_left = std::stoi(f.p("${Me.CastTimeLeft}"));
+    CHECK(cast_left > 2000);
+    CHECK(cast_left <= 2500);
+    sp.casting = {};
+    // A gem's recast: by number or by the spell's name; NULL for an empty gem.
+    CHECK(f.p("${Me.GemTimer[1]}") == "0");
+    sp.gems[0].ready = net::GameConnection::eq_time() + 5000;
+    const int gem_left = std::stoi(f.p("${Me.GemTimer[Minor Healing]}"));
+    CHECK(gem_left > 4000);
+    CHECK(gem_left <= 5000);
+    CHECK(f.p("${Me.GemTimer[1].TotalSeconds}") == std::to_string(gem_left / 1000));
+    CHECK(f.p("${Me.GemTimer[5]}") == "NULL");
+    // The active discipline: the last buff slot's.
+    CHECK(f.p("${Me.ActiveDisc}") == "NULL");
+    CHECK(f.p("${Bool[${Me.ActiveDisc.ID}]}") == "FALSE");
+    sp.buffs[game::kBuffSlots - 1].spell = 4498;
+    sp.buffs[game::kBuffSlots - 1].tics = 10;
+    CHECK(f.p("${Me.ActiveDisc} ${Me.ActiveDisc.ID}") == "Test Discipline 4498");
+    // Combat abilities: the n-th one's spell, or a name's number.
+    A::profile(*f.world.conn)->disciplines = {0, 4498};
+    CHECK(f.p("${Me.CombatAbility[2]} ${Me.CombatAbility[Test Discipline]}") == "Test Discipline 2");
+    CHECK(f.p("${Me.CombatAbility[1]} ${Me.CombatAbility[Holy Armor]}") == "NULL NULL");
+    // No ability source in this fixture: no skill.
+    CHECK(f.p("${Me.Ability[Kick]}") == "FALSE");
+}
+
+TEST_CASE("TLO: Me.AltAbility by name or ability id, with its rank, reuse and spell") {
+    Fixture f;
+    auto& aa = net::GameConnectionTestAccess::alt_adv(*f.world.conn);
+    game::AltAbility a;
+    a.id = 1003;
+    a.group = 5;
+    a.rank = 3;
+    a.max_rank = 5;
+    a.title_sid = 9001; // Innate Strength
+    a.spell = 200;
+    a.refresh = 600;
+    aa.add(a);
+    aa.owned = {{1003, 3, 0}};
+    CHECK(f.p("${Me.AltAbility[Innate Strength]}") == "5");
+    CHECK(f.p("${Me.AltAbility[5].Name}") == "Innate Strength");
+    CHECK(f.p("${Me.AltAbility[innate strength].ID} ${Me.AltAbility[5].Rank} ${Me.AltAbility[5].MaxRank}") == "5 3 5");
+    CHECK(f.p("${Me.AltAbility[5].ReuseTime} ${Me.AltAbility[5].Passive}") == "600 FALSE");
+    CHECK(f.p("${Me.AltAbility[5].Spell} ${Me.AltAbility[5].Spell.ID} ${Me.AltAbility[5].Spell.Mana}") ==
+          "Minor Healing 200 10");
+    CHECK(f.p("${Bool[${Me.AltAbility[Innate Strength].Spell}]}") == "TRUE");
+    CHECK(f.p("${Me.AltAbility[Mystical Shielding]} ${Me.AltAbility[6]}") == "NULL NULL"); // not owned
+}
+
+TEST_CASE("TLO: item members E3 reads (ItemReady, Timer, Clicky, stacks, worn slots, augments, links)") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    auto& inv = A::inventory(*f.world.conn);
+    net::Item wand;
+    wand.name = "Wand of Testing";
+    wand.id = 6001;
+    wand.equip_slots = (1u << 13) | (1u << 14); // the hands
+    wand.effects[net::kEffectClick].effect = 200;
+    wand.effects[net::kEffectClick].type = 4;
+    wand.tradeskills = 1;
+    wand.no_drop = 0;
+    wand.aug_sockets[0] = {7, 1, 0};
+    wand.aug_sockets[2] = {3, 1, 0};
+    net::Item stone;
+    stone.name = "Aug Stone";
+    stone.id = 6002;
+    wand.contents.push_back({0, stone});
+    inv.put(net::ItemSlot::possessions(net::kSlotGeneral1 + 2), wand);
+    // A click effect without a recast: ready, its timer 0.
+    CHECK(f.p("${Me.ItemReady[Wand of Testing]} ${Me.ItemReady[=wand of testing]} ${Me.ItemReady[6001]}") == "TRUE TRUE TRUE");
+    CHECK(f.p("${FindItem[Wand].Timer} ${FindItem[Wand].Clicky} ${FindItem[Wand].EffectType}") == "0 Minor Healing Click Worn");
+    // An item without a click effect is never ready and has no timer.
+    CHECK(f.p("${Me.ItemReady[Healing Potion]} ${FindItem[Healing Potion].Timer}") == "FALSE NULL");
+    CHECK(f.p("${Me.ItemReady[Nothing Like It]}") == "FALSE");
+    // Stacks over the packs and their bags (5 + 2 of 20 each).
+    CHECK(f.p("${FindItem[Healing Potion].StackCount} ${FindItem[Healing Potion].FreeStack}") == "7 33");
+    CHECK(f.p("${FindItem[Wand].StackCount} ${FindItem[Wand].FreeStack}") == "0 0");
+    CHECK(f.p("${FindItem[Wand].WornSlot[1]} ${FindItem[Wand].WornSlot[2]} ${FindItem[Wand].WornSlot[3]}") == "13 14 NULL");
+    CHECK(f.p("${FindItem[Wand].WornSlot[mainhand]} ${FindItem[Wand].WornSlot[head]}") == "TRUE FALSE");
+    CHECK(f.p("${FindItem[Wand].NoTrade} ${FindItem[Wand].Tradeskills}") == "TRUE TRUE");
+    net::Item token;
+    token.name = "Trade Token";
+    token.no_drop = 255; // EQEmu's tradeable
+    inv.put(net::ItemSlot::possessions(net::kSlotGeneral1 + 3), token);
+    CHECK(f.p("${FindItem[Trade Token].NoTrade} ${FindItem[Trade Token].Tradeskills}") == "FALSE FALSE");
+    // Augments: two visible sockets, the first holding a stone.
+    CHECK(f.p("${FindItem[Wand].Augs}") == "2");
+    CHECK(f.p("${FindItem[Wand].AugSlot[1]} ${FindItem[Wand].AugSlot[1].Name} ${FindItem[Wand].AugSlot[1].Type}") ==
+          "Aug Stone Aug Stone 7");
+    CHECK(f.p("${FindItem[Wand].AugSlot[1].Item.ID} ${FindItem[Wand].AugSlot[1].Empty}") == "6002 FALSE");
+    CHECK(f.p("${FindItem[Wand].AugSlot[3]} ${FindItem[Wand].AugSlot[3].Empty} ${FindItem[Wand].AugSlot[7]}") ==
+          "NULL TRUE NULL");
+    CHECK(f.p("${Me.Inventory[pack3].AugSlot[1].Name}") == "Aug Stone");
+    // ItemLink: the link's text, with the \x12 tags for CLICKABLE.
+    const std::string link = f.p("${FindItem[Wand].ItemLink}");
+    const std::string clickable = f.p("${FindItem[Wand].ItemLink[CLICKABLE]}");
+    CHECK(link.find("Wand of Testing") != std::string::npos);
+    CHECK(link.front() != '\x12');
+    REQUIRE(clickable.size() == link.size() + 2);
+    CHECK(clickable.front() == '\x12');
+    CHECK(clickable.back() == '\x12');
+}
+
+TEST_CASE("TLO: spell members E3 reads, Spell.Duration in ticks") {
+    Fixture f;
+    CHECK(f.p("${Spell[Selo's Accelerando].DurationWindow} ${Spell[Holy Armor].DurationWindow}") == "1 0");
+    CHECK(f.p("${Spell[Test Slow].Base[1]} ${Spell[Test Slow].Base[13]} ${Spell[Test Slow].SlowPct}") == "70 NULL 30");
+    CHECK(f.p("${Spell[Holy Armor].SlowPct} ${Spell[Holy Armor].Dispellable} ${Spell[Holy Armor].EnduranceCost}") ==
+          "0 TRUE 0");
+    CHECK(f.p("${Spell[Holy Armor].Subcategory} ${Spell[Holy Armor].Description}") == "Unknown NULL");
+    CHECK(f.p("${Spell[Minor Healing].MyRange}") == "100.00");
+    // Duration: a plain value of ticks; the timestamp members on its milliseconds.
+    const int ticks = std::stoi(f.p("${Spell[Holy Armor].Duration}"));
+    CHECK(f.p("${Spell[Holy Armor].Duration.TotalSeconds}") == std::to_string(ticks * 6));
+    // The player holds Holy Armor in buff slot 1: cast again it refreshes that slot, and it stacks with itself.
+    CHECK(f.p("${Spell[Holy Armor].WillLand}") == "1");
+    CHECK(f.p("${Spell[Holy Armor].StacksWith[Holy Armor]}") == "TRUE");
+    CHECK(f.p("${Spell[Holy Armor].StacksWith[No Such Spell]}") == "NULL");
+    // No pet buffs: the first pet slot.
+    CHECK(f.p("${Spell[Holy Armor].WillLandPet}") == "1");
+}
+
+TEST_CASE("TLO: spawns' Aggressive, Primary, Secondary and Body; the group's Present, Injured and LowMana") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    auto& rat = A::world(*f.world.conn).spawns[10];
+    CHECK(f.p("${Spawn[10].Aggressive}") == "FALSE");
+    rat.player_state = 4;
+    CHECK(f.p("${Spawn[10].Aggressive} ${Target.Aggressive}") == "TRUE TRUE");
+    rat.appearance.material[7] = 10001;
+    rat.appearance.material[8] = 200;
+    CHECK(f.p("${Spawn[10].Primary} ${Spawn[10].Secondary}") == "10001 200");
+    rat.body_type = 1;
+    CHECK(f.p("${Spawn[10].Body} ${Spawn[10].Body.Name} ${Spawn[10].Body.ID}") == "Humanoid Humanoid 1");
+    CHECK(f.p("${Spawn[10].Body.Name.NotEqual[Undead]}") == "TRUE");
+    // Groupie is in the zone.
+    CHECK(f.p("${Group.Present}") == "1");
+    // The player's own HP and mana by percent, the others' as their spawn and the group's mana shows them.
+    const int my_hp = std::stoi(f.p("${Me.PctHPs}"));
+    CHECK(f.p("${Group.Injured[" + std::to_string(my_hp + 1) + "]}") == "1");
+    CHECK(f.p("${Group.Injured[" + std::to_string(my_hp) + "]}") == "0");
+    const int my_mana = std::stoi(f.p("${Me.PctMana}"));
+    A::group(*f.world.conn).mana_percent[12] = 10;
+    CHECK(f.p("${Group.LowMana[" + std::to_string(my_mana + 1) + "]}") == (my_mana + 1 > 10 ? "2" : "1"));
+    CHECK(f.p("${Group.LowMana[5]}") == "0");
+    CHECK(f.p("${Group.Injured}") == "0");
+}

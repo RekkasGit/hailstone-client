@@ -87,7 +87,7 @@ manifest's `caps` (docs/addons.md).
 | TLO | Index | Gives | What |
 |---|---|---|---|
 | `Me` | | `character` | the player; NULL before the player is in a zone |
-| `Target` | | `spawn` | the current target |
+| `Target` | | `target` | the current target |
 | `Spawn` | id, or a [search](#spawn-searches) | `spawn` | the spawn with that id, or the nearest that matches |
 | `SpawnCount` | a search | int | how many spawns match (0 when not connected) |
 | `NearestSpawn` | `n`, `n,search` or `search` | `spawn` | the nth nearest that matches (1 the nearest) |
@@ -122,7 +122,8 @@ manifest's `caps` (docs/addons.md).
 `LineOfSight` is NULL before the zone's collision is loaded, and for a coordinate that is not a finite number below
 1 000 000 in size.
 
-A compiled plugin can add TLOs (`AddTopLevelObject`). It cannot replace one that exists. MQ TLOs that are missing:
+A compiled plugin can add TLOs (`AddTopLevelObject`). It cannot replace one that exists. `Spell.StacksWithDiscs` is
+not given (docs/unknowns.md). MQ TLOs that are missing:
 `Raid`, `Mercenary`, `Corpse`, `Merchant`, `Ground`, `Macro`, and other MQ plugins' TLOs (`Navigation` and
 `Stick` are built in).
 
@@ -178,6 +179,9 @@ the clean name.
 | `MyBuff[n\|name]` | `buff` | the same, counting only buffs the player cast |
 | `BuffDuration[n\|name]`, `MyBuffDuration[n\|name]` | `timestamp` | time left on that buff |
 | `Mezzed`, `Charmed`, `Feared`, `Rooted`, `Snared`, `Slowed`, `Silenced`, `Poisoned`, `Diseased`, `Cursed`, `Corrupted` | `buff` | the buff that puts it in that state; NULL when none does (below) |
+| `Aggressive` | bool | its PlayerState has 4 or 8, as MQ tests it |
+| `Primary`, `Secondary` | int | the model number of what it holds in the primary and secondary hand |
+| `Body` | `body` | its body type, by name (`Humanoid`, `Undead`, ...) |
 
 A spawn's buffs are the player's own, or the target's as OP_TargetBuffs gave them. Stock EQEmu sends those only to
 GMs, players with the Inspect Buffs AA or leadership, or when its `AlwaysSendTargetsBuffs` rule is on. Check
@@ -197,9 +201,14 @@ character's name.
 | `PctHPs`, `CurrentHPs`, `MaxHPs` | int | real values, the items' HP included (as the windows show them) |
 | `PctMana`, `CurrentMana`, `MaxMana` | int | |
 | `PctEndurance`, `CurrentEndurance`, `MaxEndurance` | int | |
+| `Endurance` | int | MQ's old name for `CurrentEndurance` |
 | `Exp`, `AAExp` | int | the raw values (0..330) |
 | `PctExp`, `PctAAExp` | float | percent of the level or AA point |
 | `AAPoints`, `AAPointsSpent` | int | |
+| `AAPointsTotal` | int | the two summed |
+| `AAPointsAssigned` | int | the first of the profile's assigned AA points |
+| `AltAbility[name\|group]` | `altability` | an AA the player owns, by its name or its ability (group) id |
+| `PctAggro`, `SecondaryPctAggro` | int | the aggro meter's percentages for the player and for the secondary (below) |
 | `Buff[n\|name]` | `buff` | the nth long buff, or one by name; with no index, the count |
 | `Song[n\|name]` | `buff` | the same for short buffs (songs) |
 | `CountBuffs`, `CountSongs` | int | |
@@ -212,8 +221,12 @@ character's name.
 | `Book[n]` | `spell` | the spell in book slot n |
 | `Book[name]` | int | the book slot that holds that spell |
 | `SpellReady[n\|name]` | bool | the gem has a spell, it is ready and the player is not casting |
+| `GemTimer[n\|name]` | `timestamp` | time left before the gem's spell may be cast: the longer of the gem's recast and the spell's linked timer; NULL for an empty gem |
 | `Casting` | `spell` | the spell being cast |
+| `CastTimeLeft` | `timestamp` | time left on the cast bar; 0 when not casting |
 | `Combat` | bool | auto attack is on |
+| `AutoFire` | bool | ranged auto attack is on |
+| `ActiveDisc` | `spell` | the discipline running (the discipline buff slot); NULL when none |
 | `CombatState` | string | `COMBAT`, `RESTING` or `ACTIVE` |
 | `Sitting`, `Standing`, `Ducking`, `Feigning`, `Dead`, `Moving` | bool | |
 | `Stunned`, `Invis`, `Sneaking` | bool | |
@@ -222,7 +235,9 @@ character's name.
 | `Cash` | int | all carried coin, in copper |
 | `Grouped` | bool | |
 | `GroupSize` | int | the player included |
-| `XTarget[n]` | `spawn` | the spawn in extended target slot n; with no index, how many slots hold a spawn |
+| `XTarget[n]` | `xtarget` | the spawn in extended target slot n; with no index, how many slots hold a spawn |
+| `XTargetSlots` | int | the extended target list's slots |
+| `ItemReady[name\|id]` | bool | a carried item (by id, `=exact name` or part of it) has a click effect that is ready |
 | `Inventory[slot]` | `item` | the item in a slot, by [name or number](#inventory-slots) |
 | `FreeInventory` | int | empty general slots plus empty bag slots |
 | `Pet` | `spawn` | as the `Pet` TLO |
@@ -230,12 +245,16 @@ character's name.
 | `AbilityReady[name\|number]` | bool | a skill's reuse timer has run out |
 | `CombatAbilityReady[name]` | bool | the same for a combat ability (a discipline); the name works without its "Rk. II" |
 | `AltAbilityReady[name\|group]` | bool | the same for an activated AA |
+| `Ability[name\|number]` | bool | the player has that skill (one the Ability Book lists) |
+| `CombatAbility[n]` | `spell` | the player's nth combat ability |
+| `CombatAbility[name]` | int | that combat ability's number |
 | `AbilityTimer`, `CombatAbilityTimer`, `AltAbilityTimer` | `timestamp` | time left before it is ready |
 
 "Ready" means only that the reuse timer has run out. Checking endurance and mana is up to the script. Ability names
 are matched as the Ability Book shows them.
 
-Not yet: the `AltAbility` type (`Me.AltAbility[...]`).
+The aggro meter's percentages (`PctAggro` here and on `target`, `xtarget` and `groupmember`) are the server's
+(EQEmu's `Character:EnableAggroMeter` rule): 0 until it sends them.
 
 ### buff
 
@@ -265,7 +284,19 @@ The value of `Spell[...]`, `Me.Gem[n]`, `Me.Casting` and the like. Its plain val
 | `Range`, `AERange` | float | |
 | `CastTime`, `RecastTime`, `RecoveryTime` | float | seconds |
 | `MyCastTime` | `timestamp` | the cast time (not adjusted for focus) |
-| `Duration` | `timestamp` | the spell file's duration cap, in ticks of 6 s |
+| `Duration` | `ticks` | the duration at the player's level, in ticks of 6 s |
+| `DurationWindow` | int | 1 for a short buff (song window), else 0 |
+| `MyRange` | float | the range with the player's range focus |
+| `EnduranceCost` | int | |
+| `Base[n]` | int | effect n's base value (1..12) |
+| `Dispellable` | bool | |
+| `Description` | string | the spell's description (dbstr type 6); NULL for none |
+| `Subcategory` | string | its subcategory's name (dbstr type 5), `Unknown` for none; `SubcategoryID` the number |
+| `SlowPct` | int | how much its first attack-speed effect below 100% slows, at the player's level; 0 for none |
+| `WillLand` | int | the buff slot + 1 the client's own stacking rules (FindAffectSlot) give it cast on the player; 0 when it would not land |
+| `StacksWith[name]` | bool | it would land over a buff of that spell alone (MQ's WillStackWith) |
+| `StacksTarget` | bool | it is not too powerful for the target and stacks with each buff the target is known to have |
+| `WillLandPet` | int | 0 when one of the pet's buffs would block it, else the first empty pet buff slot + 1 |
 | `TargetType` | string | `Single`, `Self`, `Group v1`, `PB AE`, `Targeted AE`, `Line of Sight`, ... |
 | `SpellType` | string | `Beneficial` or `Detrimental` |
 | `Beneficial` | bool | |
@@ -294,6 +325,18 @@ An item in a slot. Its plain value is the item's name.
 | `Item[n]` | `item` | the item in bag slot n (1-based); only for a bag in a top-level slot |
 | `ItemSlot` | int | the [slot](#inventory-slots) it is in |
 | `ItemSlot2` | int | its place in the bag (0-based); -1 when it is not in a bag |
+| `NoTrade` | bool | |
+| `Tradeskills` | bool | |
+| `Clicky` | `spell` | its click effect's spell; NULL without one |
+| `EffectType` | string | `Spell Scroll`, `Click Worn`, `Click Inventory`, `Click Unknown`, `Worn` or `Combat` (the first it has) |
+| `Timer` | `ticks` | ticks left on its click effect's reuse (rounded up), 0 when ready; NULL without a click effect |
+| `StackCount` | int | how many of this item the general slots and their bags hold; 0 for an item that does not stack |
+| `FreeStack` | int | how many more the stacks of this item there could hold |
+| `WornSlot[n]` | int | the nth slot it may be worn in |
+| `WornSlot[name]` | bool | it may be worn in that slot |
+| `ItemLink` | string | its item link's text; `ItemLink[CLICKABLE]` with the link marks, for a chat line |
+| `Augs` | int | its visible augment sockets |
+| `AugSlot[n]` | `augtype` | augment socket n (1..6) of a common item |
 
 ### group and groupmember
 
@@ -319,6 +362,37 @@ name.
 | `Leader`, `MainTank`, `MainAssist`, `Puller` | bool | |
 | `Mercenary`, `Offline` | bool | |
 | `OtherZone` | bool | online but not in this zone |
+| `PctAggro` | int | its aggro meter percentage |
+
+| More `group` members | Gives | What |
+|---|---|---|
+| `Present` | int | the members besides the player whose spawn is in this zone |
+| `Injured[pct]` | int | the members in the zone (the player too) with health above 0 and below the percent |
+| `LowMana[pct]` | int | the same for mana (the others' as the group's mana updates give it) |
+
+### target and xtarget
+
+`Target` is a `target` and `Me.XTarget[n]` an `xtarget`: each has every `spawn` member and the same plain value.
+
+| Member | Gives | What |
+|---|---|---|
+| `target.PctAggro`, `target.SecondaryPctAggro` | int | the aggro meter's percentages for the player and for the secondary |
+| `target.SecondaryAggroPlayer` | `spawn` | the secondary: the next on the hate list when the player has aggro, else the one that has it |
+| `xtarget.PctAggro` | int | the player's aggro percentage on that slot's spawn |
+
+### altability
+
+An AA the player owns. Its plain value is its ability (group) id.
+
+| Member | Gives | What |
+|---|---|---|
+| `ID`, `GroupID` | int | the ability's id, all its ranks share it |
+| `Name`, `Description` | string | dbstr types 1 and 4 |
+| `Rank`, `MaxRank` | int | the rank owned, and the last |
+| `ReuseTime` | int | seconds, before reductions |
+| `Cost`, `MinLevel`, `Type` | int | |
+| `Passive` | bool | it casts no spell |
+| `Spell` | `spell` | the spell it casts |
 
 ### Small types
 
@@ -327,6 +401,9 @@ name.
 | `class` | its name | `ID`, `Name`, `ShortName` (`WAR`, `CLR`, ...) |
 | `race` | its name | `ID`, `Name` |
 | `heading` | the compass point (`N`, `NNE`, ...) | `Degrees` (clockwise from north), `DegreesCCW`, `ShortName`, `Name` (`north by northeast`), `Clock` (1..12) |
+| `ticks` | ticks (6 s) | a `timestamp` on the same time: every `timestamp` member |
+| `body` | its name | `ID`, `Name` |
+| `augtype` | the augment's name; NULL for an empty socket | `Name`, `Item` (`item`), `Empty`, `Slot`, `Type` (the socket's type), `Visible` |
 | `timestamp` | milliseconds | `Raw` (ms), `TotalSeconds`, `TotalMinutes`, `Hours`, `Minutes` (0..59), `Seconds` (0..59), `Ticks` (6 s, rounded up), `TimeHMS` (`h:mm:ss`), `Time` (`m:ss`) |
 | `zone` | its long name | `ID`, `Name`, `ShortName` |
 | `everquest` | `EverQuest` | `GameState` (`INGAME`, `CHARSELECT` or `PRECHARSELECT`), `Server` (the server's name), `UIScale` (always 1.0) |

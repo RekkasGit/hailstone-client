@@ -1461,6 +1461,12 @@ Real estate is built to the original (docs/protocol/rof2-packets.md "Real estate
 - **`/target` at an equal distance.** RoF2's GetNearestSpawnMaybe (0x5a04e0) keeps the first of equally near matches
   in its spawn list's order. Now: the lower spawn id. Settle: how the original orders its spawn list (insertion on
   OP_NewSpawn or otherwise), from PlayerManagerClient's list code.
+- **`Spell.StacksWithDiscs` is not given** (NULL). MQ reads the spell's StacksWithDiscs flag, which the client's spell
+  record does not decode: which RoF2 spells_us.txt column holds it is not confirmed (MQ names only a later client's
+  offset). Settle: the column in RoF2's EQ_Spell layout (the spell parser's write to that field).
+- **`Spell.WillLandPet` past the pet's buffs.** When the pet's buffs fill every slot from the first with no gap, the
+  answer is the next slot + 1: the pet window's slot count (MQ's `GetMaxBuffs`) is not known, so a full pet bar is not
+  noticed. Settle: the RoF2 pet window's buff count.
 
 ## Server-specific extensions
 

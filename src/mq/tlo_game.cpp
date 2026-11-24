@@ -18,6 +18,8 @@
 #include "game/eq_names.h"
 #include "game/group.h"
 #include "game/inventory.h"
+#include "game/item_links.h"
+#include "game/server_ext.h"
 #include "game/spell_effect_text.h"
 #include "game/spells.h"
 #include "game/world_state.h"
@@ -37,7 +39,7 @@ using net::GameConnection;
 struct Types {
     const Type *spawn, *character, *cls, *race, *heading, *spell, *buff, *timestamp, *item, *zone, *group, *member,
         *everquest, *macroquest, *hailstone, *window, *plugin, *time, *gametime, *navigation, *stick, *debuff, *moveto,
-        *bandolier, *bandolier_item, *advpath;
+        *bandolier, *bandolier_item, *advpath, *target, *xtarget, *altability, *aug, *ticks, *body;
 };
 
 Types g; // set once by register_game_tlos (the types live in the registry that registered them)
@@ -251,21 +253,30 @@ std::int64_t buff_ms_left(const Context& c, const game::BuffSlot& b) {
 
 // ---------------------------------------------------------------- items
 
-// An item's place packed into a value: type << 32 | slot << 16 | (sub + 1).
+// An item's place packed into a value: (aug + 1) << 48 | type << 32 | slot << 16 | (sub + 1). The augment is a
+// common item's content (an AugSlot); the inventory itself is looked up without it.
 std::int64_t pack_slot(const net::ItemSlot& s) {
-    return (static_cast<std::int64_t>(s.type) << 32) | (static_cast<std::int64_t>(static_cast<std::uint16_t>(s.slot)) << 16) |
-           static_cast<std::uint16_t>(s.sub + 1);
+    return (static_cast<std::int64_t>(static_cast<std::uint8_t>(s.aug + 1)) << 48) |
+           (static_cast<std::int64_t>(static_cast<std::uint16_t>(s.type)) << 32) |
+           (static_cast<std::int64_t>(static_cast<std::uint16_t>(s.slot)) << 16) | static_cast<std::uint16_t>(s.sub + 1);
 }
 net::ItemSlot unpack_slot(std::int64_t v) {
     net::ItemSlot s;
-    s.type = static_cast<std::int16_t>(v >> 32);
+    s.type = static_cast<std::int16_t>(static_cast<std::uint16_t>(v >> 32));
     s.slot = static_cast<std::int16_t>(static_cast<std::uint16_t>(v >> 16));
     s.sub = static_cast<std::int16_t>(static_cast<std::int32_t>(v & 0xffff) - 1);
+    s.aug = static_cast<std::int16_t>(static_cast<std::int32_t>((v >> 48) & 0xff) - 1);
     return s;
 }
 
 const net::Item* item_of(const Context& c, const Value& v) {
-    return c.conn ? c.conn->inventory().at(unpack_slot(v.i)) : nullptr;
+    if (!c.conn) return nullptr;
+    net::ItemSlot s = unpack_slot(v.i);
+    const std::int16_t aug = s.aug;
+    s.aug = -1;
+    const net::Item* it = c.conn->inventory().at(s);
+    if (!it || aug < 0) return it;
+    return it->item_class == 0 ? it->content(static_cast<std::uint32_t>(aug)) : nullptr;
 }
 
 V item_value(const Context& c, const net::ItemSlot& s) {
@@ -816,7 +827,9 @@ void register_character() {
             return V::integer(count);
         }
         if (!parse_int(index, n) || n < 1 || n > static_cast<std::int64_t>(slots.size())) return V::nil();
-        return spawn_value(spawn_of(ctx, slots[static_cast<std::size_t>(n - 1)].spawn_id));
+        // MQ's xtarget type: the slot's spawn, and the slot for its PctAggro.
+        const game::Spawn* s = spawn_of(ctx, slots[static_cast<std::size_t>(n - 1)].spawn_id);
+        return s ? V::object(g.xtarget, s->id, static_cast<double>(n - 1)) : V::nil();
     });
     me_member("Inventory", [](const Context& ctx, const GameConnection&, std::string_view index) -> V {
         int slot = slot_by_name(index);
@@ -953,8 +966,11 @@ void register_spell() {
     m("RecoveryTime", [](const Context&, const game::SpellData& s, std::string_view) {
         return V::number(s.recovery_time / 1000.0);
     });
-    m("Duration", [](const Context&, const game::SpellData& s, std::string_view) {
-        return V::object(g.timestamp, static_cast<std::int64_t>(s.duration_cap) * 6000);
+    // MQ's Spell.Duration: ticks (a plain value of ticks, the timestamp members on their milliseconds) at the
+    // player's level (GetSpellDuration), the record's cap without a connection.
+    m("Duration", [](const Context& c, const game::SpellData& s, std::string_view) {
+        const std::int64_t ticks = c.conn ? c.conn->spell_duration_ticks(s) : static_cast<std::int64_t>(s.duration_cap);
+        return V::object(g.ticks, std::max<std::int64_t>(ticks, 0) * 6000);
     });
     m("Level", [](const Context& c, const game::SpellData& s, std::string_view) -> V {
         if (!c.conn || !c.conn->profile()) return V::nil();
@@ -1308,6 +1324,489 @@ void register_misc_types() {
     gf("Year", [](const net::TimeOfDay& t) { return V::integer(t.year); });
     gf("Night", [](const net::TimeOfDay& t) { return V::boolean(t.hour < 6 || t.hour >= 19); });
     gf("Time24", [](const net::TimeOfDay& t) { return V::string(std::format("{:02}:{:02}", t.hour, t.minute)); });
+}
+
+// ---------------------------------------------------------------- the members E3 reads (MacroQuest's meanings)
+
+// A member of the player's character (Me.PctHPs and the like) read through the registry, for the group's sums.
+V character_member(const Context& c, const char* name) {
+    if (!c.conn || !c.conn->world().player()) return V::nil();
+    auto it = g.character->members.find(name);
+    return it == g.character->members.end() ? V::nil() : it->second(c, V::object(g.character, c.conn->world().player_id), {});
+}
+
+// The aggro meter's reading of entry `type` (net/aggro_packets.h: 0 the player, 1 the secondary, 2..6 the group,
+// 7..26 the extended targets); 0 until the server sends one, as MQ's pAggroInfo reads.
+V aggro_pct(const Context& c, int type) {
+    if (!c.conn || type < 0 || type >= net::kAggroTypes) return V::integer(0);
+    return V::integer(c.conn->aggro().pct[static_cast<std::size_t>(type)]);
+}
+
+// MQ's FindItemByID / FindItemByName over the carried items (worn, packs and their bags, the cursor): a number is an
+// item id, "=name" the exact name, else part of the name.
+std::optional<net::ItemSlot> find_carried(const Context& c, std::string_view index) {
+    std::optional<net::ItemSlot> found;
+    std::int64_t id = 0;
+    const bool by_id = parse_int(index, id);
+    each_carried(c, [&](const net::ItemSlot& s, const net::Item& it) {
+        if (by_id ? it.id == static_cast<std::uint32_t>(id) : item_name_matches(it, index)) {
+            found = s;
+            return true;
+        }
+        return false;
+    });
+    return found;
+}
+
+// The seconds until an item's click effect may be used again (GetItemTimer); nullopt without a click effect.
+std::optional<std::int64_t> item_click_seconds(const Context& c, const net::Item& it) {
+    if (!c.conn || !it.effects[net::kEffectClick].present()) return std::nullopt;
+    const auto ready_at = static_cast<std::int64_t>(c.conn->item_recast_timer(&it));
+    const auto now = static_cast<std::int64_t>(std::time(nullptr));
+    return ready_at > now ? ready_at - now : 0;
+}
+
+// Each item in the general slots and their bags (MQ's InvSlot_FirstBagSlot .. the last), for StackCount and FreeStack.
+template <typename F> void each_pack_item(const Context& c, F&& fn) {
+    if (!c.conn) return;
+    for (int s = net::kSlotGeneral1; s <= net::kSlotGeneral10; ++s) {
+        const net::Item* it = c.conn->inventory().at(net::ItemSlot::possessions(static_cast<std::int16_t>(s)));
+        if (!it) continue;
+        if (it->is_bag()) {
+            for (const auto& b : it->contents) fn(b.item);
+        } else {
+            fn(*it);
+        }
+    }
+}
+
+// The player's owned AA rank by name (dbstr type 1, or the name the windows show) or by its ability's group id.
+const game::AltAbility* owned_aa(const Context& c, std::string_view index) {
+    if (!c.conn || index.empty()) return nullptr;
+    const auto& aa = c.conn->alt_adv();
+    std::int64_t group = 0;
+    if (parse_int(index, group)) return aa.owned_rank(static_cast<std::int32_t>(group));
+    for (const auto& o : aa.owned) {
+        const game::AltAbility* a = o.id ? aa.get(o.id) : nullptr;
+        if (a && (iequals(c.conn->aa_name(*a), index) || iequals(c.conn->aa_display_name(*a), index))) return a;
+    }
+    return nullptr;
+}
+
+// MQ's IsSpellTooPowerful with the player casting on `target`.
+bool spell_too_powerful(const Context& c, const game::Spawn& target, const game::SpellData& s) {
+    const game::Spawn* caster = me(c);
+    if (!caster || caster->id == target.id) return false;
+    if (s.target_type == 6 || s.spell_type == 0 || s.duration_formula == 0) return false; // self, detrimental, instant
+    const std::uint8_t level = s.level_needed(caster->class_id);
+    if (level == 0 || level > 254) return false;
+    int target_level = target.level;
+    if (target.is_npc && target.pet_owner_id)
+        if (const game::Spawn* master = spawn_of(c, target.pet_owner_id)) target_level = master->level;
+    if (level > 65 && target_level < 61) return true;
+    return level > 50 && target_level < level / 2 + 15;
+}
+
+// MQ's GetMeleeSpeedPctFromSpell(spell, false): the slow of the spell's first SPA 11 below 100%, at the player's
+// level. Hailstone leaves out MQ's look into a triggered spell's effects.
+std::int64_t slow_pct(const Context& c, const game::SpellData& s) {
+    for (std::size_t e = 0; e < s.effect.size(); ++e) {
+        if (s.effect[e] != 11 || s.base[e] - 100 >= 0) continue;
+        int min_level = 255;
+        for (std::uint8_t l : s.class_level)
+            if (l < min_level) min_level = l;
+        const int level = c.conn ? c.conn->player_status().level : 1;
+        return std::llabs(game::spell_calc_value(s.formula[e], s.base[e] - 100, s.max[e] - 100, 0,
+                                                 min_level == 255 ? 1 : min_level, level));
+    }
+    return 0;
+}
+
+void register_e3_members() {
+    // ---- Me
+    const_cast<Type*>(g.character)->members["Endurance"] = g.character->members.at("CurrentEndurance"); // MQ's old name
+    me_member("PctAggro", [](const Context& ctx, const GameConnection&, std::string_view) { return aggro_pct(ctx, net::kAggroPlayer); });
+    me_member("SecondaryPctAggro", [](const Context& ctx, const GameConnection&, std::string_view) {
+        return aggro_pct(ctx, net::kAggroSecondary);
+    });
+    me_member("XTargetSlots", [](const Context&, const GameConnection& c, std::string_view) {
+        return V::integer(static_cast<std::int64_t>(c.xtargets().slots.size()));
+    });
+    me_member("AutoFire", [](const Context&, const GameConnection& c, std::string_view) { return V::boolean(c.auto_fire()); });
+    me_member("AAPointsTotal", [](const Context&, const GameConnection& c, std::string_view) -> V {
+        return c.profile() ? V::integer(std::int64_t{c.profile()->aa_points} + c.profile()->aa_points_spent) : V::nil();
+    });
+    me_member("AAPointsAssigned", [](const Context&, const GameConnection& c, std::string_view) {
+        return V::integer(c.alt_adv().assigned[0]);
+    });
+    // MQ: the time left on the cast bar.
+    me_member("CastTimeLeft", [](const Context&, const GameConnection& c, std::string_view) {
+        const auto& cast = c.spell_state().casting;
+        const std::int64_t left = cast.eta_ms ? cast.eta_ms - GameConnection::now_ms() : 0;
+        return V::object(g.timestamp, std::max<std::int64_t>(left, 0));
+    });
+    // MQ's GemTimer: the longer of the gem's own recast and the spell's linked reuse timer. MQ answers the whole
+    // recast instead of what is left for a timer it has just seen change; here it is always what is left.
+    me_member("GemTimer", [](const Context& ctx, const GameConnection& c, std::string_view index) -> V {
+        const auto& st = c.spell_state();
+        std::int64_t n = 0;
+        int gem = -1;
+        if (parse_int(index, n)) {
+            gem = static_cast<int>(n) - 1;
+        } else {
+            for (int i = 0; i < game::kSpellGems && gem < 0; ++i) {
+                const game::SpellData* s = spell_data(ctx, st.gems[static_cast<std::size_t>(i)].spell);
+                if (s && iequals(s->name, index)) gem = i;
+            }
+        }
+        if (gem < 0 || gem >= game::kSpellGems) return V::nil();
+        const game::SpellData* s = spell_data(ctx, st.gems[static_cast<std::size_t>(gem)].spell);
+        if (!s) return V::nil();
+        const std::int64_t now = GameConnection::eq_time();
+        std::int64_t left = std::max<std::int64_t>(std::int64_t{st.gems[static_cast<std::size_t>(gem)].ready} - now, 0);
+        const int linked = s->reuse_timer_index;
+        if (linked > 0 && linked < static_cast<int>(st.linked_ready.size())) {
+            const auto fast = static_cast<std::int64_t>(std::time(nullptr));
+            const std::int64_t ready = st.linked_ready[static_cast<std::size_t>(linked)];
+            if (ready > fast) left = std::max(left, (ready - fast) * 1000);
+        }
+        return V::object(g.timestamp, left);
+    });
+    // MQ's ItemReady: the carried item has a click effect whose timer has run out.
+    me_member("ItemReady", [](const Context& ctx, const GameConnection& c, std::string_view index) {
+        auto at = find_carried(ctx, index);
+        const net::Item* it = at ? c.inventory().at(*at) : nullptr;
+        auto secs = it ? item_click_seconds(ctx, *it) : std::nullopt;
+        return V::boolean(secs && *secs == 0);
+    });
+    // MQ: Ability[name] is whether the player has the skill (an activatable one, as AbilityReady finds it).
+    me_member("Ability", [](const Context& ctx, const GameConnection&, std::string_view index) {
+        return V::boolean(ability(ctx, AbilityKind::Skill, index).has_value());
+    });
+    // MQ: CombatAbility[#] is the spell of the player's n-th combat ability, CombatAbility[name] its number.
+    me_member("CombatAbility", [](const Context& ctx, const GameConnection& c, std::string_view index) -> V {
+        constexpr int kCombatAbilities = 300; // PcProfile's list (the profile ends sooner when it is shorter)
+        std::int64_t n = 0;
+        if (parse_int(index, n)) return n < 1 || n > kCombatAbilities ? V::nil() : spell_value(ctx, c.combat_ability(static_cast<std::int32_t>(n - 1)));
+        for (int i = 0; i < kCombatAbilities; ++i) {
+            const game::SpellData* s = spell_data(ctx, c.combat_ability(i));
+            if (s && iequals(s->name, index)) return V::integer(i + 1);
+        }
+        return V::nil();
+    });
+    // MQ reads the Combat Abilities window's effect label: the discipline in the last buff slot.
+    me_member("ActiveDisc", [](const Context& ctx, const GameConnection& c, std::string_view) -> V {
+        if (!c.discipline_active()) return V::nil();
+        return spell_value(ctx, c.spell_state().buffs[game::kBuffSlots - 1].spell);
+    });
+    me_member("AltAbility", [](const Context& ctx, const GameConnection&, std::string_view index) -> V {
+        const game::AltAbility* a = owned_aa(ctx, index);
+        return a ? V::object(g.altability, a->id) : V::nil();
+    });
+
+    // ---- altability (MQ2AltAbilityType): its plain value is the ability's group id
+    Type& aa = const_cast<Type&>(*g.altability);
+    auto aa_of = [](const Context& c, const Value& v) -> const game::AltAbility* {
+        return c.conn ? c.conn->alt_adv().get(static_cast<std::uint32_t>(v.i)) : nullptr;
+    };
+    aa.to_value = [aa_of](const Context& c, const Value& v) {
+        const game::AltAbility* a = aa_of(c, v);
+        return a ? V::integer(a->group) : V::nil();
+    };
+    auto aam = [aa_of](const char* name, auto fn) {
+        add(g.altability, name, [aa_of, fn](const Context& c, const Value& v, std::string_view index) -> V {
+            const game::AltAbility* a = aa_of(c, v);
+            return a ? fn(c, *a, index) : V::nil();
+        });
+    };
+    aam("ID", [](const Context&, const game::AltAbility& a, std::string_view) { return V::integer(a.group); });
+    aam("GroupID", [](const Context&, const game::AltAbility& a, std::string_view) { return V::integer(a.group); });
+    aam("Name", [](const Context& c, const game::AltAbility& a, std::string_view) {
+        std::string n = c.conn->aa_name(a);
+        return V::string(n.empty() ? c.conn->aa_display_name(a) : n);
+    });
+    aam("Description", [](const Context& c, const game::AltAbility& a, std::string_view) -> V {
+        std::string d = c.conn->aa_description(a);
+        return d.empty() ? V::nil() : V::string(std::move(d));
+    });
+    aam("Rank", [](const Context&, const game::AltAbility& a, std::string_view) { return V::integer(a.rank); });
+    aam("MaxRank", [](const Context&, const game::AltAbility& a, std::string_view) { return V::integer(a.max_rank); });
+    aam("ReuseTime", [](const Context&, const game::AltAbility& a, std::string_view) { return V::integer(a.refresh); });
+    aam("Cost", [](const Context&, const game::AltAbility& a, std::string_view) { return V::integer(a.cost); });
+    aam("MinLevel", [](const Context&, const game::AltAbility& a, std::string_view) { return V::integer(a.level_req); });
+    aam("Type", [](const Context&, const game::AltAbility& a, std::string_view) { return V::integer(a.type); });
+    aam("Passive", [](const Context&, const game::AltAbility& a, std::string_view) { return V::boolean(!a.activated()); });
+    aam("Spell", [](const Context& c, const game::AltAbility& a, std::string_view) -> V {
+        return a.spell > 0 ? spell_value(c, static_cast<std::uint32_t>(a.spell)) : V::nil();
+    });
+
+    // ---- ticks (MQ2TicksType): a timestamp whose plain value is ticks
+    Type& ticks = const_cast<Type&>(*g.ticks);
+    ticks.parent = g.timestamp;
+    ticks.to_value = [](const Context&, const Value& v) { return V::integer(v.i / 6000); };
+
+    // ---- spell
+    auto sm = [](const char* name, auto fn) {
+        add(g.spell, name, [fn](const Context& c, const Value& v, std::string_view index) -> V {
+            const game::SpellData* s = spell_data(c, v.i);
+            return s ? fn(c, *s, index) : V::nil();
+        });
+    };
+    sm("Description", [](const Context& c, const game::SpellData& s, std::string_view) -> V {
+        if (!c.conn) return V::nil();
+        std::string d = c.conn->strings().db_string(static_cast<std::uint32_t>(s.description_id), 6);
+        return d.empty() ? V::nil() : V::string(std::move(d));
+    });
+    sm("Subcategory", [](const Context& c, const game::SpellData& s, std::string_view) {
+        std::string d = c.conn && s.subcategory > 0 ? c.conn->strings().db_string(static_cast<std::uint32_t>(s.subcategory), 5)
+                                                    : std::string();
+        return V::string(d.empty() ? "Unknown" : d);
+    });
+    sm("SubcategoryID", [](const Context&, const game::SpellData& s, std::string_view) { return V::integer(s.subcategory); });
+    sm("DurationWindow", [](const Context&, const game::SpellData& s, std::string_view) { return V::integer(s.duration_window ? 1 : 0); });
+    sm("EnduranceCost", [](const Context&, const game::SpellData& s, std::string_view) { return V::integer(s.endurance_cost); });
+    sm("Dispellable", [](const Context&, const game::SpellData& s, std::string_view) { return V::boolean(!s.no_dispell); });
+    sm("MyRange", [](const Context& c, const game::SpellData& s, std::string_view) {
+        return V::number(s.range + (c.conn ? static_cast<float>(c.conn->spell_range_focus(s)) : 0.0f));
+    });
+    sm("Base", [](const Context&, const game::SpellData& s, std::string_view index) -> V {
+        std::int64_t n = 0;
+        if (!parse_int(index, n) || n < 1 || n > static_cast<std::int64_t>(s.base.size())) return V::nil();
+        return V::integer(s.base[static_cast<std::size_t>(n - 1)]);
+    });
+    sm("SlowPct", [](const Context& c, const game::SpellData& s, std::string_view) { return V::integer(slow_pct(c, s)); });
+    // MQ's WillLand: FindAffectSlot's slot + 1 on the player's buffs (0: it would not land).
+    sm("WillLand", [](const Context& c, const game::SpellData& s, std::string_view) -> V {
+        if (!c.conn) return V::nil();
+        return V::integer(c.conn->spell_landing_slot(s.id) + 1);
+    });
+    // MQ's StacksWith[name]: WillStackWith(this, that): it would land over a buff of that spell alone.
+    sm("StacksWith", [](const Context& c, const game::SpellData& s, std::string_view index) -> V {
+        if (!c.conn || index.empty()) return V::nil();
+        const game::SpellData* other = c.conn->spell_table().find_by_name(index);
+        if (!other) {
+            std::int64_t id = 0;
+            if (parse_int(index, id)) other = spell_data(c, id);
+        }
+        if (!other) return V::nil();
+        return V::boolean(c.conn->spell_landing_slot(s.id, other->id) != -1);
+    });
+    // MQ's StacksTarget: not too powerful for the target, and stacking with each buff the target is known to have.
+    sm("StacksTarget", [](const Context& c, const game::SpellData& s, std::string_view) -> V {
+        if (!c.conn) return V::nil();
+        const game::Spawn* t = spawn_of(c, c.conn->world().target_id);
+        if (!t) return V::nil();
+        if (spell_too_powerful(c, *t, s)) return V::boolean(false);
+        for (const auto& b : spawn_buffs(c, *t)) {
+            const game::SpellData* d = spell_data(c, b.buff->spell);
+            if (d && c.conn->spell_landing_slot(s.id, d->id) == -1) return V::boolean(false);
+        }
+        return V::boolean(true);
+    });
+    // MQ's WillLandPet: 0 when a pet buff will not stack with it, else the first empty pet buff slot + 1 (the
+    // buffs after that slot are not looked at, as in MQ). Without a pet, 0.
+    sm("WillLandPet", [](const Context& c, const game::SpellData& s, std::string_view) -> V {
+        if (!c.conn) return V::nil();
+        std::vector<std::pair<std::uint32_t, std::uint32_t>> buffs; // slot, spell
+        for (const auto& [slot, b] : c.conn->pet_buffs())
+            if (!b.empty()) buffs.emplace_back(slot, b.spell);
+        std::sort(buffs.begin(), buffs.end());
+        std::uint32_t next = 0;
+        for (const auto& [slot, spell] : buffs) {
+            if (slot != next) break; // an empty slot before this one
+            if (c.conn->spell_landing_slot(s.id, spell) == -1) return V::integer(0);
+            ++next;
+        }
+        return V::integer(std::int64_t{next} + 1);
+    });
+
+    // ---- item
+    auto im = [](const char* name, auto fn) {
+        add(g.item, name, [fn](const Context& c, const Value& v, std::string_view index) -> V {
+            const net::Item* it = item_of(c, v);
+            return it ? fn(c, v, *it, index) : V::nil();
+        });
+    };
+    im("NoTrade", [](const Context&, const Value&, const net::Item& it, std::string_view) { return V::boolean(it.no_trade()); });
+    im("Tradeskills", [](const Context&, const Value&, const net::Item& it, std::string_view) { return V::boolean(it.tradeskills != 0); });
+    im("Clicky", [](const Context& c, const Value&, const net::Item& it, std::string_view) -> V {
+        const auto& e = it.effects[net::kEffectClick];
+        return e.present() ? spell_value(c, static_cast<std::uint32_t>(e.effect)) : V::nil();
+    });
+    // MQ's EffectType: the first of scroll, click (worn / inventory), worn or focus, combat.
+    im("EffectType", [](const Context&, const Value&, const net::Item& it, std::string_view) -> V {
+        if (it.effects[net::kEffectScroll].present()) return V::string("Spell Scroll");
+        if (it.effects[net::kEffectClick].present()) {
+            switch (it.effects[net::kEffectClick].type) {
+            case 4: return V::string("Click Worn");
+            case 1:
+            case 5: return V::string("Click Inventory");
+            default: return V::string("Click Unknown");
+            }
+        }
+        if (it.effects[net::kEffectFocus].present() || it.effects[net::kEffectWorn].present()) return V::string("Worn");
+        if (it.effects[net::kEffectProc].present()) return V::string("Combat");
+        return V::nil();
+    });
+    // MQ's Timer: ticks until the click effect is ready, rounded up; 0 for one without a recast; NULL without one.
+    im("Timer", [](const Context& c, const Value&, const net::Item& it, std::string_view) -> V {
+        auto secs = item_click_seconds(c, it);
+        return secs ? V::object(g.ticks, (*secs + 5) / 6 * 6000) : V::nil();
+    });
+    im("StackCount", [](const Context& c, const Value&, const net::Item& it, std::string_view) {
+        std::int64_t n = 0;
+        if (it.stackable())
+            each_pack_item(c, [&](const net::Item& o) {
+                if (o.id == it.id) n += o.stack_count;
+            });
+        return V::integer(n);
+    });
+    im("FreeStack", [](const Context& c, const Value&, const net::Item& it, std::string_view) {
+        std::int64_t n = 0;
+        if (it.stackable())
+            each_pack_item(c, [&](const net::Item& o) {
+                if (o.id == it.id) n += std::max<std::int64_t>(std::int64_t{o.max_stack} - o.stack_count, 0);
+            });
+        return V::integer(n);
+    });
+    // MQ's WornSlot[n]: the n-th slot the item may be worn in; WornSlot[name]: whether it may be worn there.
+    im("WornSlot", [](const Context&, const Value&, const net::Item& it, std::string_view index) -> V {
+        std::int64_t n = 0;
+        if (parse_int(index, n)) {
+            if (n < 1) return V::nil();
+            for (int bit = 0; bit < 32; ++bit)
+                if ((it.equip_slots & (1u << bit)) && --n == 0) return V::integer(bit);
+            return V::nil();
+        }
+        const int slot = slot_by_name(index);
+        return V::boolean(slot >= 0 && slot < 32 && (it.equip_slots & (1u << slot)));
+    });
+    im("ItemLink", [](const Context& c, const Value&, const net::Item& it, std::string_view index) {
+        std::string link = game::make_item_link(it, c.conn->server_ext().wide_item_links(*c.conn));
+        // Without CLICKABLE, the link's text without the \x12 tags around it (MQ's GetItemLink).
+        if (!iequals(index, "CLICKABLE") && link.size() >= 2 && link.front() == '\x12' && link.back() == '\x12')
+            link = link.substr(1, link.size() - 2);
+        return V::string(std::move(link));
+    });
+    // The augment sockets of a common item: Augs counts the visible ones, AugSlot[n] is socket n.
+    im("Augs", [](const Context&, const Value&, const net::Item& it, std::string_view) {
+        std::int64_t n = 0;
+        if (it.item_class == 0)
+            for (const auto& s : it.aug_sockets) n += s.type != 0 && s.visible;
+        return V::integer(n);
+    });
+    im("AugSlot", [](const Context&, const Value& v, const net::Item& it, std::string_view index) -> V {
+        std::int64_t n = 0;
+        if (!parse_int(index, n) || n < 1 || n > static_cast<std::int64_t>(it.aug_sockets.size()) || it.item_class != 0)
+            return V::nil();
+        net::ItemSlot at = unpack_slot(v.i);
+        if (at.aug >= 0) return V::nil(); // an augment has no sockets
+        at.aug = static_cast<std::int16_t>(n - 1);
+        return V::object(g.aug, pack_slot(at));
+    });
+
+    // ---- augtype (MQ2AugType): a socket; its plain value is the augment's name
+    Type& aug = const_cast<Type&>(*g.aug);
+    aug.to_value = [](const Context& c, const Value& v) {
+        const net::Item* it = item_of(c, v);
+        return it ? V::string(it->name) : V::nil();
+    };
+    auto socket_of = [](const Context& c, const Value& v) -> const net::Item::AugSocket* {
+        net::ItemSlot at = unpack_slot(v.i);
+        const std::int16_t n = at.aug;
+        at.aug = -1;
+        const net::Item* host = c.conn ? c.conn->inventory().at(at) : nullptr;
+        return host && n >= 0 && n < static_cast<std::int16_t>(host->aug_sockets.size())
+                   ? &host->aug_sockets[static_cast<std::size_t>(n)] : nullptr;
+    };
+    add(g.aug, "Name", [](const Context& c, const Value& v, std::string_view) -> V {
+        const net::Item* it = item_of(c, v);
+        return it ? V::string(it->name) : V::nil();
+    });
+    add(g.aug, "Item", [](const Context& c, const Value& v, std::string_view) -> V {
+        return item_of(c, v) ? V::object(g.item, v.i) : V::nil();
+    });
+    add(g.aug, "Empty", [](const Context& c, const Value& v, std::string_view) { return V::boolean(item_of(c, v) == nullptr); });
+    add(g.aug, "Slot", [](const Context&, const Value& v, std::string_view) { return V::integer(unpack_slot(v.i).aug + 1); });
+    add(g.aug, "Type", [socket_of](const Context& c, const Value& v, std::string_view) -> V {
+        const auto* s = socket_of(c, v);
+        return s ? V::integer(s->type) : V::nil();
+    });
+    add(g.aug, "Visible", [socket_of](const Context& c, const Value& v, std::string_view) -> V {
+        const auto* s = socket_of(c, v);
+        return s ? V::boolean(s->visible != 0) : V::nil();
+    });
+
+    // ---- spawns
+    spawn_member("Aggressive", [](const Context&, const game::Spawn& s, std::string_view) {
+        return V::boolean((s.player_state & 0xcu) != 0); // PlayerState 4 or 8, as MQ tests it
+    });
+    spawn_member("Primary", [](const Context&, const game::Spawn& s, std::string_view) { return V::integer(s.appearance.material[7]); });
+    spawn_member("Secondary", [](const Context&, const game::Spawn& s, std::string_view) { return V::integer(s.appearance.material[8]); });
+    spawn_member("Body", [](const Context&, const game::Spawn& s, std::string_view) { return V::object(g.body, s.body_type); });
+    Type& body = const_cast<Type&>(*g.body);
+    auto body_name = [](std::int64_t id) -> V {
+        if (id < 0 || id >= static_cast<std::int64_t>(std::size(game::szBodyType))) return V::nil();
+        return V::string(std::string(game::szBodyType[static_cast<std::size_t>(id)]));
+    };
+    body.to_value = [body_name](const Context&, const Value& v) { return body_name(v.i); };
+    add(g.body, "ID", [](const Context&, const Value& v, std::string_view) { return V::integer(v.i); });
+    add(g.body, "Name", [body_name](const Context&, const Value& v, std::string_view) { return body_name(v.i); });
+
+    // ---- target (MQ2TargetType) and xtarget (MQ2XTargetType): a spawn with the aggro meter's readings
+    const_cast<Type&>(*g.target).parent = g.spawn;
+    add(g.target, "PctAggro", [](const Context& c, const Value&, std::string_view) { return aggro_pct(c, net::kAggroPlayer); });
+    add(g.target, "SecondaryPctAggro", [](const Context& c, const Value&, std::string_view) {
+        return aggro_pct(c, net::kAggroSecondary);
+    });
+    add(g.target, "SecondaryAggroPlayer", [](const Context& c, const Value&, std::string_view) -> V {
+        return c.conn && c.conn->aggro().secondary_id ? spawn_value(spawn_of(c, c.conn->aggro().secondary_id)) : V::nil();
+    });
+    const_cast<Type&>(*g.xtarget).parent = g.spawn;
+    add(g.xtarget, "PctAggro", [](const Context& c, const Value& v, std::string_view) {
+        return aggro_pct(c, net::kAggroXTarget1 + static_cast<int>(v.f));
+    });
+
+    // ---- group
+    // Present: the members other than the player whose spawn is in the zone.
+    add(g.group, "Present", [](const Context& c, const Value&, std::string_view) {
+        auto members = group_members(c);
+        std::int64_t n = 0;
+        for (std::size_t i = 1; i < members.size(); ++i)
+            if (members[i] && spawn_named(c, members[i]->name)) ++n;
+        return V::integer(n);
+    });
+    // Injured[pct] and LowMana[pct]: the members in the zone (the player too) with HP or mana above 0 and under it.
+    auto count_under = [](const char* mine, bool hp) {
+        return [mine, hp](const Context& c, const Value&, std::string_view index) {
+            std::int64_t threshold = 0, n = 0;
+            if (!parse_int(index, threshold) || threshold == 0) return V::integer(0);
+            auto members = group_members(c);
+            for (std::size_t i = 0; i < members.size(); ++i) {
+                std::int64_t pct = -1;
+                if (i == 0) {
+                    V v = character_member(c, mine);
+                    if (v.kind == Value::Kind::Int) pct = v.i;
+                } else if (members[i] && !members[i]->offline) {
+                    const game::Spawn* s = spawn_named(c, members[i]->name);
+                    if (s && hp) {
+                        pct = s->hp_percent;
+                    } else if (s) {
+                        const auto& m = c.conn->group().mana_percent;
+                        if (auto it = m.find(s->id); it != m.end()) pct = it->second;
+                    }
+                }
+                if (pct > 0 && pct < threshold) ++n;
+            }
+            return V::integer(n);
+        };
+    };
+    add(g.group, "Injured", count_under("PctHPs", true));
+    add(g.group, "LowMana", count_under("PctMana", false));
+    add(g.member, "PctAggro", [](const Context& c, const Value& v, std::string_view) -> V {
+        if (v.i < 0 || v.i >= 6) return V::nil();
+        return aggro_pct(c, v.i == 0 ? net::kAggroPlayer : net::kAggroGroup1 + static_cast<int>(v.i) - 1);
+    });
 }
 
 } // namespace
@@ -1806,6 +2305,12 @@ void register_game_tlos(Registry& r) {
     g.bandolier_item = &r.type("bandolieritem");
     g.advpath = &r.type("advpath");
     g.debuff = &r.type("debuff");
+    g.target = &r.type("target");
+    g.xtarget = &r.type("xtarget");
+    g.altability = &r.type("altability");
+    g.aug = &r.type("augtype");
+    g.ticks = &r.type("ticks");
+    g.body = &r.type("body");
     register_spawn();
     register_character();
     register_abilities();
@@ -1819,6 +2324,7 @@ void register_game_tlos(Registry& r) {
     register_moveto();
     register_bandolier();
     register_advpath();
+    register_e3_members();
 
     // MQ's LineOfSight[y,x,z:y,x,z]: two points in the server's coordinates (MQ's Loc order).
     r.add_tlo("LineOfSight", [](const Context& c, std::string_view index) -> V {
@@ -1862,7 +2368,8 @@ void register_game_tlos(Registry& r) {
         return c.conn && c.conn->world().player() ? V::object(g.character, c.conn->world().player_id) : V::nil();
     });
     r.add_tlo("Target", [](const Context& c, std::string_view) -> V {
-        return c.conn ? spawn_value(spawn_of(c, c.conn->world().target_id)) : V::nil();
+        const game::Spawn* s = c.conn ? spawn_of(c, c.conn->world().target_id) : nullptr;
+        return s ? V::object(g.target, s->id) : V::nil();
     });
     r.add_tlo("Spawn", [](const Context& c, std::string_view index) -> V {
         if (!c.conn) return V::nil();

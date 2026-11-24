@@ -246,6 +246,50 @@ void GameConnection::with_character(const std::function<void(game::mechanics::Ch
     fn(ch);
 }
 
+std::int32_t GameConnection::spell_duration_ticks(const game::SpellData& s) const {
+    auto ticks = static_cast<std::int32_t>(s.duration_cap);
+    with_character([&](game::mechanics::Character& ch) { ticks = ch.spell_duration(s, pstatus_.level); });
+    return ticks;
+}
+
+std::int32_t GameConnection::spell_range_focus(const game::SpellData& s) const {
+    std::int32_t mod = 0;
+    with_character([&](game::mechanics::Character& ch) { mod = ch.focus_range_modifier(s); });
+    return mod;
+}
+
+int GameConnection::spell_landing_slot(std::uint32_t spell, std::optional<std::uint32_t> existing) const {
+    if (!profile_ || !spell_table_ || !world_.player()) return -1;
+    int slot = -1;
+    with_character([&](game::mechanics::Character& ch) {
+        game::SpellState state;
+        if (existing) {
+            // MQ's WillStackWith: one buff of the other spell, the player's, at the player's level.
+            game::BuffSlot& b = state.buffs[0];
+            b.spell = *existing;
+            b.level = pstatus_.level;
+            b.caster_id = world_.player_id;
+            b.effect_type = 2;
+            if (const game::SpellData* d = spell_table_->get(*existing)) b.tics = ch.spell_duration(*d, pstatus_.level);
+        } else {
+            state.buffs = spells_.buffs;
+        }
+        game::HitLandingContext ctx;
+        ctx.spells = spell_table_.get();
+        ctx.world = &world_;
+        ctx.spell_state = &state;
+        ctx.character = &ch;
+        ctx.strings = &strings_;
+        ctx.class_id = profile_->class_;
+        ctx.level = pstatus_.level;
+        ctx.mana = static_cast<std::int32_t>(profile_->mana);
+        ctx.now_ms = static_cast<std::uint32_t>(now_ms());
+        ctx.pvp_rules = pvp_rules_;
+        slot = game::buff_landing_slot(spell, ctx);
+    });
+    return slot;
+}
+
 namespace {
 
 // GetSpellMemTicksLeft's callees on the connection's state.

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- New TLO members E3 reads, as in MacroQuest:
+  - on `${Me}`: `ItemReady[name]`, `PctAggro`, `SecondaryPctAggro`, `AltAbility[name|id]` (`.ID`, `.Name`, `.Rank`, `.ReuseTime`, `.Spell` ...), `ActiveDisc`, `AutoFire`, `Ability[name]`, `CombatAbility[#|name]`, `Endurance`, `GemTimer[#|name]`, `CastTimeLeft`, `AAPointsAssigned`, `AAPointsTotal`, `XTargetSlots` and `XTarget[n].PctAggro`;
+  - on items: `AugSlot[n]` (`.Name`, `.Item` ...), `Augs`, `ItemLink[CLICKABLE]`, `WornSlot[n|name]`, `Clicky`, `EffectType`, `FreeStack`, `NoTrade`, `Timer`, `StackCount`, `Tradeskills`;
+  - on spells: `StacksWith[name]`, `StacksTarget`, `WillLand`, `WillLandPet` (by the client's own stacking rules), `Description`, `Subcategory`, `DurationWindow`, `MyRange`, `EnduranceCost`, `Base[n]`, `Dispellable`, `SlowPct`;
+  - on `${Target}`: `PctAggro`, `SecondaryPctAggro`, `SecondaryAggroPlayer`; on spawns: `Aggressive`, `Primary`, `Secondary`, `Body.Name`;
+  - on `${Group}`: `Present`, `Injured[pct]`, `LowMana[pct]`, and `Member[n].PctAggro`.
+- `${Spell[...].Duration}` is now in ticks at your level, as in MacroQuest, where it gave the spell file's longest duration in milliseconds.
+
 - Plugins and scripts can colour their chat lines with MacroQuest's colour codes (`\ag`, `\a-w`, `\a#336699`, `\ax` ...), as `WriteChatColor` takes them. A server's message or a player's text cannot: its codes are left out.
 - C++ plugins can include the SDK's new `hailstone_plugin.hpp` to register commands and TLOs as lambdas that capture `this` and other values, as MacroQuest's `mq::AddCommand` does.
 - New TLOs `${MacroQuest.Path[config]}` and `${Hailstone.Path[config]}`: the folder for scripts' settings, `scripts/config` in Hailstone's folder. Plugins can also get it from the SDK's new `get_scripts_config_dir`.
