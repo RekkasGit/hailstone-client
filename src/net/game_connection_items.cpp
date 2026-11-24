@@ -289,11 +289,22 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
         if (auto r = decode_apply_poison(p)) handle_apply_poison(*r);
         break;
     case Op::MoveItem:
-    case Op::DeleteCharge:
         if (auto m = decode_move_item(p)) {
             log::debug("server {}: {}/{}/{} -> {}/{}/{} count {}", op_name(op), m->from.type, m->from.slot, m->from.sub,
                        m->to.type, m->to.slot, m->to.sub, m->count);
             apply_server_move(*m);
+        }
+        break;
+    case Op::DeleteCharge:
+        // EQEmu sends one notification per charge spent on a retained non-stackable item. Only a separate
+        // OP_MoveItem removes an expended item. A rechargeable item can stay in inventory at zero charges.
+        if (auto m = decode_move_item(p)) {
+            if (Item* item = inventory_.at(m->from);
+                item && !item->stackable() && item->charges > 0 && item->charges != 0xffffffffu) {
+                --item->charges;
+                item_refreshes_.push_back(*item);
+                if (item_refreshes_.size() > 16) item_refreshes_.pop_front();
+            }
         }
         break;
     case Op::DeleteItem:

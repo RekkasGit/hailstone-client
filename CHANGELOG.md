@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Charged items stay in inventory and on the hotbar after spending a charge if the server keeps the item
+
 ## 0.7.3-beta (2026-11-23)
 
 - Warrior epic glows and other attached particle effects stay aligned as weapons, characters and objects move
