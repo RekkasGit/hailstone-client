@@ -3176,6 +3176,9 @@ void show_queued_chat(Loaded& l) {
         lines.swap(l.queued_chat);
         l.chat_queue_full = false;
     }
+    // As the plugin's own line, as it would be from one of its callbacks: GameConnection::chat keeps MacroQuest's
+    // colour codes only in a plugin's or script's line, and this runs from the client's pulse, outside any.
+    CallerScope scope(l.caps, l.name);
     for (const auto& c : lines) {
         if (c.chat_color) h_write_chat_color(&l, c.text.c_str(), c.color);
         else h_write_chat(&l, c.text.c_str(), c.color);

@@ -21,6 +21,7 @@
 #include "platform/tcp_socket.h"
 #include "plugin/native_nameplates.h"
 #include "plugin/native_plugins.h"
+#include "plugin/policy.h"
 #include "mq_test_world.h"
 #include "plugin_consent_helper.h"
 #include "app/addon_requirements.h"
@@ -49,6 +50,7 @@ struct Host {
     mq::Registry reg;
     mq::Context ctx;
     std::vector<std::string> printed, sent;
+    std::vector<std::string> printed_by; // plugin::caller_name() for each printed line
     std::vector<std::pair<int, std::string>> used, checked; // use_ability, ability_state (kind and name)
     bool ability_ready = true;
     std::vector<plugin::AbilityBulkRow> ability_rows; // get_ability_data_bulk's rows
@@ -79,7 +81,10 @@ struct Host {
         ne.policy = &policy;
         ne.registry = &reg;
         ne.context = ce.context;
-        ne.print = [this](const std::string& t, std::uint32_t) { printed.push_back(t); };
+        ne.print = [this](const std::string& t, std::uint32_t) {
+            printed.push_back(t);
+            printed_by.emplace_back(plugin::caller_name());
+        };
         ne.run = ce.run;
         ne.send = [this](plugin::Stream s, const net::AppPacket& p) { packets.emplace_back(s, p); };
         ne.dirs = {plugin_dir};
@@ -1346,6 +1351,10 @@ TEST_CASE("native plugins: chat written from a plugin's own thread shows at the 
     CHECK_FALSE(colour_line());
     h.hooks.pulse();
     CHECK(h.printed_line("[Probe] chat from a worker 1"));
+    // Shown as the plugin's line, so the chat keeps its MacroQuest colour codes (GameConnection::chat strips them
+    // from anyone else's).
+    for (std::size_t i = 0; i < h.printed.size(); ++i)
+        if (h.printed[i] == "[Probe] chat from a worker 1") CHECK(h.printed_by[i] == "HostProbe");
     CHECK(colour_line());
     // Shown once.
     const auto shown = h.printed.size();
