@@ -326,6 +326,36 @@ TEST_CASE("mock server: OP_CancelInvite from the server prints the declining pla
     CHECK(count == 2);
 }
 
+TEST_CASE("mock server: a search purchase answer for no purchase of ours does not unlock the next Buy early") {
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    PlayerProfile pp;
+    pp.expansions = 0x40000; // a row's Buy needs the RoF expansion (7728)
+    rig.conn.set_profile_for_test(pp);
+    BazaarResults r;
+    r.trader_id = 789;
+    BazaarResult e;
+    e.trader_id = 789, e.serial = "0000000000004321", e.cost = 900, e.quantity = 1, e.item_id = 5023, e.icon = 592;
+    e.name = "Fine Steel Sword";
+    r.results.push_back(e);
+    rig.conn.receive_zone_packet_for_test(encode(r));
+    REQUIRE(rig.conn.bazaar_search_state().results.size() == 1);
+    TraderBuy b;
+    b.method = 2;
+    b.sub_action = 1;
+    b.seller_name = "Seller";
+    b.item_name = "Fine Steel Sword";
+    b.quantity = 1;
+    // Two unasked answers, then one purchase: it is still waiting for its own answer.
+    rig.conn.receive_zone_packet_for_test(encode(b));
+    rig.conn.receive_zone_packet_for_test(encode(b));
+    CHECK(rig.conn.bazaar_row_buy_allowed());
+    rig.conn.bazaar_buy(0, 1, false);
+    CHECK_FALSE(rig.conn.bazaar_row_buy_allowed());
+    rig.conn.receive_zone_packet_for_test(encode(b));
+    CHECK(rig.conn.bazaar_row_buy_allowed());
+}
+
 TEST_CASE("mock server: EQEmu's TradeRequestFailed answer reads as a failed purchase") {
     Rig rig;
     REQUIRE(rig.to_zone());

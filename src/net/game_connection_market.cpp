@@ -402,7 +402,8 @@ void GameConnection::handle_trader_purchase(const TraderBuy& in) {
             system(1437, {game::money_words(total), merchant_ ? merchant_->name : b.seller_name}, kMerchantsColour);
         }
     } else {
-        --search_pending_;
+        // As the merchant path above: an answer to no purchase of ours must not count one in advance.
+        if (search_pending_ > 0) --search_pending_;
         if (b.sub_action == 0) {
             std::int64_t total = static_cast<std::int64_t>(b.quantity) * b.price + b.already_sold;
             if (!game::take_money(coins_, total)) coins_ = {};
