@@ -1306,7 +1306,7 @@ AddonPolicy and AddonPolicyAction are refused to plugin code (nil / false).
 | PluginMenu | () → {{plugin, owner, label, command}} | Plugin menu entries (a plugin's own alone) | self |
 | PluginMenuClick | (i) → — | Run entry i of PluginMenu's list as its owner | self |
 | PluginConsent | () → {server, serial, warning, plugins={{name, file, size, sha256, short}}} \| nil | Pending consent question for the server's compiled plugins | self |
-| AnswerPluginConsent | (true\|false\|nil, serial) → ok | Answer the question with that serial (nil = ask later); false when it is not the one pending | self |
+| AnswerPluginConsent | (true\|false\|nil, serial) → ok | Answer the question with that serial (nil = ask later); false when it is not the one pending, or the caller is not the shipped interface's own code | self |
 | AddonPolicy | () → {serial, message, can_retry} \| nil | A server's required add-on that failed in the world; the same table until the failure changes. nil to plugin code and to an interface Hailstone does not ship | self |
 | AddonPolicyAction | ("retry", serial) → ok | The player's Retry: the failed required add-ons are tried again once. False when stale or not retriable; the client's own interface's file only | pack |
 

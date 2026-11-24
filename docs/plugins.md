@@ -134,7 +134,9 @@ The packs (`ui/modern/pluginconsent.lua`, the Gamepad UI's `dialogs.lua`) use tw
   required}}}`. Title, intro and warning are worded for what is asked; `required` is true for the player's own add-on
   the server requires.
 - `hs.AnswerPluginConsent(true | false | nil, serial)`. An answer to a question since replaced (another server's,
-  other bytes) is refused (false) and nothing is kept.
+  other bytes) is refused (false) and nothing is kept. Only the interface's own files answer, as with
+  `hs.AddonPolicyAction`: plugin code, another Lua state with the hs API, and an interface Hailstone does not ship get
+  false.
 
 Both packs keep Allow and Don't allow off for a second after a question shows or changes. Plugin code gets nil.
 Without a pack window (`hs.ReplaceWindow("PluginConsent")`) the client draws its own.

@@ -449,7 +449,9 @@ int PluginConsent(lua_State* L) {
 
 // ok = hs.AnswerPluginConsent(allow, serial): allow true, false, or nil (put away until the next zone-in); serial the
 // question's (hs.PluginConsent().serial). An answer to a question that is no longer the one asked (another server's,
-// or the same server's with other bytes, come up between the draw and the click) is refused: false, nothing kept.
+// or the same server's with other bytes, come up between the draw and the click) is refused: false, nothing kept. As
+// hs.AddonPolicyAction, only the interface's own files answer it: false for plugin code, for another Lua state that
+// has the hs API (not the UI pack's), and under an interface Hailstone does not ship.
 int AnswerPluginConsent(lua_State* L) {
     UiHost& h = host_of(L);
     std::optional<bool> allow;
@@ -461,7 +463,8 @@ int AnswerPluginConsent(lua_State* L) {
     bool asked = false;
     plugin::cxx_guard(L, [&] {
         // Only the client's own interfaces answer it (UiHost::trusted_ui); under another one the client draws it.
-        if (plugin_code() || !h.trusted_ui || !h.answer_plugin_consent || !h.plugin_consent) return;
+        if (plugin_code() || !h.trusted_ui || !pack || !h.answer_plugin_consent || !h.plugin_consent) return;
+    const bool pack = ui::lua::pack_code(L);
         const auto q = h.plugin_consent();
         asked = q && static_cast<lua_Integer>(q->serial) == serial;
     });
