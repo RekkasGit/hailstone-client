@@ -2249,8 +2249,9 @@ Tests: `tests/passage_of_time_test.cpp`, `tests/ability_commands_test.cpp`.
 #### Eye control
 
 SPA 67 acquires an Eye summon named from the first 24 bytes of the player's name. Its view and control are separate
-from the body, which keeps gravity, air and environment damage; the Eye sends its own spawn ID's movement. Fade,
-despawn, death and zoning restore control. Once held, control stays while that spawn lives.
+from the body, which keeps gravity, air and environment damage. The Eye sends movement under its own spawn ID.
+The passive body reports zero run speed so observers and autofollow see the caster at the body's position.
+Fade, despawn, death and zoning restore control. Once held, control stays while that spawn lives.
 
 Mouse look and the gamepad's right stick use the Eye's posture for turning, so you can steer a standing or
 crouching Eye while your character sits. Stun still blocks turning. This follows `CEverQuest::ProcessControls`
