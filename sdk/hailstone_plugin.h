@@ -881,7 +881,10 @@ typedef struct PluginHostApi {
     void (*log)(void* host, int level, const char* text); /* the client's log: 0 debug .. 3 error */
 
     /* MQ's WriteChatColor: a line in the chat window (color 0xRRGGBB, 0 the default). MacroQuest's colour codes in the
-     * text (BEL and a letter, "\ag" ... "\ax", "\a#rrggbb") colour its parts (docs/plugins.md "Colour codes"). */
+     * text (BEL and a letter, "\ag" ... "\ax", "\a#rrggbb") colour its parts (docs/plugins.md "Colour codes"). Unlike
+     * the other host functions it works from any of the plugin's threads: from one the client does not answer on (not
+     * its own thread, not a lent one) the line waits for the next pulse, as MacroQuest's WriteChatColor posts it to its
+     * main thread; lines from there keep their order. */
     void (*write_chat)(void* host, const char* text, uint32_t color);
     /* MQ's DoCommand: a command line, as typed (${...} parsed), held to the plugin's capabilities. */
     void (*do_command)(void* host, const char* line);
@@ -968,7 +971,8 @@ typedef struct PluginHostApi {
 
     /* ---- ABI 2: more of the client ---- */
     /* A chat line in one of the game's chat colours (the colour numbers the game's own messages use: 15 yellow,
-     * 2 green, 6 grey ...; 0 the default), where write_chat takes an RGB value. */
+     * 2 green, 6 grey ...; 0 the default), where write_chat takes an RGB value. From another thread it waits for the
+     * next pulse, as write_chat does. */
     void (*write_chat_color)(void* host, const char* text, uint32_t color);
     /* The plugin's folders for the saved server (servers/<profile>/plugin-config/<name>/) and for the character
      * (servers/<profile>/characters/<world>/<character>/plugin-config/<name>/), created on demand: as config_dir,

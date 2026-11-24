@@ -290,6 +290,16 @@ struct Loaded {
     bool read_denied = false;   // ... HAILSTONE_CAP_READ (the readers)
     bool web_denied = false;    // ... HAILSTONE_CAP_WEB (web_*)
     std::atomic<bool> thread_warned{false}; // said once that it called the host from another thread
+    // write_chat / write_chat_color from one of its own threads (not a lent one): shown at the next pulse, in order,
+    // as MacroQuest's WriteChatColor posts a line from another thread to its main thread. Any of its threads may add.
+    struct QueuedChat {
+        std::string text;
+        std::uint32_t color = 0;
+        bool chat_color = false; // write_chat_color's
+    };
+    std::mutex chat_mutex;
+    std::vector<QueuedChat> queued_chat;
+    bool chat_queue_full = false; // said once that lines were dropped
     std::vector<std::string> threw_at;       // the callbacks that let an exception out (said once each)
 
     // next_spawn's walk: the zone's spawn ids in order, made again at a walk's start (after_id 0) and whenever the
@@ -3124,6 +3134,53 @@ template <typename R, typename... A, R (*F)(void*, A...)> struct MainOnly<F> {
     }
 };
 template <auto F> constexpr auto main_only = &MainOnly<F>::call;
+
+// write_chat and write_chat_color: on the client's thread (or a lent one) at once; from another of the plugin's
+// threads queued for the next pulse (show_queued_chat), as MacroQuest's WriteChatColor does, where every other host
+// function is refused there. At most kQueuedChatLines wait; past them a line is dropped and the log says so once.
+constexpr std::size_t kQueuedChatLines = 1000;
+void queue_chat(void* h, const char* text, std::uint32_t color, bool chat_color) {
+    if (!h || !text) return;
+    Loaded& l = Loaded::of(h);
+    std::lock_guard<std::mutex> lock(l.chat_mutex);
+    if (l.queued_chat.size() >= kQueuedChatLines) {
+        if (!l.chat_queue_full) {
+            l.chat_queue_full = true;
+            log::warn("plugin {}: more than {} chat lines from its own threads before a pulse; the rest dropped",
+                      l.name, kQueuedChatLines);
+        }
+        return;
+    }
+    l.queued_chat.push_back({text, color, chat_color});
+}
+template <bool ChatColor> void write_chat_entry(void* h, const char* text, std::uint32_t color) {
+    try {
+        {
+            HostThread thread(h);
+            if (thread.ok()) {
+                if constexpr (ChatColor) h_write_chat_color(h, text, color);
+                else h_write_chat(h, text, color);
+                return;
+            }
+        }
+        queue_chat(h, text, color, ChatColor);
+    } catch (...) {
+        host_threw(h);
+    }
+}
+// The lines queue_chat held, on the client's thread at a pulse.
+void show_queued_chat(Loaded& l) {
+    std::vector<Loaded::QueuedChat> lines;
+    {
+        std::lock_guard<std::mutex> lock(l.chat_mutex);
+        lines.swap(l.queued_chat);
+        l.chat_queue_full = false;
+    }
+    for (const auto& c : lines) {
+        if (c.chat_color) h_write_chat_color(&l, c.text.c_str(), c.color);
+        else h_write_chat(&l, c.text.c_str(), c.color);
+    }
+}
 // The same, for a host function whose 0 means something: off the client's thread it returns `off` instead.
 template <auto F, auto Off> struct MainOnlyOr;
 template <typename R, typename... A, R (*F)(void*, A...), auto Off> struct MainOnlyOr<F, Off> {
@@ -3200,8 +3257,9 @@ NativePlugins::NativePlugins(NativeEnv env) : impl_(std::make_unique<Impl>()) {
     Impl* m = impl_.get();
     m->owner = m->env.hooks->new_owner("plugins");
     m->env.hooks->add_command(m->owner, "/plugin", [m](std::string_view args) { m->command(args); }, kCapCommands);
-    // Unloads a plugin asked for from its own code.
+    // Shows the chat lines plugins wrote from their own threads, and unloads a plugin asked for from its own code.
     m->env.hooks->on_pulse(m->owner, [m] {
+        for (const auto& l : m->loaded) show_queued_chat(*l);
         std::vector<std::string> pending;
         for (const auto& l : m->loaded)
             if (l->unload_pending && !l->busy) pending.push_back(l->name);
@@ -3499,7 +3557,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.caps = main_only<h_caps>;
     p.table.name = main_only<h_name>;
     p.table.log = main_only<h_log>;
-    p.table.write_chat = main_only<h_write_chat>;
+    p.table.write_chat = write_chat_entry<false>;
     p.table.do_command = main_only<h_do_command>;
     p.table.add_command = main_only<h_add_command>;
     p.table.remove_command = main_only<h_remove_command>;
@@ -3537,7 +3595,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.out_end = main_only<h_out_end>;
     p.table.add_option = main_only<h_add_option>;
     p.table.add_menu = main_only<h_add_menu>;
-    p.table.write_chat_color = main_only<h_write_chat_color>;
+    p.table.write_chat_color = write_chat_entry<true>;
     p.table.server_config_dir = main_only<h_server_config_dir>;
     p.table.character_config_dir = main_only<h_character_config_dir>;
     p.table.zone_name = main_only<h_zone_name>;

@@ -843,6 +843,18 @@ void probe_lend(void*, const char* args) {
                again, added, parsed_len, parsed, nested, ended, after);
 }
 
+// /probechatthread: write_chat and write_chat_color from a thread of the plugin's own (not lent): queued for the next
+// pulse, where another host function from there is refused.
+void probe_chat_thread(void*, const char*) {
+    int added = -1;
+    std::thread([&] {
+        host->write_chat(host->host, "[Probe] chat from a worker 1", 0);
+        if (HAILSTONE_HOST_HAS(host, write_chat_color)) host->write_chat_color(host->host, "[Probe] chat from a worker 2", 15);
+        added = host->add_command(host->host, "/fromworker", nothing, nullptr);
+    }).join();
+    WriteChatf("[Probe] chat thread: add_command %d", added);
+}
+
 void probe_lend_after(void*, const char*) {
     int added = -1;
     std::thread([&] { added = host->add_command(host->host, "/afterkeep", nothing, nullptr); }).join();
@@ -1180,6 +1192,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probelend", probe_lend, nullptr);
     AddCommand("/probelendafter", probe_lend_after, nullptr);
     AddCommand("/probelendinner", probe_lend_inner, nullptr);
+    AddCommand("/probechatthread", probe_chat_thread, nullptr);
     AddCommand("/probespellsbyname", probe_spells_by_name, nullptr);
     for (const char* what : buffer_commands)
         AddCommand(own_command(what).c_str(), probe_buffer, const_cast<char*>(what));
