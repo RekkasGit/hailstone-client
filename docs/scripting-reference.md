@@ -336,7 +336,8 @@ name.
 | `stick` | `ON` or `OFF` | `Active`, `Status` (`ON`, `PAUSED` or `OFF`), `Distance`, `StickTarget` (spawn id, 0 none), `StickTargetName` |
 | `math` | NULL | `Calc[expr]`, `Sqrt`, `Abs`, `Sin`, `Cos`, `Tan`, `Asin`, `Acos`, `Atan` (degrees), `Rand[max]` or `Rand[min,max]`, `Not`, `Hex`, `Dec[hex]`, `Clamp[n,min,max]`, `Distance[y,x,z:y,x,z]` (a missing point or coordinate is the player's) |
 
-`Debuff` is the MQ2Debuffs plugin's TLO, which E3 reads. Each counter effect (SPA 35 disease, 36 poison, 116 curse,
+`Debuff` is the MQ2Debuffs plugin's TLO, which E3 reads. Only detrimental spells count: some beneficial buffs carry
+a counter effect too. Each counter effect (SPA 35 disease, 36 poison, 116 curse,
 369 corruption) with a positive base adds the counters left once the client knows them (as the buff window's
 counter numbers), else the counters the spell starts with; a cure's own effect (a negative base) adds none. The
 pet's buffs come from the pet window's list, which carries no counters left, so `Debuff[pet]` always counts the

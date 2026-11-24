@@ -310,6 +310,10 @@ TEST_CASE("TLO: Debuff and Debuff[pet] sum the counters on the player's and the 
     sp.buffs[2] = buff(3006); // Test Venom: 3 poison, 2 curse, -5 disease
     CHECK(p("${Debuff.Diseased} ${Debuff.Poisoned} ${Debuff.Cursed} ${Debuff.Corrupted}") == "4 3 2 0");
     CHECK(p("${Debuff.Count} ${Debuff}") == "9 9");
+    // A beneficial spell's counter effect is not counted.
+    sp.buffs[5] = buff(3007); // Test Ward: beneficial, 1 corruption
+    CHECK(p("${Debuff.Corrupted} ${Debuff.Count}") == "0 9");
+    sp.buffs[5] = game::BuffSlot{};
     // Once known, the counters left (the effect's slot data).
     sp.buffs[1].counters_known = true;
     sp.buffs[1].slot_data[1] = 1;

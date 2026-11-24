@@ -167,6 +167,8 @@ struct World {
             f << spell_line({{0, "3006"}, {1, "Test Venom"}, {17, "10"}, {20, "3"}, {21, "2"}, {22, "-5"}, {83, "0"},
                              {86, "36"}, {87, "116"}, {88, "35"}})
               << "\n";
+            // A beneficial buff with a corruption counter effect (SPA 369, 1): no debuff.
+            f << spell_line({{0, "3007"}, {1, "Test Ward"}, {17, "10"}, {20, "1"}, {83, "1"}, {86, "369"}}) << "\n";
             // A bard song (the Bard level, column 111, 1).
             f << spell_line({{0, "3373"}, {1, "Test Chant"}, {13, "1000"}, {17, "3"}, {83, "0"}, {111, "1"}}) << "\n";
         }

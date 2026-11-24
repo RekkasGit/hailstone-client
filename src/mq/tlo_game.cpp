@@ -185,7 +185,7 @@ template <typename Pass> V buff_with_effect(const Context& c, const game::Spawn&
 }
 
 // Debuff[...]: the disease, poison, curse and corruption counters on the player (Debuff) or the player's pet
-// (Debuff[pet]), summed over every buff. Each counter effect with a positive base (a cure's own is negative) adds
+// (Debuff[pet]), summed over every detrimental buff (spell type 0). Each counter effect with a positive base (a cure's own is negative) adds
 // the counters left once the client knows them (the effect's slot data, as the buff window's counter overlay), else
 // the counters the spell starts with (a zone-in list or the profile fills no slot data). The pet's buffs
 // (OP_PetBuffWindow) carry no slot data, so they always count the starting counters.
@@ -199,7 +199,7 @@ DebuffCounters debuff_counters(const Context& c, bool pet) {
     auto add_buff = [&](const game::BuffSlot& b) {
         if (b.empty()) return;
         const game::SpellData* d = spell_data(c, b.spell);
-        if (!d) return;
+        if (!d || d->beneficial()) return; // a beneficial spell's counter effect (some buffs carry one) is no debuff
         for (std::size_t e = 0; e < d->effect.size(); ++e) {
             if (!game::is_counter_spa(d->effect[e]) || d->base[e] <= 0) continue;
             const std::int64_t n = b.counters_known && e < b.slot_data.size() ? b.slot_data[e] : d->base[e];
