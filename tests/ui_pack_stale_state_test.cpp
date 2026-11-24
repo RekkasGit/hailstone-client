@@ -652,3 +652,115 @@ end
     CHECK_FALSE(r.saw("Give up the current adventure?"));
     CHECK(r.no_errors());
 }
+
+namespace {
+
+// A stand-in for a stock window's lists and buttons: fake.lists[win][list] = { rows = { {texts}, ... }, sel = row
+// (0-based, -1 none) }, one column a text with no heads; every child shown and enabled unless fake.off[id]; clicks are listed in `calls`. forced[id]
+// makes the next ui.Button / ui.InvisibleButton of that id report a click. ui.Text is seen as DrawText is.
+constexpr const char* kStockWindows = R"lua(
+forced = {}
+fake.lists, fake.off = {}, {}
+local function list(win, id) return fake.lists[win] and fake.lists[win][id] end
+local ListInfo, ListRow, ListClick = hs.ListInfo, hs.ListRow, hs.ListClick
+hs.ListInfo = function(win, id, ...)
+  local l = list(win, id)
+  if l then
+    local cols = #(l.rows[1] or { "" })
+    local labels, widths = {}, {}
+    for c = 1, cols do labels[c], widths[c] = "", 80 end
+    return #l.rows, cols, l.sel, labels, widths, false
+  end
+  if fake.lists[win] then return 0, 1, -1, { "" }, { 80 }, false end
+  return ListInfo(win, id, ...)
+end
+hs.ListRow = function(win, id, row, ...)
+  local l = list(win, id)
+  if l then return l.rows[row + 1] end
+  if fake.lists[win] then return nil end
+  return ListRow(win, id, row, ...)
+end
+hs.ListClick = function(win, id, row, button, ...)
+  local l = list(win, id)
+  if l then
+    calls[#calls + 1] = "listclick " .. id .. " " .. row
+    if button == "left" and l.rows[row + 1] then l.sel = row end
+    return true
+  end
+  return ListClick(win, id, row, button, ...)
+end
+local ChildShown, ChildState, ClickChild = hs.ChildShown, hs.ChildState, hs.ClickChild
+hs.ChildShown = function(win, id, ...)
+  if fake.lists[win] then return not fake.off[id] end
+  return ChildShown(win, id, ...)
+end
+hs.ChildState = function(win, id, ...)
+  if fake.lists[win] then return not fake.off[id], false end
+  return ChildState(win, id, ...)
+end
+hs.ClickChild = function(win, id, button, ...)
+  if fake.lists[win] then calls[#calls + 1] = "click " .. id return true end
+  return ClickChild(win, id, button, ...)
+end
+local Button, InvisibleButton = ui.Button, ui.InvisibleButton
+ui.Button = function(id, ...)
+  local hit = Button(id, ...)
+  if forced[id] then forced[id] = nil return true end
+  return hit
+end
+ui.InvisibleButton = function(id, ...)
+  local hit = InvisibleButton(id, ...)
+  if forced[id] then forced[id] = nil return true end
+  return hit
+end
+local Text = ui.Text
+ui.Text = function(s, ...)
+  seen[#seen + 1] = s
+  return Text(s, ...)
+end
+)lua";
+
+} // namespace
+
+TEST_CASE("UI packs (modern): the guild's member actions ask first, naming the member, and Yes acts on that member") {
+    PackRig r("modern");
+    r.run(kStockWindows);
+    r.run(R"lua(
+fake.shown.GuildManagementWnd = true
+fake.lists.GuildManagementWnd = { MemberList = { sel = 0, rows = {
+  { "Alpha", "50", "Warrior", "Member", "", "", "Zone", "" },
+  { "Beta", "40", "Cleric", "Member", "", "", "Zone", "" } } } }
+)lua");
+    r.s->frames(3);
+    struct Action { const char* label; const char* child; const char* question; };
+    for (const Action& a : {Action{"Promote", "PromoteButton", "Promote Alpha?"},
+                            Action{"Demote", "DemoteButton", "Demote Alpha?"},
+                            Action{"Make Leader", "MakeLeaderButton", "Make Alpha the guild leader?"},
+                            Action{"Remove", "RemoveButton", "Remove Alpha from the guild?"}}) {
+        CAPTURE(a.child);
+        const std::string button = std::string(a.label) + "##" + a.child;
+        r.run(("calls = {} seen = {} fake.lists.GuildManagementWnd.MemberList.sel = 0 forced['" + button + "'] = true")
+                  .c_str());
+        r.s->frames(2);
+        CHECK(r.saw(a.question));
+        CHECK_FALSE(r.called(std::string("click ") + a.child)); // one click asks; nothing is sent
+        r.run(("forced['" + std::string(a.label) + "##askyes" + a.child + "'] = true").c_str());
+        r.s->frames(2);
+        CHECK(r.called(std::string("click ") + a.child));
+        r.run("seen = {}");
+        r.s->frames(1);
+        CHECK_FALSE(r.saw(a.question)); // answered: put away
+    }
+    // Another member selected while it is asked: the question goes, its Yes is never drawn.
+    r.run("calls = {} seen = {} forced['Remove##RemoveButton'] = true");
+    r.s->frames(2);
+    CHECK(r.saw("Remove Alpha from the guild?"));
+    r.run("fake.lists.GuildManagementWnd.MemberList.sel = 1 seen = {}");
+    r.s->frames(2);
+    r.run("seen = {}");
+    r.s->frames(1);
+    CHECK_FALSE(r.saw("Remove Alpha from the guild?"));
+    CHECK_FALSE(r.saw("Remove Beta from the guild?"));
+    CHECK_FALSE(r.called("click RemoveButton"));
+    CHECK(r.no_errors());
+}

@@ -266,6 +266,8 @@ The CLOSE_TOP_WINDOW key (Escape unless rebound) closes one ticked window per pr
 
 Controls (`lib/widgets.lua`): buttons, check boxes, button rows, edit and combo boxes, sliders, gauges, lists, STML text, item slots and grids, tabs and coins. A list is a virtual table over `hs.ListInfo` / `hs.ListRow`, sortable and filterable.
 
+A button with `opts.ask` (a function giving the question) opens a Yes / Cancel question on a click, and only its Yes clicks the child. The question goes away when `ask` gives a different question (another member selected), or the child is disabled or hidden.
+
 Each control is bound to a game window's child by its ScreenID (the layout's `id`, not `name`): it reads what the child shows and hands clicks to it (`hs.ClickChild`, `hs.ListClick`, `hs.SetWindowText`, `hs.ComboSelect`, `hs.SetSlider`, `hs.SetTabPage`, `hs.PickUp`), so the window's own handler runs.
 
 ImGui bindings they add beyond the first set: `InputTextWithHint`, `PushTextWrapPos` / `PopTextWrapPos`, `SetCursorScreenPos`, `TableSetupScrollFreeze`, `TableGetSortSpecs` and the `Sortable`, `BordersInner*`, `Hideable`, `Reorderable` table flags.
@@ -426,7 +428,7 @@ Helper: `lib/social.lua`.
 - **RaidWindow**: twelve reflowing group cards, ungrouped players above, roles, search, the invitation banner.
   - A member dropped on a card, or "Move here", is selected in the game's list and that group's button pressed. The game enables those buttons only in a locked raid, so an unlocked raid's leader gets it locked first. A full group refuses the drop.
 - **RaidOptionsWindow**, **LFGuildWnd**.
-- **GuildManagementWnd**: roster, notes, message of the day, ranks.
+- **GuildManagementWnd**: roster, notes, message of the day, ranks. Promote, Demote, Make Leader and Remove ask first, naming the selected member; selecting another member puts the question away (Hailstone, as the gamepad pack).
 - **InspectWnd**: worn grid and gear by name.
 - **MailWindow**, **MailAddressBookWindow** and **MailCompositionWindow**.
 - **GroupSearchWnd**: your post (as player or group) beside sortable, searchable results; a group's members and wanted classes under it.
