@@ -1818,9 +1818,15 @@ The pack's tables reach the plugin only as views: what a pack function it calls 
 passes its functions as arguments (its own tables handed back stay its own), and a metatable it did not set itself
 from `getmetatable`. It cannot get the pack's own `hs` or `ui` functions to act under the player's authority.
 
-Not covered: a function or table the plugin hands a pack function, or returns to the pack. The pack may keep it as it
-is (docs/todo.md). A player who copies the same files into a UI pack makes them the pack's own, with the player's
-authority.
+What the plugin hands the pack goes the other way the same: an argument to a pack function, and what its function
+returns or raises to the pack's code, reaches the pack as what it puts in a shared table does. Its own table comes as
+a view whose metamethods and functions run as the plugin (and whose `next` and `rawget` see nothing, as above); its
+function runs as the plugin. A pack that keeps either and uses it later runs none of the plugin's code under the
+player's authority. Operators the view has none of (`==` with another table, `<`, `..`, a call, `tostring`) do not
+reach the plugin's metatable. A client function that reads a table raw (`ui.PushStyleColors`) still gets the table
+behind the view.
+
+A player who copies the same files into a UI pack makes them the pack's own, with the player's authority.
 
 #### How plugins load
 
