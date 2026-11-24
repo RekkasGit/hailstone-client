@@ -2008,6 +2008,16 @@ Previews never enter the inventory and no success is reported locally: the serve
 A refusal changes nothing (EQEmu prints "Transfer Failed"). RoF2 clears both selections after sending (`0x6b00b0`).
 Zoning or disconnecting closes the window.
 
+#### Real estate: transferring a plot
+
+The packets and the original's checks are in docs/protocol/rof2-packets.md "Real estate". The Transfer button (the
+purchase and manage windows, `RealEstatePurchaseWnd` and `RealEstateManageWnd` in `app/lua_ui_realestate.cpp`) asks for a confirmation naming the current target.
+**Hailstone change:** the question keeps that target's spawn id and name, and its Yes sends the transfer only while the
+same spawn, with the same name, is still targeted (`GameConnection::re_transfer`); otherwise nothing is sent and the
+refusal is logged. RoF2's RealEstate_SendTransferPlot reads the target as it is at the Yes, so a target changed while
+the question was up received the plot. Not switchable: sending a plot to a player the question did not name is not
+behaviour worth keeping.
+
 #### Other rules
 
 - Stats-disabled flags (`game::update_stats_disabled`): from the UseItem (0x13) and Ornament (0x15) game features and
