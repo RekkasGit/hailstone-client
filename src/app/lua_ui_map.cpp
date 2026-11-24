@@ -2519,7 +2519,9 @@ int ZoneRoute(lua_State* L) {
     const std::uint32_t from = lua_isstring(L, 2) ? game::zone_id_by_short_name(lua_tostring(L, 2))
                                : h.conn                ? h.conn->zone_id()
                                                        : 0u;
-    game::ZoneRoute r = s.routes.route(from, to, [&](std::uint32_t z) { return s.zone_allowed(h, z); });
+    // (the route in a box the state owns across the pushes: plugin/lua_keep.h)
+    auto& r = plugin::lua_keep<game::ZoneRoute>(L);
+    plugin::cxx_guard(L, [&] { r = s.routes.route(from, to, [&](std::uint32_t z) { return s.zone_allowed(h, z); }); });
     if (r.zones.empty()) {
         lua_pushnil(L);
         return 1;

@@ -2326,7 +2326,11 @@ int Option(lua_State* L) {
 // value = hs.UiIni(section, key)   -- a value of the character's UI ini (over defaults.ini), nil when neither has it
 int UiIniGet(lua_State* L) {
     auto& m = Impl::of(L);
-    if (auto v = m.layout.get(luaL_checkstring(L, 1), luaL_checkstring(L, 2))) lua_pushstring(L, v->c_str());
+    const char* section = luaL_checkstring(L, 1);
+    const char* key = luaL_checkstring(L, 2);
+    auto& v = plugin::lua_keep<std::optional<std::string>>(L); // (across the push: lua_keep.h)
+    plugin::cxx_guard(L, [&] { v = m.layout.get(section, key); });
+    if (v) lua_pushlstring(L, v->data(), v->size());
     else lua_pushnil(L);
     return 1;
 }

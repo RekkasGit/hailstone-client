@@ -155,12 +155,15 @@ int Glyph(lua_State* L) {
 // plain button applies); nil for an unknown input.
 int Binding(lua_State* L) {
     Gamepad* g = pad(L);
-    auto text = g ? g->binding_text(luaL_checkstring(L, 1)) : std::nullopt;
+    const char* input = luaL_checkstring(L, 1);
+    // (the text in a box the state owns: the push can raise, lua_keep.h)
+    auto& text = core::lua_keep<std::optional<std::string>>(L);
+    if (g) core::cxx_guard(L, [&] { text = g->binding_text(input); });
     if (!text) {
         lua_pushnil(L);
         return 1;
     }
-    lua_pushstring(L, text->c_str());
+    lua_pushlstring(L, text->data(), text->size());
     return 1;
 }
 

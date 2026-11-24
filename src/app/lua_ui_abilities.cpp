@@ -36,6 +36,7 @@
 #include "game/spell_gem.h"
 #include "game/mechanics/abilities.h"
 #include "net/game_connection.h"
+#include "plugin/lua_keep.h"
 
 namespace hailstone::app {
 
@@ -74,7 +75,6 @@ bool should_display(const net::GameConnection& c, int n) {
     return true;
 }
 
-// The discipline's hotbutton (CCombatSkillsSelectWnd's Make Hotkey): type 10, value 0x84 + n (DoHotButton runs
 // Every slot's spell and should_display at once, with the same answers: should_display compares each ability with all
 // 300, and hs.Disciplines runs every frame while one cools down (ui/gamepad/abilities.lua). Here each slot's spell is
 // looked up once and a slot is hidden when its group's highest rank (from one sorted pass) is above its own. On the
@@ -105,6 +105,7 @@ void list_abilities(const net::GameConnection& c, ListedAbilities& out) {
     }
 }
 
+// The discipline's hotbutton (CCombatSkillsSelectWnd's Make Hotkey): type 10, value 0x84 + n (DoHotButton runs
 // PcZoneClient::doCombatAbility(GetCombatAbility(value - 0x84), 1)), labelled with the spell's name.
 std::optional<game::HotButton> discipline_button(const net::GameConnection& c, int n) {
     const game::SpellData* s = n >= 0 && n < kCombatAbilities ? c.spell_table().get(c.combat_ability(n)) : nullptr;
@@ -123,9 +124,9 @@ int Disciplines(lua_State* L) {
     const auto& c = *h.conn;
     const std::uint32_t cls = c.visible_class();
     const auto now = static_cast<std::uint32_t>(std::time(nullptr));
-    int out = 0;
     ListedAbilities listed;
     list_abilities(c, listed);
+    int out = 0;
     for (int n = 0; n < kCombatAbilities; ++n) {
         const std::uint32_t id = c.combat_ability(n);
         const game::SpellData* s = id ? listed.spell[static_cast<std::size_t>(n)] : nullptr;
@@ -156,19 +157,33 @@ int UsableSkills(lua_State* L) {
     lua_newtable(L);
     if (!h.conn || !h.character) return 1;
     const auto now = static_cast<std::uint32_t>(net::GameConnection::now_ms());
+    // The skills and their names in a box the state owns, made inside cxx_guard: a push below that raises would skip
+    // a destructor in this frame (plugin/lua_keep.h).
+    struct Row {
+        std::uint32_t id = 0;
+        bool combat = false;
+        std::string name;
+    };
+    auto& rows = plugin::lua_keep<std::vector<Row>>(L);
+    lua_insert(L, -2); // (the box under the list)
+    plugin::cxx_guard(L, [&] {
+        const auto race = skill_race(*h.conn, *h.character);
+        for (bool combat : {true, false})
+            for (std::uint32_t s : game::mechanics::usable_skills(*h.character, combat, race))
+                rows.push_back({s, combat, s == game::mechanics::skill::kSlam ? std::string("Slam") : h.conn->skill_name(s)});
+    });
     int out = 0;
-    const auto race = skill_race(*h.conn, *h.character);
-    for (bool combat : {true, false})
-        for (std::uint32_t s : game::mechanics::usable_skills(*h.character, combat, race)) {
-            lua_createtable(L, 0, 4);
-            set_int(L, "id", s);
-            set_str(L, "name", s == game::mechanics::skill::kSlam ? "Slam" : h.conn->skill_name(s));
-            lua_pushboolean(L, combat);
-            lua_setfield(L, -2, "combat");
-            std::uint32_t left = h.actions ? h.actions->skill_state().timers.remaining(*h.character, s, now) : 0;
-            set_int(L, "remaining", (left + 999) / 1000);
-            lua_rawseti(L, -2, ++out);
-        }
+    for (const Row& r : rows) {
+        lua_createtable(L, 0, 4);
+        set_int(L, "id", r.id);
+        set_str(L, "name", r.name);
+        lua_pushboolean(L, r.combat);
+        lua_setfield(L, -2, "combat");
+        std::uint32_t left = h.actions ? h.actions->skill_state().timers.remaining(*h.character, r.id, now) : 0;
+        set_int(L, "remaining", (left + 999) / 1000);
+        lua_rawseti(L, -2, ++out);
+    }
+    rows = {};
     return 1;
 }
 
@@ -423,6 +438,8 @@ public:
             std::snprintf(t, sizeof t, "%d:%02d:%02d", sec / 3600, (sec - sec / 3600 * 3600) / 60, sec - sec / 60 * 60);
             return std::string(t);
         };
+        ListedAbilities listed;
+        list_abilities(c, listed);
         for (int n = 0; n < kCombatAbilities; ++n) {
             const game::SpellData* s = listed.spell[static_cast<std::size_t>(n)];
             if (!s || !listed.shown[static_cast<std::size_t>(n)]) continue;
@@ -438,8 +455,6 @@ public:
                        hms(static_cast<std::int32_t>(s->recast_time / 1000)),
                        std::to_string(c.combat_ability_timer(*s))};
             if (n == selected_) list_.selected = static_cast<int>(list_.rows.size());
-        ListedAbilities listed;
-        list_abilities(c, listed);
             list_.rows.push_back(std::move(r));
             rows_.push_back(n);
         }
