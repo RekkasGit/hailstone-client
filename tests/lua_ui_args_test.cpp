@@ -271,6 +271,35 @@ TEST_CASE("hs API: SetUiIni does not write the file each call; save_layout write
     lua_close(L);
 }
 
+// hs.ReplaceWindow and hs.WindowShown keep the names they are given in bounded maps: past 1024 names the stale ones
+// (not replaced in the last frames) are dropped, and a new name while all are recent is not kept.
+TEST_CASE("hs API: ReplaceWindow keeps a bounded number of window names") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().DisplaySize = ImVec2(1600, 900);
+    {
+        app::UiHost host;
+        host.in_game = host.ui_ready = true;
+        app::UiApi api(host);
+        api.begin_frame();
+        lua_State* L = luaL_newstate();
+        luaL_openlibs(L);
+        lua_newtable(L);
+        api.register_functions(L);
+        lua_setglobal(L, "hs");
+        CHECK(run(L, "for i = 1, 3000 do hs.ReplaceWindow('Script' .. i) end return hs.WindowShown('Late')") == "false");
+        CHECK(api.replaces("Script1"));
+        CHECK(api.replaces("Script1024"));
+        CHECK_FALSE(api.replaces("Script1025")); // all 1024 are this frame's: not kept
+        CHECK_FALSE(api.replaces("Late"));
+        for (int i = 0; i < 4; ++i) api.begin_frame();
+        run(L, "hs.ReplaceWindow('Script2000')");
+        CHECK(api.replaces("Script2000")); // the stale names made room
+        CHECK_FALSE(api.replaces("Script1"));
+        lua_close(L);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 TEST_CASE("plugin values: deep tables both ways stop at the depth limit, with room on the stack") {
     lua_State* L = luaL_newstate();
     // A UiValue nested 1000 arrays deep (a plugin's answer): only kMaxValueDepth levels become tables.
