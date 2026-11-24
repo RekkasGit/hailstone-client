@@ -12,9 +12,16 @@
 // and the CombatAbilityWnd model: shown only for the classes CCombatAbilityWnd::AboutToShow accepts; a drag from its
 // "Discipline" row n (hs.PickUp("CombatAbilityWnd", "Discipline", n)) makes the discipline's hotbutton.
 #include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
 #include <cstdio>
 #include <ctime>
 #include <limits>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include <lua.hpp>
 
@@ -68,6 +75,36 @@ bool should_display(const net::GameConnection& c, int n) {
 }
 
 // The discipline's hotbutton (CCombatSkillsSelectWnd's Make Hotkey): type 10, value 0x84 + n (DoHotButton runs
+// Every slot's spell and should_display at once, with the same answers: should_display compares each ability with all
+// 300, and hs.Disciplines runs every frame while one cools down (ui/gamepad/abilities.lua). Here each slot's spell is
+// looked up once and a slot is hidden when its group's highest rank (from one sorted pass) is above its own. On the
+// stack, no heap: nothing to leak if a Lua push after it raises.
+struct ListedAbilities {
+    std::array<const game::SpellData*, kCombatAbilities> spell{};
+    std::array<bool, kCombatAbilities> shown{};
+};
+void list_abilities(const net::GameConnection& c, ListedAbilities& out) {
+    std::array<std::pair<std::int32_t, std::int32_t>, kCombatAbilities> ranks{}; // {group, rank}
+    std::size_t count = 0;
+    for (int n = 0; n < kCombatAbilities; ++n) {
+        const game::SpellData* s = c.spell_table().get(c.combat_ability(n)); // (as should_display: an empty slot is id 0)
+        out.spell[static_cast<std::size_t>(n)] = s;
+        if (s) ranks[count++] = {s->spell_group, s->spell_rank};
+    }
+    const auto end = ranks.begin() + static_cast<std::ptrdiff_t>(count);
+    std::sort(ranks.begin(), end);
+    for (std::size_t n = 0; n < out.spell.size(); ++n) {
+        const game::SpellData* s = out.spell[n];
+        if (!s) {
+            out.shown[n] = true; // (as should_display: nothing to compare)
+            continue;
+        }
+        // the last of its group in the sorted list holds the group's highest rank (s itself is in it)
+        auto top = std::upper_bound(ranks.begin(), end, std::pair{s->spell_group, std::numeric_limits<std::int32_t>::max()});
+        out.shown[n] = !(s->spell_rank < std::prev(top)->second);
+    }
+}
+
 // PcZoneClient::doCombatAbility(GetCombatAbility(value - 0x84), 1)), labelled with the spell's name.
 std::optional<game::HotButton> discipline_button(const net::GameConnection& c, int n) {
     const game::SpellData* s = n >= 0 && n < kCombatAbilities ? c.spell_table().get(c.combat_ability(n)) : nullptr;
@@ -87,10 +124,12 @@ int Disciplines(lua_State* L) {
     const std::uint32_t cls = c.visible_class();
     const auto now = static_cast<std::uint32_t>(std::time(nullptr));
     int out = 0;
+    ListedAbilities listed;
+    list_abilities(c, listed);
     for (int n = 0; n < kCombatAbilities; ++n) {
         const std::uint32_t id = c.combat_ability(n);
-        const game::SpellData* s = id ? c.spell_table().get(id) : nullptr;
-        if (!s || !should_display(c, n)) continue;
+        const game::SpellData* s = id ? listed.spell[static_cast<std::size_t>(n)] : nullptr;
+        if (!s || !listed.shown[static_cast<std::size_t>(n)]) continue;
         lua_createtable(L, 0, 10);
         set_int(L, "index", n);
         set_int(L, "spell", id);
@@ -385,8 +424,8 @@ public:
             return std::string(t);
         };
         for (int n = 0; n < kCombatAbilities; ++n) {
-            const game::SpellData* s = c.spell_table().get(c.combat_ability(n));
-            if (!s || !should_display(c, n)) continue;
+            const game::SpellData* s = listed.spell[static_cast<std::size_t>(n)];
+            if (!s || !listed.shown[static_cast<std::size_t>(n)]) continue;
             ListRow r;
             const std::uint32_t target = s->target_type == 6 ? 6816 : s->target_type == 41 ? 6817 : 6818;
             const std::int32_t ticks = host.character ? host.character->spell_duration(*s, c.player_status().level) : 0;
@@ -399,6 +438,8 @@ public:
                        hms(static_cast<std::int32_t>(s->recast_time / 1000)),
                        std::to_string(c.combat_ability_timer(*s))};
             if (n == selected_) list_.selected = static_cast<int>(list_.rows.size());
+        ListedAbilities listed;
+        list_abilities(c, listed);
             list_.rows.push_back(std::move(r));
             rows_.push_back(n);
         }
