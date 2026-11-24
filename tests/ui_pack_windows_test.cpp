@@ -5902,7 +5902,8 @@ TEST_CASE("UI packs (modern): a resized bag window lays its slots out to its wid
 }
 
 // The buff menu (ui/modern/lib/buffmenu.lua): a right click on a target's or the pet's buff opens that buff's menu,
-// and its rows act on the buff that was clicked: Spell Info on the target's, Add to Blocked Pet Spells on the pet's.
+// and its rows act on the buff that was clicked: Spell Info on the target's, Add to Blocked Pet Spells on the pet's,
+// and Remove on a removable pet buff still on the same pet and in the same slot.
 // The frame's own menu stays shut (the buff took the click); Alt with a right click still opens it.
 TEST_CASE("UI packs (modern): a right click on a target's or the pet's buff opens the buff menu") {
     test::ScratchDir scratch("ui_pack_buff_menu_test");
@@ -5928,13 +5929,20 @@ TEST_CASE("UI packs (modern): a right click on a target's or the pet's buff open
         run(R"lua(
 targetShown, petShown = true, true
 targetIcon, petIcon = nil, nil
-menuLabels, menuPick, shownSpell, blocked = {}, nil, nil, {}
-local buffSlot, label, shown, gauge, menuItem, showSpell, setText, clickChild =
-  hs.BuffSlot, hs.Label, hs.WindowShown, hs.Gauge, ui.MenuItem, hs.ShowSpell, hs.SetWindowText, hs.ClickChild
-hs.BuffSlot = function(win, id, overlays)
+menuLabels, menuPick, menuPicked, shownSpell, blocked, removals = {}, nil, nil, nil, {}, {}
+petBeneficial, petEntity, petSlot = true, 104, 19
+local buffSlot, label, shown, gauge, menuItem, showSpell, setText, clickChild, windowButton =
+  hs.BuffSlot, hs.Label, hs.WindowShown, hs.Gauge, ui.MenuItem, hs.ShowSpell, hs.SetWindowText, hs.ClickChild, hs.WindowButton
+hs.BuffSlot = function(win, id, overlays, identity)
   if win == "TargetWindow" and id == "Buff0" then return 11, 60000, "Holy Armor", true end
-  if win == "PetInfoWindow" and id == "PetBuff0" then return 11, 60000, "Holy Armor", true end
-  return buffSlot(win, id, overlays)
+  if win == "PetInfoWindow" and id == "PetBuff0" then
+    local removable = identity and petBeneficial
+    if petBeneficial then
+      return 11, 60000, "Holy Armor", true, 1, removable and petEntity or nil, removable and petSlot or nil
+    end
+    return 12, 60000, "Test Slow", false, 0
+  end
+  return buffSlot(win, id, overlays, identity)
 end
 hs.Label = function(n) if n == 28 then return "a rat" end return label(n) end
 hs.WindowShown = function(win)
@@ -5957,9 +5965,13 @@ hs.ClickChild = function(win, id, button)
   if win == "BlockedPetBuffWnd" then blocked.add = id .. ":" .. tostring(button); return true end
   return clickChild(win, id, button)
 end
+hs.WindowButton = function(win, id, message)
+  if win == "PetInfoWindow" then removals[#removals + 1] = id .. ":" .. tostring(message); return true end
+  return windowButton(win, id, message)
+end
 ui.MenuItem = function(text, ...)
   menuLabels[#menuLabels + 1] = text
-  if text == menuPick then return true end
+  if text == menuPick then menuPicked = text; return true end
   return menuItem(text, ...)
 end
 local button = ui.InvisibleButton
@@ -5999,7 +6011,7 @@ end
         auto closeMenu = [&] {
             ImGui::ClosePopupsExceptModals();
             s.frames(1);
-            run("menuPick, menuLabels = nil, {}");
+            run("menuPick, menuPicked, menuLabels = nil, nil, {}");
         };
         // the target's buff: Spell Info, and the frame's menu stays shut
         run("menuPick = 'Spell Info'");
@@ -6021,8 +6033,33 @@ end
         press(centre("petIcon"));
         CHECK(run("return blocked.edit") == "BW_EditSpellToBlockFromPet=11");
         CHECK(run("return blocked.add") == "BW_AddSpellToBlockFromPet:left");
-        CHECK(run("return table.concat(menuLabels, '|')") == "Spell Info|Add to Blocked Pet Spells");
+        CHECK(run("return table.concat(menuLabels, '|')") == "Spell Info|Add to Blocked Pet Spells|Remove");
         run("menuPick = nil");
+        release();
+        closeMenu();
+        run("menuPick = 'Remove'");
+        press(centre("petIcon"));
+        CHECK(run("return table.concat(removals, '|')") == "PetBuff0:3");
+        run("menuPick = nil");
+        release();
+        closeMenu();
+
+        // The same spell under the same display icon is a different effect after either change.
+        for (const char* change : {"petEntity = 105", "petSlot = 20"}) {
+            press(centre("petIcon"));
+            CHECK(run("return menuLabels[#menuLabels]") == "Remove");
+            run(change);
+            run("menuPick = 'Remove'");
+            release();
+            CHECK(run("return menuPicked") == "Remove");
+            CHECK(run("return table.concat(removals, '|')") == "PetBuff0:3");
+            closeMenu();
+        }
+
+        run("petBeneficial, menuPick = false, 'Remove'");
+        press(centre("petIcon"));
+        CHECK(run("return table.concat(menuLabels, '|')") == "Spell Info|Add to Blocked Pet Spells");
+        CHECK(run("return table.concat(removals, '|')") == "PetBuff0:3");
         release();
         closeMenu();
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
