@@ -225,9 +225,13 @@ std::optional<std::size_t> player_from_partial_name(std::string_view word, const
 
 std::string who_race_name(const EqStrings& strings, std::uint32_t race_id) {
     if (race_id == 0) return {};
-    auto name = strings.db_string(race_id, eRaceName); // GetRaceDesc @0x515ce0
+    // HandleWhoAllResponse @0x4bc010: a playable race's name is CharacterZoneClient_GetRaceDescription's (race_name
+    // here), any other race's dbstr type 11 (GetRaceDesc @0x515ce0), as an illusion reports it.
+    if (is_playable_race(race_id)) return race_name(race_id);
+    auto name = strings.db_string(race_id, eRaceName);
     if (!name.empty() && !hailstone::iequals(name, "UNKNOWN RACE")) return name;
-    // Illusion Tree (spell 601) uses this race, which RoF2's dbstr labels UNKNOWN RACE.
+    // A deliberate difference from RoF2, which prints dbstr's "UNKNOWN RACE" as it stands: the client's own label
+    // instead, "Tree" for Illusion Tree's race (spell 601), "Race <id>" when it has none.
     if (race_id == Race::Tree) return "Tree";
     return race_name(race_id);
 }

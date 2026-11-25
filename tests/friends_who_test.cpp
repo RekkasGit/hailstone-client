@@ -113,6 +113,7 @@ TEST_CASE("who: zone replies show the same illusion race names in chat and Lua")
     std::ofstream(scratch.path() / "eqstr_us.txt") << "5025 %4 (%5)\n";
     std::ofstream(scratch.path() / "dbstr_us.txt")
         << "0^11^Unused Name\n"
+        << "2^11^Not The Client's Barbarian\n"
         << "143^11^UNKNOWN RACE\n"
         << "209^11^Earth Elemental\n"
         << "367^11^Skeleton\n"
@@ -128,6 +129,8 @@ TEST_CASE("who: zone replies show the same illusion race names in chat and Lua")
         const char* label;
     } cases[] = {
         {1, "Player", "Human"},
+        // A playable race takes the client's own name, not dbstr's (HandleWhoAllResponse).
+        {2, "Barbarian", "Barbarian"},
         {367, "SkeletonIllusion", "Skeleton"},
         {209, "ElementalIllusion", "Earth Elemental"},
         {143, "TreeIllusion", "Tree"},

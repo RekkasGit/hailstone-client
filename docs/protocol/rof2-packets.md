@@ -933,9 +933,11 @@ The language part is 1411 " in <language>," (language names from the client's ta
 #### Chat: /who race labels
 
 The stock chat lines and the `raceName` field returned by `hs.WhoResults()` use the race id sent in
-`WhoAllResponse`, which may be the player's current illusion. They take the name from `dbstr_us.txt` type 11
-(`GetRaceDesc` at `0x515ce0`). Missing, empty or `UNKNOWN RACE` entries use the built-in race labels, `Tree`
-for the Illusion Tree model (143), or `Race <id>` for an otherwise unknown id. A zero race id has an empty label.
+`WhoAllResponse`, which may be the player's current illusion. As `HandleWhoAllResponse` (`0x4bc010`) does, a
+playable race takes the client's own name (`CharacterZoneClient_GetRaceDescription`) and any other race the name
+in `dbstr_us.txt` type 11 (`GetRaceDesc` at `0x515ce0`). Where RoF2 would print a missing, empty or `UNKNOWN RACE`
+entry as it stands, Hailstone deliberately uses its built-in race label instead: `Tree` for the Illusion Tree model
+(143), or `Race <id>` for an otherwise unknown id. A zero race id has an empty label.
 
 #### Chat: /who friends
 
