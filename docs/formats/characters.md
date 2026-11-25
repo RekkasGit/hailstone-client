@@ -561,6 +561,11 @@ grip space; skeletal ones are baked in their rest pose.
 - EQG models use `ARMR_WEAP`, `ARML_WEAP`, `ARML_SHLD` and the bone's bind matrix.
 - Items are not tinted (`itmt.ini[Primary/SecondaryTintIndex]` is not read).
 
+After a client-side inventory move or bandolier activation, Hailstone sends `OP_WearChange` for the refreshed hands.
+It uses the same model number as the local appearance, including ornaments, or 0 for an empty hand. EQEmu's
+inventory move only broadcasts armor slots, and its bandolier activation sends no wear changes. EQEmu relays the
+client's held-model updates to the other players in the zone. Server-driven inventory refreshes apply locally.
+
 The local player's ranged attack changes the held models as the original does. `PlayerZoneClient::DoAttack`
 @0x5a5000 for the range slot (after another kind of attack) sets 7 and 8 to "0" and 8 to the range item;
 `DoRangedAttack` @0x5a4920 then sets 7 to "0" and 8 to the range item (`ItemBase_GetIDFile(0x22)` @0x7b3e70: its main

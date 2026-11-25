@@ -437,19 +437,21 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
 
 // ---------------------------------------------------------------- moves
 
-void GameConnection::refresh_worn_slot(int slot) {
-    // PcClient_RefreshWornSlotVisual: our own model shows what we wear, its
-    // ornament included (game::worn_look). The server sends OP_WearChange to
-    // everyone else, not to us.
-    int ms = game::material_slot(slot);
+void GameConnection::refresh_worn_slot(int slot, bool publish_held_model) {
+    // PcClient_RefreshWornSlotVisual sets our own worn appearance with ornaments.
+    const int ms = game::material_slot(slot);
     if (ms < 0) return;
     auto it = world_.spawns.find(world_.player_id);
     if (it == world_.spawns.end()) return;
     const Item* item = inventory_.at(ItemSlot::possessions(static_cast<std::int16_t>(slot)));
     game::WornLook look;
     if (item) look = game::worn_look(*item, ms);
-    game::apply_wear_change(it->second.appearance, static_cast<std::uint8_t>(ms), look.material, look.hero_forge,
-                            look.tint);
+    const auto material_slot = static_cast<std::uint8_t>(ms);
+    game::apply_wear_change(it->second.appearance, material_slot, look.material, look.hero_forge, look.tint);
+    // EQEmu's SwapItem only maps armor slots through SlotConvert2, and SetBandolier sends no wear changes.
+    // Publish the worn hand model through the wear-change relay after a client-initiated equipment change.
+    if (publish_held_model && (ms == game::kSlotPrimary || ms == game::kSlotSecondary))
+        send_held_model(material_slot, look.material);
     refresh_instrument_state();
 }
 
@@ -466,15 +468,16 @@ void GameConnection::set_held_model(int held, int item_slot) {
     game::Appearance& a = it->second.appearance;
     const auto slot = static_cast<std::uint8_t>(held);
     game::apply_wear_change(a, slot, look.material, 0, look.tint);
-    // SetHeldModel's last step (quiet 0, online): {spawn id, the model number, tint, slot}. Stock EQEmu relays it to
-    // the other clients in the zone (Client::Handle_OP_WearChange) and keeps no state of it, so a later zone-in shows
-    // the worn primary and secondary again. The model is the IT number (0 for "0"); the four dwords after it stay 0
-    // as SetHeldModel leaves them. The tint is ItemBase_GetPaletteTintIndex of the primary (slot 7) or secondary
-    // (slot 8) item, a definition field (+0x570) the item serialisation is not known to carry: 0 (docs/unknowns.md).
+    send_held_model(slot, look.material);
+}
+
+void GameConnection::send_held_model(std::uint8_t slot, std::uint32_t material) {
+    // EQEmu's Client::Handle_OP_WearChange relays SetHeldModel's update to the other clients. The four words after
+    // material are zero. The palette tint index is not known to be serialized with the item (docs/unknowns.md).
     if (!zone_ready_) return;
     WearChange w;
     w.spawn_id = static_cast<std::uint16_t>(world_.player_id);
-    w.armor.material = look.material;
+    w.armor.material = material;
     w.slot = slot;
     send_zone(encode(w));
 }
@@ -516,9 +519,9 @@ bool GameConnection::move_item(const ItemSlot& from, const ItemSlot& to, std::ui
     m.from = from;
     m.to = to;
     m.count = count;
-    send_zone(encode(m));
-    if (is_worn(from)) refresh_worn_slot(from.slot);
-    if (is_worn(to)) refresh_worn_slot(to.slot);
+    const bool sent = send_zone(encode(m));
+    if (is_worn(from)) refresh_worn_slot(from.slot, sent);
+    if (is_worn(to)) refresh_worn_slot(to.slot, sent);
     // CTradeWnd_OnTradeItemMoved (game/trade_rules.h): a move into or out of a trade slot clears both ready flags.
     if (trade_) {
         game::TradeFlags f{trade_->their_ready, trade_->my_ready};
