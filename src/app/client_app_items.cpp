@@ -4,6 +4,7 @@
 #include "app/lua_ui_windows.h"
 #include "game/interact.h"
 #include "game/item_notify.h"
+#include "game/window_notify.h"
 
 namespace hailstone::app::client_internal {
 
@@ -243,6 +244,43 @@ void ClientApp::run_with_keys(std::string_view line, net::SlotClickKeys keys) {
 // put down, loot), rightmouseup its right click (use, read, open or close a bag), rightmouseheld the item's display.
 // MQ clicks the slot's window, so a closed bag's slot works only through its fallbacks; here every slot works as if
 // its window were open.
+void ClientApp::notify_command(std::string_view args) {
+    if (!conn_) return;
+    const game::WindowNotify n = game::parse_window_notify(args);
+    if (!n.error.empty()) {
+        conn_->ui_message(n.error);
+        return;
+    }
+    // With a UI, the stock window takes it as the player's click would, its own checks and all.
+    if (ui_api_) {
+        bool done = false;
+        if (n.notification == "listselect") done = ui_api_->select_list(n.window, n.child, n.value - 1, 0);
+        else if (n.notification == "tabselect") ui_api_->set_tab_page(n.window, n.child, n.value - 1), done = true;
+        else done = ui_api_->click_child(n.window, n.child, n.notification == "rightmouseup" ? "rightup" : "left");
+        if (!done) log::info("/notify: {} {} {}: nothing took it", n.window, n.child, n.notification);
+        return;
+    }
+    // Without one (a headless client): the buttons whose handler is one connection call, while their window shows.
+    if (n.notification != "leftmouseup") return;
+    auto& c = *conn_;
+    using A = game::NotifyAction;
+    switch (game::notify_action(n.window, n.child)) {
+    case A::TradeAccept: if (c.trade() && c.trade()->open) c.trade_accept(); break;
+    case A::TradeCancel: if (c.trade() && c.trade()->open) c.trade_cancel(); break;
+    case A::LootAll: if (c.loot_session()) c.loot_all(); break;
+    case A::LootDone: if (c.loot_session()) c.end_loot(); break;
+    case A::ConfirmYes: if (c.confirmation()) c.answer_confirmation(true); break;
+    case A::ConfirmNo: if (c.confirmation()) c.answer_confirmation(false); break;
+    case A::LargeDialogYes: if (c.large_dialog()) c.answer_large_dialog(1); break;
+    case A::LargeDialogNo: if (c.large_dialog()) c.answer_large_dialog(2); break;
+    case A::TaskDecline: if (c.tasks().offers) c.decline_tasks(); break;
+    case A::BankAuto: if (c.bank()) c.auto_bank(); break;
+    case A::BankDone: if (c.bank()) c.close_bank(); break;
+    case A::TributeToggle: c.tribute_toggle(!c.tribute().settings.active); break;
+    case A::None: log::info("/notify: {} {}: needs the UI", n.window, n.child); break;
+    }
+}
+
 void ClientApp::itemnotify_command(std::string_view args) {
     if (!conn_) return;
     const game::ItemNotify n = game::parse_item_notify(args);

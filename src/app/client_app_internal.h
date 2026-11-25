@@ -526,6 +526,9 @@ public:
         automation_->hooks().add_command(plugin::Hooks::kClient, "/itemnotify", [this](std::string_view args) {
             itemnotify_command(args);
         }, plugin::kCapActions);
+        automation_->hooks().add_command(plugin::Hooks::kClient, "/notify", [this](std::string_view args) {
+            notify_command(args);
+        }, plugin::kCapActions);
         // MQ's /nomodkey, /shiftkey and /ctrlkey: the command after them runs with those keys forced for its clicks
         // (E3 sends "/nomodkey /itemnotify ..." so a key the player holds changes nothing). The line itself is checked
         // as any line is, the caller's permissions held.
@@ -961,6 +964,9 @@ private:
     // /itemnotify (game/item_notify.h): the mouse notification on the slot or item the line names, with command_keys()
     // (client_app_items.cpp).
     void itemnotify_command(std::string_view args);
+    // /notify (game/window_notify.h): a window child's click, list or tab selection; on the stock window with a UI,
+    // else the connection's call for the buttons notify_action() knows.
+    void notify_command(std::string_view args);
     // The modifier keys a command's click uses: those /nomodkey, /shiftkey or /ctrlkey forced while their line runs,
     // else the keyboard's (MacroQuest's clicks read the keyboard too).
     net::SlotClickKeys command_keys() const;

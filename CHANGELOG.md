@@ -3,6 +3,7 @@
 ## Unreleased
 
 - `${Window[...]}` answers from the client's own state for the casting, spell book, loot, merchant, bank, trade, give and dialog windows and `pack1`..`pack10`, so scripts that ask whether one is open work with no UI.
+- New command `/notify` (MacroQuest's): clicks a window's button, or selects a list row or tab, by MacroQuest's window and child names. E3 accepts trades and gives, finishes looting and answers dialogs with it; those buttons work with no UI too.
 - New commands `/itemnotify` (click an item slot, a slot in a bag, or an item by name: `leftmouseup`, `rightmouseup`, `rightmouseheld`) and `/nomodkey`, `/shiftkey` and `/ctrlkey` (run a line with the modifier keys forced), as in MacroQuest: E3 moves, sells, trades and loots items with them.
 - New commands, as in MacroQuest (E3 uses them): `/makemevisible`, `/removelev`, `/removeaura <name>`, `/memspell <gem> "<spell name or id>"` and `/click left|right target`. `/memspell` and `/click` used to run the game's `/memspellset` and `/clickthrough`, whose names they abbreviate.
 - New command `/doortarget [id <n> | <name>] | clear` and TLO `${DoorTarget}` (`.ID`, `.Name`, `.X`, `.Y`, `.Z`, `.Distance`, `.Open` ...), and new TLOs `${Merchant}` (`.Open`, `.ItemsReceived`, `.Items`, `.Item[n|name]`, `.Markup`) and `${Mercenary}` (its state, `.Name` and its spawn's members), as in MacroQuest; new members `${Me.TargetOfTarget}`, `${Me.Instance}`, `${EverQuest.Ping}`, `${EverQuest.Foreground}` and `${Navigation.Velocity}`.
