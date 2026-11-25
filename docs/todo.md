@@ -283,6 +283,8 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - One instanced model per definition, a few matrices a frame.
   - Without an authored volume, solid where the animation has them, so the rings let a player into the water shaft and out at the top. Seen live 2026-11-18.
   - Authored skeleton volumes keep the trunks solid and the branches passable in Warsliks Woods and other classic zones.
+  - The verified jungle leaf cards are passable in Trakanon's Teeth and other zones that reuse the models, matching
+    their server collision maps (docs/formats/wld.md, "Placed-object animation").
 - [ ] **Animated zone objects, open** (docs/unknowns.md).
   - The phase against the original's clock.
   - D3DX's key compression.

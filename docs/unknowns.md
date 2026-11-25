@@ -471,6 +471,8 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - Settle: a live session with GM `#set flymode` and buffs, or a trace of the cache flag's writers.
 
 - **Animated zone objects** (docs/formats/wld.md "Placed-object animation", docs/mechanics.md "Animated zone objects").
+  - The jungle leaf correction follows the server collision maps. An original-client traversal of the same foliage
+    has yet to be recorded. The generic WLD polygon sweep reads the authored solid flags.
   - Phase: each definition's controller starts with the zone's load here; the original's starts when its first actor
     is made, also at the zone's load. The gap between the original's object creation and its first frame was not
     measured, so the phase may differ by that much.

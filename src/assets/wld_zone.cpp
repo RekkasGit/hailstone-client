@@ -480,6 +480,19 @@ bool decorative_slime_mesh(std::string_view zone, std::string_view actor, const 
            std::ranges::find(layouts, zone) != std::end(layouts);
 }
 
+void make_jungle_leaves_passable(std::string_view actor, Mesh& mesh) {
+    std::string_view leaf_material = "CMPLANT105_MDF";
+    if (actor == "JNTREE102_ACTORDEF") leaf_material = "JNTR2LEAF_MDF";
+    else if (actor != "CMPLANT105_ACTORDEF" && actor != "CMPLANT105B_ACTORDEF" && actor != "JNTREE101_ACTORDEF")
+        return;
+
+    // The classic zone maps keep these plants' stems solid and omit the leaf cards. The WLD marks both solid.
+    for (auto& part : mesh.parts) {
+        const auto& material = mesh.materials[part.material];
+        if (material.raw_render_method == 0x80000013 && material.name == leaf_material) part.solid = false;
+    }
+}
+
 // Adds every static (mesh-sprite) actor definition of a WLD to the zone and
 // returns the fragment indices of the meshes they use. Skeletal actors' 0x34
 // particle nodes go to `particles`, also for an actor without a mesh. `own` is
@@ -519,6 +532,7 @@ std::unordered_set<const wld::Fragment*> add_actor_defs(Zone& zone, const wld::W
                 if (const auto* sk = w.get<wld::Skeleton>(sref->skeleton)) {
                     built = wld::build_skeleton_pose(w, *sk, f.name, &built_nodes);
                     if (!built) ++failed;
+                    if (built && !sk->collision_volume) make_jungle_leaves_passable(key, *built);
                     // A skeleton volume is in actor space, independent of its mesh centres and bone poses.
                     if (built && new_mesh && sk->collision_volume)
                         append_collision_hull(w, sk->collision_volume, glm::vec3(0.0f), placement_hull);
