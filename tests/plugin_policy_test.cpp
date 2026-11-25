@@ -216,6 +216,19 @@ TEST_CASE("command catalog: stock aliases, extended commands, and live add-on re
     CHECK(plugin::parse_server_cfg("[commands]\nblock_groups = addon_commands\n").commands.allowed("/mapfilter"));
     CHECK(plugin::parse_server_cfg("[commands]\nblock_groups = non_rof2\n").commands.decision("/MapFilter").reason ==
           "non_rof2");
+    // PR 210's commands are built in too; /click and /memspell are their own, not RoF2's /clickthrough and
+    // /memspellset taken by prefix, and the modifier-key commands are helpers like /docommand.
+    for (const char* name : {"/click", "/ctrlkey", "/doortarget", "/itemnotify", "/makemevisible", "/memspell",
+                             "/nomodkey", "/removeaura", "/removelev", "/shiftkey"}) {
+        CAPTURE(name);
+        const auto row = find(name);
+        REQUIRE(row != rows.end());
+        CHECK(row->origin == plugin::CommandOrigin::Extended);
+        CHECK(plugin::canonical_command_name(name) == name);
+    }
+    CHECK(plugin::canonical_command_name("/clickthrough") == "/clickthrough");
+    CHECK(find("/nomodkey")->groups == std::vector<std::string>{"non_rof2", "command_helpers"});
+    CHECK(plugin::parse_server_cfg("[commands]\nblock_groups = addon_commands\n").commands.allowed("/itemnotify"));
     auto target = find("/target");
     REQUIRE(target != rows.end());
     CHECK(target->origin == plugin::CommandOrigin::Stock);
