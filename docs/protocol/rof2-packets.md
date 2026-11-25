@@ -930,6 +930,13 @@ The language part is 1411 " in <language>," (language names from the client's ta
 | Consent / ConsentDeny | C→Z | 0x1fd1 / 0x7a45 | the name, NUL-terminated |
 | SpawnAppearance 21 / 24 | C→Z | 0x0971 | anonymous flags (1 anonymous, 2 roleplaying) / AFK; other spawns' 18 linkdead, 20 GM, 22 guild id, 23 guild rank, 52 guild show, 53 offline mode update `game::Spawn` (the guild lines: Guilds below) |
 
+#### Chat: /who race labels
+
+The stock chat lines and the `raceName` field returned by `hs.WhoResults()` use the race id sent in
+`WhoAllResponse`, which may be the player's current illusion. They take the name from `dbstr_us.txt` type 11
+(`GetRaceDesc` at `0x515ce0`). Missing, empty or `UNKNOWN RACE` entries use the built-in race labels, `Tree`
+for the Illusion Tree model (143), or `Race <id>` for an otherwise unknown id. A zero race id has an empty label.
+
 #### Chat: /who friends
 
 `/who friends` (also the localised `friend` word and `/who all friends`) sends the saved list through FriendsWho instead of WhoAllRequest.

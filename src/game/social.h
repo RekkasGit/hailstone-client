@@ -55,6 +55,9 @@ struct WhoParse {
 // guild name the guild; anything else the name.
 WhoParse parse_who_args(const std::string& args, const WhoContext& ctx, const EqStrings& strings);
 
+// The reported race's display name, including illusions. A race id of zero has no label.
+std::string who_race_name(const EqStrings& strings, std::uint32_t race_id);
+
 // HandleWhoAllResponse @0x4bc010: the lines to print (colour 0x119), in
 // order: the title and rule line, one per player, the footer.
 // `multiclass_masks`: the class field is a bit mask of classes (NMS).
