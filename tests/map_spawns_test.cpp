@@ -503,6 +503,38 @@ TEST_CASE("Map filters: ground objects draw without a full item database") {
     for (const auto& draw : kMapDraws) CHECK(marked_vertices(r.L, draw, kGround) > 0);
 }
 
+TEST_CASE("Map filters: a ground object gone by the end of collection is not drawn") {
+    for (const auto& draw : kMapDraws) {
+        CAPTURE(draw);
+        auto filter = std::make_shared<MarkerFilter>();
+        MarkerRig r(filter);
+        auto& ground = net::GameConnectionTestAccess::ground_objects(*r.world.conn);
+        for (const std::uint32_t id : {98u, 99u}) {
+            game::GroundObject object;
+            object.drop_id = id;
+            object.name = "IT63_ACTORDEF";
+            object.position = game::server_to_world({id == 98u ? 20.0f : -20.0f, 0.0f, 0.0f});
+            ground.push_back(object);
+        }
+        r.filters.set_enabled(mq::MapFilter::Ground, true);
+        constexpr ImU32 kGround = IM_COL32(0xc0, 0xc0, 0xc0, 0);
+        filter->policy_queries = 0;
+        const int both = marked_vertices(r.L, draw, kGround);
+        REQUIRE(both > 0);
+        const auto final_query = filter->policy_queries;
+        filter->policy_queries = 0;
+        filter->on_policy = [&] {
+            if (filter->policy_queries != final_query) return; // the final source query, after the collection
+            std::erase_if(ground, [](const game::GroundObject& o) { return o.drop_id == 99; });
+        };
+        const int one = marked_vertices(r.L, draw, kGround);
+        filter->on_policy = {};
+        CHECK(one > 0);
+        CHECK(one < both);
+        CHECK(marked_vertices(r.L, draw, kGround) == one); // and stays gone
+    }
+}
+
 TEST_CASE("Map filters: vectors, markers and target overlays draw on every map view") {
     MarkerRig r;
     r.filters.set_enabled(mq::MapFilter::Npc, true);

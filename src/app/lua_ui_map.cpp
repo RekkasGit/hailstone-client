@@ -38,6 +38,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -1461,11 +1462,17 @@ MapMarkers map_markers(UiHost& h, mq::MapFilters* filters, int active_layer, boo
             f.target = mark->is_target();
             return !f.target && in_view && !in_view(f.at);
         });
+        // One table of the current ground objects for every mark, not a scan of them per mark. Nothing below calls
+        // a provider, so the pointers stay valid. (The first object with an id wins, as a scan would find it.)
+        std::unordered_map<std::uint32_t, const game::GroundObject*> ground_now;
+        if (!out.ground.empty()) {
+            ground_now.reserve(c.ground_objects().size());
+            for (const auto& object : c.ground_objects()) ground_now.emplace(object.drop_id, &object);
+        }
         std::erase_if(out.ground, [&](GroundMark& g) {
-            const auto found = std::find_if(c.ground_objects().begin(), c.ground_objects().end(),
-                                            [&](const game::GroundObject& object) { return object.drop_id == g.drop_id; });
-            if (found == c.ground_objects().end()) return true;
-            g.object = *found;
+            const auto found = ground_now.find(g.drop_id);
+            if (found == ground_now.end()) return true;
+            g.object = *found->second;
             g.at = game::world_to_map(g.object.position);
             g.mark.label = mq::MapFilters::ground_label(g.object);
             return in_view && !in_view(g.at);
