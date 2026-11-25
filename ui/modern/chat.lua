@@ -41,6 +41,7 @@ local function state(slot)
     c.onLink = function(link) API.chat.Link(slot, link[1], link[2]) end
     c.inputOpts = {
       moveToEnd = false,
+      colorSpans = function(text) return chatlinks.ColorSpans(c.links, text, stml.LINK) end,
       history = function(older)
         local line = API.chat.History(slot, older)
         if line then c.links = {}; line = collapseLinks(c, line) end

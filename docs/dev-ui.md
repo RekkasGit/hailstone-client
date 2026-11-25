@@ -575,6 +575,7 @@ Spell sets (`game/spell_sets.h`, `net/game_connection_spell_sets.cpp`) are the c
 The bindings (`lua_imgui.cpp`) take only ImGui's public window flags, refuse calls ImGui would only assert on, and draw images only from live client textures (`src/ui/texture_ids.h`). Additions:
 
 - `ui.CodeEditor` (`lua_code_editor.cpp`): a Lua editor with colours from `src/ui/code_syntax.h`, an error line and completion. An editor not drawn for about a minute, or any not drawn last frame once more than 256 exist, is forgotten.
+- A hidden-label, single-line `ui.InputText` can take `options.colorSpans(editedText)` to color parts of the edited text. Return a sorted list of disjoint `{firstByte, lastByte, {r, g, b, a}}` ranges with inclusive, 1-based UTF-8 byte offsets. The field retains its native selection, cursor, and scrolling.
 - `ui.SetClipboardText` / `GetClipboardText`; MQ scripts get them only with every capability (docs/plugins.md).
 - `ui.EdgeButton(id, x0, y0, x1, y1)`: an invisible button reaching the window's outer edge.
 - `ui.FindWindowRect(name)`: a window's place and size by name (nothing for one never drawn).
@@ -745,7 +746,7 @@ AchievementsWnd and AchievementWnd (`achievements.lua`, both packs; `lib/achieve
 
 **Closing and ownership.** Close with `hs.ShowWindow("AchievementsWnd", false)` / `hs.ShowWindow("AchievementWnd", false)`. Only an explicit main-window open may request a refresh; drawing or reading never does. A reopened detail keeps its source. Catalog or connection replacement invalidates indices and detail ownership. Comparisons and linked snapshots never replace own state, and linked details have no reward/share buttons. Acceptance means local selection or request admission, not a server grant.
 
-**Chat composition** (`lib/chatlinks.lua`, both packs): item and achievement tags are stored intact while the editor shows readable labels; the expanded prefix goes back to `hs.ChatTakeFocus`, and Send restores the exact tags. Malformed achievement envelopes show a generic label. A tagged line expanding past ten tags or 512 raw bytes (the gamepad channel prefix included) is rejected intact with a visible error, so the network never truncates through a tag; untagged chat keeps its longer limit. The gamepad edit field holds the same 2048-byte buffer as Modern.
+**Chat composition** (`lib/chatlinks.lua`, both packs) stores item, say, and achievement tags intact while the editor shows their labels in the current chat link color. The draft and chat history use the same palette color. The editor expands the highlighted spans for `hs.ChatTakeFocus` and Send. Malformed achievement envelopes show a generic label. A tagged line expanding past ten tags or 512 raw bytes (the gamepad channel prefix included) is rejected intact with a visible error, so the network never truncates through a tag. Untagged chat keeps its longer limit. The gamepad edit field holds the same 2048-byte buffer as Modern.
 
 #### `lua_ui_map.cpp`
 
