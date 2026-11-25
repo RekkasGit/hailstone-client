@@ -505,6 +505,7 @@ TEST_CASE("Advanced Inventory bulk destroy: the client asks first unless the shi
     bound.no_drop = 0; // No Trade
     inv.push_back(bound);
     inv.push_back(make_item(2007, "Old Boot", 27));
+    inv.push_back(make_item(2008, "Bent Nail", 29));
     net::ConnectionOptions options = quick_options();
     options.servers_dir = scratch.path();
     Rig rig(std::move(config), options);
@@ -562,6 +563,28 @@ TEST_CASE("Advanced Inventory bulk destroy: the client asks first unless the shi
     REQUIRE(conn.item_job());
     REQUIRE(rig.until([&] { return !conn.item_job(); }));
     CHECK(id_at(conn, 27) == 0u);
+
+    // Under an interface Hailstone does not ship, the question is the client's own window (UiHost::client_confirm),
+    // which that interface may never draw nor answer: only its Yes starts the job
+    host.trusted_ui = false;
+    bulk("{ 'i:29' }");
+    CHECK(lua_toboolean(L, 3)); // asked
+    CHECK_FALSE(host.confirm);
+    REQUIRE(host.client_confirm);
+    CHECK(host.client_confirm->text == "Destroy 1 item? This cannot be undone.");
+    bulk("{ 'i:29' }");
+    CHECK(std::string(lua_tostring(L, 2)) == "Answer the open question first.");
+    app::answer_client_confirm(host, false);
+    CHECK_FALSE(host.client_confirm);
+    CHECK_FALSE(conn.item_job());
+    CHECK(id_at(conn, 29) == 2008u);
+    bulk("{ 'i:29' }");
+    CHECK_FALSE(conn.item_job());
+    app::answer_client_confirm(host, true);
+    REQUIRE(conn.item_job());
+    REQUIRE(rig.until([&] { return !conn.item_job(); }));
+    CHECK(id_at(conn, 29) == 0u);
+    host.trusted_ui = true;
 
     // Fast Item Destroy: no question
     conn.change_client_option(game::ClientOption::FastItemDestroy, 1);

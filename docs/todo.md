@@ -586,6 +586,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] An update's approval holds only for the capabilities and version the player saw.
 - [x] **The player's word wins over a check under way:** an add-on removed meanwhile is not installed again; auto-update switched off meanwhile is not overridden; an update keeps the switch as it is at install time.
 - [x] Scripts started by a script or plugin get no more than their starter; `scripts/config/` never runs as code.
+- [x] **Permanent actions under an add-on or hand-made interface** (a character's delete, a bulk destroy) are asked in the client's own window (`UiHost::client_confirm`), which no Lua code sees or answers, so the question appears even when that interface draws no ConfirmationDialogBox.
 - [x] **A server's compiled plugins load only once the player allowed their bytes for that server** (`servers/<profile>/plugin_approvals.txt`). The prompt in both packs and the client's own; changed from the add-on list.
 - [x] A module runs only in a script it may do as much as: an add-on's module is refused in a script that may do more.
 - [x] **Binding a command needs 'commands'.** Scripts and plugins cannot shadow the game's or the client's own commands (`Hooks::new_guest`, `reserved_command`).

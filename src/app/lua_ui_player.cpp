@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include "app/actions_ui.h"
 #include "app/lua_ui_windows.h"
@@ -1443,6 +1444,48 @@ private:
 };
 
 } // namespace
+
+void ask_confirm(UiHost& host, UiHost::Confirm c) {
+    if (host.trusted_ui) host.confirm = std::move(c);
+    else host.client_confirm = std::move(c);
+}
+
+bool confirm_open(const UiHost& host) { return host.confirm || host.client_confirm; }
+
+void answer_client_confirm(UiHost& host, bool yes) {
+    if (!host.client_confirm) return;
+    auto done = std::move(host.client_confirm->done);
+    host.client_confirm.reset();
+    if (done) done(yes);
+}
+
+// Centred, raised above the interface's windows each frame (it is drawn after them), and its own ImGui window: Lua
+// can neither find it among the stock windows nor click it. The close box answers No.
+void draw_client_confirm(UiHost& host) {
+    if (!host.client_confirm) return;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.5f),
+                            ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowBgAlpha(0.95f);
+    constexpr const char* kName = "Confirm###hailstone_client_confirm";
+    if (const ImGuiWindow* w = ImGui::FindWindowByName(kName); !w || !w->WasActive) ImGui::SetNextWindowFocus();
+    bool open = true;
+    std::optional<bool> answer;
+    if (ImGui::Begin(kName, &open,
+                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse)) {
+        ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+        const float em = ImGui::GetFontSize();
+        ImGui::PushTextWrapPos(em * 26.0f);
+        ImGui::TextUnformatted(host.client_confirm->text.c_str());
+        ImGui::PopTextWrapPos();
+        if (ImGui::Button("Yes", ImVec2(em * 6.0f, 0.0f))) answer = true;
+        ImGui::SameLine();
+        if (ImGui::Button("No", ImVec2(em * 6.0f, 0.0f))) answer = false;
+    }
+    ImGui::End();
+    if (!open) answer = false;
+    if (answer) answer_client_confirm(host, *answer);
+}
 
 // Hailstone's player menu (a deliberate difference; game::opens_player_menu). The rows' words are this client's own:
 // the original has no such menu to take them from.

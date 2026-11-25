@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Under an add-on or hand-made interface, deleting a character or bulk-destroying items asks in a window of the client's own, so the question always appears (before, an interface that drew no confirmation box left the action waiting with no prompt)
 - If the update feed ever serves an older release than one it showed before, the login screen's corner says "Not up to date: the update feed went back to ..." instead of "Up to date", and nothing is installed
 - Under a Barbarian, Troll or Ogre citizen illusion (races 90, 92 and 93), Slam and Bash need the Bash skill and a shield, as in the original client, instead of sending an attack the server ignores
 - Perf window: **Log hitches** no longer calls every frame a hitch after the frame rate drops for good (a heavier zone, a slower power state); after 30 hitches in a row the typical frame time starts again from the latest frame

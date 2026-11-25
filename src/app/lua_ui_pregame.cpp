@@ -978,11 +978,12 @@ int CharacterSelectDo(lua_State* L) {
         } else if (what == "create") action = A::Create;
         else if (what == "delete") {
             // Deleting is permanent, so the client owns the question. The shipped packs' own code asks first in its
-            // own look (ui/*/charselect.lua) and takes this as its answer; any other caller (an interface Hailstone
-            // does not ship) gets the client's ConfirmationDialogBox naming the character, and only its Yes deletes,
-            // and only while the same character is still picked.
+            // own look (ui/*/charselect.lua) and takes this as its answer; any other caller gets the client's question
+            // naming the character (ask_confirm: the shipped pack's ConfirmationDialogBox, or under an interface
+            // Hailstone does not ship the client's own window), and only its Yes deletes, and only while the same
+            // character is still picked.
             if (picked && h.trusted_ui && ui::lua::pack_code(L)) action = A::Delete;
-            else if (picked && !h.confirm) {
+            else if (picked && !confirm_open(h)) {
                 core::cxx_guard(L, [&h, &v] {
                     std::string name = v.characters[static_cast<std::size_t>(v.selected)].name;
                     UiHost::Confirm c;
@@ -995,7 +996,7 @@ int CharacterSelectDo(lua_State* L) {
                             return;
                         h.char_select_action = static_cast<int>(A::Delete);
                     };
-                    h.confirm = std::move(c);
+                    ask_confirm(h, std::move(c));
                 });
                 ok = true;
             }

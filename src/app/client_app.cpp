@@ -256,6 +256,9 @@ int ClientApp::run() {
         if (screen_ == Screen::InGame && zone_settling() && !loading_under_question_) ui::loading_overlay(loading_view_);
         if (automation_ && ui_.visible()) automation_->imgui(game_view_.dev_windows);
         if (ui_.visible()) addon_policy_window();
+        // A permanent action asked under an interface Hailstone does not ship: the client's own question, drawn
+        // whether or not the interface draws ConfirmationDialogBox (UiHost::client_confirm).
+        draw_client_confirm(ui_host_);
         // The server plugins' question waits: the loading screen (draw_ui's, or the settling's) is a window beneath
         // it, drawn after every other window and with the question raised again above it (ui::loading_overlay).
         if (loading_under_question_ && ((screen_ == Screen::InGame && zone_settling()) ||

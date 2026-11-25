@@ -317,7 +317,7 @@ std::string ask_bulk_destroy(UiHost& h, net::GameConnection& c, const std::vecto
     if (auto why = c.bulk_items_blocked(net::GameConnection::ItemJobMode::Destroy); !why.empty()) return why;
     const std::vector<net::ItemSlot> plan = c.bulk_items_plan(net::GameConnection::ItemJobMode::Destroy, slots);
     if (plan.empty()) return c.start_bulk_job(net::GameConnection::ItemJobMode::Destroy, slots); // (its own answer)
-    if (h.confirm) return "Answer the open question first.";
+    if (confirm_open(h)) return "Answer the open question first.";
     std::size_t bound = 0;
     for (const net::ItemSlot& at : plan)
         if (const net::Item* it = c.inventory().at(at); it && (it->no_trade() || it->attuned)) ++bound;
@@ -338,7 +338,7 @@ std::string ask_bulk_destroy(UiHost& h, net::GameConnection& c, const std::vecto
         if (auto why = now.start_bulk_job(net::GameConnection::ItemJobMode::Destroy, slots); !why.empty())
             log::info("bulk destroy: {}", why);
     };
-    h.confirm = std::move(q);
+    ask_confirm(h, std::move(q)); // (under an interface Hailstone does not ship, the client's own window)
     return {};
 }
 
