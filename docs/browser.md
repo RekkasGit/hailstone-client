@@ -198,6 +198,12 @@ Tabs and frames:
   folder below it. CEF writes nothing else (checked on Linux).
 - One program for all of CEF's processes. Each tab is an off-screen browser (`windowless_frame_rate` 30); a new
   window (`window.open`, `target=_blank`) opens in the same tab.
+- **`main` has no stack protector** (`NO_STACK_PROTECTOR`, as CEF's own examples and `CefExecuteProcess`), and
+  calls `CefExecuteProcess` itself. On Linux Chromium gives each of its other processes a new stack canary while it
+  runs (`--change-stack-guard-on-fork`), so a function of ours under that call with a canary check would abort the
+  process with glibc's `*** stack smashing detected ***` on the way out. Before, utility processes (an unzipper a
+  few seconds after the start, say) ended so when done, printing it to the client's standard error. The browser
+  process's own code runs after the call returns, in a function of its own.
 - **The client's pipes are the browser process's alone.** Before `CefInitialize` it moves them to private copies,
   closed across exec on POSIX and not inheritable on Windows, and points standard input and output (and Windows'
   standard handles) at the null device (`platform::take_protocol_stdio`). CEF's renderers, GPU and utility

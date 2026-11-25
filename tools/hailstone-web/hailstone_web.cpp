@@ -29,6 +29,7 @@
 #include <utility>
 #include <vector>
 
+#include "include/base/cef_compiler_specific.h"
 #include "include/cef_app.h"
 #include "include/cef_browser.h"
 #include "include/cef_client.h"
@@ -695,14 +696,10 @@ bool sandbox_possible() {
 // False once the message loop has ended: the reader posts nothing to a CEF that is shutting down.
 std::atomic<bool> g_running{true};
 
-int run(const CefMainArgs& main_args, const std::vector<std::string>& args) {
-    CefRefPtr<App> app = new App;
-    // CEF's other processes are this program too: they run here and end.
-    const int code = CefExecuteProcess(main_args, app, nullptr);
-    if (code >= 0) return code;
-
-    // Only here, in the browser process: CEF's other processes returned above, and those it starts from now on
-    // inherit standard input and output.
+// The browser process, once CefExecuteProcess (in main) has said this is it.
+int run_browser(const CefMainArgs& main_args, CefRefPtr<App> app, const std::vector<std::string>& args) {
+    // Only here, in the browser process: CEF's other processes returned from CefExecuteProcess, and those it starts
+    // from now on inherit standard input and output.
     if (!hailstone::platform::take_protocol_stdio(g_client)) {
         std::fprintf(stderr, "hailstone-web: could not take the client's pipes off standard input and output\n");
         return 2;
@@ -759,12 +756,28 @@ int run(const CefMainArgs& main_args, const std::vector<std::string>& args) {
 
 } // namespace
 
+// CEF's other processes are this program too: CefExecuteProcess runs one and returns its exit code. Chromium may give
+// such a process a new stack canary while it runs (--change-stack-guard-on-fork, on Linux), so no function on the
+// stack around that call may check its canary on return: main is NO_STACK_PROTECTOR and calls CefExecuteProcess
+// itself (CEF's wrapper is marked so too), with nothing of ours in between. A frame with a canary there would end
+// every such process that returns (a utility process at the end of its job, say) in glibc's "*** stack smashing
+// detected ***" abort. The browser process's code runs in a function of its own, called only after it returned.
 #if defined(_WIN32)
-int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
+NO_STACK_PROTECTOR int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
+    const CefMainArgs main_args(instance);
+    CefRefPtr<App> app = new App;
+    const int code = CefExecuteProcess(main_args, app, nullptr);
+    if (code >= 0) return code;
     std::vector<std::string> args;
     for (int i = 0; i < __argc; ++i) args.push_back(CefString(__wargv[i]).ToString()); // UTF-16 to UTF-8
-    return run(CefMainArgs(instance), args);
+    return run_browser(main_args, app, args);
 }
 #else
-int main(int argc, char** argv) { return run(CefMainArgs(argc, argv), std::vector<std::string>(argv, argv + argc)); }
+NO_STACK_PROTECTOR int main(int argc, char** argv) {
+    const CefMainArgs main_args(argc, argv);
+    CefRefPtr<App> app = new App;
+    const int code = CefExecuteProcess(main_args, app, nullptr);
+    if (code >= 0) return code;
+    return run_browser(main_args, app, std::vector<std::string>(argv, argv + argc));
+}
 #endif

@@ -5,6 +5,8 @@
 #include <cfloat>
 #include <chrono>
 #include <deque>
+#include <fstream>
+#include <iterator>
 #include <thread>
 
 #include <imgui.h>
@@ -1175,6 +1177,45 @@ TEST_CASE("browser host: the CEF helper draws a page and passes messages both wa
     CHECK_FALSE(t->closed);
     host.shutdown();
 }
+
+#if !defined(_WIN32)
+// CEF's other processes run this program too and return from CefExecuteProcess when they are done (its utility
+// processes a few seconds after the start). Chromium gives them a new stack canary while they run
+// (--change-stack-guard-on-fork), so a canary check on the way back out ended each in glibc's "stack smashing
+// detected" abort until main was made NO_STACK_PROTECTOR (tools/hailstone-web). The helper's standard error, which
+// its processes share, goes to a file here (through sh) for the length of a session that outlives those processes.
+TEST_CASE("browser host: CEF's other processes end without a stack-protector abort") {
+    test::ScratchDir data("hailstone-web-canary");
+    const std::string err = (data.path() / "stderr.txt").string();
+    const std::string web = (data.path() / "web").string();
+    BrowserHost host([&] {
+        return process_transport({"/bin/sh", "-c", "exec \"$0\" \"$1\" 2>\"$2\"", HAILSTONE_WEB_HELPER,
+                                  "--data=" + web, err});
+    });
+    TabOptions o = script({"example.net"});
+    o.width = 64;
+    o.height = 64;
+    o.profile = web + "/server";
+    auto id = host.open("about:blank", o);
+    REQUIRE(id != 0);
+    const Tab* t = host.tab(id);
+    REQUIRE(pump(host, 0, [&] { return t->view.width == 64 && !t->loading; }));
+    auto log = [&] {
+        std::ifstream f(err, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+    };
+    // Seen 3.5 to 5 s after the start before the fix; given 8.
+    const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(8);
+    while (std::chrono::steady_clock::now() < until && log().find("stack smashing") == std::string::npos) {
+        host.poll(0);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    CHECK_FALSE(t->closed);
+    host.shutdown();
+    INFO(log());
+    CHECK(log().find("stack smashing") == std::string::npos);
+}
+#endif
 
 TEST_CASE("browser host: the CEF helper quits by itself at Shutdown, with a tab open (its cookies written)") {
     test::ScratchDir data("hailstone-web-quit");
