@@ -770,7 +770,10 @@ Materials map to passes like zone materials (`render/material_state.h`):
 
 - Back faces are culled (WLD fronts clockwise, EQG counter-clockwise in this frame; two-sided materials not culled).
 - Cross-fades last 100 ms, 175 ms into P01/O01.
-- Fog matches `zone.frag`. A soft key light (0.8 + 0.25·N·L) keeps bodies readable while the zone is full-bright.
+- Fog matches `zone.frag` for opaque and alpha-blended actors. For additive actors, fog and underwater absorption
+  attenuate the material's colour. Fog colour, underwater shafts and the rain sheen would show the edges of dark
+  additive textures, such as the faerie dragon's wing cards, so the additive pass omits them.
+- A soft key light (0.8 + 0.25·N·L) keeps bodies readable while the zone is full-bright.
 
 #### Animation choice
 
