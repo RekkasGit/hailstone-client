@@ -5,6 +5,8 @@
 #include <cfloat>
 #include <chrono>
 #include <deque>
+#include <fstream>
+#include <iterator>
 #include <thread>
 
 #include <imgui.h>
@@ -1175,6 +1177,107 @@ TEST_CASE("browser host: the CEF helper draws a page and passes messages both wa
     CHECK_FALSE(t->closed);
     host.shutdown();
 }
+
+// A <select>'s list longer and wider than the tab, at the tab's bottom right corner: CEF has the list reaching past
+// the view, and the helper (TabClient::inside_view) moves it inside, no larger than the view, so the client takes its
+// image (a popup larger than the tab is dropped) and draws it where the helper says.
+TEST_CASE("browser host: the CEF helper keeps a select's list inside a small tab") {
+    test::ScratchDir data("hailstone-web-popup");
+    BrowserHost host([&] { return process_transport({HAILSTONE_WEB_HELPER, "--data=" + data.path().string()}); });
+    TabOptions o = script({"example.net"});
+    o.width = 160;
+    o.height = 90;
+    o.profile = (data.path() / "server").string();
+    auto id = host.open("about:blank", o);
+    REQUIRE(id != 0);
+    const Tab* t = host.tab(id);
+    REQUIRE(pump(host, 0, [&] { return t->view.width == 160 && !t->loading; }));
+    std::string options;
+    for (int i = 0; i < 40; ++i) options += "<option>option number " + std::to_string(i) + " with a long name</option>";
+    host.eval(id, "document.body.style.margin = '0';"
+                  "document.body.innerHTML = '<select id=\"s\" style=\"position:absolute; right:0; bottom:0;"
+                  " width:40px; height:20px\">" + options + "</select>';"
+                  "document.getElementById('s').onchange = function() {"
+                  " hailstone.post('picked ' + this.selectedIndex); };"
+                  "hailstone.post('placed');");
+    REQUIRE(pump(host, 0, [&] { return !host.take_messages(id).empty(); }));
+    host.focus(id, true);
+    // A click in the middle of the select (the tab's last 40x20 pixels) opens its list.
+    for (MouseKind kind : {MouseKind::Move, MouseKind::Down, MouseKind::Up}) {
+        Mouse m;
+        m.tab = id;
+        m.kind = kind;
+        m.x = 140;
+        m.y = 80;
+        host.mouse(m);
+    }
+    REQUIRE(pump(host, 0, [&] { return t->popup_shown && t->popup.width > 0 && t->popup.height > 0; }));
+    CHECK(t->popup_x >= 0);
+    CHECK(t->popup_y >= 0);
+    CHECK(t->popup_x + t->popup.width <= 160);
+    CHECK(t->popup_y + t->popup.height <= 90);
+    // Drawn: the list's pixels came through, not only its place.
+    bool painted = false;
+    for (std::byte b : t->popup.bgra) painted |= b != std::byte{0};
+    CHECK(painted);
+    // A click near the list's bottom left, where the client draws it, picks an entry other than the first: the
+    // helper moves it back to where CEF has the list (a click there unmoved would miss the list and only close it).
+    for (MouseKind kind : {MouseKind::Move, MouseKind::Down, MouseKind::Up}) {
+        Mouse m;
+        m.tab = id;
+        m.kind = kind;
+        m.x = t->popup_x + 10;
+        m.y = t->popup_y + t->popup.height - 8;
+        host.mouse(m);
+    }
+    std::vector<std::string> got;
+    REQUIRE(pump(host, 0, [&] {
+        for (auto& m : host.take_messages(id)) got.push_back(m);
+        return !got.empty();
+    }));
+    CHECK(got.front().rfind("picked ", 0) == 0);
+    CHECK(got.front() != "picked 0");
+    host.shutdown();
+}
+
+#if !defined(_WIN32)
+// CEF's other processes run this program too and return from CefExecuteProcess when they are done (its utility
+// processes a few seconds after the start). Chromium gives them a new stack canary while they run
+// (--change-stack-guard-on-fork), so a canary check on the way back out ended each in glibc's "stack smashing
+// detected" abort until main was made NO_STACK_PROTECTOR (tools/hailstone-web). The helper's standard error, which
+// its processes share, goes to a file here (through sh) for the length of a session that outlives those processes.
+TEST_CASE("browser host: CEF's other processes end without a stack-protector abort") {
+    test::ScratchDir data("hailstone-web-canary");
+    const std::string err = (data.path() / "stderr.txt").string();
+    const std::string web = (data.path() / "web").string();
+    BrowserHost host([&] {
+        return process_transport({"/bin/sh", "-c", "exec \"$0\" \"$1\" 2>\"$2\"", HAILSTONE_WEB_HELPER,
+                                  "--data=" + web, err});
+    });
+    TabOptions o = script({"example.net"});
+    o.width = 64;
+    o.height = 64;
+    o.profile = web + "/server";
+    auto id = host.open("about:blank", o);
+    REQUIRE(id != 0);
+    const Tab* t = host.tab(id);
+    REQUIRE(pump(host, 0, [&] { return t->view.width == 64 && !t->loading; }));
+    auto log = [&] {
+        std::ifstream f(err, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+    };
+    // Seen 3.5 to 5 s after the start before the fix; given 8.
+    const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(8);
+    while (std::chrono::steady_clock::now() < until && log().find("stack smashing") == std::string::npos) {
+        host.poll(0);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    CHECK_FALSE(t->closed);
+    host.shutdown();
+    INFO(log());
+    CHECK(log().find("stack smashing") == std::string::npos);
+}
+#endif
 
 TEST_CASE("browser host: the CEF helper quits by itself at Shutdown, with a tab open (its cookies written)") {
     test::ScratchDir data("hailstone-web-quit");

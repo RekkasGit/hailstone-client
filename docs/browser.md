@@ -113,7 +113,9 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
     the change to make if full-screen frames turn out too slow.
   - A popup (`OnPopupShow`, select lists) is a second, smaller image. The helper places it inside the view, no larger
     than it, moving it in where CEF has it reaching past an edge (the mouse over it is moved back for CEF), as CEF's
-    own off-screen example does.
+    own off-screen example does. Tested through the real helper: a select at a 160x90 tab's corner, whose list CEF
+    puts at x 120, 226 wide, comes inside the tab, drawn, and a click on it picks an entry. Only the horizontal case
+    is exercised: Chromium itself kept that list's height and place inside the view.
 - **The helper's life** (`web/browser_host.h`). Started at the first tab. A helper that exits or sends a broken
   message is restarted a second later, with every open tab at its last address and size. After four deaths within a
   minute the client gives up, closes the tabs and opens pages in the system's browser. One that answers the hello
@@ -198,6 +200,12 @@ Tabs and frames:
   folder below it. CEF writes nothing else (checked on Linux).
 - One program for all of CEF's processes. Each tab is an off-screen browser (`windowless_frame_rate` 30); a new
   window (`window.open`, `target=_blank`) opens in the same tab.
+- **`main` has no stack protector** (`NO_STACK_PROTECTOR`, as CEF's own examples and `CefExecuteProcess`), and
+  calls `CefExecuteProcess` itself. On Linux Chromium gives each of its other processes a new stack canary while it
+  runs (`--change-stack-guard-on-fork`), so a function of ours under that call with a canary check would abort the
+  process with glibc's `*** stack smashing detected ***` on the way out. Before, utility processes (an unzipper a
+  few seconds after the start, say) ended so when done, printing it to the client's standard error. The browser
+  process's own code runs after the call returns, in a function of its own.
 - **The client's pipes are the browser process's alone.** Before `CefInitialize` it moves them to private copies,
   closed across exec on POSIX and not inheritable on Windows, and points standard input and output (and Windows'
   standard handles) at the null device (`platform::take_protocol_stdio`). CEF's renderers, GPU and utility
