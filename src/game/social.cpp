@@ -223,6 +223,15 @@ std::optional<std::size_t> player_from_partial_name(std::string_view word, const
     return best;
 }
 
+std::string who_race_name(const EqStrings& strings, std::uint32_t race_id) {
+    if (race_id == 0) return {};
+    auto name = strings.db_string(race_id, eRaceName); // GetRaceDesc @0x515ce0
+    if (!name.empty() && !hailstone::iequals(name, "UNKNOWN RACE")) return name;
+    // Illusion Tree (spell 601) uses this race, which RoF2's dbstr labels UNKNOWN RACE.
+    if (race_id == Race::Tree) return "Tree";
+    return race_name(race_id);
+}
+
 std::vector<std::string> format_who_response(const net::WhoResponse& r, const EqStrings& strings, bool multiclass_masks) {
     std::vector<std::string> lines;
     if (r.title_string != 0xffffffff) {
@@ -266,7 +275,7 @@ std::vector<std::string> format_who_response(const net::WhoResponse& r, const Eq
             } else if (e.class_ != 0) {
                 klass = who_class_text(strings, static_cast<std::int32_t>(e.class_), static_cast<std::int32_t>(e.level));
             }
-            std::string race = e.race ? race_name(e.race) : std::string();
+            std::string race = who_race_name(strings, e.race);
             lines.push_back(str(strings, e.format,
                                 {prefix, std::to_string(e.level), klass, e.name, race, e.guild, zone, pid, extra}));
         } else if (e.format == 5023) {
