@@ -251,6 +251,7 @@ class ContextAttack final : public melee::AttackQueries {
 public:
     ContextAttack(const SkillContext& ctx, SkillState& state, SkillResult& out) : ctx_(ctx), st_(state), out_(out) {}
     void set_me(const melee::Spawn* me) { me_ = me; }
+    void set_slam(bool slam) { slam_ = slam; }
 
     bool has_character() override { return ctx_.ch != nullptr; }
     std::int32_t total_effect(std::int32_t spa) override { return ctx_.ch->total_effect(spa, true, 0, true, true); }
@@ -297,7 +298,7 @@ public:
     std::uint8_t can_use_combat_skill(std::int32_t slot, std::int32_t skill) override {
         if (skill > 99) return 0; // IsSkillIdBelow100
         if (slot != 100) return 1;
-        return mechanics::can_use_combat_skill(ctx_, static_cast<std::uint32_t>(skill)) ? 1 : 0;
+        return mechanics::can_use_combat_skill(ctx_, static_cast<std::uint32_t>(skill), slam_) ? 1 : 0;
     }
     melee::ItemRef item(std::int32_t slot) override { return ctx_.ch->sheet().item(slot) ? slot : melee::kNoItem; }
     melee::ItemRef weapon_ref_item(std::int32_t slot, bool fist, bool) override {
@@ -453,6 +454,7 @@ private:
     SkillState& st_;
     SkillResult& out_;
     const melee::Spawn* me_ = nullptr;
+    bool slam_ = false;
     std::optional<std::vector<int>> affects_;
     std::size_t removed_ = 0;
 };
@@ -495,7 +497,7 @@ bool can_i_hit(const SkillContext& ctx, float extra_range, SkillResult& out) {
     return melee::can_i_hit(me, t, extra_range, q, ctx.ch->fpu());
 }
 
-bool can_use_combat_skill(const SkillContext& ctx, std::uint32_t skill) {
+bool can_use_combat_skill(const SkillContext& ctx, std::uint32_t skill, bool slam) {
     if (skill > 99) return false; // IsSkillIdBelow100
     if (skill_table_entry(skill).base_damage < 1) return false;
     const CharacterSheet& sheet = ctx.ch->sheet();
@@ -506,6 +508,11 @@ bool can_use_combat_skill(const SkillContext& ctx, std::uint32_t skill) {
     if (skill == skill::kBash && (race == 9 || race == 10 || race == 2)) return true;
     if (adjusted_skill(*ctx.ch, skill) <= 0) return false; // CharacterZoneClient::HasSkill @0x44a1b0
     if (skill != skill::kBash || ctx.me.type != 0) return true;
+    // A deliberate change to a RoF2 rule (docs/mechanics.md "Slam"): Slam's attack needs no shield. The original
+    // asks the races 90, 92 and 93, which have the innate Slam but not the race pass above, for the shield as for
+    // Bash; Hailstone asks only for the Bash skill, which EQEmu's OPCombatAbility wants from them too (it bypasses
+    // the skill only for races 2, 9 and 10, by GetRace, and checks no shield).
+    if (slam) return true;
     // Bash: a shield in the secondary slot, one of three primary items, or a two-hander with SPA 226.
     bool allowed = true;
     const net::Item* secondary = sheet.item(14);
@@ -522,11 +529,13 @@ bool can_use_combat_skill(const SkillContext& ctx, std::uint32_t skill) {
     return allowed;
 }
 
-bool do_attack(const SkillContext& ctx, SkillState& state, std::uint8_t slot, std::uint32_t skill, SkillResult& out) {
+bool do_attack(const SkillContext& ctx, SkillState& state, std::uint8_t slot, std::uint32_t skill, SkillResult& out,
+               bool slam) {
     if (!ctx.ch) return false;
     ContextAttack q(ctx, state, out);
     melee::Spawn me = melee_spawn(ctx.me, ctx.stand_state);
     q.set_me(&me);
+    q.set_slam(slam);
     std::optional<melee::Spawn> target;
     if (ctx.target && !ctx.target_is_me) target = melee_spawn(*ctx.target, 100);
     const melee::Spawn* t = ctx.target_is_me ? &me : target ? &*target : nullptr;
@@ -701,7 +710,7 @@ public:
     }
     bool do_attack(useskill::Spawn&, std::int32_t slot, std::uint32_t skill, useskill::Spawn*) override {
         if (slot != 100) return false;
-        bool done = do_attack_skill(ctx_, st_, skill, out_);
+        bool done = mechanics::do_attack(ctx_, st_, 100, skill, out_, slam);
         for (std::size_t i = 0; i < 2; ++i) me_.combat_skill_used[i] = static_cast<std::int32_t>(st_.timers.combat_used[i]);
         return done;
     }
@@ -848,6 +857,9 @@ private:
     useskill::Spawn& me_;
     useskill::Spawn* target_;
     std::vector<const net::Item*> items_;
+
+public:
+    bool slam = false; // this UseSkill runs Slam (111): its DoAttack(100, 10) needs no shield (can_use_combat_skill)
 };
 
 useskill::Spawn spawn_of(const SkillActor& a) {
@@ -872,6 +884,8 @@ SkillResult use_skill(const SkillContext& ctx, SkillState& state, std::uint32_t 
     if (!ctx.ch) return out;
     // Racial Slam follows the current appearance, including illusions. Route Bash through the
     // shieldless Slam path when the current form supplies it, even if the base race cannot Slam.
+    // Under a 90, 92 or 93 form Slam still needs the Bash skill (can_use_combat_skill), so a character without it
+    // sends nothing, which EQEmu would drop.
     if (id == skill::kBash && ctx.form_slam != 0xff) id = skill::kSlam;
     useskill::Spawn me = spawn_of(ctx.me);
     me.stand_state = ctx.stand_state;
@@ -909,6 +923,7 @@ SkillResult use_skill(const SkillContext& ctx, SkillState& state, std::uint32_t 
     s.hide_position = {state.hide_x, state.hide_y, state.hide_z};
     s.precision = ctx.ch->fpu().precision();
     ContextQueries q(ctx, state, out, me, target ? &*target : nullptr);
+    q.slam = id == skill::kSlam;
     useskill::use_skill(s, id, q);
     state.sneaking = me.sneak != 0;
     state.fishing = me.fishing_event != 0;

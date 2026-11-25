@@ -250,12 +250,15 @@ double bearing(double y1, double x1, double y2, double x2);
 float melee_range(const SkillActor* a, const SkillActor* b);
 // PlayerZoneClient::CanIHit @0x5a2940 (the caller passes the player's SPA 40 total).
 bool can_i_hit(const SkillContext& ctx, float extra_range, SkillResult& out);
-// PlayerZoneClient::CanUseCombatSkill @0x5a2f10 for slot 100.
-bool can_use_combat_skill(const SkillContext& ctx, std::uint32_t skill);
+// PlayerZoneClient::CanUseCombatSkill @0x5a2f10 for slot 100. `slam`: the attack is Slam's (UseSkill's skill 111),
+// whose Bash needs no shield (a deliberate change, docs/mechanics.md "Slam").
+bool can_use_combat_skill(const SkillContext& ctx, std::uint32_t skill, bool slam = false);
 // PlayerZoneClient::DoAttack @0x5a5000 for the local player (game/mechanics/melee.h) on this context:
 // slots 13 / 14 (auto attack; the swings go to SkillResult::swings) and 100 (a combat skill: OP_CombatAbility).
 // `skill` is the argument as passed (DoAttack compares its low byte). Returns the original's al.
-bool do_attack(const SkillContext& ctx, SkillState& state, std::uint8_t slot, std::uint32_t skill, SkillResult& out);
+// `slam` as for can_use_combat_skill.
+bool do_attack(const SkillContext& ctx, SkillState& state, std::uint8_t slot, std::uint32_t skill, SkillResult& out,
+               bool slam = false);
 // DoAttack(100, skill, target).
 bool do_attack_skill(const SkillContext& ctx, SkillState& state, std::uint32_t skill, SkillResult& out);
 // DoPassageOfTime @0x45daf0's swing timers on this context, in its order: the attack-on reset (@0x45db76,
