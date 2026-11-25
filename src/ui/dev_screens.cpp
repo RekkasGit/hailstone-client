@@ -18,6 +18,7 @@
 #include "core/ascii_case.h"
 #include "core/config.h"
 #include "core/wipe.h"
+#include "game/chat_windows.h"
 #include "game/eq_names.h"
 #include "game/zone_names.h"
 #include "game/gamepad_bindings.h"
@@ -34,6 +35,16 @@ const ImVec4 kErrorColor{1.0f, 0.42f, 0.38f, 1.0f};
 const ImVec4 kDimColor{0.62f, 0.64f, 0.68f, 1.0f};
 const ImVec4 kGoodColor{0.45f, 0.85f, 0.45f, 1.0f};
 const ImVec4 kLockedColor{1.0f, 0.75f, 0.30f, 1.0f};
+
+bool chat_replaced() {
+    // Moving or combining tabs can leave Chat1 empty while another frame draws the chat.
+    static const auto screens = [] {
+        std::array<std::string, game::kChatWindowSlots> names;
+        for (std::size_t i = 0; i < names.size(); ++i) names[i] = std::format("Chat{}", i + 1);
+        return names;
+    }();
+    return std::ranges::any_of(screens, lua::replaces);
+}
 
 // Places the next window centred on the screen with a size in font-height units.
 void center_next_window(float width_em, float height_em = 0.0f) {
@@ -2335,7 +2346,7 @@ InGameActions in_game_overlay(InGameView& view) {
     if (!lua::replaces("PlayerWindow")) player_window(view.player, actions);
     if (!lua::replaces("TargetWindow")) target_window(view.target, view.player.attacking, actions);
     if (!lua::replaces("RespawnWnd")) respawn_window(view.respawn, actions);
-    if (view.show_chat && !lua::replaces("Chat1")) actions.chat_submit = chat_window(view.chat, &view.show_chat);
+    if (view.show_chat && !chat_replaced()) actions.chat_submit = chat_window(view.chat, &view.show_chat);
     if (view.dev_windows && view.show_spawns) actions.target_spawn = spawn_list_window(view.spawns, &view.show_spawns);
     return actions;
 }

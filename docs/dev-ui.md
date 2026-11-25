@@ -77,6 +77,10 @@ the strip and overflow button visually unchanged when that tab receives new mess
 scrollbar. Groups, names, order, selection and tab settings are saved per character. The native model is shared by
 the Modern controls, [`hs.UI.chat`](ui-api.md#chat-tabs-and-windows) and [`/chattabs`](commands.md).
 
+Any active UI pack replacement for `Chat1` through `Chat32` suppresses the built-in fallback chat. Chat works
+in the remaining frames when moves or combines leave frame 1 empty. The fallback is available when the pack
+provides no chat, and `ui.cpp_windows=1` can show it alongside the pack for debugging.
+
 The menu's first rows are the original's, in its order (Window, Scrollbar, New Chat Window, Rename Window, Always
 Chat Here, the tell menus, Filters, Channel, Language, Hit Modes); the tab rows, highlight settings, Font Size, Use
 Tell Windows and Timestamps are Hailstone's and follow. Rename Window renames the frame, Rename Tab the chat window it
