@@ -495,6 +495,8 @@ TEST_CASE("TLO: Group, items, Zone and the rest") {
     CHECK(f.p("${Me.FreeInventory}") == "11"); // 8 empty general slots + 3 in the bag
     CHECK(f.p("${Cursor}") == "NULL");
     CHECK(f.p("${Window[InventoryWindow].Open} ${Window[BankWnd].Open}") == "TRUE FALSE");
+    // pack1..10: TRUE while the slot holds a bag (its slots work with the window closed).
+    CHECK(f.p("${Window[pack2].Open} ${Window[pack1].Open} ${Window[pack11].Open}") == "TRUE FALSE FALSE");
     CHECK(f.p("${EverQuest.GameState} ${EverQuest.Server}") == "INGAME TestServer");
     // MacroQuest.Path[config] is the scripts' settings folder; MQ's other names stay NULL until settled.
     CHECK(f.p("${MacroQuest.Path[config]}") == "NULL"); // no folder given
@@ -1245,6 +1247,32 @@ TEST_CASE("TLO: Merchant, its stock and ItemsReceived") {
     CHECK(f.p("${Merchant.ID} ${Merchant.CleanName}") == "11 Fippy Darkpaw");
     m->open = false;
     CHECK(f.p("${Merchant.Open} ${Merchant.ItemsReceived} ${Merchant.Item[1]}") == "FALSE FALSE NULL");
+}
+
+TEST_CASE("TLO: Window.Open from the connection's state, with no UI") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    auto& c = *f.world.conn;
+    // The fixture's UI shows InventoryWindow alone: these windows answer from the connection, not from it.
+    CHECK(f.p("${Window[MerchantWnd].Open} ${Window[BigBankWnd]} ${Window[LootWnd].Open} ${Window[TradeWnd].Open}") ==
+          "FALSE FALSE FALSE FALSE");
+    CHECK(f.p("${Window[SpellBookWnd].Open} ${Window[CastingWindow].Open} ${Window[ConfirmationDialogBox].Open}") ==
+          "FALSE FALSE FALSE");
+    A::merchant(c).emplace().open = true;
+    A::bank(c).emplace().slots = 24;
+    A::spell_book_open(c) = true;
+    CHECK(f.p("${Window[merchantwnd].Open} ${Window[BigBankWnd].Open} ${Window[BankWnd].Open} ${Window[SpellBookWnd]}") ==
+          "TRUE TRUE FALSE TRUE");
+    A::bank(c)->slots = 16; // CBankWnd from BankWnd for a 16-slot bank
+    CHECK(f.p("${Window[BigBankWnd].Open} ${Window[BankWnd].Open}") == "FALSE TRUE");
+    auto& t = A::trade(c).emplace();
+    t.open = true;
+    t.with_npc = true;
+    CHECK(f.p("${Window[GiveWnd].Open} ${Window[TradeWnd].Open}") == "TRUE FALSE");
+    t.with_npc = false;
+    CHECK(f.p("${Window[GiveWnd].Open} ${Window[TradeWnd].Open}") == "FALSE TRUE");
+    // A window the connection knows nothing of asks the UI.
+    CHECK(f.p("${Window[InventoryWindow].Open} ${Window[FriendsWindow].Open}") == "TRUE FALSE");
 }
 
 TEST_CASE("TLO: /doortarget and DoorTarget") {

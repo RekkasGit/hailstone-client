@@ -59,6 +59,8 @@ struct GameConnectionTestAccess {
     }
     static std::optional<MerchantSession>& merchant(GameConnection& c) { return c.merchant_; }
     static std::optional<BankSession>& bank(GameConnection& c) { return c.bank_; }
+    static std::optional<TradeSession>& trade(GameConnection& c) { return c.trade_; }
+    static bool& spell_book_open(GameConnection& c) { return c.spell_book_open_; }
     static std::optional<GameConnection::LootSession>& loot(GameConnection& c) { return c.loot_; }
     static GameConnection::Tribute& tribute(GameConnection& c) { return c.tribute_; }
     static game::BankCoins& bank_coins(GameConnection& c) { return c.bank_coins_; }

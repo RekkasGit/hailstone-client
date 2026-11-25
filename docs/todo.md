@@ -600,7 +600,14 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] `mq.TLO` values' metatable locked, so a script cannot swap in a `__gc`.
 - [x] **MQ's `Math` TLO (its Calculate arithmetic), `If` and `Range`,** and the rest of MQ's int, float and string members with MQ's edge cases (`mq/calc.h`).
 - [x] The TLO members E3 reads on `Me`, items, spells, `Target`, spawns and `Group` (aggro, AAs, disciplines, gem and cast timers, augments, item links, the client's own stacking rules for `StacksWith` / `WillLand`). Unit tests only; not tried with E3.
-- [ ] `Spell.StacksWithDiscs` (its spell column is not decoded) and other MQ plugins' TLOs (`DanNet`, `NetBots`, `MoveUtils`) and `Defined` and window controls (`Window.Child`, `/invoke`), which E3 also reads.
+- [ ] `Spell.StacksWithDiscs` (its spell column is not decoded) and other MQ plugins' TLOs (`DanNet`, `NetBots`, `MoveUtils`) and `Defined`, which E3 also reads.
+- [x] `Window[name].Open` from the connection's state for the windows that mirror it (casting, spell book, loot, merchant, bank, trade, give, dialogs, `pack1`..`pack10`), with no UI needed. Unit tests only.
+- [ ] **E3's window controls, UI-independent.** `Window.Child[name]` (`.Text`, `.Enabled`, `.Value`, `.List[=text,col]`, `.LeftMouseUp`), `DoOpen` and `DoClose`, and `/notify <window> <child> leftmouseup|listselect n|newvalue n|tabselect n` and `/invoke`, answered and run from the connection for the windows E3 uses:
+  - children read: `CAW_CombatEffectTimeRemainingGauge` (the disc's time left), `AAP_*AbilityButton` text (the Actions buttons), `MW_SelectedItemLabel`, `MW_Buy/Sell_Button` enabled, `ItemList` rows, `QTYW_SliderInput`, `TRDW_HisName`, `cd_textoutput`, `AltCurr_PointList`;
+  - actions: trade/give accept and cancel, loot done/all/broadcast, merchant select/buy/sell/done, quantity slider and accept, bank auto and done, the dialogs' yes/no/accept/decline, respawn select, tribute activate, raid unlock, `IW_Money0` and the alternate currency buttons;
+  - child names match MQ's: the XML `item` name or the ScreenID, any case (`cd_textoutput` is `TextOutput`, `TSEL_AcceptButton` `AcceptButton`, `BIGB_AutoButton` `AutoButton`); page names (`ActionsAbilitiesPage`, `TBW_PersonalPage`) resolve to their window;
+  - the connection takes over the window-made quantity requests (merchant Buy/Sell, `IW_Money0`), which `UiHost::quantity` holds now;
+  - with a UI loaded, any other window goes to its stock window (`UiApi::click_child`, `select_list`, `set_slider`).
 - [x] MQ's `Raid` and `Corpse` TLOs, and `Me.Invulnerable`, `Mount`, `CurrentFavor`, `TributeActive`, `SpellShieldBonus`, `SpellDamageBonus`, `PetBuff`, and the spells' `CounterType` and `CounterNumber`. Unit tests only.
 - [x] **Spawn searches follow MacroQuest's words and matching rules** (`mq/spawn_search.h`): spawn types, pets, 3D radius, named test, group, raid, guild, xtarget, light, player state.
 - [x] **The alerts key** (CMD_HISTORIC_ALERTS, __ExecuteCmd case 168) toggles AlertHistoryWnd in both packs; listed with its Shift+H default. Seen live in the Modern pack.

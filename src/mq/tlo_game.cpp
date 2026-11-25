@@ -1211,6 +1211,47 @@ void register_group() {
     });
 }
 
+
+// Whether stock window `name` shows, from the connection's state where the window only mirrors it (MacroQuest's
+// scripts ask the UI what the client knows: ${Window[CastingWindow].Open} for "casting"). These answer with no UI
+// at all (a headless client) and agree with the stock windows' own shown() (app/lua_ui_*.cpp). pack1..pack10 are
+// TRUE while that slot holds a bag: a Hailstone bag's slots can be clicked with its window closed (/itemnotify),
+// which is what a script opens it for. Nothing for any other name.
+std::optional<bool> game_window_open(const Context& c, std::string_view name) {
+    if (!c.conn) return std::nullopt;
+    const GameConnection& k = *c.conn;
+    auto is = [&](std::string_view w) { return iequals(name, w); };
+    if (is("CastingWindow")) return k.spell_state().casting.casting();
+    if (is("SpellBookWnd")) return k.spell_book_open();
+    if (is("LootWnd")) return k.loot_session() && k.loot_session()->open;
+    if (is("MerchantWnd")) return k.merchant() && k.merchant()->open;
+    // CBankWnd is built from BigBankWnd (24 slots) or BankWnd (16), by the account's bank size.
+    if (is("BigBankWnd") || is("BankWnd")) return k.bank() && k.bank()->slots == (is("BankWnd") ? 16 : 24);
+    if (is("GuildBankWnd")) return k.guild_bank().banker != 0;
+    if (is("TradeWnd") || is("GiveWnd")) return k.trade() && k.trade()->open && k.trade()->with_npc == is("GiveWnd");
+    if (is("ConfirmationDialogBox")) return k.confirmation().has_value();
+    if (is("LargeDialogWindow")) return k.large_dialog().has_value();
+    if (is("TaskSelectWnd")) return k.tasks().offers.has_value();
+    if (is("RespawnWnd")) return k.respawn_window().has_value();
+    if (is("ProgressionSelectionWnd") || is("TaskTemplateSelectWnd")) {
+        const auto& sel = k.shroud_selection();
+        return k.shroud_selection_open() && sel && sel->status == 0 && (sel->context_id != 0) == is("TaskTemplateSelectWnd");
+    }
+    if (name.size() > 4 && iequals(name.substr(0, 4), "pack")) {
+        std::int64_t n = 0;
+        if (!parse_int(name.substr(4), n) || n < 1 || n > net::kSlotGeneral10 - net::kSlotGeneral1 + 1) return std::nullopt;
+        const net::Item* it = k.inventory().at(net::ItemSlot::possessions(static_cast<std::int16_t>(net::kSlotGeneral1 + n - 1)));
+        return it && it->is_bag();
+    }
+    return std::nullopt;
+}
+
+// The connection's answer, else the UI's (UiApi::shown), else FALSE.
+bool window_is_open(const Context& c, std::string_view name) {
+    if (auto open = game_window_open(c, name)) return *open;
+    return c.window_open && c.window_open(name);
+}
+
 void register_misc_types() {
     Type& zone = const_cast<Type&>(*g.zone);
     zone.to_value = [](const Context& c, const Value&) {
@@ -1290,12 +1331,8 @@ void register_misc_types() {
     });
 
     Type& win = const_cast<Type&>(*g.window);
-    win.to_value = [](const Context& c, const Value& v) {
-        return V::string(c.window_open && c.window_open(v.s) ? "TRUE" : "FALSE");
-    };
-    add(g.window, "Open", [](const Context& c, const Value& v, std::string_view) {
-        return V::boolean(c.window_open && c.window_open(v.s));
-    });
+    win.to_value = [](const Context& c, const Value& v) { return V::string(window_is_open(c, v.s) ? "TRUE" : "FALSE"); };
+    add(g.window, "Open", [](const Context& c, const Value& v, std::string_view) { return V::boolean(window_is_open(c, v.s)); });
     add(g.window, "Name", [](const Context&, const Value& v, std::string_view) { return V::string(v.s); });
 
     Type& plug = const_cast<Type&>(*g.plugin);

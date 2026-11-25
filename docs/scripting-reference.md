@@ -504,8 +504,20 @@ pet's buffs come from the pet window's list, which carries no counters left, so 
 starting counters. `Silenced` is TRUE while any of the buffs has SPA 96 (as `Me.Silenced`, which gives the buff).
 Only these members are here; MQ2Debuffs' others are missing.
 
-`Window[name]` asks the UI whether a window of that name is open. The names are the game's own window names, which
-the UI packs use too (`InventoryWindow`, `LootWnd`, `BankWnd`, `GroupWindow`, ...).
+`Window[name]` says whether a window of that name is open. The names are the game's own window names, which
+the UI packs use too (`InventoryWindow`, `LootWnd`, `BankWnd`, `GroupWindow`, ...). Where the window only shows what
+the client already knows, the answer comes from the client's state, so it holds with no UI loaded (a headless
+client):
+
+- `CastingWindow` (casting), `SpellBookWnd`, `LootWnd`, `MerchantWnd`;
+- `BigBankWnd` (a 24-slot bank) or `BankWnd` (16), `GuildBankWnd`;
+- `TradeWnd` (with a player), `GiveWnd` (with an NPC);
+- `ConfirmationDialogBox`, `LargeDialogWindow`, `TaskSelectWnd`, `RespawnWnd`, `ProgressionSelectionWnd`,
+  `TaskTemplateSelectWnd`;
+- `pack1`..`pack10`: TRUE while that slot holds a bag. A Hailstone bag's slots can be clicked with its window closed,
+  which is what a script opens it for.
+
+Any other name asks the UI, and is FALSE without one.
 
 ### Pure types
 
