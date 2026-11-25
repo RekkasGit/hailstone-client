@@ -1811,6 +1811,9 @@ private:
     void save_iso_settings();
     // The zone's triangles for a pick, less what the isometric camera's cut takes away there.
     std::function<void(const game::PickSegment&, const game::PickTriangleSink&)> pick_world() const;
+    // The same on another mesh (the drawn one, world_visual_collision_, for world placement).
+    std::function<void(const game::PickSegment&, const game::PickTriangleSink&)>
+    pick_mesh(const game::CollisionMesh& m) const;
     // How far above the feet the isometric camera looks: the middle of the body.
     float iso_focus_height() const { return floor_offset_ * 0.5f + 2.0f; }
     // The mark where a click's walk ends (a ring on the ground, drawn as the target ring is): where, since when (the

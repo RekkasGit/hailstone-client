@@ -137,6 +137,8 @@ public:
     bool world_placement_aiming() const;
     void world_placement_update(std::optional<plugin::WorldPlacementPoint> ground, bool pressed, bool released);
     void world_placement_cancel();
+    void world_placement_player_cancel(); // NativePlugins::world_placement_player_cancel
+    void world_placement_player_input();
     void shutdown();
 
     struct Impl;

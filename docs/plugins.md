@@ -724,6 +724,9 @@ Host functions:
   Hailstone's folder (`${MacroQuest.Path[config]}`, Lua's `mq.configDir`), shared by every plugin and script. Made
   on demand and written as `config_dir` writes its folder; 0 when the client has none. Needs no capability. Added
   later in ABI 4: test `HAILSTONE_HOST_HAS(host, get_scripts_config_dir)` first;
+- `host->world_placement_start`, `world_placement_get` and `world_placement_cancel`: a one-shot ground aim for the
+  player (needs `ui` and `extend`; see "Mouse-aimed ground placement"). Added later in ABI 4: test
+  `HAILSTONE_HOST_HAS` for all three first;
 - `ParseMacroData` (`${...}`, any TLO);
 - `AddTopLevelObject`: a TLO with members the plugin answers; refused when the name is already a TLO (as in MQ);
 - `RemoveTopLevelObject` (only the plugin's own);
@@ -2607,7 +2610,9 @@ SHA-256, and FNV-1a64 with bit 63 cleared.
 
 Check `HAILSTONE_WORLD_PLACEMENT` through `world_capabilities` to identify the placement SDK layout, then
 check `HAILSTONE_HOST_HAS` for `world_placement_start`, `world_placement_get` and `world_placement_cancel`.
-The host advertises the bit in the zone even without an available render frame. Placement calls require an
+The host advertises the bit in the zone even without an available render frame, so a non-zero
+`world_capabilities` no longer means a geometry frame is ready: test `HAILSTONE_WORLD_GEOMETRY` for that.
+Placement calls require an
 active native add-on with `ui` and `extend` on the client's own thread because they use window focus and input.
 
 - `start` arms one interactive aim in the loaded world. The active aim belongs to one add-on.
@@ -2618,10 +2623,15 @@ active native add-on with `ui` and `extend` on the client's own thread because t
   world geometry API to draw a preview.
 - A world press and release on valid ground confirms one position. The host consumes the gesture before
   regular targeting, object use and click-to-move. A window, sky, or blocked surface clears the pending gesture.
-- Escape, a world right click, loss of focus and scene retirement cancel aiming. `get` returns confirmation or
+- Escape, a world right click, loss of focus and scene retirement cancel aiming. After the player's own cancel
+  (Escape or the right click), `start` returns 0 for that add-on until the player presses a mouse button over one
+  of the windows, so an add-on that arms again on its own cannot keep the world's clicks; start the aim from the
+  add-on's own button or window. `get` returns confirmation or
   cancellation once to the owner. When the scene is unavailable, it returns zero unless returning a pending
   cancellation with zero for the zone and instance. Deactivation, unload and permission loss discard owned state.
-- The aim resolves solid static ground the camera can see. Moving obstacles can block it. Nothing in the
+- The aim resolves solid static ground the camera can see, on the drawn world (the surface `world_floor_below`
+  answers from): a tree's trunk or another drawn surface in the way leaves the aim invalid. Placed objects and
+  animated scenery block it too; players and NPCs do not. Nothing in the
   host API sends game packets, syncs coordinates with players or records positions beyond the aim.
 
 #### The floor below

@@ -15,8 +15,7 @@ enum HailstoneWorldCapability {
     HAILSTONE_WORLD_DRAWN_ANCHORS = 4u,
     HAILSTONE_WORLD_PRESENT_RECEIPTS = 8u,
     HAILSTONE_WORLD_SURFACE_PATCH = 16u,
-    /* Bit 128 was used by a placement preview with different host table offsets. */
-    HAILSTONE_WORLD_PLACEMENT = 256u /* placement API supported, reported by world_capabilities */
+    HAILSTONE_WORLD_PLACEMENT = 32u /* world_placement_* supported; reported in the zone without a render frame */
 };
 enum HailstoneWorldQueryResult {
     HAILSTONE_WORLD_DEFERRED = 0,  /* unavailable scene geometry, stale frame, or exhausted query budget */

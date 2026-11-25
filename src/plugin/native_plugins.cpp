@@ -77,7 +77,7 @@ static_assert(sizeof(HailstoneWorldFrame) == 136 && offsetof(HailstoneWorldFrame
 static_assert(sizeof(HailstoneWorldAnchor) == 32 && sizeof(HailstoneWorldVertex) == 28);
 static_assert(sizeof(HailstoneWorldSurfacePatch) == 64 && sizeof(HailstoneWorldSurfacePatchResult) == 576 &&
               offsetof(HailstoneWorldSurfacePatchResult, region_xy) == 64);
-static_assert(sizeof(HailstoneWorldReceipt) == 48);
+static_assert(sizeof(HailstoneWorldReceipt) == 48 && sizeof(HailstoneWorldPlacement) == 28);
 static_assert(sizeof(void*) != 8 || (sizeof(HailstoneWorldSubmission) == 56 && offsetof(HailstoneWorldSubmission, vertices) == 40));
 static_assert(sizeof(void*) != 8 || (sizeof(HailstoneUiContribution) == 56 && offsetof(HailstoneUiContribution, command) == 48));
 
@@ -3348,6 +3348,8 @@ void NativePlugins::world_placement_update(std::optional<WorldPlacementPoint> gr
 }
 
 void NativePlugins::world_placement_cancel() { impl_->world_placement.cancel(); }
+void NativePlugins::world_placement_player_cancel() { impl_->world_placement.player_cancel(); }
+void NativePlugins::world_placement_player_input() { impl_->world_placement.player_input(); }
 
 void NativePlugins::world_frame(HailstoneWorldFrame frame, WorldQueries queries) {
     auto& m = *impl_;

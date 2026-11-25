@@ -394,6 +394,14 @@ void Automation::world_placement_cancel() {
     if (impl_->plugins) impl_->plugins->world_placement_cancel();
 }
 
+void Automation::world_placement_player_cancel() {
+    if (impl_->plugins) impl_->plugins->world_placement_player_cancel();
+}
+
+void Automation::world_placement_player_input() {
+    if (impl_->plugins) impl_->plugins->world_placement_player_input();
+}
+
 void Automation::shutdown() {
     Impl& m = *impl_;
     world_unavailable();

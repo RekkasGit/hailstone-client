@@ -49,11 +49,16 @@ void ClientApp::update_mouse_look() {
     const bool placement_right_release = right_released && std::exchange(world_placement_right_held_, false);
     mouse_left_held_ = in.left_button;
     mouse_right_held_ = in.right_button;
+    // A press in a window lets a plugin the player cancelled aim again (its own button, say); a plugin re-arming on
+    // its own cannot keep the world's clicks (WorldPlacementHost::player_cancel). update_player runs before draw_ui,
+    // so the window's own handler in this frame may already start one.
+    if (automation_ && (left_pressed || right_pressed) && ui_.wants_mouse()) automation_->world_placement_player_input();
     if (automation_ && automation_->world_placement_aiming()) {
         if (right_pressed) world_placement_right_held_ = in.right_button;
-        if (!world_placement_input_allowed() || in.was_pressed(platform::Key::Escape) ||
-            (right_pressed && !ui_.wants_mouse())) {
+        if (!world_placement_input_allowed()) {
             automation_->world_placement_cancel();
+        } else if (in.was_pressed(platform::Key::Escape) || (right_pressed && !ui_.wants_mouse())) {
+            automation_->world_placement_player_cancel();
         } else {
             automation_->world_placement_update(world_placement_point_at(in.mouse_x, in.mouse_y),
                                                 left_pressed, left_released);

@@ -331,8 +331,12 @@ bool ClientApp::world_placement_input_allowed() const {
 std::optional<plugin::WorldPlacementPoint> ClientApp::world_placement_point_at(float x, float y) const {
     if (!view_area_.contains(x, y) || ui_.wants_mouse()) return std::nullopt;
     const auto ray = game::screen_ray(pick_camera_, x - view_area_.x, y - view_area_.y);
+    // The mesh the renderer draws (world_visual_collision_), as world_floor_below answers from: the gameplay mesh
+    // gives a tree only its invisible authored hull, which placement skips, so the aim would pass through the trunk
+    // the player sees, and refined terrain would put the point off the drawn ground.
+    if (!world_visual_collision_) return std::nullopt;
     game::PickScene scene;
-    scene.world = pick_world();
+    scene.world = pick_mesh(*world_visual_collision_);
     const auto hit = game::pick_ground_placement(ray, scene);
     if (!hit) return std::nullopt;
     // Moving scenery blocks placement on the static world but is not itself a placement surface.
@@ -343,7 +347,12 @@ std::optional<plugin::WorldPlacementPoint> ClientApp::world_placement_point_at(f
 
 std::function<void(const game::PickSegment&, const game::PickTriangleSink&)> ClientApp::pick_world() const {
     if (!collision_) return {};
-    const game::CollisionMesh* mesh = &*collision_;
+    return pick_mesh(*collision_);
+}
+
+std::function<void(const game::PickSegment&, const game::PickTriangleSink&)>
+ClientApp::pick_mesh(const game::CollisionMesh& m) const {
+    const game::CollisionMesh* mesh = &m;
     // The isometric camera: a surface the cut takes away (game/iso_occlusion.h) is not there for a click, which goes
     // on through it to what shows behind (a spawn, a door, the ground).
     const game::IsoReveal reveal = iso_reveal();

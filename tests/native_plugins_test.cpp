@@ -195,17 +195,17 @@ TEST_CASE("native plugins: placement is advertised without a render frame and re
     REQUIRE(h.plugins->load("HostProbe"));
 
     h.run("/probeworldplacement status");
-    // Only the canonical placement bit is present. The old layout's bit (128) must stay clear.
-    CHECK(h.printed_line("[Probe] placement: 256 0 0 0 0"));
+    // Only the placement bit: no geometry frame yet.
+    CHECK(h.printed_line("[Probe] placement: 32 0 0 0 0"));
     h.placement_scene = plugin::WorldPlacementScene{1, 85, 2};
     h.run("/probeworldplacement status");
-    CHECK(h.printed_line("[Probe] placement: 256 1 0 85 2"));
+    CHECK(h.printed_line("[Probe] placement: 32 1 0 85 2"));
     h.run("/probeworldplacement start");
     CHECK(h.printed_line("[Probe] placement start: 1"));
     REQUIRE(h.plugins->world_placement_aiming());
     h.plugins->world_placement_update(plugin::WorldPlacementPoint{12, -7, 2}, true, true);
     h.run("/probeworldplacement status");
-    CHECK(h.printed_line("[Probe] placement: 256 1 3 85 2"));
+    CHECK(h.printed_line("[Probe] placement: 32 1 3 85 2"));
 
     h.run("/probeworldplacement start");
     REQUIRE(h.plugins->world_placement_aiming());
@@ -235,7 +235,7 @@ TEST_CASE("native plugins: placement stays on the actual client thread during a 
     h.run("/probeworldplacement cancel");
     CHECK_FALSE(h.plugins->world_placement_aiming());
     h.run("/probeworldplacement status");
-    CHECK(h.printed_line("[Probe] placement: 256 1 4 85 2"));
+    CHECK(h.printed_line("[Probe] placement: 32 1 4 85 2"));
 }
 
 TEST_CASE("native plugins: nameplate frame lease and canvas ownership") {

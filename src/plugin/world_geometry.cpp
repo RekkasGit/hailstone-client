@@ -15,7 +15,7 @@ bool finite_position(float x, float y, float z) {
 }
 
 bool WorldPlacementHost::start(std::uint64_t owner, WorldPlacementScene scene) {
-    if (!owner || !scene.epoch || !scene.zone_id || aim_) return false;
+    if (!owner || !scene.epoch || !scene.zone_id || aim_ || held_off_.contains(owner)) return false;
     results_.erase(owner);
     aim_ = Aim{owner, {scene, std::nullopt}};
     return true;
@@ -76,9 +76,16 @@ void WorldPlacementHost::cancel(std::uint64_t owner) {
     if (auto result = results_.find(owner); result != results_.end()) result->second.ground.reset();
 }
 
+void WorldPlacementHost::player_cancel() {
+    if (!aim_) return;
+    held_off_.insert(aim_->owner);
+    cancel();
+}
+
 void WorldPlacementHost::retire(std::uint64_t owner) {
     if (aim_ && aim_->owner == owner) aim_.reset();
     results_.erase(owner);
+    held_off_.erase(owner);
 }
 
 void WorldGeometryHost::begin(HailstoneWorldFrame frame, WorldQueries queries) {

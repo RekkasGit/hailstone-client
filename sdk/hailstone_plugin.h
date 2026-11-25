@@ -1221,8 +1221,11 @@ typedef struct PluginHostApi {
      * Start returns 1 when armed. Get requires out->size and returns 1 when it writes the current
      * status and zone identity. CONFIRMED and CANCELLED are consumed by the owner on the first read.
      * Cancellation affects only the caller's placement. These calls run on the client's own thread.
+     * After the player cancels an aim (Escape, a right click), start returns 0 for that plugin until the
+     * player presses a mouse button over one of the windows (its own button, say).
      * Check HAILSTONE_WORLD_PLACEMENT via world_capabilities in the world, then check all three
-     * entries with HAILSTONE_HOST_HAS. */
+     * entries with HAILSTONE_HOST_HAS. Added later in ABI 4: test HAILSTONE_HOST_HAS(host,
+     * world_placement_start), world_placement_get and world_placement_cancel first. */
     int (*world_placement_start)(void* host);
     int (*world_placement_get)(void* host, HailstoneWorldPlacement* out);
     void (*world_placement_cancel)(void* host);

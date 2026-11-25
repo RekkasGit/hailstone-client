@@ -26,7 +26,7 @@
 - Plugins can lend the client's thread to their own threads with the SDK's new `lend_thread`, while their callback waits for them, so a script runtime whose scripts run on a thread of their own (MQ2Mono-style C# scripts) can read TLOs and run commands from there. Inside a host call the client makes while a plugin lends (a command it runs, say), `lend_thread` refuses, since waiting there for the plugin's threads would hang the client.
 - Plugins can ask whether a command exists with the SDK's new `command_exists`. It says whether a plugin, a script or the client added the command, or whether it is one of the game's own.
 - Modern Spell Gems has optional spell names, a background toggle, and resize grips that wrap the tiles into rows and columns. Icon size is adjustable, and existing layouts keep their defaults
-- Native add-ons can preview and confirm a mouse-aimed ground position through the world placement SDK.
+- Native add-ons can preview and confirm a mouse-aimed ground position through the world placement SDK. **Plugin authors:** `world_capabilities` now reports `HAILSTONE_WORLD_PLACEMENT` in the zone before a geometry frame is ready; test `HAILSTONE_WORLD_GEOMETRY` for the frame
 - Trees with authored collision hulls let players move through their branches while their trunks still block movement. This fixes the invisible walls near the Field of Bone entrance to Warsliks Woods and in other classic zones
 - Decorative slime no longer blocks movement over the Veksar ramp and doorway or through passages in several Lost Dungeons of Norrath layouts
 - Spells that require line of sight now report “You cannot see your target” before casting through a solid door or moving obstacle

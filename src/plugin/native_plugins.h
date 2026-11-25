@@ -103,6 +103,10 @@ public:
     bool world_placement_aiming() const;
     void world_placement_update(std::optional<WorldPlacementPoint> ground, bool pressed, bool released);
     void world_placement_cancel();
+    // The player cancelled the aim (Escape, a right click): its owner may not aim again until
+    // world_placement_player_input, a press in one of the windows (WorldPlacementHost::player_cancel).
+    void world_placement_player_cancel();
+    void world_placement_player_input();
     NativePlugins(const NativePlugins&) = delete;
     NativePlugins& operator=(const NativePlugins&) = delete;
 

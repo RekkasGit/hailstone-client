@@ -6,6 +6,7 @@
 #include <functional>
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "game/world_geometry.h"
@@ -31,6 +32,11 @@ public:
     void update(std::optional<WorldPlacementPoint> ground, bool pressed, bool released);
     void cancel();
     void cancel(std::uint64_t owner);
+    // The player's own cancel (Escape, a right click): until player_input, the owner cannot start another aim, so a
+    // plugin that arms again at once cannot keep the player's world clicks.
+    void player_cancel();
+    // A press in one of the windows: owners held off by player_cancel may aim again.
+    void player_input() { held_off_.clear(); }
     void retire(std::uint64_t owner);
 
 private:
@@ -45,6 +51,7 @@ private:
     };
     std::optional<Aim> aim_;
     std::unordered_map<std::uint64_t, Result> results_;
+    std::unordered_set<std::uint64_t> held_off_;
 };
 
 struct WorldQueries {

@@ -439,3 +439,41 @@ TEST_CASE("world geometry host: rounded boundary witness needs a valid source fa
         }
     }
 }
+
+TEST_CASE("world placement host: after the player cancels, the owner aims again only after a window press") {
+    plugin::WorldPlacementHost host;
+    const plugin::WorldPlacementScene scene{3, 85, 2};
+    HailstoneWorldPlacement out{};
+    out.size = sizeof(out);
+
+    // A host cancel (scene retirement, focus loss) holds nobody off.
+    REQUIRE(host.start(1, scene));
+    host.cancel();
+    REQUIRE(host.start(1, scene));
+
+    // The player's own cancel: the owner reads CANCELLED, and re-arming at once (every pulse) is refused, so the
+    // world's clicks stay the player's; another add-on may still aim.
+    host.player_cancel();
+    REQUIRE(host.get(1, scene, &out));
+    CHECK(out.status == HAILSTONE_WORLD_PLACEMENT_CANCELLED);
+    CHECK_FALSE(host.start(1, scene));
+    CHECK_FALSE(host.start(1, scene));
+    CHECK_FALSE(host.aiming());
+    REQUIRE(host.start(2, scene));
+    host.cancel(2);
+
+    // A press in a window (the add-on's own button) lets it aim again.
+    host.player_input();
+    REQUIRE(host.start(1, scene));
+
+    // Unload or permission loss forgets the hold-off with the rest of the owner's state.
+    host.player_cancel();
+    CHECK_FALSE(host.start(1, scene));
+    host.retire(1);
+    CHECK(host.start(1, scene));
+
+    // With no aim, a player cancel holds nobody off.
+    host.cancel();
+    host.player_cancel();
+    CHECK(host.start(1, scene));
+}
