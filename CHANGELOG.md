@@ -53,7 +53,7 @@
 - Moving a slider that writes to the UI ini (Window Transparency, fades) no longer rewrites the file every frame; it is saved with the window places and on quit or camp
 - Modern Guild window: Promote, Demote, Make Leader and Remove ask first and name the member, as the gamepad UI does. Selecting another member while it asks puts the question away
 - Modern Raid window: Leave and Make Leader ask first, as the gamepad UI does
-- Fellowship Make Leader (both UIs) and the modern shared task Make leader ask first and name the member. If another member is selected while it asks, the lead is not handed to them
+- The modern shared task Make leader asks first and names the member. If another member is selected while it asks, the lead is not handed to them
 - Gamepad Friends: confirming Remove after the list changed no longer removes whoever happened to be selected. If the name has left the list, the window says so
 - Gamepad Who: a new /who reply (from the Friends window or typed in chat) keeps the picked player picked if they are in it, and otherwise clears the pick, so Invite, Target and the rest no longer act on whoever took that row
 - Gamepad Merchant: a Buy, Sell or parcel Send pressed as the window closed no longer goes through at the next merchant you open

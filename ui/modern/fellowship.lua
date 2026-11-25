@@ -6,6 +6,8 @@
 --     "Show all possible", the selected kit's description, and Refresh List.
 -- Every field, list and button uses the shared model (app/lua_ui_fellowship.cpp). The server decides membership,
 -- permissions and campsite availability; the member list scrolls through rosters of up to 64 players.
+-- Make Leader, Remove, Leave, End Fellowship and Destroy Camp ask first: the shared model's own question, naming the
+-- member, in the confirmation dialog. The buttons ask nothing of their own, or they would ask twice.
 local API = hs.UI
 local hud = dofile("lib/hud.lua")
 local W = dofile("lib/widgets.lua")
@@ -17,13 +19,6 @@ local C = T.color
 local WINDOW = "FellowshipWnd"
 -- Testing: test.tab.FellowshipWnd.Subwindows=n in ui/settings/modern.txt opens page n once.
 local testTab = tonumber(ui.GetSetting("test.tab.FellowshipWnd.Subwindows") or "")
-
--- Make Leader asks first, naming the selected member (Hailstone, as the guild's and raid's): the question goes when
--- another member is selected.
-local selectedName = ""
-local ASK_LEADER = function()
-  return "Make " .. (selectedName ~= "" and selectedName or "the selected member") .. " the fellowship leader?"
-end
 
 local function fellowshipPage(s)
   local bh = K.ButtonH(s)
@@ -48,13 +43,10 @@ local function fellowshipPage(s)
   else
     W.List(WINDOW, "MemberList", 0, -below, { sortable = true })
   end
-  local rows, _, sel = API.windows.ListInfo(WINDOW, "MemberList")
-  local picked = rows and sel and sel >= 0 and API.windows.ListRow(WINDOW, "MemberList", sel)
-  selectedName = picked and picked[1] or ""
   W.ButtonRow(WINDOW, {
     { "CreateFellowshipButton", "Create", { primary = true, tooltip = "Start a fellowship (you lead it)" } },
     { "InviteMemberButton", "Invite", { tooltip = "Invite your target to the fellowship" } },
-    { "MakeLeaderButton", "Make Leader", { tooltip = "Make the selected member the leader", ask = ASK_LEADER } },
+    { "MakeLeaderButton", "Make Leader", { tooltip = "Make the selected member the leader" } },
     { "RemoveMemberButton", "Remove", { danger = true, tooltip = "Remove the selected member" } },
   }, bh)
   W.ButtonRow(WINDOW, {
