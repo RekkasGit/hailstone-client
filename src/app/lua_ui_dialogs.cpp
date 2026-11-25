@@ -95,7 +95,9 @@ private:
     bool sync(UiHost& host) {
         std::optional<std::pair<int, int>> pos;
         const int r = quantity_sync(host, &pos);
-        if (r == 2) {
+        // Without ImGui (a client that draws nothing; a script reading Window[QuantityWnd].Open) there is no screen
+        // to place it on: the dialog's state is all there is.
+        if (r == 2 && ImGui::GetCurrentContext()) {
             ImVec2 ds = ImGui::GetIO().DisplaySize;
             auto rect = host.textures ? host.textures->screen_rect("QuantityWnd") : std::nullopt;
             int w = rect ? rect->w : 200, h = rect ? rect->h : 100;

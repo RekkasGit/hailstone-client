@@ -162,6 +162,8 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     m.env = std::move(env);
     mq::register_game_tlos(m.registry);
     m.ctx.window_open = [&m](std::string_view w) { return m.env.window_open && m.env.window_open(w); };
+    m.ctx.window_child = m.env.window_child;
+    m.ctx.window_act = m.env.window_act;
     m.ctx.plugin_loaded = [&m](std::string_view p) { return m.plugins && m.plugins->loaded(p); };
     m.ctx.ability = m.env.ability;
     m.ctx.foreground = m.env.foreground;

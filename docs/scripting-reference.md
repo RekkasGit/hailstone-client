@@ -519,7 +519,32 @@ client):
 - `pack1`..`pack10`: TRUE while that slot holds a bag. A Hailstone bag's slots can be clicked with its window closed,
   which is what a script opens it for.
 
-Any other name asks the UI, and is FALSE without one.
+Any other name asks the client's stock windows (their own open state, kept whether or not anything is drawn), and
+is FALSE for a window the client does not have.
+
+`Window[name].Child[child]` is one of the window's children, by its ScreenID (MQ's item names that E3 sends are taken
+too: `MW_ItemList`, `cd_textoutput`, and `TRDW_OtherName`, a later client's name for `TRDW_HisName`). Its members
+come from the window's own state, the same answers it draws with, so they hold with no UI drawn:
+
+| Member | Type | |
+|---|---|---|
+| `Text` | string | the child's text; `""` when the window gives it none (whether the XML has such a child is not checked) |
+| `Enabled` | bool | TRUE unless the window disables it (a child the window leaves alone reads as enabled) |
+| `Value` | float | a gauge's value, 0..1000; NULL for anything else |
+| `List[row(,column)]` | string | that cell's text; NULL past the rows or columns |
+| `List[text(,column)]` | int | the first row (from 1) whose cell holds the text, any case; `=text` the whole text. NULL for none |
+| `Open` | bool | its window is open and the window does not hide it |
+| `Name` | string | the child's name |
+
+The column is from 1, 1 by default. A list's rows are the window's own, in its order: the merchant's as `/notify ...
+listselect` counts them (the merchant's order, hidden rows left out).
+
+MacroQuest's window methods act as they are read, as MQ's do; `/invoke ${...}` reads its line and does nothing else:
+
+- `DoOpen`, `DoClose`: the window opens or closes (its open state above: a closed merchant or trade window ends it);
+- `LeftMouseUp`, `RightMouseUp` on a child: the click `/notify` sends (`${Window[BigBankWnd].Child[BIGB_AutoButton].LeftMouseUp}`).
+
+They need the server's `actions` permission, as `/notify` does, and give TRUE when something took them.
 
 ### Pure types
 

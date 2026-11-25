@@ -131,6 +131,9 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
         noparse_ = before;
     });
     h.add_command(owner_, "/docommand", [this](std::string_view args) { run_nested(args); });
+    // /invoke ${Window[...].DoOpen} (MQ's InvokeCmd sets bRunNextCommand and nothing else): the line's ${...} were
+    // read before the command got it, and reading a window method is what acts (Window's LeftMouseUp, DoOpen ...).
+    h.add_command(owner_, "/invoke", [](std::string_view) {});
     // /timed <deciseconds> <command> (MQ's DoTimedCmd): the command runs that many tenths of a second later, as
     // whoever sent it (a script's line stays held to its permissions). As in MQ the line is not ${}-expanded when it
     // is sent (filter skips it) but when it runs, so its values are those of that moment. The delay is MQ's

@@ -274,6 +274,7 @@ one, the server's add-on rules decide whether it may.
 | `/keypress <command> [hold\|release]` | Press a key command by name. |
 | `/echo <text>` | Print a line to chat. |
 | `/docommand <line>`, `/noparse <line>` | Run a line; run it without expanding `${...}`. |
+| `/invoke ${...}` | Read the line's `${...}` and do nothing else: what acts is the read, for MacroQuest's window methods (`${Window[InventoryWindow].DoOpen}`, `${Window[BigBankWnd].Child[BIGB_AutoButton].LeftMouseUp}`). |
 | `/squelch <line>` | Run a line without the chat lines it prints. |
 | `/timed <deciseconds> <line>` | Run a line that many tenths of a second later (MacroQuest's). Its `${...}` are read when it runs; a script's line keeps the script's permissions. At most 1000 wait at once. |
 | `/doortarget [id <n> \| <name>]`, `/doortarget clear` | Pick a door for `${DoorTarget}` (MacroQuest's): the one with that id, or the nearest whose name holds the text (the nearest door with no text); `clear` drops it. |

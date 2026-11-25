@@ -60,7 +60,7 @@ std::string eqstr(UiHost& host, std::uint32_t id, std::vector<std::string> args 
 
 // Centred on the screen by the window's XML size (CPopupWndManager's dialogs, CQuantityWnd without a point).
 std::array<int, 2> centred(UiHost& host, const char* screen) {
-    ImVec2 ds = ImGui::GetIO().DisplaySize;
+    const ImVec2 ds = ImGui::GetCurrentContext() ? ImGui::GetIO().DisplaySize : ImVec2(0, 0); // no screen: none
     auto r = host.textures ? host.textures->screen_rect(screen) : std::nullopt;
     int w = r ? r->w : 300, h = r ? r->h : 200;
     return {(static_cast<int>(ds.x) - w) / 2, (static_cast<int>(ds.y) - h) / 2};

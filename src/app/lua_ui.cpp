@@ -49,6 +49,7 @@
 #include "game/eq_names.h"
 #include "game/hot_button_state.h"
 #include "game/item_sort.h"
+#include "game/window_notify.h"
 #include "game/merchant.h"
 #include "game/option_commands.h"
 #include "game/mechanics/character.h"
@@ -3102,6 +3103,43 @@ std::optional<bool> UiApi::child_checked(std::string_view screen, std::string_vi
     Child c;
     w->child(impl_->host, child, c);
     return c.checked;
+}
+
+std::optional<mq::WindowChild> UiApi::window_child(std::string_view window, std::string_view child, bool rows) {
+    StockWindow* w = impl_->window(game::canonical_window(window));
+    if (!w) return std::nullopt;
+    auto read = [&](std::string_view id) {
+        mq::WindowChild out;
+        Child c;
+        w->child(impl_->host, id, c);
+        out.text = c.text;
+        out.enabled = c.enabled;
+        out.shown = c.shown;
+        if (c.has_gauge || c.gauge >= 0) out.gauge = std::max(c.gauge, 0); // -1: the gauge hidden
+        if (rows) {
+            if (const ListData* d = w->list(impl_->host, id)) {
+                out.is_list = true;
+                out.columns = d->columns;
+                for (const auto& r : d->rows) out.rows.push_back(r.texts);
+            }
+        }
+        return out;
+    };
+    const std::string canonical = game::canonical_child(child);
+    mq::WindowChild out = read(canonical);
+    // A window that keys the child by the name as sent (the bank's BIGB_ buttons, which /notify's table shortens).
+    const bool nothing = !out.text && !out.enabled && !out.shown && !out.gauge && !out.is_list;
+    if (nothing && canonical != child) out = read(child);
+    return out;
+}
+
+bool UiApi::window_shown(std::string_view window) const { return shown(game::canonical_window(window)); }
+
+bool UiApi::show_window(std::string_view window, bool show) {
+    const std::string screen = game::canonical_window(window);
+    if (!impl_->window(screen)) return false;
+    this->show(screen, show);
+    return true;
 }
 
 std::optional<bool> UiApi::child_state(std::string_view screen, std::string_view child) {

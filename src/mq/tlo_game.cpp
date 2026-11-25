@@ -1218,6 +1218,30 @@ void register_group() {
 }
 
 
+// A Window value's name: the window's, then, for a child, kChildMark and the child's (Window.Child below).
+constexpr char kChildMark = '\x1f';
+std::string_view window_part(std::string_view s) { return s.substr(0, s.find(kChildMark)); }
+std::string_view child_part(std::string_view s) {
+    const auto at = s.find(kChildMark);
+    return at == std::string_view::npos ? std::string_view{} : s.substr(at + 1);
+}
+
+// MQ's MaybeExactCompare: "=text" the whole text in any case, else the text anywhere in it in any case.
+bool maybe_exact_compare(std::string_view haystack, std::string_view needle) {
+    if (needle.empty()) return haystack.empty();
+    if (needle.front() == '=') return iequals(haystack, needle.substr(1));
+    if (needle.size() > haystack.size()) return false;
+    for (std::size_t i = 0; i + needle.size() <= haystack.size(); ++i)
+        if (iequals(haystack.substr(i, needle.size()), needle)) return true;
+    return false;
+}
+
+// A child value's state (Context::window_child); nothing for a window value or without the hook.
+std::optional<WindowChild> child_state(const Context& c, const Value& v, bool rows) {
+    if (v.i != 1 || !c.window_child) return std::nullopt;
+    return c.window_child(window_part(v.s), child_part(v.s), rows);
+}
+
 // Whether stock window `name` shows, from the connection's state where the window only mirrors it (MacroQuest's
 // scripts ask the UI what the client knows: ${Window[CastingWindow].Open} for "casting"). These answer with no UI
 // at all (a headless client) and agree with the stock windows' own shown() (app/lua_ui_*.cpp). pack1..pack10 are
@@ -1256,6 +1280,14 @@ std::optional<bool> game_window_open(const Context& c, std::string_view name) {
 bool window_is_open(const Context& c, std::string_view name) {
     if (auto open = game_window_open(c, name)) return *open;
     return c.window_open && c.window_open(name);
+}
+
+// Open on a window value, or on a child: its window shows and the child is not hidden.
+bool window_open_member(const Context& c, const Value& v) {
+    if (!window_is_open(c, window_part(v.s))) return false;
+    if (v.i != 1) return true;
+    auto ch = child_state(c, v, false);
+    return ch && ch->shown.value_or(true);
 }
 
 void register_misc_types() {
@@ -1336,10 +1368,83 @@ void register_misc_types() {
         return V::boolean(debuff_has_effect(c, v.i != 0, 96));
     });
 
+    // MQ's window type (MQ2WindowType.cpp) for a window and, through Child[name], one of its children: the value's
+    // name is the window's, and a child's (i == 1) follows it after kChildMark. A child's members come from the
+    // window's own state (Context::window_child: the stock windows' answers, with no drawing needed, so a client
+    // without a UI answers alike); the methods act as they are read (Context::window_act).
     Type& win = const_cast<Type&>(*g.window);
-    win.to_value = [](const Context& c, const Value& v) { return V::string(window_is_open(c, v.s) ? "TRUE" : "FALSE"); };
-    add(g.window, "Open", [](const Context& c, const Value& v, std::string_view) { return V::boolean(window_is_open(c, v.s)); });
-    add(g.window, "Name", [](const Context&, const Value& v, std::string_view) { return V::string(v.s); });
+    win.to_value = [](const Context& c, const Value& v) { return V::string(window_open_member(c, v) ? "TRUE" : "FALSE"); };
+    add(g.window, "Open", [](const Context& c, const Value& v, std::string_view) { return V::boolean(window_open_member(c, v)); });
+    add(g.window, "Name", [](const Context&, const Value& v, std::string_view) {
+        return V::string(std::string(v.i == 1 ? child_part(v.s) : window_part(v.s)));
+    });
+    // Child[name]: MQ's GetChildItem finds it by its XML item name or ScreenID. Hailstone's windows key their
+    // children by ScreenID (game::canonical_child maps the item names E3 sends); whether such a child exists is
+    // not known here, so a name the window has no child for reads as one that shows nothing.
+    add(g.window, "Child", [](const Context&, const Value& v, std::string_view index) -> V {
+        if (index.empty()) return V::nil();
+        return V::object(g.window, 1, 0, std::string(window_part(v.s)) + kChildMark + std::string(index));
+    });
+    // Text: the child's text (MQ's GetWindowText, an STML box's text, a page's tab text); "" when it has none.
+    add(g.window, "Text", [](const Context& c, const Value& v, std::string_view) -> V {
+        auto ch = child_state(c, v, false);
+        return ch ? V::string(ch->text.value_or(std::string())) : V::nil();
+    });
+    // Enabled: IsEnabled. A child the window leaves as its XML has it reads as enabled (most are; the XML's own
+    // state is not read here).
+    add(g.window, "Enabled", [](const Context& c, const Value& v, std::string_view) -> V {
+        auto ch = child_state(c, v, false);
+        return ch ? V::boolean(ch->enabled.value_or(true)) : V::nil();
+    });
+    // Value: a gauge's value, 0..1000 (CGaugeWnd LastFrameVal, the value it drew; here the value it is set to);
+    // NULL for anything else.
+    add(g.window, "Value", [](const Context& c, const Value& v, std::string_view) -> V {
+        auto ch = child_state(c, v, false);
+        return ch && ch->gauge ? V::number(*ch->gauge) : V::nil();
+    });
+    // List[row(,column)]: that cell's text; List[text(,column)]: the 1-based row whose cell holds the text
+    // (MaybeExactCompare: "=text" the whole text, any case). The column is 1-based, 1 by default; one past the
+    // list's columns, a row past its end or text in no row is NULL, as in MQ. The rows are the window's own, in
+    // its order (the merchant's: as listselect counts them).
+    add(g.window, "List", [](const Context& c, const Value& v, std::string_view index) -> V {
+        auto ch = child_state(c, v, true);
+        if (!ch || !ch->is_list || index.empty()) return V::nil();
+        std::string_view key = index;
+        int column = 0;
+        if (const auto comma = index.find(','); comma != std::string_view::npos) {
+            key = index.substr(0, comma);
+            column = std::max(0, int_from_text(index.substr(comma + 1), 0) - 1);
+            if (column >= ch->columns) return V::nil();
+        }
+        auto cell = [&](const std::vector<std::string>& row) -> std::optional<std::string_view> {
+            if (static_cast<std::size_t>(column) >= row.size()) return std::nullopt;
+            return std::string_view(row[static_cast<std::size_t>(column)]);
+        };
+        std::int64_t n = 0;
+        if (parse_int(key, n)) {
+            if (n < 1 || n > static_cast<std::int64_t>(ch->rows.size())) return V::nil();
+            auto text = cell(ch->rows[static_cast<std::size_t>(n - 1)]);
+            return text ? V::string(std::string(*text)) : V::nil();
+        }
+        for (std::size_t r = 0; r < ch->rows.size(); ++r) {
+            auto text = cell(ch->rows[r]);
+            if (!text) return V::nil(); // MQ stops at a row without that column
+            if (maybe_exact_compare(*text, key)) return V::integer(static_cast<std::int64_t>(r) + 1);
+        }
+        return V::nil();
+    });
+    // The methods: MQ sends the click (SendWndClick2) or shows / hides the window (Show) as the member is read.
+    auto method = [](const char* name, const char* action, bool on_window) {
+        add(g.window, name, [action, on_window](const Context& c, const Value& v, std::string_view) -> V {
+            if (!c.window_act) return V::nil();
+            const std::string_view child = v.i == 1 && !on_window ? child_part(v.s) : std::string_view{};
+            return V::boolean(c.window_act(window_part(v.s), child, action));
+        });
+    };
+    method("LeftMouseUp", "leftmouseup", false);
+    method("RightMouseUp", "rightmouseup", false);
+    method("DoOpen", "doopen", true);
+    method("DoClose", "doclose", true);
 
     Type& plug = const_cast<Type&>(*g.plugin);
     plug.to_value = [](const Context& c, const Value& v) {

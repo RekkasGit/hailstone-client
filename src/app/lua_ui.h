@@ -530,6 +530,14 @@ public:
     // The enabled state the window gives a child (nullopt: the XML's), and a link clicked in an STML child (testing
     // aids).
     std::optional<bool> child_state(std::string_view screen, std::string_view child);
+    // Window[w].Child[c] for the MQ TLOs (mq::Context::window_child): what the stock window gives the child (its
+    // text, enabled and shown state, a gauge's value, with `rows` a list's rows), from its own state, so it answers
+    // without anything drawn. MQ's names are taken (game::canonical_window / canonical_child, then the name as
+    // given); nullopt for a window this client does not have.
+    std::optional<mq::WindowChild> window_child(std::string_view window, std::string_view child, bool rows);
+    // Window[w].Open's UI answer and DoOpen / DoClose, with MQ's window names.
+    bool window_shown(std::string_view window) const;
+    bool show_window(std::string_view window, bool show);
     bool stml_link(std::string_view screen, std::string_view child, int message, std::string_view data);
     // The rows' first texts of a stock window's list (testing aids).
     std::vector<std::string> list_texts(std::string_view screen, std::string_view child);

@@ -5,6 +5,7 @@
 #include "game/interact.h"
 #include "game/item_notify.h"
 #include "game/window_notify.h"
+#include "plugin/policy.h"
 
 namespace hailstone::app::client_internal {
 
@@ -334,6 +335,27 @@ void ClientApp::notify_command(std::string_view args) {
     else if (n.notification != "newvalue")
         done = ui_api_->click_child(n.window, n.child, n.notification == "rightmouseup" ? "rightup" : "left");
     if (!done) log::info("/notify: {} {} {}: nothing took it", n.window, n.child, n.notification);
+}
+
+bool ClientApp::window_act(std::string_view window, std::string_view child, std::string_view action) {
+    // A read that acts, held to what /notify needs: a script without 'actions' cannot click or close (a merchant's
+    // or trade's DoClose ends it) by reading a member instead of sending the command.
+    if ((plugin::caller_caps() & plugin::kCapActions) == 0) {
+        if (conn_)
+            conn_->ui_message(std::format("{}: the window method {} needs the server's 'actions' permission",
+                                          plugin::caller_name(), action));
+        return false;
+    }
+    // MQ's SendWndClick2 on a child: the click /notify would send (its game-state actions first, the UI after).
+    if (action == "leftmouseup" || action == "rightmouseup") {
+        if (child.empty() || !conn_) return false;
+        notify_command(std::string(window) + " " + std::string(child) + " " + std::string(action));
+        return true;
+    }
+    // CXWnd::Show(true / false): the stock window's own open state (UiApi's windows are state alone, built with or
+    // without anything drawn), which Window[...].Open then reads.
+    if (action == "doopen" || action == "doclose") return ui_api_ && ui_api_->show_window(window, action == "doopen");
+    return false;
 }
 
 void ClientApp::itemnotify_command(std::string_view args) {

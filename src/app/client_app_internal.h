@@ -469,7 +469,16 @@ public:
         aenv.server_name = [this] { return char_view_.server_name; };
         aenv.server_profile = [this] { return server_profile_.id; };
         aenv.profile_name = [this] { return server_profile_.name; };
-        aenv.window_open = [this](std::string_view w) { return ui_api_ && ui_api_->shown(w); };
+        aenv.window_open = [this](std::string_view w) { return ui_api_ && ui_api_->window_shown(w); };
+        // Window.Child's reads, DoOpen / DoClose and the click methods (mq::Context): UiApi's windows are state
+        // alone (UiHost and the connection), built with or without anything drawn.
+        aenv.window_child = [this](std::string_view w, std::string_view c, bool rows) -> std::optional<mq::WindowChild> {
+            if (!ui_api_) return std::nullopt;
+            return ui_api_->window_child(w, c, rows);
+        };
+        aenv.window_act = [this](std::string_view w, std::string_view c, std::string_view action) {
+            return window_act(w, c, action);
+        };
         aenv.world_placement_scene = [this] { return world_placement_scene(); };
         aenv.world_placement_input_allowed = [this] { return world_placement_input_allowed(); };
         aenv.face = [this](double degrees, bool) { face_degrees(degrees); };
@@ -980,6 +989,9 @@ private:
     // /notify (game/window_notify.h): a window child's click, list or tab selection. The buttons notify_action()
     // knows run the connection's call, UI or none; anything else goes to the stock window.
     void notify_command(std::string_view args);
+    // MQ's window methods read in a line (mq::Context::window_act): a click goes as /notify sends it, DoOpen and
+    // DoClose show or hide the stock window.
+    bool window_act(std::string_view window, std::string_view child, std::string_view action);
     // The modifier keys a command's click uses: those /nomodkey, /shiftkey or /ctrlkey forced while their line runs,
     // else the keyboard's (MacroQuest's clicks read the keyboard too).
     net::SlotClickKeys command_keys() const;

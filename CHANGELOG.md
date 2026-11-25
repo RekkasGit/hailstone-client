@@ -3,6 +3,7 @@
 ## Unreleased
 
 - `${Window[...]}` answers from the client's own state for the casting, spell book, loot, merchant, bank, trade, give and dialog windows and `pack1`..`pack10`, so scripts that ask whether one is open work with no UI.
+- `${Window[...].Child[...]}` reads a window's child as MacroQuest does (`Text`, `Enabled`, `Value`, `List`, `Open`), from the window's own state, so E3's merchant, trade, quantity and gauge reads work with no UI drawn. The window methods `DoOpen`, `DoClose`, `LeftMouseUp` and `RightMouseUp` act as they are read, and `/invoke` is accepted, so E3's `/invoke ${Window[InventoryWindow].DoOpen}` opens it for a following `Window[...].Open`.
 - `/notify` runs everything E3 presses from the client's own state, UI or none: merchant buy and sell with their quantity, coin and alternate currency buttons, task and respawn choices, raid lock, and the confirmation box's questions.
 - New command `/notify` (MacroQuest's): clicks a window's button, or selects a list row or tab, by MacroQuest's window and child names. E3 accepts trades and gives, finishes looting and answers dialogs with it; those buttons work with no UI too.
 - New commands `/itemnotify` (click an item slot, a slot in a bag, or an item by name: `leftmouseup`, `rightmouseup`, `rightmouseheld`) and `/nomodkey`, `/shiftkey` and `/ctrlkey` (run a line with the modifier keys forced), as in MacroQuest: E3 moves, sells, trades and loots items with them.

@@ -114,11 +114,29 @@ struct AbilityState {
     std::int64_t reuse_ms = 0;
 };
 
+// What a stock window's child shows, for Window[w].Child[c] (the client's UiApi::window_child: the window's own
+// state, the same answers it draws with, with no drawing needed).
+struct WindowChild {
+    std::optional<std::string> text;
+    std::optional<bool> enabled; // nullopt: the window leaves it as its XML has it
+    std::optional<bool> shown;
+    std::optional<int> gauge;    // a gauge's value, 0..1000
+    bool is_list = false;        // a list: its rows below, when they were asked for
+    int columns = 0;
+    std::vector<std::vector<std::string>> rows; // each row's column texts
+};
+
 struct Context {
     const Registry* registry = nullptr;
     const net::GameConnection* conn = nullptr;
     nav::NavControl* nav = nullptr; // the client's navigation (/nav, the Navigation TLO); null: none
     std::function<bool(std::string_view window)> window_open; // Window[name].Open
+    // Window[name].Child[child]'s reads (`rows`: a list's rows too); nullopt: no such window.
+    std::function<std::optional<WindowChild>(std::string_view window, std::string_view child, bool rows)> window_child;
+    // MQ's window methods, which act as they are read (/invoke ${Window[...].DoOpen} only reads its line):
+    // "leftmouseup" and "rightmouseup" on a child (`child` empty: the window), "doopen" and "doclose" on a window.
+    // False: nothing took it.
+    std::function<bool(std::string_view window, std::string_view child, std::string_view action)> window_act;
     std::function<bool(std::string_view plugin)> plugin_loaded; // Plugin[name].IsLoaded
     std::function<bool()> foreground; // EverQuest.Foreground: the game's window has the focus; null: false
     // One of the player's abilities by name (or an AA's group, a skill's number); nullopt: the player has none such.

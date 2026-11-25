@@ -52,6 +52,8 @@ inline std::string canonical_child(std::string_view c) {
         {"MW_ItemList", "ItemList"},      {"TSEL_TaskList", "TaskList"}, {"RW_SelectButton", "SelectButton"},
         {"RW_OptionsList", "OptionsList"},      {"MW_Done_Button", "MW_Done_Button"},
         {"LW_LootAllButton", "LootAllButton"}, {"LW_DoneButton", "DoneButton"}, {"LW_BroadcastButton", "BroadcastButton"},
+        // A later client's name for the trade partner's label, which E3 asks for when it runs 64-bit (Hailstone).
+        {"TRDW_OtherName", "TRDW_HisName"},
     };
     for (const auto& [from, to] : kNames)
         if (iequals(c, from)) return std::string(to);

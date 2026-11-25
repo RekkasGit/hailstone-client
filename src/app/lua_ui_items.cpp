@@ -38,8 +38,9 @@ int index_after(std::string_view id, std::string_view prefix) {
     return ec == std::errc() && p == rest.data() + rest.size() ? v : -1;
 }
 
-bool shift() { return ImGui::GetIO().KeyShift; }
-bool ctrl() { return ImGui::GetIO().KeyCtrl; }
+// The keys held (none without ImGui: a client that draws nothing, a /notify with no UI).
+bool shift() { return ImGui::GetCurrentContext() && ImGui::GetIO().KeyShift; }
+bool ctrl() { return ImGui::GetCurrentContext() && ImGui::GetIO().KeyCtrl; }
 
 // The money buttons count platinum first: Money0 platinum .. Money3 copper; wire coin types count copper first.
 int coin_type(int button) { return 3 - button; }

@@ -32,6 +32,7 @@ constexpr ExtendedCommand kExtended[] = {
     {"/face", "Turn toward a target, coordinate, or heading.", kMovement},
     {"/finditem", "Search items across your inventory.", {}, "/advi"},
     {"/import", "Import eligible socials and hot buttons."},
+    {"/invoke", "Read a line's ${...} for its window methods.", kHelpers},
     {"/keypress", "Tap, hold, or release a game binding.", kMovement},
     {"/lighting", "Switch lighting modes."},
     {"/lua", "Start, pause, stop, or list Lua scripts."},
