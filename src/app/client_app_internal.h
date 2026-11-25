@@ -509,6 +509,48 @@ public:
         lua_ui_->add_ui_api([this](lua_State* L) { register_ui_api(L); });
         automation_->hooks().add_command(plugin::Hooks::kClient, "/lighting",
                                          [this](std::string_view args) { lighting_command(args); });
+        // MacroQuest's commands that act for the player (docs/commands.md), registered as the client's so they come
+        // before the game's abbreviations (/click is /clickthrough there, /memspell /memspellset).
+        automation_->hooks().add_command(plugin::Hooks::kClient, "/makemevisible", [this](std::string_view) {
+            if (conn_) conn_->make_me_visible(false); // CharacterZoneClient::MakeMeVisible(0, false), as MQ calls it
+        }, plugin::kCapActions);
+        automation_->hooks().add_command(plugin::Hooks::kClient, "/removelev", [this](std::string_view) {
+            if (conn_) conn_->removelev_command();
+        }, plugin::kCapActions);
+        automation_->hooks().add_command(plugin::Hooks::kClient, "/removeaura", [this](std::string_view args) {
+            if (conn_) conn_->removeaura_command(args);
+        }, plugin::kCapActions);
+        automation_->hooks().add_command(plugin::Hooks::kClient, "/memspell", [this](std::string_view args) {
+            if (conn_) conn_->memspell_command(args);
+        }, plugin::kCapActions);
+        // MQ's /click left|right target: the left or right click on the target the mouse would give it
+        // (LeftClickedOnPlayer: with an item on the cursor, the item is given; RightClickedOnPlayer: loot, talk ...).
+        // MQ's other places (center, item, a screen point) are not here.
+        automation_->hooks().add_command(plugin::Hooks::kClient, "/click", [this](std::string_view args) {
+            if (!conn_) return;
+            std::string button, where;
+            {
+                std::string_view rest = args;
+                auto next = [&rest] {
+                    while (!rest.empty() && rest.front() == ' ') rest.remove_prefix(1);
+                    const std::size_t end = std::min(rest.find(' '), rest.size());
+                    std::string w(rest.substr(0, end));
+                    rest.remove_prefix(end);
+                    for (char& c : w) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                    return w;
+                };
+                button = next();
+                where = next();
+            }
+            if ((button != "left" && button != "right") || where != "target") {
+                conn_->ui_message("[MQ] /click: only /click left target and /click right target are supported.");
+                return;
+            }
+            const std::uint32_t id = conn_->world().target_id;
+            if (!id || !conn_->world().spawns.contains(id)) return;
+            if (button == "left") left_click_spawn(id);
+            else right_click_spawn(id);
+        }, plugin::kCapActions);
         stats_ui_->set_open(opts_.show_stats);
         // The performance window (app/perf_ui.h): Ctrl+Shift+P, /perf, or ui.perf_window=1.
         perf_ui_.set_open(config_.get_bool("ui.perf_window", false));

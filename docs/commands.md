@@ -276,6 +276,11 @@ one, the server's add-on rules decide whether it may.
 | `/squelch <line>` | Run a line without the chat lines it prints. |
 | `/timed <deciseconds> <line>` | Run a line that many tenths of a second later (MacroQuest's). Its `${...}` are read when it runs; a script's line keeps the script's permissions. At most 1000 wait at once. |
 | `/doortarget [id <n> \| <name>]`, `/doortarget clear` | Pick a door for `${DoorTarget}` (MacroQuest's): the one with that id, or the nearest whose name holds the text (the nearest door with no text); `clear` drops it. |
+| `/makemevisible` | End your invisibility (MacroQuest's; the client's own MakeMeVisible). |
+| `/removelev` | Click off every buff that levitates you, saying each (MacroQuest's). |
+| `/removeaura <name>` | Remove each of your auras whose name holds the text, any case (MacroQuest's). |
+| `/memspell <gem> "<spell>"` | Memorize a spell from your book into gem 1..12, by its exact name (any case) or its id (MacroQuest's; as the spell sets do it). Nothing for a spell not in the book or above your level. |
+| `/click left target`, `/click right target` | Click your target as the mouse would (MacroQuest's): a left click with an item on the cursor gives it; a right click loots, talks and the rest. MacroQuest's other places (`center`, a screen point ...) are not supported. |
 
 In a social's lines, `/pause` waits and `/timer` sets the button's cooldown (docs/dev-ui.md).
 

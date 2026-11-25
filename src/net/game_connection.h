@@ -1751,6 +1751,13 @@ public:
     bool memorizing_set() const { return set_mem_.mode == 2; }
     // Clicks off one of the player's buffs (OP_BuffRemoveRequest).
     void remove_buff(int slot);
+    // MacroQuest's commands on these (registered by the app, so they come before the game's abbreviations):
+    // /removelev clicks off every buff with levitation (SPA 57), saying each; /removeaura <name> removes each aura
+    // whose name holds the text; /memspell <gem> "<spell>" memorizes a spell of the book (by exact name, any case, or
+    // id) into gem 1..12 through MemorizeSet with only that gem, when the player's level allows it.
+    void removelev_command();
+    void removeaura_command(std::string_view args);
+    void memspell_command(std::string_view args);
     // Clicks off a removable beneficial buff in the focused pet's server slot.
     bool remove_pet_buff(std::uint32_t slot);
     // RemovePCAffectex(affect, 0) / NotifyPCAffectChange: the client drops a buff
