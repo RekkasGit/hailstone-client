@@ -1113,10 +1113,14 @@ void open_container(UiHost& host, const net::ItemSlot& s) {
 // closes its container, a book is read, a common item is used (OP_ItemVerifyRequest: clickies, food and drink,
 // scrolls and tomes on servers that scribe them). The item display is the held button's (inspect_held).
 void item_right_click(UiHost& host, const net::ItemSlot& slot) {
-    if (!host.conn) return;
     const ImGuiIO& io = ImGui::GetIO();
+    item_right_click(host, slot, {io.KeyShift, io.KeyCtrl, io.KeyAlt});
+}
+
+void item_right_click(UiHost& host, const net::ItemSlot& slot, net::SlotClickKeys keys) {
+    if (!host.conn) return;
     using R = net::GameConnection::SlotRightClick;
-    switch (host.conn->right_click_item(slot, {io.KeyShift, io.KeyCtrl, io.KeyAlt})) {
+    switch (host.conn->right_click_item(slot, keys)) {
     case R::ToggleContainer: toggle_container(host, slot); break;
     default: break; // the item preview went out (GameConnection::preview_item); the trader's selection is not built
     }

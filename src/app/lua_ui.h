@@ -34,7 +34,7 @@
 
 struct lua_State;
 
-namespace hailstone::net { class GameConnection; struct Item; struct ItemSlot; struct CharCreate; }
+namespace hailstone::net { class GameConnection; struct Item; struct ItemSlot; struct CharCreate; struct SlotClickKeys; }
 namespace hailstone::game { class HotButtonStore; struct HotButton; namespace mechanics { class Character; } }
 namespace hailstone { class GameDir; }
 namespace hailstone::assets { class CharacterLibrary; struct CharacterModel; }
@@ -444,6 +444,7 @@ public:
     void toggle(std::string_view screen);
     // A right click on an inventory item: a bag opens or closes its container window, anything else is inspected.
     void right_click_item(const net::ItemSlot& slot);
+    void right_click_item(const net::ItemSlot& slot, net::SlotClickKeys keys); // with these modifier keys
     // Hailstone's menu on another player at x, y (app::open_player_menu); false when it did not open.
     bool open_player_menu(std::uint32_t spawn_id, float x, float y);
     // The OPEN_INV_BAGS / CLOSE_INV_BAGS / TOGGLE_INV_BAGS keys: every bag in the general slots opens or closes.

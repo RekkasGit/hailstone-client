@@ -523,6 +523,21 @@ public:
         automation_->hooks().add_command(plugin::Hooks::kClient, "/memspell", [this](std::string_view args) {
             if (conn_) conn_->memspell_command(args);
         }, plugin::kCapActions);
+        automation_->hooks().add_command(plugin::Hooks::kClient, "/itemnotify", [this](std::string_view args) {
+            itemnotify_command(args);
+        }, plugin::kCapActions);
+        // MQ's /nomodkey, /shiftkey and /ctrlkey: the command after them runs with those keys forced for its clicks
+        // (E3 sends "/nomodkey /itemnotify ..." so a key the player holds changes nothing). The line itself is checked
+        // as any line is, the caller's permissions held.
+        automation_->hooks().add_command(plugin::Hooks::kClient, "/nomodkey", [this](std::string_view args) {
+            run_with_keys(args, {});
+        });
+        automation_->hooks().add_command(plugin::Hooks::kClient, "/shiftkey", [this](std::string_view args) {
+            run_with_keys(args, {true, false, false});
+        });
+        automation_->hooks().add_command(plugin::Hooks::kClient, "/ctrlkey", [this](std::string_view args) {
+            run_with_keys(args, {false, true, false});
+        });
         // MQ's /click left|right target: the left or right click on the target the mouse would give it
         // (LeftClickedOnPlayer: with an item on the cursor, the item is given; RightClickedOnPlayer: loot, talk ...).
         // MQ's other places (center, item, a screen point) are not here.
@@ -943,6 +958,15 @@ private:
     render::SceneLighting scene_lighting(const game::SceneLight& scene, const render::Daylight& sky,
                                          render::DynamicShadowLights* moving = nullptr) const;
     void lighting_command(std::string_view args);
+    // /itemnotify (game/item_notify.h): the mouse notification on the slot or item the line names, with command_keys()
+    // (client_app_items.cpp).
+    void itemnotify_command(std::string_view args);
+    // The modifier keys a command's click uses: those /nomodkey, /shiftkey or /ctrlkey forced while their line runs,
+    // else the keyboard's (MacroQuest's clicks read the keyboard too).
+    net::SlotClickKeys command_keys() const;
+    // /nomodkey, /shiftkey, /ctrlkey: `line` run through the command interpreter with these keys forced.
+    void run_with_keys(std::string_view line, net::SlotClickKeys keys);
+    std::optional<net::SlotClickKeys> forced_keys_;
     void lua_social_command(std::string_view args); // /luasocial (app/client_app_draw.cpp)
     // Config::get_float: NaN and the infinities are the fallback, so a bad hailstone.ini value never reaches a
     // matrix or a clamp that lets NaN through.
