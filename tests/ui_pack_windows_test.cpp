@@ -28,6 +28,7 @@
 
 #include "lua_ui_api_mock.h"
 
+#include "app/chat_tabs.h"
 #include "app/lua_ui.h"
 #include "app/gamepad.h"
 #include "core/byte_io.h"
@@ -4276,6 +4277,63 @@ TEST_CASE("UI packs (modern): a dialog's corner and edge resize it, neither scal
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
     }
     ImGui::DestroyContext(ctx);
+}
+
+TEST_CASE("UI packs (modern): fallback chat appears only without a chat replacement") {
+    namespace tabs = app::chat_tabs;
+    const auto src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
+    hailstone::test::ScratchDir scratch("ui_pack_fallback_chat");
+    const auto dir = scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(src, dir / "modern", fs::copy_options::recursive);
+    std::unique_ptr<ImGuiContext, decltype(&ImGui::DestroyContext)> ctx(ImGui::CreateContext(), ImGui::DestroyContext);
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    Session s(dir, "modern");
+    s.lua.set_entry_scripts({"chat.lua"});
+    ReplacementCheck replacements(s.api);
+    ui::InGameView fallback;
+    const auto fallback_active = [] {
+        const ImGuiWindow* window = ImGui::FindWindowByName("Chat##hailstone");
+        return window && window->Active;
+    };
+
+    s.frames(4, &fallback);
+    REQUIRE(s.api.replaces("Chat1"));
+    CHECK_FALSE(fallback_active());
+
+    const int destination = tabs::new_window("Other Chat");
+    REQUIRE(destination > 1);
+    REQUIRE(tabs::combine(destination) > 0);
+    REQUIRE(tabs::group(1).tabs.empty());
+    const std::string slot = std::to_string(destination);
+    const std::string screen = "Chat" + slot;
+    s.frames(4, &fallback);
+    CHECK_FALSE(s.api.replaces("Chat1"));
+    REQUIRE(s.api.replaces(screen));
+    const ImGuiWindow* modern = ImGui::FindWindowByName(("###modern." + screen).c_str());
+    REQUIRE(modern);
+    CHECK(modern->Active);
+    CHECK_FALSE(fallback_active());
+
+    s.host.keep_cpp_windows = true;
+    s.frames(1, &fallback);
+    CHECK(modern->Active);
+    CHECK(fallback_active());
+    s.host.keep_cpp_windows = false;
+
+    const std::string disable = "ui.DisableWindow('Chat " + slot + "')";
+    REQUIRE(luaL_dostring(s.lua.state(), disable.c_str()) == LUA_OK);
+    s.frames(4, &fallback);
+    CHECK_FALSE(s.api.replaces(screen));
+    CHECK_FALSE(modern->Active);
+    CHECK(fallback_active());
+    CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+
+    REQUIRE(tabs::detach(1) == 1);
+    s.frames(4, &fallback);
+    CHECK(s.api.replaces("Chat1"));
+    CHECK_FALSE(fallback_active());
 }
 
 // A resizable HUD frame's bottom-right corner resizes it (the chat): a larger design size, the scale untouched. A
