@@ -1624,6 +1624,11 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
 }
 
 bool ScriptHost::run(const std::string& name, const std::vector<std::string>& args, std::string* why) {
+    return run_file(name, args, why, false);
+}
+
+bool ScriptHost::run_file(const std::string& name, const std::vector<std::string>& args, std::string* why,
+                          bool zone_policy) {
     Impl& m = *impl_;
     auto refuse = [&](std::string text) {
         if (why) *why = text;
@@ -1692,7 +1697,7 @@ bool ScriptHost::run(const std::string& name, const std::vector<std::string>& ar
     lua_xmove(L, sc.co, 1); // the chunk onto the coroutine
     sc.co_ref = luaL_ref(L, LUA_REGISTRYINDEX);
     watch(sc.co);
-    m.say(std::format("[Lua] running {} ({})", key, plugin::caps_text(caps)));
+    m.say(std::format("[Lua] running {} ({})", key, plugin::caps_text(caps)), zone_policy);
     log::info("lua: running {} from {}, sha256 {}, caps {}", key, entry->string(), to_hex(hash), plugin::caps_text(caps));
     m.scripts.push_back(std::move(s));
     return true;
@@ -1704,10 +1709,10 @@ bool ScriptHost::Impl::kept(const Script& s) const {
             env.policy->required_file(plugin::FileKind::Script, s.hash));
 }
 
-void ScriptHost::Impl::end(Script& s, const std::string& why) {
+void ScriptHost::Impl::end(Script& s, const std::string& why, bool zone_policy) {
     s.stop_requested = true;
     if (s.status == Script::Status::Running || s.status == Script::Status::Paused) s.status = Script::Status::Exited;
-    say("[Lua] " + s.name + " " + why);
+    say("[Lua] " + s.name + " " + why, zone_policy);
 }
 
 bool ScriptHost::Impl::may_control(const Script& s) const { return (s.caps & ~plugin::caller_caps()) == 0; }
@@ -1975,7 +1980,7 @@ void ScriptHost::Impl::draw_windows(Script& s) {
     --s.busy;
 }
 
-void ScriptHost::policy_changed(const std::vector<std::string>& autoload) {
+void ScriptHost::policy_changed(const std::vector<std::string>& autoload, bool zone_policy) {
     Impl& m = *impl_;
     for (auto& sp : m.scripts) {
         Script& s = *sp;
@@ -1989,7 +1994,7 @@ void ScriptHost::policy_changed(const std::vector<std::string>& autoload) {
                 if ((allowed & caps) != caps) { caps = 0; break; }
             }
         if (caps == 0) {
-            m.end(s, "stopped: it may not run here");
+            m.end(s, "stopped: it may not run here", zone_policy);
         } else if (caps != s.caps) {
             s.caps = caps;
             constexpr std::uint32_t needed = plugin::kCapUi | plugin::kCapExtend;
@@ -2004,7 +2009,8 @@ void ScriptHost::policy_changed(const std::vector<std::string>& autoload) {
     for (auto& [social, sp] : m.buttons) {
         Script& s = *sp;
         if (r.mode != plugin::ButtonMode::Full) {
-            if (button_running(social)) m.say("[Lua] " + s.name + " stopped: this server does not let it run on");
+            if (button_running(social))
+                m.say("[Lua] " + s.name + " stopped: this server does not let it run on", zone_policy);
             m.stop_threads(s);
         } else {
             if (s.caps != r.caps) invalidate_plugin_lifecycle(s);
@@ -2016,7 +2022,7 @@ void ScriptHost::policy_changed(const std::vector<std::string>& autoload) {
     // The server's scripts its hailstone.cfg starts ([scripts] run).
     if (m.env.policy && m.env.policy->current())
         for (const auto& name : m.env.policy->current()->run_scripts)
-            if (!running(name)) run(name, {});
+            if (!running(name)) run_file(name, {}, nullptr, zone_policy);
     // Required managed add-ons start independently of the player's autorun choices.
     m.required.clear();
     if (m.env.policy && m.env.policy->current() && !m.env.policy->current()->provisional) {
@@ -2028,13 +2034,13 @@ void ScriptHost::policy_changed(const std::vector<std::string>& autoload) {
             const auto text = file ? read_file(*file) : std::nullopt;
             if (text && sha256(*text) == entry.second &&
                 m.env.policy->caps(plugin::FileKind::Script, entry.second, entry.first) != 0)
-                run(entry.first, {});
+                run_file(entry.first, {}, nullptr, zone_policy);
         }
     }
     // The player's own the settings and the character's autorun list name.
-    m.start_allowed(autoload);
-    m.start_allowed(m.autorun);
-    m.start_managed();
+    m.start_allowed(autoload, zone_policy);
+    m.start_allowed(m.autorun, zone_policy);
+    m.start_managed(zone_policy);
 }
 
 std::size_t ScriptHost::retry_required_addons() {
@@ -2054,7 +2060,7 @@ std::size_t ScriptHost::retry_required_addons() {
     return started;
 }
 
-void ScriptHost::Impl::start_managed() {
+void ScriptHost::Impl::start_managed(bool zone_policy) {
     if (!env.policy || !env.policy->received()) return;
     for (const auto& addon : managed) {
         if (!addon.enabled || !addon.verified || self->running(addon.name)) continue;
@@ -2063,7 +2069,7 @@ void ScriptHost::Impl::start_managed() {
         if (!entry || !fs::equivalent(*entry, addon.entry, ec)) continue; // never start a shadowing server/manual file
         const auto hash = file_hash(*entry);
         if (!hash || *hash != addon.hash || env.policy->caps(plugin::FileKind::Script, *hash) == 0) continue;
-        self->run(addon.name, {});
+        self->run_file(addon.name, {}, nullptr, zone_policy);
     }
 }
 
@@ -2147,13 +2153,14 @@ bool ScriptHost::Impl::check_required_addons(std::string* problem) const {
     return true;
 }
 
-void ScriptHost::Impl::start_allowed(const std::vector<std::string>& names) {
+void ScriptHost::Impl::start_allowed(const std::vector<std::string>& names, bool zone_policy) {
     if (!env.policy || !env.policy->received()) return;
     for (const auto& name : names) {
         if (name.empty() || self->running(name)) continue;
         auto entry = resolve(lower(name));
         auto text = entry ? read_file(*entry) : std::nullopt;
-        if (text && env.policy->caps(plugin::FileKind::Script, sha256(*text), name) != 0) self->run(name, {});
+        if (text && env.policy->caps(plugin::FileKind::Script, sha256(*text), name) != 0)
+            self->run_file(name, {}, nullptr, zone_policy);
     }
 }
 
@@ -2220,7 +2227,7 @@ std::vector<ScriptHost::Found> ScriptHost::found() const {
 
 std::vector<fs::path> ScriptHost::folders() const { return impl_->dirs(); }
 
-void ScriptHost::set_autorun_file(const fs::path& file) {
+void ScriptHost::set_autorun_file(const fs::path& file, bool zone_policy) {
     Impl& m = *impl_;
     if (file == m.autorun_file) return;
     m.autorun_file = file;
@@ -2229,7 +2236,7 @@ void ScriptHost::set_autorun_file(const fs::path& file) {
     if (!file.empty() && ini.load(file))
         for (const auto& key : ini.keys("Autorun"))
             if (ini.get_int("Autorun", key, 0) != 0) m.autorun.push_back(lower(key));
-    m.start_allowed(m.autorun);
+    m.start_allowed(m.autorun, zone_policy);
 }
 
 bool ScriptHost::autorun(std::string_view name) const {

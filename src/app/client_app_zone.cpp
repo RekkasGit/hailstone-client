@@ -608,7 +608,7 @@ void ClientApp::enter_zone() {
     use_character_settings(files.dir); // (taken over at the entry into the world: the same, unless the name differs)
     actions_ui_->enter_zone(files.hot_buttons());
     // The character's autorun scripts (the Scripts window; the same file at each zone-in starts nothing again).
-    if (automation_) automation_->scripts().set_autorun_file(files.scripts_ini());
+    if (automation_) automation_->set_zone_autorun_file(files.scripts_ini());
     // The UI's window layout is the character's (ui-<pack>.txt), its other settings shared.
     ui_character_dir_ = files.dir;
     if (lua_ui_) lua_ui_->set_character_settings(files.ui_settings(ui_name_));

@@ -154,8 +154,10 @@ constexpr std::size_t kWindowLines = 1000;
 // put where the restored lines end. It keeps what the windows keep (trim_windows).
 constexpr std::size_t kHistoryLines = 32000;
 constexpr std::string_view kHistoryHeader = "# Hailstone chat history 2";
+constexpr std::string_view kHistoryHeaderV3 = "# Hailstone chat history 3"; // first group prototype
 constexpr std::string_view kHistoryHeaderV1 = "# Hailstone chat history 1"; // no time column
 constexpr std::string_view kHistoryMark = "-- the chat from before --";
+constexpr std::string_view kHistoryGroup = "# Hailstone chat group\t";
 
 ChatState& state() {
     static ChatState s;
@@ -219,6 +221,7 @@ std::string escape(std::string_view text) {
 // to them (open_tell).
 constexpr int kNameLink = 1001;
 constexpr int kAchievementLink = 1002;
+constexpr int kChatGroupLink = 1003;
 
 // STML's attribute parser does not decode entities. Hex keeps the exact received
 // metadata out of markup syntax, including quotes and literal entity-like text.
@@ -348,12 +351,11 @@ void add_colored(std::string& out, std::string_view text, std::string& name, gam
 // One line as STML: its colour, item links as <a WndNotify="27,data"> (the tag between the two \x12, encoded by
 // game::stml_link_data), and with `names`, a link on its player's name. A colour code's colour lasts across the
 // links, which keep their own link colour; any still open close at the end of the line.
-std::string line_stml(const ui::ChatLine& l, bool names, TimestampFormat stamps) {
+std::string line_stml(const ui::ChatLine& l, std::string_view text, bool names, TimestampFormat stamps) {
     std::uint32_t rgb = l.rgb ? l.rgb : l.color ? chat_index_rgb(static_cast<int>(l.color)) : channel_rgb(l.channel);
     std::string out = timestamp_stml(l.time, stamps) + std::format("<c \"#{:06x}\">", rgb & 0xffffff);
     std::string name = names ? link_name(l) : std::string();
     game::MqColorState colors(rgb & 0xffffff);
-    std::string_view text = l.text;
     std::size_t at = 0;
     while (at < text.size()) {
         std::size_t a = text.find('\x12', at);
@@ -363,7 +365,7 @@ std::string line_stml(const ui::ChatLine& l, bool names, TimestampFormat stamps)
             break;
         }
         add_colored(out, text.substr(at, a - at), name, colors);
-        std::string tag = l.text.substr(a + 1, b - a - 1);
+        std::string tag(text.substr(a + 1, b - a - 1));
         if (!tag.empty() && tag.front() == '3') {
             const auto achievement = game::parse_achievement_chat_link(tag);
             std::string shown = achievement ? achievement->text : "Achievement";
@@ -388,6 +390,16 @@ std::string line_stml(const ui::ChatLine& l, bool names, TimestampFormat stamps)
     }
     for (std::size_t i = game::finish_mq_colors(colors).size(); i > 0; --i) out += "</c>";
     return out + "</c>";
+}
+
+std::string group_stml(const ui::ChatLine& l, TimestampFormat stamps) {
+    std::string out = timestamp_stml(l.time, stamps) +
+        std::format("<c \"#{:06x}\"><a WndNotify=\"{},{}\">{}</a></c>",
+                    ui::kChatGroupRgb, kChatGroupLink, l.seq, escape(l.group_label()));
+    if (l.group_expanded)
+        for (const auto& message : l.group_messages)
+            out += "\n  " + line_stml(l, message, false, TimestampFormat::Off);
+    return out;
 }
 
 UiHost& host(lua_State* L) { return *static_cast<UiHost*>(lua_touserdata(L, lua_upvalueindex(1))); }
@@ -496,7 +508,7 @@ struct ChatWnd {
     // What hs.ChatText shows of it (scan_windows): the first and last line's seq and the count, and a generation
     // that changes whenever its lines change in another way than lines added at the end or leaving from the front.
     std::uint64_t gen = 0, first = 0, last = 0;
-    std::size_t count = 0;
+    std::size_t count = 0, raw_count = 0;
 };
 
 struct ChatGroup {
@@ -523,6 +535,7 @@ struct ChatManager {
     std::uint32_t next_serial = 1;
     const ui::ChatView* scanned = nullptr; // what scan_windows last looked at
     std::uint64_t scanned_revision = 0, scanned_serial = 0, scanned_colors = 0, scanned_achievement_catalog = 0;
+    std::uint64_t scanned_groups = 0;
     std::uint64_t next_gen = 1;                             // ChatWnd::gen's source (never reset)
     ui::UiIni* ini = nullptr;
 
@@ -1008,9 +1021,11 @@ void scan_windows(const ui::ChatView& v, int w_asked) {
     const auto catalog = h && h->conn ? h->conn->achievements().catalog_token() : 0;
     bool fresh = m.scanned != &v || m.scanned_serial != m.serial || m.scanned_colors != state().colors ||
         m.scanned_achievement_catalog != catalog;
-    if (!fresh && m.scanned_revision == v.revision && wnd(w_asked).gen) return;
+    const bool groups_changed = m.scanned_groups != v.group_revision;
+    if (!fresh && !groups_changed && m.scanned_revision == v.revision && wnd(w_asked).gen) return;
     std::array<std::uint64_t, kMaxChatWindows> first{}, last{};
-    std::array<std::size_t, kMaxChatWindows> count{};
+    std::array<std::size_t, kMaxChatWindows> count{}, raw_count{};
+    std::array<bool, kMaxChatWindows> has_groups{};
     std::unordered_map<std::uint32_t, int> by_serial;
     for (int w = 0; w < kMaxChatWindows; ++w)
         if (used(w)) by_serial[wnd(w).serial] = w;
@@ -1026,22 +1041,27 @@ void scan_windows(const ui::ChatView& v, int w_asked) {
         if (!count[i]) first[i] = l.seq;
         last[i] = l.seq;
         ++count[i];
+        has_groups[i] = has_groups[i] || !l.group_messages.empty();
+        raw_count[i] += std::max(std::size_t{1}, l.group_messages.size());
     }
     for (int w = 0; w < kMaxChatWindows; ++w) {
         ChatWnd& c = wnd(w);
         if (!c.used) continue;
         auto i = static_cast<std::size_t>(w);
-        if (fresh || !c.gen || last[i] < c.last || (last[i] == c.last && (first[i] != c.first || count[i] != c.count)))
+        if (fresh || (groups_changed && has_groups[i]) || !c.gen || last[i] < c.last ||
+            (last[i] == c.last && (first[i] != c.first || count[i] != c.count)))
             c.gen = m.next_gen++;
         c.first = first[i];
         c.last = last[i];
         c.count = count[i];
+        c.raw_count = raw_count[i];
     }
     m.scanned = &v;
     m.scanned_revision = v.revision;
     m.scanned_serial = m.serial;
     m.scanned_colors = state().colors;
     m.scanned_achievement_catalog = catalog; // existing links revalidate after catalog replacement/retirement
+    m.scanned_groups = v.group_revision;
 }
 
 // ---------------------------------------------------------------- the menus (CChatWindowManager::InitContextMenu)
@@ -1619,7 +1639,8 @@ int ChatWindows(lua_State* L) {
 // version, lines, reset, count = hs.ChatText(slot, version, names, stamps, true)   -- Hailstone: the lines added since
 // `version` (one this call gave for the same slot, names and stamps) when the script can keep what it has: reset
 // false, add `lines` at the end and drop lines from the front until `count` are left. Else reset true and `lines`
-// are all of them, as without the last argument.
+// are all of them, as without the last argument. The sixth argument opts in to a single STML entry per group.
+// That entry contains the disclosure link and, when open, all of the group's lines.
 int ChatText(lua_State* L) {
     UiHost& h = host(L);
     int w = up_window(L, 1);
@@ -1640,10 +1661,12 @@ int ChatText(lua_State* L) {
         stamps = TimestampFormat::Hours24Seconds;
     }
     bool since = lua_toboolean(L, 5) != 0;
-    // bits 0..39 the last line's seq, 40..59 the window's generation, 60 names, 61..62 timestamp format.
+    bool groups = lua_toboolean(L, 6) != 0;
+    // bits 0..39 the last line's seq, 40..58 generation, 59 groups, 60 names, 61..62 timestamp format.
     // Keeping the format in the version invalidates the cached lines when the player changes it.
-    constexpr std::uint64_t kSeqMask = (std::uint64_t{1} << 40) - 1, kGenMask = (std::uint64_t{1} << 20) - 1;
+    constexpr std::uint64_t kSeqMask = (std::uint64_t{1} << 40) - 1, kGenMask = (std::uint64_t{1} << 19) - 1;
     auto version = static_cast<lua_Integer>((c.last & kSeqMask) | ((c.gen & kGenMask) << 40) |
+                                            (std::uint64_t{groups} << 59) |
                                             (std::uint64_t{names} << 60) | (static_cast<std::uint64_t>(stamps) << 61));
     int given = 0;
     lua_Integer held = lua_tointegerx(L, 2, &given);
@@ -1666,12 +1689,18 @@ int ChatText(lua_State* L) {
     for (std::size_t k = from; k < h.chat->lines.size(); ++k) {
         const auto& l = h.chat->lines[k];
         if (line_seq(*h.chat, k) <= c.cleared || window_of_line(l) != w) continue;
-        plugin::push_made(L, line_stml(l, names, stamps)); // (out of this frame before the push: plugin/lua_keep.h)
-        lua_rawseti(L, -2, ++i);
+        auto push = [&](std::string text) {
+            plugin::push_made(L, std::move(text)); // (out of this frame before the push: plugin/lua_keep.h)
+            lua_rawseti(L, -2, ++i);
+        };
+        if (l.group_messages.empty()) push(line_stml(l, l.text, names, stamps));
+        else if (groups) push(group_stml(l, stamps));
+        else
+            for (const auto& message : l.group_messages) push(line_stml(l, message, false, stamps));
     }
     if (!since) return 2;
     lua_pushboolean(L, !append);
-    lua_pushinteger(L, static_cast<lua_Integer>(c.count));
+    lua_pushinteger(L, static_cast<lua_Integer>(groups ? c.count : c.raw_count));
     return 4;
 }
 
@@ -2183,9 +2212,26 @@ int ChatSetHitMode(lua_State* L) {
 }
 
 // hs.ChatLink(slot, message, data)   -- a link clicked in the output: 27 an item link (asks the server for it), 1001
-// a name link (open_tell), 1002 a validated achievement snapshot.
+// a name link (open_tell), 1002 a validated achievement snapshot, 1003 a message group in this tab.
 int ChatLink(lua_State* L) {
     UiHost& h = host(L);
+    if (luaL_checkinteger(L, 2) == kChatGroupLink) {
+        if (!h.chat || plugin_code()) return 0;
+        const int w = up_window(L, 1);
+        if (w < 0) return 0;
+        std::size_t length = 0;
+        const char* data = luaL_checklstring(L, 3, &length);
+        std::uint64_t seq = 0;
+        const auto [end, error] = std::from_chars(data, data + length, seq);
+        if (error != std::errc{} || end != data + length || seq <= wnd(w).cleared) return 0;
+        sync_lines(*h.chat);
+        auto& lines = h.chat->lines;
+        auto it = std::lower_bound(lines.begin(), lines.end(), seq,
+                                   [](const ui::ChatLine& line, std::uint64_t key) { return line.seq < key; });
+        if (it != lines.end() && it->seq == seq && window_of_line(*it) == w)
+            h.chat->toggle_chat_group(*it);
+        return 0;
+    }
     if (luaL_checkinteger(L, 2) == kAchievementLink) {
         std::size_t length = 0;
         const char* data = luaL_checklstring(L, 3, &length);
@@ -2449,7 +2495,8 @@ namespace {
 
 // ---------------------------------------------------------------- the chat history (Hailstone)
 // chat_history.txt: a header, then one line per chat line, oldest first: channel, rgb, colour, time (std::time, 0
-// unknown), peer and text, tab-separated (\\, \t, \n, \r escaped in the text and peer). Version 1 had no time.
+// unknown), peer and text, tab-separated (\\, \t, \n, \r escaped in the text and peer). A group marker supplies
+// the count and title for the following records. Older clients skip the marker and read the individual lines.
 
 std::string history_escape(std::string_view v) {
     std::string out;
@@ -2488,11 +2535,32 @@ void restore_chat_history(UiHost& host, const std::filesystem::path& file) {
     s.history_restored = true;
     std::ifstream in(file);
     std::string line;
-    if (!in || !std::getline(in, line) || (line != kHistoryHeader && line != kHistoryHeaderV1)) return;
-    const bool timed = line == kHistoryHeader;
-    const int fields = timed ? 5 : 4;
+    if (!in || !std::getline(in, line) || (line != kHistoryHeader && line != kHistoryHeaderV3 &&
+                                           line != kHistoryHeaderV1)) return;
+    const bool group_markers = line == kHistoryHeader;
+    const bool prototype = line == kHistoryHeaderV3;
+    const bool timed = line != kHistoryHeaderV1;
+    const int fields = prototype ? 6 : timed ? 5 : 4;
     std::deque<ui::ChatLine> old;
+    std::size_t group_begin = 0, group_count = 0;
+    std::string group_title;
     while (std::getline(in, line)) {
+        if (group_markers && line.starts_with(kHistoryGroup)) {
+            while (old.size() > kHistoryLines) old.pop_front();
+            group_count = 0;
+            const std::string_view metadata = std::string_view(line).substr(kHistoryGroup.size());
+            const auto separator = metadata.find('\t');
+            if (separator == std::string_view::npos) continue;
+            std::size_t count = 0;
+            const auto [end, error] = std::from_chars(metadata.data(), metadata.data() + separator, count);
+            if (error != std::errc{} || end != metadata.data() + separator || count == 0 || count > kHistoryLines)
+                continue;
+            group_title = history_unescape(metadata.substr(separator + 1));
+            if (group_title.empty() || group_title.find_first_of("\r\n\0", 0, 3) != std::string::npos) continue;
+            group_begin = old.size();
+            group_count = count;
+            continue;
+        }
         std::vector<std::string_view> f;
         std::size_t at = 0;
         for (int k = 0; k < fields; ++k) {
@@ -2508,11 +2576,39 @@ void restore_chat_history(UiHost& host, const std::filesystem::path& file) {
         l.color = static_cast<std::uint32_t>(std::strtoul(std::string(f[2]).c_str(), nullptr, 10));
         if (timed) l.time = std::strtoll(std::string(f[3]).c_str(), nullptr, 10);
         l.peer = history_unescape(f[timed ? 4 : 3]);
-        l.text = history_unescape(std::string_view(line).substr(at));
+        std::string_view payload = std::string_view(line).substr(at);
+        if (prototype && f[5] == "group") {
+            l.text = ui::kClientSystemMessages;
+            while (true) {
+                const auto separator = payload.find('\t');
+                l.group_messages.push_back(history_unescape(payload.substr(0, separator)));
+                if (separator == std::string_view::npos) break;
+                payload.remove_prefix(separator + 1);
+            }
+        } else if (!prototype || f[5] == "line") {
+            l.text = history_unescape(payload);
+        } else {
+            continue;
+        }
         l.restored = true;
         old.push_back(std::move(l));
-        if (old.size() > kHistoryLines) old.pop_front();
+        if (group_count && old.size() == group_begin + group_count) {
+            auto first = old.begin() + static_cast<std::ptrdiff_t>(group_begin);
+            if (std::all_of(first, old.end(), [&](const ui::ChatLine& row) {
+                    return row.channel == ui::ChatChannel::System && row.peer.empty() && row.time == first->time &&
+                           row.color == first->color && row.rgb == first->rgb;
+                })) {
+                first->group_messages.reserve(group_count);
+                for (auto it = first; it != old.end(); ++it) first->group_messages.push_back(std::move(it->text));
+                first->text = std::move(group_title);
+                old.erase(first + 1, old.end());
+            }
+            group_count = 0;
+        }
+        if (group_count == 0)
+            while (old.size() > kHistoryLines) old.pop_front();
     }
+    while (old.size() > kHistoryLines) old.pop_front();
     if (old.empty()) return;
     ChatManager& m = manager();
     ui::ChatLine mark;
@@ -2554,9 +2650,17 @@ void save_chat_history(bool ending) {
         out << kHistoryHeader << '\n';
         for (std::size_t i = first; i < lines.size(); ++i) {
             const ui::ChatLine& l = lines[i];
-            if (l.restored && l.text == kHistoryMark) continue;
-            out << static_cast<int>(l.channel) << '\t' << std::format("{:x}", l.rgb) << '\t' << l.color << '\t'
-                << l.time << '\t' << history_escape(l.peer) << '\t' << history_escape(l.text) << '\n';
+            if (l.restored && l.text == kHistoryMark && l.group_messages.empty()) continue;
+            const auto write = [&](std::string_view text) {
+                out << static_cast<int>(l.channel) << '\t' << std::format("{:x}", l.rgb) << '\t' << l.color << '\t'
+                    << l.time << '\t' << history_escape(l.peer) << '\t' << history_escape(text) << '\n';
+            };
+            if (l.group_messages.empty()) {
+                write(l.text);
+            } else {
+                out << kHistoryGroup << l.group_messages.size() << '\t' << history_escape(l.text) << '\n';
+                for (const auto& message : l.group_messages) write(message);
+            }
         }
     }
     std::error_code ec;
@@ -2806,9 +2910,17 @@ std::string chat_visible_text() {
     for (int w = 0; w < kMaxChatWindows; ++w) {
         if (!used(w)) continue;
         std::vector<std::string> lines;
-        for (std::size_t k = 0; k < v.lines.size(); ++k)
-            if (line_seq(v, k) > wnd(w).cleared && window_of_line(v.lines[k]) == w)
-                lines.push_back(game::strip_mq_colors(game::strip_links(v.lines[k].text)));
+        for (const auto& line : v.lines) {
+            if (line.seq <= wnd(w).cleared || window_of_line(line) != w) continue;
+            if (line.group_messages.empty()) {
+                lines.push_back(game::strip_mq_colors(game::strip_links(line.text)));
+            } else {
+                lines.push_back(line.group_label());
+                if (line.group_expanded)
+                    for (const auto& message : line.group_messages)
+                        lines.push_back(game::strip_mq_colors(game::strip_links(message)));
+            }
+        }
         std::size_t from = lines.size() > 20 ? lines.size() - 20 : 0;
         for (std::size_t i = from; i < lines.size(); ++i) out += lines[i] + "\n";
         out += "\n===================================\n";

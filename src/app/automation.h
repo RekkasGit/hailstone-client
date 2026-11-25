@@ -99,6 +99,7 @@ public:
     plugin::UiBridge& plugin_ui();
     // The script host (the Lua socials run there too) and MQ's TLOs and types.
     mq::ScriptHost& scripts();
+    void set_zone_autorun_file(const std::filesystem::path& file);
     const mq::Registry& registry() const;
     const mq::Context& context(); // what the TLOs read now
     mq::MapFilters& map_filters();

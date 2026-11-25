@@ -13,17 +13,32 @@ local K = dofile("lib/keyboard.lua")
 local chatlinks = dofile("lib/chatlinks.lua")
 local C = T.C
 S.LINK = C.chatLink -- (this copy of stml: chat links in the colour made for the chat's page)
+local CHAT_GROUP_LINK = 1003
+local CHAT_GROUP_TAG = '^<c "#%x+"><a WndNotify="' .. CHAT_GROUP_LINK .. ',(%d+)">'
 
-local cache = {} -- by slot: { version, lines = { segments } }
+local function parsed(raw)
+  local group = raw:match(CHAT_GROUP_TAG)
+  if not group then return S.parse(raw, C.chatText) end
+  local summary, notices = raw:match("^([^\n]*)\n?(.*)$")
+  local line = S.parse(summary, C.chatText, true)
+  line.group = group
+  line.messages = {}
+  for message in notices:gmatch("[^\n]+") do
+    line.messages[#line.messages + 1] = S.parse(message, C.chatText)
+  end
+  return line
+end
+
+local cache = {} -- by slot: { version, lines = { segments }, display = { segments } }
 -- The window's lines, parsed; only the lines that came since the last look are asked for and parsed (hs.ChatText's
 -- incremental form), unless the window's lines changed otherwise.
 local function lines(slot)
   local c = cache[slot]
   if not c then
-    c = { version = -1, lines = {} }
+    c = { version = -1, lines = {}, display = {} }
     cache[slot] = c
   end
-  local version, raw, reset, count = API.chat.Text(slot, c.version, false, false, true)
+  local version, raw, reset, count = API.chat.Text(slot, c.version, false, false, true, true)
   if version and raw and version ~= c.version then
     c.version, c.changed = version, ui.GetTime()
     if reset then c.lines = {} end
@@ -31,13 +46,25 @@ local function lines(slot)
     local n = #l
     for _, r in ipairs(raw) do
       n = n + 1
-      l[n] = S.parse(r, C.chatText)
+      l[n] = parsed(r)
     end
     local drop = n - math.max(count or n, 0)
     if drop > 0 then
       table.move(l, drop + 1, n, 1)
       for i = n - drop + 1, n do l[i] = nil end
     end
+    local display, at = c.display, 0
+    for _, line in ipairs(l) do
+      at = at + 1
+      display[at] = line
+      if line.messages then
+        for _, message in ipairs(line.messages) do
+          at = at + 1
+          display[at] = message
+        end
+      end
+    end
+    for i = #display, at + 1, -1 do display[i] = nil end
   end
   return c
 end
@@ -106,7 +133,7 @@ ui.window("Chat Ticker", function()
   end
   if GPSTATE.chatOpen then return end
   local c = lines(main)
-  local n = #c.lines
+  local n = #c.display
   if n == 0 then return end
   T.frame()
   T.resetFonts()
@@ -143,7 +170,7 @@ ui.window("Chat Ticker", function()
     local all, na = tickerRows, 0
     local font = S.fontKey()
     for i = n, math.max(1, n - 12), -1 do
-      local rows = S.rows(c.lines[i], w - T.px(28), font)
+      local rows = S.rows(c.display[i], w - T.px(28), font)
       for r = #rows, 1, -1 do na = na + 1; all[na] = rows[r] end
       if na * lh > h then break end
     end
@@ -256,7 +283,8 @@ ui.window("Chat Log", function()
       if pad.menuPressed("up") then scroll = scroll + 3 end
       if pad.menuPressed("down") then scroll = math.max(0, scroll - 3) end
     end
-    if ui.IsItemHovered() then
+    local logHovered = ui.IsItemHovered()
+    if logHovered then
       local wheel = ui.GetIO().wheel or 0
       if wheel ~= 0 then scroll = math.max(0, scroll + math.floor(wheel * 3 + 0.5)) end
     end
@@ -268,18 +296,35 @@ ui.window("Chat Log", function()
     local _, lh = ui.CalcTextSize("Ag")
     ui.PushClipRect(x0 + T.px(8), y0 + T.px(8), logX1 - T.px(8), y1 - T.px(8), true)
     local y = y1 - T.px(14)
-    local n = #c.lines
+    local n = #c.display
     scroll = math.min(scroll, math.max(0, n - 1))
     local font = S.fontKey()
+    local left, top, bottom = x0 + T.px(16), y0 + T.px(8), y1 - T.px(8)
+    local mx, my = ui.GetMousePos()
+    local visibleGroup, clickedGroup
     for i = n - scroll, 1, -1 do
-      local rows = S.rows(c.lines[i], logX1 - x0 - T.px(32), font)
+      local line = c.display[i]
+      local rows = S.rows(line, logX1 - x0 - T.px(32), font)
       for r = #rows, 1, -1 do
         y = y - lh
-        S.drawRow(rows[r], x0 + T.px(16), y)
+        local row = rows[r]
+        S.drawRow(row, left, y)
+        local last = row[#row]
+        if line.group and last and y >= top and y + lh <= bottom then
+          visibleGroup = visibleGroup or line.group
+          local right = left + last[3] + ui.CalcTextSize(last[1])
+          if logHovered and mx >= left and mx <= right and my >= y and my < y + lh then
+            local col = last[2]
+            ui.DrawLine(left, y + lh, right, y + lh, col[1], col[2], col[3], 1, 1)
+            if ui.IsMouseClicked(ui.Mouse.Left) then clickedGroup = line.group end
+          end
+        end
       end
       if y < y0 then break end
     end
     ui.PopClipRect()
+    if not clickedGroup and visibleGroup and logFocused and W.pressed("a") then clickedGroup = visibleGroup end
+    if clickedGroup then API.chat.Link(slot, CHAT_GROUP_LINK, clickedGroup) end
     if scroll > 0 then T.textIn(x0, y0 + T.px(8), logX1 - T.px(16), y0 + T.px(8) + lh, scroll .. " lines up", C.dim, 1) end
     T.unfont()
     -- the right side: what to say

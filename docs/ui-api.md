@@ -46,6 +46,13 @@ Tab records expose `unread` (also with flashing off), `flash`, `flashColor` (nil
 highlight this frame). A background message flashes the label every half second for five seconds, then leaves it
 highlighted until selected. Mutations need `commands`. Feature-check with `hs.UI.Supports('chat', 'SplitTab')`.
 
+`hs.UI.chat.Text(slot, version, names, timestamps, incremental, groups)` accepts an optional sixth argument.
+When true, a chat group occupies one STML entry. Its coloured heading shows the title and count in both states
+and carries a `WndNotify="1003,id"` disclosure link. An expanded group includes its messages on subsequent lines.
+An interface can use
+`hs.UI.chat.Link(slot, 1003, id)` to toggle the group in that tab. The toggle resets its cached text. Calls that
+omit the sixth argument receive the individual messages as ordinary lines.
+
 ## Optional world nameplate presentations
 
 `hs.UI.nameplates` is a generic drawing service, also `require('hailstone').nameplates` for ordinary add-on scripts;

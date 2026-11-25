@@ -243,6 +243,10 @@ enum class ConnectionState : std::uint8_t {
 
 const char* to_string(ConnectionState state);
 
+inline constexpr std::size_t kChatGroupMaxTitleBytes = 80;
+inline constexpr std::size_t kChatGroupMaxRows = 32;
+inline constexpr std::size_t kChatGroupMaxRowBytes = 1024;
+
 struct ChatEvent {
     enum class Kind : std::uint8_t { System, Say, Tell, Group, Guild, Raid, Shout, Auction, OOC, Emote, Combat, Spell, Other };
     Kind kind = Kind::System;
@@ -253,6 +257,7 @@ struct ChatEvent {
     std::uint32_t color = 0;
     std::string peer; // the player the line is from: a tell's other player (the sender, or whom we told), a channel's
                       // speaker (Hailstone: the modern chat's name links)
+    std::vector<std::string> group; // the group's plain text rows. When nonempty, text is its title.
 };
 
 // Something the client plays a sound for (audio/; the wave each gets is
@@ -516,6 +521,13 @@ public:
     void ui_message(std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0) {
         chat(ChatEvent::Kind::System, std::move(text), rgb, color);
     }
+    // Display the surviving lines of a local group as one collapsible entry. Only the individual rows go through
+    // the chat hooks and log. Returns false for invalid input, with no rows submitted.
+    bool write_chat_group(std::string title, std::vector<std::string> messages);
+    // A routine add-on policy notice goes through the normal hooks and log. During a zone transfer, the UI
+    // can present these notices together. The first zone-in has no transfer.
+    void zone_client_message(std::string text);
+    std::vector<std::string> take_zone_client_messages();
     // The spell effect stages queued since the last call, in order (cast stages from OP_BeginCast and procs, impact
     // stages from OP_Action 231); a zone change drops those not yet taken.
     std::vector<SpellEffectCue> take_spell_effect_cues() { return std::exchange(effect_cues_, {}); }
@@ -3003,7 +3015,11 @@ private:
     void set_spawn_motion(game::Spawn& s, const Motion& m);
     void connect_world(bool zoning);
     void chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0,
-              std::string peer = {}, std::optional<std::string> display_text = std::nullopt, bool filter = true);
+              std::string peer = {}, std::optional<std::string> display_text = std::nullopt, bool filter = true,
+              bool zone_client_notice = false);
+    bool prepare_chat(ChatEvent& event, std::optional<std::string> display_text, bool filter,
+                      bool group_member = false);
+    void enqueue_chat(ChatEvent event);
     // ReportSuccessfulHit's melee line for an attack by `source`, through the chat filters (`report`: its argument).
     void report_hit(const game::HitLine& line, std::uint32_t source, bool report = true);
     void handle_combat(Op op, const AppPacket& p);
@@ -3453,6 +3469,7 @@ private:
     bool server_files_changed_ = false;
     void finish_server_files();
     std::deque<ChatEvent> chat_;
+    std::optional<std::vector<std::string>> zone_client_messages_;
     std::vector<ZonePoint> zone_points_;
     bool zone_change_pending_ = false;
     ZoneChange zone_change_request_; // the pending request, for "not ready" retries
