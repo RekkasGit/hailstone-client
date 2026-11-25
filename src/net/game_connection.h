@@ -515,7 +515,8 @@ public:
     void ui_message(std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0) {
         chat(ChatEvent::Kind::System, std::move(text), rgb, color);
     }
-    // The sound events since the last call (doors included).
+    // The spell effect stages queued since the last call, in order (cast stages from OP_BeginCast and procs, impact
+    // stages from OP_Action 231); a zone change drops those not yet taken.
     std::vector<SpellEffectCue> take_spell_effect_cues() { return std::exchange(effect_cues_, {}); }
     // The effect packets since the last call, in order (app/spell_particles.h plays them).
     std::vector<EffectPacketCue> take_effect_packets() { return std::exchange(effect_packets_, {}); }
@@ -524,6 +525,7 @@ public:
     std::vector<game::MissilePacket> take_missiles() { return std::exchange(missiles_, {}); }
     // Spell 859 local presentation; no packet is encoded or sent.
     void spell_missile_hit(const game::Missile& missile);
+    // The sound events since the last call (doors included).
     std::vector<SoundCue> take_sound_cues();
     // CContainerMgr::OpenContainer / CloseContainer's sound for a bag of `bag_type`: a 2D wave cue
     // (game/sound_rules.h container_sound). The windows and the bag keys call it; nothing is sent.

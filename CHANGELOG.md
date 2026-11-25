@@ -16,6 +16,7 @@
 - An accepted duel opponent can be attacked (auto attack, kick, bash, backstab, detrimental spells) on a server without PvP, and beneficial spells on players outside the duel are refused while it runs, as in the original
 - A duel, running or only offered, ends when you change zones, as the server ends it; before, a player in the new zone who happened to get the old opponent's id counted as your opponent
 - Spell and level-up effects that arrived just as you changed zones no longer play on a creature in the new zone
+- Hit, spell and door sounds that arrived just as you changed zones no longer play at a creature or place in the new zone
 - In the bazaar, a purchase answer for no purchase of yours no longer lets a later Buy go before its predecessor's answer
 - A creature that despawns and is replaced under the same id in one moment no longer starts with the old one's animation sounds and loop
 - A ground item or object the server sends again under the same id with another model, place, rotation or size is redrawn there (it kept its old model and position)
