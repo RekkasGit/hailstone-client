@@ -3,6 +3,7 @@
 #include "app/client_app_internal.h"
 #include "app/lua_ui_windows.h"
 #include "game/interact.h"
+#include "game/item_notify.h"
 
 namespace hailstone::app::client_internal {
 
@@ -220,6 +221,92 @@ void ClientApp::draw_items() {
         game_view_.chat.clicked_link.reset();
     }
     // (INVENTORY, I by default, goes through the key map: key_command.)
+}
+
+
+net::SlotClickKeys ClientApp::command_keys() const {
+    if (forced_keys_) return *forced_keys_;
+    const ImGuiIO& io = ImGui::GetIO();
+    return {io.KeyShift, io.KeyCtrl, io.KeyAlt};
+}
+
+void ClientApp::run_with_keys(std::string_view line, net::SlotClickKeys keys) {
+    while (!line.empty() && line.front() == ' ') line.remove_prefix(1);
+    if (!conn_ || line.empty()) return;
+    const std::optional<net::SlotClickKeys> before = forced_keys_; // (nested: /shiftkey /nomodkey ...)
+    forced_keys_ = keys;
+    conn_->send_command(std::string(line));
+    forced_keys_ = before;
+}
+
+// MQ's ItemNotify on Hailstone's own clicks: leftmouseup is the slot's left click (CInvSlot::HandleLButtonUp: pick up,
+// put down, loot), rightmouseup its right click (use, read, open or close a bag), rightmouseheld the item's display.
+// MQ clicks the slot's window, so a closed bag's slot works only through its fallbacks; here every slot works as if
+// its window were open.
+void ClientApp::itemnotify_command(std::string_view args) {
+    if (!conn_) return;
+    const game::ItemNotify n = game::parse_item_notify(args);
+    if (!n.error.empty()) {
+        conn_->ui_message(n.error);
+        return;
+    }
+    const auto& inv = conn_->inventory();
+    std::optional<net::ItemSlot> slot = n.slot;
+    if (!slot) { // an item carried, by id or exact name: the first in slot order, bags' contents after their bag
+        auto match = [&](const net::Item& it) {
+            return n.item_id ? it.id == n.item_id : iequals(it.name, n.item_name);
+        };
+        for (const auto& [key, it] : inv.items()) {
+            if (key.first != net::kInvPossessions) continue;
+            if (match(it)) {
+                slot = net::ItemSlot::possessions(key.second);
+                break;
+            }
+            for (const auto& b : it.contents)
+                if (match(b.item)) {
+                    slot = net::ItemSlot::possessions(key.second, static_cast<std::int16_t>(b.index));
+                    break;
+                }
+            if (slot) break;
+        }
+        if (!slot) {
+            conn_->ui_message(n.item_id ? std::format("Item '#{}' not found.", n.item_id)
+                                        : std::format("Item '{}' not found.", n.item_name));
+            return;
+        }
+    }
+    // A slot in a bag: the bag must be there, and the slot one it has (MQ's messages).
+    if (slot->sub >= 0) {
+        const net::Item* bag = inv.at(slot->parent());
+        if (!bag || !bag->is_bag()) {
+            conn_->ui_message(std::format("There was no container in slot {}", slot->slot));
+            return;
+        }
+        if (slot->sub >= bag->bag_slots) {
+            conn_->ui_message(std::format("{} is not a valid slot for this container.", slot->sub));
+            return;
+        }
+    }
+    const net::SlotClickKeys keys = command_keys();
+    switch (n.notification) {
+    case game::ItemNotification::LeftMouseUp: conn_->click_slot(*slot, keys.shift, keys.ctrl); break;
+    case game::ItemNotification::RightMouseUp:
+        if (ui_api_) ui_api_->right_click_item(*slot, keys);
+        else conn_->right_click_item(*slot, keys);
+        break;
+    case game::ItemNotification::RightMouseHeld: {
+        const net::Item* it = nullptr;
+        if (slot->type == net::kInvCorpse) {
+            const auto& loot = conn_->loot_session();
+            if (loot && loot->open)
+                if (auto f = loot->items.find(slot->slot); f != loot->items.end()) it = &f->second;
+        } else {
+            it = inv.at(*slot);
+        }
+        if (it && item_ui_) item_ui_->inspect(*it);
+        break;
+    }
+    }
 }
 
 } // namespace hailstone::app::client_internal

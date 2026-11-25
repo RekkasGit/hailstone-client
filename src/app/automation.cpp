@@ -164,6 +164,7 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     m.ctx.window_open = [&m](std::string_view w) { return m.env.window_open && m.env.window_open(w); };
     m.ctx.plugin_loaded = [&m](std::string_view p) { return m.plugins && m.plugins->loaded(p); };
     m.ctx.ability = m.env.ability;
+    m.ctx.foreground = m.env.foreground;
     m.ctx.can_see = m.env.can_see;
     m.ctx.line_of_sight = m.env.line_of_sight;
     m.ctx.config_path = path_utf8(m.env.data_dir / "scripts" / "config"); // the scripts' config_dir below
@@ -176,6 +177,9 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     ce.run = [&m](const std::string& l) { m.run(l); };
     ce.set_target = [&m](std::uint32_t id) {
         if (net::GameConnection* c = m.conn()) c->set_target(id);
+    };
+    ce.set_door_target = [&m](std::optional<std::uint8_t> id) {
+        if (net::GameConnection* c = m.conn()) c->set_door_target(id);
     };
     ce.face = m.env.face;
     ce.keypress = m.env.keypress;

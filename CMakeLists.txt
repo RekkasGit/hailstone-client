@@ -1415,6 +1415,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/commerce_test.cpp
     tests/bandolier_swap_test.cpp
     tests/exchange_test.cpp
+    tests/player_commands_test.cpp
+    tests/item_notify_test.cpp
     tests/bank_test.cpp
     tests/bank_snapshot_test.cpp
     tests/real_estate_test.cpp

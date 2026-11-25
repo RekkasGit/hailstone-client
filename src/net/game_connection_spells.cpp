@@ -5,6 +5,7 @@
 // with OP_ManaChange, then sends OP_MemorizeSpell(3) with the real recast.
 
 #include <array>
+#include <charconv>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -250,6 +251,149 @@ void GameConnection::with_character(const std::function<void(game::mechanics::Ch
         &world_);
     game::mechanics::Character ch(*sheet, no_tables, game::mechanics::spell_lookup(*spell_table_));
     fn(ch);
+}
+
+void GameConnection::removelev_command() {
+    if (!spell_table_) return;
+    for (int i = 0; i < game::kBuffSlots; ++i) {
+        const game::BuffSlot& b = spells_.buffs[static_cast<std::size_t>(i)];
+        const game::SpellData* d = b.empty() ? nullptr : spell_table_->get(b.spell);
+        if (!d || !d->has_effect(game::SPA_LEVITATION)) continue;
+        const std::string name = d->name; // (the slot is cleared by remove_buff)
+        remove_buff(i);
+        ui_message("Removing: " + name);
+    }
+}
+
+void GameConnection::removeaura_command(std::string_view args) {
+    while (!args.empty() && args.front() == ' ') args.remove_prefix(1);
+    while (!args.empty() && args.back() == ' ') args.remove_suffix(1);
+    if (args.empty()) {
+        ui_message("Usage: /removeaura <auraname> or <aurapartialname>");
+        return;
+    }
+    auto lower = [](std::string_view s) {
+        std::string out(s);
+        for (char& c : out) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return out;
+    };
+    const std::string needle = lower(args);
+    std::vector<std::uint32_t> ids; // (remove_aura changes the list)
+    for (const auto& a : auras_)
+        if (lower(a.name).find(needle) != std::string::npos) ids.push_back(a.spawn_id);
+    for (std::uint32_t id : ids) remove_aura(id);
+}
+
+void GameConnection::memspell_command(std::string_view args) {
+    if (!profile_ || !spell_table_) return;
+    while (!args.empty() && args.front() == ' ') args.remove_prefix(1);
+    const std::size_t space = args.find(' ');
+    if (space == std::string_view::npos) {
+        ui_message("Usage: /memspell <gem> \"<spell name or id>\"");
+        return;
+    }
+    int gem = 0;
+    {
+        const std::string_view word = args.substr(0, space);
+        const auto [end, ec] = std::from_chars(word.data(), word.data() + word.size(), gem);
+        if (ec != std::errc() || end != word.data() + word.size()) gem = 0;
+    }
+    std::string_view name = args.substr(space + 1);
+    while (!name.empty() && name.front() == ' ') name.remove_prefix(1);
+    while (!name.empty() && name.back() == ' ') name.remove_suffix(1);
+    // a quoted name (MQ's argument 2), else the rest of the line
+    if (!name.empty() && name.front() == '"') {
+        name.remove_prefix(1);
+        if (const auto q = name.find('"'); q != std::string_view::npos) name = name.substr(0, q);
+    }
+    if (gem < 1 || gem > game::kLoadoutGems || name.empty()) return; // MQ: nothing for a gem out of range
+    std::uint32_t id = 0;
+    const auto [end, ec] = std::from_chars(name.data(), name.data() + name.size(), id);
+    const bool by_id = ec == std::errc() && end == name.data() + name.size();
+    const game::SpellData* found = nullptr;
+    for (std::uint32_t s : spells_.book) {
+        const game::SpellData* d = s == game::kNoSpell ? nullptr : spell_table_->get(s);
+        if (!d) continue;
+        if (by_id ? d->id == id : (d->name.size() == name.size() &&
+                                   std::equal(name.begin(), name.end(), d->name.begin(), [](char a, char b) {
+                                       return std::tolower(static_cast<unsigned char>(a)) ==
+                                              std::tolower(static_cast<unsigned char>(b));
+                                   }))) {
+            found = d;
+            break;
+        }
+    }
+    if (!found) return; // not in the book (MQ says nothing)
+    if (found->level_needed(profile_->class_) > pstatus_.level) return; // the level it needs not met
+    std::array<std::int32_t, game::kLoadoutGems> set;
+    set.fill(-1);
+    set[static_cast<std::size_t>(gem - 1)] = static_cast<std::int32_t>(found->id);
+    memorize_set(set);
+}
+
+std::int32_t GameConnection::spell_duration_ticks(const game::SpellData& s) const {
+    auto ticks = static_cast<std::int32_t>(s.duration_cap);
+    with_character([&](game::mechanics::Character& ch) { ticks = ch.spell_duration(s, pstatus_.level); });
+    return ticks;
+}
+
+std::int32_t GameConnection::spell_range_focus(const game::SpellData& s) const {
+    std::int32_t mod = 0;
+    with_character([&](game::mechanics::Character& ch) { mod = ch.focus_range_modifier(s); });
+    return mod;
+}
+
+// with_character's Character has not run ProcessAllStats (its item totals and the bonuses from them are still
+// zero): these run it first, as the stats window does with its own.
+std::int32_t GameConnection::spell_shield_bonus() const {
+    std::int32_t v = 0;
+    // Before RoF2's cap of 35: a server may let it go higher. The stats window shows the capped one.
+    with_character([&](game::mechanics::Character& ch) {
+        ch.process_all_stats();
+        v = ch.stats().spell_shield_uncapped;
+    });
+    return v;
+}
+
+std::int32_t GameConnection::spell_damage_bonus() const {
+    std::int32_t v = 0;
+    with_character([&](game::mechanics::Character& ch) {
+        ch.process_all_stats();
+        v = ch.stats().spell_damage;
+    });
+    return v;
+}
+
+int GameConnection::spell_landing_slot(std::uint32_t spell, std::optional<std::uint32_t> existing) const {
+    if (!profile_ || !spell_table_ || !world_.player()) return -1;
+    int slot = -1;
+    with_character([&](game::mechanics::Character& ch) {
+        game::SpellState state;
+        if (existing) {
+            // MQ's WillStackWith: one buff of the other spell, the player's, at the player's level.
+            game::BuffSlot& b = state.buffs[0];
+            b.spell = *existing;
+            b.level = pstatus_.level;
+            b.caster_id = world_.player_id;
+            b.effect_type = 2;
+            if (const game::SpellData* d = spell_table_->get(*existing)) b.tics = ch.spell_duration(*d, pstatus_.level);
+        } else {
+            state.buffs = spells_.buffs;
+        }
+        game::HitLandingContext ctx;
+        ctx.spells = spell_table_.get();
+        ctx.world = &world_;
+        ctx.spell_state = &state;
+        ctx.character = &ch;
+        ctx.strings = &strings_;
+        ctx.class_id = profile_->class_;
+        ctx.level = pstatus_.level;
+        ctx.mana = static_cast<std::int32_t>(profile_->mana);
+        ctx.now_ms = static_cast<std::uint32_t>(now_ms());
+        ctx.pvp_rules = pvp_rules_;
+        slot = game::buff_landing_slot(spell, ctx);
+    });
+    return slot;
 }
 
 namespace {

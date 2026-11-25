@@ -61,6 +61,13 @@ struct GameConnectionTestAccess {
     }
     static std::optional<MerchantSession>& merchant(GameConnection& c) { return c.merchant_; }
     static std::optional<BankSession>& bank(GameConnection& c) { return c.bank_; }
+    static std::optional<GameConnection::LootSession>& loot(GameConnection& c) { return c.loot_; }
+    static GameConnection::Tribute& tribute(GameConnection& c) { return c.tribute_; }
+    static game::BankCoins& bank_coins(GameConnection& c) { return c.bank_coins_; }
+    static game::MercManager& merc(GameConnection& c) { return c.merc_; }
+    static std::vector<AuraUpdate>& auras(GameConnection& c) { return c.auras_; }
+    static std::uint32_t& target_of_target(GameConnection& c) { return c.target_of_target_; }
+    static glm::vec3& velocity(GameConnection& c) { return c.velocity_; }
     static bool item_command(GameConnection& c, const std::string& command, const std::string& args) {
         return c.item_command(command, args);
     }
@@ -183,6 +190,8 @@ struct World {
               << "\n";
             // A beneficial buff with a corruption counter effect (SPA 369, 1): no debuff.
             f << spell_line({{0, "3007"}, {1, "Test Ward"}, {17, "10"}, {20, "1"}, {83, "1"}, {86, "369"}}) << "\n";
+            // An invulnerability (SPA 40), beneficial.
+            f << spell_line({{0, "3008"}, {1, "Test Aura"}, {17, "3"}, {20, "1"}, {83, "1"}, {86, "40"}}) << "\n";
             // A bard song (the Bard level, column 111, 1).
             f << spell_line({{0, "3373"}, {1, "Test Chant"}, {13, "1000"}, {17, "3"}, {83, "0"}, {111, "1"}}) << "\n";
         }

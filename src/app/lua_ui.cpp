@@ -3233,6 +3233,9 @@ void UiApi::actions_key(int page) {
 }
 
 void UiApi::right_click_item(const net::ItemSlot& slot) { item_right_click(impl_->host, slot); }
+void UiApi::right_click_item(const net::ItemSlot& slot, net::SlotClickKeys keys) {
+    item_right_click(impl_->host, slot, keys);
+}
 bool UiApi::open_player_menu(std::uint32_t spawn_id, float x, float y) {
     return app::open_player_menu(impl_->host, spawn_id, x, y);
 }

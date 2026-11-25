@@ -550,6 +550,8 @@ public:
     }
     // What set_player_motion last gave: whether the player is moving, and the heading (0..512).
     bool player_moving() const { return moving_; }
+    // ... and the velocity, world units per tick (the movement's 50 ms step; MQ2Nav's SpeedX/Y/Z).
+    const glm::vec3& player_velocity() const { return velocity_; }
     bool player_stationary() const { return !moving_ && velocity_ == glm::vec3(0.0f) && speed_run_ == 0.0f; }
     float player_heading() const { return heading_; }
     // Zone points of the current zone (OP_SendZonepoints): targets by zone_points.number.
@@ -1668,6 +1670,18 @@ public:
         return profile_->disciplines[static_cast<std::size_t>(n)];
     }
     bool knows_discipline(std::uint32_t id) const;
+    // For the MQ TLOs (mq/tlo_game.cpp), with the stats port of with_character:
+    // a spell's duration in ticks at the player's level (SpellDuration; the record's cap without a profile);
+    std::int32_t spell_duration_ticks(const game::SpellData& s) const;
+    // the range focus on a spell (GetFocusRangeModifier), added to its range for Spell.MyRange;
+    std::int32_t spell_range_focus(const game::SpellData& s) const;
+    // FindAffectSlot's slot for the spell on the player (game::buff_landing_slot): over the player's buffs, or with
+    // `existing` over buffs holding only that spell (MQ's WillStackWith); -1 when it would not land.
+    int spell_landing_slot(std::uint32_t spell, std::optional<std::uint32_t> existing = std::nullopt) const;
+    // the items' spell shielding, without RoF2's cap of 35 (a server may allow more), and spell damage
+    // (CharacterZoneClient's SpellShieldBonus and SpellDamageBonus).
+    std::int32_t spell_shield_bonus() const;
+    std::int32_t spell_damage_bonus() const;
     // PlayerBase::CanSee's zone test (the app's collision): true when nothing blocks the segment (world coordinates).
     void set_line_of_sight(std::function<bool(const glm::vec3&, const glm::vec3&)> los) { line_of_sight_ = std::move(los); }
     // True once the app has given this connection its hooks (line of sight, teleport, app commands): the app installs
@@ -1758,6 +1772,13 @@ public:
     bool memorizing_set() const { return set_mem_.mode == 2; }
     // Clicks off one of the player's buffs (OP_BuffRemoveRequest).
     void remove_buff(int slot);
+    // MacroQuest's commands on these (registered by the app, so they come before the game's abbreviations):
+    // /removelev clicks off every buff with levitation (SPA 57), saying each; /removeaura <name> removes each aura
+    // whose name holds the text; /memspell <gem> "<spell>" memorizes a spell of the book (by exact name, any case, or
+    // id) into gem 1..12 through MemorizeSet with only that gem, when the player's level allows it.
+    void removelev_command();
+    void removeaura_command(std::string_view args);
+    void memspell_command(std::string_view args);
     // Clicks off a removable beneficial buff in the focused pet's server slot.
     bool remove_pet_buff(std::uint32_t slot);
     // RemovePCAffectex(affect, 0) / NotifyPCAffectChange: the client drops a buff
@@ -2089,6 +2110,10 @@ public:
     // The zone's switches (OP_SpawnDoor), animated by update() as the
     // original's CDisplay_ProcessSwitches does every frame.
     const std::vector<game::Door>& doors() const { return doors_; }
+    // MQ's switch target (/doortarget, the DoorTarget TLO): a door of this zone, or none. The zone's doors going
+    // (OP_RemoveAllDoors, a zone change) clear it.
+    std::optional<std::uint8_t> door_target() const { return door_target_; }
+    void set_door_target(std::optional<std::uint8_t> id) { door_target_ = id; }
     const game::Door* door(std::uint8_t id) const;
     const std::vector<game::GroundObject>& ground_objects() const { return ground_objects_; }
     // CEverQuest::ClickedSwitch -> EQSwitch::UseSwitch: refuses unusable or
@@ -3590,6 +3615,7 @@ private:
 
     // Doors and ground objects.
     std::vector<game::Door> doors_;
+    std::optional<std::uint8_t> door_target_; // door_target
     // OP_FindPersonRequest reservations and transmitted requests. Unsent reservations cannot own a reply or a
     // timeout; transmitted requests take the replies in the order sent (see path_reply). A discarded one (its owner
     // stopped or replaced it) still takes its reply, so the later ones keep theirs.

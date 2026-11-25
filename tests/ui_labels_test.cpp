@@ -368,3 +368,37 @@ TEST_CASE("display_name_iequals is iequals over display_name") {
             CHECK(game::display_name_iequals(n, o) == iequals(game::display_name(n), o));
         }
 }
+
+TEST_CASE("Item bonus labels: the sums before RoF2's caps (the *Bonus2 fields); heal amount and the rest uncapped") {
+    mq_test::World w("ui_labels_item_bonuses");
+    using A = net::GameConnectionTestAccess;
+    net::Item robe;
+    robe.name = "Warded Robe";
+    robe.id = 7001;
+    robe.equip_slots = 1u << net::kSlotChest;
+    robe.races = 0xffffffffu; // every race (an item the race may not use adds nothing)
+    robe.classes = 0xffff;
+    robe.spell_shield = 50;   // RoF2's cap: 35
+    robe.dot_shield = 40;     // 35
+    robe.accuracy = 200;      // 150
+    robe.heal_amt = 400;      // no cap
+    A::inventory(*w.conn).put(net::ItemSlot::possessions(net::kSlotChest), robe);
+    app::UiHost host;
+    host.in_game = true;
+    host.conn = w.conn.get();
+    bool ran = false;
+    A::with_character(*w.conn, [&](game::mechanics::Character& ch) {
+        ran = true;
+        ch.process_all_stats(); // as the stats window does with the character the labels read
+        host.character = &ch;
+        // The rules use the capped copies; the labels show the sums.
+        CHECK(ch.stats().spell_shield == 35);
+        CHECK(ch.stats().spell_shield_uncapped == 50);
+        CHECK(app::ui_label(host, 215).text == "50"); // spell shielding
+        CHECK(app::ui_label(host, 219).text == "40"); // DoT shielding
+        CHECK(app::ui_label(host, 222).text == "200"); // accuracy
+        CHECK(app::ui_label(host, 225).text == "400"); // heal amount
+        CHECK(app::ui_label(host, 216).text == "0");  // combat effects: none
+    });
+    CHECK(ran);
+}

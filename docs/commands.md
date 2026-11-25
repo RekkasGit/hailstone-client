@@ -276,6 +276,14 @@ one, the server's add-on rules decide whether it may.
 | `/docommand <line>`, `/noparse <line>` | Run a line; run it without expanding `${...}`. |
 | `/squelch <line>` | Run a line without the chat lines it prints. |
 | `/timed <deciseconds> <line>` | Run a line that many tenths of a second later (MacroQuest's). Its `${...}` are read when it runs; a script's line keeps the script's permissions. At most 1000 wait at once. |
+| `/doortarget [id <n> \| <name>]`, `/doortarget clear` | Pick a door for `${DoorTarget}` (MacroQuest's): the one with that id, or the nearest whose name holds the text (the nearest door with no text); `clear` drops it. |
+| `/makemevisible` | End your invisibility (MacroQuest's; the client's own MakeMeVisible). |
+| `/removelev` | Click off every buff that levitates you, saying each (MacroQuest's). |
+| `/removeaura <name>` | Remove each of your auras whose name holds the text, any case (MacroQuest's). |
+| `/memspell <gem> "<spell>"` | Memorize a spell from your book into gem 1..12, by its exact name (any case) or its id (MacroQuest's; as the spell sets do it). Nothing for a spell not in the book or above your level. |
+| `/click left target`, `/click right target` | Click your target as the mouse would (MacroQuest's): a left click with an item on the cursor gives it; a right click loots, talks and the rest. MacroQuest's other places (`center`, a screen point ...) are not supported. |
+| `/itemnotify <slot> <notification>`, `/itemnotify in <bag> <n> <notification>`, `/itemnotify "<item>" <notification>` | Click an item slot (MacroQuest's): `leftmouseup` picks up, puts down or loots as a left click does; `rightmouseup` uses, reads or opens and closes a bag; `rightmouseheld` shows the item. Slots: 0..33, the worn slots' names, `pack1`..`pack10`, `cursor`, `loot1`.., `bank1`..`bank24`, `sharedbank1`..`2`, `trade1`.., `enviro1`..; in a bag (`pack`, `bank` or `sharedbank`), slot n counted from 1; an item by its exact name or `#id`. A bag's slot works whether or not its window is open. |
+| `/nomodkey <line>`, `/shiftkey <line>`, `/ctrlkey <line>` | Run a line with the modifier keys forced off, or Shift or Ctrl held, for the clicks it makes (MacroQuest's): `/shiftkey /itemnotify pack1 leftmouseup` picks up a whole stack. Without them a command's click reads the keyboard. |
 
 In a social's lines, `/pause` waits and `/timer` sets the button's cooldown (docs/dev-ui.md).
 
