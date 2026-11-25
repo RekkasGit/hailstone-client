@@ -5,6 +5,7 @@
 // draws or writes a map file.
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -180,6 +181,11 @@ struct MapFilterCommandInput {
     const game::GuildState* guild = nullptr;
 };
 
+// TargetPath's pacing: a target must stay selected this long before its path is asked for (tabbing through
+// targets asks for none of the ones passed over), and two requests are at least this far apart.
+inline constexpr std::chrono::milliseconds kTargetPathSettle{500};
+inline constexpr std::chrono::milliseconds kTargetPathInterval{1000};
+
 struct MapFilterTargetPathState {
     std::uint64_t context = 0;
     std::uint32_t target = 0;
@@ -187,13 +193,18 @@ struct MapFilterTargetPathState {
     std::uint64_t generation = 0;
     bool requested = false;
     bool owns_path = false;
+    std::chrono::steady_clock::time_point target_since{};             // when this target (or context) was first seen
+    std::optional<std::chrono::steady_clock::time_point> last_request; // kept across targets and contexts
 };
 
-// Keep the server find path on the current target while TargetPath is enabled. The background path is silent and
-// never turns the player. A path the player starts takes ownership back; TargetPath then leaves it alone until the
-// option is toggled or the target changes again. Disabling the option only stops a path this updater still owns.
+// Hailstone's TargetPath, not MQ2Map's: MQ2Map's option only lets a right-click on a map label reach the game's own
+// handler. Here it keeps the server find path on the current target while the option is on, asking with a silent
+// OP_FindPersonRequest once the target has settled (kTargetPathSettle) and no sooner than kTargetPathInterval after
+// the last request. The background path never turns the player or plays a sound. A path the player starts takes
+// ownership back; TargetPath then leaves it alone until the option is toggled or the target changes again.
+// Disabling the option only stops a path this updater still owns.
 void update_map_filter_target_path(MapFilters& filters, net::GameConnection& connection,
-                                   MapFilterTargetPathState& state);
+                                   MapFilterTargetPathState& state, std::chrono::steady_clock::time_point now);
 
 // /mapfilter, help and status. `say` receives one chat line at a time; the caller decides colour and squelch handling.
 void run_map_filter_command(MapFilters& filters, std::string_view args, const MapFilterCommandInput& input,

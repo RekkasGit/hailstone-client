@@ -360,7 +360,7 @@ void Automation::frame() {
     net::GameConnection* connection = m.conn();
     // Checked every frame: a GM status rule can change the answer without a new hailstone.cfg.
     m.map_filters.set_suspended(connection && !connection->server_command_allowed("/mapfilter"));
-    if (connection) mq::update_map_filter_target_path(m.map_filters, *connection, m.map_filter_target_path);
+    if (connection) mq::update_map_filter_target_path(m.map_filters, *connection, m.map_filter_target_path, now);
     m.hooks.pulse();
     m.scripts->pulse();
 }

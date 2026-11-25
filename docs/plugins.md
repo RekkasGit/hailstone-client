@@ -1017,9 +1017,11 @@ the client runs it.
 
 The game's maps (map window, minimap, zone map) show the group by themselves. `/mapfilter` adds MQ2Map's own spawn and
 ground-object marks, colours, target overlays and custom searches; the command changes the shared C++ map presenter,
-so no UI-pack control is needed (`docs/commands.md`). `TargetPath` requests a silent server path when enabled and
-again when the target or zone changes; it never turns the player or plays path sounds and chat. A shown or pending
-player Find takes ownership back and is not replaced. A server whose `[commands]` rules deny `/mapfilter`
+so no UI-pack control is needed (`docs/commands.md`). `TargetPath` is Hailstone's own behaviour, not MQ2Map's (there it
+only lets a right-click on a map label reach the game's handler): it requests a silent server path
+(`OP_FindPersonRequest`) when enabled and again when the target or zone changes, once the target has stayed selected
+for half a second and at most once a second; it never turns the player or plays path sounds and chat. A shown or
+pending player Find takes ownership back and is not replaced. A server whose `[commands]` rules deny `/mapfilter`
 also switches off the saved options while the player is on it: no filter marks, lines or circles, no TargetPath
 requests and no player vanilla mode (the settings stay saved for other servers). A ground label uses its actor name (for example `IT63`) when
 the client has not received an item name; Hailstone does not invent one. `map_spawn` is still asked for every other
