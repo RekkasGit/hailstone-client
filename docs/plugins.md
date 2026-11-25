@@ -491,12 +491,22 @@ compiled plugin does. Each part needs the same capability as in a compiled plugi
 | `hs.DisplaySpellId(n)`, `hs.DisplayItemData(n)` | see "Display instances" below |
 | `right_click_item(slot [, class])`, `close_spell_book()`, `clear_spell_recovery()`, `set_window_pet(id)`, `inspect_item(id [, augments])`, `set_max_camera_distance(d)` | the client's own actions (`actions`) |
 | `chat(text [, color])`, `server_dir()`, `character_dir()`, `max_camera_distance()` | a chat line in one of the game's colours; its folders for the server and the character (see "Lua plugin folders" below) |
+| `chat_group(title, lines)` | a locally displayed, initially collapsed chat group. Uses the same permissions as `chat` |
 | `server_rule(section, key)` | a setting from a non-client section of the server's `hailstone.cfg` (`[autocombat] hunter = off`), as written; nil when absent |
 | `autoskill_list()` | the player's autoskill list in order: `{key, name, endurance, mana, target_hp_below, target_hp_above, self_hp_below, when, keep_buff}` (`read`) |
 | `alt_abilities()` | the abilities the AA window lists, in its order (by tab, then rank id); see "Alternate abilities" below (`read`) |
 | `train_aa(group)` | buys the next rank of an ability as `/alternateadv buy` does (no question), when the window's own check allows it; false, with nothing sent, otherwise. One rank a call; points and ranks change when the server answers (`actions`) |
 | `use_ability(kind, name)` | uses a skill (`"skill"`), combat ability (`"disc"`) or activated AA (`"aa"`) by name (a combat ability's also without its rank), an AA's group or a skill's number, as its hot button does; false when the player has none such (`actions`) |
 | `hold_autoskill(on)` | the Ability Book's autoskill uses nothing while held (its switch stays; the button shows "On (held)"); the hold goes when the script stops (`actions`) |
+
+#### Collapsible chat groups from Lua
+
+```lua
+local client = require('hailstone')
+client.chat_group('Inventory Check', {'Checked four bags.', 'Seven slots are free.'})
+```
+
+The title appears in the system chat window with a count. The player can expand it to read the individual rows. Pass a plain-text title of up to 80 bytes and a dense list of one to 32 nonempty strings of up to 1024 bytes each. The function returns `true` for accepted input and `false` if the arguments are invalid or there is no session. Existing chat filters, hooks, and logging receive the individual messages.
 
 #### The nameplate hook
 
@@ -1058,6 +1068,24 @@ Several plugins may extend the client at once: they are asked in load order and 
 
 A C++ allocation or provider exception at an SDK entry point returns the ordinary zero/void failure result. Side
 effects completed before it are not retried or undone.
+
+#### Collapsible local chat
+
+`write_chat_group` submits one collapsed group with a title the plugin supplies. It needs a game connection
+and no capability. Call on the client's thread or on a thread using `lend_thread`. The client copies the title
+and rows during the call. Use a title of 1 to 80 bytes and 1 to 32 rows of 1 to 1024 bytes each. Pass one line
+of text per row. The function returns 1 on acceptance and 0 if the input is invalid or the service is unavailable.
+
+```c
+const char* rows[] = {"Checked four bags.", "Seven slots are free.", "One item is ready to parcel."};
+if (HAILSTONE_HOST_HAS(host, write_chat_group)) {
+    host->write_chat_group(host->host, "Inventory Check", rows, 3);
+} else {
+    for (size_t i = 0; i < sizeof(rows) / sizeof(rows[0]); ++i) {
+        host->write_chat(host->host, rows[i], 0);
+    }
+}
+```
 
 #### Extended spell IDs
 

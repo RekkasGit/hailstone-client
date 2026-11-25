@@ -2,6 +2,7 @@
 // where a plugin should not, to check that the client holds.
 //   /probethread   calls host functions from a std::thread, then reports what they answered (ability_state too,
 //   when the host table has it)
+//   /probechatgroup   writes a valid group and tries invalid and off-thread local chat submissions
 //   /probethrow    lets an exception out (not a std::exception); so do ${Probe.Throw} and OnUpdateImGui
 //   /probestate n  web_state(tab 1) with a struct whose size says n bytes, as a plugin built with a shorter one
 //   /probemessage n  web_message(tab 1) into a buffer of n bytes (0: no buffer)
@@ -86,6 +87,8 @@ static_assert(offsetof(PluginHostApi, world_placement_get) ==
               offsetof(PluginHostApi, world_placement_start) + sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, world_placement_cancel) ==
               offsetof(PluginHostApi, world_placement_get) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, write_chat_group) ==
+              offsetof(PluginHostApi, world_placement_cancel) + sizeof(PluginHostApi::caps));
 
 namespace {
 
@@ -117,6 +120,22 @@ void probe_thread(void*, const char*) {
 }
 
 void probe_throw(void*, const char*) { throw 42; }
+
+void probe_chat_group(void*, const char*) {
+    if (!HAILSTONE_HOST_HAS(host, write_chat_group)) return;
+    const char* rows[] = {"First probe row.", "Second probe row."};
+    const int accepted = host->write_chat_group(host->host, "Probe Status", rows, 2);
+    const int too_many = host->write_chat_group(host->host, "Probe Status", rows, UINT32_MAX);
+    const int no_title = host->write_chat_group(host->host, nullptr, rows, 2);
+    const int empty = host->write_chat_group(host->host, "Probe Status", rows, 0);
+    const std::string long_row(2048, 'x');
+    const char* malformed[] = {"A valid prefix.", long_row.c_str()};
+    const int too_long = host->write_chat_group(host->host, "Probe Status", malformed, 2);
+    int off_thread = -1;
+    std::thread([&] { off_thread = host->write_chat_group(host->host, "Probe Status", rows, 2); }).join();
+    WriteChatf("[Probe] chat group: accepted %d, count %d, title %d, empty %d, row %d, thread %d",
+               accepted, too_many, no_title, empty, too_long, off_thread);
+}
 
 void probe_state(void*, const char* args) {
     HailstoneWebState st;
@@ -1196,6 +1215,7 @@ int probe_tlo(void*, const char*, const char* member, const char*, HailstoneValu
 HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probethread", probe_thread, nullptr);
     AddCommand("/probethrow", probe_throw, nullptr);
+    AddCommand("/probechatgroup", probe_chat_group, nullptr);
     AddCommand("/probestate", probe_state, nullptr);
     AddCommand("/probemessage", probe_message, nullptr);
     AddCommand("/probetcp", probe_tcp, nullptr);
@@ -1243,6 +1263,7 @@ HAILSTONE_API void InitializePlugin(void) {
 HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probethread");
     RemoveCommand("/probethrow");
+    RemoveCommand("/probechatgroup");
     RemoveCommand("/probestate");
     RemoveCommand("/probemessage");
     RemoveCommand("/probetcp");

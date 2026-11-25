@@ -616,6 +616,7 @@ void ClientApp::back_to_login(std::string message, bool is_error) {
     if (is_error) login_token_session_.clear();
     link_death_since_.reset();
     if (ui_api_) ui_api_->save_layout();
+    show_zone_client_messages(false);
     // Hailstone: the chat's lines to the character's history (a link death, a camp to the server list, a lost
     // connection); entering the world again puts them back.
     save_chat_history(true);
@@ -1055,6 +1056,13 @@ void ClientApp::update_window_title() {
     }
 }
 
+void ClientApp::show_zone_client_messages(bool collapse) {
+    if (!conn_) return;
+    auto messages = conn_->take_zone_client_messages();
+    if (collapse) game_view_.chat.add_client_messages(std::move(messages));
+    else for (auto& message : messages) game_view_.chat.add(ui::ChatChannel::System, std::move(message));
+}
+
 void ClientApp::update_connection() {
     if (!conn_) return;
     if (window_.input().user_activity) conn_->note_user_activity();
@@ -1087,6 +1095,8 @@ void ClientApp::update_connection() {
             quit_ = true;
         },
         [this] {
+            // A failed transfer can still have produced notices on departure. Keep them in chat history.
+            show_zone_client_messages(false);
             if (auto kind = conn_->camped_out()) camp_finished(*kind);
             else if (conn_->link_death()) update_link_death();
             else back_to_login(conn_->error(), true);
@@ -1216,7 +1226,12 @@ void ClientApp::update_connection() {
         break;
     }
     if (auto z = conn_->take_zone_to_load()) load_zone(*z);
-    while (auto c = conn_->poll_chat()) game_view_.chat.add(chat_channel(c->kind), c->text, c->rgb, c->color, c->peer);
+    while (auto c = conn_->poll_chat()) {
+        if (c->group.empty())
+            game_view_.chat.add(chat_channel(c->kind), std::move(c->text), c->rgb, c->color, std::move(c->peer));
+        else
+            game_view_.chat.add_chat_group(std::move(c->text), std::move(c->group));
+    }
     // Hailstone: the chat history every few minutes too (a crash keeps most of it).
     if (screen_ == Screen::InGame && Clock::now() - chat_saved_ > std::chrono::minutes(3)) {
         chat_saved_ = Clock::now();

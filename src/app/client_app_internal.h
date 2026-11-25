@@ -822,6 +822,7 @@ private:
     // The 302 / 114 play reply's question ("remove the character still logged in?"), Yes / No to the login client.
     void draw_kick_question();
     void update_connection();
+    void show_zone_client_messages(bool collapse);
     // The OS window's title: the picked server's name, and the character's in the world (client_window_title).
     void update_window_title();
     // The original's slash commands that act on the client (app/client_app_commands.cpp), by handler name; true =

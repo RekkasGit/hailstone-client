@@ -2075,12 +2075,32 @@ void loading_overlay(const LoadingView& view, bool cover_ui) {
 
 // ---- In game --------------------------------------------------------------
 
+std::string ChatLine::group_label() const {
+    return std::format("{} {} [{}]", group_expanded ? '-' : '+', text, group_messages.size());
+}
+
 void ChatView::add(ChatChannel channel, std::string text, std::uint32_t rgb, std::uint32_t color, std::string peer) {
     lines.push_back({channel, std::move(text), rgb, color, std::move(peer), 0, false,
-                     static_cast<std::int64_t>(std::time(nullptr))});
-    lines.back().seq = ++revision;
+                     static_cast<std::int64_t>(std::time(nullptr)), ++revision, {}, false});
     while (lines.size() > max_lines) lines.pop_front();
     scroll_to_bottom = true;
+}
+
+void ChatView::add_chat_group(std::string title, std::vector<std::string> messages) {
+    if (title.empty() || title.find_first_of("\r\n\0", 0, 3) != std::string::npos || messages.empty() || max_lines == 0)
+        return;
+    add(ChatChannel::System, std::move(title));
+    lines.back().group_messages = std::move(messages);
+}
+
+void ChatView::add_client_messages(std::vector<std::string> messages) {
+    add_chat_group(std::string(kClientSystemMessages), std::move(messages));
+}
+
+void ChatView::toggle_chat_group(ChatLine& line) {
+    if (line.group_messages.empty()) return;
+    line.group_expanded = !line.group_expanded;
+    ++group_revision;
 }
 
 void hud_panel(const HudView& view, bool& show_chat, bool& show_spawns, InGameActions& actions) {
@@ -2166,14 +2186,36 @@ std::optional<std::string> chat_window(ChatView& view, bool* open) {
     // Every line is drawn (the history is capped): wrapped lines have different heights, which a
     // ImGuiListClipper (one height for all) cannot place.
     ImGui::PushTextWrapPos(0.0f);
-    for (const ChatLine& l : view.lines) {
-        ImGui::PushStyleColor(ImGuiCol_Text, l.rgb ? rgb_color(l.rgb) : channel_color(l.channel));
-        // The dev screen's chat draws each line in one colour: a plugin's colour codes are taken out (game/mq_colors.h).
-        const bool coded = l.text.find(game::kMqColorCode) != std::string::npos;
-        const std::string plain = coded ? game::strip_mq_colors(l.text) : std::string();
-        const std::string& text = coded ? plain : l.text;
+    const auto draw_line = [&view](const std::string& raw) {
+        // The dev screen draws each line in one colour, including lines with embedded MQ colour codes.
+        const bool coded = raw.find(game::kMqColorCode) != std::string::npos;
+        const std::string plain = coded ? game::strip_mq_colors(raw) : std::string();
+        const std::string& text = coded ? plain : raw;
         if (text.find('\x12') == std::string::npos) ImGui::TextUnformatted(text.c_str());
         else chat_line_with_links(text, view);
+    };
+    for (ChatLine& l : view.lines) {
+        if (!l.group_messages.empty()) {
+            const ImVec4 color = rgb_color(kChatGroupRgb);
+            const std::string label = l.group_label();
+            ImGui::TextColored(color, "%s", label.c_str());
+            if (ImGui::IsItemHovered()) {
+                const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+                ImGui::GetWindowDrawList()->AddLineH(a.x, b.x, b.y, ImGui::GetColorU32(color));
+                ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+            }
+            if (ImGui::IsItemClicked()) view.toggle_chat_group(l);
+            if (l.group_expanded) {
+                ImGui::Indent();
+                ImGui::PushStyleColor(ImGuiCol_Text, channel_color(l.channel));
+                for (const auto& text : l.group_messages) draw_line(text);
+                ImGui::PopStyleColor();
+                ImGui::Unindent();
+            }
+            continue;
+        }
+        ImGui::PushStyleColor(ImGuiCol_Text, l.rgb ? rgb_color(l.rgb) : channel_color(l.channel));
+        draw_line(l.text);
         ImGui::PopStyleColor();
     }
     ImGui::PopTextWrapPos();

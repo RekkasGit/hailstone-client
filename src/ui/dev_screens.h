@@ -474,6 +474,9 @@ enum class ChatChannel : std::uint8_t {
     System, Say, Tell, Group, Guild, Raid, Shout, Auction, OOC, Emote, Combat, Spell, Error, Count
 };
 
+inline constexpr std::uint32_t kChatGroupRgb = 0xedc375;
+inline constexpr std::string_view kClientSystemMessages = "Client System Messages";
+
 struct ChatLine {
     ChatChannel channel = ChatChannel::System;
     std::string text;
@@ -486,6 +489,10 @@ struct ChatLine {
     std::int64_t time = 0;    // Hailstone: when it came (std::time; 0 unknown), for the chat's timestamps
     std::uint64_t seq = 0;    // its place in ChatView::revision's count (1-based); lines leave from anywhere in the
                               // buffer (each chat window keeps its own last lines: app/lua_ui_chat.cpp)
+    std::vector<std::string> group_messages; // nonempty when text is the title of a collapsible chat group
+    bool group_expanded = false;
+
+    std::string group_label() const;
 };
 
 struct ChatView {
@@ -498,8 +505,12 @@ struct ChatView {
     // Set when the player clicks an item link in a line (lines keep the \x12 link tags).
     std::optional<game::ItemLink> clicked_link;
     std::uint64_t revision = 0; // counts added lines (the Lua chat window's hs.ChatText version)
+    std::uint64_t group_revision = 0; // changes when an existing group is opened or closed
 
     void add(ChatChannel channel, std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0, std::string peer = {});
+    void add_chat_group(std::string title, std::vector<std::string> messages);
+    void add_client_messages(std::vector<std::string> messages);
+    void toggle_chat_group(ChatLine& line);
 };
 
 struct SpawnEntry {

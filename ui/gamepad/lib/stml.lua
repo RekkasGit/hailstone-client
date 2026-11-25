@@ -16,17 +16,18 @@ local function hex(h)
 end
 
 -- line -> { { text, colour } }; color: the colour outside any <c> (the palette's text)
-function S.parse(line, color)
+function S.parse(line, color, explicitLinkColor)
   local out, colors, link = {}, { color or T.C.text }, false
   local pos = 1
   while pos <= #line do
     local lt = line:find("<", pos, true)
     local text = line:sub(pos, (lt or #line + 1) - 1)
-    if text ~= "" then out[#out + 1] = { entities(text), link and S.LINK or colors[#colors] } end
+    local col = link and not explicitLinkColor and S.LINK or colors[#colors]
+    if text ~= "" then out[#out + 1] = { entities(text), col } end
     if not lt then break end
     local gt = line:find(">", lt, true)
     if not gt then -- a "<" that opens no tag ("<3" in a chat line): the rest is text, not dropped
-      out[#out + 1] = { entities(line:sub(lt)), link and S.LINK or colors[#colors] }
+      out[#out + 1] = { entities(line:sub(lt)), col }
       break
     end
     local tag = line:sub(lt + 1, gt - 1)

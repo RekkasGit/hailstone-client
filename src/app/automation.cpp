@@ -84,6 +84,11 @@ struct Automation::Impl {
         else log::info("{}", game::strip_mq_colors(text)); // the log is plain text (game/mq_colors.h)
     }
 
+    void zone_notice(const std::string& text) {
+        if (net::GameConnection* c = conn()) c->zone_client_message(text);
+        else log::info("{}", text);
+    }
+
     // A command line as the player's would go (the hooks first: GameConnection::send_command).
     void run(const std::string& line) {
         if (net::GameConnection* c = conn()) {
@@ -127,11 +132,11 @@ struct Automation::Impl {
         if (!has || c->server_rules()->provisional) scripts->set_autorun_file({});
         scripts->set_server_dir(dir.empty() ? fs::path() : dir / "scripts");
         plugins->set_server_dir(dir.empty() ? fs::path() : dir / "plugins");
-        recheck();
+        recheck(has);
     }
 
     // What runs, checked again against the policy (the server's rules, or the add-ons' ceilings, changed).
-    void recheck() {
+    void recheck(bool zone_policy = false) {
         const auto& rules = policy.current();
         if (!rules || !rules->addons.enabled) {
             enforcement_identities_ready = false;
@@ -147,8 +152,8 @@ struct Automation::Impl {
         }
         std::vector<std::string> script_autoload;
         for (auto& s : mq::split_index(env.script_autoload)) script_autoload.push_back(s);
-        scripts->policy_changed(script_autoload);
-        plugins->policy_changed(autoload());
+        scripts->policy_changed(script_autoload, zone_policy);
+        plugins->policy_changed(autoload(), zone_policy);
     }
 
     // The server as the player knows it: the saved server's name, else the world's.
@@ -198,6 +203,7 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     se.registry = &m.registry;
     se.context = ce.context;
     se.print = ce.echo;
+    se.zone_notice = [&m](const std::string& t) { m.zone_notice(t); };
     se.run = ce.run;
     se.dirs = search_dirs(m.env.data_dir / "scripts", m.env.install_dir / "scripts");
     se.config_dir = m.env.data_dir / "scripts" / "config";
@@ -237,6 +243,7 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     ne.registry = &m.registry;
     ne.context = ce.context;
     ne.print = [&m](const std::string& t, std::uint32_t rgb) { m.print(t, rgb); };
+    ne.zone_notice = se.zone_notice;
     ne.run = ce.run;
     ne.send = [&m](plugin::Stream s, const net::AppPacket& p) {
         if (net::GameConnection* c = m.conn()) {
@@ -306,6 +313,7 @@ std::shared_ptr<game::ExtensionChain> Automation::extensions() { return impl_->e
 game::NameplateCanvasRegistry& Automation::nameplates() { return impl_->nameplates; }
 plugin::UiBridge& Automation::plugin_ui() { return impl_->plugin_ui; }
 mq::ScriptHost& Automation::scripts() { return *impl_->scripts; }
+void Automation::set_zone_autorun_file(const fs::path& file) { impl_->scripts->set_autorun_file(file, true); }
 
 std::uint32_t Automation::plugin_caps(std::string_view tag) const {
     // By the owner's tag alone (plugin::UiBridge::owner_tag): a script named after a compiled plugin never gets the

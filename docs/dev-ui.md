@@ -42,7 +42,7 @@ build/hailstone/hailstone --ui-demo chars --frames 20 --screenshot chars.png   #
 build/hailstone/hailstone --ui-demo login --ui-scale 1.5 # override the display scale
 ```
 
-The screens are `login`, `servers`, `chars`, `nochars`, `loading`, `game` and `items` (a fake inventory and corpse). F1 to F7 switch screens; the buttons walk a fake flow (any username and password log in); typed chat is echoed.
+F1 to F7 switch between `login`, `servers`, `chars`, `nochars`, `loading`, `game` and `items` (a fake inventory and corpse). The buttons walk a fake flow (any username and password log in), and typed chat is echoed. `--ui-demo client-chat` and `--ui-demo client-chat-expanded` load the bundled Modern Lua chat window with a sample zone transfer and its notice group closed or open. Use `--zone skyfire --ui-scale 1` to see it over Skyfire.
 
 While the UI has keyboard or mouse focus, the camera ignores that input; holding the right mouse button still turns it.
 
@@ -64,6 +64,8 @@ while (window.poll_events()) {
 ```
 
 ### Modern chat tabs
+
+After changing zones, routine Lua and compiled plug-in lifecycle notices appear in a gold **Client System Messages [n]** row in the window that receives those system messages. Select the row to expand it, and select it again to collapse it. The initial entry after signing in shows the notices individually. Server messages, add-on errors, and manual command responses still appear individually. Add-ons can post groups with their own titles through the Lua module or compiled plug-in SDK.
 
 Right-click any tab or the chat output for the chat menu: create, rename and close tabs and windows, detach, move
 or reorder a tab, and combine windows into the one you clicked. **Switch Tab** lists that window's tabs, **Chat

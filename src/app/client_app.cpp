@@ -132,6 +132,9 @@ int ClientApp::run() {
         window_.set_swap_mouse_buttons(conn_ && !conn_->client_option(game::ClientOption::MouseRightHanded));
         update_lap.mark("browser, window");
         if (automation_) automation_->frame();
+        if (conn_ && screen_ == Screen::InGame && player_ready_ &&
+            (conn_->state() == net::ConnectionState::InZone || conn_->state() == net::ConnectionState::Camping))
+            show_zone_client_messages(true);
         update_lap.mark("automation");
         if (conn_ && world_objects_ && screen_ == Screen::InGame && player_ready_) {
             world_objects_->update(*conn_);
@@ -1046,6 +1049,7 @@ int ClientApp::run() {
         update_zone_settle();
     }
     if (ui_api_) ui_api_->save_layout();
+    show_zone_client_messages(false);
     save_chat_history(true);
     if (!opts_.window_size_given) {
         // The game window's place for the next start (window_desc); not a --window-size run's.
