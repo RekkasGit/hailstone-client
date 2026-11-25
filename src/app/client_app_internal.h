@@ -173,6 +173,7 @@
 #include "app/navigator.h"
 #include "ui/asset_picker.h"
 #include "core/asset_folder_choice.h"
+#include "mq/popup.h"
 
 namespace hailstone::app {
 
@@ -536,6 +537,25 @@ public:
         automation_->hooks().add_command(plugin::Hooks::kClient, "/removebuff", [this](std::string_view args) {
             if (conn_) conn_->removebuff_command(args);
         }, plugin::kCapActions);
+        // MQ's popups on the game's centre-screen text (mq/popup.h); display only, as /echo.
+        static constexpr std::pair<const char*, mq::PopupKind> kPopups[] = {
+            {"/popup", mq::PopupKind::Plain},
+            {"/popcustom", mq::PopupKind::Custom},
+            {"/popupecho", mq::PopupKind::Echo}};
+        for (const auto& entry : kPopups) {
+            const mq::PopupKind kind = entry.second; // (not a structured binding: Apple Clang will not capture one)
+            automation_->hooks().add_command(plugin::Hooks::kClient, entry.first, [this, kind](std::string_view args) {
+                if (!conn_) return;
+                const mq::Popup p = mq::parse_popup(args, kind);
+                if (!p.usage.empty()) {
+                    conn_->client_message(p.usage); // the client's own codes
+                    return;
+                }
+                mq::show_popup(conn_->text_overlay(), p, static_cast<std::uint32_t>(net::GameConnection::now_ms()));
+                if (kind == mq::PopupKind::Echo)
+                    conn_->client_message(mq::popup_echo_line(p, !plugin::caller_name().empty()));
+            });
+        }
         automation_->hooks().add_command(plugin::Hooks::kClient, "/memspell", [this](std::string_view args) {
             if (conn_) conn_->memspell_command(args);
         }, plugin::kCapActions);

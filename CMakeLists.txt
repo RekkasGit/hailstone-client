@@ -1421,6 +1421,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/window_notify_test.cpp
     tests/window_child_test.cpp
     tests/imgui_frame_test.cpp
+    tests/popup_test.cpp
     tests/notify_state_test.cpp
     tests/notify_quantity_test.cpp
     tests/bank_test.cpp

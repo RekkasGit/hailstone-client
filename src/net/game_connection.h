@@ -524,6 +524,13 @@ public:
     void ui_message(std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0) {
         chat(ChatEvent::Kind::System, std::move(text), rgb, color);
     }
+    // A line the client writes itself with MQ's colour codes in it (a MacroQuest command's reply: /popupecho's
+    // "Popup::", a usage line): its codes are kept though no script or plugin wrote it, where ui_message takes the
+    // BEL out of such a line. Text in it from elsewhere (the player's command line, which a ${...} may have filled
+    // with a server's names) must have its BEL taken out by the caller (game::kMqColorCode).
+    void client_message(std::string text, std::uint32_t rgb = 0) {
+        chat(ChatEvent::Kind::System, std::move(text), rgb, 0, {}, std::nullopt, true, true);
+    }
     // The spell effect stages queued since the last call, in order (cast stages from OP_BeginCast and procs, impact
     // stages from OP_Action 231); a zone change drops those not yet taken.
     std::vector<SpellEffectCue> take_spell_effect_cues() { return std::exchange(effect_cues_, {}); }
@@ -3057,8 +3064,10 @@ private:
     void apply_spawn(const Spawn& s);
     void set_spawn_motion(game::Spawn& s, const Motion& m);
     void connect_world(bool zoning);
+    // `client_codes`: the client's own line keeps the MQ colour codes it wrote (client_message).
     void chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0,
-              std::string peer = {}, std::optional<std::string> display_text = std::nullopt, bool filter = true);
+              std::string peer = {}, std::optional<std::string> display_text = std::nullopt, bool filter = true,
+              bool client_codes = false);
     // ReportSuccessfulHit's melee line for an attack by `source`, through the chat filters (`report`: its argument).
     void report_hit(const game::HitLine& line, std::uint32_t source, bool report = true);
     void handle_combat(Op op, const AppPacket& p);

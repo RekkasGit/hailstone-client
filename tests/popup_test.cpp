@@ -1,0 +1,72 @@
+// MQ's popups (mq/popup.h): /popup, /popcustom and /popupecho's words as MQ's CustomPopup takes them, and what
+// reaches the game's centre-screen text (game::TextOverlay).
+#include <doctest/doctest.h>
+
+#include "mq/popup.h"
+
+using hailstone::mq::parse_popup;
+using hailstone::mq::PopupKind;
+
+TEST_CASE("popup: /popup takes the whole line, light blue for 3 s") {
+    auto p = parse_popup("15 2 CANNOT CHARM", PopupKind::Plain);
+    CHECK(p.text == "15 2 CANNOT CHARM");
+    CHECK(p.colour == 18);
+    CHECK(p.hold_ms == 3000);
+    CHECK(p.usage.empty());
+}
+
+TEST_CASE("popup: /popupecho and /popcustom take a colour, then seconds, then the rest") {
+    auto p = parse_popup("15 2 CANNOT CHARM", PopupKind::Echo);
+    CHECK(p.colour == 15);
+    CHECK(p.hold_ms == 2000);
+    CHECK(p.text == "CANNOT CHARM");
+    // A colour without seconds: the rest after the colour.
+    p = parse_popup("13 Run away", PopupKind::Custom);
+    CHECK(p.colour == 13);
+    CHECK(p.hold_ms == 3000);
+    CHECK(p.text == "Run away");
+    // GetIntFromString: a word that starts with a digit is read as far as it is a number.
+    p = parse_popup("15x 4s go", PopupKind::Custom);
+    CHECK(p.colour == 15);
+    CHECK(p.hold_ms == 4000);
+    CHECK(p.text == "go");
+    // Not a digit first: the whole line, the defaults.
+    p = parse_popup("CANNOT CHARM 15 2", PopupKind::Echo);
+    CHECK(p.text == "CANNOT CHARM 15 2");
+    CHECK(p.colour == 18);
+    CHECK(p.hold_ms == 3000);
+    // A quoted word is one word; the rest keeps its spacing.
+    p = parse_popup("14 \"3\" two  spaces", PopupKind::Custom);
+    CHECK(p.hold_ms == 3000); // the second word starts with a quote, not a digit
+    CHECK(p.text == "\"3\" two  spaces");
+    // Huge seconds are held to the overlay's milliseconds.
+    p = parse_popup("14 99999999 long", PopupKind::Custom);
+    CHECK(p.hold_ms == UINT32_MAX);
+    // Nothing given: MQ's usage, nothing shown.
+    CHECK(parse_popup("", PopupKind::Echo).usage.find("/popupecho") != std::string::npos);
+    CHECK(parse_popup("   ", PopupKind::Custom).usage.find("/popcustom") != std::string::npos);
+}
+
+TEST_CASE("popup: the overlay gets the text without MQ's colour codes; the echo keeps them") {
+    hailstone::game::TextOverlay overlay;
+    auto p = parse_popup("15 2 \ar>>^<<\ax CANNOT CHARM", PopupKind::Echo);
+    hailstone::mq::show_popup(overlay, p, 1000);
+    REQUIRE(overlay.active());
+    auto f = overlay.frame(1000 + 600); // past the 500 ms fade-in
+    REQUIRE(f);
+    CHECK(f->text == ">>^<< CANNOT CHARM");
+    CHECK((f->argb & 0xffffff) == hailstone::game::text_overlay_rgb(15));
+    CHECK((f->argb >> 24) == 255);
+    CHECK(overlay.frame(1000 + 2000 + 500 + 1)); // the hold, then the fade-out
+    CHECK_FALSE(overlay.frame(1000 + 2000 + 500 + 600));
+    // The echo: the client's own "Popup::" codes always; the text's own codes from a script, not from the player's
+    // command line (a ${...} there may hold a server's names).
+    CHECK(hailstone::mq::popup_echo_line(p, true) == "\ayPopup\aw:: \ar>>^<<\ax CANNOT CHARM");
+    CHECK(hailstone::mq::popup_echo_line(p, false) == "\ayPopup\aw:: r>>^<<x CANNOT CHARM");
+    // Priority 10, as the game's: a popup replaces one of the same priority.
+    hailstone::mq::show_popup(overlay, parse_popup("first", PopupKind::Plain), 5000);
+    hailstone::mq::show_popup(overlay, parse_popup("second", PopupKind::Plain), 5100);
+    auto g = overlay.frame(5700);
+    REQUIRE(g);
+    CHECK(g->text == "second");
+}

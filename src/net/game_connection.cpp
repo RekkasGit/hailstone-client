@@ -201,11 +201,12 @@ void GameConnection::fail(std::string message) {
 }
 
 void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb, std::uint32_t color,
-                          std::string peer, std::optional<std::string> display_text, bool filter) {
+                          std::string peer, std::optional<std::string> display_text, bool filter, bool client_codes) {
     // MacroQuest's colour codes (game/mq_colors.h) are for the plugins' and scripts' own lines: from anyone else (a
     // server's message, a player's tell) a BEL is taken out, so their text cannot colour the chat. A hook below may
-    // still put codes into a line it rewrites, as the plugin's own.
-    if (plugin::caller_name().empty()) {
+    // still put codes into a line it rewrites, as the plugin's own. The client's own coded lines (client_message) keep
+    // theirs.
+    if (plugin::caller_name().empty() && !client_codes) {
         auto drop = [](std::string& t) { std::erase(t, game::kMqColorCode); };
         drop(text);
         if (display_text) drop(*display_text);
