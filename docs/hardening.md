@@ -108,28 +108,37 @@ A file in a server's overlay (`servers/<id>/assets`) is read into the heap: the 
 files while the client runs, and Windows refuses a rename over a mapped file. A file that cannot be mapped (no
 address space, a file system that cannot map, an empty file) is also read into the heap.
 
-#### The cost of mapping
+#### A file changed under the mapping
 
 A game file that another program truncates or rewrites in place while it is mapped (a patcher, launcher or sync
-tool writing into the game folder alongside the client) can:
+tool writing into the game folder alongside the client) is handled as a malformed archive, not a crash:
 
-- crash the client with SIGBUS on Linux and macOS when a member past the new end is read. Windows refuses to shorten
-  a file while a view of it is mapped (`SetEndOfFile` fails with `ERROR_USER_MAPPED_FILE`, per Microsoft's
-  documentation; not tested here), so there the fault (`EXCEPTION_IN_PAGE_ERROR`) comes only from a read error of the
-  disk or share the file is on;
-- hand the parsers bytes that change under them.
+- A read of a page past a truncated file's new end faults: SIGBUS on Linux and macOS. On Windows the truncation is
+  refused while a view of it is mapped (`SetEndOfFile` fails with `ERROR_USER_MAPPED_FILE`, per Microsoft's
+  documentation), and the fault (`EXCEPTION_IN_PAGE_ERROR`) comes only from a read error of the disk or share the
+  file is on.
+- `PfsArchive` never parses the mapping itself. It copies what it reads (the header, the directory, each member's
+  compressed blocks) out through `platform::MappedFile::read`, and parses and inflates the copy. The copy is a
+  `memcpy` inside a guard: `__try`/`__except` for `EXCEPTION_IN_PAGE_ERROR` on Windows, and on POSIX a SIGBUS handler
+  that jumps back to the copy when the faulting thread is inside one. The read then throws, and the caller treats it
+  as it treats any archive it cannot read. Since only the `memcpy` runs inside the guard, no parser is left half-way.
+- Every other SIGBUS is handed to the action that was there before (the crash handler, or the default). A handler
+  installed later replaces the guard's; each read checks this (one `sigaction` query) and puts the guard back, with
+  that handler as its predecessor.
+- An edit in place, without a truncation, hands the parsers bytes that change between reads. The parsers bound every
+  read against the archive's length, so such bytes are treated like any malformed file.
 
-The parsers bound every read against the mapping's length, so changed bytes are treated like any malformed file; a
-fault from a shrunk file is not caught. Checking the file's size before each read would still leave the moment
-between the check and the read; catching the signal would mean jumping out of a parser in the middle of building its
-objects. Neither was done (docs/todo.md "Code health").
+The private copy is one member's compressed bytes at a time; each thread keeps a buffer of up to 4 MiB for it between
+reads. Opening six archives of the NMS folder mapped (Greater Faydark's three, `global_chr`, `potranquility`,
+`dulak_obj`) and inflating every member (63 MB) took 118 ms before and 124 ms with the copies and the guard, best of
+seven on one core; the rest of a zone load (parsing, textures, uploads) is not affected.
 
-It is accepted because:
+Mapping stays because:
 
 - Hailstone never writes the game folder (docs/layout.md), and nothing else is expected to while the client runs;
 - a patcher that does is expected to replace files by rename (which leaves the old mapping intact on POSIX) rather
   than truncate them;
-- the gain is the archives' size in private memory.
+- the gain is the archives' size in private memory: character archives stay open for the whole session.
 
 A file replaced by rename is picked up the next time the archive is opened (another zone,
 `CharacterArchiveCache::clear()` after an asset-folder or overlay change).
