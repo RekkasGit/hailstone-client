@@ -836,7 +836,6 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] `net::server_file_destination` still accepts versioned shared libraries (`.so.N`) in scripts and plugins as data, while `tools/make_addon.py` refuses them.
 - [ ] Updates: `kept-<time>/` folders left by a rollback are never cleaned up; offer to remove them.
 - [ ] Conversation journal texts over 0xffe characters still split on reload (the fgets limit), as in the original.
-- [ ] **A mapped game archive truncated while the client runs crashes it on Linux and macOS** (SIGBUS; docs/hardening.md "Mapped game archives"). Accepted for now: nothing is expected to write the game folder while the client runs. A real fix would read archives into memory when a patcher is about, or catch the fault around archive reads; a size check before reading leaves a gap. Windows refuses the truncation (per its documentation, not tested here).
 
 ## Not planned
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A game archive in the asset folder that another program shortens while Hailstone runs (a patcher writing in place) no longer crashes the client on Linux; what can no longer be read from it is treated as a damaged file
 - Under a Barbarian, Troll or Ogre citizen illusion (races 90, 92 and 93), Slam and Bash need the Bash skill and a shield, as in the original client, instead of sending an attack the server ignores
 - Perf window: **Log hitches** no longer calls every frame a hitch after the frame rate drops for good (a heavier zone, a slower power state); after 30 hitches in a row the typical frame time starts again from the latest frame
 - **Script and plugin authors:** `${Spawn[N]}`, `${Spell[N]}`, `${Me.Inventory[N]}`, an item's `Item[N]`, `${Group.Member[N]}` and `${Me.SpellReady[N]}` give NULL (or FALSE) for a number too large for what it indexes, instead of wrapping round to another spawn, spell, slot or gem
