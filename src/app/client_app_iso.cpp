@@ -163,7 +163,8 @@ void ClientApp::save_iso_settings() {
 }
 
 void ClientApp::update_iso_hover() {
-    if (!iso() || !iso_hover_on_ || !conn_ || ui_.wants_mouse() || mouse_look_.active || conn_->placement().active()) {
+    if (!iso() || !iso_hover_on_ || !conn_ || ui_.wants_mouse() || mouse_look_.active || conn_->placement().active() ||
+        (automation_ && automation_->world_placement_aiming())) {
         iso_hover_ = {};
         return;
     }
@@ -355,6 +356,14 @@ bool ClientApp::iso_click(const glm::vec2& at, const PickTarget& hit, bool right
         iso_walking_ = true;
     }
     return true;
+}
+
+void ClientApp::cancel_iso_clicks() {
+    iso_pending_.reset();
+    iso_walking_ = iso_hold_ = false;
+    iso_marker_ = {};
+    left_click_pending_.reset();
+    left_click_.reset();
 }
 
 void ClientApp::update_iso_clicks(bool player_moved) {

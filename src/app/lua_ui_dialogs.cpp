@@ -4,6 +4,8 @@
 #include <array>
 #include <charconv>
 #include <chrono>
+#include <climits>
+#include <cstdint>
 #include <cstdlib>
 #include <deque>
 #include <format>

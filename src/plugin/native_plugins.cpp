@@ -77,7 +77,7 @@ static_assert(sizeof(HailstoneWorldFrame) == 136 && offsetof(HailstoneWorldFrame
 static_assert(sizeof(HailstoneWorldAnchor) == 32 && sizeof(HailstoneWorldVertex) == 28);
 static_assert(sizeof(HailstoneWorldSurfacePatch) == 64 && sizeof(HailstoneWorldSurfacePatchResult) == 576 &&
               offsetof(HailstoneWorldSurfacePatchResult, region_xy) == 64);
-static_assert(sizeof(HailstoneWorldReceipt) == 48);
+static_assert(sizeof(HailstoneWorldReceipt) == 48 && sizeof(HailstoneWorldPlacement) == 28);
 static_assert(sizeof(void*) != 8 || (sizeof(HailstoneWorldSubmission) == 56 && offsetof(HailstoneWorldSubmission, vertices) == 40));
 static_assert(sizeof(void*) != 8 || (sizeof(HailstoneUiContribution) == 56 && offsetof(HailstoneUiContribution, command) == 48));
 
@@ -156,6 +156,7 @@ struct NativePlugins::Impl {
     Hooks::Owner owner = 0;
     std::vector<std::unique_ptr<Loaded>> loaded;
     WorldGeometryHost world_geometry;
+    WorldPlacementHost world_placement;
     std::vector<Hooks::Owner> world_owners;
     std::vector<Info> failures; // the last load error by name
     std::vector<std::pair<std::string, Sha256Digest>> required; // files found at the last policy check
@@ -1093,6 +1094,7 @@ void h_set_active(void* h, int active) {
         if (!l.active) {
             l.world_ready = false;
             l.host->world_geometry.retire(l.owner);
+            l.host->world_placement.retire(l.owner);
             remove_nameplates(l);
             if (l.host->env.ui) l.host->env.ui->remove_contributions(l.name);
         }
@@ -1683,7 +1685,9 @@ bool world_allowed(const Loaded& l) {
 
 std::uint32_t h_world_capabilities(void* h) {
     const auto& l = Loaded::of(h);
-    return world_allowed(l) && l.world_ready ? l.host->world_geometry.capabilities() : 0;
+    if (!world_allowed(l)) return 0;
+    const std::uint32_t geometry = l.world_ready ? l.host->world_geometry.capabilities() : 0;
+    return geometry | HAILSTONE_WORLD_PLACEMENT;
 }
 
 int h_world_floor_below(void* h, std::uint64_t frame, std::uint32_t epoch,
@@ -1703,6 +1707,33 @@ int h_world_anchor(void* h, std::uint64_t frame, std::uint32_t epoch,
 int h_world_submit(void* h, const HailstoneWorldSubmission* submission) {
     auto& l = Loaded::of(h);
     return world_allowed(l) && l.host->world_geometry.submit(l.owner, submission) ? 1 : 0;
+}
+
+int h_world_placement_start(void* h) {
+    if (on_lent_thread()) return 0;
+    auto& l = Loaded::of(h);
+    const auto& env = l.host->env;
+    if (!world_allowed(l) || !env.world_placement_scene || !env.world_placement_input_allowed ||
+        !env.world_placement_input_allowed()) return 0;
+    const auto scene = env.world_placement_scene();
+    return scene && l.host->world_placement.start(l.owner, *scene) ? 1 : 0;
+}
+
+int h_world_placement_get(void* h, HailstoneWorldPlacement* out) {
+    if (on_lent_thread()) return 0;
+    auto& l = Loaded::of(h);
+    const auto& env = l.host->env;
+    if (!l.active || l.unload_pending || !l.can(kCapUi | kCapExtend) || !env.world_placement_scene ||
+        !out || out->size < sizeof(*out)) return 0;
+    if (!env.world_placement_input_allowed || !env.world_placement_input_allowed())
+        l.host->world_placement.cancel(l.owner);
+    return l.host->world_placement.get(l.owner, env.world_placement_scene(), out) ? 1 : 0;
+}
+
+void h_world_placement_cancel(void* h) {
+    if (on_lent_thread()) return;
+    auto& l = Loaded::of(h);
+    l.host->world_placement.cancel(l.owner);
 }
 
 int h_world_surface_patch(void* h, const HailstoneWorldSurfacePatch* query,
@@ -3310,6 +3341,16 @@ bool NativePlugins::world_wanted() const {
            std::any_of(m.loaded.begin(), m.loaded.end(), [](const auto& l) { return l->hooks.world_frame && world_allowed(*l); });
 }
 
+bool NativePlugins::world_placement_aiming() const { return impl_->world_placement.aiming(); }
+
+void NativePlugins::world_placement_update(std::optional<WorldPlacementPoint> ground, bool pressed, bool released) {
+    impl_->world_placement.update(ground, pressed, released);
+}
+
+void NativePlugins::world_placement_cancel() { impl_->world_placement.cancel(); }
+void NativePlugins::world_placement_player_cancel() { impl_->world_placement.player_cancel(); }
+void NativePlugins::world_placement_player_input() { impl_->world_placement.player_input(); }
+
 void NativePlugins::world_frame(HailstoneWorldFrame frame, WorldQueries queries) {
     auto& m = *impl_;
     if (m.world_geometry.active()) world_unavailable();
@@ -3435,6 +3476,7 @@ void discard(NativePlugins::Impl& m, std::unique_ptr<Loaded> l, bool shutdown) {
     l->unload_pending = true; l->active = false;
     remove_nameplates(*l);
     m.world_geometry.retire(l->owner);
+    m.world_placement.retire(l->owner);
     std::erase(m.world_owners, l->owner);
     if (shutdown && l->shutdown) guarded(*l, "ShutdownPlugin", [&] { l->shutdown(); });
     m.env.hooks->remove(l->owner);
@@ -3680,6 +3722,9 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.command_exists = main_only<h_command_exists>;
     p.table.lend_thread = main_only<h_lend_thread>;
     p.table.get_scripts_config_dir = main_only<h_get_scripts_config_dir>;
+    p.table.world_placement_start = main_only<h_world_placement_start>;
+    p.table.world_placement_get = main_only<h_world_placement_get>;
+    p.table.world_placement_cancel = main_only<h_world_placement_cancel>;
     Hooks& hooks = *m.env.hooks;
     Loaded* lp = &p;
     // Each callback runs with the plugin's capabilities and counts as the plugin being busy (no unloading under it).
@@ -3820,6 +3865,7 @@ bool NativePlugins::unload_file(std::string_view name) {
     if (it == m.loaded.end()) return false;
     if ((*it)->busy) { // the plugin asked from its own code: not under its feet
         (*it)->unload_pending = true;
+        m.world_placement.retire((*it)->owner);
         if (m.env.ui) m.env.ui->remove_contributions((*it)->name);
         return true;
     }
@@ -3859,6 +3905,7 @@ void NativePlugins::policy_changed(const std::vector<std::string>& autoload) {
         if (!l->can(kNameplateCaps)) remove_nameplates(*l);
         if (!l->can(kCapUi | kCapExtend)) {
             l->world_ready = false; m.world_geometry.retire(l->owner); std::erase(m.world_owners, l->owner);
+            m.world_placement.retire(l->owner);
         }
         // No longer allowed to extend the client: its class names go, and it is out of the chain (a plugin that
         // gains it needs a reload).

@@ -1635,7 +1635,7 @@ end
             login.project_page = "https://example.invalid/hailstone";
             // What's new open (test.whatsnew opens it once in the modern pack; the gamepad pack's page is below)
             REQUIRE(luaL_dostring(s.lua.state(), "ui.SetSetting('test.whatsnew', '1')") == LUA_OK);
-            for (const char* check : {"off", "checking", "uptodate", "unknown", "newer"}) {
+            for (const char* check : {"off", "checking", "uptodate", "unknown", "newer", "behind"}) {
                 login.update.check = check;
                 login.update.off_reason = "a development build";
                 s.frames(2);
@@ -3699,6 +3699,357 @@ end
         }
         ImGui::DestroyContext(ctx);
     }
+}
+
+TEST_CASE("Modern Server Management uses authorized snapshots and submits only reviewed edits") {
+    const fs::path source = fs::path(__FILE__).parent_path().parent_path() / "ui/modern";
+    hailstone::test::ScratchDir scratch("ui_server_management_");
+    const fs::path dir = scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(source, dir / "modern", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    {
+        Session session(dir, "modern");
+        bool authorized = false;
+        bool paused = false;
+        int saves = 0;
+        int reloads = 0;
+        int full_snapshots = 0;
+        int catalog_refreshes = 0;
+        app::ServerManagementView snapshot;
+        snapshot.serial = 1;
+        snapshot.catalog_serial = 1;
+        snapshot.revision = "42";
+        snapshot.file_revision = "20261124T010000Z-zone-1";
+        snapshot.minimum_status = 210;
+        snapshot.fields = {{"commands", "block_groups", "movement_automation"},
+                           {"commands", "gm", "/nav:200"},
+                           {"addons", "required", "example/hud:1.0.0"}, {"local_extension", "keep_me", "original"},
+                           {"commands", "default", "deny"}};
+        snapshot.commands = {{"/nav", "Walk a route", "extended", {}, {"movement_automation", "non_rof2"}},
+                             {"/moveto", "Walk to a location", "extended", {}, {"movement_automation", "non_rof2"}},
+                             {"/finditem", "Search your inventory", "extended", {"/advi"}, {"non_rof2"}},
+                             {"/follow", "Follow a player", "stock", {}, {}},
+                             {"/target", "Select a target", "stock", {}, {}},
+                             {"/camp", "Camp", "stock", {}, {}},
+                             {"/quit", "Quit", "stock", {}, {}},
+                             {"/exit", "Exit", "stock", {}, {}},
+                             {"/servermanagement", "Open this window", "extended", {}, {"non_rof2"}},
+                             {"/notes", "Add-on notes", "addon", {}, {"addon_commands"}}};
+        session.host.server_management_available = [] { return true; };
+        session.host.server_management = [&](std::uint32_t known, std::uint32_t known_catalog) -> std::optional<app::ServerManagementView> {
+            if (!authorized) return std::nullopt;
+            if (paused) return app::ServerManagementView{.paused = true};
+            if (known != snapshot.serial) {
+                ++full_snapshots;
+                return snapshot;
+            }
+            app::ServerManagementView metadata;
+            metadata.serial = snapshot.serial;
+            metadata.catalog_serial = snapshot.catalog_serial;
+            metadata.revision = snapshot.revision;
+            metadata.file_revision = snapshot.file_revision;
+            metadata.saving = snapshot.saving;
+            metadata.reloading = snapshot.reloading;
+            metadata.reload_required = snapshot.reload_required;
+            metadata.message = snapshot.message;
+            if (known_catalog != snapshot.catalog_serial) {
+                ++catalog_refreshes;
+                metadata.commands = snapshot.commands;
+            }
+            return metadata;
+        };
+        session.host.open_server_management = [&] {
+            CHECK(snapshot.reload_required);
+            CHECK_FALSE(snapshot.reloading);
+            snapshot.reloading = true;
+            ++reloads;
+            return true;
+        };
+        session.host.save_server_management = [&](std::string_view revision, const auto& edits) {
+            ++saves;
+            CHECK(revision == (saves == 1 ? "43" : saves == 2 ? "44" : "45"));
+            REQUIRE(edits.size() == (saves <= 2 ? 2 : 1));
+            if (saves <= 2) {
+                CHECK(edits.front().section == "commands");
+                CHECK(edits.front().key == "blocked_message");
+                CHECK(edits.front().value == "This command was blocked by your server admin.");
+            }
+            CHECK(edits.back().section == "commands");
+            CHECK(edits.back().key == "gm");
+            CHECK(edits.back().value == "/nav:253, /targ:205");
+            snapshot.saving = true;
+            return true;
+        };
+        auto visible = [] {
+            ImGuiWindow* win = ImGui::FindWindowByName("Server Management###modern.ServerManagement");
+            return win && win->WasActive;
+        };
+        lua_State* L = session.lua.state();
+        REQUIRE(luaL_dostring(L, R"lua(
+local draftModel = dofile("lib/server_management.lua")
+local draft = draftModel.new({
+  fields = {
+    { section = "commands", key = "allow", value = "Ephemeral, /ADVI, :, /" },
+    { section = "commands", key = "block_groups", value = "non_rof2" },
+    { section = "commands", key = "gm", value = "/Retained:typo" },
+    { section = "addons", key = "allow", value = "https://github.com/example/hud, example/keep" },
+    { section = "addons", key = "required", value = "example/hud : V1.2.0-rc.10+written, example/hud:1.2.0-rc.2, " ..
+      "example/hud:1.2.0-rc.10+equal, example/release:2.0.0+release, example/release:2.0.0-rc.1, " ..
+      "example/text:3.1.0-alpha.zz, example/text:3.1.0-alpha.100, example/text:3.1.0-alpha" },
+    { section = "addons", key = "suggest", value = "example/other@v1.3.0" }
+  },
+  commands = {
+    { name = "/finditem", description = "Search inventory", origin = "extended", aliases = { "/advi" }, groups = { "non_rof2" } },
+    { name = "/emote", description = "Emote", origin = "stock", aliases = { ":" }, groups = {} }
+  }
+})
+local command = assert(draftModel.filterCommands(draft, "extended", "AdVi")[1])
+assert(draftModel.commandEffective(draftModel.commandRules(draft), command) == "allow")
+assert(draftModel.commandRules(draft).commands["/emote"] == "allow")
+draftModel.setCommandRule(draft, "/advi", "", false)
+assert(draftModel.commandEffective(draftModel.commandRules(draft), command) == "block")
+assert(draftModel.get(draft, "commands.allow") == "Ephemeral, :, /")
+draftModel.set(draft, "commands.gm", "/ADVI:200, /finditem:150, ::210, /Unlisted:75, /Retained:typo")
+local rule, _, status = draftModel.commandEffective(draftModel.commandRules(draft), command)
+assert(rule == "gm" and status == 200)
+assert(draftModel.commandRules(draft).gm["/emote"].minimum == 210)
+draftModel.setCommandRule(draft, "/advi", "gm", false, 253)
+local retained = draftModel.get(draft, "commands.gm")
+assert(retained == "/ADVI:253, ::210, /Unlisted:75, /Retained:typo")
+assert(draftModel.validCommandGmList(retained, draft.saved["commands.gm"]))
+assert(not draftModel.validCommandGmList(retained .. ", /Retained:typo", draft.saved["commands.gm"]))
+assert(not draftModel.validCommandGmList(retained .. ", /Other:typo", draft.saved["commands.gm"]))
+draftModel.set(draft, "commands.block", "/ADVI")
+assert(draftModel.commandEffective(draftModel.commandRules(draft), command) == "block")
+draftModel.set(draft, "commands.block", "")
+draftModel.set(draft, "commands.gm", "/ADVI:oops, /finditem:150")
+rule, _, status = draftModel.commandEffective(draftModel.commandRules(draft), command)
+assert(rule == "gm" and status == nil)
+draftModel.setCommandRule(draft, "/advi", "gm")
+assert(draftModel.get(draft, "commands.gm") == "/ADVI:200")
+draftModel.setCommandRule(draft, "/advi", "allow")
+assert(draftModel.get(draft, "commands.gm") == "")
+assert(draftModel.commandEffective(draftModel.commandRules(draft), command) == "allow")
+assert(not draftModel.validCommandGmList("/finditem:0"))
+assert(not draftModel.validCommandGmList("/finditem:32768"))
+assert(not draftModel.validCommandGmList("/:200"))
+assert(draftModel.validCommandGmList("/finditem:32767, ::150"))
+local _, byId = draftModel.addons(draft)
+local addon = assert(byId["example/hud"])
+assert(addon.mode == "required" and addon.minimum == "V1.2.0-rc.10+written")
+assert(byId["example/release"].minimum == "2.0.0+release")
+assert(byId["example/text"].minimum == "3.1.0-alpha.zz")
+assert(draft.edits["addons.required"] == nil)
+draftModel.setAddonMinimum(draft, addon, "2.0.1")
+assert(draftModel.get(draft, "addons.required") == "example/hud:2.0.1, example/release:2.0.0+release, " ..
+  "example/release:2.0.0-rc.1, example/text:3.1.0-alpha.zz, example/text:3.1.0-alpha.100, example/text:3.1.0-alpha")
+assert(draftModel.get(draft, "addons.allow") == "https://github.com/example/hud, example/keep")
+assert(draftModel.get(draft, "addons.suggest") == "example/other@v1.3.0")
+
+local target = { name = "/target", description = "Select a target", origin = "stock", aliases = {}, groups = {} }
+local resolves = 0
+local prefixDraft = draftModel.new({ fields = {}, commands = { target } }, function(name)
+  assert(name == "/targ")
+  resolves = resolves + 1
+  return "/target"
+end)
+draftModel.set(prefixDraft, "commands.gm", "/TARG:204")
+rule, _, status = draftModel.commandEffective(draftModel.commandRules(prefixDraft), target)
+assert(rule == "gm" and status == 204)
+draftModel.setCommandRule(prefixDraft, "/target", "gm", false, 205)
+assert(draftModel.get(prefixDraft, "commands.gm") == "/TARG:205" and resolves == 1)
+
+local button, input, select, color, invisibleButton, header =
+  ui.Button, ui.InputTextWithHint, ui.Selectable, ui.TextColored, ui.InvisibleButton, ui.CollapsingHeader
+ui.Button = function(label, ...)
+  local clicked = button(label, ...)
+  if clickManagement == label then clickManagement = nil return true end
+  return clicked
+end
+ui.InputTextWithHint = function(label, ...)
+  local value, changed = input(label, ...)
+  if label == "##commands.blocked_message" and managementText then
+    value, changed, managementText = managementText, true, nil
+  elseif label == "##smgm/nav" and managementStatus then
+    value, changed, managementStatus = managementStatus, true, nil
+  elseif label == "##commands.gm" and managementGmList then
+    value, changed, managementGmList = managementGmList, true, nil
+  elseif label == "##smgm/target" and managementTargetStatus then
+    value, changed, managementTargetStatus = managementTargetStatus, true, nil
+  end
+  return value, changed
+end
+ui.CollapsingHeader = function(label, ...)
+  local open = header(label, ...)
+  return open or (label == "Command lists" and managementGmList ~= nil)
+end
+ui.Selectable = function(label, ...)
+  local clicked = select(label, ...)
+  if label == visitManagement then visitManagement = nil return true end
+  return clicked
+end
+ui.InvisibleButton = function(label, ...)
+  local clicked = invisibleButton(label, ...)
+  if label == originManagement then originManagement = nil return true end
+  return clicked
+end
+ui.TextColored = function(r, g, b, a, text)
+  if text == "GM access / 210+" then managementRankSeen = true end
+  if text == "Blocked" then managementBlockSeen = true end
+  if text == "GM 200+" then managementInitialRuleSeen = true end
+  if text == "GM 253+" then managementUpdatedRuleSeen = true end
+  if text == "GM 204+" then managementPrefixSeen = true end
+  if text == "GM 205+" then managementCanonicalSeen = true end
+  if text == "Review changes" then managementReviewSeen = true end
+  if text == "This policy restricts /camp, /quit, /exit, /servermanagement. Review these rules before saving." then
+    if managementReviewSeen then managementReviewWarningSeen = true else managementWarningSeen = true end
+  end
+  if text == "GM rules require command:status with a status from 1 to 32767." then managementValidationSeen = true end
+  if text == "/notes" then managementNotesSeen = true end
+  if text == "/freshaddon" then managementFreshAddonSeen = true end
+  if text == "The editor snapshot expired. Reload before saving." then managementExpiredSeen = true end
+  if text == "Reloading policy..." then managementReloadingSeen = true end
+  if text == "/nav:195 -> /nav:253, /targ:205" then managementServerValueSeen = true end
+  if text == "Resolve the changed server values before saving." then managementConflictSeen = true end
+  color(r, g, b, a, text)
+end
+)lua") == LUA_OK);
+        session.frames(2);
+        CHECK_FALSE(visible());
+        authorized = true;
+        session.frames(3);
+        CHECK(visible());
+        CHECK(full_snapshots == 1);
+        REQUIRE(luaL_dostring(L, "assert(managementRankSeen and managementBlockSeen and managementInitialRuleSeen and managementWarningSeen)") == LUA_OK);
+        // Exercise all controls' immediate-mode window paths, including the add-on list and smaller viewport.
+        for (const char* label : {"Client & gameplay", "Add-ons", "Scripts & plugins", "Socials", "Assets & web", "Commands"}) {
+            lua_pushstring(L, label);
+            lua_setglobal(L, "visitManagement");
+            session.frames(2);
+            REQUIRE(luaL_dostring(L, "assert(visitManagement == nil)") == LUA_OK);
+        }
+        session.display_size = {800, 560};
+        session.frames(2);
+        REQUIRE(luaL_dostring(L, R"lua(
+managementStatus = "0"
+clickManagement = "Review changes##sm"
+)lua") == LUA_OK);
+        session.frames(2);
+        REQUIRE(luaL_dostring(L, "assert(managementValidationSeen and not managementReviewSeen)") == LUA_OK);
+        REQUIRE(luaL_dostring(L, R"lua(
+managementStatus = "253"
+managementText = "This command was blocked by your server admin."
+)lua") == LUA_OK);
+        session.frames(2);
+        REQUIRE(luaL_dostring(L, R"lua(
+originManagement = '##smorigin1'
+managementGmList = "/nav:253, /targ:204"
+)lua") == LUA_OK);
+        session.frames(2);
+        REQUIRE(luaL_dostring(L, "assert(managementPrefixSeen); managementTargetStatus = '205'") == LUA_OK);
+        session.frames(2);
+        REQUIRE(luaL_dostring(L, "assert(managementCanonicalSeen)") == LUA_OK);
+        REQUIRE(luaL_dostring(L, "originManagement = '##smorigin3'") == LUA_OK);
+        session.frames(2);
+        REQUIRE(luaL_dostring(L, "assert(managementUpdatedRuleSeen and managementNotesSeen and not managementFreshAddonSeen)") == LUA_OK);
+        snapshot.catalog_serial = 2;
+        snapshot.commands.back() = {"/freshaddon", "Newly registered command", "addon", {}, {"addon_commands"}};
+        REQUIRE(luaL_dostring(L, "managementNotesSeen = nil") == LUA_OK);
+        session.frames(2);
+        CHECK(full_snapshots == 1);
+        CHECK(catalog_refreshes == 1);
+        REQUIRE(luaL_dostring(L, "assert(managementFreshAddonSeen and not managementNotesSeen)") == LUA_OK);
+        REQUIRE(luaL_dostring(L, R"lua(
+clickManagement = "Review changes##sm"
+)lua") == LUA_OK);
+        session.frames(2);
+        REQUIRE(luaL_dostring(L, "assert(managementReviewWarningSeen)") == LUA_OK);
+        paused = true;
+        session.host.in_game = false;
+        session.frames(2);
+        CHECK_FALSE(visible());
+        paused = false;
+        session.host.in_game = true;
+        snapshot.serial = 2;
+        snapshot.revision = "43";
+        snapshot.reloaded = true;
+        session.frames(2);
+        CHECK(visible());
+        CHECK(full_snapshots == 2);
+        REQUIRE(luaL_dostring(L, "clickManagement = 'Save policy##sm'") == LUA_OK);
+        session.frames(2);
+        CHECK(saves == 1);
+        snapshot.saving = false;
+        snapshot.reload_required = true;
+        snapshot.message = "The editor snapshot expired. Reload before saving.";
+        REQUIRE(luaL_dostring(L, "clickManagement = 'Save policy##sm'") == LUA_OK);
+        session.frames(2);
+        CHECK(saves == 1);
+        REQUIRE(luaL_dostring(L, "assert(managementExpiredSeen); clickManagement = 'Reload policy##sm'") == LUA_OK);
+        session.frames(2);
+        CHECK(reloads == 1);
+        REQUIRE(luaL_dostring(L, "assert(managementReloadingSeen)") == LUA_OK);
+        snapshot.serial = 3;
+        snapshot.revision = "44";
+        snapshot.reload_required = false;
+        snapshot.reloading = false;
+        snapshot.reloaded = true;
+        snapshot.message.clear();
+        session.frames(2);
+        CHECK(full_snapshots == 3);
+        REQUIRE(luaL_dostring(L, "clickManagement = 'Save policy##sm'") == LUA_OK);
+        session.frames(2);
+        CHECK(saves == 2);
+
+        // A lost confirmation may mean a change already landed. If a different value arrived for another key,
+        // compare it with the proposed edit and require a choice before allowing the new save.
+        snapshot.saving = false;
+        snapshot.reload_required = true;
+        REQUIRE(luaL_dostring(L, "clickManagement = 'Reload policy##sm'") == LUA_OK);
+        session.frames(2);
+        CHECK(reloads == 2);
+        snapshot.serial = 4;
+        snapshot.revision = "45";
+        snapshot.reload_required = false;
+        snapshot.reloading = false;
+        snapshot.fields.push_back({"commands", "blocked_message", "This command was blocked by your server admin."});
+        snapshot.fields[1].value = "/nav:195";
+        session.frames(2);
+        CHECK(full_snapshots == 4);
+        REQUIRE(luaL_dostring(L, R"lua(
+assert(managementConflictSeen and managementServerValueSeen)
+clickManagement = 'Save policy##sm'
+)lua") == LUA_OK);
+        session.frames(2);
+        CHECK(saves == 2);
+        REQUIRE(luaL_dostring(L, "clickManagement = 'Keep my edit##commands.gm'") == LUA_OK);
+        session.frames(2);
+        CHECK(saves == 2);
+        REQUIRE(luaL_dostring(L, "clickManagement = 'Save policy##sm'") == LUA_OK);
+        session.frames(2);
+        CHECK(saves == 3);
+
+        snapshot.serial = 5;
+        snapshot.saving = false;
+        snapshot.reloaded = false;
+        snapshot.revision = "46";
+        snapshot.fields[1].value = "/nav:253, /targ:205";
+        session.frames(2);
+        CHECK(full_snapshots == 5);
+        session.host.trusted_ui = false;
+        session.frames(2);
+        CHECK_FALSE(visible());
+        REQUIRE(luaL_dostring(L, R"lua(
+assert(not hs.UI.serverManagement.Available())
+assert(not hs.UI.serverManagement.Save("46", {}))
+)lua") == LUA_OK);
+        CHECK(saves == 3);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
 }
 
 // A click meant for something else the instant the question pops up must not answer it: both buttons wait a
@@ -6584,6 +6935,128 @@ GPSTATE.whoOpen = true
         s.frames(2);
         CHECK(run("return submitted[#submitted] or ''") == "/invite BadName");
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// The gamepad pack's LB is Loot All's own key: it does nothing while the stock window has Loot All disabled.
+TEST_CASE("UI packs (gamepad): LB loots everything only while Loot All is enabled") {
+    test::ScratchDir scratch("ui_gamepad_loot_all_test");
+    const auto dir = scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / "gamepad", dir / "gamepad",
+             fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_HasGamepad;
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures; // 1.92: the atlas is built by NewFrame
+    {
+        Session s(dir, "gamepad");
+        auto* L = s.lua.state();
+        auto run = [&](const char* code) {
+            const int rc = luaL_dostring(L, code);
+            INFO((rc == LUA_OK ? "" : lua_tostring(L, -1)));
+            REQUIRE(rc == LUA_OK);
+            const std::string result = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
+            lua_settop(L, 0);
+            return result;
+        };
+        run(R"lua(
+padPress, lootShown, lootAllEnabled, lootAlls = nil, false, false, 0
+hs.gamepad = {
+  connected = function() return true end,
+  type = function() return 'xbox' end,
+  mode = function() return 'menu' end,
+  set_mode = function() return 'menu' end,
+  pressed = function(b) return b == padPress end,
+  down = function(b) return b == padPress end,
+  released = function() return false end,
+  axis = function() return 0 end,
+  glyph = function(b) return string.upper(b) end,
+  takes_b = function() end,
+  request_focus = function(window) ui.SetWindowFocus(window) end,
+}
+local shown, state, slot, click = hs.WindowShown, hs.ChildState, hs.SlotItem, hs.ClickChild
+hs.WindowShown = function(win) if win == "LootWnd" then return lootShown end return shown(win) end
+hs.ChildState = function(win, id, ...)
+  if win == "LootWnd" and id == "LootAllButton" then return lootAllEnabled end
+  return state(win, id, ...)
+end
+hs.SlotItem = function(win, child, ...)
+  if win == "LootWnd" then
+    if child == "LW_LootSlot0" then return { name = "Rusty Dagger", icon = 0, count = 1 } end
+    return nil
+  end
+  return slot(win, child, ...)
+end
+hs.ClickChild = function(win, id, button)
+  if win == "LootWnd" then
+    if id == "LootAllButton" then lootAlls = lootAlls + 1 end
+    return true
+  end
+  return click(win, id, button)
+end
+)lua");
+        s.frames(240); // the pack takes the pad's focus for a window only from 3 seconds after zoning in
+        run("lootShown = true");
+        s.frames(30);
+        auto press_lb = [&] {
+            run("padPress = 'lb'");
+            s.frames(1);
+            run("padPress = nil");
+            s.frames(2);
+        };
+        press_lb();
+        CHECK(run("return tostring(lootAlls)") == "0");
+        run("lootAllEnabled = true");
+        s.frames(2);
+        press_lb();
+        CHECK(run("return tostring(lootAlls)") == "1");
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// The gamepad pack's question before a character is deleted starts on Cancel (its rule for every question): an A
+// carried over from the Delete press must not answer it.
+TEST_CASE("UI packs (gamepad): the delete question starts on Cancel") {
+    test::ScratchDir scratch("ui_gamepad_delete_focus_test");
+    const auto dir = scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / "gamepad", dir / "gamepad",
+             fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures; // 1.92: the atlas is built by NewFrame
+    {
+        Session s(dir, "gamepad", {}, false);
+        ui::CharacterSelectView chars;
+        chars.server_name = "World One";
+        chars.characters = {{"Bob", 12, 1, {1}, "North Qeynos"}, {"Cid", 50, 2, {5, 2}, "Kaladim"}};
+        chars.selected = 0;
+        s.host.ui_ready = true;
+        s.host.game_state = 1;
+        s.host.char_select = &chars;
+        auto* L = s.lua.state();
+        REQUIRE(luaL_dostring(L, R"lua(
+forced, focused = {}, {}
+local invisible = ui.InvisibleButton
+ui.InvisibleButton = function(id, ...)
+  local hit = invisible(id, ...)
+  focused[id] = ui.IsItemFocused()
+  if forced[id] then forced[id] = nil return true end
+  return hit
+end
+)lua") == LUA_OK);
+        s.frames(30);
+        REQUIRE(luaL_dostring(L, "forced['##delete'] = true") == LUA_OK);
+        s.frames(6);
+        CHECK(s.lua.run_for_test("", "return tostring(focused['##delno'] == true and focused['##delyes'] == false)") ==
+              "true");
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        s.host.char_select = nullptr;
     }
     ImGui::DestroyContext(ctx);
 }

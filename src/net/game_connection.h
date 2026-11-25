@@ -14,6 +14,7 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <deque>
 #include <filesystem>
@@ -100,6 +101,7 @@
 #include "net/commerce.h"
 #include "net/market_packets.h"
 #include "net/settings_packets.h"
+#include "net/server_management_packets.h"
 #include "net/zone_link_packets.h"
 #include "plugin/policy.h"
 #include "net/server_files.h"
@@ -348,7 +350,7 @@ struct ConnectionOptions {
     // The saved server's folder (servers/<id>/): at the first zone-in the zone-in waits while the server's client
     // files are brought into it (net/server_files.h).
     std::filesystem::path server_files_dir;
-    // Transient logins cache only hailstone.cfg here, to check server access without enabling the full download.
+    // Transient logins cache only hailstone.cfg here, for access and command policy without the full download.
     std::filesystem::path server_access_dir;
     // How much those files may come to (hailstone.ini's assets.server_files_max_*_mb).
     ServerFileSync::Limits server_files_limits;
@@ -371,6 +373,8 @@ public:
     void receive_world_packet_for_test(const AppPacket& p) { handle_world(p); }
     game::WorldState& world_for_test() { return world_; }
     void set_spell_table_for_test(std::shared_ptr<const game::SpellTable> t) { spell_table_ = std::move(t); }
+    std::size_t cast_stages_shown_for_test() const { return cast_stage_shown_.size(); }
+    static constexpr std::size_t cast_stages_kept_for_test() { return kCastStagesKept; }
     void expire_poison_timer_for_test() { if (poison_started_ms_) poison_started_ms_ = 1; } // as if 10 s had passed
 
     // Connects to the world server named in the ticket.
@@ -512,7 +516,8 @@ public:
     void ui_message(std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0) {
         chat(ChatEvent::Kind::System, std::move(text), rgb, color);
     }
-    // The sound events since the last call (doors included).
+    // The spell effect stages queued since the last call, in order (cast stages from OP_BeginCast and procs, impact
+    // stages from OP_Action 231); a zone change drops those not yet taken.
     std::vector<SpellEffectCue> take_spell_effect_cues() { return std::exchange(effect_cues_, {}); }
     // The effect packets since the last call, in order (app/spell_particles.h plays them).
     std::vector<EffectPacketCue> take_effect_packets() { return std::exchange(effect_packets_, {}); }
@@ -521,6 +526,7 @@ public:
     std::vector<game::MissilePacket> take_missiles() { return std::exchange(missiles_, {}); }
     // Spell 859 local presentation; no packet is encoded or sent.
     void spell_missile_hit(const game::Missile& missile);
+    // The sound events since the last call (doors included).
     std::vector<SoundCue> take_sound_cues();
     // CContainerMgr::OpenContainer / CloseContainer's sound for a bag of `bag_type`: a 2D wave cue
     // (game/sound_rules.h container_sound). The windows and the bag keys call it; nothing is sent.
@@ -556,6 +562,18 @@ public:
     void request_zone_links();
     const std::optional<ZoneLinks>& zone_links() const { return zone_links_; }
     std::uint32_t zone_links_serial() const { return zone_links_serial_; }
+    bool server_management_available() const;
+    bool open_server_management();
+    bool save_server_management(std::uint32_t revision, std::span<const ServerManagementEdit> edits);
+    void close_server_management();
+    const std::optional<ServerManagementReply>& server_management_snapshot() const { return server_management_snapshot_; }
+    std::uint32_t server_management_serial() const { return server_management_serial_; }
+    bool server_management_saving() const;
+    bool server_management_paused() const;
+    bool server_management_reloading() const;
+    bool server_management_reload_required() const { return server_management_reload_required_; }
+    bool server_management_reloaded() const { return server_management_reloaded_; }
+    const std::string& server_management_message() const { return server_management_message_; }
     // The current zone's id and instance (from OP_NewZone; 0 before it arrives).
     std::uint16_t zone_id() const { return new_zone_ ? new_zone_->zone_id : 0; }
     // The spawns ProcessSwitches checks for a moving floor switch's riders (the app's player); null: none.
@@ -1139,7 +1157,10 @@ public:
     bool re_can_sell(bool verbose);
     void re_sell();
     bool re_can_transfer(bool verbose);
-    void re_transfer();
+    // The plot to the player the confirmation named: `target` and its `name` as they were when it was asked. Hailstone:
+    // refused (nothing sent) when the target has changed since, where RealEstate_SendTransferPlot reads the target
+    // as it is at the Yes.
+    void re_transfer(std::uint32_t target, const std::string& name);
     void re_opt_out(bool opt_out);
     void re_escrow(ReEscrowAction action, std::vector<ReEscrow::Entry> entries = {});
     void re_save_access(std::uint32_t re, const ReAccess& access);
@@ -2505,6 +2526,8 @@ public:
     // table order); ';' and '[' lines go to the chat server; anything else is
     // said on the default channel.
     void send_command(const std::string& line);
+    // Also used for stock social directives, which have their own interpreter.
+    bool allow_server_command(std::string_view name);
     // A client message by eqstr id (the system colour), as the key commands print them.
     void system_message(std::uint32_t eqstr, std::uint32_t color = 0) { system(eqstr, {}, color); }
     const game::SocialState& social() const { return social_; }
@@ -3017,7 +3040,7 @@ private:
     void set_spawn_motion(game::Spawn& s, const Motion& m);
     void connect_world(bool zoning);
     void chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0,
-              std::string peer = {}, std::optional<std::string> display_text = std::nullopt);
+              std::string peer = {}, std::optional<std::string> display_text = std::nullopt, bool filter = true);
     // ReportSuccessfulHit's melee line for an attack by `source`, through the chat filters (`report`: its argument).
     void report_hit(const game::HitLine& line, std::uint32_t source, bool report = true);
     void handle_combat(Op op, const AppPacket& p);
@@ -3287,7 +3310,11 @@ private:
     std::filesystem::path chat_log_path_;
     // The open log and the path it was opened for: one open per file, not per line (a raid's hundreds of lines a
     // second). Reopened when /log names another file; closed when /log goes off.
-    std::unique_ptr<std::ofstream> chat_log_;
+    // A C file (platform::open_c_file): not passed on to the browser helper, which would hold it open.
+    struct CloseChatLog {
+        void operator()(std::FILE* f) const noexcept;
+    };
+    std::unique_ptr<std::FILE, CloseChatLog> chat_log_;
     std::filesystem::path chat_log_open_path_;
     bool seconds_log_ = false;
     float distance_to(std::uint32_t spawn_id) const;
@@ -3395,6 +3422,12 @@ private:
     std::optional<plugin::Rules> server_rules_;
     // Returns false when this login received a policy that denies Hailstone access.
     bool update_server_rules();
+    void request_hailstone_settings();
+    void update_command_account_status();
+    void update_server_management();
+    void pause_server_management_for_zone();
+    void handle_server_management(const AppPacket& p);
+    bool send_server_management(const AppPacket& p, std::uint32_t id, ServerManagementAction action);
     bool guild_world_invites_ = false; // OP_HailstoneGuildReply's hello this zone-in (server/'s script)
     std::uint32_t server_rules_serial_ = 0;
     int hook_game_state_ = 0;              // the game state last raised (plugin::kGameState*; 0 none yet)
@@ -3679,6 +3712,9 @@ private:
     std::vector<std::uint32_t> blood_spurts_; // local player landed sharp-weapon hit target IDs
     // Per caster, the spell whose cast stage has played (its OP_BeginCast, or the one added for a proc) and until when
     // (now_ms) an OP_Action of it counts as that cast's landing rather than a proc.
+    // Pruned once past its window, with the spawn (apply_spawn, OP_DeleteSpawn) and at the zone change; at most
+    // kCastStagesKept casters (a cast time near 2^32 ms would otherwise keep an unknown caster's entry for weeks).
+    static constexpr std::size_t kCastStagesKept = 4096;
     std::unordered_map<std::uint32_t, std::pair<std::uint32_t, std::int64_t>> cast_stage_shown_;
     std::vector<game::MissilePacket> missiles_;
     LandingEffects landing_;
@@ -4000,6 +4036,23 @@ private:
     std::unordered_map<std::string, std::uint8_t> quest_npcs_;
     bool quest_npcs_asked_ = false;
     bool hailstone_script_ = false;   // a zone answered OP_HailstoneSettingsRequest
+    std::optional<int> command_account_status_;
+    std::chrono::steady_clock::time_point settings_requested_at_{};
+    std::chrono::steady_clock::time_point command_account_status_received_at_{};
+    bool server_management_offered_ = false;
+    struct PendingManagement {
+        std::uint32_t id;
+        ServerManagementAction action;
+        std::chrono::steady_clock::time_point deadline;
+    };
+    std::optional<PendingManagement> server_management_pending_;
+    std::optional<ServerManagementReply> server_management_snapshot_;
+    bool server_management_reload_required_ = false;
+    bool server_management_reloaded_ = false;
+    bool server_management_waiting_for_zone_ = false;
+    std::string server_management_message_;
+    std::uint32_t server_management_request_id_ = 0;
+    std::uint32_t server_management_serial_ = 0;
     bool zone_links_asked_ = false;
     std::optional<ZoneLinks> zone_links_;
     std::uint32_t zone_links_serial_ = 0;

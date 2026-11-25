@@ -1153,13 +1153,17 @@ void push_read_only(lua_State* L, int real) {
 }
 
 void push_in(lua_State* L, int v, int S, int tag);
+void push_export(lua_State* L, int v, int S, int tag);
 
 // A function a plugin took from hs or ui, or one it left in a table the pack shares (shared-table views, below):
 // runs the real one (upvalue 1) as the plugin (upvalue 2, its tag), whoever calls it. Only the pack's code or the
 // plugin's own may call it: another plugin would act with this one's capabilities. Once the plugin's folder is gone
 // (it unloaded) it does nothing. A plugin's own Lua function (upvalue 3: its folder's view state, below) is handed
 // its arguments as the plugin sees the pack's values (push_in: a table as a view), whoever passes them: a pack
-// library a plugin calls runs as the plugin and passes its own tables to the plugin's callbacks.
+// library a plugin calls runs as the plugin and passes its own tables to the plugin's callbacks. Such a function
+// (one push_wrapped made) gives back what it returns, or raises, as the pack gets a value of the plugin's
+// (push_export): a table as an owned view, a function as the plugin's. The pack's code that keeps a result and uses
+// it later runs none of the plugin's code as the player.
 int call_as(lua_State* L) {
     auto& ui = LuaUi::Impl::of(L);
     const char* tag = lua_tostring(L, lua_upvalueindex(2));
@@ -1179,19 +1183,33 @@ int call_as(lua_State* L) {
     }
     lua_pushvalue(L, lua_upvalueindex(1));
     lua_insert(L, 1);
-    if (same&&!source) { // already the plugin: as it is
+    // A wrapper push_wrapped made (upvalue 3 the folder's S) is how the pack's code holds the plugin's function, and
+    // the pack's code may call it while it runs as the plugin (a pack function the plugin called): what it returns
+    // or raises goes to the pack as push_export gives it, whoever runs.
+    const bool exports = lua_type(L, lua_upvalueindex(3)) == LUA_TTABLE;
+    if (same && !source && !exports) { // already the plugin: as it is
         lua_call(L, n, LUA_MULTRET);
         return lua_gettop(L);
     }
     int status = LUA_OK;
-    {
+    if (same && !source) {
+        status = lua_pcall(L, n, LUA_MULTRET, 0);
+    } else {
         struct SourceScope { const LuaUi::CallbackOwner* before=g_callback_source; ~SourceScope(){g_callback_source=before;} } source_scope;
         if(source)g_callback_source=source;
         LuaUi::Impl::Acting acting(ui, tag);
         status = lua_pcall(L, n, LUA_MULTRET, 0);
     }
+    const int results = lua_gettop(L);
+    if (exports) {
+        luaL_checkstack(L, 8, nullptr);
+        for (int i = 1; i <= results; ++i) {
+            push_export(L, i, lua_upvalueindex(3), lua_upvalueindex(2));
+            lua_replace(L, i);
+        }
+    }
     if (status != LUA_OK) return lua_error(L);
-    return lua_gettop(L);
+    return results;
 }
 
 // ---- The tables the pack shares, seen from a plugin's code (make_env). A plugin reads the pack's globals; a table
@@ -1203,8 +1221,10 @@ int call_as(lua_State* L) {
 // past it. A pack function the plugin gets (a global, a table's, ui's) comes wrapped (call_pack): what it returns
 // comes as the plugin sees the pack's values, so a pack table it returns is a view too; and what the pack passes the
 // plugin's functions comes the same way (call_as). getmetatable gives the plugin a metatable it set itself as it is,
-// any other as a view. What is still the plugin's to reach: a value it hands to a pack function as an argument (or
-// returns to the pack from a callback), which the pack keeps as it is (docs/todo.md).
+// any other as a view. What the plugin hands the pack's code the other way (an argument to a pack function,
+// call_pack; what its function returns or raises to the pack, call_as) comes as what it writes into a shared table
+// (push_export): a table of its own as an owned view, whose metamethods and functions run as the plugin, so the pack
+// that keeps it and uses it later, as the player, runs none of the plugin's code with the player's authority.
 //
 // Each folder's state S (an upvalue of the closures below): [kPackReal] pack view -> its table, [kOwnReal] owned view
 // -> the plugin's table, [kPackOf] / [kOwnOf] the other way, [kWrapped] function -> its call_as, [kPackFn] pack
@@ -1337,8 +1357,10 @@ void push_out(lua_State* L, int v, int S, int tag, int kind) {
     else lua_pushvalue(L, v);
 }
 
-// A value the plugin writes into a shared table, pushed as it is stored: a function wrapped as the plugin's (a pack
-// function it was given, call_pack, as the pack's own), a table of its own as an owned view, a pack view as its table.
+// A value of the plugin's on its way to the pack's code (written into a shared table, an argument to a pack function,
+// what its function returns or raises to the pack), pushed as the pack gets it: a function wrapped as the plugin's (a
+// pack function it was given, call_pack, as the pack's own), a table of its own as an owned view, a pack view as its
+// table. (The UI's state has no coroutine library: no coroutine of the plugin's can reach the pack to be resumed.)
 void push_export(lua_State* L, int v, int S, int tag) {
     v = lua_absindex(L, v);
     if (lua_type(L, v) == LUA_TFUNCTION) {
@@ -1459,8 +1481,10 @@ int view_pairs(lua_State* L) {
 }
 
 // A pack's Lua function as a plugin gets it (push_in): upvalue 1 the function, 2 the plugin's tag, 3 its S. Called
-// by the plugin's code it runs as ever (as the plugin), but what it returns, or raises, comes as push_in gives it.
-// Called by anyone else (the pack, which got it back) it is the pack's function as it is.
+// by the plugin's code it runs as ever (as the plugin), but its arguments reach it as push_export gives the pack the
+// plugin's values (a table as an owned view, a function as the plugin's: the pack's function may keep them and use
+// them later, as the player), and what it returns, or raises, comes as push_in gives it. Called by anyone else (the
+// pack, which got it back) it is the pack's function as it is.
 int call_pack(lua_State* L) {
     const int n = lua_gettop(L);
     const char* tag = lua_tostring(L, lua_upvalueindex(2));
@@ -1469,6 +1493,11 @@ int call_pack(lua_State* L) {
     if (!tag || g_caller_tag != tag) {
         lua_call(L, n, LUA_MULTRET);
         return lua_gettop(L);
+    }
+    luaL_checkstack(L, 8, nullptr);
+    for (int i = 2; i <= n + 1; ++i) {
+        push_export(L, i, lua_upvalueindex(3), lua_upvalueindex(2));
+        lua_replace(L, i);
     }
     const int status = lua_pcall(L, n, LUA_MULTRET, 0);
     const int results = lua_gettop(L);

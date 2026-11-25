@@ -1743,6 +1743,14 @@ int ChatSubmit(lua_State* L) {
     return 0;
 }
 
+// Pushes the text make() returns: made inside cxx_guard, then out of this frame before the push (push_made), so a push
+// that raises leaves nothing of it behind (plugin/lua_keep.h).
+template <class F> void push_text(lua_State* L, F&& make) {
+    std::string s;
+    plugin::cxx_guard(L, [&] { s = make(); });
+    plugin::push_made(L, std::move(s));
+}
+
 // text, replace = hs.ChatTakeFocus(slot [, typed])   -- when the keyboard goes to the chat input (the chat keys: Enter, ';',
 // '/', '['; game/chat_input.h; a tell menu's name): what goes into the active window's input (replace: instead of
 // what is typed); nil otherwise and for other windows
@@ -1756,12 +1764,17 @@ int ChatTakeFocus(lua_State* L) {
     if (plugin_code()) return 0;
     int to = used(s.focus_window) ? s.focus_window : active_window();
     if (s.link_all && w > 0 && host_of(active_window()) == w) {
-        bool have_typed = lua_type(L, 2) == LUA_TSTRING;
-        std::string typed = have_typed ? lua_tostring(L, 2) : std::string();
-        game::LinkAllChat r = game::link_all_into_chat(typed, *s.link_all);
+        const bool have_typed = lua_type(L, 2) == LUA_TSTRING;
+        const char* typed = have_typed ? lua_tostring(L, 2) : "";
+        // (the lines and the text in a box the state owns across the pushes: plugin/lua_keep.h)
+        auto& r = plugin::lua_keep<game::LinkAllChat>(L);
+        plugin::cxx_guard(L, [&] {
+            const std::string typed_text = typed;
+            r = game::link_all_into_chat(typed_text, *s.link_all);
+            if (!have_typed) r.text.erase(0, typed_text.size());
+        });
         s.link_all.reset();
         for (const std::string& line : r.sent) submit_line(host(L), up_of(w), line);
-        if (!have_typed) r.text.erase(0, typed.size());
         lua_pushlstring(L, r.text.data(), r.text.size());
         lua_pushboolean(L, have_typed);
         return 2;
@@ -1789,9 +1802,11 @@ std::optional<std::string> step_history(bool older) {
 // text = hs.ChatHistory(slot, older)   -- steps through the lines sent before (older: one further back)
 int ChatHistory(lua_State* L) {
     if (plugin_code()) return 0;
-    auto line = step_history(lua_toboolean(L, 2) != 0);
+    const bool older = lua_toboolean(L, 2) != 0;
+    std::optional<std::string> line;
+    plugin::cxx_guard(L, [&] { line = step_history(older); });
     if (!line) return 0;
-    lua_pushlstring(L, line->data(), line->size());
+    plugin::push_made(L, std::move(*line)); // (out of this frame before the push: plugin/lua_keep.h)
     return 1;
 }
 
@@ -1855,7 +1870,7 @@ int ChatInfo(lua_State* L) {
     }
     lua_pushinteger(L, wnd(w).font);
     lua_pushboolean(L, active_window() == w);
-    lua_pushstring(L, default_name(wnd(w)).c_str());
+    push_text(L, [w] { return default_name(wnd(w)); });
     lua_pushboolean(L, wnd(w).scrollbar);
     lua_pushboolean(L, manager().locked == w);
     return 5;
@@ -2013,7 +2028,10 @@ int ChatFilters(lua_State* L) {
     int w = up_window(L, 1);
     lua_newtable(L);
     if (w < 0) return 1;
-    auto joined = joined_channels();
+    // (the channels in a box the state owns across the pushes, under the list: plugin/lua_keep.h)
+    auto& joined = plugin::lua_keep<std::vector<std::string>>(L);
+    lua_insert(L, -2);
+    plugin::cxx_guard(L, [&] { joined = joined_channels(); });
     lua_Integer n = 0;
     for (const auto& it : game::chat_filter_items()) {
         if (it.menu == game::ChatFilterMenu::ChatChannel &&
@@ -2022,13 +2040,13 @@ int ChatFilters(lua_State* L) {
         lua_createtable(L, 0, 6);
         lua_pushinteger(L, it.channel);
         lua_setfield(L, -2, "id");
-        lua_pushstring(L, filter_group_text(it.menu).c_str());
+        push_text(L, [&it] { return filter_group_text(it.menu); });
         lua_setfield(L, -2, "group");
         lua_pushinteger(L, static_cast<lua_Integer>(it.menu));
         lua_setfield(L, -2, "menu");
         lua_pushinteger(L, static_cast<lua_Integer>(filter_group_parent(it.menu)));
         lua_setfield(L, -2, "parent");
-        lua_pushstring(L, filter_text(it, joined).c_str());
+        push_text(L, [&] { return filter_text(it, joined); });
         lua_setfield(L, -2, "name");
         lua_pushboolean(L, manager().channel_map[it.channel] == w);
         lua_setfield(L, -2, "on");
@@ -2040,7 +2058,7 @@ int ChatFilters(lua_State* L) {
 // groups = hs.ChatFilterGroups()   -- the Filters menu's submenus: { id (ChatFilterMenu), parent (0: the Filters
 // menu), name }; Chat Channel, Melee and Spells, then Hailstone's Extended (server) and its submenus
 int ChatFilterGroups(lua_State* L) {
-    auto groups = game::chat_filter_groups();
+    const auto groups = game::chat_filter_groups();
     lua_createtable(L, static_cast<int>(groups.size()), 0);
     lua_Integer index = 0;
     for (const auto& group : groups) {
@@ -2049,7 +2067,7 @@ int ChatFilterGroups(lua_State* L) {
         lua_setfield(L, -2, "id");
         lua_pushinteger(L, static_cast<lua_Integer>(group.parent));
         lua_setfield(L, -2, "parent");
-        lua_pushstring(L, filter_group_text(group.menu).c_str());
+        push_text(L, [&group] { return filter_group_text(group.menu); });
         lua_setfield(L, -2, "name");
         lua_rawseti(L, -2, ++index);
     }
@@ -2097,10 +2115,10 @@ int ChatSetFont(lua_State* L) {
 
 // names = hs.ChatDefaultChannels()   -- the Channel menu's items (hs.ChatSetDefault's order, 0-based)
 int ChatDefaultChannels(lua_State* L) {
-    auto items = game::chat_default_items();
+    const auto items = game::chat_default_items();
     lua_createtable(L, static_cast<int>(items.size()), 0);
     for (std::size_t i = 0; i < items.size(); ++i) {
-        lua_pushstring(L, eqstr(items[i].eqstr).c_str());
+        push_text(L, [&] { return eqstr(items[i].eqstr); });
         lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
     }
     return 1;
@@ -2142,13 +2160,13 @@ int ChatHitModes(lua_State* L) {
         lua_createtable(L, 0, 4);
         lua_pushinteger(L, cat + 1);
         lua_setfield(L, -2, "id");
-        lua_pushstring(L, hit_category_name(cat).c_str());
+        push_text(L, [cat] { return hit_category_name(cat); });
         lua_setfield(L, -2, "name");
         lua_pushinteger(L, hit_mode_value(cat));
         lua_setfield(L, -2, "mode");
         lua_createtable(L, 3, 0);
         for (int mode = 0; mode < 3; ++mode) {
-            lua_pushstring(L, eqstr(game::hit_mode_eqstr(cat, mode)).c_str());
+            push_text(L, [cat, mode] { return eqstr(game::hit_mode_eqstr(cat, mode)); });
             lua_rawseti(L, -2, mode + 1);
         }
         lua_setfield(L, -2, "modes");

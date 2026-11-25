@@ -6,6 +6,7 @@
 #include <cctype>
 #include <format>
 
+#include "game/spawn_name_lookup.h"
 #include "game/appearance.h"
 #include "game/eq_names.h"
 #include "game/item_moves.h"
@@ -56,12 +57,11 @@ LabelValue int_value(std::int64_t value, std::int64_t base = 0, bool compare = f
     return v;
 }
 
-// The group gauges look members up every frame: compare in place rather than lower-casing each spawn's name.
+// The group gauges look members up every frame: through an index kept while the spawn set holds
+// (game::SpawnNameLookup), the exact name and a player first, then a display name.
 const game::Spawn* spawn_by_name(const game::WorldState& world, const std::string& name) {
-    if (name.empty()) return nullptr;
-    for (const auto& [id, s] : world.spawns)
-        if (iequals(s.name, name) || game::display_name_iequals(s.name, name)) return &s;
-    return nullptr;
+    static game::SpawnNameLookup lookup; // (the UI runs on the main thread alone)
+    return lookup.find(world, name, true);
 }
 
 const game::Spawn* spawn(const game::WorldState& world, std::uint32_t id) {

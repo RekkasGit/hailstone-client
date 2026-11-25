@@ -6,6 +6,7 @@
 // names in dbstr_us.txt (9001 Innate Strength, 9002 Mystical Shielding).
 
 #include <cstdint>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -18,6 +19,7 @@
 #include "game/coords.h"
 #include "game/mechanics/tables.h"
 #include "net/game_connection.h"
+#include "net/world_packets.h"
 #include "scratch_dir.h"
 
 namespace hailstone::net {
@@ -88,6 +90,11 @@ struct GameConnectionTestAccess {
     static std::string& character(GameConnection& c) { return c.character_; }
     static bool& auto_attack(GameConnection& c) { return c.auto_attack_; }
     static ConnectionState& state(GameConnection& c) { return c.state_; }
+    // A zone hand-off as world makes it: the zone's address in answer to OP_EnterWorld (the only state that takes it).
+    static void zone_hand_off(GameConnection& c, std::uint16_t port = 9000) {
+        c.state_ = ConnectionState::EnteringWorld;
+        c.receive_world_packet_for_test(encode(ZoneServerInfo{"127.0.0.1", port}));
+    }
     static std::optional<NewZone>& new_zone(GameConnection& c) { return c.new_zone_; }
     static std::vector<ZonePoint>& zone_points(GameConnection& c) { return c.zone_points_; }
     static std::vector<game::Door>& doors(GameConnection& c) { return c.doors_; }
@@ -104,7 +111,13 @@ struct GameConnectionTestAccess {
     static game::ClientOptions& client_options(GameConnection& c) { return c.client_options_; }
     static void open_chat_log(GameConnection& c, const std::string& name) { c.open_chat_log(name); }
     static void log_command(GameConnection& c, const std::string& args) { c.log_command(args); }
-    static std::ofstream* chat_log_stream(GameConnection& c) { return c.chat_log_.get(); }
+    static std::FILE* chat_log_stream(GameConnection& c) { return c.chat_log_.get(); }
+    // Puts the chat log's stream in error the same way on every C runtime: a write to a stream opened for reading
+    // only fails and sets the error (the Microsoft runtime sets none for a read from an append-only stream).
+    static void fail_chat_log(GameConnection& c) {
+        c.chat_log_.reset(std::fopen(c.chat_log_open_path_.string().c_str(), "rb"));
+        if (c.chat_log_) std::fputc('x', c.chat_log_.get());
+    }
     static void chat(GameConnection& c, std::string text) { c.chat(ChatEvent::Kind::System, std::move(text)); }
     static std::string& safelock(GameConnection& c) { return c.safelock_; }
     static WorldTicket& ticket(GameConnection& c) { return c.ticket_; }

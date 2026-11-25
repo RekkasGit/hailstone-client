@@ -19,6 +19,7 @@
 #include "game/position_tracker.h"
 #include "game/zoning.h"
 #include "mock_server/harness.h"
+#include "mq_test_world.h"
 #include "net/chat_server.h"
 #include "net/door_packets.h"
 #include "net/group_packets.h"
@@ -252,6 +253,26 @@ TEST_CASE("mock server: extended spell capability is ready before ZoneEntry only
     CHECK(rig.conn.spell_id_limit() == game::kRof2StockMaxSpellId);
     CHECK_FALSE(rig.conn.spell_data_ready());
     CHECK(rig.conn.spell_table().get(70000));
+}
+
+TEST_CASE("mock server: a zone address outside EnterWorld is ignored; the next enter world still zones in") {
+    Rig rig;
+    REQUIRE(rig.to_character_select());
+    rig.chat();
+    rig.server.world.send_reliable(encode(ZoneServerInfo{"127.0.0.1", rig.server.zone.port()}));
+    ByteWriter marker; // reliable delivery is in order: once this line shows, the address has been handled
+    detail::write_cstring(marker, "marker");
+    rig.server.world.send_reliable(make_packet(Op::MOTD, std::move(marker)));
+    std::vector<ChatEvent> lines;
+    REQUIRE(rig.until([&] {
+        for (auto& l : rig.chat()) lines.push_back(std::move(l));
+        return has_line(lines, "marker");
+    }));
+    CHECK(rig.conn.state() == ConnectionState::CharacterSelect);
+    CHECK(MockEqServer::count(rig.server.world_log, Op::WorldComplete) == 0);
+    CHECK(rig.server.zone_log.empty());
+    rig.conn.enter_world("Gennro");
+    REQUIRE(rig.until_state(ConnectionState::InZone));
 }
 
 TEST_CASE("mock server: a session key too long for OP_SendLoginInfo fails the world login, nothing sent") {
@@ -1388,8 +1409,9 @@ TEST_CASE("mock server: a wrong session key gets the world connection dropped") 
 TEST_CASE("mock server: a failure on the world link ends its queue; a packet behind it is not handled") {
     Rig rig;
     REQUIRE(rig.to_character_select());
-    // A short OP_ZoneServerInfo fails the connection; a good one in the same datagram behind it must not start a
-    // zone connection afterwards.
+    // Waiting for the address after OP_EnterWorld (the only state that takes it), a short OP_ZoneServerInfo fails
+    // the connection; a good one in the same datagram behind it must not start a zone connection afterwards.
+    GameConnectionTestAccess::state(rig.conn) = ConnectionState::EnteringWorld;
     AppPacket good = encode(ZoneServerInfo{"127.0.0.1", rig.server.zone.port()});
     AppPacket bad = good;
     bad.data.resize(4);

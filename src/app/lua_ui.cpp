@@ -98,6 +98,21 @@ struct UiApi::Impl {
     std::size_t windows_indexed = 0;
     std::map<std::string, int, std::less<>> replaced_at; // screen -> frame of its last hs.ReplaceWindow
     int frame = 0;
+    // hs.ReplaceWindow and hs.WindowShown take any name a script gives (the packs' own windows are not all stock
+    // ones): the names kept per window are bounded. Only the last few frames' replacements count (replaces()), so
+    // past kMaxNamed names the older ones are dropped; a name past it while all are recent is not kept.
+    static constexpr std::size_t kMaxNamed = 1024;
+    bool note_replaced(std::string_view name) {
+        if (auto it = replaced_at.find(name); it != replaced_at.end()) {
+            it->second = frame;
+            return true;
+        }
+        if (replaced_at.size() >= kMaxNamed)
+            std::erase_if(replaced_at, [this](const auto& e) { return frame - e.second > 2; });
+        if (replaced_at.size() >= kMaxNamed) return false;
+        replaced_at.emplace(name, frame);
+        return true;
+    }
     ScreenReplacements screens{&replaced_at, &frame}; // hs.LoginScreen .. (app/lua_ui_pregame.cpp)
     // The cursor's hotbutton: a left press made while it was held, and the frame such a press came up (a click
     // that put it nowhere: it is dropped the next frame, as a click on the world drops CCursorAttachment's button).
@@ -452,9 +467,13 @@ struct UiApi::Impl {
     // ui::window_ini_info(name), worked out once per name: it depends on the name alone.
     const ui::WindowIniInfo& ini_info(std::string_view name) {
         auto it = ini_infos.find(name);
-        if (it == ini_infos.end()) it = ini_infos.emplace(std::string(name), ui::window_ini_info(name)).first;
+        if (it == ini_infos.end()) {
+            if (ini_infos.size() >= kMaxNamed) return uncached_ini_info = ui::window_ini_info(name); // (bounded)
+            it = ini_infos.emplace(std::string(name), ui::window_ini_info(name)).first;
+        }
         return it->second;
     }
+    ui::WindowIniInfo uncached_ini_info; // ini_info's answer for a name past kMaxNamed (until its next call)
 
     void store_visibility() {
         // A new connection at character select has no in-game window state to save for the last character.
@@ -850,14 +869,14 @@ int UiAnimation(lua_State* L) {
 // confirmation, among them a destroy's; a trade, a give, a quantity, a bazaar purchase's, a group invitation, a
 // respawn choice, a large dialog, a task offer) give way only to the pack's own windows: a plugin's code could
 // otherwise put the client's away and draw a question of its own in its place.
-// The consent question and the Server add-ons warning are the client's own interfaces' alone (UiHost::trusted_ui):
+// Consent, add-on policy warnings and Server Management are reserved to the client's own interfaces (UiHost::trusted_ui):
 // under an add-on or hand-placed interface the client draws them, as that interface cannot act on them
 // (hs.AnswerPluginConsent, hs.AddonPolicyAction).
 bool may_replace(std::string_view name, const UiHost& host) {
     static constexpr std::string_view kPackOnly[] = {
-        "PluginConsent", "AddonPolicy", "ConfirmationDialogBox", "TradeWnd",    "GiveWnd",          "QuantityWnd",
+        "PluginConsent", "AddonPolicy", "ServerManagement", "ConfirmationDialogBox", "TradeWnd", "GiveWnd", "QuantityWnd",
         "BazaarConfirmationWnd", "GroupInvite", "RespawnWnd", "LargeDialogWindow", "TaskSelectWnd"};
-    if (!host.trusted_ui && (name == "PluginConsent" || name == "AddonPolicy")) return false;
+    if (!host.trusted_ui && (name == "PluginConsent" || name == "AddonPolicy" || name == "ServerManagement")) return false;
     if (ui::lua::LuaUi::caller_tag().empty()) return true;
     return std::find(std::begin(kPackOnly), std::end(kPackOnly), name) == std::end(kPackOnly);
 }
@@ -865,7 +884,7 @@ bool may_replace(std::string_view name, const UiHost& host) {
 int ReplaceWindow(lua_State* L) {
     auto& m = Impl::of(L);
     std::string name = luaL_checkstring(L, 1);
-    if (may_replace(name, m.host)) m.replaced_at[name] = m.frame;
+    if (may_replace(name, m.host)) m.note_replaced(name);
     StockWindow* w = m.window(name);
     bool shown = w && (m.host.ui_ready || w->pre_game()) && w->shown(m.host);
     lua_pushboolean(L, shown);
@@ -903,7 +922,11 @@ int ReplaceWindow(lua_State* L) {
                                           static_cast<int>(ds.y), lua_toboolean(L, 2) != 0);
         sized = p.w != place.w || p.h != place.h;
         place = p;
-        Impl::Placed& placed = m.placed[name];
+        // (bounded as replaced_at: a name past Impl::kMaxNamed is placed each time but not remembered)
+        auto it = m.placed.find(name);
+        if (it == m.placed.end() && m.placed.size() < Impl::kMaxNamed) it = m.placed.emplace(name, Impl::Placed{}).first;
+        Impl::Placed none;
+        Impl::Placed& placed = it == m.placed.end() ? none : it->second;
         int& gen = placed.generation;
         int& scr = placed.screen;
         reset = gen != m.layout.generation() || scr != m.screen_serial;
@@ -936,10 +959,7 @@ int ReplaceWindow(lua_State* L) {
 int WindowShown(lua_State* L) {
     auto& m = Impl::of(L);
     const char* name = luaL_checkstring(L, 1);
-    if (may_replace(name, m.host)) {
-        if (auto it = m.replaced_at.find(std::string_view(name)); it != m.replaced_at.end()) it->second = m.frame;
-        else m.replaced_at.emplace(name, m.frame);
-    }
+    if (may_replace(name, m.host)) m.note_replaced(name);
     StockWindow* w = m.window(name);
     lua_pushboolean(L, w && (m.host.ui_ready || w->pre_game()) && w->shown(m.host));
     return 1;
@@ -956,16 +976,32 @@ int WindowPlaced(lua_State* L) {
                                  number_to_int(luaL_checknumber(L, 4)), number_to_int(luaL_checknumber(L, 5))};
     const bool sizable = lua_toboolean(L, 6) != 0;
     std::string name = name_arg;
-    m.screen_rects[name] = now;
+    if (auto at = m.screen_rects.find(name); at != m.screen_rects.end()) at->second = now;
+    else if (m.screen_rects.size() < Impl::kMaxNamed) m.screen_rects.emplace(name, now); // (bounded: Impl::kMaxNamed)
     if (!m.layout.loaded()) return 0;
-    const Impl::Placed& placed = m.placed[name];
-    if (placed.generation != m.layout.generation()) return 0;
+    // (only a window hs.ReplaceWindow placed under this layout: one it never placed is not made an entry here)
+    auto pl = m.placed.find(name);
+    if (pl == m.placed.end() || pl->second.generation != m.layout.generation()) return 0;
+    const Impl::Placed& placed = pl->second;
     ui::WindowRect r{now[0], now[1], now[2], now[3]};
     auto it = m.seen.find(name);
     bool moved = it != m.seen.end() && it->second != now && placed.screen == m.screen_serial;
     m.seen[name] = now;
     if (moved) m.last_place[name] = {r, sizable};
     return 0;
+}
+
+// A click on ConfirmationDialogBox's Yes from code other than the pack's own (a script, a plugin window, another Lua
+// state with the hs API) while that box asks a destroy's question (destructive_confirmation_up): refused, and logged.
+// The pack draws the box and its own code passes the player's click on; a script pressing it would destroy an item or
+// disband a guild without the player's word. Any other question, and No, stay open to scripts (an accepted rez, a
+// trade's question). A Hailstone guard of its own.
+bool script_destroy_yes(lua_State* L, const UiHost& host, std::string_view window, std::string_view child) {
+    if (window != "ConfirmationDialogBox" || child != "Yes_Button" || ui::lua::pack_code(L) ||
+        !destructive_confirmation_up(host))
+        return false;
+    log::warn("A script pressed Yes on the destroy question (ConfirmationDialogBox); refused: only the player answers it");
+    return true;
 }
 
 // hs.ShowWindow(name, show)   -- shows or hides the game window (and with it the replacement)
@@ -979,9 +1015,12 @@ int ShowWindow(lua_State* L) {
 // default; 3 is a buff button's right click, which removes the buff)
 int WindowButton(lua_State* L) {
     auto& m = Impl::of(L);
-    StockWindow* w = m.window(luaL_checkstring(L, 1));
+    const char* name = luaL_checkstring(L, 1);
+    StockWindow* w = m.window(name);
     int message = held_int(luaL_optinteger(L, 3, 1));
-    bool ok = w && w->click(m.host, luaL_checkstring(L, 2), message == 3 ? "remove" : "left", false);
+    const char* child = luaL_checkstring(L, 2);
+    bool ok = w && !script_destroy_yes(L, m.host, name, child) &&
+              w->click(m.host, child, message == 3 ? "remove" : "left", false);
     lua_pushboolean(L, ok);
     return 1;
 }
@@ -991,8 +1030,13 @@ int WindowButton(lua_State* L) {
 int ClickChild(lua_State* L) {
     auto& m = Impl::of(L);
     note_click_rect(m.host);
-    StockWindow* w = m.window(luaL_checkstring(L, 1));
+    const char* name = luaL_checkstring(L, 1);
+    StockWindow* w = m.window(name);
     const char* child_arg = luaL_checkstring(L, 2);
+    if (script_destroy_yes(L, m.host, name, child_arg)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
     std::string button = lua_isstring(L, 3) ? lua_tostring(L, 3) : "left";
     std::string child = child_arg;
     bool outside = lua_toboolean(L, 4) != 0;
@@ -1029,10 +1073,11 @@ int StmlLink(lua_State* L) {
 // ok = hs.ClickChildAt(name, child, clientX, clientY [, button])   -- as ClickChild (no original to place)
 int ClickChildAt(lua_State* L) {
     auto& m = Impl::of(L);
-    StockWindow* w = m.window(luaL_checkstring(L, 1));
+    const char* name = luaL_checkstring(L, 1);
+    StockWindow* w = m.window(name);
     const char* child = w ? luaL_checkstring(L, 2) : nullptr;
     std::string button = lua_isstring(L, 5) ? lua_tostring(L, 5) : "left";
-    lua_pushboolean(L, w && w->click(m.host, child, button, false));
+    lua_pushboolean(L, w && !script_destroy_yes(L, m.host, name, child) && w->click(m.host, child, button, false));
     return 1;
 }
 
@@ -2303,16 +2348,25 @@ int Option(lua_State* L) {
 // value = hs.UiIni(section, key)   -- a value of the character's UI ini (over defaults.ini), nil when neither has it
 int UiIniGet(lua_State* L) {
     auto& m = Impl::of(L);
-    if (auto v = m.layout.get(luaL_checkstring(L, 1), luaL_checkstring(L, 2))) lua_pushstring(L, v->c_str());
+    const char* section = luaL_checkstring(L, 1);
+    const char* key = luaL_checkstring(L, 2);
+    auto& v = plugin::lua_keep<std::optional<std::string>>(L); // (across the push: lua_keep.h)
+    plugin::cxx_guard(L, [&] { v = m.layout.get(section, key); });
+    if (v) lua_pushlstring(L, v->data(), v->size());
     else lua_pushnil(L);
     return 1;
 }
 
-// hs.SetUiIni(section, key, value)   -- writes a value to the character's UI ini (UIIni_WriteString) and saves it
+// hs.SetUiIni(section, key, value)   -- writes a value to the character's UI ini (UIIni_WriteString). The file is
+// written with the window places (UiIni::save_if_due, at most every 2 s) and at once on a quit, a camp, a return to
+// the login screen or another character's layout (UiApi::save_layout, load_layout), not on each call: a slider
+// dragged calls it every frame.
 int UiIniSet(lua_State* L) {
     auto& m = Impl::of(L);
-    m.layout.put(luaL_checkstring(L, 1), luaL_checkstring(L, 2), luaL_checkstring(L, 3));
-    m.layout.save();
+    const char* section = luaL_checkstring(L, 1);
+    const char* key = luaL_checkstring(L, 2);
+    const char* value = luaL_checkstring(L, 3);
+    plugin::cxx_guard(L, [&] { m.layout.put(section, key, value); });
     return 0;
 }
 
@@ -3208,6 +3262,7 @@ void register_luasocial_api(lua_State* L, UiHost& host);  // app/lua_ui_luasocia
 void register_hotbar_api(lua_State* L, UiHost& host);     // app/lua_ui_hotbar.cpp
 void register_web_api(lua_State* L, UiHost& host);        // app/lua_ui_web.cpp
 void register_find_api(lua_State* L, UiHost& host);       // app/lua_ui_find.cpp
+void register_server_management_api(lua_State* L, UiHost& host); // app/lua_ui_server_management.cpp
 void register_compare_api(lua_State* L, UiHost& host, std::function<StockWindow*(std::string_view)> find_window); // app/lua_ui_compare.cpp
 void register_task_api(lua_State* L, UiHost& host, std::vector<std::unique_ptr<StockWindow>>& windows); // app/lua_ui_progress.cpp
 int CompassStrips(lua_State* L);                     // app/lua_ui_misc.cpp
@@ -3286,6 +3341,7 @@ void UiApi::register_functions(lua_State* L) {
     register_hotbar_api(L, impl_->host);
     register_web_api(L, impl_->host);
     register_find_api(L, impl_->host);
+    register_server_management_api(L, impl_->host);
     register_compare_api(L, impl_->host, [impl = impl_.get()](std::string_view name) { return impl->window(name); });
     register_task_api(L, impl_->host, impl_->windows);
     // Opening a tracker entry changes TaskWnd's selected objective list in this frame. Its next ListInfo/ListRow

@@ -50,6 +50,8 @@ struct NativeEnv {
     // connection its setters change (class masks, the pet list). Either may be null.
     game::ExtensionChain* extensions = nullptr;
     std::function<net::GameConnection*()> connection;
+    std::function<std::optional<WorldPlacementScene>()> world_placement_scene;
+    std::function<bool()> world_placement_input_allowed;
     // ABI 2: where a plugin's Lua windows, their functions, options and menu entries go (plugin/ui_bridge.h); null:
     // none.
     UiBridge* ui = nullptr;
@@ -98,6 +100,13 @@ public:
     void world_recorded(std::size_t batch, std::uint32_t vertices);
     void world_finish(bool submitted, bool presented);
     void world_unavailable();
+    bool world_placement_aiming() const;
+    void world_placement_update(std::optional<WorldPlacementPoint> ground, bool pressed, bool released);
+    void world_placement_cancel();
+    // The player cancelled the aim (Escape, a right click): its owner may not aim again until
+    // world_placement_player_input, a press in one of the windows (WorldPlacementHost::player_cancel).
+    void world_placement_player_cancel();
+    void world_placement_player_input();
     NativePlugins(const NativePlugins&) = delete;
     NativePlugins& operator=(const NativePlugins&) = delete;
 

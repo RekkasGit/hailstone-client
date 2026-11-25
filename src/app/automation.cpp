@@ -244,6 +244,8 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     ne.nameplates = &m.nameplates;
     ne.web = m.env.web;
     ne.connection = [&m] { return m.conn(); };
+    ne.world_placement_scene = m.env.world_placement_scene;
+    ne.world_placement_input_allowed = m.env.world_placement_input_allowed;
     ne.max_camera_distance = m.env.max_camera_distance;
     ne.set_max_camera_distance = m.env.set_max_camera_distance;
     ne.hot_button = m.env.hot_button;
@@ -382,6 +384,26 @@ void Automation::world_finish(bool submitted, bool presented) {
 
 void Automation::world_unavailable() {
     if (impl_->plugins) impl_->plugins->world_unavailable();
+}
+
+bool Automation::world_placement_aiming() const {
+    return impl_->plugins && impl_->plugins->world_placement_aiming();
+}
+
+void Automation::world_placement_update(std::optional<plugin::WorldPlacementPoint> ground, bool pressed, bool released) {
+    if (impl_->plugins) impl_->plugins->world_placement_update(ground, pressed, released);
+}
+
+void Automation::world_placement_cancel() {
+    if (impl_->plugins) impl_->plugins->world_placement_cancel();
+}
+
+void Automation::world_placement_player_cancel() {
+    if (impl_->plugins) impl_->plugins->world_placement_player_cancel();
+}
+
+void Automation::world_placement_player_input() {
+    if (impl_->plugins) impl_->plugins->world_placement_player_input();
 }
 
 void Automation::shutdown() {

@@ -427,6 +427,7 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - Native WLD density setting and small-node suppression.
   - Animation-trigger timing.
   - Live comparison across equipment changes, zoning and supported model families.
+- [ ] **Spell emitters of a spawn that leaves.** The client stops them and drops their effect timers; trace what the original does with a deleted actor's spell emitters (docs/unknowns.md).
 - [ ] **Actor particle hold.** Measure how far the actors' own effects' particles reach from their point and set the 30-unit view margin from it (docs/unknowns.md).
 - [ ] **Other players' carried lights after an equipment change.** Stock EQEmu sends nothing for them (docs/unknowns.md); trace how the original updates a remote player's light.
 - [x] **Name plates: occlusion, draw order and fading.**
@@ -561,6 +562,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] The box set's other windows (`--box-child`) have no updater and fetch no add-ons: only the first window downloads and installs (tests/updater_test.cpp).
 - [ ] A lock between Hailstone windows the client did not start (two copies opened by hand): each still has its own updater and add-on manager on the same `download/` and `addons/` files.
 - [ ] A release job in CI (packages, manifest, signature, upload).
+- [x] **Release images pinned by digest.** `linux.Dockerfile` is pinned by digest with an apt snapshot date; MSVC 17.14 and SDK 10.0.26100 in `msvc_setup.sh` (docs/updater.md "Making a release").
 - [x] **macOS arm64 releases:** a plain folder like Linux's with MoltenVK beside the binary; built, tested and signed ad hoc by the macOS workflow (docs/ci.md "macOS arm64"), packed and signed into the manifest locally. No Developer ID or notarization, by choice: players clear the quarantine (README.md).
 - [ ] **macOS on a Mac.** Only the build and headless tests have run.
   - The client on Apple Silicon: MoltenVK's device features, the window, input, audio, the Keychain.
@@ -568,6 +570,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] **macOS: the saved passwords use deprecated Keychain calls** (SecKeychain, deprecated since macOS 10.10; Apple Clang warns, `platform/credentials.cpp`). SecItem's calls replace them.
 - [ ] **macOS: the startup error for a missing Vulkan** names the graphics card makers' drivers (app/startup_error.cpp); on macOS it would be the missing `libMoltenVK.dylib`.
 - [ ] Resumable downloads (HTTP range requests) instead of starting over.
+- [x] **A feed that went back:** a signed manifest older than the newest one the feed showed before (`update/feed-seen.txt`) is reported, not called up to date (tests/updater_test.cpp). A feed frozen on one manifest is not detected, by choice: no re-signing schedule (docs/updater.md "A feed that went back").
 
 ### Add-ons (docs/addons.md)
 - [x] The manifest and GitHub link parsers, the library header reader; `tools/make_addon.py`, and `hailstone_sign` for add-on manifests.
@@ -583,6 +586,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] An update's approval holds only for the capabilities and version the player saw.
 - [x] **The player's word wins over a check under way:** an add-on removed meanwhile is not installed again; auto-update switched off meanwhile is not overridden; an update keeps the switch as it is at install time.
 - [x] Scripts started by a script or plugin get no more than their starter; `scripts/config/` never runs as code.
+- [x] **Permanent actions asked by code other than a shipped pack's own** (a character's delete, a bulk destroy, from a script, a plugin window or an add-on interface) are asked in the client's own window (`UiHost::client_confirm`), which no Lua code sees or answers. A script's stock-window click on ConfirmationDialogBox's Yes is refused while that box asks a destroy's question (an item's destroy, a guild's disband).
 - [x] **A server's compiled plugins load only once the player allowed their bytes for that server** (`servers/<profile>/plugin_approvals.txt`). The prompt in both packs and the client's own; changed from the add-on list.
 - [x] A module runs only in a script it may do as much as: an add-on's module is refused in a script that may do more.
 - [x] **Binding a command needs 'commands'.** Scripts and plugins cannot shadow the game's or the client's own commands (`Hooks::new_guest`, `reserved_command`).
@@ -625,10 +629,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
   - Whether a server extension allowed mid-zone needs the next zone-in.
 - [x] **Plugin windows: the pack's global tables are views.** Plugin functions left in the pack's global tables (`GPSTATE`, `modern`, `ui_palette`) used to run as the player; the plugin now sees those tables through views that make what it writes run as the plugin (and stop when it unloads). The views refuse setmetatable, rawset and `__gc` (ui/lua/lua_host.cpp).
 - [x] **Plugin windows: the pack's functions are wrapped.** What they return or raise reaches the plugin as a view; the pack's arguments to a plugin's callbacks are views; `getmetatable` gives a view of a metatable the plugin did not set (ui/lua/lua_host.cpp).
-- [ ] **A function or table a plugin passes to the pack is not wrapped** (as an argument to a pack function, or returned from a callback).
-  - A pack function that keeps it and calls it later runs the plugin's code as the player.
-  - A full membrane (wrap every value crossing into pack code) would close it, at a cost on every call.
-  - The packs' shared libraries that keep callbacks should keep them per window instead.
+- [x] **A function or table a plugin passes to the pack is wrapped** (as an argument to a pack function, or returned or raised from a callback): it reaches the pack as what the plugin leaves in a shared table does (`push_export`: a table as an owned view, a function as the plugin's), so a pack function that keeps it and uses it later runs none of the plugin's code as the player (ui/lua/lua_host.cpp `call_pack`, `call_as`).
 - [x] **Auto-update:** the check at start (`addons.check_hours`), locally modified files, files moved only at the login screen, approval when the caps grow.
 - [x] Signatures: the key pinned at the first install, an update with another key (or unsigned) refused.
 - [x] **Suggested add-ons:** the signed add-on index (projecthailstone/hailstone-addon-index) and a server's `[addons] suggest`. A line on the server select; Look at it / Not now / Don't ask again on the login screen, in both packs and the client's own. A suggestion's card held to the index's name and key.

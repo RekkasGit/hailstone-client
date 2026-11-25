@@ -3,7 +3,9 @@
 #include <doctest/doctest.h>
 
 #include <chrono>
+#include <cmath>
 #include <fstream>
+#include <limits>
 #include <thread>
 #include <utility>
 
@@ -12,6 +14,7 @@
 #include "core/ini_file.h"
 #include "core/log.h"
 #include "core/sha256.h"
+#include "game/coords.h"
 #include "mq/commands.h"
 #include "mq/lua_mq.h"
 #include "mq/lua_script.h" // ScriptRun, HostWork (the host's insides)
@@ -36,6 +39,7 @@ struct Host {
     mq::Context ctx;
     std::vector<std::string> printed, sent;
     std::vector<std::pair<std::string, int>> keys; // /keypress: the command and its mode (0 tap, 1 hold, 2 release)
+    std::vector<double> faced; // /face: the MQ degrees asked for
     std::uint32_t target = 0;
     std::int64_t clock = 0;
     std::unique_ptr<mq::Commands> commands;
@@ -59,6 +63,7 @@ struct Host {
             keys.emplace_back(command, mode);
             return true;
         };
+        ce.face = [this](double degrees, bool) { faced.push_back(degrees); };
         ce.now_ms = [this] { return clock; };
         commands = std::make_unique<mq::Commands>(ce);
         mq::ScriptEnv se;
@@ -914,6 +919,35 @@ print('read', dofile('f1.lua').v)
     CHECK_FALSE(fs::exists(own / "more.lua"));
 }
 
+TEST_CASE("MQ Lua: mq.pickle's byte limit counts a replaced file once and the script's own new files") {
+    Host h(plugin::kCapRead | plugin::kCapCommands); // scripts/config/bytes/
+    const fs::path own = h.config_dir / "bytes";
+    fs::create_directories(own / "deep");
+    std::ofstream(own / "deep" / "pad.bin", std::ios::binary).close();
+    fs::resize_file(own / "deep" / "pad.bin", std::uintmax_t{56} << 20); // sparse: 56 of the 64 MiB
+    h.write("bytes.lua", R"(
+local mq = require('mq')
+local three = string.rep('a', 3 * 1024 * 1024)
+print('a', pcall(mq.pickle, 'a.lua', {s = three}))
+for i = 1, 6 do print('again' .. i, pcall(mq.pickle, 'a.lua', {s = three})) end
+print('b', pcall(mq.pickle, 'sub/b.lua', {s = three}))
+print('c', pcall(mq.pickle, 'c.lua', {s = three}))
+print('small', pcall(mq.pickle, 'a.lua', {v = 1}))
+print('c2', pcall(mq.pickle, 'c.lua', {s = three}))
+)");
+    REQUIRE(h.scripts->run("bytes", {}));
+    h.pulses(20); // (several 3 MiB pickles may take more than one slice)
+    CHECK(h.printed_line("a true"));
+    for (int i = 1; i <= 6; ++i) CHECK(h.printed_line("again" + std::to_string(i) + " true")); // 59 MiB, not 77
+    CHECK(h.printed_line("b true"));                                                     // 62 MiB
+    bool full = false;
+    for (const auto& l : h.printed) full |= l.rfind("c false", 0) == 0 && l.find("config directory is full") != std::string::npos;
+    CHECK(full); // 65 MiB: the count has b in it, written after it was taken
+    CHECK(h.printed_line("small true"));
+    CHECK(h.printed_line("c2 true")); // a's shrinking freed its room
+    CHECK(fs::exists(own / "sub" / "b.lua"));
+}
+
 TEST_CASE("MQ Lua: require of a huge name that is not there is a plain error, and the script goes on") {
     Host h;
     h.write("huge_require.lua", R"(
@@ -1008,6 +1042,42 @@ TEST_CASE("MQ commands: /keypress reads hold only after a space") {
     h.run("/keypress forward hold\t");
     REQUIRE(h.keys.size() == 2);
     CHECK(h.keys.back().second == 0);
+}
+
+TEST_CASE("MQ commands: /face takes only a finite heading or loc") {
+    Host h;
+    h.run("/face heading 450");
+    REQUIRE(h.faced.size() == 1);
+    CHECK(h.faced.back() == doctest::Approx(90.0)); // one turn's degrees
+    h.run("/face heading -90");
+    REQUIRE(h.faced.size() == 2);
+    CHECK(h.faced.back() == doctest::Approx(270.0));
+    // "nan", "inf" and 1e300 parse as numbers; none turns the player, nor falls back to the target.
+    for (const char* bad : {"/face heading nan", "/face heading inf", "/face heading -inf",
+                            "/face loc nan,0", "/face loc 0,inf", "/face loc 1e300,0", "/face loc 1,x"})
+        h.run(bad);
+    CHECK(h.faced.size() == 2);
+    h.run("/face heading 1e300"); // finite but past float: wrapped, not cast
+    CHECK(h.faced.size() == 3);
+    CHECK(h.faced.back() >= 0.0);
+    CHECK(h.faced.back() < 360.0);
+    h.run("/face loc 10,0"); // the server's y first: due north of the player at the origin
+    REQUIRE(h.faced.size() == 4);
+    CHECK(h.faced.back() == doctest::Approx(0.0));
+}
+
+TEST_CASE("MQ degrees to an EQ heading: wrapped, and nothing for NaN or an infinity") {
+    CHECK(*game::mq_degrees_to_heading(0.0) == doctest::Approx(0.0f));
+    CHECK(*game::mq_degrees_to_heading(90.0) == doctest::Approx(384.0f)); // clockwise vs counter-clockwise
+    CHECK(*game::mq_degrees_to_heading(450.0) == doctest::Approx(384.0f));
+    CHECK(*game::mq_degrees_to_heading(-90.0) == doctest::Approx(128.0f));
+    auto huge = game::mq_degrees_to_heading(1e300);
+    REQUIRE(huge);
+    CHECK(*huge >= 0.0f);
+    CHECK(*huge < 512.0f);
+    CHECK_FALSE(game::mq_degrees_to_heading(std::nan("")));
+    CHECK_FALSE(game::mq_degrees_to_heading(std::numeric_limits<double>::infinity()));
+    CHECK_FALSE(game::mq_degrees_to_heading(-std::numeric_limits<double>::infinity()));
 }
 
 TEST_CASE("MQ commands: /target prefers an exact player name over a mount") {

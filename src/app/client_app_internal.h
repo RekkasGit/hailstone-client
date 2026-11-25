@@ -66,6 +66,7 @@
 #include "core/shared_file_cache.h"
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "core/path_utf8.h"
 #include "core/wipe.h"
 #include "app/nameplate_layer.h"
 #include "app/nameplate_input.h"
@@ -394,8 +395,9 @@ public:
         web_service_ = std::make_unique<WebService>(WebServiceEnv{
             [this] { return browser(); }, [this] { return web_textures_.get(); },
             [this] {
-                return (platform::data_dir() / "web" / (server_profile_.id.empty() ? "default" : server_profile_.id))
-                    .string();
+                // UTF-8, as the helper's --data= is (it holds each profile to that folder).
+                return path_utf8(platform::data_dir() / "web" /
+                                 (server_profile_.id.empty() ? "default" : server_profile_.id));
             },
             [this] {
                 const auto& rules = conn_ ? conn_->server_rules() : std::nullopt;
@@ -468,6 +470,8 @@ public:
         aenv.server_profile = [this] { return server_profile_.id; };
         aenv.profile_name = [this] { return server_profile_.name; };
         aenv.window_open = [this](std::string_view w) { return ui_api_ && ui_api_->shown(w); };
+        aenv.world_placement_scene = [this] { return world_placement_scene(); };
+        aenv.world_placement_input_allowed = [this] { return world_placement_input_allowed(); };
         aenv.face = [this](double degrees, bool) { face_degrees(degrees); };
         aenv.keypress = [this](std::string_view command, int mode) { return script_keypress(command, mode); };
         aenv.max_camera_distance = [this] { return max_camera_distance_; };
@@ -611,6 +615,12 @@ public:
         // /luasocial [n | new]: the Lua social editor on social n (1..120), or on the first empty social.
         automation_->hooks().add_command(plugin::Hooks::kClient, "/luasocial", [this](std::string_view args) {
             lua_social_command(args);
+        });
+        automation_->hooks().add_command(plugin::Hooks::kClient, "/servermanagement", [this](std::string_view args) {
+            if (!conn_ || !plugin::caller_name().empty()) return;
+            if (!args.empty()) return conn_->ui_message("Usage: /servermanagement");
+            if (!server_management_ui()) return conn_->ui_message("Server Management is available in the Modern interface.");
+            if (!conn_->open_server_management()) conn_->ui_message("Server Management is unavailable on this session.");
         });
         actions_ui_ = std::make_unique<ActionsUi>(config_, config_path_);
         // The gamepad (app/gamepad.h, docs/gamepad.md; a client extension): hailstone.ini gamepad.*.
@@ -974,6 +984,7 @@ private:
     void run_with_keys(std::string_view line, net::SlotClickKeys keys);
     std::optional<net::SlotClickKeys> forced_keys_;
     void lua_social_command(std::string_view args); // /luasocial (app/client_app_draw.cpp)
+    bool server_management_ui() const { return lua_ui_ && ui_host_.trusted_ui && ui_name_ == "modern"; }
     // Config::get_float: NaN and the infinities are the fallback, so a bad hailstone.ini value never reaches a
     // matrix or a clamp that lets NaN through.
     float config_float(std::string_view key, float fallback) const { return config_.get_float(key, fallback); }
@@ -1152,6 +1163,9 @@ private:
     };
     // The zone's surface under a window point (the pick ray against the zone mesh), world coordinates.
     std::optional<glm::vec3> world_point_at(float x, float y);
+    std::optional<plugin::WorldPlacementScene> world_placement_scene() const;
+    bool world_placement_input_allowed() const;
+    std::optional<plugin::WorldPlacementPoint> world_placement_point_at(float x, float y) const;
     // Item placement mode (game/placement.h) each frame: the ghost under the mouse, re-validated.
     void update_placement();
     // `why` names the pick in the log; null picks quietly.
@@ -1460,6 +1474,7 @@ private:
     // less the heading, radians), which a left-button look turns.
     game::MouseLook mouse_look_;
     bool mouse_left_held_ = false, mouse_right_held_ = false;
+    bool world_placement_right_held_ = false;
     std::optional<glm::vec2> left_click_pending_;
     std::optional<glm::vec2> left_click_;
     bool right_click_ = false;
@@ -1827,6 +1842,9 @@ private:
     bool iso_click(const glm::vec2& at, const PickTarget& hit, bool right);
     // Each frame: a key ends a click's walk, the held button aims it, an arrival makes its click.
     void update_iso_clicks(bool player_moved);
+    // Forgets a click's walk, its pending click and marker, and a left click still waiting for the button's release:
+    // they name spawns, doors and points of a world that is going (a zone change, a camp, a respawn elsewhere).
+    void cancel_iso_clicks();
     // How near a walk to spawn `id` goes before its click.
     float iso_spawn_arrive(std::uint32_t id) const;
     // Each step: the movement keys as a heading relative to the camera (turns the player) and the forward key the
@@ -1871,6 +1889,9 @@ private:
     void save_iso_settings();
     // The zone's triangles for a pick, less what the isometric camera's cut takes away there.
     std::function<void(const game::PickSegment&, const game::PickTriangleSink&)> pick_world() const;
+    // The same on another mesh (the drawn one, world_visual_collision_, for world placement).
+    std::function<void(const game::PickSegment&, const game::PickTriangleSink&)>
+    pick_mesh(const game::CollisionMesh& m) const;
     // How far above the feet the isometric camera looks: the middle of the body.
     float iso_focus_height() const { return floor_offset_ * 0.5f + 2.0f; }
     // The mark where a click's walk ends (a ring on the ground, drawn as the target ring is): where, since when (the
@@ -1914,6 +1935,7 @@ private:
     std::mt19937 pre_game_rng_{std::random_device{}()};
     game::PickCamera pick_camera_;   // last frame's, for mouse picking (CCamera as GetScreenRay reads it)
     bool pick_camera_valid_ = false;
+    std::uint32_t pick_camera_epoch_ = 0;
     std::optional<glm::mat4> target_view_projection_; // the same camera with the rendered scene's projection
 };
 

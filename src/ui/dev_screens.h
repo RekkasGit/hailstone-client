@@ -72,8 +72,10 @@ struct UpdateNotice {
     bool can_restart = false;      // ready: "Restart now" can go (no box set window is running)
     float progress = -1.0f;        // downloading: 0..1, -1 unknown
     // What the corner of the login screen says about this build (update_status_text): "off" (no updates here,
-    // off_reason why), "checking", "uptodate", "newer" (state says what is under way), "unknown" (the check failed).
+    // off_reason why), "checking", "uptodate", "newer" (state says what is under way), "unknown" (the check failed),
+    // "behind" (the feed's signed manifest is older than one it showed before: version the feed's, seen that one).
     std::string check = "off";
+    std::string seen;
     std::string off_reason;
 };
 // The notice's sentence ("" nothing to say), as every login screen shows it.
