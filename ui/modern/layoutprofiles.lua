@@ -4,6 +4,8 @@ if not Profiles or not Profiles.List then return end
 
 local hud = dofile("lib/hud.lua")
 local K = dofile("lib/dialogs_kit.lua")
+local Visual = dofile("lib/layout_preview.lua")
+local C = hud.T.color
 local WINDOW = "LayoutProfilesWindow"
 local OPTS = {
   size = function() return 446, 328 end,
@@ -13,7 +15,7 @@ local OPTS = {
 
 local names, selected, preview = {}, nil, nil
 local name, status, overwrite = "", "", nil
-local pendingApply
+local pendingApply, visual
 local opened = false
 
 local function selectProfile(picked)
@@ -118,6 +120,37 @@ local function drawSaveBeforeApply(s, buttonHeight)
   ui.EndPopup()
 end
 
+local function drawVisualPreview(s, buttonHeight)
+  if not visual then return end
+  local io = ui.GetIO()
+  local width = math.max(1, math.min(840 * s, io.width - 40 * s))
+  local height = math.max(1, math.min(480 * s, io.height - 190 * s))
+  if visual.opening then
+    local totalHeight = (#visual.boxes > 0 and height or 0) + 125 * s
+    ui.SetNextWindowPos(math.max(0, (io.width - width) * 0.5 - 8 * s),
+      math.max(0, (io.height - totalHeight) * 0.5), ui.Cond.Appearing)
+    visual.opening = nil
+  end
+  if not ui.BeginPopup("##visual-layout-preview") then
+    visual = nil
+    return
+  end
+  ui.PushTextWrapPos(ui.GetCursorPos() + width)
+  K.Caption("Visual Preview")
+  ui.TextWrapped(visual.name)
+  ui.TextWrapped("Read-only view of the saved window positions.")
+  if visual.approximate and #visual.boxes > 0 then
+    ui.TextWrapped("Approximate positions. Re-save the layout for an updated preview.")
+  end
+  Visual.draw(visual, width, height, C.inset, C.frameBorder, C.accent, C.text)
+  ui.PopTextWrapPos()
+  if ui.Button("Close Preview", 120 * s, buttonHeight) then
+    visual = nil
+    ui.CloseCurrentPopup()
+  end
+  ui.EndPopup()
+end
+
 local function draw(_, _, _, _, s)
   K.Caption("Save current setup")
   local buttonHeight = K.ButtonH(s)
@@ -160,14 +193,21 @@ local function draw(_, _, _, _, s)
   end
 
   ui.Dummy(0, 8 * s)
+  local actionWidth = math.max(1, (ui.GetContentRegionAvail() - 16 * s) / 3)
   ui.BeginDisabled(not preview)
-  if ui.Button("Apply Profile", 122 * s, buttonHeight) then
+  if ui.Button("Visual Preview", actionWidth, buttonHeight) then
+    visual = Visual.prepare(preview)
+    visual.opening = true
+    ui.OpenPopup("##visual-layout-preview")
+  end
+  ui.SameLine(0, 8 * s)
+  if ui.Button("Apply Profile", actionWidth, buttonHeight) then
     apply(selected, false)
   end
   ui.EndDisabled()
   ui.SameLine(0, 8 * s)
   ui.BeginDisabled(not Profiles.CanUndo())
-  if ui.Button("Undo Apply", 112 * s, buttonHeight) then
+  if ui.Button("Undo Apply", actionWidth, buttonHeight) then
     local ok, err = Profiles.Undo()
     status = ok and "Restored the previous setup." or (err or "The previous setup could not be restored.")
   end
@@ -189,11 +229,14 @@ local function draw(_, _, _, _, s)
     ui.EndPopup()
   end
   drawSaveBeforeApply(s, buttonHeight)
+  drawVisualPreview(s, buttonHeight)
 end
 
 ui.window("Layout Profiles", function()
   if not API.session.InGame() or not API.windows.Shown(WINDOW) then
-    if opened then names, selected, preview, name, status, overwrite, pendingApply = {}, nil, nil, "", "", nil, nil end
+    if opened then
+      names, selected, preview, name, status, overwrite, pendingApply, visual = {}, nil, nil, "", "", nil, nil, nil
+    end
     opened = false
     return
   end

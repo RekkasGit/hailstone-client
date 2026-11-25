@@ -3,20 +3,26 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <system_error>
 #include <utility>
 
 #include "core/atomic_file.h"
 #include "core/byte_io.h"
+#include "ui/ui_ini.h"
 
 namespace hailstone::ui {
 namespace {
 
-constexpr std::string_view kMagic = "Hailstone layout profile 2\n";
+constexpr std::string_view kMagic = "Hailstone layout profile 3\n";
+constexpr std::string_view kPreviousMagic = "Hailstone layout profile 2\n";
 constexpr std::string_view kLegacyMagic = "Hailstone layout profile 1\n";
 constexpr std::size_t kMaxBytes = 2 * 1024 * 1024;
 constexpr std::string_view kSuffix = ".hslayout";
+constexpr std::size_t kMaxRectName = 128;
+constexpr int kMaxRectCoordinate = 65536;
+constexpr int kSavedWindowedSize = 4096;
 
 std::string folded(std::string_view text) {
     std::string out(text);
@@ -43,15 +49,39 @@ bool window_key(std::string_view section, std::string_view key) {
     return std::ranges::find(keys, folded(key)) != std::end(keys);
 }
 
+bool preview_coordinate(int value) {
+    return value >= -kMaxRectCoordinate && value <= kMaxRectCoordinate;
+}
+
+bool usable_preview_rect(const LayoutProfileRect& rect, int width, int height) {
+    if (rect.name.empty() || rect.name.size() > kMaxRectName ||
+        rect.name.find_first_not_of(' ') == std::string::npos ||
+        std::ranges::any_of(rect.name, [](unsigned char c) { return c < 32 || c == 127; })) return false;
+    return width > 0 && height > 0 && preview_coordinate(rect.x) && preview_coordinate(rect.y) &&
+           rect.w > 0 && rect.w <= kMaxRectCoordinate && rect.h > 0 && rect.h <= kMaxRectCoordinate &&
+           rect.x < width && rect.y < height && rect.x + rect.w > 0 && rect.y + rect.h > 0;
+}
+
+std::vector<LayoutProfileRect> recorded_preview_rects(const LayoutProfile& profile) {
+    std::vector<LayoutProfileRect> rects;
+    rects.reserve(std::min(profile.rects.size(), kLayoutProfileMaxRects));
+    for (const auto& rect : profile.rects) {
+        if (usable_preview_rect(rect, profile.width, profile.height)) rects.push_back(rect);
+        if (rects.size() == kLayoutProfileMaxRects) break;
+    }
+    return rects;
+}
+
 std::optional<LayoutProfile> read_profile_file(const std::filesystem::path& path) {
     std::error_code ec;
     if (std::filesystem::file_size(path, ec) > kMaxBytes || ec) return std::nullopt;
     auto bytes = read_text_file(path);
     if (!bytes || bytes->size() > kMaxBytes) return std::nullopt;
     const bool legacy = bytes->starts_with(kLegacyMagic);
-    if (!legacy && !bytes->starts_with(kMagic)) return std::nullopt;
-    const auto offset = legacy ? kLegacyMagic.size() : kMagic.size();
-    ByteReader reader(bytes->data() + offset, bytes->size() - offset);
+    const bool has_rects = bytes->starts_with(kMagic);
+    if (!legacy && !has_rects && !bytes->starts_with(kPreviousMagic)) return std::nullopt;
+    static_assert(kMagic.size() == kPreviousMagic.size() && kMagic.size() == kLegacyMagic.size());
+    ByteReader reader(bytes->data() + kMagic.size(), bytes->size() - kMagic.size());
     try {
         auto field = [&] {
             auto value = reader.bytes(reader.le<std::uint32_t>());
@@ -67,6 +97,20 @@ std::optional<LayoutProfile> read_profile_file(const std::filesystem::path& path
         if (legacy) (void)field(); // The first prototype captured bindings. Ignore that field.
         profile.chat.parse(field());
         profile.pack_settings = field();
+        if (has_rects) {
+            const auto count = reader.le<std::uint32_t>();
+            if (count > kLayoutProfileMaxRects) return std::nullopt;
+            profile.rects.reserve(count);
+            for (std::uint32_t i = 0; i < count; ++i) {
+                const auto name = field();
+                const int x = reader.le<std::int32_t>(), y = reader.le<std::int32_t>();
+                const int w = reader.le<std::int32_t>(), h = reader.le<std::int32_t>();
+                if (name.size() > kMaxRectName) continue;
+                LayoutProfileRect rect{std::string(name), x, y, w, h};
+                if (usable_preview_rect(rect, profile.width, profile.height))
+                    profile.rects.push_back(std::move(rect));
+            }
+        }
         if (legacy) {
             profile.windows.erase_section("LayoutProfilesWindow");
             std::string settings;
@@ -144,11 +188,33 @@ bool has_saved_layout_profile(const std::filesystem::path& directory, const Layo
     chat.parse(current.chat.to_string());
     for (const auto& path : profile_files(directory)) {
         const auto profile = read_profile_file(path);
-        // Capture size annotates the preview. The underlying window, pack and chat settings determine a match.
+        // Preview geometry and capture size are descriptive. Only restorable settings determine a match.
         if (profile && profile->pack_settings == current.pack_settings && same_settings(profile->windows, windows) &&
             same_settings(profile->chat, chat)) return true;
     }
     return false;
+}
+
+std::vector<LayoutProfileRect> layout_profile_preview_rects(const LayoutProfile& profile) {
+    auto rects = recorded_preview_rects(profile);
+    if (!rects.empty() || profile.width <= 0 || profile.height <= 0) return rects;
+    for (const auto& section : profile.windows.sections()) {
+        if (folded(section) == "chatmanager" || !window_key(section, "XPosWindowed") ||
+            profile.windows.get_int(section, "Show", 1) == 0) continue;
+        constexpr int missing = std::numeric_limits<int>::min();
+        const int x = profile.windows.get_int(section, "XPosWindowed", missing);
+        const int y = profile.windows.get_int(section, "YPosWindowed", missing);
+        const int w = profile.windows.get_int(section, "WidthWindowed", 0);
+        const int h = profile.windows.get_int(section, "HeightWindowed", 0);
+        if (!preview_coordinate(x) || !preview_coordinate(y) || w <= 0 || h <= 0 ||
+            w > kMaxRectCoordinate || h > kMaxRectCoordinate) continue;
+        LayoutProfileRect rect{section, 0, 0, std::min(w, profile.width), std::min(h, profile.height)};
+        rect.x = convert_to_res(x, rect.w, kSavedWindowedSize, profile.width);
+        rect.y = convert_to_res(y, rect.h, kSavedWindowedSize, profile.height);
+        if (usable_preview_rect(rect, profile.width, profile.height)) rects.push_back(std::move(rect));
+        if (rects.size() == kLayoutProfileMaxRects) break;
+    }
+    return rects;
 }
 
 LayoutProfileSave save_layout_profile(const std::filesystem::path& directory, const LayoutProfile& profile,
@@ -158,8 +224,10 @@ LayoutProfileSave save_layout_profile(const std::filesystem::path& directory, co
     const std::array<std::string, 3> payload = {
         profile.windows.to_string(), profile.chat.to_string(), profile.pack_settings,
     };
-    std::size_t size = kMagic.size() + (payload.size() + 3) * sizeof(std::uint32_t) + profile.name.size();
+    const auto rects = recorded_preview_rects(profile);
+    std::size_t size = kMagic.size() + (payload.size() + 4) * sizeof(std::uint32_t) + profile.name.size();
     for (const auto& part : payload) size += part.size();
+    for (const auto& rect : rects) size += sizeof(std::uint32_t) + 4 * sizeof(std::int32_t) + rect.name.size();
     if (size > kMaxBytes || profile.width <= 0 || profile.height <= 0) return LayoutProfileSave::Failed;
 
     ByteWriter writer;
@@ -173,6 +241,14 @@ LayoutProfileSave save_layout_profile(const std::filesystem::path& directory, co
     writer.le(static_cast<std::int32_t>(profile.width));
     writer.le(static_cast<std::int32_t>(profile.height));
     for (const auto& part : payload) field(part);
+    writer.le(static_cast<std::uint32_t>(rects.size()));
+    for (const auto& rect : rects) {
+        field(rect.name);
+        writer.le(static_cast<std::int32_t>(rect.x));
+        writer.le(static_cast<std::int32_t>(rect.y));
+        writer.le(static_cast<std::int32_t>(rect.w));
+        writer.le(static_cast<std::int32_t>(rect.h));
+    }
     const auto& bytes = writer.data();
     const std::string_view contents(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     if (overwrite) return write_file_atomic(path, contents) ? LayoutProfileSave::Saved : LayoutProfileSave::Failed;

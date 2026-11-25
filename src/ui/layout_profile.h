@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -10,11 +11,25 @@
 
 namespace hailstone::ui {
 
+struct LayoutProfileRect {
+    std::string name;
+    int x = 0, y = 0, w = 0, h = 0;
+    bool operator==(const LayoutProfileRect&) const = default;
+};
+
+namespace lua {
+// The active pack's visible windows, clipped to the viewport. Implemented by the ImGui Lua layer.
+std::vector<LayoutProfileRect> snapshot_pack_window_rects(int width, int height);
+}
+
+inline constexpr std::size_t kLayoutProfileMaxRects = 256;
+
 struct LayoutProfile {
     std::string name;
     int width = 0, height = 0;
     IniFile windows, chat;
     std::string pack_settings;
+    std::vector<LayoutProfileRect> rects;
 };
 
 // Names are local to a pack and matched case-insensitively on all platforms.
@@ -25,6 +40,8 @@ bool has_saved_layout_profile(const std::filesystem::path& directory, const Layo
 enum class LayoutProfileSave { Saved, Exists, Failed };
 LayoutProfileSave save_layout_profile(const std::filesystem::path& directory, const LayoutProfile& profile,
                                       bool overwrite);
+// Recorded bounds use the saved viewport's coordinates. Earlier profiles may have a partial stock preview.
+std::vector<LayoutProfileRect> layout_profile_preview_rects(const LayoutProfile& profile);
 
 // The stock UI.ini also contains unrelated character settings. Replace only window placement and chat layout keys.
 IniFile capture_layout_windows(const IniFile& current);

@@ -360,6 +360,7 @@ struct UiApi::Impl {
         profile.name = name;
         profile.width = number_to_int(display.x);
         profile.height = number_to_int(display.y);
+        if (!name.empty()) profile.rects = ui::lua::snapshot_pack_window_rects(profile.width, profile.height);
         profile.windows = ui::capture_layout_windows(snapshot.file());
         profile.chat = host.conn->capture_layout_chat();
         profile.pack_settings = host.layout_profile_pack().first->capture_layout_profile_settings();
@@ -3023,6 +3024,7 @@ int LayoutProfilesPreview(lua_State* L) {
     }
     std::set<std::string> windows;
     std::size_t chat = 0;
+    std::vector<ui::LayoutProfileRect> rects;
     plugin::cxx_guard(L, [&] {
         for (const auto& section : profile->windows.sections())
             if (!game::same_no_case(section, "ChatManager")) windows.insert(section);
@@ -3037,8 +3039,9 @@ int LayoutProfilesPreview(lua_State* L) {
         }
         chat = profile->windows.keys("ChatManager").size();
         for (const auto& section : profile->chat.sections()) chat += profile->chat.keys(section).size();
+        rects = ui::layout_profile_preview_rects(*profile);
     });
-    lua_createtable(L, 0, 5);
+    lua_createtable(L, 0, 7);
     lua_pushlstring(L, profile->name.data(), profile->name.size());
     lua_setfield(L, -2, "name");
     auto number = [L](const char* key, lua_Integer value) {
@@ -3049,6 +3052,21 @@ int LayoutProfilesPreview(lua_State* L) {
     number("height", profile->height);
     number("windows", static_cast<lua_Integer>(windows.size()));
     number("chat", static_cast<lua_Integer>(chat));
+    lua_pushboolean(L, profile->rects.empty() && !rects.empty());
+    lua_setfield(L, -2, "approximate");
+    lua_createtable(L, static_cast<int>(rects.size()), 0);
+    for (std::size_t i = 0; i < rects.size(); ++i) {
+        const auto& rect = rects[i];
+        lua_createtable(L, 0, 5);
+        lua_pushlstring(L, rect.name.data(), rect.name.size());
+        lua_setfield(L, -2, "name");
+        number("x", rect.x);
+        number("y", rect.y);
+        number("w", rect.w);
+        number("h", rect.h);
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    lua_setfield(L, -2, "rects");
     return 1;
 }
 

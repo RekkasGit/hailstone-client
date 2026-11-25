@@ -4,13 +4,15 @@ if not Profiles or not Profiles.List then return end
 
 local W = dofile("lib/window.lua")
 local K = dofile("lib/keyboard.lua")
+local Visual = dofile("lib/layout_preview.lua")
 local T, pad = W.T, W.pad
 local WINDOW = "LayoutProfilesWindow"
 local HINTS = { { "a", "Select" }, { "b", "Close" } }
+local PREVIEW_HINTS = { { "a", "Close Preview" }, { "b", "Back" } }
 local keyboard = K.new()
 local names, list, state, side = {}, {}, {}, {}
 local preview, selected, status
-local pendingApply
+local pendingApply, visual
 local opened = false
 
 local function selectProfile(i)
@@ -102,6 +104,32 @@ local function drawSaveBeforeApply(request, x, y, width)
   if request.error then ui.TextWrapped(request.error) end
 end
 
+local function closeVisualPreview()
+  visual = nil
+  side.want, side.at = 2, ui.GetTime()
+end
+
+local function drawVisualPreview(x, y, bottom, width)
+  ui.SetCursorScreenPos(x, y)
+  T.heading("Visual Preview")
+  ui.TextWrapped(visual.name)
+  ui.TextWrapped("Read-only view of the saved window positions.")
+  if visual.approximate and #visual.boxes > 0 then
+    ui.TextWrapped("Approximate positions. Re-save the layout for an updated preview.")
+  end
+  local _, top = ui.GetCursorScreenPos()
+  local bh = T.px(54)
+  local height = bottom - top - bh - T.px(10)
+  local C = T.C
+  Visual.draw(visual, width, height, C.sunken, C.edge, C.accent, C.text)
+  ui.SetCursorScreenPos(x, bottom - bh)
+  if visual.opening then
+    ui.SetKeyboardFocusHere()
+    visual.opening = nil
+  end
+  if T.button("##close-visual-preview", "Close Preview", width, bh, {}, pad) then closeVisualPreview() end
+end
+
 local function drawProfiles(x, y, right, bottom, width)
   local gap, rowH, bh = T.px(24), 52, T.px(54)
   local leftW = math.floor((width - gap) * 0.46)
@@ -128,18 +156,24 @@ local function drawProfiles(x, y, right, bottom, width)
   if T.button("##profile-save", "Save Current Setup", rightW, bh, {}, pad) then
     K.open(keyboard, "Profile name", "", 48, true)
   end
-  W.sideAfter(side, 1, 3, list)
+  W.sideAfter(side, 1, 4, list)
   W.sideBefore(side, 2)
+  if T.button("##profile-visual-preview", "Visual Preview", rightW, bh, { disabled = not preview }, pad) then
+    visual = Visual.prepare(preview)
+    visual.opening = true
+  end
+  W.sideAfter(side, 2, 4, list)
+  W.sideBefore(side, 3)
   if T.button("##profile-apply", "Apply Profile", rightW, bh, { primary = true, disabled = not preview }, pad) then
     apply(selected, false)
   end
-  W.sideAfter(side, 2, 3, list)
-  W.sideBefore(side, 3)
+  W.sideAfter(side, 3, 4, list)
+  W.sideBefore(side, 4)
   if T.button("##profile-undo", "Undo Apply", rightW, bh, { disabled = not Profiles.CanUndo() }, pad) then
     local ok, err = Profiles.Undo()
     status = ok and "Restored the previous setup." or (err or "The previous setup could not be restored.")
   end
-  W.sideAfter(side, 3, 3, list)
+  W.sideAfter(side, 4, 4, list)
 
   ui.PushTextWrapPos(right - ui.GetWindowPos())
   if preview then
@@ -164,7 +198,7 @@ ui.window("Layout Profiles", function()
   if not W.shown(WINDOW) then
     if opened then
       names, list, state, side = {}, {}, {}, {}
-      preview, selected, status, pendingApply = nil, nil, nil, nil
+      preview, selected, status, pendingApply, visual = nil, nil, nil, nil, nil
       K.cancel(keyboard)
     end
     opened = false
@@ -172,7 +206,7 @@ ui.window("Layout Profiles", function()
   end
   if not opened then refresh(); opened = true end
   if W.begin("Layout Profiles", { w = 1260, h = 820, title = "Layout Profiles",
-        hints = keyboard.open and K.HINTS or HINTS }) then
+        hints = keyboard.open and K.HINTS or (visual and PREVIEW_HINTS or HINTS) }) then
     local x, y, right, bottom, width = W.area()
     if keyboard.open then
       if K.draw(keyboard, pad, x, y, width) == "ok" then
@@ -184,11 +218,13 @@ ui.window("Layout Profiles", function()
       end
     elseif not W.confirm(state) then
       if pendingApply then drawSaveBeforeApply(pendingApply, x, y, width)
+      elseif visual then drawVisualPreview(x, y, bottom, width)
       else drawProfiles(x, y, right, bottom, width) end
     end
   end
   if W.back(W.finish(), state, keyboard, list) then
     if pendingApply then closeApplyPrompt()
+    elseif visual then closeVisualPreview()
     else API.windows.Show(WINDOW, false) end
   end
 end)

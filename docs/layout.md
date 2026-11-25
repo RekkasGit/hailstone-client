@@ -236,9 +236,13 @@ UI packs' script settings (`ui/settings/<pack>.txt`) are shared too; the window 
 Open **Layout Profiles** from the Modern EQ menu, **More** or **All Windows** in the Gamepad main menu, or with
 `/layoutprofiles`. Modern also offers it under **Options → Display → Interface**. Save the current setup under a
 name such as Desktop, Handheld or Raid.
-Select a saved profile to see its capture size and a summary before choosing **Apply Profile**. If your current
-layout differs from every saved profile, you can name it and choose **Save & Apply**, choose **Apply Without Saving**,
-or cancel. The save prompt uses the same replacement confirmation as regular saves.
+Select a saved profile and choose **Visual Preview** to see where its visible windows sat at the saved screen
+size. You can close the diagram and keep playing with the current layout. Older profiles use any complete saved
+window positions and sizes for an approximate preview.
+
+If your current layout differs from every saved profile, **Apply Profile** lets you name it and choose
+**Save & Apply**, choose **Apply Without Saving**, or cancel. The save prompt uses the same replacement
+confirmation as regular saves.
 **Undo Apply** restores the setup in use immediately before the last apply, once per apply and during the
 same character and interface session.
 

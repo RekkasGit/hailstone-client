@@ -22,8 +22,11 @@ Use dot calls. Methods are grouped by service (`session`, `character`, `inventor
 ## Layout profiles
 
 `hs.UI.layoutProfiles` is available to interface code during a character session. `List()` returns saved
-names for the active pack. `Preview(name)` returns `{name, width, height, windows, chat}` or
-`nil, reason`. It describes the capture without applying it. `Save(name[, overwrite])` returns `true` or
+names for the active pack. `Preview(name)` returns
+`{name, width, height, windows, chat, rects, approximate}` or `nil, reason`.
+`rects` lists `{name, x, y, w, h}` window bounds in pixels at the saved screen size. An empty list means
+no window geometry is available. `approximate` indicates that the preview uses positions and sizes from
+an earlier save format. Previewing leaves the current layout in use. `Save(name[, overwrite])` returns `true` or
 `false, reason[, code]`. If a name is taken, the code is `"exists"`. Ask the player before retrying with
 `overwrite=true`.
 

@@ -48,6 +48,7 @@
 #include "mq/map_filter.h"
 #include "platform/paths.h"
 #include "ui/dev_screens.h"
+#include "ui/layout_profile.h"
 #include "ui/lua/lua_host.h"
 #include "mock_server/harness.h"
 #include "manual_clock.h"
@@ -553,6 +554,137 @@ TEST_CASE("UI packs: EQ menu opens Layout Profiles when the current pack draws i
                                                                     : "Layout Profiles");
         REQUIRE(window);
         CHECK(window->Active);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+}
+
+TEST_CASE("UI packs: visual layout preview draws saved positions without applying") {
+    for (const std::string_view pack : {"modern", "gamepad"}) {
+        CAPTURE(pack);
+        test::ScratchDir scratch("lp-preview");
+        const auto dir = scratch.path();
+        fs::create_directories(dir / "game");
+        fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / pack, dir / pack, fs::copy_options::recursive);
+        struct ResetDataDirectory {
+            ~ResetDataDirectory() { platform::set_data_dir_for_tests({}); }
+        } reset_directory;
+        platform::set_data_dir_for_tests(dir);
+        std::unique_ptr<ImGuiContext, void(*)(ImGuiContext*)> context(ImGui::CreateContext(), ImGui::DestroyContext);
+        ImGui::GetIO().IniFilename = nullptr;
+        ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+        Session s(dir, std::string(pack));
+        s.host.layout_profile_pack = [&] { return std::pair{&s.lua, pack}; };
+        s.lua.set_character_settings(dir / "pack.txt");
+        std::ofstream(dir / pack / "preview_fixture.lua") << R"lua(
+            local function panel(name, x, y, w, h)
+              ui.window(name, function()
+                ui.SetNextWindowPos(x, y, ui.Cond.Always)
+                ui.SetNextWindowSize(w, h, ui.Cond.Always)
+                ui.Begin(name)
+                ui.End()
+              end)
+            end
+            panel('Saved Frame', 24, 40, 290, 164)
+            panel('Second Frame', 1040, 270, 290, 150)
+        )lua";
+        s.lua.set_entry_scripts({"layoutprofiles.lua", "preview_fixture.lua"});
+        s.display_size = {1280, 720};
+        s.frames(2);
+        auto run = [&](const char* code) {
+            INFO(std::string(code));
+            const auto rc = luaL_dostring(s.lua.state(), code);
+            REQUIRE_MESSAGE(rc == LUA_OK, std::string(rc == LUA_OK ? "" : lua_tostring(s.lua.state(), -1)));
+        };
+        REQUIRE(s.lua.set_setting("hud.locked", "1"));
+        run(R"lua(
+            local profiles = hs.UI.layoutProfiles
+            assert(profiles.Save('Desktop'))
+            local model = assert(profiles.Preview('Desktop'))
+            assert(model.width == 1280 and model.height == 720 and not model.approximate)
+            assert(#model.rects == 2)
+            local rect = {}
+            for _, item in ipairs(model.rects) do rect[item.name] = item end
+            local first, second = assert(rect['Saved Frame']), assert(rect['Second Frame'])
+            assert(first.x == 24 and first.y == 40 and first.w == 290 and first.h == 164)
+            assert(second.x == 1040 and second.y == 270 and second.w == 240 and second.h == 150)
+        )lua");
+        REQUIRE(s.lua.set_setting("hud.locked", "0"));
+        s.lua.set_entry_scripts({"layoutprofiles.lua"});
+        s.lua.rescan_for_test();
+        run(R"lua(
+            visualText, visualActions = {}, 0
+            for _, name in ipairs({'LayoutProfilesSave', 'LayoutProfilesApply', 'LayoutProfilesUndo'}) do
+              local native = hs[name]
+              hs[name] = function(...)
+                visualActions = visualActions + 1
+                return native(...)
+              end
+            end
+            local text, draw, button, invisible = ui.TextWrapped, ui.DrawText, ui.Button, ui.InvisibleButton
+            ui.TextWrapped = function(t, ...) visualText[t] = true; return text(t, ...) end
+            ui.DrawText = function(x, y, r, g, b, a, t, ...)
+              visualText[t] = true
+              return draw(x, y, r, g, b, a, t, ...)
+            end
+            local function press(button, label, ...)
+              local clicked = button(label, ...)
+              if label ~= pressControl then return clicked end
+              pressControl = nil
+              return true
+            end
+            ui.Button = function(...) return press(button, ...) end
+            ui.InvisibleButton = function(...) return press(invisible, ...) end
+        )lua");
+        s.api.show("LayoutProfilesWindow", true);
+        s.frames(2);
+        auto press = [&](const char* modern, const char* gamepad) {
+            lua_pushstring(s.lua.state(), pack == "modern" ? modern : gamepad);
+            lua_setglobal(s.lua.state(), "pressControl");
+            s.frames(2);
+            run("assert(pressControl == nil)");
+        };
+        press("Visual Preview", "##profile-visual-preview");
+        run(R"lua(
+            assert(visualText['Saved Frame'] and visualText['Second Frame'])
+            assert(visualText['Read-only view of the saved window positions.'])
+            assert(not visualText['Approximate positions. Re-save the layout for an updated preview.'])
+            assert(visualActions == 0 and not hs.UI.layoutProfiles.CanUndo())
+        )lua");
+        CHECK(s.lua.setting("hud.locked") == "0");
+        press("Close Preview", "##close-visual-preview");
+        CHECK(s.api.shown("LayoutProfilesWindow"));
+        const auto profile_dir = dir / "layout-profiles" / platform::ui_settings_file(pack).stem();
+        auto preview_saved_file = [&](const ui::LayoutProfile& profile) {
+            s.api.show("LayoutProfilesWindow", false);
+            s.frames(1);
+            REQUIRE(ui::save_layout_profile(profile_dir, profile, true) == ui::LayoutProfileSave::Saved);
+            run("visualText = {}");
+            s.api.show("LayoutProfilesWindow", true);
+            s.frames(2);
+            press("Visual Preview", "##profile-visual-preview");
+        };
+        ui::LayoutProfile legacy;
+        legacy.name = "Desktop";
+        legacy.width = 1280;
+        legacy.height = 720;
+        legacy.windows.set_int("Legacy Frame", "XPosWindowed", 42);
+        legacy.windows.set_int("Legacy Frame", "YPosWindowed", 32);
+        legacy.windows.set_int("Legacy Frame", "WidthWindowed", 292);
+        legacy.windows.set_int("Legacy Frame", "HeightWindowed", 170);
+        preview_saved_file(legacy);
+        run(R"lua(
+            assert(visualText['Legacy Frame'])
+            assert(visualText['Approximate positions. Re-save the layout for an updated preview.'])
+        )lua");
+        press("Close Preview", "##close-visual-preview");
+        legacy.windows = {};
+        preview_saved_file(legacy);
+        run(R"lua(
+            assert(visualText['No window positions are available. Save this layout again to capture a visual preview.'])
+            assert(visualActions == 0 and not hs.UI.layoutProfiles.CanUndo())
+        )lua");
+        CHECK(s.lua.setting("hud.locked") == "0");
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
     }
 }

@@ -11,6 +11,7 @@
 #include "imgui.h"
 #include "imgui_internal.h" // stack sizes, to refuse pops and ends that ImGui would only assert on
 #include "ui/imgui_layer.h"
+#include "ui/layout_profile.h"
 #include "ui/lua/lua_draw_scope.h"
 #include "ui/lua/lua_host.h"
 #include "ui/texture_ids.h"
@@ -172,6 +173,12 @@ bool refused_to(lua_State *L, const ImGuiWindow *w) {
 bool consent_window_name(const char *name) {
 	return ImHashStr(name) == ImHashStr(kConsentWindowName);
 }
+
+ImGuiID profile_window_marker() {
+	static const ImGuiID key = ImHashStr("hailstone.LayoutProfile.PackWindowFrame");
+	return key;
+}
+
 // A refused Begin leaves nothing behind for the next window: the script's SetNextWindow* calls are dropped, so they
 // cannot move or resize the window begun next (the consent prompt, when it follows).
 void refuse_begin(bool child) {
@@ -188,7 +195,8 @@ int Begin(lua_State *L) {
 	bool hasOpen = !lua_isnoneornil(L, 2);
 	bool open = B(L, 2, true);
 	const int flags = WindowFlags(L, 3);
-	if (g_guard && !pack_code(L) && (consent_window_name(name) || refused_to(L, ImGui::FindWindowByName(name)))) {
+	const bool own_pack = pack_code(L);
+	if (g_guard && !own_pack && (consent_window_name(name) || refused_to(L, ImGui::FindWindowByName(name)))) {
 		refuse_begin(false);
 		lua_pushboolean(L, false);
 		lua_pushboolean(L, open);
@@ -200,10 +208,14 @@ int Begin(lua_State *L) {
 	apply_pending_collapse(name);
 	bool visible = ImGui::Begin(name, hasOpen ? &open : nullptr, flags);
 	style.WindowMenuButtonPosition = menuButton;
-	begun().push_back({ImGui::GetCurrentWindow(), false, ImGui::GetWindowDrawList()->_ClipRectStack.Size});
+	ImGuiWindow* window = ImGui::GetCurrentWindow();
+	begun().push_back({window, false, ImGui::GetWindowDrawList()->_ClipRectStack.Size});
+	if (own_pack) {
+		window->StateStorage.SetInt(profile_window_marker(), open && !window->Hidden ? ImGui::GetFrameCount() : -1);
+	}
 	if (g_guard && g_guardLuaFrame == ImGui::GetFrameCount() && LuaUi::drawing_window() == g_guardLuaWindow &&
-		pack_code(L))
-		guard(ImGui::GetCurrentWindow());
+		own_pack)
+		guard(window);
 	lua_pushboolean(L, visible);
 	lua_pushboolean(L, open);
 	return 2;
@@ -1386,6 +1398,32 @@ bool pack_code(lua_State *L) {
 	const bool pack = lua_getfield(L, LUA_REGISTRYINDEX, kPackStateKey) == LUA_TBOOLEAN && lua_toboolean(L, -1);
 	lua_pop(L, 1);
 	return pack;
+}
+
+std::vector<LayoutProfileRect> snapshot_pack_window_rects(int width, int height) {
+	std::vector<LayoutProfileRect> rectangles;
+	if (!GImGui || width <= 0 || height <= 0) return rectangles;
+	const int earliest = std::max(0, ImGui::GetFrameCount() - 1);
+	const ImGuiID marker = profile_window_marker();
+	for (const ImGuiWindow* window : GImGui->Windows) {
+		if (window->StateStorage.GetInt(marker, -1) < earliest) continue;
+		if (window->Flags & (ImGuiWindowFlags_ChildWindow | ImGuiWindowFlags_Popup | ImGuiWindowFlags_Tooltip)) continue;
+		std::string_view name(window->Name);
+		name = name.substr(0, name.find("##"));
+		if (name.empty() || name == "Layout Profiles" || name == "Layout Preview") continue;
+		const auto edge = [](float start, float size, int limit) {
+			return static_cast<int>(std::round(std::clamp(static_cast<double>(start) + size, 0.0,
+			                                            static_cast<double>(limit))));
+		};
+		if (!std::isfinite(window->Pos.x) || !std::isfinite(window->Pos.y) ||
+		    !std::isfinite(window->Size.x) || !std::isfinite(window->Size.y)) continue;
+		const int x = edge(window->Pos.x, 0, width), y = edge(window->Pos.y, 0, height);
+		const int w = edge(window->Pos.x, window->Size.x, width) - x;
+		const int h = edge(window->Pos.y, window->Size.y, height) - y;
+		if (w > 0 && h > 0) rectangles.push_back({std::string(name), x, y, w, h});
+		if (rectangles.size() == kLayoutProfileMaxRects) break;
+	}
+	return rectangles;
 }
 
 bool ContextOnly(std::string_view name) {
