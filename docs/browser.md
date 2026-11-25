@@ -113,7 +113,9 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
     the change to make if full-screen frames turn out too slow.
   - A popup (`OnPopupShow`, select lists) is a second, smaller image. The helper places it inside the view, no larger
     than it, moving it in where CEF has it reaching past an edge (the mouse over it is moved back for CEF), as CEF's
-    own off-screen example does.
+    own off-screen example does. Tested through the real helper: a select at a 160x90 tab's corner, whose list CEF
+    puts at x 120, 226 wide, comes inside the tab, drawn, and a click on it picks an entry. Only the horizontal case
+    is exercised: Chromium itself kept that list's height and place inside the view.
 - **The helper's life** (`web/browser_host.h`). Started at the first tab. A helper that exits or sends a broken
   message is restarted a second later, with every open tab at its last address and size. After four deaths within a
   minute the client gives up, closes the tabs and opens pages in the system's browser. One that answers the hello
