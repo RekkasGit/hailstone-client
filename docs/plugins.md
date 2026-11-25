@@ -2212,7 +2212,8 @@ Find, TargetPath and other navigation keep working; only their drawn lines and m
 
 The player's `/mapfilter vanilla` setting is shared by every character and saved in `hailstone.ini`. The server rule
 locks the effective mode on without overwriting that saved choice. With no rule, or `vanilla = off`, the player's
-choice decides. This is client-side and advisory: a modified client can ignore `hailstone.cfg`.
+choice decides. A GM can switch the rule in Server Management (Client & gameplay, Vanilla maps). This is client-side and
+advisory: a modified client can ignore `hailstone.cfg`.
 
 #### Autoskill
 
