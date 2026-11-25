@@ -1445,9 +1445,14 @@ private:
 
 } // namespace
 
-void ask_confirm(UiHost& host, UiHost::Confirm c) {
-    if (host.trusted_ui) host.confirm = std::move(c);
-    else host.client_confirm = std::move(c);
+void ask_client_confirm(UiHost& host, UiHost::Confirm c) { host.client_confirm = std::move(c); }
+
+// The order ConfirmationWindow::question takes: the ground drop's question shows before the connection's.
+bool destructive_confirmation_up(const UiHost& host) {
+    if (!host.conn) return false;
+    if (host.drop_confirm && *host.drop_confirm && host.conn->inventory().cursor()) return false;
+    const auto& c = host.conn->confirmation();
+    return c && !c->ok_only && (c->id == net::kConfirmDestroy || c->id == net::kConfirmGuildDelete);
 }
 
 bool confirm_open(const UiHost& host) { return host.confirm || host.client_confirm; }

@@ -422,8 +422,8 @@ TEST_CASE("hs.ServerSelect: each world's favourite mark, and ServerSelectDo favo
     CHECK(ui.host.server_select_action == static_cast<int>(ui::ServerSelectAction::Favorite));
 }
 
-// The client's own question (app::draw_client_confirm), asked for a permanent action under an interface Hailstone
-// does not ship: drawn whatever the interface draws, and its handler runs only on the player's click of Yes (No and
+// The client's own question (app::draw_client_confirm), asked for a permanent action by code other than a shipped
+// pack's own: drawn whatever the interface draws, and its handler runs only on the player's click of Yes (No and
 // the close box answer no).
 TEST_CASE("draw_client_confirm: the client's own question acts only on its Yes") {
     ImGuiContext* ctx = ImGui::CreateContext();
@@ -438,7 +438,7 @@ TEST_CASE("draw_client_confirm: the client's own question acts only on its Yes")
             app::UiHost::Confirm c;
             c.text = "Delete Cid permanently? This cannot be undone.";
             c.done = [&answers](bool yes) { answers.push_back(yes); };
-            app::ask_confirm(host, std::move(c));
+            app::ask_client_confirm(host, std::move(c));
         };
         auto frame = [&](std::optional<ImVec2> mouse = std::nullopt, bool down = false) {
             auto& io = ImGui::GetIO();
@@ -489,14 +489,18 @@ TEST_CASE("draw_client_confirm: the client's own question acts only on its Yes")
         CHECK(answers[1]);
         CHECK_FALSE(host.client_confirm);
 
-        // Under a pack Hailstone ships the question is the pack's (UiHost::confirm), and the client draws none.
+        // Under a pack Hailstone ships too (a script's request): the client's own window, not the pack's box.
         host.trusted_ui = true;
         ask();
-        CHECK(host.confirm);
-        CHECK_FALSE(host.client_confirm);
+        CHECK_FALSE(host.confirm);
+        REQUIRE(host.client_confirm);
         CHECK(app::confirm_open(host));
         frame();
+        frame();
         CHECK(answers.size() == 2);
+        click(button(0));
+        REQUIRE(answers.size() == 3);
+        CHECK(answers[2]);
     }
     ImGui::DestroyContext(ctx);
 }
@@ -522,28 +526,26 @@ TEST_CASE("hs.CharacterSelect: the characters with their race and classes, and i
     CHECK_FALSE(ui.host.char_select_action); // the scene follows the pick; nothing to ask
     CHECK(ui("return hs.CharacterSelectDo('enter')") == "true");
     CHECK(ui.host.char_select_action == static_cast<int>(A::EnterWorld));
-    // Delete from code other than a shipped pack's own: the client asks, naming the character, and only Yes deletes
+    // Delete from code other than a shipped pack's own (a script, under the shipped pack): the client asks in its own
+    // window (UiHost::client_confirm), naming the character, never in the pack's ConfirmationDialogBox, whose Yes a
+    // script could press; only the player's Yes deletes
     CHECK(ui("return hs.CharacterSelectDo('delete')") == "true");
     CHECK(ui.host.char_select_action == static_cast<int>(A::EnterWorld));
-    REQUIRE(ui.host.confirm);
-    CHECK(ui.host.confirm->text == "Delete Cid permanently? This cannot be undone.");
+    CHECK_FALSE(ui.host.confirm);
+    REQUIRE(ui.host.client_confirm);
+    CHECK(ui.host.client_confirm->text == "Delete Cid permanently? This cannot be undone.");
     CHECK(ui("return hs.CharacterSelectDo('delete')") == "false"); // the question is already up
-    auto no = std::move(ui.host.confirm->done);
-    ui.host.confirm.reset();
-    no(false);
+    CHECK(ui("return hs.WindowButton('ConfirmationDialogBox', 'Yes_Button')") == "false"); // not the box's question
+    app::answer_client_confirm(ui.host, false);
     CHECK(ui.host.char_select_action == static_cast<int>(A::EnterWorld));
     ui("hs.CharacterSelectDo('delete')");
-    REQUIRE(ui.host.confirm);
-    auto moved = std::move(ui.host.confirm->done);
-    ui.host.confirm.reset();
+    REQUIRE(ui.host.client_confirm);
     CHECK(ui("return hs.CharacterSelectDo('select', 1)") == "true"); // the pick moved before the answer
-    moved(true);
+    app::answer_client_confirm(ui.host, true);
     CHECK(ui.host.char_select_action == static_cast<int>(A::EnterWorld));
     ui("hs.CharacterSelectDo('select', 2) hs.CharacterSelectDo('delete')");
-    REQUIRE(ui.host.confirm);
-    auto yes = std::move(ui.host.confirm->done);
-    ui.host.confirm.reset();
-    yes(true);
+    REQUIRE(ui.host.client_confirm);
+    app::answer_client_confirm(ui.host, true);
     CHECK(ui.host.char_select_action == static_cast<int>(A::Delete));
     // A shipped pack's own code asks in its own look first (ui/*/charselect.lua): its call deletes at once
     ui.host.char_select_action.reset();

@@ -310,7 +310,7 @@ std::vector<PlannedItem> planned_items(const net::GameConnection& c, const std::
 }
 
 // A bulk destroy asked by code other than a shipped pack's own (which asks in its own look first: the modern pack's
-// inventorymanager.lua): the client's own question, with the count and how many are No Trade or attuned; its Yes
+// inventorymanager.lua): the client's own question in its own window (ask_client_confirm), with the count and how many are No Trade or attuned; its Yes
 // starts the job only if the same items are still where they were. Hailstone's own (the Advanced Inventory is not the
 // original's); Options Destroy (FastItemDestroy) skips it, as it does the single item's.
 std::string ask_bulk_destroy(UiHost& h, net::GameConnection& c, const std::vector<net::ItemSlot>& slots) {
@@ -338,7 +338,7 @@ std::string ask_bulk_destroy(UiHost& h, net::GameConnection& c, const std::vecto
         if (auto why = now.start_bulk_job(net::GameConnection::ItemJobMode::Destroy, slots); !why.empty())
             log::info("bulk destroy: {}", why);
     };
-    ask_confirm(h, std::move(q)); // (under an interface Hailstone does not ship, the client's own window)
+    ask_client_confirm(h, std::move(q)); // the client's own window: no script can answer it
     return {};
 }
 

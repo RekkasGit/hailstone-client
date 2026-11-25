@@ -272,10 +272,11 @@ struct UiHost {
         std::function<void(bool yes)> done;
     };
     std::optional<Confirm> confirm;
-    // A permanent action's question (a character's delete, a bulk destroy) asked under an interface Hailstone does not
-    // ship (trusted_ui false), which the client draws itself (draw_client_confirm): such an interface may never draw
-    // ConfirmationDialogBox, so the player would get no question, and its code could press that box's Yes itself. No
-    // Lua code sees or answers this one. A Hailstone addition (the original had no interfaces of other authors' code).
+    // A permanent action's question (a character's delete, a bulk destroy) asked by code other than a shipped pack's
+    // own (a script, a plugin window, an interface Hailstone does not ship), which the client draws itself
+    // (draw_client_confirm): an interface Hailstone does not ship may never draw ConfirmationDialogBox, so the player
+    // would get no question, and script code could press that box's Yes itself (hs.ClickChild). No Lua code sees or
+    // answers this one. A Hailstone addition (the original ran no interfaces or scripts of other authors' code).
     std::optional<Confirm> client_confirm;
     // CColorPickerWnd::Open(caller, colour): the colour to start from (0xRRGGBB) and the caller's notification 0x25
     // with the accepted colour (0xffRRGGBB). `serial` tells a new request from the shown one; `caller` lets a
@@ -414,9 +415,9 @@ struct UiHost {
     std::function<void()> crash_report_close;
 };
 
-// A permanent action's question where the player sees it whatever the interface: the interface's ConfirmationDialogBox
-// (UiHost::confirm) under one Hailstone ships, the client's own (UiHost::client_confirm) under any other.
-void ask_confirm(UiHost& host, UiHost::Confirm c);
+// A permanent action's question asked by code other than a shipped pack's own: the client's own window
+// (UiHost::client_confirm), shown whatever the interface draws and answered only by the player.
+void ask_client_confirm(UiHost& host, UiHost::Confirm c);
 // Whether either question is up (a second permanent action waits for the first's answer).
 bool confirm_open(const UiHost& host);
 // The player's answer to UiHost::client_confirm: closes it, then calls its handler.
@@ -424,6 +425,9 @@ void answer_client_confirm(UiHost& host, bool yes);
 // Draws UiHost::client_confirm (ImGui), above every other window: the client, each frame after the interface's
 // windows (ClientApp::run_frame).
 void draw_client_confirm(UiHost& host);
+// Whether ConfirmationDialogBox now asks a question whose Yes destroys something for good (an item's destroy, a
+// guild's disband): code other than the pack's own may not press its Yes (hs.ClickChild, WindowButton, ClickChildAt).
+bool destructive_confirmation_up(const UiHost& host);
 
 // CQuantityWnd::Open (game/quantity_dialog.h) for a window: accepted at once calls `done`, else shows the dialog.
 void open_quantity(UiHost& host, const game::QuantityOpen& in, std::function<void(std::int32_t)> done,
