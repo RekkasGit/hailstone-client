@@ -37,6 +37,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -1128,6 +1129,7 @@ struct FilteredSpawn {
     glm::vec3 at{0.0f};
     mq::MapFilter marker_filter = mq::MapFilter::Invalid;
     bool target = false;
+    bool npc_allowed = false; // a living NPC passed the server's NPC map policy (map_markers)
 };
 struct GroundMark {
     std::uint32_t drop_id = 0;
@@ -1271,17 +1273,29 @@ MapMarkers map_markers(UiHost& h, mq::MapFilters* filters, int active_layer, boo
         const net::GameConnection& c = *h.conn;
         const auto context = c.interaction_context();
         auto current = [&] { return h.conn == &c && c.interaction_context() == context; };
-        using SourceStamp = std::pair<std::uint64_t, std::uint64_t>;
+        // The policy's flags join its revision: a provider need not advance the revision when only its flags change.
+        using SourceStamp = std::tuple<std::uint64_t, std::uint64_t, std::uint32_t>;
         auto source = [&]() -> std::optional<SourceStamp> {
             if (!current()) return std::nullopt;
-            const auto policy = c.server_ext().map_policy(c).revision;
+            const auto policy = c.server_ext().map_policy(c);
             if (!current()) return std::nullopt;
             const auto life = c.server_ext().lifecycle_revision(c);
             if (!current()) return std::nullopt;
-            return SourceStamp{policy, life};
+            return SourceStamp{policy.revision, life, policy.flags};
         };
         const auto stamp = source();
         if (!stamp) return {};
+        // /mapfilter's marks for living NPCs follow the server's NPC map policy as the packs' Find overlays do: none
+        // when it hides stock NPCs, disables NPC Find or supplies its own spawn marks; only listed NPCs with
+        // server-only Find; and each one through the Find visibility hook. The current target is exempt (the player
+        // already has it; its line, circles and mark stay), and so are corpses, which Find never lists.
+        const game::MapPolicy npc_policy{std::get<2>(*stamp), {}, 0};
+        const bool npc_marks = npc_policy.npc_find_enabled() &&
+            !(npc_policy.flags & (game::MapPolicyHideStockNpcs | game::MapPolicyCustomSpawns));
+        const bool npc_server_only = npc_policy.npc_find_server_only();
+        auto policy_npc = [](const std::optional<mq::MapFilterMark>& mark, const game::Spawn& sp) {
+            return mark && !mark->is_target() && sp.is_npc && !sp.is_corpse;
+        };
         std::optional<mq::SpawnSearchMatcher> custom_matcher;
         if (filters && filters->custom_enabled() && filters->custom_search()) {
             mq::SearchSources search_sources = mq::sources_of(c);
@@ -1353,7 +1367,10 @@ MapMarkers map_markers(UiHost& h, mq::MapFilters* filters, int active_layer, boo
             }
             if (!group && !custom && !filtered) continue;
             if (!visible && !(filtered && filtered->is_target())) continue;
+            const bool npc_check = policy_npc(filtered, *sp);
             const bool allowed = c.server_ext().map_visible(c, *sp, 0); // HAILSTONE_MAP_VISIBLE_MARKER
+            // (npc_find_visible asks the HAILSTONE_MAP_FIND hook and pins the actor it asked about)
+            const bool npc_allowed = npc_check && allowed && npc_marks && c.npc_find_visible(sp->id, npc_server_only);
             sp = copy(actor);
             if (!sp || !allowed) continue;
             const glm::vec3 admitted_at = spawn_map(*sp);
@@ -1361,6 +1378,7 @@ MapMarkers map_markers(UiHost& h, mq::MapFilters* filters, int active_layer, boo
             if (filters && (admitted_visible || sp->id == c.world().target_id)) {
                 filtered = filters->spawn_mark(*sp, filter_input(*sp, group));
                 if (filtered && !admitted_visible && !filtered->is_target()) filtered.reset();
+                if (policy_npc(filtered, *sp) && !npc_allowed) filtered.reset();
             } else {
                 filtered.reset();
             }
@@ -1383,7 +1401,8 @@ MapMarkers map_markers(UiHost& h, mq::MapFilters* filters, int active_layer, boo
                 m.rgb = filtered->rgb;
                 m.layer = active_layer;
                 m.label = std::move(filtered->label);
-                out.filtered.push_back({actor, *sp, std::move(m), spawn_map(*sp), filtered->marker_filter, filtered->is_target()});
+                out.filtered.push_back({actor, *sp, std::move(m), spawn_map(*sp), filtered->marker_filter,
+                                        filtered->is_target(), npc_allowed});
             }
             if (mark) {
                 const glm::vec3 mark_at = spawn_map(*sp);
@@ -1434,6 +1453,9 @@ MapMarkers map_markers(UiHost& h, mq::MapFilters* filters, int active_layer, boo
             if (!filters) return true;
             const auto mark = filters->spawn_mark(*sp, filter_input(*sp, same_group() && member(*sp)));
             if (!mark) return true;
+            if (policy_npc(mark, *sp) &&
+                (!f.npc_allowed || (npc_server_only && (sp->id > 0xffff || !c.findable_npcs().contains(sp->id)))))
+                return true;
             f.mark.rgb = mark->rgb;
             f.mark.label = std::move(mark->label);
             f.marker_filter = mark->marker_filter;

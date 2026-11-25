@@ -96,7 +96,8 @@ void draw_prepared(lua_State* L) {
 }
 
 struct MarkerFilter final : game::ServerExtension {
-    bool deny_group = false, deny_npcs = false, marks = false;
+    bool deny_group = false, deny_npcs = false, marks = false, deny_find = false;
+    std::uint32_t flags = 0;
     mutable int self_queries = 0, group_queries = 0;
     mutable std::size_t visible_queries = 0;
     std::uint64_t content = 1, life = 1;
@@ -107,7 +108,7 @@ struct MarkerFilter final : game::ServerExtension {
         ++policy_queries;
         const auto callback = on_policy;
         if (callback) callback();
-        return {0, "Map filter", content};
+        return {flags, "Map filter", content};
     }
     std::uint64_t lifecycle_revision(const net::GameConnection&) const override {
         ++lifecycle_queries;
@@ -116,7 +117,7 @@ struct MarkerFilter final : game::ServerExtension {
         return life;
     }
     bool map_visible(const net::GameConnection&, const game::Spawn& sp, std::uint32_t purpose) const override {
-        if (purpose != 0) return true; // independent Find admission
+        if (purpose != 0) return !(deny_find && sp.is_npc); // independent Find admission
         ++visible_queries;
         if (deny_npcs && sp.is_npc) return false;
         if (sp.id == 1) ++self_queries;
@@ -310,6 +311,63 @@ TEST_CASE("Map filters: command state draws spawn marks on every map view") {
     r.filters.set_enabled(mq::MapFilter::Target, true);
     constexpr ImU32 kTarget = IM_COL32(0xc0, 0, 0, 0);
     for (const auto& draw : kMapDraws) CHECK(marked_vertices(r.L, draw, kTarget) > 0);
+}
+
+TEST_CASE("Map filters: NPC marks follow the server's NPC map policy; the target and other spawns stay") {
+    auto filter = std::make_shared<MarkerFilter>();
+    MarkerRig r(filter);
+    auto& conn = *r.world.conn;
+    auto& world = net::GameConnectionTestAccess::world(conn);
+    constexpr ImU32 kNpc = IM_COL32(0x40, 0x40, 0x40, 0), kTarget = IM_COL32(0xc0, 0, 0, 0);
+    r.filters.set_enabled(mq::MapFilter::Npc, true);
+    world.target_id = 0;
+    auto npc_marks = [&] {
+        int n = 0;
+        for (const auto& draw : kMapDraws) n += marked_vertices(r.L, draw, kNpc) > 0 ? 1 : 0;
+        return n;
+    };
+    REQUIRE(npc_marks() == 3);
+    const std::array<std::uint32_t, 4> restrictive{game::MapPolicyHideStockNpcs, game::MapPolicyDisableNpcFind,
+                                                   game::MapPolicyCustomSpawns,
+                                                   game::MapPolicyServerNpcFindOnly | game::MapPolicyDisableNpcFind};
+    for (const std::uint32_t flags : restrictive) {
+        CAPTURE(flags);
+        filter->flags = flags;
+        CHECK(npc_marks() == 0);
+        // A custom search for NPCs takes the same path.
+        r.filters.set_custom("npc");
+        CHECK(npc_marks() == 0);
+        r.filters.clear_custom();
+    }
+    filter->flags = 0;
+    filter->deny_find = true; // the Find visibility hook hides them as it hides Find's own rows
+    CHECK(npc_marks() == 0);
+    filter->deny_find = false;
+
+    // Server-only Find: only the NPCs the server lists.
+    filter->flags = game::MapPolicyServerNpcFindOnly;
+    CHECK(npc_marks() == 0);
+    net::FindableNpc listed;
+    listed.spawn_id = 11;
+    conn.receive_zone_packet_for_test(net::encode_findable_npc(listed));
+    CHECK(npc_marks() == 3);
+    filter->deny_find = true; // listed, but the Find hook still has the last word
+    CHECK(npc_marks() == 0);
+    filter->deny_find = false;
+    listed.remove = true;
+    conn.receive_zone_packet_for_test(net::encode_findable_npc(listed));
+    CHECK(npc_marks() == 0);
+
+    // The current target keeps its mark and lines; the player's own group mark is not an NPC's.
+    filter->flags = game::MapPolicyHideStockNpcs | game::MapPolicyDisableNpcFind;
+    world.target_id = 10;
+    r.filters.set_enabled(mq::MapFilter::Target, true);
+    for (const auto& draw : kMapDraws) {
+        CHECK(marked_vertices(r.L, draw, kTarget) > 0);
+        CHECK(r.group(draw) > 0);
+    }
+    filter->flags = 0;
+    CHECK(npc_marks() == 3); // removing the flags restores the marks
 }
 
 TEST_CASE("Map filters: vanilla keeps map lines and navigation but no marks or provider calls") {
