@@ -391,7 +391,8 @@ Testing: `HAILSTONE_COMMERCE_TEST=merchant|bank|give:<item id>` near the NPC.
 Helper: `lib/dialogs_kit.lua`.
 
 - **ConfirmationDialogBox**: Yes is primary; Enter does not accept.
-- **LargeDialogWindow**: the server's text, scrolled.
+- **LargeDialogWindow**: the server's STML text, scrolled. Both shipped interfaces display `<table>`, `<tr>` and
+  `<td>` as aligned columns and rows. Cell text keeps its colours and wraps to fit the column.
 - **TextEntryWnd**, **EditLabelWnd**, **TipWindow** (earlier tips).
 - **NoteWindow** and **BookWindow**: paper-toned pages, side by side or stacked.
 - **AlarmWnd**, **BreathWindow** (a frame; the air bar pulses in its last quarter), **RespawnWnd**.
