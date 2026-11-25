@@ -78,6 +78,7 @@
 #include "game/reward_selection.h"
 #include "game/achievements.h"
 #include "game/task_window.h"
+#include "game/remove_buff.h"
 #include "game/text_overlay.h"
 #include "game/camera_shake.h"
 #include "game/tracking.h"
@@ -1820,10 +1821,11 @@ public:
     // whose name holds the text; /memspell <gem> "<spell>" memorizes a spell of the book (by exact name, any case, or
     // id) into gem 1..12 through MemorizeSet with only that gem, when the player's level allows it;
     // /removebuff [-pet|-both] <name> clicks off the first buff of the player's or the focused pet's whose name
-    // matches (game/remove_buff.h).
+    // matches, /removepetbuff <name> the pet's (game/remove_buff.h).
     void removelev_command();
     void removeaura_command(std::string_view args);
     void removebuff_command(std::string_view args);
+    void removepetbuff_command(std::string_view args);
     void memspell_command(std::string_view args);
     // Clicks off a removable beneficial buff in the focused pet's server slot.
     bool remove_pet_buff(std::uint32_t slot);
@@ -3215,6 +3217,8 @@ private:
     void memorize_tick(std::int64_t now);
     std::optional<std::vector<std::int64_t>> game_steps_; // set_game_steps
     void update_usable_gems();
+    // /removebuff's and /removepetbuff's click-off of the first buff `r` names.
+    void remove_named_buff(const game::RemoveBuff& r);
     // The stats port over the current profile, inventory, buffs and AAs (CharacterZoneClient's effect totals).
     void with_character(const std::function<void(game::mechanics::Character&)>& fn) const;
     // with_character's sheet, rebuilt in place on each call (build_sheet_into: no allocation for an unchanged

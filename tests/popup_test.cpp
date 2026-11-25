@@ -35,10 +35,14 @@ TEST_CASE("popup: /popupecho and /popcustom take a colour, then seconds, then th
     CHECK(p.text == "CANNOT CHARM 15 2");
     CHECK(p.colour == 18);
     CHECK(p.hold_ms == 3000);
-    // A quoted word is one word; the rest keeps its spacing.
+    // GetArg drops a word's quotes: a quoted "3" is the seconds; the rest keeps its spacing.
     p = parse_popup("14 \"3\" two  spaces", PopupKind::Custom);
-    CHECK(p.hold_ms == 3000); // the second word starts with a quote, not a digit
-    CHECK(p.text == "\"3\" two  spaces");
+    CHECK(p.hold_ms == 3000);
+    CHECK(p.text == "two  spaces");
+    // A quoted run is one word for the rest too.
+    p = parse_popup("14 \"two words\" left", PopupKind::Custom);
+    CHECK(p.hold_ms == 3000); // "two words" does not start with a digit
+    CHECK(p.text == "\"two words\" left");
     // Huge seconds are held to the overlay's milliseconds.
     p = parse_popup("14 99999999 long", PopupKind::Custom);
     CHECK(p.hold_ms == UINT32_MAX);

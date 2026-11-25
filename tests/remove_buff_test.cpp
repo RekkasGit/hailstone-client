@@ -29,6 +29,17 @@ TEST_CASE("removebuff: the player's, the pet's or both; the rest of the line or 
     CHECK(parse_remove_buff("\"\"").name.empty());
 }
 
+TEST_CASE("removepetbuff: the pet's only; the whole line or a quoted name") {
+    auto p = hailstone::game::parse_remove_pet_buff("Spirit of Wolf");
+    CHECK_FALSE(p.self);
+    CHECK(p.pet);
+    CHECK(p.name == "Spirit of Wolf");
+    CHECK(hailstone::game::parse_remove_pet_buff("\"Burnout IV\" more").name == "Burnout IV");
+    // As MQ's RemovePetBuff, the whole line is the name: "-pet" is no option here.
+    CHECK(hailstone::game::parse_remove_pet_buff("-pet Haste").name == "-pet Haste");
+    CHECK(hailstone::game::parse_remove_pet_buff("  ").name.empty());
+}
+
 TEST_CASE("removebuff: a name matches anywhere in any case; =name the whole name") {
     CHECK(remove_buff_matches("Spirit of Wolf", "wolf"));
     CHECK(remove_buff_matches("Spirit of Wolf", "SPIRIT OF WOLF"));

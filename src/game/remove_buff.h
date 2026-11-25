@@ -1,11 +1,13 @@
 #pragma once
 
-// /removebuff (MacroQuest's RemoveBuff, which E3 uses to drop a buff from the player or the pet): what a line names.
-// A Hailstone addition: the original client has no such command. GameConnection::removebuff_command runs it.
+// /removebuff and /removepetbuff (MacroQuest's RemoveBuff and RemovePetBuff, which E3 uses to drop a buff from the
+// player or the pet): what a line names. A Hailstone addition: the original client has no such commands.
+// GameConnection::removebuff_command and removepetbuff_command run them.
 //
 //   /removebuff <name>          the player's first buff (long buffs, then songs) whose name matches
 //   /removebuff -pet <name>     the focused pet's first buff (in its window's order) whose name matches
 //   /removebuff -both <name>    the pet's, then the player's
+//   /removepetbuff <name>       the same as /removebuff -pet (RemovePetBuff, which -pet calls in MQ)
 //
 // As MacroQuest: the name is the rest of the line, or the text between quotes when it starts with one. It matches a
 // spell's name anywhere in it, in any case; "=name" matches the whole name only (MaybeExactCompare). Only the first
@@ -62,6 +64,16 @@ inline RemoveBuff parse_remove_buff(std::string_view line) {
     } else {
         out.name = detail::remove_buff_name(line);
     }
+    return out;
+}
+
+// /removepetbuff's line: the pet's buff only, the name taken as /removebuff takes it (a leading "-pet" is part of the
+// name here, as MQ's RemovePetBuff takes its whole line).
+inline RemoveBuff parse_remove_pet_buff(std::string_view line) {
+    RemoveBuff out;
+    out.self = false;
+    out.pet = true;
+    out.name = detail::remove_buff_name(line);
     return out;
 }
 

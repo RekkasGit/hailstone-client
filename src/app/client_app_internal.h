@@ -538,6 +538,9 @@ public:
         automation_->hooks().add_command(plugin::Hooks::kClient, "/removebuff", [this](std::string_view args) {
             if (conn_) conn_->removebuff_command(args);
         }, plugin::kCapActions);
+        automation_->hooks().add_command(plugin::Hooks::kClient, "/removepetbuff", [this](std::string_view args) {
+            if (conn_) conn_->removepetbuff_command(args);
+        }, plugin::kCapActions);
         // MQ's popups on the game's centre-screen text (mq/popup.h); display only, as /echo.
         static constexpr std::pair<const char*, mq::PopupKind> kPopups[] = {
             {"/popup", mq::PopupKind::Plain},

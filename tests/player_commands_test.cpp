@@ -235,4 +235,15 @@ TEST_CASE("player commands: /removebuff -pet and -both click off the focused pet
     c.removebuff_command("-both Test Armor");
     REQUIRE(rig.until([&] { return MockEqServer::count(log, net::Op::BuffRemoveRequest) == before + 3; }));
     CHECK(last_buff_remove(log) == std::pair{0u, c.world().player_id});
+    // /removepetbuff: the pet's first match only, never the player's (E3's HUD sends it).
+    c.removepetbuff_command("=test armor");
+    REQUIRE(rig.until([&] { return MockEqServer::count(log, net::Op::BuffRemoveRequest) == before + 4; }));
+    CHECK(last_buff_remove(log) == std::pair{9u, pet.spawn_id});
+    rig.run_for(std::chrono::milliseconds(50));
+    CHECK(MockEqServer::count(log, net::Op::BuffRemoveRequest) == before + 4);
+    // Nothing named, or no pet buff of that name: nothing sent.
+    c.removepetbuff_command("");
+    c.removepetbuff_command("Spirit of Wolf");
+    rig.run_for(std::chrono::milliseconds(50));
+    CHECK(MockEqServer::count(log, net::Op::BuffRemoveRequest) == before + 4);
 }

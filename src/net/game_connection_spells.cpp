@@ -337,10 +337,14 @@ void GameConnection::removeaura_command(std::string_view args) {
     for (std::uint32_t id : ids) remove_aura(id);
 }
 
-void GameConnection::removebuff_command(std::string_view args) {
-    if (!spell_table_) return;
-    const game::RemoveBuff r = game::parse_remove_buff(args);
-    if (r.name.empty()) return;
+void GameConnection::removebuff_command(std::string_view args) { remove_named_buff(game::parse_remove_buff(args)); }
+
+void GameConnection::removepetbuff_command(std::string_view args) {
+    remove_named_buff(game::parse_remove_pet_buff(args));
+}
+
+void GameConnection::remove_named_buff(const game::RemoveBuff& r) {
+    if (!spell_table_ || r.name.empty()) return;
     auto matches = [&](std::uint32_t spell) {
         const game::SpellData* d = spell_table_->get(spell);
         return d && game::remove_buff_matches(d->name, r.name);
