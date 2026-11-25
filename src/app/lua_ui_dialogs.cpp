@@ -47,10 +47,7 @@ public:
 
     void frame(UiHost& host) override { sync(host); }
 
-    bool shown(UiHost& host) override {
-        sync(host);
-        return active_;
-    }
+    bool shown(UiHost& host) override { return sync(host); }
     void set_shown(UiHost& host, bool show) override {
         if (show) return;
         if (host.quantity) host.quantity.reset();
@@ -59,51 +56,29 @@ public:
     }
 
     void child(UiHost& host, std::string_view id, Child& out) override {
-        sync(host);
-        if (!active_) return;
+        if (!sync(host)) return;
+        const auto& e = host.quantity_entry;
         if (id == "QTYW_Slider") {
-            out.slider_count = max_ - min_ + 1;
-            out.slider_value = value_;
+            out.slider_count = e.max - e.min + 1;
+            out.slider_value = e.value;
         } else if (id == "QTYW_SliderInput") {
-            out.text = text_;
+            out.text = e.text;
         }
     }
 
     bool set_slider(UiHost& host, std::string_view id, int value) override {
-        sync(host);
-        if (!active_ || id != "QTYW_Slider") return false;
-        value_ = std::clamp(value, 0, max_ - min_);
-        text_ = std::to_string(value_ + min_); // sub_00725940
-        return true;
+        return id == "QTYW_Slider" && quantity_set_slider(host, value);
     }
 
     bool set_text(UiHost& host, std::string_view id, const std::string& text) override {
-        sync(host);
-        if (!active_ || id != "QTYW_SliderInput") return false;
-        text_ = text;
+        if (!sync(host) || id != "QTYW_SliderInput") return false;
+        host.quantity_entry.text = text;
         return true;
     }
 
     bool click(UiHost& host, std::string_view id, std::string_view button, bool) override {
-        sync(host);
-        if (!active_ || button != "left") return false;
-        if (id == "QTYW_Accept_Button" || id == "QTYW_SliderInput") {
-            // sub_00725a20: the box's number (atoi) into the slider, clamped by it; then slider + min to the owner.
-            int v = 0;
-            std::from_chars(text_.data(), text_.data() + text_.size(), v);
-            value_ = std::clamp(v - min_, 0, max_ - min_);
-            std::int32_t q = game::quantity_dialog_accept(min_, value_);
-            if (host.quantity) {
-                auto done = std::move(host.quantity->done);
-                host.quantity.reset();
-                if (done) done(q);
-            } else if (host.conn) {
-                host.conn->finish_quantity(static_cast<std::uint32_t>(q));
-            }
-            sync(host);
-            return true;
-        }
-        return false;
+        if (button != "left" || (id != "QTYW_Accept_Button" && id != "QTYW_SliderInput")) return false;
+        return quantity_accept(host);
     }
 
     std::optional<std::array<int, 2>> take_move(UiHost&) override {
@@ -113,68 +88,27 @@ public:
     }
 
 private:
-    // The dialog's owner this frame; a new one starts the slider at its start and moves the window.
-    void sync(UiHost& host) {
-        if (host.quantity && host.quantity->owner_valid && !host.quantity->owner_valid()) host.quantity.reset();
-        int key = 0;
-        std::int32_t min = 0, max = 0, start = 0;
+    // Whether a dialog is open; a new one moves the window (CQuantityWnd::Open: to its caller's point, kept on the
+    // screen by the dialog's own size, or centred).
+    bool sync(UiHost& host) {
         std::optional<std::pair<int, int>> pos;
-        if (host.quantity) {
-            key = host.quantity->serial;
-            min = host.quantity->min, max = host.quantity->max, start = host.quantity->slider;
-            pos = host.quantity->position;
-        } else if (host.conn && host.conn->quantity_request()) {
-            const auto& q = *host.conn->quantity_request();
-            key = -1;
-            max = static_cast<std::int32_t>(q.max), start = static_cast<std::int32_t>(q.start);
-            if (!conn_open_ || !for_ || !for_->same(q.slot) || conn_max_ != q.max) {
-                // CInvSlot::HandleLButtonUp opens it at the slot's centre; CLootWnd::RequestLootSlot at (-1, -1),
-                // centred.
-                const auto& r = host.click_rect;
-                if (r[0] >= 0 && !q.centred) pos = std::pair{static_cast<int>((r[0] + r[2]) / 2), static_cast<int>((r[1] + r[3]) / 2)};
-                for_ = q.slot;
-                conn_max_ = q.max;
-                conn_open_ = false;
+        const int r = quantity_sync(host, &pos);
+        if (r == 2) {
+            ImVec2 ds = ImGui::GetIO().DisplaySize;
+            auto rect = host.textures ? host.textures->screen_rect("QuantityWnd") : std::nullopt;
+            int w = rect ? rect->w : 200, h = rect ? rect->h : 100;
+            if (pos) {
+                int x = pos->first, y = pos->second;
+                if (x + w > static_cast<int>(ds.x)) x = static_cast<int>(ds.x) - w;
+                if (y + h > static_cast<int>(ds.y)) y = static_cast<int>(ds.y) - h;
+                move_ = std::array<int, 2>{x, y};
+            } else {
+                move_ = std::array<int, 2>{(static_cast<int>(ds.x) - w) / 2, (static_cast<int>(ds.y) - h) / 2};
             }
         }
-        active_ = key != 0;
-        if (!active_) {
-            key_ = 0;
-            conn_open_ = false;
-            for_.reset();
-            return;
-        }
-        if (key == key_ && (key != -1 || conn_open_)) return;
-        key_ = key;
-        if (key == -1) conn_open_ = true;
-        min_ = min, max_ = std::max(min, max);
-        value_ = std::clamp(start, 0, max_ - min_);
-        text_ = std::to_string(value_ + min_);
-        move_.reset();
-        if (pos) {
-            // CQuantityWnd::Open: kept on the screen by the dialog's own size.
-            ImVec2 ds = ImGui::GetIO().DisplaySize;
-            auto r = host.textures ? host.textures->screen_rect("QuantityWnd") : std::nullopt;
-            int w = r ? r->w : 200, h = r ? r->h : 100;
-            int x = pos->first, y = pos->second;
-            if (x + w > static_cast<int>(ds.x)) x = static_cast<int>(ds.x) - w;
-            if (y + h > static_cast<int>(ds.y)) y = static_cast<int>(ds.y) - h;
-            move_ = std::array<int, 2>{x, y};
-        } else {
-            ImVec2 ds = ImGui::GetIO().DisplaySize;
-            auto r = host.textures ? host.textures->screen_rect("QuantityWnd") : std::nullopt;
-            int w = r ? r->w : 200, h = r ? r->h : 100;
-            move_ = std::array<int, 2>{(static_cast<int>(ds.x) - w) / 2, (static_cast<int>(ds.y) - h) / 2};
-        }
+        return r != 0;
     }
 
-    bool active_ = false, conn_open_ = false;
-    int key_ = 0;
-    std::optional<net::ItemSlot> for_;
-    std::uint32_t conn_max_ = 0;
-    std::int32_t min_ = 0, max_ = 0;
-    int value_ = 0;
-    std::string text_;
     std::optional<std::array<int, 2>> move_;
 };
 
@@ -938,15 +872,24 @@ void open_quantity(UiHost& host, const game::QuantityOpen& in, std::function<voi
         };
     }
     game::QuantityOpen q = in;
-    ImVec2 ds = ImGui::GetIO().DisplaySize;
-    q.screen_width = static_cast<std::int32_t>(ds.x);
-    q.screen_height = static_cast<std::int32_t>(ds.y);
+    // A script's /notify opens it too, maybe with no UI (no ImGui frame): then no screen to keep it on, and the keys
+    // its line forced.
+    const bool imgui = ImGui::GetCurrentContext() != nullptr;
+    if (imgui) {
+        ImVec2 ds = ImGui::GetIO().DisplaySize;
+        q.screen_width = static_cast<std::int32_t>(ds.x);
+        q.screen_height = static_cast<std::int32_t>(ds.y);
+    }
     if (auto r = host.textures ? host.textures->screen_rect("QuantityWnd") : std::nullopt) {
         q.rect[0] = 0, q.rect[1] = 0, q.rect[2] = r->w, q.rect[3] = r->h;
     }
-    const ImGuiIO& io = ImGui::GetIO();
-    q.shift = io.KeyShift;
-    q.ctrl = io.KeyCtrl;
+    if (host.forced_mods) {
+        q.shift = (*host.forced_mods)[0];
+        q.ctrl = (*host.forced_mods)[1];
+    } else if (imgui) {
+        q.shift = ImGui::GetIO().KeyShift;
+        q.ctrl = ImGui::GetIO().KeyCtrl;
+    }
     game::QuantityResult r = game::quantity_dialog_open(q);
     if (r.closed) {
         host.quantity.reset();
@@ -966,6 +909,73 @@ void open_quantity(UiHost& host, const game::QuantityOpen& in, std::function<voi
     u.owner_valid = std::move(owner_valid);
     u.serial = ++host.quantity_serial;
     host.quantity = std::move(u);
+}
+
+int quantity_sync(UiHost& host, std::optional<std::pair<int, int>>* position) {
+    auto& e = host.quantity_entry;
+    if (host.quantity && host.quantity->owner_valid && !host.quantity->owner_valid()) host.quantity.reset();
+    int key = 0;
+    std::int32_t min = 0, max = 0, start = 0;
+    if (host.quantity) {
+        key = host.quantity->serial;
+        min = host.quantity->min, max = host.quantity->max, start = host.quantity->slider;
+        if (position) *position = host.quantity->position;
+    } else if (host.conn && host.conn->quantity_request()) {
+        const auto& q = *host.conn->quantity_request();
+        key = -1;
+        max = static_cast<std::int32_t>(q.max), start = static_cast<std::int32_t>(q.start);
+        const std::array<std::int32_t, 4> slot{q.slot.type, q.slot.slot, q.slot.sub, q.slot.aug};
+        if (!e.request_open || e.request_slot != slot || e.request_max != q.max) {
+            // CInvSlot::HandleLButtonUp opens it at the slot's centre; CLootWnd::RequestLootSlot at (-1, -1),
+            // centred.
+            const auto& r = host.click_rect;
+            if (position && r[0] >= 0 && !q.centred)
+                *position = std::pair{static_cast<int>((r[0] + r[2]) / 2), static_cast<int>((r[1] + r[3]) / 2)};
+            e.request_slot = slot;
+            e.request_max = q.max;
+            e.request_open = false;
+        }
+    }
+    if (key == 0) {
+        e.key = 0;
+        e.request_open = false;
+        e.request_slot.reset();
+        return 0;
+    }
+    if (key == e.key && (key != -1 || e.request_open)) return 1;
+    e.key = key;
+    if (key == -1) e.request_open = true;
+    e.min = min, e.max = std::max(min, max);
+    e.value = std::clamp(start, 0, e.max - e.min);
+    e.text = std::to_string(e.value + e.min);
+    return 2;
+}
+
+bool quantity_set_slider(UiHost& host, int value) {
+    if (!quantity_sync(host, nullptr)) return false;
+    auto& e = host.quantity_entry;
+    e.value = std::clamp(value, 0, e.max - e.min);
+    e.text = std::to_string(e.value + e.min); // sub_00725940
+    return true;
+}
+
+bool quantity_accept(UiHost& host) {
+    if (!quantity_sync(host, nullptr)) return false;
+    auto& e = host.quantity_entry;
+    // sub_00725a20: the box's number (atoi) into the slider, clamped by it; then slider + min to the owner.
+    int v = 0;
+    std::from_chars(e.text.data(), e.text.data() + e.text.size(), v);
+    e.value = std::clamp(v - e.min, 0, e.max - e.min);
+    const std::int32_t q = game::quantity_dialog_accept(e.min, e.value);
+    if (host.quantity) {
+        auto done = std::move(host.quantity->done);
+        host.quantity.reset();
+        if (done) done(q);
+    } else if (host.conn) {
+        host.conn->finish_quantity(static_cast<std::uint32_t>(q));
+    }
+    quantity_sync(host, nullptr);
+    return true;
 }
 
 void add_dialog_windows(std::vector<std::unique_ptr<StockWindow>>& out) {

@@ -3191,6 +3191,7 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
                 const bool chosen = respawn_ && respawn_chosen_;
                 if (!respawn_) {
                     respawn_session_ = core::next_process_serial();
+                    respawn_choice_.reset();
                     clear_hover_rez();
                 }
                 respawn_ = std::move(window);

@@ -61,6 +61,10 @@ struct GameConnectionTestAccess {
     static std::optional<BankSession>& bank(GameConnection& c) { return c.bank_; }
     static std::optional<TradeSession>& trade(GameConnection& c) { return c.trade_; }
     static bool& spell_book_open(GameConnection& c) { return c.spell_book_open_; }
+    static std::optional<RespawnWindow>& respawn(GameConnection& c) { return c.respawn_; }
+    static bool& respawn_chosen(GameConnection& c) { return c.respawn_chosen_; }
+    static game::TaskState& tasks(GameConnection& c) { return c.tasks_; }
+    static std::map<std::uint32_t, GameConnection::AltCurrency>& alt_currencies(GameConnection& c) { return c.alt_currencies_; }
     static std::optional<GameConnection::LootSession>& loot(GameConnection& c) { return c.loot_; }
     static GameConnection::Tribute& tribute(GameConnection& c) { return c.tribute_; }
     static game::BankCoins& bank_coins(GameConnection& c) { return c.bank_coins_; }

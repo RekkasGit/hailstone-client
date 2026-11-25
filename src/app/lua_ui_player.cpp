@@ -156,6 +156,40 @@ private:
 
 // ---------------------------------------------------------------- ConfirmationDialogBox (CConfirmationDialogBoxWnd)
 
+} // namespace
+
+int confirmation_question(UiHost& host) {
+    if (!host.conn) return 0;
+    if (host.drop_confirm && *host.drop_confirm) {
+        if (host.conn->inventory().cursor()) return 1;
+        *host.drop_confirm = false; // the item left the cursor
+    }
+    if (host.conn->confirmation()) return 2;
+    if (host.confirm) return 3;
+    return host.conn->guild().inviter.empty() ? 0 : 4;
+}
+
+bool answer_confirmation_question(UiHost& host, bool yes) {
+    const int q = confirmation_question(host);
+    if (!q) return false;
+    ++host.confirm_answers; // the next question (a queued one may follow at once) starts its own time limit
+    if (q == 1) {
+        *host.drop_confirm = false;
+        if (yes) host.conn->drop_cursor_on_ground();
+    } else if (q == 2) {
+        host.conn->answer_confirmation(yes);
+    } else if (q == 3) {
+        auto done = std::move(host.confirm->done);
+        host.confirm.reset();
+        if (done) done(yes);
+    } else {
+        host.conn->answer_guild_invite(yes);
+    }
+    return true;
+}
+
+namespace {
+
 // CConfirmationDialogBoxWnd @0x71d8f0: TextOutput (STML), and the buttons its flags show (sub_0071db50: bit 0 OK,
 // bit 1 Cancel, bit 2 Yes, bit 3 No); a button closes it and answers its owner (Yes 4, No 8, OK 1, Cancel 2), a
 // timeout (OnProcessFrame) answers 2. Two questions use it here: the ground drop (CEverQuest::LMouseUp:
@@ -169,6 +203,7 @@ public:
 
     bool shown(UiHost& host) override {
         int q = question(host);
+        if (answers_ != host.confirm_answers) answers_ = host.confirm_answers, showing_ = 0;
         if (q != showing_) {
             showing_ = q;
             int timeout = q == 1   ? 20000
@@ -231,34 +266,10 @@ public:
 
 private:
     // 1 the drop question, 2 the connection's, 3 a window's own (UiHost::confirm), 0 none.
-    static int question(UiHost& host) {
-        if (!host.conn) return 0;
-        if (host.drop_confirm && *host.drop_confirm) {
-            if (host.conn->inventory().cursor()) return 1;
-            *host.drop_confirm = false; // the item left the cursor
-        }
-        if (host.conn->confirmation()) return 2;
-        if (host.confirm) return 3;
-        return host.conn->guild().inviter.empty() ? 0 : 4;
-    }
+    static int question(UiHost& host) { return confirmation_question(host); }
     // A connection question with flags 1 (an OK button alone).
     static bool ok_only(UiHost& host) { return question(host) == 2 && host.conn->confirmation()->ok_only; }
-    void answer(UiHost& host, bool yes) {
-        int q = question(host);
-        showing_ = 0; // the next question (a queued one may follow at once) starts its own time limit
-        if (q == 1) {
-            *host.drop_confirm = false;
-            if (yes) host.conn->drop_cursor_on_ground();
-        } else if (q == 2) {
-            host.conn->answer_confirmation(yes);
-        } else if (q == 3) {
-            auto done = std::move(host.confirm->done);
-            host.confirm.reset();
-            if (done) done(yes);
-        } else if (q == 4) {
-            host.conn->answer_guild_invite(yes);
-        }
-    }
+    void answer(UiHost& host, bool yes) { answer_confirmation_question(host, yes); }
 
     // Handle_OP_GuildInvite @0x4b9410: "%1 is interested in having you join %2." (eqstr 534), asked with
     // ConfirmationDialog(100, flags 0xc, 10000 ms).
@@ -268,6 +279,7 @@ private:
     }
 
     int showing_ = 0;
+    std::uint32_t answers_ = 0; // host.confirm_answers when the time limit started
     std::optional<std::chrono::steady_clock::time_point> deadline_;
     std::optional<std::array<int, 2>> move_;
 };

@@ -26,7 +26,7 @@ TEST_CASE("notify: window, child, notification and value") {
     CHECK(parse_window_notify("MerchantWnd ItemList listselect").error == "Invalid listselect value");
     CHECK(parse_window_notify("MerchantWnd ItemList listselect 0").error == "Invalid listselect value");
     CHECK(parse_window_notify("MerchantWnd ItemList listselect x").error == "Invalid listselect value");
-    CHECK(parse_window_notify("QuantityWnd QTYW_Slider newvalue 5").error == "Notification 'newvalue' not supported");
+    CHECK(parse_window_notify("QuantityWnd QTYW_Slider wheel 5").error == "Notification 'wheel' not supported");
 }
 
 TEST_CASE("notify: MQ's item names and case become the ScreenID; pages their window") {
@@ -61,9 +61,40 @@ TEST_CASE("notify: the buttons a client with no UI runs") {
     CHECK(act("BigBankWnd BIGB_AutoButton leftmouseup") == NotifyAction::BankAuto);
     CHECK(act("BigBankWnd BIGB_DoneButton leftmouseup") == NotifyAction::BankDone);
     CHECK(act("TBW_PersonalPage TBWP_ActivateButton leftmouseup") == NotifyAction::TributeToggle);
-    // These need the UI: a selection (task accept, respawn) or no single call yet.
-    CHECK(act("TaskSelectWnd TSEL_AcceptButton leftmouseup") == NotifyAction::None);
-    CHECK(act("RespawnWnd SelectButton leftmouseup") == NotifyAction::None);
-    CHECK(act("MerchantWnd MW_Buy_Button leftmouseup") == NotifyAction::None);
+    CHECK(act("TaskSelectWnd TSEL_AcceptButton leftmouseup") == NotifyAction::TaskAccept);
+    CHECK(act("RespawnWnd SelectButton leftmouseup") == NotifyAction::RespawnSelect);
+    CHECK(act("RaidWindow Raid_UnlockButton leftmouseup") == NotifyAction::RaidUnlock);
+    CHECK(act("RaidWindow raid_lockbutton leftmouseup") == NotifyAction::RaidLock);
+    CHECK(act("MerchantWnd MW_Buy_Button leftmouseup") == NotifyAction::MerchantBuy);
+    CHECK(act("MerchantWnd MW_Sell_Button leftmouseup") == NotifyAction::MerchantSell);
+    CHECK(act("MerchantWnd MW_Done_Button leftmouseup") == NotifyAction::MerchantDone);
+    CHECK(act("QuantityWnd QTYW_Accept_Button leftmouseup") == NotifyAction::QuantityAccept);
+    CHECK(act("InventoryWindow IW_Money0 leftmouseup") == NotifyAction::Money0);
+    CHECK(act("InventoryWindow IW_Money3 leftmouseup") == NotifyAction::Money3);
+    CHECK(act("InventoryWindow IW_AltCurr_ReclaimButton leftmouseup") == NotifyAction::AltCurrencyReclaim);
+    CHECK(act("InventoryWindow IW_AltCurr_CreateItemButton leftmouseup") == NotifyAction::AltCurrencyCreate);
+    CHECK(act("RespawnWnd RW_SelectButton leftmouseup") == NotifyAction::RespawnSelect);
+    // Not one of E3's: the stock window's (a UI).
+    CHECK(act("InventoryWindow IW_Tinting leftmouseup") == NotifyAction::None);
     CHECK(act("LootWnd TRDW_Trade_Button leftmouseup") == NotifyAction::None); // another window's button
+}
+
+TEST_CASE("notify: the lists a listselect picks from, and the quantity slider's newvalue") {
+    auto list = [](std::string_view line) {
+        auto n = parse_window_notify(line);
+        return game::notify_list(n.window, n.child);
+    };
+    using game::NotifyList;
+    CHECK(list("MerchantWnd ItemList listselect 2") == NotifyList::MerchantItems);
+    CHECK(list("MerchantWnd MW_ItemList listselect 2") == NotifyList::MerchantItems);
+    CHECK(list("InventoryWindow AltCurr_PointList listselect 1") == NotifyList::AltCurrencies);
+    CHECK(list("TaskSelectWnd TSEL_TaskList listselect 1") == NotifyList::TaskOffers);
+    CHECK(list("RespawnWnd RW_OptionsList listselect 1") == NotifyList::RespawnOptions);
+    CHECK(list("BazaarSearchWnd ItemList listselect 1") == NotifyList::None);
+    auto n = parse_window_notify("QuantityWnd QTYW_slider newvalue 20");
+    CHECK(n.error.empty());
+    CHECK(n.value == 20);
+    CHECK(game::notify_quantity_slider(n.window, n.child));
+    CHECK(parse_window_notify("QuantityWnd QTYW_Slider newvalue 0").error.empty()); // a slider may go to 0
+    CHECK(parse_window_notify("QuantityWnd QTYW_Slider newvalue").error == "Invalid newvalue value");
 }

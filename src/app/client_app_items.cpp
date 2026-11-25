@@ -235,9 +235,12 @@ void ClientApp::run_with_keys(std::string_view line, net::SlotClickKeys keys) {
     while (!line.empty() && line.front() == ' ') line.remove_prefix(1);
     if (!conn_ || line.empty()) return;
     const std::optional<net::SlotClickKeys> before = forced_keys_; // (nested: /shiftkey /nomodkey ...)
+    const auto mods_before = ui_host_.forced_mods;
     forced_keys_ = keys;
+    ui_host_.forced_mods = std::array<bool, 2>{keys.shift, keys.ctrl};
     conn_->send_command(std::string(line));
     forced_keys_ = before;
+    ui_host_.forced_mods = mods_before;
 }
 
 // MQ's ItemNotify on Hailstone's own clicks: leftmouseup is the slot's left click (CInvSlot::HandleLButtonUp: pick up,
@@ -251,46 +254,85 @@ void ClientApp::notify_command(std::string_view args) {
         conn_->ui_message(n.error);
         return;
     }
-    // A button whose window's handler is one connection call runs it, UI or none, while its window would show (the
-    // same checks as the stock window's shown()). The confirmation's Yes and No go to the UI when there is one: its
-    // box also asks the ground drop, a window's own and the guild invite questions, which answer_confirmation()
-    // does not answer.
+    // What E3 presses runs from the client's state, UI or none (game/window_notify.h's maps): each with the call its
+    // window's handler makes, and only while that window would show (the stock window's shown()'s checks). The
+    // windows read and write the same state (the merchant's and the alternate currency's selection, the task and
+    // respawn choice, the quantity dialog's slider, the confirmation's question), so the two agree.
     using A = game::NotifyAction;
-    const A action = n.notification == "leftmouseup" ? game::notify_action(n.window, n.child) : A::None;
-    const bool ui_question = ui_api_ && (action == A::ConfirmYes || action == A::ConfirmNo);
-    if (action != A::None && !ui_question) {
-        auto& c = *conn_;
-        switch (action) {
-        case A::TradeAccept: if (c.trade() && c.trade()->open) c.trade_accept(); break;
-        case A::TradeCancel: if (c.trade() && c.trade()->open) c.trade_cancel(); break;
-        case A::LootAll: if (c.loot_session() && c.loot_session()->open) c.loot_all(); break;
-        case A::LootDone: if (c.loot_session() && c.loot_session()->open) c.end_loot(); break;
-        case A::ConfirmYes: if (c.confirmation()) c.answer_confirmation(true); break;
-        case A::ConfirmNo: if (c.confirmation()) c.answer_confirmation(false); break;
-        case A::LargeDialogYes: if (c.large_dialog()) c.answer_large_dialog(1); break;
-        case A::LargeDialogNo: if (c.large_dialog()) c.answer_large_dialog(2); break;
-        case A::TaskDecline: if (c.tasks().offers) c.decline_tasks(); break;
-        case A::BankAuto: if (c.bank()) c.auto_bank(); break;
-        case A::BankDone: if (c.bank()) c.close_bank(); break;
-        case A::TributeToggle: c.tribute_toggle(!c.tribute().settings.active); break;
-        case A::None: break;
+    using L = game::NotifyList;
+    auto& c = *conn_;
+    if (n.notification == "leftmouseup")
+        if (const A action = game::notify_action(n.window, n.child); action != A::None) {
+            switch (action) {
+            case A::TradeAccept: if (c.trade() && c.trade()->open) c.trade_accept(); break;
+            case A::TradeCancel: if (c.trade() && c.trade()->open) c.trade_cancel(); break;
+            case A::LootAll: if (c.loot_session() && c.loot_session()->open) c.loot_all(); break;
+            case A::LootDone: if (c.loot_session() && c.loot_session()->open) c.end_loot(); break;
+            // The box's question, whichever it is: the ground drop, the server's, a window's own, the guild invite.
+            case A::ConfirmYes: answer_confirmation_question(ui_host_, true); break;
+            case A::ConfirmNo: answer_confirmation_question(ui_host_, false); break;
+            case A::LargeDialogYes: if (c.large_dialog()) c.answer_large_dialog(1); break;
+            case A::LargeDialogNo: if (c.large_dialog()) c.answer_large_dialog(2); break;
+            case A::TaskAccept: c.accept_selected_task(); break;
+            case A::TaskDecline: if (c.tasks().offers) c.decline_tasks(); break;
+            case A::BankAuto: if (c.bank()) c.auto_bank(); break;
+            case A::BankDone: if (c.bank()) c.close_bank(); break;
+            case A::TributeToggle: c.tribute_toggle(!c.tribute().settings.active); break;
+            case A::RespawnSelect: c.choose_selected_respawn(); break;
+            case A::RaidLock:
+            case A::RaidUnlock: {
+                // RAID_LockButton is enabled for the leader of an unlocked raid, RAID_UnlockButton of a locked one.
+                const auto& r = c.raid();
+                const bool lock = action == A::RaidLock;
+                if (r.active && r.leader == c.character_name() && r.locked != lock) c.raid_lock(lock);
+                break;
+            }
+            case A::MerchantBuy: merchant_buy_button(ui_host_); break;
+            case A::MerchantSell: merchant_sell_button(ui_host_); break;
+            case A::MerchantDone: if (c.merchant() && c.merchant()->open) c.close_merchant(); break;
+            case A::QuantityAccept: quantity_accept(ui_host_); break;
+            case A::AltCurrencyReclaim: alt_currency_reclaim_button(ui_host_); break;
+            case A::AltCurrencyCreate: alt_currency_create_button(ui_host_); break;
+            case A::Money0: case A::Money1: case A::Money2: case A::Money3:
+                inventory_money_button(ui_host_, static_cast<int>(action) - static_cast<int>(A::Money0));
+                break;
+            case A::None: break;
+            }
+            return;
         }
+    if (n.notification == "listselect")
+        if (const L list = game::notify_list(n.window, n.child); list != L::None) {
+            const int row = n.value - 1;
+            switch (list) {
+            case L::MerchantItems: merchant_select_row(ui_host_, row); break;
+            case L::AltCurrencies: alt_currency_select_row(ui_host_, row); break;
+            case L::TaskOffers: c.select_task_offer(row); break;
+            case L::RespawnOptions:
+                if (const auto& w = c.respawn_window(); w && row >= 0 && row < static_cast<int>(w->options.size()))
+                    c.set_respawn_choice(w->options[static_cast<std::size_t>(row)].id);
+                break;
+            case L::None: break;
+            }
+            return;
+        }
+    if (n.notification == "newvalue" && game::notify_quantity_slider(n.window, n.child)) {
+        quantity_set_slider(ui_host_, n.value);
         return;
     }
-    // Anything else: the stock window, as the player's click would (its selection and its own state held there).
+    // Anything else (a page's tab, a window E3 does not use): the stock window, as the player's click would.
     if (!ui_api_) {
         log::info("/notify: {} {} {}: needs the UI", n.window, n.child, n.notification);
         return;
     }
     bool done = false;
     // MQ's listselect sets the list's selection. Few stock lists take a selection of their own (list_select); the
-    // rest select a row on its click, as the merchant's does, so that is the fallback.
-    // The row is the window's own (StockWindow::list), not a UI pack's sorted or filtered view of it: the same
-    // with or without a UI, as Window.Child[...].List will count it.
+    // rest select a row on its click, so that is the fallback. The row is the window's own (StockWindow::list), not
+    // a UI pack's sorted or filtered view of it.
     if (n.notification == "listselect")
         done = ui_api_->select_list(n.window, n.child, n.value - 1, 0) || ui_api_->click_list(n.window, n.child, n.value - 1, 0);
     else if (n.notification == "tabselect") ui_api_->set_tab_page(n.window, n.child, n.value - 1), done = true;
-    else done = ui_api_->click_child(n.window, n.child, n.notification == "rightmouseup" ? "rightup" : "left");
+    else if (n.notification != "newvalue")
+        done = ui_api_->click_child(n.window, n.child, n.notification == "rightmouseup" ? "rightup" : "left");
     if (!done) log::info("/notify: {} {} {}: nothing took it", n.window, n.child, n.notification);
 }
 

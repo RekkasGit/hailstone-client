@@ -774,6 +774,17 @@ public:
         return std::max<std::int64_t>(0, static_cast<std::int64_t>(respawn_->time_remaining_ms) - respawn_age_ms());
     }
     void choose_respawn(std::uint32_t option_id);
+    // CRespawnWnd's selected option: the one picked in its list (set_respawn_choice, until one is sent), else the
+    // server's default. Kept here, not in the window, so a script's Select (/notify RespawnWnd SelectButton) chooses
+    // what the window shows, or the default with no UI. 0 without a window.
+    std::uint32_t respawn_selected_option() const { return respawn_ ? respawn_choice_.value_or(respawn_->selected) : 0; }
+    void set_respawn_choice(std::uint32_t option_id) {
+        if (respawn_ && !respawn_chosen_) respawn_choice_ = option_id;
+    }
+    // Select: choose_respawn(respawn_selected_option()) (it checks the delay and the option's availability).
+    void choose_selected_respawn() {
+        if (respawn_) choose_respawn(respawn_selected_option());
+    }
     // Same-zone hover completion publishes a new living spawn. The app must place its physics body there before
     // the next movement step; a full zone change uses the ordinary zone-in placement instead.
     struct RespawnPlacement {
@@ -1272,6 +1283,23 @@ public:
     const std::map<std::uint32_t, AltCurrency>& alt_currencies() const { return alt_currencies_; }
     // Reclaim: the cursor's currency item into the count (put_in), or `count` of it out onto the cursor.
     void alt_currency_reclaim(std::uint32_t currency, std::uint32_t count, bool put_in);
+    // The inventory's Alt. Currency page: the currency picked in its list (0 none) and Display Missing (the ones at
+    // 0 listed too). Kept here, not in the window, so a script's /notify picks and uses the same with or without a UI.
+    std::uint32_t alt_currency_selected() const { return alt_currency_selected_; }
+    void select_alt_currency(std::uint32_t currency) { alt_currency_selected_ = currency; }
+    bool alt_currency_show_missing() const { return alt_currency_show_missing_; }
+    void set_alt_currency_show_missing(bool show) { alt_currency_show_missing_ = show; }
+    // The page's list in its order (std::map's: by currency id), and the picked one's entry (none when not held).
+    std::vector<std::uint32_t> alt_currency_list() const {
+        std::vector<std::uint32_t> v;
+        for (const auto& [cid, a] : alt_currencies_)
+            if (alt_currency_show_missing_ || (a.amount > 0 && a.entry.shown)) v.push_back(cid);
+        return v;
+    }
+    const AltCurrency* selected_alt_currency() const {
+        auto it = alt_currencies_.find(alt_currency_selected_);
+        return it == alt_currencies_.end() ? nullptr : &it->second;
+    }
     struct PointMerchant {
         std::uint32_t npc = 0;           // the merchant while its window is open
         PointMerchantList list;          // the server's answer
@@ -1939,6 +1967,20 @@ public:
     // 20 units): OP_ShopRequest. The server's answer opens the window and
     // sends the stock as item packets of type 0x64.
     void open_merchant(std::uint32_t npc_id);
+    // The merchant list's selection (MerchantSession::considered): consider the merchant slot's item (an inventory
+    // item picked for selling is let go, as the list's click does), or drop it.
+    void merchant_consider(std::uint32_t merchant_slot) {
+        if (!merchant_ || !merchant_->open || !merchant_->items.count(merchant_slot)) return;
+        merchant_->considered = merchant_slot;
+        merchant_unselect();
+    }
+    void merchant_drop_considered() {
+        if (merchant_) merchant_->considered.reset();
+    }
+    // PurchasePageHandler +0x60, "show every item" (MW_UsableButton unchecked): the list starts filtered to what the
+    // player can use; kept for the session, as the original's window keeps it.
+    bool merchant_show_all() const { return merchant_show_all_; }
+    void set_merchant_show_all(bool all) { merchant_show_all_ = all; }
     // CMerchantWnd RequestGetItem: buy `quantity` of the merchant slot's item.
     void merchant_buy(std::uint32_t merchant_slot, std::uint32_t quantity);
     // RequestPutItem: sell `quantity` of the inventory item at `slot`.
@@ -2380,6 +2422,17 @@ public:
     // OP_SharedTaskAcceptNew for a shared task selection); Decline sends task id 0.
     void accept_task(std::uint32_t task_id);
     void decline_tasks();
+    // The task select window's selection (TaskOffers::selected): a row of the offers, and Accept on it (nothing
+    // when no row is selected), so a script's Accept takes what the window shows, or the first offer with no UI.
+    static const game::TaskOffer* selected_task_offer(const game::TaskOffers& o) {
+        return o.selected >= 0 && o.selected < static_cast<int>(o.offers.size()) ? &o.offers[static_cast<std::size_t>(o.selected)] : nullptr;
+    }
+    void select_task_offer(int row) {
+        if (tasks_.offers && row >= 0 && row < static_cast<int>(tasks_.offers->offers.size())) tasks_.offers->selected = row;
+    }
+    void accept_selected_task() {
+        if (const auto* t = tasks_.offers ? selected_task_offer(*tasks_.offers) : nullptr) accept_task(t->task_id);
+    }
     // Abandons a task (OP_CancelTask).
     void cancel_task(std::uint32_t type, std::uint32_t sequence);
     // The task window's Remove (TASK_AbandonButton): the question (game::task_abandon_eqstr, 10 s, the task id) for
@@ -4070,6 +4123,10 @@ private:
     bool waiting_for_port_ = false; // PlayerZoneClient +0x1f05
     std::int64_t respawn_shown_ms_ = 0;
     bool respawn_chosen_ = false;
+    bool merchant_show_all_ = false; // merchant_show_all()
+    std::uint32_t alt_currency_selected_ = 0;   // alt_currency_selected()
+    bool alt_currency_show_missing_ = false;    // alt_currency_show_missing()
+    std::optional<std::uint32_t> respawn_choice_; // the list's pick this window (respawn_selected_option)
     bool respawn_selection_sending_ = false; // outgoing hooks cannot recursively commit another choice
     std::uint32_t respawn_session_ = 0;
 };
