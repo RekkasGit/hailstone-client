@@ -218,6 +218,7 @@ struct Rules {
     int social_press_commands = 5;
     bool social_faces = true;
     bool autoskill = true; // [abilities] autoskill: the Ability Book's autoskill may run (game/ability_book.h)
+    bool map_vanilla = false; // [map] vanilla: only the map background, without marks or overlays
     bool npc_collision = true; // [movement] npc_collision: live NPCs stop the player (game/npc_collision.h)
     // [movement] passable_ladders: walking into a ladder whose polygons are all passable climbs it
     // (CollisionMesh::touches_passable_ladder).

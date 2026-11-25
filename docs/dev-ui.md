@@ -323,6 +323,7 @@ Each entry names the window and what is particular to it; the `hs.*` calls behin
   - Fit / Follow / Labels / Auto Z, and your own markers per zone in `map.markers.<zone>`;
   - right click: Find a path here (`hs.FindMapLocation`), the cursor's /loc and distance; Edit opens the map toolbar;
   - the side panel's Find page is Hailstone's Find window (`app/lua_ui_find.cpp`, docs/navigation.md "Find"); its NPCs button marks the listed NPCs on the map.
+  - `/mapfilter` draws MQ2Map-style spawn and ground marks directly in the shared C++ map view, on the large map and minimap; there are no pack-owned filter controls.
 
 - **Bag1..36** (`bags.lua`): rows of up to five. Resizable (Hailstone's): a set size (`hud.size.Bag<n>`) fits as many slots to a row as its width holds.
 

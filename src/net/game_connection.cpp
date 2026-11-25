@@ -829,6 +829,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         npc_find_identity_.reset();
         quiet_path_.reset();
         shown_find_lease_ = {};
+        shown_find_silent_ = false;
         ++shown_find_generation_;
         retire_tracking();
         tracking_request_.reset(); tracking_data_.reset(); tracking_actors_.clear();

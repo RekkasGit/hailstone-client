@@ -17,7 +17,6 @@
   - on `${Group}`: `Present`, `Injured[pct]`, `LowMana[pct]`, and `Member[n].PctAggro`.
 - New TLOs `${Raid}` (`.Members`, `.Leader`, `.Member[n|name]` with `.Name`, `.Group`, `.Class` ... and the member's spawn) and `${Corpse}` (`.Open`, `.Items`, `.Item[n|name]` with every item member), as in MacroQuest, and new members `${Me.Invulnerable}`, `${Me.Mount}`, `${Me.CurrentFavor}`, `${Me.TributeActive}`, `${Me.SpellShieldBonus}`, `${Me.SpellDamageBonus}`, `${Me.PetBuff[n|name]}`, and a spell's or buff's `CounterType` and `CounterNumber`.
 - `${Spell[...].Duration}` is now in ticks at your level, as in MacroQuest, where it gave the spell file's longest duration in milliseconds.
-
 - Under a Barbarian, Troll or Ogre citizen illusion (races 90, 92 and 93), Slam and Bash need the Bash skill, instead of sending an attack the server ignores, but no shield: Slam never needs one (the original client asked those forms for a shield; the server does not)
 - A game archive in the asset folder that another program shortens while Hailstone runs (a patcher writing in place) no longer crashes the client on Linux; what can no longer be read from it is treated as a damaged file
 - Under an add-on or hand-made interface, deleting a character or bulk-destroying items asks in a window of the client's own, so the question always appears (before, an interface that drew no confirmation box left the action waiting with no prompt)
@@ -70,6 +69,8 @@
 - Plugins can ask whether a command exists with the SDK's new `command_exists`. It says whether a plugin, a script or the client added the command, or whether it is one of the game's own.
 - Modern Spell Gems has optional spell names, a background toggle, and resize grips that wrap the tiles into rows and columns. Icon size is adjustable, and existing layouts keep their defaults
 - Native add-ons can preview and confirm a mouse-aimed ground position through the world placement SDK. **Plugin authors:** `world_capabilities` now reports `HAILSTONE_WORLD_PLACEMENT` in the zone before a geometry frame is ready; test `HAILSTONE_WORLD_GEOMETRY` for the frame
+- `/mapfilter` brings MacroQuest's map filters to Hailstone: spawn types, colours, target lines, paths and circles, markers, vectors and custom spawn searches. `on` and `off` work as aliases for `show` and `hide`. The settings are shared by every character; target lines and circles also reach into the minimap from an off-screen target, and TargetPath leaves player-started routes alone without turning or making sounds
+- `/mapfilter vanilla` shows only the map background, without labels, marks, routes or overlays, while navigation keeps working. A server can lock it on with `[map] vanilla = on` in `hailstone.cfg` without changing the player's saved choice
 - Trees with authored collision hulls let players move through their branches while their trunks still block movement. This fixes the invisible walls near the Field of Bone entrance to Warsliks Woods and in other classic zones
 - Decorative slime no longer blocks movement over the Veksar ramp and doorway or through passages in several Lost Dungeons of Norrath layouts
 - Spells that require line of sight now report “You cannot see your target” before casting through a solid door or moving obstacle

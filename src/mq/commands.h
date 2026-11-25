@@ -24,9 +24,12 @@
 
 namespace hailstone::mq {
 
+class MapFilters;
+
 struct CommandEnv {
     plugin::Hooks* hooks = nullptr;
     const Registry* registry = nullptr;
+    MapFilters* map_filters = nullptr; // shared with the map presenter; a private default when a test leaves it null
     std::function<const Context&()> context;
     std::function<void(const std::string& text)> echo;    // a chat line (MQ's WriteChatColor)
     std::function<void(const std::string& line)> run;     // a command line through the client (GameConnection)
@@ -75,6 +78,7 @@ private:
     // The last line filter: the line as it finally goes, after the plugins' rewrites.
     void final_check(std::string& line, plugin::Flow& flow);
     void say(const std::string& text) const; // a chat line, unless /squelch is running
+    void map_filter(std::string_view args);
     // /docommand, /noparse and /squelch: the rest of the line run as a command, at most kMaxNestedCommands deep.
     void run_nested(std::string_view args);
     // /timed: a line waiting for its time, with who sent it (run as them: CallerScope).
@@ -88,6 +92,7 @@ private:
     void run_timed(); // each pulse: the lines due, in the order they fall due (sent order for the same time)
     std::vector<Timed> timed_;
     CommandEnv env_;
+    std::unique_ptr<MapFilters> own_map_filters_;
     plugin::Hooks::Owner owner_ = 0;
     plugin::Hooks::Owner final_owner_ = 0; // final_check's, registered again so it stays the last filter
     bool redispatched_ = false;            // the next line through filter() is the one it sent on itself

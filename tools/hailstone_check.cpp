@@ -108,6 +108,7 @@ int main(int argc, char** argv) {
                         : "",
                     r.social_faces ? "on" : "off");
         std::printf("  autoskill (the Ability Book): %s\n", r.autoskill ? "allowed" : "off");
+        std::printf("  map: %s\n", r.map_vanilla ? "vanilla" : "normal");
         std::printf("  NPC collision: %s\n", r.npc_collision ? "on" : "off");
         std::printf("  passable ladders climbed: %s\n", r.passable_ladders ? "on" : "off");
         commands = std::move(r.commands);

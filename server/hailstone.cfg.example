@@ -31,6 +31,9 @@ faces = on                ; off disables Lua button faces in any mode
 [abilities]
 autoskill = on            ; off disables the Ability Book's autoskill
 
+[map]
+vanilla = off             ; on: only the map background, without labels, marks, routes or overlays. Navigation still works
+
 [movement]
 npc_collision = on        ; live NPCs block players (players, pets, mercenaries and corpses never do). On by default,
                           ; also without this file; off: everyone walks through everyone, as in the original client
