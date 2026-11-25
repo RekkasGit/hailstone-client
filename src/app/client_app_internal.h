@@ -1175,8 +1175,8 @@ private:
     bool activate_nameplate(std::uint32_t id);
     // CEverQuest::LeftClickedOnPlayer.
     void left_click_spawn(std::uint32_t id);
-    // CEverQuest::RightClickedOnPlayer (update_item_input): false when the spawn has no right-click action.
-    bool right_click_spawn(std::uint32_t id);
+    // False when the spawn has no right-click action. Only mouse callers enable the Consider shortcut.
+    bool right_click_spawn(std::uint32_t id, bool consider_npc = false);
     // Doors and ground objects (app/world_objects.h): a left click or the
     // USE key on one, the open tradeskill container, the --auto-door test.
     bool click_world(const PickTarget& hit);
@@ -1623,6 +1623,7 @@ private:
     bool pc_names_ = true, npc_names_ = true;
     bool own_name_ = true; // Hailstone's switch for the player's own name sprite (display.own_name; game::NameSpriteSwitches)
     bool player_menu_ = true; // Hailstone's right-click menu on players (mouse.player_menu; game::opens_player_menu)
+    bool right_click_consider_ = true; // mouse.right_click_consider
     bool con_name_colour_ = true;     // Hailstone: NPC names in their consider colour (display.con_name_colour)
     bool show_invis_undead_ = false; // Hailstone: "[Name]" for known invisibility versus undead (display.show_invis_undead)
     bool plate_overlap_fade_ = true; // Hailstone: a covered name fades (display.plate_overlap_fade)

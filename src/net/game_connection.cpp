@@ -2892,8 +2892,12 @@ void GameConnection::attack_command(const std::string& args) {
 }
 
 void GameConnection::consider() {
+    consider(world_.target_id);
+}
+
+void GameConnection::consider(std::uint32_t spawn_id) {
     if (state_ != ConnectionState::InZone) return;
-    auto it = world_.spawns.find(world_.target_id);
+    auto it = world_.spawns.find(spawn_id);
     // Cmd_consider @0x4df830 prints its lines with dsp_chat_2 (colour 0x111, the default). With no target it is
     // 13063 "Consider whom?"; 12240 "Consider who?" is the reply handler's (CEverQuest::Consider @0x5239a0).
     if (it == world_.spawns.end()) {
@@ -2909,7 +2913,7 @@ void GameConnection::consider() {
     }
     Consider c;
     c.player_id = world_.player_id;
-    c.target_id = world_.target_id;
+    c.target_id = spawn_id;
     // Cmd_consider @0x4df830: spawn type 2 and up (a corpse) sends OP_ConsiderCorpse with the same 20 bytes and no
     // consider tip; the server answers in chat (decay, and a player corpse's resurrection time).
     const auto op = it->second.is_corpse ? Op::ConsiderCorpse : Op::Consider;

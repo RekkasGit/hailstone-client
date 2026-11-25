@@ -738,6 +738,7 @@ public:
     void set_spell_hit_modes(const game::SpellHitModes& modes) { spell_hit_modes_ = modes; }
     // OP_Consider for the current target; the answer prints the con line.
     void consider();
+    void consider(std::uint32_t spawn_id);
     // unk_SetStandState @0x5a0bc0 (PlayerZoneClient::ChangePosition)
     // for the player: 100 stand, 105
     // kneel (looting, bind wound), 110 sit, 111 crouch, 115 lie down (feign

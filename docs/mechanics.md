@@ -1335,6 +1335,17 @@ Options > General "Player Right-Click Menu" (hailstone.ini `mouse.player_menu`, 
 context menus off (the ContextMenus option, or the player down) the original's right click happens; the gamepad's
 Interact keeps the original's.
 
+#### Right click on an NPC
+
+With **Right-Click to Consider** enabled, a mouse right click on a targetable NPC without another right-click action
+uses the same Consider request and chat reply as `/consider`. It considers the clicked NPC and preserves the current
+target, as in RoF2 (CEverQuest::RightClickedOnPlayer, call at 0x537cf8). Merchant, banker and other NPC interactions,
+boat controls and corpse looting take priority. Click-to-move still walks into range before acting.
+
+The setting is on by default and saved in `hailstone.ini` as `mouse.right_click_consider`. In Modern it is under
+Options > General > Interface. In Gamepad it is under Options > Interface and applies to the mouse. The controller's
+Interact button and the `/click right target` command keep their existing interactions.
+
 ## Death, teleports, the respawn at bind and camping
 
 Code: `game/death_report.*`, `game/zoning.*`, `net/game_connection_death.cpp`; vectors in
