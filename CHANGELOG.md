@@ -4,6 +4,7 @@
 
 - Other players see weapons, shields and instruments change or disappear when you swap equipment or activate a bandolier set.
 - Right-clicking a parcel in the Modern merchant window opens its item details. Alt-right-click still opens window settings.
+- Right-clicking an ordinary NPC shows its Consider message in chat. **Right-Click to Consider** is on by default and can be switched off in Options.
 - New commands `/itemnotify` (click an item slot, a slot in a bag, or an item by name: `leftmouseup`, `rightmouseup`, `rightmouseheld`) and `/nomodkey`, `/shiftkey` and `/ctrlkey` (run a line with the modifier keys forced), as in MacroQuest: E3 moves, sells, trades and loots items with them.
 - New commands, as in MacroQuest (E3 uses them): `/makemevisible`, `/removelev`, `/removeaura <name>`, `/memspell <gem> "<spell name or id>"` and `/click left|right target`. `/memspell` and `/click` used to run the game's `/memspellset` and `/clickthrough`, whose names they abbreviate.
 - New command `/doortarget [id <n> | <name>] | clear` and TLO `${DoorTarget}` (`.ID`, `.Name`, `.X`, `.Y`, `.Z`, `.Distance`, `.Open` ...), and new TLOs `${Merchant}` (`.Open`, `.ItemsReceived`, `.Items`, `.Item[n|name]`, `.Markup`) and `${Mercenary}` (its state, `.Name` and its spawn's members), as in MacroQuest; new members `${Me.TargetOfTarget}`, `${Me.Instance}`, `${EverQuest.Ping}`, `${EverQuest.Foreground}` and `${Navigation.Velocity}`.

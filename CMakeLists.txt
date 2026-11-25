@@ -600,6 +600,7 @@ add_library(hailstone_engine STATIC
   src/app/lua_ui_customization.cpp
   src/app/lua_ui_dialogs.cpp
   src/app/lua_ui_menu.cpp
+  src/app/spawn_interaction.cpp
   src/app/lua_ui_social.cpp
   src/app/lua_ui_realestate.cpp
   src/app/lua_ui_progress.cpp
