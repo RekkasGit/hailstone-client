@@ -570,6 +570,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] **macOS: the saved passwords use deprecated Keychain calls** (SecKeychain, deprecated since macOS 10.10; Apple Clang warns, `platform/credentials.cpp`). SecItem's calls replace them.
 - [ ] **macOS: the startup error for a missing Vulkan** names the graphics card makers' drivers (app/startup_error.cpp); on macOS it would be the missing `libMoltenVK.dylib`.
 - [ ] Resumable downloads (HTTP range requests) instead of starting over.
+- [x] **A feed that went back:** a signed manifest older than the newest one the feed showed before (`update/feed-seen.txt`) is reported, not called up to date (tests/updater_test.cpp). A feed frozen on one manifest is not detected, by choice: no re-signing schedule (docs/updater.md "A feed that went back").
 
 ### Add-ons (docs/addons.md)
 - [x] The manifest and GitHub link parsers, the library header reader; `tools/make_addon.py`, and `hailstone_sign` for add-on manifests.

@@ -48,6 +48,7 @@ void ClientApp::start_updater() {
     n.check = "checking";
     UpdaterEnv env;
     env.install_dir = install;
+    env.data_dir = platform::data_dir();
     env.feed = update_settings_.feed.empty() ? default_update_feed() : update_settings_.feed;
     env.version = release_version();
     env.platform = std::string(update_platform());
@@ -81,6 +82,7 @@ void ClientApp::update_updater() {
     const UpdateStatus s = updater_->status();
     ui::UpdateNotice& n = login_view_.update;
     n.version = s.version;
+    n.seen = s.seen;
     n.notes = s.notes;
     n.error = s.error;
     n.has_package = s.has_package;
@@ -99,6 +101,7 @@ void ClientApp::update_updater() {
     case UpdateState::Idle:
     case UpdateState::Checking: n.check = "checking"; break;
     case UpdateState::UpToDate: n.check = "uptodate"; break;
+    case UpdateState::FeedBehind: n.check = "behind"; break;
     // A failed check has no version; a failed download does.
     case UpdateState::Failed: n.check = s.version.empty() ? "unknown" : "newer"; break;
     // (a skipped release is still newer than this build: the corner says so, with no buttons, as its state is "")

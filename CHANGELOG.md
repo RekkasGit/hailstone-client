@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- If the update feed ever serves an older release than one it showed before, the login screen's corner says "Not up to date: the update feed went back to ..." instead of "Up to date", and nothing is installed
 - Under a Barbarian, Troll or Ogre citizen illusion (races 90, 92 and 93), Slam and Bash need the Bash skill and a shield, as in the original client, instead of sending an attack the server ignores
 - Perf window: **Log hitches** no longer calls every frame a hitch after the frame rate drops for good (a heavier zone, a slower power state); after 30 hitches in a row the typical frame time starts again from the latest frame
 - **Script and plugin authors:** `${Spawn[N]}`, `${Spell[N]}`, `${Me.Inventory[N]}`, an item's `Item[N]`, `${Group.Member[N]}` and `${Me.SpellReady[N]}` give NULL (or FALSE) for a number too large for what it indexes, instead of wrapping round to another spawn, spell, slot or gem

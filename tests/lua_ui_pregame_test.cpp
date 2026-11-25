@@ -681,6 +681,11 @@ TEST_CASE("hs.LoginScreen about and hs.LoginDo openProject: the corner's build, 
     CHECK(ui("return hs.LoginScreen().about.text") == "Up to date");
     v.update.check = "unknown";
     CHECK(ui("return hs.LoginScreen().about.text") == "Could not check for updates");
+    v.update.check = "behind";
+    v.update.version = "0.3.0";
+    v.update.seen = "0.4.0";
+    CHECK(ui("local a = hs.LoginScreen().about return a.status .. '|' .. a.text") ==
+          "behind|Not up to date: the update feed went back to 0.3.0 (0.4.0 was out)");
     v.update.check = "newer";
     v.update.version = "0.5.0";
     CHECK(ui("return hs.LoginScreen().about.text") == "Version 0.5.0 is out");

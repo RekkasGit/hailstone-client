@@ -360,6 +360,8 @@ std::string update_status_text(const UpdateNotice& n) {
     if (n.check == "checking") return "Checking for updates...";
     if (n.check == "uptodate") return "Up to date";
     if (n.check == "unknown") return "Could not check for updates";
+    if (n.check == "behind")
+        return std::format("Not up to date: the update feed went back to {} ({} was out)", n.version, n.seen);
     if (n.check == "newer") {
         if (n.state == "downloading") return std::format("Downloading {}...", n.version);
         if (n.state == "ready") return std::format("{} is ready: restart to update", n.version);
@@ -673,6 +675,7 @@ LoginAction about_corner(const LoginView& view) {
         ImGui::PushTextWrapPos(0.0f);
         if (update_notice_text(view.update).empty()) {
             const ImVec4 colour = view.update.check == "uptodate" ? ImVec4(0.45f, 0.85f, 0.45f, 1.0f)
+                                  : view.update.check == "behind" ? ImVec4(1.0f, 0.65f, 0.25f, 1.0f)
                                                                   : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
             ImGui::TextColored(colour, "%s", update_status_text(view.update).c_str());
         } else if (LoginAction a = update_notice(view.update); a != LoginAction::None) {

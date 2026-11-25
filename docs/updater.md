@@ -16,6 +16,7 @@ Code: `src/app/updater.*` (check, download), `src/app/update_install.*` (install
   updater's word on it (`ui::update_status_text`):
   - "Checking for updates...", "Up to date", "Version 0.5.0 is out";
   - "Could not check for updates" (offline, no manifest yet: the reason is only logged);
+  - "Not up to date: the update feed went back to 0.6.0 (0.7.0 was out)" (see "A feed that went back");
   - "Updates are off: <why>" (a development build, `update.check=0`, no HTTPS, a test run, a box set's other window).
 
   Under it, **What's new** (this version's part of the shipped `CHANGELOG.md`, `core/changelog.h`; greyed when
@@ -108,6 +109,32 @@ pending, the client removes each file from a table of those releases' files whos
   `ui/modern/eqmain.lua` (0.5.0-beta to 0.7.1-beta), now `game_menu.lua`.
 - A pack's folder stays, even if that empties it.
 
+### A feed that went back
+
+An older release's signed manifest still checks, so whoever can change the feed (the releases, or the way to them)
+could serve one again. That cannot downgrade anyone: only a release newer than the running build is offered. But the
+corner would say "Up to date" to a player who is not, and a fix released since would never reach them.
+
+So the client remembers the newest release each feed address has shown it in a manifest whose signature checked:
+`update/feed-seen.txt` under the data folder (`platform::data_dir()`, docs/layout.md), one `<version> <feed>` line a
+feed, at most 16. A signed manifest older than that one is reported, not taken: the corner says "Not up to date: the
+update feed went back to 0.6.0 (0.7.0 was out)", the log warns, and nothing is offered or installed. A newer manifest
+raises the mark; the check is a Hailstone defence of its own, with no counterpart in the original's patcher.
+
+- **A fresh install** has seen nothing and takes the first manifest. **A portable copy** keeps its file with the
+  folder; one made before a release has only the older mark.
+- **Going back by hand** (unpacking an older release over the folder): the feed still shows the newest, which is
+  newer than the running build and is offered as usual. The mark is about the feed, not the build.
+- **Each feed address has its own mark**, so pointing `update.feed` at a test feed with a later version does not
+  make the release feed look behind.
+- **A release withdrawn on purpose** (the newest deleted, so the feed falls back to the one before) shows as a feed
+  that went back to every client that saw it. Release a fixed version over it instead; deleting `feed-seen.txt`
+  forgets the mark.
+- **A feed frozen on one manifest is not detected.** Serving the same manifest for ever, never the newer one, looks
+  the same as no new release. Only an expiry (a date or serial each manifest must refresh, re-signed on a schedule)
+  would tell them apart, and that is left out on purpose: a re-signing schedule would be a burden on every release,
+  and a missed one would turn every client's corner into a warning.
+
 ### The release key
 
 The manifest is signed with Ed25519 (RFC 8032, through Monocypher). The signature covers every byte before the
@@ -142,6 +169,7 @@ The install is described in `app/update_install.h`. Everything lives in `<Hailst
 | `failed.txt` | a release that was rolled back, and is not offered again |
 | `note.txt` | a rollback's message for the version it starts |
 | `trash/` | files that were in use when moved, removed at the next start |
+| `feed-seen.txt` | the newest release each feed showed in a signed manifest ("A feed that went back"); under the data folder, which is this folder unless `HAILSTONE_DATA_DIR` names another |
 | `kept-<time>/` | what a rollback found in `previous/` that the journal did not name (see below); never removed by the client |
 
 The client installs the update itself once it has quit (end of `run_client`, after its window, the browser helper
@@ -364,4 +392,6 @@ its folder's permissions) and never written over an existing file.
   package already downloaded whole is kept.
 - **Other Hailstone windows** the client did not start (not the box set's) are not seen. On Linux they run on; on
   Windows their open files are moved like the quitting client's.
+- **A frozen feed.** A feed that keeps serving one signed manifest is not told apart from no new release, by choice
+  ("A feed that went back").
 - **The CI job.** Releases are published by hand; a tag-triggered CI job would need the signing key in CI.
