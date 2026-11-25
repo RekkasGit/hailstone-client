@@ -369,10 +369,18 @@ public:
     GameConnection(const GameDir& game, ConnectionOptions options = {});
     ~GameConnection();
     // Tests: a zone packet handled as if it had arrived (no session needed).
-    void receive_zone_packet_for_test(const AppPacket& p) { handle_zone(p); }
-    void receive_world_packet_for_test(const AppPacket& p) { handle_world(p); }
-    game::WorldState& world_for_test() { return world_; }
-    void set_spell_table_for_test(std::shared_ptr<const game::SpellTable> t) { spell_table_ = std::move(t); }
+    void receive_zone_packet_for_test(const AppPacket& p) { invalidate_character(); handle_zone(p); invalidate_character(); }
+    void receive_world_packet_for_test(const AppPacket& p) { invalidate_character(); handle_world(p); invalidate_character(); }
+    game::WorldState& world_for_test() { invalidate_character(); return world_; }
+    void set_spell_table_for_test(std::shared_ptr<const game::SpellTable> t) {
+        invalidate_character();
+        spell_table_ = std::move(t);
+    }
+    // The MQ TLOs' shared character (with_cached_character) is built again on its next read: the state it was built
+    // from changed outside update() without a packet sent.
+    void invalidate_character() const { ++character_serial_; }
+    // Tests: how many sheets the TLOs' shared character has been built from.
+    std::uint32_t character_builds_for_test() const { return character_builds_; }
     std::size_t cast_stages_shown_for_test() const { return cast_stage_shown_.size(); }
     static constexpr std::size_t cast_stages_kept_for_test() { return kCastStagesKept; }
     void expire_poison_timer_for_test() { if (poison_started_ms_) poison_started_ms_ = 1; } // as if 10 s had passed
@@ -2911,9 +2919,16 @@ public:
     // (CollsnCallbackForFloor), or none. The trader stall check (0x4431a0) reads it.
     void set_touching_switch(std::optional<std::uint8_t> door) { touching_switch_ = door; }
     std::optional<std::uint8_t> touching_switch() const { return touching_switch_; }
-    void set_profile_for_test(const PlayerProfile& p) { profile_ = p; }
+    void set_profile_for_test(const PlayerProfile& p) {
+        invalidate_character();
+        profile_ = p;
+    }
     // Tests: DoPassageOfTime's timed blocks as if a frame ran at `now` (now_ms()'s clock).
-    void passage_of_time_for_test(std::int64_t now) { passage_of_time(now); }
+    void passage_of_time_for_test(std::int64_t now) {
+        invalidate_character();
+        passage_of_time(now);
+        invalidate_character();
+    }
     // ---- the barter hall (game/barter.h; net/game_connection_market.cpp) ----
     // CBarterMerchantWnd: a right click on a buyer sends OP_Barter 11 (RightClickedOnPlayer); the window opens on the
     // server's answer. A line is picked, Sell asks for the quantity (sell_start: the dialog's limit, or nothing when
@@ -3197,6 +3212,22 @@ private:
     // inventory); a nested call builds its own.
     mutable std::unique_ptr<game::mechanics::CharacterSheet> character_sheet_;
     mutable bool character_sheet_busy_ = false;
+    // build_sheet_into over the connection's state now.
+    void build_character_sheet(game::mechanics::CharacterSheet& sheet) const;
+    // The MQ TLOs' reads (spell_landing_slot, spell_duration_ticks, spell_range_focus and the spell bonuses): a
+    // script asks many in one frame (E3's StacksWith over each of a target's buffs), so they share one sheet and one
+    // Character, built on the first read and kept until character_serial_ moves: each update() (the packets, the
+    // clock), each packet the client sends (an action that may have changed its state at once, an item move), and
+    // each local change made without one (clear_buff_locally, the tests' setters). Inside update() and in a nested
+    // call they build their own, as with_character does. `stats`: the same sheet's Character after
+    // ProcessAllStats, run once per build and kept apart, so the effect-only one does not change with it (its
+    // haste would take in the items' then).
+    void with_cached_character(bool stats, const std::function<void(game::mechanics::Character&)>& fn) const;
+    struct CharacterCache; // net/character_cache.h
+    mutable std::unique_ptr<CharacterCache> character_cache_;
+    mutable std::uint32_t character_builds_ = 0; // the shared character's sheets built (tests)
+    mutable std::uint64_t character_serial_ = 1;
+    bool in_update_ = false;
     void update_merchant();
     void update_npc_interactions();
     void update_barter();

@@ -325,6 +325,8 @@ The value of `Spell[...]`, `Me.Gem[n]`, `Me.Casting` and the like. Its plain val
 | `ResistType` | string | `Magic`, `Fire`, `Cold`, `Poison`, `Disease`, `Chromatic`, `Prismatic`, `Physical`, `Corruption` or `Unresistable` |
 | `ResistAdj`, `Skill`, `SpellIcon`, `GemIcon`, `Category` | int | raw spell file values |
 
+The stacking and stats reads (`WillLand`, `StacksWith`, `StacksTarget`, `WillLandPet`, `Duration`, `MyRange`, and `Me.SpellShieldBonus` / `SpellDamageBonus`) work out the player's character once and share it until the client's state may have changed: the next frame, a packet the client sends, or a buff it drops itself. A script that asks them over each of a target's buffs in one frame pays for one build.
+
 ### item
 
 An item in a slot. Its plain value is the item's name.

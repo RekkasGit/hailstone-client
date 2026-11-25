@@ -1,4 +1,5 @@
 #include "net/game_connection.h"
+#include "net/character_cache.h"
 
 #include "net/notice_packets.h"
 #include "net/player_packets.h"
@@ -136,6 +137,7 @@ void GameConnection::reload_game_files() {
     tables_.reset();
     auto table = std::make_shared<game::SpellTable>();
     if (!table->load(game_)) log::warn("spells_us.txt not found; spell names and rules are unavailable");
+    invalidate_character();
     spell_table_ = std::move(table);
     if (spell_id_limit_ > game::kRof2StockMaxSpellId && !spell_data_ready())
         log::warn("Reloaded spells_us.txt does not support the current zone's spell ID limit {}", spell_id_limit_);
@@ -259,6 +261,20 @@ void GameConnection::connect_world(bool zoning) {
 }
 
 void GameConnection::update() {
+    // The MQ TLOs' shared character (with_cached_character) is not used while the frame changes the state, and is
+    // built again after it.
+    struct UpdateScope {
+        GameConnection& c;
+        bool was;
+        explicit UpdateScope(GameConnection& conn) : c(conn), was(conn.in_update_) {
+            conn.in_update_ = true;
+            c.invalidate_character();
+        }
+        ~UpdateScope() {
+            c.in_update_ = was;
+            c.invalidate_character();
+        }
+    } update_scope(*this);
     if (world_session_) {
         world_session_->update();
         if (world_session_->state() == SessionState::Connected && !world_login_sent_ &&
@@ -512,6 +528,7 @@ bool GameConnection::new_armor_membership_changed() {
 }
 
 void GameConnection::send_world(const AppPacket& p) {
+    invalidate_character(); // an action: what it changed at once, the TLOs' shared character no longer shows
     if (!world_session_) return;
     if (options_.hooks && options_.hooks->has_packet_hooks(plugin::Stream::World, plugin::Direction::Out)) {
         AppPacket copy = p;
@@ -523,6 +540,7 @@ void GameConnection::send_world(const AppPacket& p) {
 }
 
 bool GameConnection::send_zone(const AppPacket& p, bool reliable, const std::function<bool()>& still_current) {
+    invalidate_character(); // an action (an item move, a click-off): what it changed at once, the cache no longer shows
     if (!zone_session_ || zone_session_->state() != SessionState::Connected) return false;
     if (still_current && !still_current()) return false;
     const auto* session = zone_session_.get();

@@ -1102,6 +1102,46 @@ TEST_CASE("TLO: Corpse, the loot window's corpse and its items") {
     CHECK(f.p("${Corpse.Open} ${Corpse.Item[1]} ${Corpse.ID}") == "FALSE NULL NULL");
 }
 
+// The stacking and stats reads a script asks many times a frame (E3's StacksWith over each of a target's buffs) share
+// one sheet (GameConnection::with_cached_character), built again after update(), a packet sent or a local change.
+TEST_CASE("TLO: spell stacking and stats reads share one character until the state may have changed") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    auto& c = *f.world.conn;
+    const std::uint32_t start = c.character_builds_for_test();
+    const std::string first = f.p("${Spell[Holy Armor].WillLand} ${Spell[Holy Armor].StacksWith[Holy Armor]} "
+                                  "${Spell[Holy Armor].WillLandPet} ${Spell[Holy Armor].Duration} "
+                                  "${Spell[Minor Healing].MyRange} ${Me.SpellShieldBonus} ${Me.SpellDamageBonus}");
+    for (int i = 0; i < 5; ++i) CHECK(f.p("${Spell[Holy Armor].StacksWith[Holy Armor]}") == "TRUE");
+    CHECK(c.character_builds_for_test() == start + 1);
+    // The same answers from a new build.
+    c.invalidate_character();
+    CHECK(f.p("${Spell[Holy Armor].WillLand} ${Spell[Holy Armor].StacksWith[Holy Armor]} "
+              "${Spell[Holy Armor].WillLandPet} ${Spell[Holy Armor].Duration} "
+              "${Spell[Minor Healing].MyRange} ${Me.SpellShieldBonus} ${Me.SpellDamageBonus}") == first);
+    CHECK(c.character_builds_for_test() == start + 2);
+    // A frame, a packet the client sends (an action), a buff the client drops itself: built again.
+    c.update();
+    f.p("${Spell[Holy Armor].WillLand}");
+    CHECK(c.character_builds_for_test() == start + 3);
+    c.send_zone_packet(net::AppPacket{});
+    f.p("${Spell[Holy Armor].WillLand}");
+    CHECK(c.character_builds_for_test() == start + 4);
+    c.clear_buff_locally(40); // an empty slot: only that it was dropped locally matters here
+    f.p("${Spell[Holy Armor].WillLand}");
+    CHECK(c.character_builds_for_test() == start + 5);
+    // An item worn changes the stats read after it (the test's accessor stands for the change).
+    net::Item robe;
+    robe.name = "Shielding Robe";
+    robe.id = 7001;
+    robe.equip_slots = 1u << net::kSlotChest;
+    robe.races = 0xffffffffu;
+    robe.classes = 0xffff;
+    robe.spell_shield = 12;
+    A::inventory(c).put(net::ItemSlot::possessions(net::kSlotChest), robe);
+    CHECK(f.p("${Me.SpellShieldBonus}") == "12");
+}
+
 TEST_CASE("TLO: Me's Invulnerable, Mount, favour, tribute, spell bonuses, PetBuff; spells' counters") {
     Fixture f;
     using A = net::GameConnectionTestAccess;
