@@ -163,7 +163,8 @@ void ClientApp::save_iso_settings() {
 }
 
 void ClientApp::update_iso_hover() {
-    if (!iso() || !iso_hover_on_ || !conn_ || ui_.wants_mouse() || mouse_look_.active || conn_->placement().active()) {
+    if (!iso() || !iso_hover_on_ || !conn_ || ui_.wants_mouse() || mouse_look_.active || conn_->placement().active() ||
+        (automation_ && automation_->world_placement_aiming())) {
         iso_hover_ = {};
         return;
     }

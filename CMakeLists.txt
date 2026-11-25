@@ -129,7 +129,9 @@ add_library(hailstone_engine STATIC
   src/plugin/hooks.cpp
   src/plugin/consent.cpp
   src/plugin/policy.cpp
+  src/plugin/command_policy.cpp
   src/net/settings_packets.cpp
+  src/net/server_management_packets.cpp
   src/net/quest_npc_packets.cpp
   src/net/zone_link_packets.cpp
   src/net/server_files_packets.cpp
@@ -178,6 +180,7 @@ add_library(hailstone_engine STATIC
   src/net/des.cpp
   src/net/login.cpp
   src/net/game_connection.cpp
+  src/net/game_connection_server_management.cpp
   src/net/game_connection_spells.cpp
   src/net/game_connection_ticks.cpp
   src/net/game_connection_spell_sets.cpp
@@ -257,6 +260,7 @@ add_library(hailstone_engine STATIC
   src/game/server_ext.cpp
   src/game/server_ext_chain.cpp
   src/game/chat_text.cpp
+  src/game/mq_colors.cpp
   src/game/chat_windows.cpp
   src/game/client_options.cpp
   src/game/buff_overlays.cpp
@@ -579,6 +583,7 @@ add_library(hailstone_engine STATIC
   src/app/navigator.cpp
   src/app/guide_path.cpp
   src/app/lua_ui_values.cpp
+  src/app/lua_ui_server_management.cpp
   src/app/lua_ui_hud.cpp
   src/app/lua_ui_hotbar.cpp
   src/app/lua_ui_caps.cpp
@@ -880,6 +885,14 @@ add_library(MQ2Example MODULE plugins/example/MQ2Example.c)
 target_include_directories(MQ2Example PRIVATE sdk)
 set_target_properties(MQ2Example PROPERTIES PREFIX "" LIBRARY_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/plugins$<0:>
                                             RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/plugins$<0:>)
+
+# HSMono (the MQ2Mono port), a repository of its own: built with the client when cloned into plugins/hsmono (ignored
+# here, as the server plugins below are).
+set(HSMONO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/plugins/hsmono")
+if(EXISTS "${HSMONO_DIR}/CMakeLists.txt")
+    message(STATUS "Found optional subproject: HSMono")
+    add_subdirectory("${HSMONO_DIR}")
+endif()
 
 # The example upscaler provider (plugins/example/upscaler): plain C against sdk/hailstone_upscaler.h, in
 # build/hailstone/upscalers/example/example.<so|dll|dylib> (render/upscaler_provider.h finds it by its folder's name).
@@ -1246,6 +1259,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/ui_rules_vectors_test.cpp
     tests/net_login_test.cpp
     tests/net_packets_test.cpp
+    tests/server_management_packets_test.cpp
     tests/shroud_packets_test.cpp
     tests/pfs_test.cpp
     tests/pfs_mapped_test.cpp
@@ -1400,6 +1414,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/spell_projectiles_test.cpp
     tests/commerce_test.cpp
     tests/bandolier_swap_test.cpp
+    tests/exchange_test.cpp
     tests/bank_test.cpp
     tests/bank_snapshot_test.cpp
     tests/real_estate_test.cpp
@@ -1444,6 +1459,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/achievements_test.cpp
     tests/achievement_connection_test.cpp
     tests/achievement_chat_test.cpp
+    tests/mq_colors_test.cpp
     tests/stml_link_injection_test.cpp
     tests/achievement_chat_input_test.cpp
     tests/lua_ui_achievements_test.cpp
@@ -1574,13 +1590,17 @@ if(HAILSTONE_BUILD_TESTS)
   add_library(HostProbe MODULE tests/plugins/HostProbe.cpp)
   add_library(HostProbeThrow MODULE tests/plugins/HostProbe.cpp)
   target_compile_definitions(HostProbeThrow PRIVATE HAILSTONE_PROBE_THROW_INIT)
+  # A C++ test plugin built with the SDK's C++ wrapper (tests/plugins/CppWrapper.cpp, sdk/hailstone_plugin.hpp), with
+  # the client's warnings: the header must compile cleanly in a plugin.
+  add_library(CppWrapper MODULE tests/plugins/CppWrapper.cpp)
+  target_compile_options(CppWrapper PRIVATE ${HAILSTONE_WARNINGS})
   # A plugin built against the 0.7.1-beta SDK header (a frozen copy): released plugins must keep loading.
   add_library(Sdk071Plugin MODULE tests/plugins/Sdk071Plugin.c)
   target_include_directories(Sdk071Plugin PRIVATE tests/plugins/sdk071)
   target_compile_options(Sdk071Plugin PRIVATE ${HAILSTONE_WARNINGS})
   set_target_properties(Sdk071Plugin PROPERTIES PREFIX "")
   add_dependencies(hailstone_tests Sdk071Plugin)
-  foreach(p ExtendTest ExtendTestV1 ExtendTestNew HostProbe HostProbeThrow)
+  foreach(p ExtendTest ExtendTestV1 ExtendTestNew HostProbe HostProbeThrow CppWrapper)
     target_include_directories(${p} PRIVATE sdk)
     set_target_properties(${p} PROPERTIES PREFIX "")
   endforeach()
@@ -1608,9 +1628,14 @@ if(HAILSTONE_BUILD_TESTS)
   target_compile_definitions(TestUpscaler_newer PRIVATE EXAMPLE_ABI=99)
   target_compile_definitions(TestUpscaler_nodevice PRIVATE EXAMPLE_REFUSE_DEVICE)
   target_compile_definitions(TestUpscaler_failing PRIVATE EXAMPLE_FAIL_EVALUATE)
-  add_dependencies(hailstone_tests MQ2Example ExtendTest ExtendTestV1 ExtendTestNew HostProbe HostProbeThrow hailstone_mock_web_helper)
-  target_compile_definitions(hailstone_tests PRIVATE HAILSTONE_EXAMPLE_PLUGIN="$<TARGET_FILE:MQ2Example>"
-    HAILSTONE_PROBE_PLUGIN="$<TARGET_FILE:HostProbe>" HAILSTONE_PROBE_THROW_PLUGIN="$<TARGET_FILE:HostProbeThrow>"
+  add_dependencies(hailstone_tests MQ2Example ExtendTest ExtendTestV1 ExtendTestNew HostProbe HostProbeThrow CppWrapper
+                   hailstone_mock_web_helper)
+    
+  target_compile_definitions(hailstone_tests PRIVATE 
+    HAILSTONE_EXAMPLE_PLUGIN="$<TARGET_FILE:MQ2Example>"
+    HAILSTONE_PROBE_PLUGIN="$<TARGET_FILE:HostProbe>" 
+    HAILSTONE_PROBE_THROW_PLUGIN="$<TARGET_FILE:HostProbeThrow>"
+    HAILSTONE_CPP_PLUGIN="$<TARGET_FILE:CppWrapper>"
     HAILSTONE_SDK071_PLUGIN="$<TARGET_FILE:Sdk071Plugin>"
     HAILSTONE_EXTEND_PLUGIN="$<TARGET_FILE:ExtendTest>" HAILSTONE_EXTEND_PLUGIN_V1="$<TARGET_FILE:ExtendTestV1>"
     HAILSTONE_EXTEND_PLUGIN_NEW="$<TARGET_FILE:ExtendTestNew>"

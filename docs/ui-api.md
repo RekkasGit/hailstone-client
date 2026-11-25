@@ -417,6 +417,26 @@ API 1.6 adds `addons.Policy()` and `addons.PolicyAction(action, serial)` (flat `
 - Both are for the client's own interfaces: add-on or hand-placed interfaces and plugin or script code get nil and
   false, and cannot replace the "AddonPolicy" window (docs/plugins.md "Opt-in add-on policies").
 
+## Server Management
+
+The built-in Modern pack uses `serverManagement` for GM policy editing. The encounter grants access using the
+account's server-side status. This module is closed to add-on code and custom interface packs.
+
+- `Available()` reports whether the client can request the server's policy. `Open()` requests the first snapshot
+  or refreshes the current snapshot when `reload_required` is set. It also succeeds if the request is already pending
+  or the current snapshot is usable.
+- `CanonicalCommandName(name)` resolves a command spelling as the policy parser does, including RoF2 abbreviations.
+- `View([known_serial[, known_catalog_serial]])` returns `nil` without an authorized snapshot. The result has
+  `serial`, `catalog_serial`, `revision`, `file_revision`, `message`, `saving`, `reload_required`, and `reloading`.
+  A new snapshot serial adds `minimum_status`, `reloaded`, and `fields` (an array of `{section, key, value}`).
+  `reloaded` indicates that a policy refresh replaced an open snapshot. A new snapshot or catalog serial adds
+  `commands` (an array of `{name, description, origin, aliases, groups}`). The catalog can update during a draft edit.
+  During a zone transfer the result contains only `paused = true` so the window can retain its draft while hidden.
+- `Save(revision, edits)` sends only edited `{section, key, value}` records and returns whether submission started.
+  Success supplies a new snapshot serial. A stale or unconfirmed save requires an `Open()` refresh before the next
+  save. The window retains the current snapshot and draft in the meantime. An empty value is an explicit edit.
+- `Close()` clears the visible management session. The client can request a fresh snapshot on the next open.
+
 ## Class names
 
 API 1.7 adds `character.ClassName(id[, short])` (flat `hs.ClassName`) and `character.ClassNamesRevision()`

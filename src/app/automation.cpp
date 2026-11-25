@@ -12,7 +12,9 @@
 
 #include "app/addon_install.h"
 #include "core/log.h"
+#include "core/path_utf8.h"
 #include "game/eq_names.h"
+#include "game/mq_colors.h"
 #include "game/nameplate_canvas.h"
 #include "mq/commands.h"
 #include "mq/lua_mq.h"
@@ -76,7 +78,7 @@ struct Automation::Impl {
 
     void print(const std::string& text, std::uint32_t rgb = 0) {
         if (net::GameConnection* c = conn()) c->ui_message(text, rgb);
-        else log::info("{}", text);
+        else log::info("{}", game::strip_mq_colors(text)); // the log is plain text (game/mq_colors.h)
     }
 
     // A command line as the player's would go (the hooks first: GameConnection::send_command).
@@ -164,6 +166,7 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     m.ctx.ability = m.env.ability;
     m.ctx.can_see = m.env.can_see;
     m.ctx.line_of_sight = m.env.line_of_sight;
+    m.ctx.config_path = path_utf8(m.env.data_dir / "scripts" / "config"); // the scripts' config_dir below
 
     mq::CommandEnv ce;
     ce.hooks = &m.hooks;
@@ -237,6 +240,8 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     ne.nameplates = &m.nameplates;
     ne.web = m.env.web;
     ne.connection = [&m] { return m.conn(); };
+    ne.world_placement_scene = m.env.world_placement_scene;
+    ne.world_placement_input_allowed = m.env.world_placement_input_allowed;
     ne.max_camera_distance = m.env.max_camera_distance;
     ne.set_max_camera_distance = m.env.set_max_camera_distance;
     ne.hot_button = m.env.hot_button;
@@ -250,6 +255,7 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     ne.dirs = search_dirs(m.env.data_dir / "plugins", m.env.install_dir / "plugins");
     ne.cache_dir = m.env.data_dir / "cache" / "plugins";
     ne.config_dir = m.env.data_dir / "plugins";
+    ne.scripts_config_dir = se.config_dir; // the scripts' settings folder, as MacroQuest.Path[config]
     fs::create_directories(ne.dirs.front(), ec);
     m.plugins = std::make_unique<plugin::NativePlugins>(ne);
 }
@@ -374,6 +380,26 @@ void Automation::world_finish(bool submitted, bool presented) {
 
 void Automation::world_unavailable() {
     if (impl_->plugins) impl_->plugins->world_unavailable();
+}
+
+bool Automation::world_placement_aiming() const {
+    return impl_->plugins && impl_->plugins->world_placement_aiming();
+}
+
+void Automation::world_placement_update(std::optional<plugin::WorldPlacementPoint> ground, bool pressed, bool released) {
+    if (impl_->plugins) impl_->plugins->world_placement_update(ground, pressed, released);
+}
+
+void Automation::world_placement_cancel() {
+    if (impl_->plugins) impl_->plugins->world_placement_cancel();
+}
+
+void Automation::world_placement_player_cancel() {
+    if (impl_->plugins) impl_->plugins->world_placement_player_cancel();
+}
+
+void Automation::world_placement_player_input() {
+    if (impl_->plugins) impl_->plugins->world_placement_player_input();
 }
 
 void Automation::shutdown() {

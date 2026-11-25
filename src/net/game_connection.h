@@ -101,6 +101,7 @@
 #include "net/commerce.h"
 #include "net/market_packets.h"
 #include "net/settings_packets.h"
+#include "net/server_management_packets.h"
 #include "net/zone_link_packets.h"
 #include "plugin/policy.h"
 #include "net/server_files.h"
@@ -349,7 +350,7 @@ struct ConnectionOptions {
     // The saved server's folder (servers/<id>/): at the first zone-in the zone-in waits while the server's client
     // files are brought into it (net/server_files.h).
     std::filesystem::path server_files_dir;
-    // Transient logins cache only hailstone.cfg here, to check server access without enabling the full download.
+    // Transient logins cache only hailstone.cfg here, for access and command policy without the full download.
     std::filesystem::path server_access_dir;
     // How much those files may come to (hailstone.ini's assets.server_files_max_*_mb).
     ServerFileSync::Limits server_files_limits;
@@ -559,6 +560,18 @@ public:
     void request_zone_links();
     const std::optional<ZoneLinks>& zone_links() const { return zone_links_; }
     std::uint32_t zone_links_serial() const { return zone_links_serial_; }
+    bool server_management_available() const;
+    bool open_server_management();
+    bool save_server_management(std::uint32_t revision, std::span<const ServerManagementEdit> edits);
+    void close_server_management();
+    const std::optional<ServerManagementReply>& server_management_snapshot() const { return server_management_snapshot_; }
+    std::uint32_t server_management_serial() const { return server_management_serial_; }
+    bool server_management_saving() const;
+    bool server_management_paused() const;
+    bool server_management_reloading() const;
+    bool server_management_reload_required() const { return server_management_reload_required_; }
+    bool server_management_reloaded() const { return server_management_reloaded_; }
+    const std::string& server_management_message() const { return server_management_message_; }
     // The current zone's id and instance (from OP_NewZone; 0 before it arrives).
     std::uint16_t zone_id() const { return new_zone_ ? new_zone_->zone_id : 0; }
     // The spawns ProcessSwitches checks for a moving floor switch's riders (the app's player); null: none.
@@ -2435,6 +2448,8 @@ public:
     // table order); ';' and '[' lines go to the chat server; anything else is
     // said on the default channel.
     void send_command(const std::string& line);
+    // Also used for stock social directives, which have their own interpreter.
+    bool allow_server_command(std::string_view name);
     // A client message by eqstr id (the system colour), as the key commands print them.
     void system_message(std::uint32_t eqstr, std::uint32_t color = 0) { system(eqstr, {}, color); }
     const game::SocialState& social() const { return social_; }
@@ -2947,7 +2962,7 @@ private:
     void set_spawn_motion(game::Spawn& s, const Motion& m);
     void connect_world(bool zoning);
     void chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0,
-              std::string peer = {}, std::optional<std::string> display_text = std::nullopt);
+              std::string peer = {}, std::optional<std::string> display_text = std::nullopt, bool filter = true);
     // ReportSuccessfulHit's melee line for an attack by `source`, through the chat filters (`report`: its argument).
     void report_hit(const game::HitLine& line, std::uint32_t source, bool report = true);
     void handle_combat(Op op, const AppPacket& p);
@@ -3031,6 +3046,10 @@ private:
     // CEverQuest_ProcessCursorQueue @0x5321a0, once a frame (net/game_connection_items.cpp).
     void process_cursor_queue();
     bool item_command(const std::string& command, const std::string& args);
+    // Hailstone: MQ2Exchange's /exchange "<item name|id>" <slot> and /unequip <slot> (game/exchange.h), through the
+    // inventory's own clicks (click_slot) so the original's checks hold.
+    void exchange_command(const std::string& args);
+    void unequip_command(const std::string& args);
     void handle_commerce(Op op, const AppPacket& p);
     void commerce_item(std::uint32_t packet_type, Item item);
     bool commerce_command(const std::string& command, const std::string& args);
@@ -3325,6 +3344,12 @@ private:
     std::optional<plugin::Rules> server_rules_;
     // Returns false when this login received a policy that denies Hailstone access.
     bool update_server_rules();
+    void request_hailstone_settings();
+    void update_command_account_status();
+    void update_server_management();
+    void pause_server_management_for_zone();
+    void handle_server_management(const AppPacket& p);
+    bool send_server_management(const AppPacket& p, std::uint32_t id, ServerManagementAction action);
     bool guild_world_invites_ = false; // OP_HailstoneGuildReply's hello this zone-in (server/'s script)
     std::uint32_t server_rules_serial_ = 0;
     int hook_game_state_ = 0;              // the game state last raised (plugin::kGameState*; 0 none yet)
@@ -3932,6 +3957,23 @@ private:
     std::unordered_map<std::string, std::uint8_t> quest_npcs_;
     bool quest_npcs_asked_ = false;
     bool hailstone_script_ = false;   // a zone answered OP_HailstoneSettingsRequest
+    std::optional<int> command_account_status_;
+    std::chrono::steady_clock::time_point settings_requested_at_{};
+    std::chrono::steady_clock::time_point command_account_status_received_at_{};
+    bool server_management_offered_ = false;
+    struct PendingManagement {
+        std::uint32_t id;
+        ServerManagementAction action;
+        std::chrono::steady_clock::time_point deadline;
+    };
+    std::optional<PendingManagement> server_management_pending_;
+    std::optional<ServerManagementReply> server_management_snapshot_;
+    bool server_management_reload_required_ = false;
+    bool server_management_reloaded_ = false;
+    bool server_management_waiting_for_zone_ = false;
+    std::string server_management_message_;
+    std::uint32_t server_management_request_id_ = 0;
+    std::uint32_t server_management_serial_ = 0;
     bool zone_links_asked_ = false;
     std::optional<ZoneLinks> zone_links_;
     std::uint32_t zone_links_serial_ = 0;
