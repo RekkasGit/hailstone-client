@@ -2880,3 +2880,11 @@ TEST_CASE("nav: a shown find and a quiet path in flight together each get their 
     CHECK(rig.conn.find_replies() == finds + 2);
     CHECK_FALSE(rig.conn.take_quiet_path(lease));
 }
+
+TEST_CASE("nav: Navigation.Velocity is the player's speed in units a second") {
+    MqHost h;
+    CHECK(h.p("${Navigation.Velocity}") == "0");
+    // the speed per 50 ms tick (3, 4: 5 a tick), 20 ticks a second
+    net::GameConnectionTestAccess::velocity(*h.world.conn) = glm::vec3(3.0f, 4.0f, 0.0f);
+    CHECK(h.p("${Navigation.Velocity}") == "100");
+}

@@ -544,6 +544,8 @@ public:
     }
     // What set_player_motion last gave: whether the player is moving, and the heading (0..512).
     bool player_moving() const { return moving_; }
+    // ... and the velocity, world units per tick (the movement's 50 ms step; MQ2Nav's SpeedX/Y/Z).
+    const glm::vec3& player_velocity() const { return velocity_; }
     bool player_stationary() const { return !moving_ && velocity_ == glm::vec3(0.0f) && speed_run_ == 0.0f; }
     float player_heading() const { return heading_; }
     // Zone points of the current zone (OP_SendZonepoints): targets by zone_points.number.
@@ -2080,6 +2082,10 @@ public:
     // The zone's switches (OP_SpawnDoor), animated by update() as the
     // original's CDisplay_ProcessSwitches does every frame.
     const std::vector<game::Door>& doors() const { return doors_; }
+    // MQ's switch target (/doortarget, the DoorTarget TLO): a door of this zone, or none. The zone's doors going
+    // (OP_RemoveAllDoors, a zone change) clear it.
+    std::optional<std::uint8_t> door_target() const { return door_target_; }
+    void set_door_target(std::optional<std::uint8_t> id) { door_target_ = id; }
     const game::Door* door(std::uint8_t id) const;
     const std::vector<game::GroundObject>& ground_objects() const { return ground_objects_; }
     // CEverQuest::ClickedSwitch -> EQSwitch::UseSwitch: refuses unusable or
@@ -3569,6 +3575,7 @@ private:
 
     // Doors and ground objects.
     std::vector<game::Door> doors_;
+    std::optional<std::uint8_t> door_target_; // door_target
     // OP_FindPersonRequest reservations and transmitted requests. Unsent reservations cannot own a reply or a
     // timeout; transmitted requests take the replies in the order sent (see path_reply). A discarded one (its owner
     // stopped or replaced it) still takes its reply, so the later ones keep theirs.

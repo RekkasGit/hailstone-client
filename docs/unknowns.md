@@ -1468,6 +1468,10 @@ Real estate is built to the original (docs/protocol/rof2-packets.md "Real estate
   answer is the next slot + 1: the pet window's slot count (MQ's `GetMaxBuffs`) is not known, so a full pet bar is not
   noticed. Settle: the RoF2 pet window's buff count.
 
+- **`Merchant.ItemsReceived` for a merchant with nothing to sell.** MQ sets it once the merchant window's list has
+  been filled (CMerchantWnd's PurchasePageHandler::UpdateList). Here it is TRUE once the merchant is open and an item
+  of its stock has come, so a merchant with no stock stays FALSE. Settle: whether UpdateList runs for an empty stock.
+
 ## Server-specific extensions
 
 - **Ability Book class filter on an NMS multiclass server.**

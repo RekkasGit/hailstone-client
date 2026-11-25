@@ -61,6 +61,10 @@ struct GameConnectionTestAccess {
     static std::optional<BankSession>& bank(GameConnection& c) { return c.bank_; }
     static std::optional<GameConnection::LootSession>& loot(GameConnection& c) { return c.loot_; }
     static GameConnection::Tribute& tribute(GameConnection& c) { return c.tribute_; }
+    static game::BankCoins& bank_coins(GameConnection& c) { return c.bank_coins_; }
+    static game::MercManager& merc(GameConnection& c) { return c.merc_; }
+    static std::uint32_t& target_of_target(GameConnection& c) { return c.target_of_target_; }
+    static glm::vec3& velocity(GameConnection& c) { return c.velocity_; }
     static bool item_command(GameConnection& c, const std::string& command, const std::string& args) {
         return c.item_command(command, args);
     }

@@ -3,7 +3,10 @@
 
 #include "core/build_info.h"
 #include "manual_clock.h"
+#include "game/doors.h"
+#include "mq/commands.h"
 #include "mq/parse.h"
+#include "plugin/hooks.h"
 #include "mq/spawn_search.h"
 #include "mq/tlo.h"
 #include "mq_test_world.h"
@@ -1165,4 +1168,165 @@ TEST_CASE("TLO: Me.Pet and Pet read the pet window's buffs, targeted or not") {
     // Targeted, with no target buffs from the server: still the pet window's.
     A::world(*f.world.conn).target_id = 14;
     CHECK(f.p("${Me.Pet.Buff[1]} ${Target.Buff[Test Plague]}") == "Test Plague Test Plague");
+}
+
+TEST_CASE("TLO: Me.Bank, the bank's coin, and InvSlot") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    auto& inv = A::inventory(*f.world.conn);
+    net::Item sword;
+    sword.name = "Banked Sword";
+    sword.id = 8001;
+    inv.put({net::kInvBank, 0, -1, -1, 0, 0}, sword);
+    net::Item chest;
+    chest.name = "Bank Chest";
+    chest.id = 8002;
+    chest.item_class = 1;
+    chest.bag_slots = 8;
+    inv.put({net::kInvBank, 2, -1, -1, 0, 0}, chest);
+    net::Item gem;
+    gem.name = "Banked Gem";
+    gem.id = 8003;
+    gem.stack_count = 3;
+    inv.put({net::kInvBank, 2, 4, -1, 0, 0}, gem);
+    net::Item shared;
+    shared.name = "Shared Ring";
+    shared.id = 8004;
+    inv.put({net::kInvSharedBank, 1, -1, -1, 0, 0}, shared);
+    // Bank[n]: the bank's slot n; past the 24 bank slots, the shared bank's.
+    CHECK(f.p("${Me.Bank[1]} ${Me.Bank[1].ID} ${Me.Bank[2]}") == "Banked Sword 8001 NULL");
+    CHECK(f.p("${Me.Bank[3]} ${Me.Bank[3].Container} ${Me.Bank[3].Item[5]} ${Me.Bank[3].Item[5].Stack}") ==
+          "Bank Chest 8 Banked Gem 3");
+    CHECK(f.p("${Me.Bank[26]} ${Me.SharedBank[2].ID} ${Me.Bank[0]} ${Me.Bank[20]}") == "Shared Ring 8004 NULL NULL");
+    CHECK(f.p("${Me.Bank[1].ItemLink}").find("Banked Sword") != std::string::npos);
+    // The bank's coin.
+    auto& coins = A::bank_coins(*f.world.conn);
+    coins.platinum = 1234;
+    coins.gold = 5;
+    coins.silver = 6;
+    coins.copper = 7;
+    coins.shared_platinum = 50;
+    CHECK(f.p("${Me.PlatinumBank} ${Me.GoldBank} ${Me.SilverBank} ${Me.CopperBank} ${Me.PlatinumShared}") ==
+          "1234 5 6 7 50");
+    CHECK(f.p("${Me.CashBank}") == "1234567");
+    // InvSlot: by MQ's number or name; .Item the item there.
+    CHECK(f.p("${InvSlot[pack1]} ${InvSlot[pack1].Item} ${InvSlot[23].Item.ID}") == "23 Healing Potion 5001");
+    CHECK(f.p("${InvSlot[pack2].Item.Items} ${InvSlot[pack2].Item.Container}") == "1 4");
+    CHECK(f.p("${InvSlot[272].Item} ${InvSlot[272].Pack} ${InvSlot[272].Slot}") == "Healing Potion 24 0"); // pack2, slot 1
+    CHECK(f.p("${InvSlot[bank1].Item} ${InvSlot[2000].Name} ${InvSlot[2002].Item}") == "Banked Sword bank1 Bank Chest");
+    CHECK(f.p("${InvSlot[2056].Item} ${InvSlot[2056].Pack} ${InvSlot[2056].Slot}") == "Banked Gem 2002 4");
+    CHECK(f.p("${InvSlot[sharedbank2].Item} ${InvSlot[2501].Name}") == "Shared Ring sharedbank2");
+    CHECK(f.p("${InvSlot[chest].Name} ${InvSlot[chest].Item} ${InvSlot[nowhere]}") == "chest NULL 0");
+}
+
+TEST_CASE("TLO: Merchant, its stock and ItemsReceived") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    CHECK(f.p("${Merchant} ${Merchant.Open} ${Merchant.ItemsReceived} ${Merchant.Items}") == "FALSE FALSE FALSE NULL");
+    auto& m = A::merchant(*f.world.conn);
+    m.emplace();
+    m->npc_id = 11;
+    m->open = true;
+    m->rate = 1.25f;
+    // Open, its stock not come yet.
+    CHECK(f.p("${Merchant} ${Merchant.ItemsReceived} ${Merchant.Items}") == "TRUE FALSE 0");
+    net::Item bread;
+    bread.name = "Loaf of Bread";
+    bread.id = 13010;
+    m->items[3] = bread;
+    net::Item water;
+    water.name = "Water Flask";
+    water.id = 13006;
+    m->items[7] = water;
+    CHECK(f.p("${Merchant.ItemsReceived} ${Merchant.Items} ${Merchant.Markup}") == "TRUE 2 1.25");
+    CHECK(f.p("${Merchant.Item[1]} ${Merchant.Item[2].ID} ${Merchant.Item[3]}") == "Loaf of Bread 13006 NULL");
+    CHECK(f.p("${Merchant.Item[Flask]} ${Merchant.Item[=loaf of bread].ID}") == "Water Flask 13010");
+    // Its other members are the merchant's spawn's.
+    CHECK(f.p("${Merchant.ID} ${Merchant.CleanName}") == "11 Fippy Darkpaw");
+    m->open = false;
+    CHECK(f.p("${Merchant.Open} ${Merchant.ItemsReceived} ${Merchant.Item[1]}") == "FALSE FALSE NULL");
+}
+
+TEST_CASE("TLO: /doortarget and DoorTarget") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    auto& doors = A::doors(*f.world.conn);
+    game::Door near;
+    near.id = 3;
+    near.name = "POKCABDOOR";
+    near.x = 10; // the server's x and y, as a spawn's X and Y
+    near.y = 0;
+    near.z = 1;
+    game::Door far;
+    far.id = 7;
+    far.name = "POKCABDOOR2";
+    far.x = 0;
+    far.y = 40;
+    doors = {near, far};
+    plugin::Hooks hooks;
+    std::vector<std::string> said;
+    mq::CommandEnv ce;
+    ce.hooks = &hooks;
+    ce.registry = &f.reg;
+    ce.context = [&f]() -> const mq::Context& { return f.ctx; };
+    ce.echo = [&said](const std::string& s) { said.push_back(s); };
+    ce.set_door_target = [&f](std::optional<std::uint8_t> id) { f.world.conn->set_door_target(id); };
+    mq::Commands commands(ce);
+    auto run = [&](std::string line) { hooks.command(line); };
+    CHECK(f.p("${DoorTarget}") == "NULL");
+    // By name: the nearest whose name holds the text.
+    run("/doortarget cabdoor");
+    CHECK(said.back() == "Switch 3 'POKCABDOOR' targeted.");
+    CHECK(f.p("${DoorTarget} ${DoorTarget.ID} ${DoorTarget.Name} ${DoorTarget.IsTargeted}") == "3 3 POKCABDOOR TRUE");
+    CHECK(f.p("${DoorTarget.X} ${DoorTarget.Y} ${DoorTarget.Z}") == "10.00 0.00 1.00");
+    // On the flat, less half its size (scale 1.0); in 3D the height too.
+    CHECK(f.p("${DoorTarget.Distance}") == "9.50");
+    CHECK(f.p("${DoorTarget.Distance3D}").substr(0, 4) == "9.55");
+    run("/doortarget id 7");
+    CHECK(f.p("${DoorTarget.ID} ${DoorTarget.Distance}") == "7 39.50");
+    run("/doortarget id");
+    CHECK(said.back() == "[MQ] DoorTarget: id specified but no number provided.");
+    CHECK(f.p("${DoorTarget}") == "NULL");
+    run("/doortarget nosuchdoor");
+    CHECK(said.back() == "[MQ] Couldn't find switch 'nosuchdoor' to target.");
+    run("/doortarget");
+    CHECK(f.p("${DoorTarget}") == "3"); // no text: the nearest door
+    run("/doortarget clear");
+    CHECK(said.back() == "Switch target cleared.");
+    CHECK(f.p("${DoorTarget}") == "NULL");
+    // The zone's doors going take the target with them.
+    run("/doortarget id 3");
+    doors.clear();
+    CHECK(f.p("${DoorTarget}") == "NULL");
+}
+
+TEST_CASE("TLO: Me.TargetOfTarget and Instance, EverQuest.Foreground and Ping, Mercenary") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    CHECK(f.p("${Me.TargetOfTarget}") == "NULL");
+    A::target_of_target(*f.world.conn) = 12;
+    CHECK(f.p("${Me.TargetOfTarget} ${Me.TargetOfTarget.ID}") == "Groupie 12");
+    CHECK(f.p("${Me.Instance}") == "0");
+    // No window to have the focus in the test; the app answers with its window's.
+    CHECK(f.p("${EverQuest.Foreground}") == "FALSE");
+    bool focused = true;
+    f.ctx.foreground = [&focused] { return focused; };
+    CHECK(f.p("${EverQuest.Foreground}") == "TRUE");
+    CHECK(f.p("${EverQuest.Ping}") == "0"); // no session: no round trips yet
+    // Mercenary: NONE without one; its other members its spawn's.
+    CHECK(f.p("${Mercenary} ${Mercenary.State} ${Mercenary.Name}") == "NONE NONE NONE");
+    f.world.add(15, "Tanker", true, 50, game::server_to_world({8, 8, 0}));
+    A::world(*f.world.conn).spawns[15].mercenary = true;
+    auto& grp = A::group(*f.world.conn);
+    grp.slots[2].name = "Tanker";
+    grp.slots[2].merc = true;
+    grp.slots[2].owner_name = "Tester";
+    auto& merc = A::merc(*f.world.conn);
+    merc.has_mercenary = 1;
+    merc.state = game::kMercActive;
+    merc.current_index = 0;
+    CHECK(f.p("${Mercenary} ${Mercenary.State} ${Mercenary.StateID} ${Mercenary.Index}") == "ACTIVE ACTIVE 5 1");
+    CHECK(f.p("${Mercenary.Name} ${Mercenary.CleanName} ${Mercenary.ID}") == "Tanker Tanker 15");
+    merc.state = game::kMercSuspended;
+    CHECK(f.p("${Mercenary.State}") == "SUSPENDED");
 }

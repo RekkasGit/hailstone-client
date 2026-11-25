@@ -485,6 +485,7 @@ public:
         aenv.set_hot_bar_page = [this](int bar, int page) {
             if (actions_ui_) actions_ui_->set_hot_bar_page(bar, page);
         };
+        aenv.foreground = [this] { return window_.focused(); };
         aenv.ability = [this](mq::AbilityKind kind, std::string_view name) {
             return ability_state(ui_host_, kind, name);
         };

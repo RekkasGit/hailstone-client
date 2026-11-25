@@ -775,6 +775,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         loot_.reset();
         loot_popup_pending_ = false; // the corpse's question goes with reset_player_for_zone below
         doors_.clear();
+        door_target_.reset();
         ground_objects_.clear();
         world_container_.reset();
         world_container_requested_.reset();

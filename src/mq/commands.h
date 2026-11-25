@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -30,6 +31,7 @@ struct CommandEnv {
     std::function<void(const std::string& text)> echo;    // a chat line (MQ's WriteChatColor)
     std::function<void(const std::string& line)> run;     // a command line through the client (GameConnection)
     std::function<void(std::uint32_t spawn_id)> set_target;
+    std::function<void(std::optional<std::uint8_t> door)> set_door_target; // /doortarget; null: none
     std::function<void(double degrees, bool fast)> face;  // MQ degrees: clockwise from north
     // /keypress: an EQ key command by its name ("forward", "jump", "hot1_1" ...), tapped (0), held (1) or let go (2);
     // false when the name is unknown.

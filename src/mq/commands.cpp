@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "game/coords.h"
+#include "game/doors.h"
 #include "game/world_state.h"
 #include "mq/nav_commands.h"
 #include "mq/parse.h"
@@ -154,6 +155,50 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
                           std::string(plugin::caller_name())});
     });
     h.on_pulse(owner_, [this] { run_timed(); });
+    // /doortarget [id <n> | <name>] | clear (MQ's DoorTarget): the door with that id, or the nearest (in 3D) whose name
+    // holds the text (any door with no text), becomes the switch target ${DoorTarget} reads. As in MQ the old one is
+    // dropped first, so a door not found leaves none. MQ's Z filter (gZFilter, off unless set) has no counterpart here.
+    h.add_command(owner_, "/doortarget", [this](std::string_view args) {
+        if (env_.set_door_target) env_.set_door_target(std::nullopt);
+        std::string_view rest = trim(args);
+        std::string word = first_word(rest);
+        if (iequals(word, "clear")) {
+            say("Switch target cleared.");
+            return;
+        }
+        const Context& ctx = env_.context();
+        const net::GameConnection* conn = ctx.conn;
+        const game::Spawn* me = conn ? conn->world().player() : nullptr;
+        if (!conn || !me) return;
+        const game::Door* found = nullptr;
+        if (iequals(word, "id")) {
+            rest = trim(rest.substr(word.size()));
+            std::int64_t id = 0;
+            if (rest.empty() || !parse_int(first_word(rest), id)) {
+                say("[MQ] DoorTarget: id specified but no number provided.");
+                return;
+            }
+            if (id >= 0 && id <= 255) found = conn->door(static_cast<std::uint8_t>(id));
+        } else {
+            const glm::vec3 at = spawn_position(*me);
+            float best = 0;
+            for (const game::Door& d : conn->doors()) {
+                if (!word.empty() && !icontains(d.name, word)) continue;
+                const glm::vec3 to = d.world_position() - at;
+                const float dist = to.x * to.x + to.y * to.y + to.z * to.z;
+                if (!found || dist < best) {
+                    found = &d;
+                    best = dist;
+                }
+            }
+        }
+        if (!found) {
+            say(std::format("[MQ] Couldn't find switch '{}' to target.", rest));
+            return;
+        }
+        if (env_.set_door_target) env_.set_door_target(found->id);
+        say(std::format("Switch {} '{}' targeted.", found->id, found->name));
+    }, plugin::kCapTarget);
     h.add_command(owner_, "/squelch", [this](std::string_view args) {
         ++squelch_;
         run_nested(args);

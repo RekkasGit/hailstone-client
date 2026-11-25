@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- New command `/doortarget [id <n> | <name>] | clear` and TLO `${DoorTarget}` (`.ID`, `.Name`, `.X`, `.Y`, `.Z`, `.Distance`, `.Open` ...), and new TLOs `${Merchant}` (`.Open`, `.ItemsReceived`, `.Items`, `.Item[n|name]`, `.Markup`) and `${Mercenary}` (its state, `.Name` and its spawn's members), as in MacroQuest; new members `${Me.TargetOfTarget}`, `${Me.Instance}`, `${EverQuest.Ping}`, `${EverQuest.Foreground}` and `${Navigation.Velocity}`.
+- New TLO `${InvSlot[n|name]}` (`.Item`, `.Pack`, `.Slot`, `.Name`) and members `${Me.Bank[n]}` and `${Me.SharedBank[n]}` (every item member, bags' contents included; the bank need not be open), `${Me.PlatinumBank}`, `${Me.GoldBank}`, `${Me.SilverBank}`, `${Me.CopperBank}`, `${Me.PlatinumShared}` and `${Me.CashBank}`, as in MacroQuest.
 - `${Me.Pet}` and `${Pet}` now read your pet's buffs from the pet window, as in MacroQuest (`.Buff[n]` the pet window's slot, `.Buff[name]` its slot number, `.BuffDuration`), where they needed the pet targeted and the server sending its buffs.
 - The Modern pack's Inventory window can be resized from its edges and corner (never smaller than it opens), and its stats page gives the item bonuses more room, so `current / cap` fits; a name too long for its column is shortened rather than running into its value.
 - The inventory's stats page shows the capped item bonuses as RoF2's stats window does, `current / cap` (Spell Shielding 42 / 35), with the items' whole total where it used to show the capped value: a server may allow more than RoF2's caps. Heal amount, spell damage and clairvoyance have no cap and show their value alone.

@@ -65,6 +65,8 @@ struct AutomationEnv {
     std::function<void(int bar, int page)> set_hot_bar_page;
     // The player's abilities for Me.AbilityReady and the rest (mq::Context::ability); null: none known.
     std::function<std::optional<mq::AbilityState>(mq::AbilityKind, std::string_view)> ability;
+    // Whether the game's window has the keyboard focus (EverQuest.Foreground); null: false.
+    std::function<bool()> foreground;
     // Line of sight for Spawn.LineOfSight and LineOfSight[...] (mq::Context::can_see, line_of_sight); null: none.
     // The player's autoskill list with each ability's name (hailstone.autoskill_list); null: none.
     std::function<std::vector<std::pair<game::AutoskillRule, std::string>>()> autoskill_list;

@@ -95,10 +95,14 @@ manifest's `caps` (docs/addons.md).
 | `Debuff` | none, or `pet` | `debuff` | the disease, poison, curse and corruption counters on the player, or on the player's pet (NULL without one); below |
 | `Group` | | `group` | the player's group; NULL when not grouped |
 | `Raid` | | `raid` | the player's raid (always there: `Members` is 0 outside a raid; its plain value is NULL) |
+| `Merchant` | | `merchant` | the merchant open (always there: `Open` says whether one is) |
+| `DoorTarget` | | `switch` | the door `/doortarget` picked; NULL for none (the zone's doors going clear it) |
+| `Mercenary` | | `mercenary` | the player's mercenary (always there: its plain value is its state, `NONE` without one) |
 | `Corpse` | | `corpse` | the corpse the loot window has open (always there: `Open` says whether one is) |
 | `Zone` | | `zone` | the current zone |
 | `Spell` | id or exact name | `spell` | a spell from the spell file |
 | `Cursor` | | `item` | the item on the cursor |
+| `InvSlot` | MQ's slot number or name | `invslot` | a slot: 0..33 the player's (`pack1`..`pack10`, `cursor` and the worn slots' names), 262.. the slots in the packs (ten a pack), 2000.. the bank (`bank1`..), 2032.. the slots in its bags, 2500.. the shared bank (`sharedbank1`..), 2532.. the slots in its bags; an unknown name is 0 |
 | `FindItem` | name, or `=exact name` | `item` | the first carried item whose name contains the text (worn, general slots, bags, cursor) |
 | `FindItemCount` | name, or `=exact name` | int | how many such items are carried, stacks counted |
 | `Window` | window name | `window` | a window, to ask whether it is open |
@@ -126,7 +130,7 @@ manifest's `caps` (docs/addons.md).
 
 A compiled plugin can add TLOs (`AddTopLevelObject`). It cannot replace one that exists. `Spell.StacksWithDiscs` is
 not given (docs/unknowns.md). MQ TLOs that are missing:
-`Mercenary`, `Merchant`, `Ground`, `Macro`, and other MQ plugins' TLOs (`Navigation` and
+`Ground`, `Macro`, and other MQ plugins' TLOs (`Navigation` and
 `Stick` are built in).
 
 ## Data types
@@ -212,6 +216,8 @@ character's name.
 | `AAPointsAssigned` | int | the first of the profile's assigned AA points |
 | `AltAbility[name\|group]` | `altability` | an AA the player owns, by its name or its ability (group) id |
 | `PctAggro`, `SecondaryPctAggro` | int | the aggro meter's percentages for the player and for the secondary (below) |
+| `TargetOfTarget` | `spawn` | the target's target; NULL for none |
+| `Instance` | int | the zone instance the player is in (0 for none) |
 | `Invulnerable` | `buff` | the buff that makes the player invulnerable (SPA 40); NULL when none does |
 | `CurrentFavor`, `CareerFavor` | int | tribute favour |
 | `TributeActive` | bool | the player's tribute is on |
@@ -248,6 +254,11 @@ character's name.
 | `XTargetSlots` | int | the extended target list's slots |
 | `ItemReady[name\|id]` | bool | a carried item (by id, `=exact name` or part of it) has a click effect that is ready |
 | `Inventory[slot]` | `item` | the item in a slot, by [name or number](#inventory-slots) |
+| `Bank[n]` | `item` | the item in bank slot n (1-based) within the slots the account has; 25 and 26 the shared bank's. The bank need not be open |
+| `SharedBank[n]` | `item` | the item in shared bank slot n (1 or 2) |
+| `PlatinumBank`, `GoldBank`, `SilverBank`, `CopperBank` | int | the bank's coin |
+| `PlatinumShared` | int | the shared bank's platinum |
+| `CashBank` | int | the bank's coin, in copper |
 | `FreeInventory` | int | empty general slots plus empty bag slots |
 | `Pet` | `pet` | as the `Pet` TLO |
 | `Bandolier[name\|n]` | `bandolier` | a bandolier set by its name (any case) or number (1..20, clamped); NULL for a name no set has |
@@ -462,18 +473,22 @@ An AA the player owns. Its plain value is its ability (group) id.
 | `class` | its name | `ID`, `Name`, `ShortName` (`WAR`, `CLR`, ...) |
 | `race` | its name | `ID`, `Name` |
 | `heading` | the compass point (`N`, `NNE`, ...) | `Degrees` (clockwise from north), `DegreesCCW`, `ShortName`, `Name` (`north by northeast`), `Clock` (1..12) |
+| `merchant` | `TRUE` while one is open, else `FALSE` | `Open`, `ItemsReceived` (open and its stock has come), `Items`, `Item[n\|name]` (`item`; n in the list's order, `=name` exact), `Markup` (its sell rate); every `spawn` member of the merchant |
+| `switch` | its id | `ID`, `Name`, `X`, `Y`, `Z`, `DefaultX`, `DefaultY`, `DefaultZ` (the server's coordinates), `Heading` and `HeadingTo` (`heading`), `Open`, `State`, `IsTargeted`, `Distance` (on the flat, less half its size), `Distance3D` |
+| `mercenary` | its state: `NONE`, `ACTIVE`, `SUSPENDED` or `DEAD` | `State`, `StateID`, `Index` (1-based), `Name` (its spawn's name, else the state); every `spawn` member of its spawn |
+| `invslot` | its number | `ID`, `Item` (`item`, NULL for an empty slot), `Pack` (the `invslot` of the bag it is in; 0 for none), `Slot` (its place in that bag, 0-based), `Name` (`chest`, `pack1`, `bank3` ...; NULL for a slot in a bag) |
 | `ticks` | ticks (6 s) | a `timestamp` on the same time: every `timestamp` member |
 | `body` | its name | `ID`, `Name` |
 | `augtype` | the augment's name; NULL for an empty socket | `Name`, `Item` (`item`), `Empty`, `Slot`, `Type` (the socket's type), `Visible` |
 | `timestamp` | milliseconds | `Raw` (ms), `TotalSeconds`, `TotalMinutes`, `Hours`, `Minutes` (0..59), `Seconds` (0..59), `Ticks` (6 s, rounded up), `TimeHMS` (`h:mm:ss`), `Time` (`m:ss`) |
 | `zone` | its long name | `ID`, `Name`, `ShortName` |
-| `everquest` | `EverQuest` | `GameState` (`INGAME`, `CHARSELECT` or `PRECHARSELECT`), `Server` (the server's name), `UIScale` (always 1.0) |
+| `everquest` | `EverQuest` | `GameState` (`INGAME`, `CHARSELECT` or `PRECHARSELECT`), `Server` (the server's name), `UIScale` (always 1.0), `Ping` (the connection's average round trip, ms, as `/netstats` shows it), `Foreground` (the game's window has the focus) |
 | `window` | `TRUE` or `FALSE` | `Open`, `Name` |
 | `plugin` | its name when loaded, else NULL | `IsLoaded`, `Name` |
 | `debuff` | `Count` | `Count` (all four), `Poisoned`, `Diseased`, `Cursed`, `Corrupted`: counters, summed over every buff; `Silenced`: bool, a buff silences (SPA 96) |
 | `time` | `hh:mm:ss` | `Hour`, `Minute`, `Second`, `Day`, `Month`, `Year`, `DayOfWeek` (1 Sunday), `Date` (`MM/DD/YYYY`), `Time24`, `SecondsSinceMidnight`, `Night` (before 6:00 or from 19:00) |
 | `gametime` | `hh:mm` | `Hour`, `Minute`, `Day`, `Month`, `Year`, `Night`, `Time24` |
-| `navigation` | `Active` | `Active`, `Paused`, `MeshLoaded`, `MeshComplete`, `TilesBuilt`, `TilesTotal`, `Destination`, `Remaining`, `PathExists[dest]`, `PathLength[dest]` (-1 for no path); docs/navigation.md "The Navigation TLO" |
+| `navigation` | `Active` | `Active`, `Paused`, `MeshLoaded`, `MeshComplete`, `TilesBuilt`, `TilesTotal`, `Destination`, `Remaining`, `PathExists[dest]`, `PathLength[dest]` (-1 for no path), `Velocity` (the player's speed, units a second); docs/navigation.md "The Navigation TLO" |
 | `stick` | `ON` or `OFF` | `Active`, `Status` (`ON`, `PAUSED` or `OFF`), `Distance`, `StickTarget` (spawn id, 0 none), `StickTargetName`, `Stopped` (within the stick's distance), `Behind` (and at the spawn's back); docs/navigation.md |
 | `bandolier` | its name | `Active` (each of its four items is the one worn in its slot, an empty one an empty slot), `Index` (1..20), `Name`, `Item[1..4]` (primary, secondary, range, ammo; clamped). A set without a name is NULL to every member. To switch sets: `/bandolier activate <name>` |
 | `bandolieritem` | its name | `ID`, `IconID`, `Name` |

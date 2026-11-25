@@ -120,6 +120,7 @@ struct Context {
     nav::NavControl* nav = nullptr; // the client's navigation (/nav, the Navigation TLO); null: none
     std::function<bool(std::string_view window)> window_open; // Window[name].Open
     std::function<bool(std::string_view plugin)> plugin_loaded; // Plugin[name].IsLoaded
+    std::function<bool()> foreground; // EverQuest.Foreground: the game's window has the focus; null: false
     // One of the player's abilities by name (or an AA's group, a skill's number); nullopt: the player has none such.
     std::function<std::optional<AbilityState>(AbilityKind, std::string_view name)> ability;
     // Line of sight in the zone between two points (world coordinates, game/coords.h): nullopt while the zone's

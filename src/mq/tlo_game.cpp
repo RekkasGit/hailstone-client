@@ -5,6 +5,7 @@
 #include <ctime>
 #include <format>
 #include <functional>
+#include <iterator>
 #include <optional>
 #include <random>
 
@@ -12,13 +13,16 @@
 #include <glm/trigonometric.hpp>
 
 #include "core/build_info.h"
+#include "game/bank.h"
 #include "game/combat.h"
 #include "game/counter_spas.h"
 #include "game/coords.h"
+#include "game/doors.h"
 #include "game/eq_names.h"
 #include "game/group.h"
 #include "game/inventory.h"
 #include "game/item_links.h"
+#include "game/mercenary.h"
 #include "game/server_ext.h"
 #include "game/spell_effect_text.h"
 #include "game/spells.h"
@@ -39,7 +43,7 @@ using net::GameConnection;
 struct Types {
     const Type *spawn, *character, *cls, *race, *heading, *spell, *buff, *timestamp, *item, *zone, *group, *member,
         *everquest, *macroquest, *hailstone, *window, *plugin, *time, *gametime, *navigation, *stick, *debuff, *moveto,
-        *bandolier, *bandolier_item, *advpath, *target, *xtarget, *altability, *aug, *ticks, *body, *raid, *raidmember, *corpse, *pet;
+        *bandolier, *bandolier_item, *advpath, *target, *xtarget, *altability, *aug, *ticks, *body, *raid, *raidmember, *corpse, *pet, *invslot, *merchant, *door, *mercenary;
 };
 
 Types g; // set once by register_game_tlos (the types live in the registry that registered them)
@@ -298,6 +302,12 @@ net::ItemSlot unpack_slot(std::int64_t v) {
 const net::Item* item_of(const Context& c, const Value& v) {
     if (!c.conn) return nullptr;
     net::ItemSlot s = unpack_slot(v.i);
+    if (s.type == net::kInvMerchant) { // the open merchant's stock (Merchant.Item): not in the inventory
+        const auto& m = c.conn->merchant();
+        if (!m || !m->open || s.sub >= 0 || s.aug >= 0) return nullptr;
+        auto it = m->items.find(static_cast<std::uint32_t>(static_cast<std::uint16_t>(s.slot)));
+        return it == m->items.end() ? nullptr : &it->second;
+    }
     if (s.type == net::kInvCorpse) { // the open loot window's (Corpse.Item): not in the inventory
         const auto& loot = c.conn->loot_session();
         if (!loot || !loot->open || s.sub >= 0) return nullptr;
@@ -2077,6 +2087,267 @@ void register_e3_members2() {
     });
 }
 
+// ---------------------------------------------------------------- the bank, InvSlot (MacroQuest's meanings)
+
+// RoF2's bank slots (NUM_BANK_SLOTS) and MQ's InvSlot numbers: 0..33 the player's slots, 262.. the slots in the
+// packs (ten a pack), 2000.. the bank, 2032.. the slots in the bank's bags, 2500.. the shared bank, 2532.. the slots in
+// its bags.
+constexpr int kBankSlots = game::kBankSlotsBig;
+constexpr int kInvSlotPackItems = 262, kInvSlotBank = 2000, kInvSlotBankItems = 2032, kInvSlotShared = 2500,
+              kInvSlotSharedItems = 2532;
+
+// An InvSlot number as a place in the client's inventory; nullopt for one it does not hold (the trade and world
+// container slots MQ also numbers).
+std::optional<net::ItemSlot> inv_slot_place(std::int64_t n) {
+    auto in = [](std::int16_t type, std::int64_t slot, std::int64_t sub) {
+        return net::ItemSlot{type, static_cast<std::int16_t>(slot), static_cast<std::int16_t>(sub), -1, 0, 0};
+    };
+    if (n >= 0 && n <= net::kSlotCursor) return in(net::kInvPossessions, n, -1);
+    const std::int64_t packs = net::kSlotGeneral10 - net::kSlotGeneral1 + 1;
+    if (n >= kInvSlotPackItems && n < kInvSlotPackItems + packs * 10)
+        return in(net::kInvPossessions, net::kSlotGeneral1 + (n - kInvSlotPackItems) / 10, (n - kInvSlotPackItems) % 10);
+    if (n >= kInvSlotBank && n < kInvSlotBank + kBankSlots) return in(net::kInvBank, n - kInvSlotBank, -1);
+    if (n >= kInvSlotBankItems && n < kInvSlotBankItems + kBankSlots * 10)
+        return in(net::kInvBank, (n - kInvSlotBankItems) / 10, (n - kInvSlotBankItems) % 10);
+    if (n >= kInvSlotShared && n < kInvSlotShared + game::kSharedBankSlots) return in(net::kInvSharedBank, n - kInvSlotShared, -1);
+    if (n >= kInvSlotSharedItems && n < kInvSlotSharedItems + game::kSharedBankSlots * 10)
+        return in(net::kInvSharedBank, (n - kInvSlotSharedItems) / 10, (n - kInvSlotSharedItems) % 10);
+    return std::nullopt;
+}
+
+// An InvSlot index: a number, or a name (MQ's ItemSlotMap: the worn slots' names, pack1..pack10, cursor, bank1..bank24,
+// sharedbank1..2); nullopt for neither.
+std::optional<std::int64_t> inv_slot_number(std::string_view index) {
+    std::int64_t n = 0;
+    if (parse_int(index, n)) return n;
+    if (int s = slot_by_name(index); s >= 0) return s;
+    auto numbered = [&](std::string_view prefix, std::int64_t first, std::int64_t count) -> std::optional<std::int64_t> {
+        if (index.size() <= prefix.size() || !iequals(index.substr(0, prefix.size()), prefix)) return std::nullopt;
+        std::int64_t k = 0;
+        if (!parse_int(index.substr(prefix.size()), k) || k < 1 || k > count) return std::nullopt;
+        return first + k - 1;
+    };
+    if (auto v = numbered("sharedbank", kInvSlotShared, game::kSharedBankSlots)) return v;
+    if (auto v = numbered("bank", kInvSlotBank, kBankSlots)) return v;
+    return std::nullopt;
+}
+
+void register_e3_members3() {
+    // ---- Me: the bank
+    // MQ's Bank[n]: bank slot n (1-based) while within the slots the account has; past RoF2's 24, the shared bank's
+    // (25 the first). NULL for an empty slot.
+    me_member("Bank", [](const Context& ctx, const GameConnection& c, std::string_view index) -> V {
+        std::int64_t n = 0;
+        if (!parse_int(index, n) || n < 1) return V::nil();
+        const int available = game::bank_slot_count(c.profile() ? c.profile()->expansions : 0, c.inventory());
+        if (n - 1 < available) return item_value(ctx, {net::kInvBank, static_cast<std::int16_t>(n - 1), -1, -1, 0, 0});
+        if (n - 1 >= kBankSlots && n - 1 - kBankSlots < game::kSharedBankSlots)
+            return item_value(ctx, {net::kInvSharedBank, static_cast<std::int16_t>(n - 1 - kBankSlots), -1, -1, 0, 0});
+        return V::nil();
+    });
+    me_member("SharedBank", [](const Context& ctx, const GameConnection&, std::string_view index) -> V {
+        std::int64_t n = 0;
+        if (!parse_int(index, n) || n < 1 || n > game::kSharedBankSlots) return V::nil();
+        return item_value(ctx, {net::kInvSharedBank, static_cast<std::int16_t>(n - 1), -1, -1, 0, 0});
+    });
+    me_member("PlatinumBank", [](const Context&, const GameConnection& c, std::string_view) { return V::integer(c.bank_coins().platinum); });
+    me_member("GoldBank", [](const Context&, const GameConnection& c, std::string_view) { return V::integer(c.bank_coins().gold); });
+    me_member("SilverBank", [](const Context&, const GameConnection& c, std::string_view) { return V::integer(c.bank_coins().silver); });
+    me_member("CopperBank", [](const Context&, const GameConnection& c, std::string_view) { return V::integer(c.bank_coins().copper); });
+    me_member("PlatinumShared", [](const Context&, const GameConnection& c, std::string_view) {
+        return V::integer(c.bank_coins().shared_platinum);
+    });
+    me_member("CashBank", [](const Context&, const GameConnection& c, std::string_view) {
+        const auto& b = c.bank_coins();
+        return V::integer(std::int64_t{b.platinum} * 1000 + std::int64_t{b.gold} * 100 + std::int64_t{b.silver} * 10 + b.copper);
+    });
+
+    // ---- invslot (MQ2InvSlotType): an InvSlot number; its plain value is the number
+    Type& inv = const_cast<Type&>(*g.invslot);
+    inv.to_value = [](const Context&, const Value& v) { return V::integer(v.i); };
+    add(g.invslot, "ID", [](const Context&, const Value& v, std::string_view) { return V::integer(v.i); });
+    add(g.invslot, "Item", [](const Context& c, const Value& v, std::string_view) -> V {
+        auto place = inv_slot_place(v.i);
+        return place ? item_value(c, *place) : V::nil();
+    });
+    // Pack: the slot (as an InvSlot) holding the bag this slot is in; 0 for a slot not in a bag. Slot: its place in that
+    // bag (0-based).
+    add(g.invslot, "Pack", [](const Context&, const Value& v, std::string_view) -> V {
+        auto place = inv_slot_place(v.i);
+        if (!place || place->sub < 0) return V::object(g.invslot, 0);
+        if (place->type == net::kInvBank) return V::object(g.invslot, kInvSlotBank + place->slot);
+        if (place->type == net::kInvSharedBank) return V::object(g.invslot, kInvSlotShared + place->slot);
+        return V::object(g.invslot, place->slot);
+    });
+    add(g.invslot, "Slot", [](const Context&, const Value& v, std::string_view) -> V {
+        auto place = inv_slot_place(v.i);
+        return V::integer(place && place->sub >= 0 ? place->sub : 0);
+    });
+    add(g.invslot, "Name", [](const Context&, const Value& v, std::string_view) -> V {
+        auto place = inv_slot_place(v.i);
+        if (!place || place->sub >= 0) return V::nil();
+        if (place->type == net::kInvBank) return V::string(std::format("bank{}", place->slot + 1));
+        if (place->type == net::kInvSharedBank) return V::string(std::format("sharedbank{}", place->slot + 1));
+        if (place->slot >= 0 && place->slot < static_cast<std::int16_t>(std::size(kSlotNames)))
+            return V::string(kSlotNames[place->slot]);
+        return V::nil();
+    });
+}
+
+// ---------------------------------------------------------------- Merchant, DoorTarget, Mercenary and the rest
+
+// The open merchant's session, or null.
+const net::MerchantSession* open_merchant(const Context& c) {
+    if (!c.conn) return nullptr;
+    const auto& m = c.conn->merchant();
+    return m && m->open ? &*m : nullptr;
+}
+
+// The player's mercenary spawn: the group's mercenary member the player owns, else a mercenary spawn whose owner
+// is the player.
+const game::Spawn* my_merc(const Context& c) {
+    if (!c.conn) return nullptr;
+    const std::string& me_name = c.conn->character_name();
+    for (const auto& m : c.conn->group().slots)
+        if (m.merc && !m.name.empty() && iequals(m.owner_name, me_name))
+            if (const game::Spawn* s = spawn_named(c, m.name)) return s;
+    for (const auto& [id, s] : c.conn->world().spawns)
+        if (s.mercenary && !s.is_corpse && s.pet_owner_id == c.conn->world().player_id) return &s;
+    return nullptr;
+}
+
+// MQ's GetMercenaryStateString: NONE without one (SUSPENDED while one is chosen), else DEAD, ACTIVE or SUSPENDED.
+const char* merc_state(const GameConnection& c) {
+    const auto& m = c.merc();
+    if (!m.has_mercenary) return m.current_index != -1 ? "SUSPENDED" : "NONE";
+    if (m.state == game::kMercDead) return "DEAD";
+    if (m.state == game::kMercActive) return "ACTIVE";
+    return "SUSPENDED";
+}
+
+void register_e3_members4() {
+    // ---- merchant (MQ2MerchantType): the merchant open; its plain value TRUE while one is. Its other members are the
+    // merchant spawn's.
+    Type& merchant = const_cast<Type&>(*g.merchant);
+    merchant.parent = g.spawn;
+    merchant.convert = [](const Context& c, const Value&) {
+        const auto* m = open_merchant(c);
+        return m ? spawn_value(spawn_of(c, m->npc_id)) : V::nil();
+    };
+    merchant.to_value = [](const Context& c, const Value&) { return V::boolean(open_merchant(c) != nullptr); };
+    add(g.merchant, "Open", [](const Context& c, const Value&, std::string_view) { return V::boolean(open_merchant(c) != nullptr); });
+    // MQ: TRUE once the merchant window's list has been filled (PurchasePageHandler::UpdateList), FALSE when it closes.
+    // Here: the merchant is open and its stock has come. A merchant with nothing for sale stays FALSE (docs/unknowns.md).
+    add(g.merchant, "ItemsReceived", [](const Context& c, const Value&, std::string_view) {
+        const auto* m = open_merchant(c);
+        return V::boolean(m && !m->items.empty());
+    });
+    add(g.merchant, "Items", [](const Context& c, const Value&, std::string_view) -> V {
+        const auto* m = open_merchant(c);
+        return m ? V::integer(static_cast<std::int64_t>(m->items.size())) : V::nil();
+    });
+    add(g.merchant, "Markup", [](const Context& c, const Value&, std::string_view) -> V {
+        const auto* m = open_merchant(c);
+        return m ? V::number(m->rate) : V::nil();
+    });
+    // Item[n]: the nth item of the stock, in the list's order; Item[name], [=name] exact, by name.
+    add(g.merchant, "Item", [](const Context& c, const Value&, std::string_view index) -> V {
+        const auto* m = open_merchant(c);
+        if (!m || index.empty()) return V::nil();
+        auto value = [](std::uint32_t slot) {
+            return V::object(g.item, pack_slot({net::kInvMerchant, static_cast<std::int16_t>(slot), -1, -1, 0, 0}));
+        };
+        std::int64_t n = 0;
+        if (parse_int(index, n)) {
+            if (n < 1 || n > static_cast<std::int64_t>(m->items.size())) return V::nil();
+            auto it = m->items.begin();
+            std::advance(it, n - 1);
+            return value(it->first);
+        }
+        for (const auto& [slot, it] : m->items)
+            if (item_name_matches(it, index)) return value(slot);
+        return V::nil();
+    });
+
+    // ---- switch (MQ2SwitchType): a door of this zone; its plain value the id
+    Type& sw = const_cast<Type&>(*g.door);
+    auto door_of = [](const Context& c, const Value& v) -> const game::Door* {
+        return c.conn && v.i >= 0 && v.i <= 255 ? c.conn->door(static_cast<std::uint8_t>(v.i)) : nullptr;
+    };
+    sw.to_value = [door_of](const Context& c, const Value& v) { return door_of(c, v) ? V::integer(v.i) : V::nil(); };
+    auto dm = [door_of](const char* name, auto fn) {
+        add(g.door, name, [door_of, fn](const Context& c, const Value& v, std::string_view index) -> V {
+            const game::Door* d = door_of(c, v);
+            return d ? fn(c, *d, index) : V::nil();
+        });
+    };
+    // MQ's X, Y, Z are the server's (the /loc numbers), as a spawn's.
+    dm("ID", [](const Context&, const game::Door& d, std::string_view) { return V::integer(d.id); });
+    dm("Name", [](const Context&, const game::Door& d, std::string_view) { return V::string(d.name); });
+    dm("X", [](const Context&, const game::Door& d, std::string_view) { return V::number(d.x); });
+    dm("Y", [](const Context&, const game::Door& d, std::string_view) { return V::number(d.y); });
+    dm("Z", [](const Context&, const game::Door& d, std::string_view) { return V::number(d.z); });
+    dm("DefaultX", [](const Context&, const game::Door& d, std::string_view) { return V::number(d.default_x); });
+    dm("DefaultY", [](const Context&, const game::Door& d, std::string_view) { return V::number(d.default_y); });
+    dm("DefaultZ", [](const Context&, const game::Door& d, std::string_view) { return V::number(d.default_z); });
+    dm("Heading", [](const Context&, const game::Door& d, std::string_view) { return heading_value(eq_heading_to_degrees(d.heading)); });
+    dm("Open", [](const Context&, const game::Door& d, std::string_view) { return V::boolean(d.state == game::kSwitchOpen); });
+    dm("State", [](const Context&, const game::Door& d, std::string_view) { return V::integer(d.state); });
+    dm("IsTargeted", [](const Context& c, const game::Door& d, std::string_view) {
+        return V::boolean(c.conn->door_target() == d.id);
+    });
+    // MQ's Distance: on the flat from the player, less half the door's bounding radius. MQ takes the actor's; here the
+    // door's scale stands for it, as MQ does for a door without an actor.
+    auto door_distance = [](const Context& c, const game::Door& d, bool flat) -> V {
+        const game::Spawn* p = me(c);
+        if (!p) return V::nil();
+        glm::vec3 to = d.world_position() - spawn_position(*p);
+        if (flat) to.z = 0;
+        return V::number(std::max(0.0f, glm::length(to) - d.scale() / 2.0f));
+    };
+    dm("Distance", [door_distance](const Context& c, const game::Door& d, std::string_view) { return door_distance(c, d, true); });
+    dm("Distance3D", [door_distance](const Context& c, const game::Door& d, std::string_view) { return door_distance(c, d, false); });
+    dm("HeadingTo", [](const Context& c, const game::Door& d, std::string_view) -> V {
+        const game::Spawn* p = me(c);
+        return p ? heading_value(heading_between(spawn_position(*p), d.world_position())) : V::nil();
+    });
+
+    // ---- mercenary (MQ2MercenaryType): the player's; its plain value its state. Other members are its spawn's.
+    Type& merc = const_cast<Type&>(*g.mercenary);
+    merc.parent = g.spawn;
+    merc.convert = [](const Context& c, const Value&) { return spawn_value(my_merc(c)); };
+    merc.to_value = [](const Context& c, const Value&) { return c.conn ? V::string(merc_state(*c.conn)) : V::nil(); };
+    add(g.mercenary, "State", [](const Context& c, const Value&, std::string_view) { return V::string(merc_state(*c.conn)); });
+    add(g.mercenary, "StateID", [](const Context& c, const Value&, std::string_view) { return V::integer(c.conn->merc().state); });
+    add(g.mercenary, "Index", [](const Context& c, const Value&, std::string_view) {
+        return V::integer(std::int64_t{c.conn->merc().current_index} + 1);
+    });
+    // MQ's Name: the spawn's (raw) name, else the state.
+    add(g.mercenary, "Name", [](const Context& c, const Value&, std::string_view) {
+        const game::Spawn* s = my_merc(c);
+        return V::string(s ? s->name : merc_state(*c.conn));
+    });
+
+    // ---- Me, EverQuest, Navigation
+    me_member("TargetOfTarget", [](const Context& ctx, const GameConnection& c, std::string_view) -> V {
+        return c.target_of_target() ? spawn_value(spawn_of(ctx, c.target_of_target())) : V::nil();
+    });
+    me_member("Instance", [](const Context&, const GameConnection& c, std::string_view) { return V::integer(c.zone_instance()); });
+    // MQ's Ping: the connection's average ping (the stat request round trips, as /netstats shows them).
+    add(g.everquest, "Ping", [](const Context& c, const Value&, std::string_view) -> V {
+        if (!c.conn) return V::integer(0);
+        auto stats = c.conn->in_zone() ? c.conn->zone_session_stats() : c.conn->world_session_stats();
+        return V::integer(stats ? stats->ping_average : 0);
+    });
+    add(g.everquest, "Foreground", [](const Context& c, const Value&, std::string_view) {
+        return V::boolean(c.foreground && c.foreground());
+    });
+    // MQ2Nav's Velocity: the player's speed, units a second (its speed per 50 ms tick x 20), rounded.
+    add(g.navigation, "Velocity", [](const Context& c, const Value&, std::string_view) {
+        return V::integer(c.conn ? std::lround(glm::length(c.conn->player_velocity()) * 20.0f) : 0);
+    });
+}
+
 } // namespace
 
 // MQ2Nav's destination syntax in an index: "id <#>", "target", "loc <y> <x> <z>", "locxyz <x> <y> <z>", or a spawn
@@ -2583,6 +2854,10 @@ void register_game_tlos(Registry& r) {
     g.raidmember = &r.type("raidmember");
     g.corpse = &r.type("corpse");
     g.pet = &r.type("pet");
+    g.invslot = &r.type("invslot");
+    g.merchant = &r.type("merchant");
+    g.door = &r.type("switch");
+    g.mercenary = &r.type("mercenary");
     register_spawn();
     register_character();
     register_abilities();
@@ -2598,6 +2873,8 @@ void register_game_tlos(Registry& r) {
     register_advpath();
     register_e3_members();
     register_e3_members2();
+    register_e3_members3();
+    register_e3_members4();
 
     // MQ's LineOfSight[y,x,z:y,x,z]: two points in the server's coordinates (MQ's Loc order).
     r.add_tlo("LineOfSight", [](const Context& c, std::string_view index) -> V {
@@ -2740,6 +3017,20 @@ void register_game_tlos(Registry& r) {
     });
     // MQ's Raid and Corpse are always there (Raid's members say whether there is a raid, Corpse.Open whether a
     // corpse is open).
+    // MQ's InvSlot[n|name]: a slot by MQ's number or name (an unknown name is slot 0, as in MQ).
+    r.add_tlo("InvSlot", [](const Context& c, std::string_view index) -> V {
+        if (!c.conn || index.empty()) return V::nil();
+        return V::object(g.invslot, inv_slot_number(index).value_or(0));
+    });
+    // MQ's Merchant (always there: Open says whether one is), DoorTarget (/doortarget's door, NULL for none) and
+    // Mercenary (always there: its state says whether there is one).
+    r.add_tlo("Merchant", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.merchant, 0) : V::nil(); });
+    r.add_tlo("DoorTarget", [](const Context& c, std::string_view) -> V {
+        if (!c.conn) return V::nil();
+        auto id = c.conn->door_target();
+        return id && c.conn->door(*id) ? V::object(g.door, *id) : V::nil();
+    });
+    r.add_tlo("Mercenary", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.mercenary, 0) : V::nil(); });
     r.add_tlo("Raid", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.raid, 0) : V::nil(); });
     r.add_tlo("Corpse", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.corpse, 0) : V::nil(); });
     r.add_tlo("Pet", [](const Context& c, std::string_view) -> V { return pet_value(my_pet(c)); });
