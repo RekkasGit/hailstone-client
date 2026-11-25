@@ -965,9 +965,11 @@ bool quantity_accept(UiHost& host) {
     if (!quantity_sync(host, nullptr)) return false;
     auto& e = host.quantity_entry;
     // sub_00725a20: the box's number (atoi) into the slider, clamped by it; then slider + min to the owner.
+    // (in 64 bits: "-2147483648" less a minimum of 1 would overflow an int)
     int v = 0;
     std::from_chars(e.text.data(), e.text.data() + e.text.size(), v);
-    e.value = std::clamp(v - e.min, 0, e.max - e.min);
+    const std::int64_t span = std::clamp<std::int64_t>(std::int64_t{e.max} - e.min, 0, INT_MAX);
+    e.value = static_cast<int>(std::clamp<std::int64_t>(std::int64_t{v} - e.min, 0, span));
     const std::int32_t q = game::quantity_dialog_accept(e.min, e.value);
     if (host.quantity) {
         auto done = std::move(host.quantity->done);

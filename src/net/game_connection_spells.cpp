@@ -22,6 +22,7 @@
 #include "game/mechanics/character.h"
 #include "game/mechanics/sheet_builder.h"
 #include "game/mechanics/spell_gems.h"
+#include "game/remove_buff.h"
 #include "game/spa_ids.h"
 
 #include "game/distance.h"
@@ -282,6 +283,33 @@ void GameConnection::removeaura_command(std::string_view args) {
     for (const auto& a : auras_)
         if (lower(a.name).find(needle) != std::string::npos) ids.push_back(a.spawn_id);
     for (std::uint32_t id : ids) remove_aura(id);
+}
+
+void GameConnection::removebuff_command(std::string_view args) {
+    if (!spell_table_) return;
+    const game::RemoveBuff r = game::parse_remove_buff(args);
+    if (r.name.empty()) return;
+    auto matches = [&](std::uint32_t spell) {
+        const game::SpellData* d = spell_table_->get(spell);
+        return d && game::remove_buff_matches(d->name, r.name);
+    };
+    if (r.pet) {
+        // RemovePetBuff: the pet window's first match, in its order (the server's slots).
+        std::optional<std::uint32_t> slot;
+        for (const auto& [s, buff] : pet_buffs_)
+            if (!buff.empty() && matches(buff.spell) && (!slot || s < *slot)) slot = s;
+        if (slot) remove_pet_buff(*slot);
+    }
+    if (r.self) {
+        // FindBuffIndex: the first long buff or song that matches, whether or not it may be clicked off (remove_buff
+        // refuses a detrimental one, as the server does); the discipline slot is in neither window.
+        for (int i = 0; i < game::kLongBuffSlots + game::kShortBuffSlots; ++i) {
+            const game::BuffSlot& b = spells_.buffs[static_cast<std::size_t>(i)];
+            if (b.empty() || !matches(b.spell)) continue;
+            remove_buff(i);
+            break;
+        }
+    }
 }
 
 void GameConnection::memspell_command(std::string_view args) {

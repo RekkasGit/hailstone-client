@@ -524,6 +524,9 @@ public:
         automation_->hooks().add_command(plugin::Hooks::kClient, "/removeaura", [this](std::string_view args) {
             if (conn_) conn_->removeaura_command(args);
         }, plugin::kCapActions);
+        automation_->hooks().add_command(plugin::Hooks::kClient, "/removebuff", [this](std::string_view args) {
+            if (conn_) conn_->removebuff_command(args);
+        }, plugin::kCapActions);
         automation_->hooks().add_command(plugin::Hooks::kClient, "/memspell", [this](std::string_view args) {
             if (conn_) conn_->memspell_command(args);
         }, plugin::kCapActions);

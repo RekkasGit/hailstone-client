@@ -1417,6 +1417,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/exchange_test.cpp
     tests/player_commands_test.cpp
     tests/item_notify_test.cpp
+    tests/remove_buff_test.cpp
     tests/window_notify_test.cpp
     tests/notify_state_test.cpp
     tests/notify_quantity_test.cpp
