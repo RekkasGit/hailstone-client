@@ -579,6 +579,7 @@ add_library(hailstone_engine STATIC
   src/ui/ui_textures.cpp
   src/ui/ui_packs.cpp
   src/ui/ui_ini.cpp
+  src/ui/layout_profile.cpp
   src/app/lua_ui.cpp
   src/app/automation.cpp
   src/app/navigator.cpp
@@ -1412,6 +1413,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/lua_folders_test.cpp
     tests/lua_keep_test.cpp
     tests/lua_character_settings_test.cpp
+    tests/layout_profile_test.cpp
     tests/lua_plugin_test.cpp
     tests/spell_projectiles_test.cpp
     tests/commerce_test.cpp

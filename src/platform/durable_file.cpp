@@ -183,4 +183,18 @@ bool replace_file_synced(const std::filesystem::path& from, const std::filesyste
 #endif
 }
 
+bool create_file_synced(const std::filesystem::path& from, const std::filesystem::path& to, std::error_code& ec) {
+#if defined(_WIN32)
+    ec.clear();
+    if (::MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_WRITE_THROUGH)) return true;
+    const auto error = ::GetLastError();
+    ec = error == ERROR_ALREADY_EXISTS || error == ERROR_FILE_EXISTS
+             ? std::make_error_code(std::errc::file_exists)
+             : std::error_code(static_cast<int>(error), std::system_category());
+    return false;
+#else
+    return link_file_synced(from, to, ec);
+#endif
+}
+
 } // namespace hailstone::platform

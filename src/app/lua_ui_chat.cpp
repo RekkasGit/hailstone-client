@@ -586,11 +586,10 @@ bool iequal(std::string_view a, std::string_view b) {
 }
 
 // The window's settings under ChatWindow<n>_ (CChatWindow_SaveSettings @0x655d10) and the tabs' keys.
-void save_window(int w) {
-    ChatManager& m = manager();
+void save_window(ui::UiIni& ini, int w) {
     const ChatWnd& c = wnd(w);
     std::string k = std::format("ChatWindow{}_", w);
-    auto put = [&](const std::string& key, const std::string& v) { m.ini->put("ChatManager", k + key, v); };
+    auto put = [&](const std::string& key, const std::string& v) { ini.put("ChatManager", k + key, v); };
     put("LanguageId", std::to_string(c.language));
     put("DefaultChannel", std::to_string(c.channel));
     put("ChatChannel", std::to_string(c.chat_index));
@@ -603,55 +602,58 @@ void save_window(int w) {
     put("TabOrder", std::to_string(std::find(tabs.begin(), tabs.end(), w + 1) - tabs.begin()));
     put("Highlight", c.flash ? "1" : "0");
     if (c.flash_color) put("HighlightColor", std::to_string(*c.flash_color));
-    else m.ini->erase("ChatManager", k + "HighlightColor");
+    else ini.erase("ChatManager", k + "HighlightColor");
 }
 
 // CChatWindowManager::SaveChatSettings @0x64fe40. The original counts NumWindows less its tell windows, which then
 // load in the place of the windows after them; tell windows are not kept here, and an unused slot's keys go.
-void save_manager() {
+void save_manager(ui::UiIni& ini) {
     ChatManager& m = manager();
-    if (!m.ini) return;
-    m.ini->put("ChatManager", "TellWindows", tell_windows_on() ? "1" : "0");
+    ini.put("ChatManager", "TellWindows", tell_windows_on() ? "1" : "0");
     int last = 0;
     for (int w = 1; w < m.num_windows; ++w)
         if (used(w) && !wnd(w).tell) last = w;
-    m.ini->put("ChatManager", "NumWindows", std::to_string(last));
-    m.ini->put("ChatManager", "LockedActiveWindow", std::to_string(used(m.locked) && !wnd(m.locked).tell ? m.locked : -1));
+    ini.put("ChatManager", "NumWindows", std::to_string(last));
+    ini.put("ChatManager", "LockedActiveWindow", std::to_string(used(m.locked) && !wnd(m.locked).tell ? m.locked : -1));
     for (int w = 0; w < kMaxChatWindows; ++w) {
         if (used(w) && !wnd(w).tell) {
-            save_window(w);
+            save_window(ini, w);
             continue;
         }
         if (w == 0) continue;
-        m.ini->erase("ChatManager", std::format("ChatWindow{}_Language", w));
-        m.ini->erase("ChatManager", std::format("ChatWindow{}_LanguageId", w));
-        m.ini->erase("ChatManager", std::format("ChatWindow{}_Group", w));
-        m.ini->erase("ChatManager", std::format("ChatWindow{}_TabOrder", w));
-        m.ini->erase("ChatManager", std::format("ChatWindow{}_Highlight", w));
-        m.ini->erase("ChatManager", std::format("ChatWindow{}_HighlightColor", w));
+        ini.erase("ChatManager", std::format("ChatWindow{}_Language", w));
+        ini.erase("ChatManager", std::format("ChatWindow{}_LanguageId", w));
+        ini.erase("ChatManager", std::format("ChatWindow{}_Group", w));
+        ini.erase("ChatManager", std::format("ChatWindow{}_TabOrder", w));
+        ini.erase("ChatManager", std::format("ChatWindow{}_Highlight", w));
+        ini.erase("ChatManager", std::format("ChatWindow{}_HighlightColor", w));
     }
     for (int g = 1; g <= kMaxChatWindows; ++g) {
         const auto& group = group_at(g);
         const std::string key = std::format("ChatGroup{}_", g);
         const auto first = std::find_if(group.tabs.begin(), group.tabs.end(), [](int slot) { return !wnd(slot - 1).tell; });
         if (first == group.tabs.end()) {
-            m.ini->erase("ChatManager", key + "Selected");
-            m.ini->erase("ChatManager", key + "Name");
+            ini.erase("ChatManager", key + "Selected");
+            ini.erase("ChatManager", key + "Name");
             continue;
         }
         const int selected = wnd(group.selected - 1).tell ? *first : group.selected;
-        m.ini->put("ChatManager", key + "Selected", std::to_string(selected));
-        if (group.name.empty()) m.ini->erase("ChatManager", key + "Name");
-        else m.ini->put("ChatManager", key + "Name", group.name);
+        ini.put("ChatManager", key + "Selected", std::to_string(selected));
+        if (group.name.empty()) ini.erase("ChatManager", key + "Name");
+        else ini.put("ChatManager", key + "Name", group.name);
     }
     for (int ch = 0; ch < game::kChatChannelCount; ++ch) {
         int w = m.channel_map[static_cast<std::size_t>(ch)];
-        m.ini->put("ChatManager", std::format("ChannelMap{}", ch), std::to_string(used(w) && !wnd(w).tell ? w : 0));
+        ini.put("ChatManager", std::format("ChannelMap{}", ch), std::to_string(used(w) && !wnd(w).tell ? w : 0));
     }
     for (int i = 0; i < game::kChatHitModeCount; ++i)
-        m.ini->put("ChatManager", std::format("HitMode{}", i), std::to_string(m.hit_modes[static_cast<std::size_t>(i)]));
+        ini.put("ChatManager", std::format("HitMode{}", i), std::to_string(m.hit_modes[static_cast<std::size_t>(i)]));
     for (std::size_t i = 0; i < m.spell_hit_modes.size(); ++i)
-        m.ini->put("ChatManager", std::format("SpellHitMode{}", i), std::to_string(m.spell_hit_modes[i]));
+        ini.put("ChatManager", std::format("SpellHitMode{}", i), std::to_string(m.spell_hit_modes[i]));
+}
+
+void save_manager() {
+    if (auto* ini = manager().ini) save_manager(*ini);
 }
 
 void changed() {
@@ -719,6 +721,12 @@ std::uint32_t color_of(const ui::ChatLine& l) {
     case C::Error: return 13;
     default: return 273;
     }
+}
+
+int routed_window(const ui::ChatLine& line) {
+    const auto channel = game::chat_channel_of_color(static_cast<std::int32_t>(color_of(line)));
+    const int window = manager().channel_map[static_cast<std::size_t>(channel)];
+    return used(window) ? window : 0;
 }
 
 int tell_window_of(const std::string& peer) {
@@ -952,8 +960,7 @@ void sync_lines(ui::ChatView& v) {
                 continue;
             }
         }
-        int w = m.channel_map[static_cast<std::size_t>(game::chat_channel_of_color(static_cast<std::int32_t>(color_of(l))))];
-        if (!used(w)) w = 0;
+        const int w = routed_window(l);
         l.window = wnd(w).serial;
         note_tab_update(w, l.seq, now);
     }
@@ -2413,7 +2420,7 @@ bool set_highlight(int tab, bool on) {
     sync_current_chat();
     c.flash = on;
     if (!on) c.unread_at.reset();
-    if (!c.tell && manager().ini) save_window(tab - 1);
+    if (!c.tell && manager().ini) save_window(*manager().ini, tab - 1);
     return true;
 }
 
@@ -2422,7 +2429,7 @@ bool set_color(int tab, std::optional<std::uint32_t> rgb) {
     auto& c = wnd(tab - 1);
     if (c.flash_color == rgb) return true;
     c.flash_color = rgb;
-    if (!c.tell && manager().ini) save_window(tab - 1);
+    if (!c.tell && manager().ini) save_window(*manager().ini, tab - 1);
     return true;
 }
 
@@ -2431,7 +2438,7 @@ bool set_scrollbar(int tab, bool on) {
     auto& c = wnd(tab - 1);
     if (c.scrollbar == on) return true;
     c.scrollbar = on;
-    if (!c.tell && manager().ini) save_window(tab - 1);
+    if (!c.tell && manager().ini) save_window(*manager().ini, tab - 1);
     return true;
 }
 
@@ -2514,7 +2521,6 @@ void restore_chat_history(UiHost& host, const std::filesystem::path& file) {
         if (old.size() > kHistoryLines) old.pop_front();
     }
     if (old.empty()) return;
-    ChatManager& m = manager();
     ui::ChatLine mark;
     mark.text = std::string(kHistoryMark);
     mark.rgb = 0x8a8a8a; // grey
@@ -2523,8 +2529,7 @@ void restore_chat_history(UiHost& host, const std::filesystem::path& file) {
     const std::size_t n = old.size();
     host.chat->lines.push_front(std::move(mark));
     for (auto it = old.rbegin(); it != old.rend(); ++it) {
-        int w = m.channel_map[static_cast<std::size_t>(game::chat_channel_of_color(static_cast<std::int32_t>(color_of(*it))))];
-        it->window = wnd(used(w) ? w : 0).serial;
+        it->window = wnd(routed_window(*it)).serial;
         host.chat->lines.push_front(std::move(*it));
     }
     // (counted as lines added, and every line numbered again in order: the restored ones come before the rest)
@@ -2575,12 +2580,20 @@ void chat_host_gone(const UiHost& host, const ui::UiIni& ini) {
     if (manager().ini == &ini) manager().ini = nullptr; // the layout it pointed into goes with the API
 }
 
-void chat_layout_loaded(ui::UiIni& ini, UiHost& host, const std::filesystem::path& user_dir) {
+void capture_chat_layout(const ui::UiIni& active, ui::UiIni& snapshot) {
+    if (manager().ini == &active) save_manager(snapshot);
+}
+
+void chat_layout_loaded(ui::UiIni& ini, UiHost& host, const std::filesystem::path& user_dir, bool profile_change) {
     state().host = &host; // the host the layout is for (the Lua functions may not be registered yet)
     // The user colours are the character's: read again from its chat.ini.
     state().chat_ini = CharacterFiles{user_dir}.chat_ini();
     state().colors_loaded = false;
     ChatManager& m = manager();
+    std::unordered_map<std::uint32_t, std::uint64_t> old_windows;
+    if (profile_change && host.chat)
+        for (const auto& window : m.wnd)
+            if (window.used) old_windows.emplace(window.serial, window.cleared);
     m.reset();
     m.ini = &ini;
     auto num = [&](const std::string& key, int def) {
@@ -2642,11 +2655,11 @@ void chat_layout_loaded(ui::UiIni& ini, UiHost& host, const std::filesystem::pat
         c.tell_target = text(k + "TellTarget", "").substr(0, 0x3f);
         c.name = text(k + "Name", std::format("ChatWindow{}", w));
         c.scrollbar = num(k + "Scrollbar", 1) != 0;
-        // The constructor @0x654c80 (as RoF2): another window's font below 0 or above 7 is the default 3, though
-        // /chatfontsize (Cmd_chatfontsize @0x4e9a10) and the Font Size menu set 0..10, so 8..10 on a window other
-        // than the main one is 3 again at the next start.
-        int font = num(k + "FontStyle", 3);
-        c.font = font < 0 || font > 7 ? 3 : font;
+        // At login the RoF2 constructor @0x654c80 accepts 0..7 for secondary windows. Profile switches preserve
+        // the 0..10 range available from /chatfontsize and the Font Size menu while in game.
+        const int font = num(k + "FontStyle", 3);
+        const int max_font = profile_change ? 10 : 7;
+        c.font = font < 0 || font > max_font ? 3 : font;
     }
     m.groups = {};
     std::array<int, kMaxChatWindows> legacy_dock{};
@@ -2702,7 +2715,21 @@ void chat_layout_loaded(ui::UiIni& ini, UiHost& host, const std::filesystem::pat
         if (mode >= 0 && mode < 3) m.spell_hit_modes[i] = mode;
     }
     restore_chat_history(host, CharacterFiles{user_dir}.chat_history());
-    if (host.chat) m.synced = host.chat->revision;
+    if (host.chat) {
+        if (profile_change) {
+            // The new tabs have new serials. Move visible scrollback to their current routes and leave lines
+            // previously cleared or hidden in closed tabs assigned to their old serials.
+            for (auto& line : host.chat->lines) {
+                const auto previous = old_windows.find(line.window);
+                if (previous == old_windows.end() || line.seq <= previous->second) continue;
+                const int window = line.restored && line.text == kHistoryMark ? 0 : routed_window(line);
+                line.window = wnd(window).serial;
+            }
+            sync_lines(*host.chat); // new lines with no prior route still get their usual tell handling
+        } else {
+            m.synced = host.chat->revision;
+        }
+    }
     push_hit_modes();
     ++m.serial;
 }

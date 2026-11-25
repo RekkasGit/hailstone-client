@@ -384,6 +384,9 @@ public:
         ui_host_.copy_ui_layout = [this](const std::filesystem::path& dir) {
             if (lua_ui_) lua_ui_->copy_character_layout(CharacterFiles{dir}.ui_settings(ui_name_));
         };
+        ui_host_.layout_profile_pack = [this] {
+            return std::pair<ui::lua::LuaUi*, std::string_view>{lua_ui_.get(), ui_name_};
+        };
         apply_video_options();
         game_view_.dev_windows = config_.get_bool("ui.dev_windows", false);
         lua_ui_->set_show_control(game_view_.dev_windows);

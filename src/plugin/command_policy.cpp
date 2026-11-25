@@ -36,6 +36,7 @@ constexpr ExtendedCommand kExtended[] = {
     {"/finditem", "Search items across your inventory.", {}, "/advi"},
     {"/import", "Import eligible socials and hot buttons."},
     {"/itemnotify", "Click an inventory slot, bag slot or item by name."},
+    {"/layoutprofiles", "Open named layout profiles."},
     {"/keypress", "Tap, hold, or release a game binding.", kMovement},
     {"/lighting", "Switch lighting modes."},
     {"/lua", "Start, pause, stop, or list Lua scripts."},

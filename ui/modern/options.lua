@@ -457,6 +457,11 @@ local function displayTab()
     check("iso_hover", "Highlight Under Cursor", "A ring under the character, door or item the mouse is over.")
   end)
   section("Interface", function()
+    if API.layoutProfiles and API.layoutProfiles.List then
+      row("Layout Profiles", "Save and switch between named window layouts, bindings and chat settings.", function()
+        if ui.Button("Manage Profiles", -1, 0) then API.windows.Show("LayoutProfilesWindow", true) end
+      end)
+    end
     local uiName = API.settings.Option("ui_name")
     if uiName ~= nil then
       local names, info = API.settings.OptionChoices("ui_name"), API.settings.OptionChoices("ui_name_info")

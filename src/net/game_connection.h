@@ -2625,6 +2625,9 @@ public:
     // The Options window's chat filters: the setting changed, kept in eqclient.ini [Options] and sent to the zone
     // (OP_SetServerFilter: EQEmu leaves out what the filters hide, Client::ServerFilter).
     void change_chat_filter(int filter, std::int32_t value);
+    // Named layout profiles capture the active filters and effective user colours from the character's chat settings.
+    IniFile capture_layout_chat() const;
+    bool apply_layout_chat(const IniFile& chat);
     // The Options window's game options (game/client_options.h): the character's options.ini over eqclient.ini's.
     const game::ClientOptions& client_options() const { return client_options_; }
     bool client_option(game::ClientOption id) const { return client_options_.on(id); }

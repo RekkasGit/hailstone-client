@@ -28,6 +28,7 @@
 
 #include "lua_ui_api_mock.h"
 
+#include "app/actions_ui.h"
 #include "app/lua_ui.h"
 #include "app/gamepad.h"
 #include "core/byte_io.h"
@@ -45,6 +46,7 @@
 #include "game/mechanics/character.h"
 #include "game/mechanics/tables.h"
 #include "mq/map_filter.h"
+#include "platform/paths.h"
 #include "ui/dev_screens.h"
 #include "ui/lua/lua_host.h"
 #include "mock_server/harness.h"
@@ -159,7 +161,8 @@ constexpr const char* kScreens[] = {
     "GroupSearchWnd", "GroupSearchFiltersWnd", "GroupMentorWindow", "FellowshipWnd", "SocialEditWnd",
     "IconSelectionWnd", "CombatAbilityWnd", "JournalNPCWnd", "JournalCatWnd", "HelpWindow", "StoryWnd",
     "AlertHistoryWnd", "ZonePathWnd", "TributeTrophyWnd",
-    "LoadskinWnd", "LayoutCopyWindow", "VideoModesWindow", "NameChangeWnd", "NameChangePetWnd", "NameChangeMercWnd",
+    "LoadskinWnd", "LayoutCopyWindow", "LayoutProfilesWindow", "VideoModesWindow",
+    "NameChangeWnd", "NameChangePetWnd", "NameChangeMercWnd",
     "OptionsWindow", "AlarmWnd", "TipWindow", "NoteWindow", "EditLabelWnd", "BugReportWindow", "FeedbackWindow",
     "ClaimWnd", "ColorPickerWnd", "BodyTintWnd", "PlayerCustomizationWnd", "TitleWnd", "BreathWindow",
     "AggroMeterWnd", "PotionBeltWnd", "BandolierWnd", "BlockedBuffWnd", "BlockedPetBuffWnd", "InspectWnd",
@@ -491,6 +494,214 @@ TEST_CASE("UI packs: every script of the shipped UIs loads, and their windows dr
             }
         }
         ImGui::DestroyContext(ctx);
+    }
+}
+
+TEST_CASE("UI packs: EQ menu opens Layout Profiles when the current pack draws it") {
+    for (const std::string_view pack : {"modern", "gamepad"}) {
+        CAPTURE(pack);
+        test::ScratchDir scratch("lp-menu");
+        const auto dir = scratch.path();
+        fs::create_directories(dir / "game");
+        fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / pack, dir / pack, fs::copy_options::recursive);
+        struct ResetDataDirectory {
+            ~ResetDataDirectory() { platform::set_data_dir_for_tests({}); }
+        } reset_directory;
+        platform::set_data_dir_for_tests(dir);
+        std::unique_ptr<ImGuiContext, void(*)(ImGuiContext*)> context(ImGui::CreateContext(), ImGui::DestroyContext);
+        ImGui::GetIO().IniFilename = nullptr;
+        ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+        Config config;
+        app::ActionsUi actions(config, dir / "hailstone.ini");
+        Session s(dir, std::string(pack));
+        s.host.actions = &actions;
+        s.host.layout_profile_pack = [&] { return std::pair{&s.lua, pack}; };
+        s.lua.set_character_settings(dir / "pack.txt");
+        s.lua.set_entry_scripts({"menus.lua"});
+        s.frames(2);
+        auto run = [&](const char* code) {
+            INFO(std::string(code));
+            const auto rc = luaL_dostring(s.lua.state(), code);
+            REQUIRE_MESSAGE(rc == LUA_OK, std::string(rc == LUA_OK ? "" : lua_tostring(s.lua.state(), -1)));
+        };
+        auto click_menu = [&] { REQUIRE(s.api.click_child("EQMainWnd", "EQButton", "left")); };
+        click_menu();
+        run(R"lua(
+            function layoutProfileRow()
+              local root = assert(hs.UI.menus.Cascades()[1])
+              for row, item in ipairs(root.items) do
+                if item.text == "Layout Profiles" then return row end
+              end
+            end
+            assert(not layoutProfileRow())
+        )lua");
+        click_menu();
+        s.lua.set_entry_scripts({"menus.lua", "layoutprofiles.lua"});
+        s.lua.rescan_for_test();
+        s.frames(2);
+        REQUIRE(s.api.replaces("LayoutProfilesWindow"));
+        CHECK_FALSE(s.api.shown("LayoutProfilesWindow"));
+        click_menu();
+        run(R"lua(
+            hs.UI.menus.CascadeClick(1, assert(layoutProfileRow()))
+            assert(#hs.UI.menus.Cascades() == 0)
+        )lua");
+        CHECK(s.api.shown("LayoutProfilesWindow"));
+        s.frames(2);
+        const auto* window = ImGui::FindWindowByName(pack == "modern" ? "Layout Profiles###modern.LayoutProfilesWindow"
+                                                                    : "Layout Profiles");
+        REQUIRE(window);
+        CHECK(window->Active);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+}
+
+TEST_CASE("UI packs: unsaved layout switch can cancel, skip, or save before applying") {
+    for (const std::string_view pack : {"modern", "gamepad"}) {
+        CAPTURE(pack);
+        test::ScratchDir scratch("lp");
+        const auto dir = scratch.path();
+        fs::create_directories(dir / "game");
+        fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / pack, dir / pack, fs::copy_options::recursive);
+        platform::set_data_dir_for_tests(dir);
+        struct ResetDataDirectory {
+            ~ResetDataDirectory() { platform::set_data_dir_for_tests({}); }
+        } reset_directory;
+        std::unique_ptr<ImGuiContext, void(*)(ImGuiContext*)> context(ImGui::CreateContext(), ImGui::DestroyContext);
+        ImGui::GetIO().IniFilename = nullptr;
+        ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+        auto options = test::quick_options();
+        options.profile_id = "p";
+        options.servers_dir = dir / "s";
+        test::Rig rig(test::MockConfig::standard(), options);
+        REQUIRE(rig.to_zone());
+        const auto config_path = dir / "hailstone.ini";
+        Config config;
+        REQUIRE(config.attach_character(dir / "keys.ini"));
+        app::ActionsUi actions(config, config_path);
+
+        Session s(dir, std::string(pack));
+        s.host.conn = &rig.conn;
+        s.host.actions = &actions;
+        s.host.layout_profile_pack = [&] { return std::pair{&s.lua, pack}; };
+        s.lua.set_character_settings(dir / "pack.txt");
+        s.lua.set_entry_scripts({"layoutprofiles.lua"});
+        s.display_size = {1280, 720};
+        s.frames(2);
+        auto run = [&](const char* code) {
+            INFO(std::string(code));
+            const auto rc = luaL_dostring(s.lua.state(), code);
+            REQUIRE_MESSAGE(rc == LUA_OK, std::string(rc == LUA_OK ? "" : lua_tostring(s.lua.state(), -1)));
+        };
+        REQUIRE(s.lua.set_setting("hud.locked", "1"));
+        run("assert(hs.UI.layoutProfiles.Save('Desktop')); assert(hs.UI.layoutProfiles.Save('P'))");
+        const int forward = static_cast<int>(game::KeyCommand::FORWARD);
+        const game::KeyCombo remap{0x11, true, true, false};
+        REQUIRE(actions.keymap().bind(forward, 0, remap));
+        REQUIRE(s.lua.set_setting("hud.locked", "0"));
+        REQUIRE(s.lua.set_setting("tasks.tracked.800", "1"));
+        run(R"lua(
+            local wrapped = ui.TextWrapped
+            local input = ui.InputTextWithHint
+            shown = {}
+            ui.TextWrapped = function(text)
+              shown[text] = true
+              return wrapped(text)
+            end
+            ui.InputTextWithHint = function(label, ...)
+              local text, entered = input(label, ...)
+              if label == '##save-before-name' and nextName then
+                text, entered, nextName = nextName, false, nil
+              end
+              return text, entered
+            end
+            local function press(control, clicked)
+              if control ~= pressControl then return clicked end
+              pressControl = nil
+              return true
+            end
+            local button, invisible = ui.Button, ui.InvisibleButton
+            ui.Button = function(label, ...)
+              return press(label, button(label, ...))
+            end
+            ui.InvisibleButton = function(label, ...)
+              return press(label, invisible(label, ...))
+            end
+            hs.ShowWindow('LayoutProfilesWindow', true)
+        )lua");
+        s.frames(2);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        CHECK(s.lua.setting("hud.locked") == "0");
+        run(R"lua(
+            local profiles = hs.UI.layoutProfiles
+            assert(shown['Chat includes tabs, filters and colors.'])
+            assert(not profiles.CanUndo())
+        )lua");
+        auto press = [&](const char* modern, const char* gamepad) {
+            lua_pushstring(s.lua.state(), pack == "modern" ? modern : gamepad);
+            lua_setglobal(s.lua.state(), "pressControl");
+            s.frames(2);
+            run("assert(pressControl == nil)");
+        };
+        auto request_apply = [&] {
+            run("shown = {}");
+            press("Apply Profile", "##profile-apply");
+            run(R"lua(
+              local found = false
+              for text in pairs(shown) do
+                if text:find('Save the current layout before applying', 1, true) then found = true end
+              end
+              assert(found and not hs.UI.layoutProfiles.CanUndo())
+            )lua");
+            CHECK(s.lua.setting("hud.locked") == "0");
+        };
+        request_apply();
+        press("Cancel", "##cancel-layout-apply");
+        CHECK(s.lua.setting("hud.locked") == "0");
+        run("assert(#hs.UI.layoutProfiles.List() == 2 and not hs.UI.layoutProfiles.CanUndo())");
+
+        request_apply();
+        press("Apply Without Saving", "##apply-without-saving");
+        CHECK(s.lua.setting("hud.locked") == "1");
+        run("assert(#hs.UI.layoutProfiles.List() == 2 and shown['Applied Desktop.'])");
+        press("Undo Apply", "##profile-undo");
+        CHECK(s.lua.setting("hud.locked") == "0");
+        run(R"lua(
+            assert(not hs.UI.layoutProfiles.CanUndo())
+            assert(shown['Restored the previous setup.'])
+        )lua");
+
+        request_apply();
+        if (pack == "modern") {
+            run("nextName = 'dEsKtop'");
+            press("Save & Apply", "##save-before-apply");
+            CHECK(s.lua.setting("hud.locked") == "0");
+            run("assert(shown['Choose a different name from the profile you are applying.'])");
+            run("nextName = 'P'");
+        } else {
+            press("", "##save-before-name");
+            press("", "##kb2_10"); // P, with the keyboard's first-letter shift
+            press("", "##kbok");
+        }
+        press("Save & Apply", "##save-before-apply");
+        CHECK(s.lua.setting("hud.locked") == "0"); // An existing profile requires confirmation.
+        run("assert(not hs.UI.layoutProfiles.CanUndo())");
+        press("Replace & Apply", "##confirmyes");
+        CHECK(s.lua.setting("hud.locked") == "1");
+        run("assert(shown['Applied Desktop.'] and hs.UI.layoutProfiles.CanUndo())");
+        CHECK(s.lua.setting("tasks.tracked.800") == "1");
+
+        // The applied layouts already have matching saved snapshots, so neither switch needs a prompt.
+        run("assert(hs.UI.layoutProfiles.Preview('P')); assert(hs.UI.layoutProfiles.Apply('P'))");
+        s.frames(2);
+        CHECK(s.lua.setting("hud.locked") == "0");
+        run("assert(hs.UI.layoutProfiles.Preview('Desktop')); assert(hs.UI.layoutProfiles.Apply('Desktop'))");
+        s.frames(2);
+        CHECK(s.lua.setting("hud.locked") == "1");
+        CHECK(actions.keymap().binding(forward, 0) == remap);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
     }
 }
 
