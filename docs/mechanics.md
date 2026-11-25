@@ -2493,6 +2493,8 @@ The blood spurt (`PlayerClient_SpawnBloodSpurt` @0x58f1c0) goes with the player'
 
 Classic (WLD) models take old-style numbers (C01..T09), with the old-style movement and idle choice, the sitting
 substitutions, the replacement for a missing clip, and a 100 ms cross-fade.
+For classic movement, Hailstone treats one-frame walk and run clips as missing so the animated gait can take over.
+South Karana's classic gnolls use their run clip while walking because their walk clip is a single pose.
 
 New-style models (EQG races) take sequence codes 0x4f..0xb6 (old-style numbers go through the old-to-new map), with
 the movement selection while moving, the idle choice while still, and the track search:
