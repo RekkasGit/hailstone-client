@@ -1162,6 +1162,87 @@ end
     }
 }
 
+TEST_CASE("UI packs: server popup table rows and columns keep their formatting") {
+    constexpr std::string_view text =
+        "Intro<br><TABLE><Tr><TD><c \"#12AB34\">Name&amp;Kind</c></TD><td>Status</td><td>Score</td></Tr>"
+        "<tr><td></td><td>Ready<br>Now</td><td>42</td></tr></TABLE><br>Outro";
+    for (const char* pack : {"modern", "gamepad"}) {
+        INFO(pack);
+        const fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
+        test::ScratchDir scratch("ui_pack_popup_table");
+        const fs::path dir = scratch.path();
+        fs::create_directories(dir / "game");
+        fs::create_directories(dir / pack);
+        fs::copy(src / "lib", dir / pack / "lib", fs::copy_options::recursive);
+        fs::copy_file(src / "largedialog.lua", dir / pack / "largedialog.lua");
+        std::unique_ptr<ImGuiContext, void(*)(ImGuiContext*)> context(ImGui::CreateContext(), ImGui::DestroyContext);
+        ImGui::GetIO().IniFilename = nullptr;
+        ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+        Session s(dir, pack);
+        s.frames(2);
+        lua_State* L = s.lua.state();
+        lua_pushcfunction(L, [](lua_State* S) {
+            const auto& color = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+            lua_pushnumber(S, color.x);
+            lua_pushnumber(S, color.y);
+            lua_pushnumber(S, color.z);
+            return 3;
+        });
+        lua_setglobal(L, "popup_text_color");
+        const auto run = [L](const char* script) {
+            const int status = luaL_dostring(L, script);
+            const char* error = status == LUA_OK ? "" : lua_tostring(L, -1);
+            REQUIRE_MESSAGE(status == LUA_OK, error);
+        };
+        run(R"lua(
+            popup_text = {}
+            local function record(text, x, y, r, g, b)
+              if text and text ~= "" then popup_text[text] = { x = x, y = y, r = r, g = g, b = b } end
+            end
+            local textWrapped, textColored, drawText = ui.TextWrapped, ui.TextColored, ui.DrawText
+            ui.TextWrapped = function(text)
+              local x, y = ui.GetCursorScreenPos()
+              record(text, x, y, popup_text_color())
+              return textWrapped(text)
+            end
+            ui.TextColored = function(r, g, b, a, text)
+              local x, y = ui.GetCursorScreenPos()
+              record(text, x, y, r, g, b)
+              return textColored(r, g, b, a, text)
+            end
+            ui.DrawText = function(x, y, r, g, b, a, text, ...)
+              record(text, x, y, r, g, b)
+              return drawText(x, y, r, g, b, a, text, ...)
+            end
+        )lua");
+
+        ByteWriter w;
+        for (const std::string_view field : std::array<std::string_view, 4>{"Results", text, "", ""}) {
+            w.le<std::uint32_t>(static_cast<std::uint32_t>(field.size() + 1));
+            w.fixed_string(field, field.size() + 1);
+        }
+        w.zeros(22); // OK button, no sound controls, no duration or response ids
+        s.conn.receive_zone_packet_for_test(net::AppPacket(net::to_wire(net::Op::OnLevelMessage), w.take()));
+        REQUIRE(s.conn.large_dialog());
+        s.frames(3);
+        REQUIRE(s.lua.load_status().error_count == 0);
+        run(R"lua(
+            local function seen(text) return assert(popup_text[text], "Popup did not draw " .. text) end
+            local name, status, score = seen("Name&Kind"), seen("Status"), seen("Score")
+            local ready, now, value = seen("Ready"), seen("Now"), seen("42")
+            local function near(a, b) return math.abs(a - b) < 1 end
+            assert(name.x < status.x and status.x < score.x and near(name.y, status.y) and near(status.y, score.y),
+              "The three cells share the first row and occupy distinct columns")
+            assert(near(status.x, ready.x) and near(ready.x, now.x) and near(score.x, value.x)
+              and near(ready.y, value.y), "The empty cell keeps the second row aligned to the first")
+            assert(seen("Intro").y < name.y and name.y < ready.y and ready.y < now.y and now.y < seen("Outro").y,
+              "The rows, in-cell break and surrounding prose stay in order")
+            assert(math.abs(name.r - 0x12/255) < 0.001 and math.abs(name.g - 0xAB/255) < 0.001
+              and math.abs(name.b - 0x34/255) < 0.001, "The cell keeps its STML color")
+        )lua");
+    }
+}
+
 TEST_CASE("UI packs: hover respawn draws available and unavailable choices without script errors") {
     for (const char* pack : {"modern", "gamepad"}) {
         INFO(pack);
