@@ -256,6 +256,9 @@ int ClientApp::run() {
         if (screen_ == Screen::InGame && zone_settling() && !loading_under_question_) ui::loading_overlay(loading_view_);
         if (automation_ && ui_.visible()) automation_->imgui(game_view_.dev_windows);
         if (ui_.visible()) addon_policy_window();
+        // A permanent action asked under an interface Hailstone does not ship: the client's own question, drawn
+        // whether or not the interface draws ConfirmationDialogBox (UiHost::client_confirm).
+        draw_client_confirm(ui_host_);
         // The server plugins' question waits: the loading screen (draw_ui's, or the settling's) is a window beneath
         // it, drawn after every other window and with the question raised again above it (ui::loading_overlay).
         if (loading_under_question_ && ((screen_ == Screen::InGame && zone_settling()) ||
@@ -1019,6 +1022,7 @@ int ClientApp::run() {
                 pick_camera_.fov_ratio = fov.v != 0.0f ? fov.h / fov.v : 1.0f;
                 pick_camera_.yon = view_.far_plane;
                 pick_camera_valid_ = view_area_.w > 0.0f && view_area_.h > 0.0f;
+                pick_camera_epoch_ = world_epoch_;
                 if (pick_camera_valid_) target_view_projection_ = plain_proj * camera_.view();
                 else target_view_projection_.reset();
             }
@@ -1064,10 +1068,11 @@ int ClientApp::run() {
 }
 
 void ClientApp::retire_world_geometry() {
-    if (automation_) automation_->world_unavailable();
+    if (automation_) automation_->world_placement_cancel();
     world_anchors_.clear();
     world_scene_ = {};
     if (++world_epoch_ == 0) ++world_epoch_;
+    if (automation_) automation_->world_unavailable();
     if (++world_collision_revision_ == 0) ++world_collision_revision_;
     world_floor_generation_ = world_objects_ ? world_objects_->visual_generation() : 0;
     world_animation_time_ = animated_objects_ ? animated_objects_->visual_time() : 0;
@@ -1351,7 +1356,7 @@ void ClientApp::update_guide() {
 
 } // namespace client_internal
 
-int run_client(ClientOptions& options) {
+int run_client(ClientOptions& options, std::optional<platform::ScopedFileLock> running_claim) {
     resolve_login_launch(options.login_launch, options.auto_user, options.auto_password, options.account, false);
     int code = 0;
     client_internal::ClientApp::UpdateExit update;
@@ -1365,7 +1370,9 @@ int run_client(ClientOptions& options) {
         code = app->run();
         update = app->update_exit();
     }
-    // The client is gone (its window, the browser helper, the plugins): a downloaded update goes in now.
+    // The client is gone (its window, the browser helper, the plugins): a downloaded update goes in now, unless
+    // another Hailstone runs from the folder (install_staged_update checks, with this process's claim let go).
+    running_claim.reset();
     if (update.install) finish_update_at_exit(update.restart);
     return code;
 }

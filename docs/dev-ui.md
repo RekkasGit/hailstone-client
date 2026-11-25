@@ -132,7 +132,7 @@ TaskSelectWnd has Preview Reward in both packs (`TSEL_PreviewRewardButton`, the 
 
 #### Shared tasks
 
-The header's Shared members control shows the roster count and opens a management popup over the native `STASK_MemberList` (Member, Role). Add target, Remove member, Make leader, Invite raid and Invite expedition use the native controls and their permission checks.
+The header's Shared members control shows the roster count and opens a management popup over the native `STASK_MemberList` (Member, Role). Add target, Remove member, Make leader, Invite raid and Invite expedition use the native controls and their permission checks. Make leader asks first, naming the member (Hailstone).
 
 #### The tracker
 
@@ -265,6 +265,8 @@ The CLOSE_TOP_WINDOW key (Escape unless rebound) closes one ticked window per pr
 #### Controls
 
 Controls (`lib/widgets.lua`): buttons, check boxes, button rows, edit and combo boxes, sliders, gauges, lists, STML text, item slots and grids, tabs and coins. A list is a virtual table over `hs.ListInfo` / `hs.ListRow`, sortable and filterable.
+
+A button with `opts.ask` (a function giving the question) opens a Yes / Cancel question on a click, and only its Yes clicks the child. The question goes away when `ask` gives a different question (another member selected), or the child is disabled or hidden.
 
 Each control is bound to a game window's child by its ScreenID (the layout's `id`, not `name`): it reads what the child shows and hands clicks to it (`hs.ClickChild`, `hs.ListClick`, `hs.SetWindowText`, `hs.ComboSelect`, `hs.SetSlider`, `hs.SetTabPage`, `hs.PickUp`), so the window's own handler runs.
 
@@ -426,15 +428,15 @@ Testing: `test.open.<screen>=<seconds>`, `test.select.<window>.<list>=<row>`.
 Helper: `lib/social.lua`.
 
 - **FriendsWindow**: friends and ignored, add, Who / Remove.
-- **RaidWindow**: twelve reflowing group cards, ungrouped players above, roles, search, the invitation banner.
+- **RaidWindow**: twelve reflowing group cards, ungrouped players above, roles, search, the invitation banner. Leave and Make Leader ask first, Make Leader naming the selected member (Hailstone, as the gamepad pack).
   - A member dropped on a card, or "Move here", is selected in the game's list and that group's button pressed. The game enables those buttons only in a locked raid, so an unlocked raid's leader gets it locked first. A full group refuses the drop.
 - **RaidOptionsWindow**, **LFGuildWnd**.
-- **GuildManagementWnd**: roster, notes, message of the day, ranks.
+- **GuildManagementWnd**: roster, notes, message of the day, ranks. Promote, Demote, Make Leader and Remove ask first, naming the selected member; selecting another member puts the question away (Hailstone, as the gamepad pack).
 - **InspectWnd**: worn grid and gear by name.
 - **MailWindow**, **MailAddressBookWindow** and **MailCompositionWindow**.
 - **GroupSearchWnd**: your post (as player or group) beside sortable, searchable results; a group's members and wanted classes under it.
 - **GroupSearchFiltersWnd**, **GroupMentorWindow**.
-- **FellowshipWnd**: members and campsite pages. Its tab box is the script's own (the model keeps no page): `test.tab.FellowshipWnd.Subwindows=n`.
+- **FellowshipWnd**: members and campsite pages. Make Leader, Remove, Leave, End Fellowship and Destroy Camp ask first through the confirmation dialog (the shared model's question, naming the member); the packs add no question of their own. Its tab box is the script's own (the model keeps no page): `test.tab.FellowshipWnd.Subwindows=n`.
 - **SocialEditWnd**:
   - button preview, colour swatches;
   - each line's command with a kind badge, a wait box for its `/pause`, move / empty buttons;
@@ -799,6 +801,8 @@ Hailstone's own login, server select, character select and creation screens, dra
 
 - **Revisions**: the first three views carry `view.revision`. Passing it back gives `true` while nothing changed, so a window keeps its table; a script that writes into its held view must read the whole view next frame.
 - **Actions** (`hs.LoginSet`, `hs.LoginDo`, `hs.ServerSelectDo`, `hs.CharacterSelectDo`, `hs.CharacterCreateDo`; lists 1-based; the file's comments list them) do what the ImGui screens do. The login view has `view.version` (`build_version()`, shown at the foot) and the updater's `view.update` with `"updateDownload"`, `"updateRestart"`, `"updateSkip"` and `"updateNotes"` (docs/updater.md).
+- **Deleting a character** is the client's call to confirm. The shipped packs (Modern, Gamepad) ask first in their own look, naming the character, and their own code's `hs.CharacterSelectDo("delete")` then deletes. From any other caller that call asks the client's question ("Delete <name> permanently? This cannot be undone.") and deletes only on Yes, and only while the same character is still picked. The client draws that question in an ImGui window of its own (`UiHost::client_confirm`, `draw_client_confirm`), under any pack, which no Lua code sees or answers: it appears even when an interface Hailstone does not ship draws no ConfirmationDialogBox, and a script cannot press its Yes as it could the box's. The Advanced Inventory's bulk destroy asks the same way (docs/mechanics.md).
+- **A destroy's question in ConfirmationDialogBox** (an item's destroy, a guild's disband) is answered Yes only by the pack's own code, which passes on the player's click: `hs.ClickChild`, `hs.WindowButton` and `hs.ClickChildAt` on its `Yes_Button` from a script, a plugin window or another Lua state return false and log a warning (`destructive_confirmation_up`). Its No, and every other question (a rez, a trade's), stay open to scripts.
 - Worlds are sorted favourites first, then by name ignoring case (`ui::server_list_order`), a Hailstone difference (the original keeps the login server's order). `"favorite", i` toggles one, kept as hailstone.ini `login.favorite_worlds.<profile>`, names joined by `|`.
 - Creation's rules are shared with the ImGui screen (`ui::create_normalize`, `create_set_deity`, `create_stat_up` and the rest in `src/ui/dev_screens.h`). `hs.CharacterCreateDo("randomName")` asks OP_RandomNameGenerator. `hs.CharacterCreateHelp(kind, id)` gives dbstr_us.txt's description (types 8, 9, 14, 15 and 10) and name.
 - Reading a view in a frame replaces the client's screen (`UiApi::replaces("LoginScreen" | "serverselect" | "CharacterListWnd" | "CharacterCreateScreen")`); actions return next frame via `UiHost::login_action`, `server_select_action`, `char_select_action` and `char_create_action`.
@@ -882,7 +886,7 @@ Ctrl+Shift+P, `/perf`, or `ui.perf_window=1`. It shows frame times, the main loo
 
 **With frame generation** (docs/graphics.md "Frame generation"): the headline shows rendered and displayed rates (`app::frame_rates`); a section adds the share of frames with an in-between frame, totals and skip reasons (a cut or resize; no free swapchain image), present mode and image count, the last wait for the second image, and frame generation's GPU time where the device can time it. The graph and phases stay per real frame.
 
-**Log hitches** (`ui.perf_log_hitches=1`) logs every frame over 2.5 times the typical frame time (20 ms at least) as `perf: hitch ...`, phases longest first, then sections of 1 ms or more (`; in it: ...`).
+**Log hitches** (`ui.perf_log_hitches=1`) logs every frame over 2.5 times the typical frame time (20 ms at least) as `perf: hitch ...`, phases longest first, then sections of 1 ms or more (`; in it: ...`). The typical frame time is a running average of the frames that were not hitches; after 30 hitches in a row it starts again from the latest frame, so a lasting drop in frame rate (a heavier zone, a slower power state) is not logged as a hitch every frame.
 
 **Frame sections** are laps marked by the main loop and `LuaUi::frame` (`core/frame_sections.h`): the Update, UI and Record phases' main calls (Update: connection, automation, world objects, player, spawn smoothing), the Record phase's cover and water maps, each Lua window and the map views' parts, the script scan and Lua GC. The "Frame sections" table shows each one's 60-frame average and slowest frame, with a filter (`app::SectionAverages`).
 

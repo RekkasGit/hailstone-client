@@ -134,7 +134,9 @@ The packs (`ui/modern/pluginconsent.lua`, the Gamepad UI's `dialogs.lua`) use tw
   required}}}`. Title, intro and warning are worded for what is asked; `required` is true for the player's own add-on
   the server requires.
 - `hs.AnswerPluginConsent(true | false | nil, serial)`. An answer to a question since replaced (another server's,
-  other bytes) is refused (false) and nothing is kept.
+  other bytes) is refused (false) and nothing is kept. Only the interface's own files answer, as with
+  `hs.AddonPolicyAction`: plugin code, another Lua state with the hs API, and an interface Hailstone does not ship get
+  false.
 
 Both packs keep Allow and Don't allow off for a second after a question shows or changes. Plugin code gets nil.
 Without a pack window (`hs.ReplaceWindow("PluginConsent")`) the client draws its own.
@@ -283,7 +285,8 @@ A script whose `events` permission the server takes away gets no more lines: tho
 - `loadfile` hands back only what it returned, and refuses a file whose values are or hold a function (`nil` and why;
   `dofile` raises it).
 - A file is at most 8 MiB. A write that would leave `mq.configDir` holding more than 1000 files or 64 MiB is refused
-  (an error).
+  (an error). The folder is counted at a script's first write and kept up to date by the writes after it; files
+  added or removed there by other means count from the next script's start.
 
 #### Modules
 
@@ -724,6 +727,9 @@ Host functions:
   Hailstone's folder (`${MacroQuest.Path[config]}`, Lua's `mq.configDir`), shared by every plugin and script. Made
   on demand and written as `config_dir` writes its folder; 0 when the client has none. Needs no capability. Added
   later in ABI 4: test `HAILSTONE_HOST_HAS(host, get_scripts_config_dir)` first;
+- `host->world_placement_start`, `world_placement_get` and `world_placement_cancel`: a one-shot ground aim for the
+  player (needs `ui` and `extend`; see "Mouse-aimed ground placement"). Added later in ABI 4: test
+  `HAILSTONE_HOST_HAS` for all three first;
 - `ParseMacroData` (`${...}`, any TLO);
 - `AddTopLevelObject`: a TLO with members the plugin answers; refused when the name is already a TLO (as in MQ);
 - `RemoveTopLevelObject` (only the plugin's own);
@@ -1929,9 +1935,15 @@ The pack's tables reach the plugin only as views: what a pack function it calls 
 passes its functions as arguments (its own tables handed back stay its own), and a metatable it did not set itself
 from `getmetatable`. It cannot get the pack's own `hs` or `ui` functions to act under the player's authority.
 
-Not covered: a function or table the plugin hands a pack function, or returns to the pack. The pack may keep it as it
-is (docs/todo.md). A player who copies the same files into a UI pack makes them the pack's own, with the player's
-authority.
+What the plugin hands the pack goes the other way the same: an argument to a pack function, and what its function
+returns or raises to the pack's code, reaches the pack as what it puts in a shared table does. Its own table comes as
+a view whose metamethods and functions run as the plugin (and whose `next` and `rawget` see nothing, as above); its
+function runs as the plugin. A pack that keeps either and uses it later runs none of the plugin's code under the
+player's authority. Operators the view has none of (`==` with another table, `<`, `..`, a call, `tostring`) do not
+reach the plugin's metatable. A client function that reads a table raw (`ui.PushStyleColors`) still gets the table
+behind the view.
+
+A player who copies the same files into a UI pack makes them the pack's own, with the player's authority.
 
 #### How plugins load
 
@@ -2201,6 +2213,51 @@ NPC collision (`game/npc_collision.h`, docs/mechanics.md "NPC collision"; player
 mounts stay passable), climbing passable ladders and solid ladders (docs/mechanics.md "Ladders") are Hailstone's own
 rules, not the original client's. Each is on unless `[movement]` turns it off; the player has no switch. A change
 reaches players at their next login.
+
+### Command policy
+
+`[commands]` is **advisory client policy**. Stock RoF2, older Hailstone builds and modified clients can ignore it.
+Add-on APIs and UI controls that perform an action directly can still use that action. Enforce account permissions
+and gameplay restrictions on the server.
+
+The server opts into this extension by setting command rules in `hailstone.cfg`. Blocking a stock command changes
+RoF2 behavior on supporting Hailstone clients. The client checks slash commands from chat, ordinary socials and
+add-on calls, including abbreviations, aliases and nested commands. Rules also cover Hailstone extensions,
+registered add-on commands, and the `/pause` and `/timer` social directives. Blocking `/target`, for example,
+blocks regular targeting by name and extended spawn searches through that command. EQEmu handles `#` commands.
+
+```ini
+[commands]
+default = allow
+block_groups = movement_automation, command_helpers
+allow = /echo
+block = /follow, /random
+gm = /nav:200, /exampleaddon:150
+blocked_message = "This command is blocked here. Ask a GM if you need it unblocked."
+```
+
+Command names are case-insensitive. Individual rules override group rules. For a command in multiple explicit
+lists, `block` takes priority, followed by `gm` and then `allow`. A GM rule uses the minimum numeric EQEmu account
+status from 1 through 32767. Hailstone receives that status from the encounter at zone-in and requests a refresh
+every 30 seconds while GM rules are active. A GM rule denies execution if the status is unavailable or expires.
+Groups can allow or block commands, with block taking priority when groups disagree.
+
+The built-in groups are:
+
+| Group | Commands |
+|---|---|
+| `non_rof2` | Hailstone's built-in extended commands |
+| `movement_automation` | `/nav`, `/afollow`, `/moveto`, `/stick`, `/face`, `/keypress` |
+| `command_helpers` | `/docommand`, `/echo`, `/noparse`, `/squelch`, `/timed` |
+| `addon_commands` | Commands registered by add-ons |
+
+Use `default = deny` and `allow` or `allow_groups` for an allowlist. Without command rules, all commands retain
+their ordinary behavior. `blocked_message` is an optional single line up to 240 UTF-8 bytes. Use whole-value quotes
+to include semicolons or hash characters. An empty value uses the client's default notice.
+
+Run `hailstone_check --list-commands` for the built-in catalog or `hailstone_check client_files/ --commands` for
+effective rules. A GM can also review and edit them in [Server Management](../server/README.md#in-game-server-management).
+These rules depend on an up-to-date, unmodified Hailstone client.
 
 ### Opt-in add-on policies
 
@@ -2557,6 +2614,34 @@ SHA-256, and FNV-1a64 with bit 63 cleared.
 - Frame and epoch tokens expire, query/vertex/batch budgets are bounded, and a complete submission is copied before
   admission. Owners come from the host, never the add-on.
 - Resubmit every batch each frame. Unloading, deactivation and permission loss retire owned geometry.
+
+#### Mouse-aimed ground placement
+
+Check `HAILSTONE_WORLD_PLACEMENT` through `world_capabilities` to identify the placement SDK layout, then
+check `HAILSTONE_HOST_HAS` for `world_placement_start`, `world_placement_get` and `world_placement_cancel`.
+The host advertises the bit in the zone even without an available render frame, so a non-zero
+`world_capabilities` no longer means a geometry frame is ready: test `HAILSTONE_WORLD_GEOMETRY` for that.
+Placement calls require an
+active native add-on with `ui` and `extend` on the client's own thread because they use window focus and input.
+
+- `start` arms one interactive aim in the loaded world. The active aim belongs to one add-on.
+  To switch tools, cancel the old aim first. A failed start preserves the active aim. Starting a new
+  aim clears the same owner's unread result.
+- Initialize `HailstoneWorldPlacement::size` before calling `get`. It returns the loaded zone and instance even
+  while inactive, and either an invalid aim or a valid preview in zone-file coordinates. Use the existing
+  world geometry API to draw a preview.
+- A world press and release on valid ground confirms one position. The host consumes the gesture before
+  regular targeting, object use and click-to-move. A window, sky, or blocked surface clears the pending gesture.
+- Escape, a world right click, loss of focus and scene retirement cancel aiming. After the player's own cancel
+  (Escape or the right click), `start` returns 0 for that add-on until the player presses a mouse button over one
+  of the windows, so an add-on that arms again on its own cannot keep the world's clicks; start the aim from the
+  add-on's own button or window. `get` returns confirmation or
+  cancellation once to the owner. When the scene is unavailable, it returns zero unless returning a pending
+  cancellation with zero for the zone and instance. Deactivation, unload and permission loss discard owned state.
+- The aim resolves solid static ground the camera can see, on the drawn world (the surface `world_floor_below`
+  answers from): a tree's trunk or another drawn surface in the way leaves the aim invalid. Placed objects and
+  animated scenery block it too; players and NPCs do not. Nothing in the
+  host API sends game packets, syncs coordinates with players or records positions beyond the aim.
 
 #### The floor below
 

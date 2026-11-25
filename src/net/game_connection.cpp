@@ -174,6 +174,7 @@ void GameConnection::select_zone_spell_limit() {
 }
 
 void GameConnection::fail(std::string message) {
+    close_server_management();
     close_evolving_transfer();
     reset_fellowship();
     reset_achievements();
@@ -198,7 +199,7 @@ void GameConnection::fail(std::string message) {
 }
 
 void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb, std::uint32_t color,
-                          std::string peer, std::optional<std::string> display_text) {
+                          std::string peer, std::optional<std::string> display_text, bool filter) {
     // MacroQuest's colour codes (game/mq_colors.h) are for the plugins' and scripts' own lines: from anyone else (a
     // server's message, a player's tell) a BEL is taken out, so their text cannot colour the chat. A hook below may
     // still put codes into a line it rewrites, as the plugin's own.
@@ -207,7 +208,7 @@ void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t 
         drop(text);
         if (display_text) drop(*display_text);
     }
-    if (options_.hooks) { // OnIncomingChat, OnFilterChat (a server's client may drop lines in dsp_chat)
+    if (filter && options_.hooks) { // OnIncomingChat, OnFilterChat (a server's client may drop lines in dsp_chat)
         // A deliberate difference from MQ, whose hook hangs off dsp_chat and sees a hit line as displayed: hooks get
         // the full sentence whatever the hit mode (docs/plugins.md), so a parser matches one form.
         plugin::ChatLine line{text, rgb, static_cast<int>(kind)};
@@ -472,6 +473,8 @@ void GameConnection::update() {
         server_rules_.reset();
         ++server_rules_serial_;
     }
+    update_command_account_status();
+    update_server_management();
     // The original reapplies the new-armor filter to a member who joins or leaves the group or raid
     // (PlayerClient_ApplyNewArmorFilterGroupMember / RaidMember); a new spawn has it made in apply_spawn.
     if (new_armor_membership_changed())
@@ -694,6 +697,14 @@ void GameConnection::handle_world(const AppPacket& p) {
         }
         break;
     case Op::ZoneServerInfo: {
+        // The original reads the address only while it waits for it after OP_EnterWorld (StartNetworkGame, GameState
+        // 3), from the character select or after world's OP_EnterWorld while zoning; stock EQEmu sends it only in
+        // answer to the client's OP_EnterWorld (world Client::EnterWorld → Clearance). Anywhere else it would end the
+        // world and zone state and connect a zone with no character, so it is dropped.
+        if (state_ != ConnectionState::EnteringWorld && state_ != ConnectionState::Zoning) {
+            log::warn("world: OP_ZoneServerInfo while {}, ignored", to_string(state_));
+            break;
+        }
         auto info = decode_zone_server_info(p);
         if (!info) { fail("could not read the zone server address"); return; }
         zone_host_ = info->host.empty() ? ticket_.world_host : info->host;
@@ -703,6 +714,11 @@ void GameConnection::handle_world(const AppPacket& p) {
         // closes it on OP_WorldComplete). The fresh zone connection replaces any old one.
         zone_session_.reset();
         invalidate_interaction_context();
+        server_management_offered_ = false;
+        command_account_status_.reset();
+        settings_requested_at_ = {};
+        command_account_status_received_at_ = {};
+        if (!server_management_waiting_for_zone_) close_server_management();
         send_world(make_empty(Op::WorldComplete));
         world_drop_pending_ = true;
         world_drop_deadline_ = Clock::now() + kWorldDropWait;
@@ -769,6 +785,16 @@ void GameConnection::handle_world(const AppPacket& p) {
         spells_.others.clear();
         cast_stage_shown_.clear();
         effect_packets_.clear();
+        // Cues not yet taken name the old zone's spawn ids, which the new zone reuses for others.
+        effect_cues_.clear();
+        level_effect_cues_.clear();
+        // The same for the sound cues tied to a spawn or a place in the old zone (a hit, a cast, a door). A 2D
+        // wave, the level-up sound and the new-mail sound name neither and would have played already in the
+        // original, which plays a sound as its packet arrives: they stay.
+        std::erase_if(sound_cues_, [](const SoundCue& c) {
+            return c.kind != SoundCue::Kind::Wave && c.kind != SoundCue::Kind::LevelUp &&
+                   c.kind != SoundCue::Kind::NewMail;
+        });
         blood_spurts_.clear();
         spells_.target_buffs.clear();
         spells_.target_buffs_entity = 0;
@@ -993,6 +1019,7 @@ void GameConnection::apply_spawn(const Spawn& s) {
     group_.mana_percent.erase(s.spawn_id);
     group_.endurance_percent.erase(s.spawn_id);
     spells_.others.erase(s.spawn_id);
+    cast_stage_shown_.erase(s.spawn_id);
     if (spells_.target_buffs_entity == s.spawn_id) {
         spells_.target_buffs_entity = 0;
         spells_.target_buffs.clear();
@@ -1103,7 +1130,7 @@ void GameConnection::finish_server_files() {
     maybe_request_client_spawn();
 }
 
-// A transient login reads only the access setting. A saved profile uses the full policy and keeps its folder for
+// A transient login reads access and command policy. A saved profile uses the full policy and keeps its folder for
 // plugin settings (server_config_dir), including on a server without the Hailstone script.
 bool GameConnection::update_server_rules() {
     plugin::Rules rules;
@@ -1122,10 +1149,12 @@ bool GameConnection::update_server_rules() {
         // A failed sync can leave an earlier login's rules on disk. Only this login's policy decides access.
         if (synced) allow_client = !received.deny_client;
         if (!options_.server_files_dir.empty()) rules = std::move(received);
+        else if (synced) rules.commands = std::move(received.commands);
     }
     log::info("server rules: {}", rules.configured ? std::format("{} ({} scripts and plugins of its own)", plugin::kServerCfgName,
                                                                  rules.server_files.size())
-                                                   : std::string("none (no hailstone.cfg): plugins and scripts run freely"));
+                                                   : std::string(rules.commands.enabled ? "command policy (transient login)"
+                                                                                        : "none: plugins and scripts run freely"));
     server_rules_ = std::move(rules);
     ++server_rules_serial_;
     return allow_client;
@@ -1269,7 +1298,7 @@ void GameConnection::finish_zone_in() {
     guild_world_invites_ = false;
     if (entered) send_zone(encode_hailstone_guild({}));
     // And the server's settings for the client; a server without Hailstone's script does not answer.
-    if (entered) send_zone(encode_hailstone_settings_request());
+    if (entered) request_hailstone_settings();
     // The camera effect's reset @0x4939b0 runs on the zone-in: a new zone starts unshaken.
     camera_shake_.reset();
     // DoMainLoop after ReadyEnterWorld: the task window rebuilt and the task compass mark looked for (0x76ff50).
@@ -1286,6 +1315,20 @@ void GameConnection::request_quest_npcs() {
     send_zone(encode_quest_npcs_request());
 }
 
+void GameConnection::request_hailstone_settings() {
+    settings_requested_at_ = options_.session.clock ? options_.session.clock() : Clock::now();
+    send_zone(encode_hailstone_settings_request());
+}
+
+void GameConnection::update_command_account_status() {
+    if (state_ != ConnectionState::InZone || zone_change_pending_ || !server_rules_ || server_rules_->provisional ||
+        server_rules_->commands.gm.empty()) return;
+    const auto now = options_.session.clock ? options_.session.clock() : Clock::now();
+    // Ask the encounter again while this policy needs an account rank. An absent or expired rank denies GM rules.
+    if (now - command_account_status_received_at_ >= std::chrono::seconds(60)) command_account_status_.reset();
+    if (now - settings_requested_at_ >= std::chrono::seconds(30)) request_hailstone_settings();
+}
+
 std::optional<TimeOfDay> GameConnection::current_time_of_day() const {
     if (!time_) return std::nullopt;
     const auto now = options_.session.clock ? options_.session.clock() : Clock::now();
@@ -1300,6 +1343,10 @@ std::optional<TimeOfDay> GameConnection::current_time_of_day() const {
 
 void GameConnection::handle_zone(const AppPacket& p) {
     if (options_.zone_packet_tap) options_.zone_packet_tap(p);
+    if (p.opcode == kOpServerManagementReply) {
+        handle_server_management(p);
+        return;
+    }
     if (p.opcode == kOpHsFiles) {
         if (auto reply = decode_server_files(p); reply && server_files_ && !server_files_->finished()) {
             server_files_->handle(*reply, ServerFileSync::Clock::now());
@@ -1349,8 +1396,14 @@ void GameConnection::handle_zone(const AppPacket& p) {
     }
     if (p.opcode == kOpHailstoneSettings) {
         if (auto v = decode_hailstone_settings(p)) {
-            log::info("server settings: flags {:#x}", v->flags); // none defined now (net/settings_packets.h)
+            log::info("server settings: flags {:#x}", v->flags);
             hailstone_script_ = true;
+            command_account_status_ = v->account_status;
+            command_account_status_received_at_ = options_.session.clock ? options_.session.clock() : Clock::now();
+            if (state_ == ConnectionState::InZone) {
+                server_management_offered_ = (v->flags & kServerManagementOffered) != 0;
+                if (!server_management_offered_) close_server_management();
+            }
         } else {
             log::warn("server settings: a bad OP_HailstoneSettings ({} bytes) ignored", p.data.size());
         }
@@ -1632,6 +1685,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
             group_.mana_percent.erase(*id);
             group_.endurance_percent.erase(*id);
             spells_.others.erase(*id);
+            cast_stage_shown_.erase(*id);
             if (spells_.target_buffs_entity == *id) {
                 spells_.target_buffs_entity = 0;
                 spells_.target_buffs.clear();
@@ -2273,6 +2327,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 // while zoning (a link death then is not in game).
                 camp_started_ = {};
                 camp_kind_ = 0;
+                pause_server_management_for_zone();
                 state_ = ConnectionState::Zoning;
                 reset_fellowship(true);
                 reset_guild_banner();
@@ -2650,6 +2705,7 @@ void GameConnection::simulate_link_loss() {
 }
 
 void GameConnection::disconnect() {
+    close_server_management();
     close_evolving_transfer();
     reset_fellowship();
     capture_bank();
@@ -2787,6 +2843,9 @@ bool GameConnection::allowed_to_attack(std::uint32_t target, std::int32_t spell)
     in.my_level = static_cast<std::uint8_t>(pstatus_.level);
     in.zone = static_cast<std::uint32_t>(zone_id()) | (static_cast<std::uint32_t>(zone_instance()) << 16);
     in.rules.pvp_rules = pvp_rules_;
+    // The duel globals AllowedToAttack reads: 0xddf7ec (the fight is on) and 0xddf7e4 (the opponent).
+    in.rules.dueling = duel_.active;
+    in.rules.duel_target_id = duel_.challenged;
     in.self_or_group_member = [this](const std::string& name) { return group_.has_member(name); };
     return game::allowed_to_attack(in);
 }

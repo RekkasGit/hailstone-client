@@ -99,6 +99,10 @@ void GameConnection::reset_player_for_zone() {
     book_.reset();
     discard_questions(); // the shown one and those waiting: they were about the zone left
     offline_mode_at_ = 0; // CEverQuest_ResetClientStateForZone @0x531b36
+    // A deliberate change from the original, which keeps its duel globals (0xddf7e4..0xddf7ec) across a zone: the
+    // duel ends with the zone. EQEmu ends it on the server too when the client leaves (Client::~Client), so the old
+    // opponent's id would otherwise name whoever holds it in the new zone (an attackable stranger).
+    duel_ = {};
 }
 
 // ---------------------------------------------------------------- duels

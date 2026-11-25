@@ -54,6 +54,7 @@ struct Host {
     std::vector<std::pair<int, std::string>> used, checked; // use_ability, ability_state (kind and name)
     bool ability_ready = true;
     std::vector<plugin::AbilityBulkRow> ability_rows; // get_ability_data_bulk's rows
+    std::optional<plugin::WorldPlacementScene> placement_scene;
     std::vector<std::pair<plugin::Stream, net::AppPacket>> packets;
     std::unique_ptr<mq::Commands> commands;
     std::unique_ptr<plugin::NativePlugins> plugins;
@@ -93,6 +94,8 @@ struct Host {
         ne.scripts_config_dir = world.dir / "scripts" / "config";
         ne.web = web;
         ne.connection = [this] { return world.conn.get(); };
+        ne.world_placement_scene = [this] { return placement_scene; };
+        ne.world_placement_input_allowed = [this] { return placement_scene.has_value(); };
         ne.extensions = extensions.get();
         ne.nameplates = &canvas;
         ne.use_ability = [this](mq::AbilityKind kind, std::string_view name) {
@@ -185,6 +188,55 @@ void nameplate_test_metrics(game::NameplateCanvasRegistry& canvas) {
 }
 
 } // namespace
+
+TEST_CASE("native plugins: placement is advertised without a render frame and remains owner scoped") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+
+    h.run("/probeworldplacement status");
+    // Only the placement bit: no geometry frame yet.
+    CHECK(h.printed_line("[Probe] placement: 32 0 0 0 0"));
+    h.placement_scene = plugin::WorldPlacementScene{1, 85, 2};
+    h.run("/probeworldplacement status");
+    CHECK(h.printed_line("[Probe] placement: 32 1 0 85 2"));
+    h.run("/probeworldplacement start");
+    CHECK(h.printed_line("[Probe] placement start: 1"));
+    REQUIRE(h.plugins->world_placement_aiming());
+    h.plugins->world_placement_update(plugin::WorldPlacementPoint{12, -7, 2}, true, true);
+    h.run("/probeworldplacement status");
+    CHECK(h.printed_line("[Probe] placement: 32 1 3 85 2"));
+
+    h.run("/probeworldplacement start");
+    REQUIRE(h.plugins->world_placement_aiming());
+    h.approve(plugin::kCapAll & ~plugin::kCapExtend);
+    h.plugins->policy_changed({});
+    CHECK_FALSE(h.plugins->world_placement_aiming());
+    h.run("/probeworldplacement status");
+    CHECK(h.printed_line("[Probe] placement: 0 0 0 0 0"));
+}
+
+TEST_CASE("native plugins: placement stays on the actual client thread during a lend") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    h.placement_scene = plugin::WorldPlacementScene{1, 85, 2};
+    REQUIRE(h.plugins->load("HostProbe"));
+
+    h.run("/probeworldplacement lent");
+    CHECK(h.printed_line("[Probe] placement lent: 1 0 0 99 1"));
+    CHECK_FALSE(h.plugins->world_placement_aiming());
+
+    h.run("/probeworldplacement start");
+    REQUIRE(h.plugins->world_placement_aiming());
+    h.printed.clear();
+    h.run("/probeworldplacement lent");
+    CHECK(h.printed_line("[Probe] placement lent: 1 0 0 99 1"));
+    CHECK(h.plugins->world_placement_aiming());
+    h.run("/probeworldplacement cancel");
+    CHECK_FALSE(h.plugins->world_placement_aiming());
+    h.run("/probeworldplacement status");
+    CHECK(h.printed_line("[Probe] placement: 32 1 4 85 2"));
+}
 
 TEST_CASE("native plugins: nameplate frame lease and canvas ownership") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);

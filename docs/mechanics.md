@@ -43,7 +43,7 @@ time. They run on plain data (`CharacterSheet`) and are covered by recorded test
 | `attack_rules.*` | who may attack whom (the PvP rules) through `AttackQueries`; live in `game/attack_check.*` |
 | `spell_gems.*` | memorising, linked timers, the usable-slot rule, gem readiness; see "Spell gems and buff stacking" |
 | `find_affect_slot.*` | buff slot choice and stacking over `AffectQueries`; live callees `game/hit_landing.*` |
-| `shown_stats.*` | the AC and ATK the inventory window shows (label cases 0x15 / 0x16), shared with the item comparison (docs/item-compare.md) |
+| `shown_stats.*` | the AC and ATK the inventory window shows (label cases 0x15 / 0x16; 0x580330 and 0x584f60, whose x 1000 wraps in 32 bits before the divide by 847 / 744), shared with the item comparison (docs/item-compare.md) |
 | `sheet_builder.*` | the sheet from the live connection; see note 4 |
 
 Notes:
@@ -1159,7 +1159,13 @@ Also Hailstone's own: selected rows can be sold, donated as tribute, destroyed o
 - Withdraw, at an open bank: each item goes through the cursor into the first free general slot, else a bag with room
   (`stow_cursor_in_packs`, never equipped). A bag and its children move once. Closing the bank stops the job.
 - Destroy: each item is destroyed from the cursor (OP_MoveItem to nowhere), with one confirmation for the batch. A
-  non-empty bag and No Destroy items are left out, rechecked just before each pickup.
+  non-empty bag and No Destroy items are left out, rechecked just before each pickup. The client owns the confirmation:
+  the Modern pack's own window asks it; any other caller of `hs.BulkItems("destroy", ...)` gets the client's question
+  with the count and how many are No Trade or attuned, and the job starts on Yes only if the same items (slot, ID,
+  serial, quantity) are still there. The client draws that question in a window of its own under any pack, which no Lua
+  code sees or can answer, so it appears even when an interface draws no ConfirmationDialogBox and no script can press
+  its Yes. Options' Fast Item Destroy skips the client's
+  question, as it does the single item's.
 
 The window shows beforehand how many items each action takes. A job stops, with a chat line and the cursor put away,
 if the items change under it. The selection records each item's ID, serial and quantity, which must still match, so a
@@ -2004,6 +2010,16 @@ Previews never enter the inventory and no success is reported locally: the serve
 A refusal changes nothing (EQEmu prints "Transfer Failed"). RoF2 clears both selections after sending (`0x6b00b0`).
 Zoning or disconnecting closes the window.
 
+#### Real estate: transferring a plot
+
+The packets and the original's checks are in docs/protocol/rof2-packets.md "Real estate". The Transfer button (the
+purchase and manage windows, `RealEstatePurchaseWnd` and `RealEstateManageWnd` in `app/lua_ui_realestate.cpp`) asks for a confirmation naming the current target.
+**Hailstone change:** the question keeps that target's spawn id and name, and its Yes sends the transfer only while the
+same spawn, with the same name, is still targeted (`GameConnection::re_transfer`); otherwise nothing is sent and the
+refusal is logged. RoF2's RealEstate_SendTransferPlot reads the target as it is at the Yes, so a target changed while
+the question was up received the plot. Not switchable: sending a plot to a player the question did not name is not
+behaviour worth keeping.
+
 #### Other rules
 
 - Stats-disabled flags (`game::update_stats_disabled`): from the UseItem (0x13) and Ornament (0x15) game features and
@@ -2020,6 +2036,17 @@ Skill 111, `slam_innate`. A deliberate change: Hailstone takes the innate Slam f
 (`app::skill_race`), as EQEmu does (Client::OPCombatAbility checks `GetRace()`). The combat lists gain or lose Slam
 with an illusion, and Bash without a shield uses the Slam path; both send `DoAttack(100, 10)`. The original uses the
 profile race (EQ_Character::InitInnates).
+
+That attack still goes through `CanUseCombatSkill` (@0x5a2f10), which lets Bash pass without the skill or a shield
+only when the spawn's `GetRace` (vtable +0x88, 0x58b4e0: the raw race an illusion sets) is 2, 9 or 10. The citizen
+races 90, 92 and 93 have the innate Slam but not that pass, so in the original their Slam needs Bash and a shield.
+
+A second deliberate change: Slam never needs a shield. Under a 90, 92 or 93 form Hailstone's Slam (and Bash, which
+goes the Slam way there) needs only the Bash skill (`can_use_combat_skill(..., slam)`): a character with the skill
+slams shieldless, one without it sends nothing. That is what stock EQEmu accepts: `Client::OPCombatAbility` bypasses
+the skill check only for races 2, 9 and 10 by `GetRace()` and checks no shield (it uses one only for the damage).
+Bash by a form without the innate Slam keeps the original's rule: a shield in the secondary slot, one of the primary
+items 11050, 10099 and 14383, or a two-hander (item type 1, 4 or 35) with SPA 226, else 12394.
 
 #### More Hot Button States
 

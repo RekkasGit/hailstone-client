@@ -18,6 +18,35 @@
 - New TLOs `${Raid}` (`.Members`, `.Leader`, `.Member[n|name]` with `.Name`, `.Group`, `.Class` ... and the member's spawn) and `${Corpse}` (`.Open`, `.Items`, `.Item[n|name]` with every item member), as in MacroQuest, and new members `${Me.Invulnerable}`, `${Me.Mount}`, `${Me.CurrentFavor}`, `${Me.TributeActive}`, `${Me.SpellShieldBonus}`, `${Me.SpellDamageBonus}`, `${Me.PetBuff[n|name]}`, and a spell's or buff's `CounterType` and `CounterNumber`.
 - `${Spell[...].Duration}` is now in ticks at your level, as in MacroQuest, where it gave the spell file's longest duration in milliseconds.
 
+- Under a Barbarian, Troll or Ogre citizen illusion (races 90, 92 and 93), Slam and Bash need the Bash skill, instead of sending an attack the server ignores, but no shield: Slam never needs one (the original client asked those forms for a shield; the server does not)
+- A game archive in the asset folder that another program shortens while Hailstone runs (a patcher writing in place) no longer crashes the client on Linux; what can no longer be read from it is treated as a damaged file
+- Under an add-on or hand-made interface, deleting a character or bulk-destroying items asks in a window of the client's own, so the question always appears (before, an interface that drew no confirmation box left the action waiting with no prompt)
+- **Script and plugin authors:** a character delete or bulk destroy a script asks for is confirmed in the client's own window under every interface, and a script can no longer press Yes on the item-destroy or guild-disband question (`hs.ClickChild` and the like return false); No and other questions are unchanged
+- If the update feed ever serves an older release than one it showed before, the login screen's corner says "Not up to date: the update feed went back to ..." instead of "Up to date", and nothing is installed
+- Perf window: **Log hitches** no longer calls every frame a hitch after the frame rate drops for good (a heavier zone, a slower power state); after 30 hitches in a row the typical frame time starts again from the latest frame
+- **Script and plugin authors:** `${Spawn[N]}`, `${Spell[N]}`, `${Me.Inventory[N]}`, an item's `Item[N]`, `${Group.Member[N]}` and `${Me.SpellReady[N]}` give NULL (or FALSE) for a number too large for what it indexes, instead of wrapping round to another spawn, spell, slot or gem
+- Spell, nimbus and server-timed effects on a creature that despawns stop with it, instead of hanging frozen in the air and jumping onto the next creature that reuses its id
+- Movement keys, `/keypress` releases and gamepad buttons let go while the client waits for a teleport zone point to answer no longer leave the character running or turning once the wait ends
+- `/face heading` with a value that is not a finite number (`nan`, `inf`) no longer leaves the character unable to turn; a heading past 360 is wrapped, and a heading or `loc` that is not a number turns nothing instead of facing the target
+- The in-game browser's helper no longer inherits the client's log and chat log files, so on Windows they can be moved or deleted after the client quits even while the helper is still closing
+- In-game browser: a script's, plugin's or server link's page whose cookie folder cannot be used is no longer opened with the player's own cookies; it closes instead. On Windows, a data folder whose name has characters outside the system's code page works with the browser
+- In-game browser: a faulty browser helper can no longer make the client reserve gigabytes of memory, or fail to make a texture, with an image larger than its tab. A drop-down list that reaches past the edge of a page is drawn inside it, and clicks on it still land on the right entry
+- In-game browser: on Linux the helper's background processes no longer crash as they finish their work (`*** stack smashing detected ***` in the terminal)
+- In-game browser: a web page's process can no longer write messages into, or read, the client's connection to the browser helper. The helper keeps that connection to itself and gives the processes it starts nothing to read or write instead
+- **Server owners:** lists a server fills by ids or names of its choosing stop at generous caps (raid members and shared task members 1024, tributes, bazaar traders and search rows 4096), and group mana and endurance, other players' casts and augment solvent texts are kept only for a spawn the client knows or a window that asked, so a flood of made-up ids no longer grows the client's memory without end
+- An accepted duel opponent can be attacked (auto attack, kick, bash, backstab, detrimental spells) on a server without PvP, and beneficial spells on players outside the duel are refused while it runs, as in the original
+- A duel, running or only offered, ends when you change zones, as the server ends it; before, a player in the new zone who happened to get the old opponent's id counted as your opponent
+- Spell and level-up effects that arrived just as you changed zones no longer play on a creature in the new zone
+- Hit, spell and door sounds that arrived just as you changed zones no longer play at a creature or place in the new zone
+- In the bazaar, a purchase answer for no purchase of yours no longer lets a later Buy go before its predecessor's answer
+- A creature that despawns and is replaced under the same id in one moment no longer starts with the old one's animation sounds and loop
+- A ground item or object the server sends again under the same id with another model, place, rotation or size is redrawn there (it kept its old model and position)
+- Isometric camera and click to move: a walk or click under way when you zone, camp or switch characters no longer clicks a spawn, door or object of the old zone on arrival in the new one
+- Taunting a target whose name starts with `@` ("@Lurker") no longer closes the client, and a name such as "@5 Guard" shows as it is
+- Servers can opt into Modern Server Management for authorized GMs to review and edit policy in game. Advisory
+  command rules can require a minimum GM status, and the add-on command list updates as commands register.
+  The encounter keeps a backup of each previous configuration. **Reload policy** keeps your draft and shows
+  settings that changed on the server.
 - Plugins and scripts can colour their chat lines with MacroQuest's colour codes (`\ag`, `\a-w`, `\a#336699`, `\ax` ...), as `WriteChatColor` takes them. A server's message or a player's text cannot: its codes are left out.
 - C++ plugins can include the SDK's new `hailstone_plugin.hpp` to register commands and TLOs as lambdas that capture `this` and other values, as MacroQuest's `mq::AddCommand` does.
 - New TLOs `${MacroQuest.Path[config]}` and `${Hailstone.Path[config]}`: the folder for scripts' settings, `scripts/config` in Hailstone's folder. Plugins can also get it from the SDK's new `get_scripts_config_dir`.
@@ -38,6 +67,7 @@
 - Plugins can lend the client's thread to their own threads with the SDK's new `lend_thread`, while their callback waits for them, so a script runtime whose scripts run on a thread of their own (MQ2Mono-style C# scripts) can read TLOs and run commands from there. Inside a host call the client makes while a plugin lends (a command it runs, say), `lend_thread` refuses, since waiting there for the plugin's threads would hang the client.
 - Plugins can ask whether a command exists with the SDK's new `command_exists`. It says whether a plugin, a script or the client added the command, or whether it is one of the game's own.
 - Modern Spell Gems has optional spell names, a background toggle, and resize grips that wrap the tiles into rows and columns. Icon size is adjustable, and existing layouts keep their defaults
+- Native add-ons can preview and confirm a mouse-aimed ground position through the world placement SDK. **Plugin authors:** `world_capabilities` now reports `HAILSTONE_WORLD_PLACEMENT` in the zone before a geometry frame is ready; test `HAILSTONE_WORLD_GEOMETRY` for the frame
 - Trees with authored collision hulls let players move through their branches while their trunks still block movement. This fixes the invisible walls near the Field of Bone entrance to Warsliks Woods and in other classic zones
 - Decorative slime no longer blocks movement over the Veksar ramp and doorway or through passages in several Lost Dungeons of Norrath layouts
 - Spells that require line of sight now report “You cannot see your target” before casting through a solid door or moving obstacle
@@ -47,7 +77,35 @@
 - Modern Pet window: right-click a removable beneficial buff and choose **Remove** to click it off
 - Literal percent signs show correctly in chat, including tells and their echoes. Chat variables still expand when the message is sent
 - Two Hailstone windows started separately can no longer install or roll back an update at the same time, which could leave the UI folder half old and half new (chat without input, "is not in the UI's folder" in the log). The second one leaves the install to the first
+- Opening several windows of a newly updated Hailstone at once no longer rolls the update back as a failed start (and no longer keeps that release from being offered again). An update downloaded in one window installs at a quit when no other Hailstone runs from the folder, including windows started on their own, instead of replacing their files under them
+- Two Hailstone windows started separately no longer undo each other's add-on installs or lose an add-on from the installed list (which made its files count as installed by hand). While one installs or removes add-ons, the other waits or says to try again
+- Hailstone's updates never write or remove anything in `upscalers/`, so an upscaler add-on can no longer be replaced or removed by an update that ships a folder of the same name
+- On Linux and macOS, files an update installs never get group or world write permission from the update package
+- A zone where many differently dressed or tinted characters come and go no longer keeps the model of every look it has shown in memory until you leave it
 - Charged items stay in inventory and on the hotbar after spending a charge if the server keeps the item
+- Spell effects no longer attach to the wrong bones of a character whose model was loaded after another was freed
+- Minimising the window on Windows can no longer stop the client with a swapchain error ("vkCreateSwapchainKHR")
+- Add-ons that hook HUD methods (`hs.UI.hooks` on `character.Gauge`, `character.Label` and the like) cost less per frame: a hooked call no longer checks every add-on's hooks or sorts them each time
+- `mq.pickle` no longer counts every file in the script's config folder on each write. Files added or removed there outside the script count from the script's next start
+- Deleting a character always asks first: an interface other than Modern or Gamepad now gets the client's own confirmation naming the character before anything is deleted
+- Bulk destroy from the Advanced Inventory asks the client's confirmation, with the count and a No Trade warning, when an add-on or other interface starts it (unless Fast Item Destroy is on), and does nothing if the items moved before you answer
+- A map right click or Find on a point that is not a number or lies far past any zone is no longer sent to the server
+- A bag window's slot click from a script can no longer reach the bag itself or alias another slot with an out-of-range index
+- The Group Mentor window reads a typed percentage past the number range without undefined behaviour
+- The quantity dialog no longer overflows when "-2147483648" is typed
+- Transferring a real estate plot goes only to the player the question named: changing target while it is up cancels the transfer
+- Group window gauges and labels find each member's spawn faster, and an NPC whose name matches a member's no longer stands in for them
+- The Gamepad abilities list costs much less per frame while a discipline cools down
+- Moving a slider that writes to the UI ini (Window Transparency, fades) no longer rewrites the file every frame; it is saved with the window places and on quit or camp
+- Modern Guild window: Promote, Demote, Make Leader and Remove ask first and name the member, as the gamepad UI does. Selecting another member while it asks puts the question away
+- Modern Raid window: Leave and Make Leader ask first, as the gamepad UI does
+- The modern shared task Make leader asks first and names the member. If another member is selected while it asks, the lead is not handed to them
+- Gamepad Friends: confirming Remove after the list changed no longer removes whoever happened to be selected. If the name has left the list, the window says so
+- Gamepad Who: a new /who reply (from the Friends window or typed in chat) keeps the picked player picked if they are in it, and otherwise clears the pick, so Invite, Target and the rest no longer act on whoever took that row
+- Gamepad Merchant: a Buy, Sell or parcel Send pressed as the window closed no longer goes through at the next merchant you open
+- Gamepad Loot: LB no longer loots everything while the window's Loot All is disabled
+- Gamepad character select: the Delete and Return Home questions start on Cancel, so an A press carried over can't answer them
+- **Plugin authors:** a table or function a plugin window hands the UI pack's code (an argument to a pack function, or what its callback returns or raises) now reaches the pack as a view, as what it writes into the pack's shared tables does, so a pack that keeps it and uses it later runs the plugin's code as the plugin, never with the player's authority. `next` and `rawget` see nothing through such a view, and the plugin's metamethods for `==`, `<`, `..`, calls and `tostring` no longer run from the pack's code
 
 ## 0.7.3-beta (2026-11-23)
 

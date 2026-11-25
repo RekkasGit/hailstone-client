@@ -80,6 +80,12 @@ static_assert(offsetof(PluginHostApi, lend_thread) ==
               offsetof(PluginHostApi, command_exists) + sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, get_scripts_config_dir) ==
               offsetof(PluginHostApi, lend_thread) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, world_placement_start) ==
+              offsetof(PluginHostApi, get_scripts_config_dir) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, world_placement_get) ==
+              offsetof(PluginHostApi, world_placement_start) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, world_placement_cancel) ==
+              offsetof(PluginHostApi, world_placement_get) + sizeof(PluginHostApi::caps));
 
 namespace {
 
@@ -642,6 +648,38 @@ void probe_map_prefix(void*, const char* args) {
         canary?1:0,revision?1:0,context&&context!=UINT64_MAX?1:0,find_mode==HAILSTONE_NPC_FIND_SERVER_ONLY);
 }
 void probe_map_cycle(void*,const char*) { host->set_active(host->host,0);host->set_active(host->host,1); }
+void probe_world_placement(void*, const char* args) {
+    if (!HAILSTONE_HOST_HAS(host, world_capabilities) || !HAILSTONE_HOST_HAS(host, world_placement_start) ||
+        !HAILSTONE_HOST_HAS(host, world_placement_get) || !HAILSTONE_HOST_HAS(host, world_placement_cancel)) return;
+    const std::string_view command = args ? args : "";
+    if (command == "start") {
+        WriteChatf("[Probe] placement start: %d", host->world_placement_start(host->host));
+        return;
+    }
+    if (command == "cancel") {
+        host->world_placement_cancel(host->host);
+        return;
+    }
+    HailstoneWorldPlacement value{};
+    value.size = sizeof(value);
+    if (command == "lent" && HAILSTONE_HOST_HAS(host, lend_thread)) {
+        value.status = 99;
+        int started = -1, read = -1;
+        const int lent = host->lend_thread(host->host, 1);
+        std::thread([&] {
+            started = host->world_placement_start(host->host);
+            read = host->world_placement_get(host->host, &value);
+            host->world_placement_cancel(host->host);
+        }).join();
+        const int ended = host->lend_thread(host->host, 0);
+        WriteChatf("[Probe] placement lent: %d %d %d %u %d", lent, started, read, value.status, ended);
+        return;
+    }
+    const auto capabilities = host->world_capabilities(host->host);
+    const int result = host->world_placement_get(host->host, &value);
+    WriteChatf("[Probe] placement: %u %d %u %u %u", capabilities, result, value.status,
+               value.zone_id, value.instance_id);
+}
 void probe_map(void*, const char* args) {
     HailstoneMapPolicy policy;
     std::memset(&policy, 0x5a, sizeof(policy));
@@ -1174,6 +1212,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probecursor", probe_cursor, nullptr);
     AddCommand("/probebinary", probe_binary, nullptr);
     AddCommand("/probebinarythread", probe_binary_thread, nullptr);
+    AddCommand("/probeworldplacement", probe_world_placement, nullptr);
     AddCommand("/probedecode", probe_decode, nullptr);
     AddCommand("/probeservices", probe_services, nullptr);
     AddCommand("/probeselectraid", probe_select, nullptr);
@@ -1220,6 +1259,7 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probecursor");
     RemoveCommand("/probebinary");
     RemoveCommand("/probebinarythread");
+    RemoveCommand("/probeworldplacement");
     RemoveCommand("/probedecode");
     RemoveCommand("/probeservices");
     RemoveCommand("/probeselectraid");

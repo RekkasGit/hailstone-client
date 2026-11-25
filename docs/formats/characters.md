@@ -671,7 +671,9 @@ positive Number), so a forged file in a server's asset folder cannot make it fil
 
 #### Building appearances off the main thread
 
-Appearances are cached per model and appearance key in the library (geometry) and per mesh on the GPU. A new one is
+Appearances are cached per model and appearance key in the library (geometry) and per mesh on the GPU. The
+library's cache keeps what an actor still wears: once it holds 512 looks, the meshes only it holds are dropped (and
+dressed again if asked for), and the next sweep waits until it holds twice what was left. A new one is
 built on the renderer's worker thread (`core::LatestJobs`: the dress, vertices, textures decoded, Luclin layers
 composited, mips), and applied on the main thread in `prepare_spawns` within a frame budget (`set_build_budget_ms`:
 4 ms in the open, 100 ms behind the loading screen; the first of a frame is always applied).

@@ -6,6 +6,7 @@
 #include <format>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <random>
 
@@ -56,7 +57,8 @@ int heading_point(double deg) {
 }
 
 const game::Spawn* spawn_of(const Context& c, std::int64_t id) {
-    if (!c.conn || id <= 0) return nullptr;
+    // (an id past 32 bits is none, not the id it wraps to)
+    if (!c.conn || id <= 0 || id > std::numeric_limits<std::uint32_t>::max()) return nullptr;
     const auto& spawns = c.conn->world().spawns;
     auto it = spawns.find(static_cast<std::uint32_t>(id));
     return it == spawns.end() ? nullptr : &it->second;
@@ -97,7 +99,7 @@ std::string lower(std::string_view s) {
 // ---------------------------------------------------------------- spells and buffs
 
 const game::SpellData* spell_data(const Context& c, std::int64_t id) {
-    if (!c.conn || id < 0 || id == game::kNoSpell) return nullptr;
+    if (!c.conn || id < 0 || id > std::numeric_limits<std::uint32_t>::max() || id == game::kNoSpell) return nullptr;
     return c.conn->spell_table().get(static_cast<std::uint32_t>(id));
 }
 
@@ -108,7 +110,7 @@ V spell_value(const Context& c, std::uint32_t id) {
 V spell_by_index(const Context& c, std::string_view index) {
     if (!c.conn) return V::nil();
     std::int64_t id = 0;
-    if (parse_int(index, id)) return spell_value(c, static_cast<std::uint32_t>(id));
+    if (parse_int(index, id)) return spell_data(c, id) ? V::object(g.spell, id) : V::nil(); // (no 32-bit wrap)
     const game::SpellData* s = c.conn->spell_table().find_by_name(index);
     return s ? V::object(g.spell, s->id) : V::nil();
 }
@@ -353,7 +355,8 @@ constexpr const char* kSlotNames[] = {"charm",     "leftear",   "head",     "fac
 
 int slot_by_name(std::string_view index) {
     std::int64_t n = 0;
-    if (parse_int(index, n)) return static_cast<int>(n);
+    // A number past the slots' 16 bits is no slot (Inventory[65536] is not the charm).
+    if (parse_int(index, n)) return n >= 0 && n <= std::numeric_limits<std::int16_t>::max() ? static_cast<int>(n) : -1;
     for (int i = 0; i < static_cast<int>(std::size(kSlotNames)); ++i)
         if (iequals(index, kSlotNames[i])) return i;
     return -1;
@@ -810,7 +813,7 @@ void register_character() {
         std::int64_t n = 0;
         int gem = -1;
         if (parse_int(index, n)) {
-            gem = static_cast<int>(n) - 1;
+            if (n >= 1 && n <= game::kSpellGems) gem = static_cast<int>(n) - 1; // (2147483648 is no gem)
         } else {
             for (int i = 0; i < game::kSpellGems; ++i) {
                 const game::SpellData* s = spell_data(ctx, st.gems[static_cast<std::size_t>(i)].spell);
@@ -1118,7 +1121,9 @@ void register_item() {
     m("Item", [](const Context& c, const Value& v, const net::Item& it, std::string_view index) -> V {
         std::int64_t n = 0;
         net::ItemSlot at = unpack_slot(v.i);
-        if (!parse_int(index, n) || n < 1 || at.sub >= 0 || !it.is_bag()) return V::nil();
+        if (!parse_int(index, n) || n < 1 || n - 1 > std::numeric_limits<std::int16_t>::max() || at.sub >= 0 ||
+            !it.is_bag())
+            return V::nil();
         net::ItemSlot inner = at;
         inner.sub = static_cast<std::int16_t>(n - 1);
         return item_value(c, inner);
@@ -1142,7 +1147,8 @@ void register_group() {
     });
     add(g.group, "Member", [](const Context& c, const Value&, std::string_view index) -> V {
         std::int64_t n = 0;
-        if (parse_int(index, n)) return member_value(c, static_cast<int>(n));
+        if (parse_int(index, n))
+            return n >= 0 && n <= std::numeric_limits<int>::max() ? member_value(c, static_cast<int>(n)) : V::nil();
         auto members = group_members(c);
         for (std::size_t i = 0; i < members.size(); ++i) {
             std::string name = members[i] ? members[i]->name : c.conn->character_name();

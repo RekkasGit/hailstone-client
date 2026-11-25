@@ -488,14 +488,17 @@ public:
     const net::Item* bag_item(UiHost& host, int index) override {
         if (index < 0) return bag(host); // the container itself
         const net::ItemSlot* s = slot(host);
-        if (!s) return nullptr;
+        const net::Item* b = bag(host);
+        if (!s || !b || index >= b->bag_slots) return nullptr; // (past the bag: no slot of it, nor one aliased by int16)
         net::ItemSlot in = *s;
         in.sub = static_cast<std::int16_t>(index);
         return host.conn->inventory().at(in);
     }
     bool bag_click(UiHost& host, int index, std::string_view button, bool outside) override {
         const net::ItemSlot* s = slot(host);
-        if (!s) return false;
+        const net::Item* b = bag(host);
+        // Only the bag's own slots: -1 (sub -1) would be the bag itself, and 65536 + k would alias slot k as an int16.
+        if (!s || !b || index < 0 || index >= b->bag_slots) return false;
         net::ItemSlot in = *s;
         in.sub = static_cast<std::int16_t>(index);
         if (button == "leftheld") return item_left_held(host, in);

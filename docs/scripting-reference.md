@@ -577,7 +577,7 @@ them. These commands come from MacroQuest rather than the game:
 |---|---|
 | `/echo text` | a line in the chat window |
 | `/target id N` \| `clear` \| `mycorpse` \| `myself` \| a search | targets (nothing, or `myself`: you) |
-| `/face` [target] \| `id N` \| `heading H` \| `loc y,x` \| a search [`fast`] | turns to face |
+| `/face` [target] \| `id N` \| `heading H` \| `loc y,x` \| a search [`fast`] | turns to face (a heading is taken modulo 360; a heading or loc that is not a finite number turns nothing) |
 | `/keypress <command> [hold\|release]` | presses a key command by the game's name: `forward`, `jump`, `hot1_1`, ... |
 | `/squelch <cmd>` | runs the command without its chat output |
 | `/docommand <cmd>` | runs the command (useful after `${...}` builds it) |
@@ -1057,7 +1057,7 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | OptionChoices | (name) → {string} | Choices the client lists for an option (e.g. "resolution") | — |
 | PlaySoundTest | (name) → bool | Plays one of the Individual Sounds options (`own_footsteps`, `pet_footsteps`, `other_footsteps`, `open_bag`, `open_bank`, `money`, `thunder`, `equip`, `creature_ambient`) once at its volume; false for another name | — |
 | UiIni | (section, key) → string\|nil | Character UI ini value (over defaults.ini) | — |
-| SetUiIni | (section, key, value) → — | Write and save a UI ini value | commands |
+| SetUiIni | (section, key, value) → — | Write a UI ini value (saved with the window places, and on a quit or camp) | commands |
 | CoolDownColor | () → r, g, b, a | Colour of cool-down rectangles (user colour 0x15f, alpha 0x40) | — |
 | DebugScreens | () → {{name, shown, replaced}} | Every stock window model | — |
 | DebugTree | () → {} | Stub: always an empty table | — |
@@ -1229,7 +1229,7 @@ send a request. `OpenTask` changes the journal selection and visibility, not tas
 | SetItemKept | (id, name, on) → — | Mark or unmark every copy as Keep | actions |
 | SetItemsKept | ({{id, name}…}, on) → — | SetItemKept for many items at once, with one write (up to 4096) | actions |
 | ItemStats | () → {{key, label}} (array pairs) | Stats the window filters and sorts by | — |
-| BulkItems | (mode, {place…} [, dry]) → count, err\|nil | Bulk "sell", "destroy", "tribute" or "withdraw" (bank to your packs, never equipped) of the chosen items; Keep-marked items are refused | actions |
+| BulkItems | (mode, {place…} [, dry]) → count, err\|nil [, asked] | Bulk "sell", "destroy", "tribute" or "withdraw" (bank to your packs, never equipped) of the chosen items; Keep-marked items are refused. A destroy asks the client's confirmation first (count, nil, true) unless Fast Item Destroy is on, in a window of the client's own that no script can answer | actions |
 | TakeItemSearch | () → text\|nil | /finditem's search, once | — |
 
 #### Abilities (lua_ui_abilities.cpp)
@@ -1479,7 +1479,7 @@ AddonPolicy and AddonPolicyAction are refused to plugin code (nil / false).
 | PluginMenu | () → {{plugin, owner, label, command}} | Plugin menu entries (a plugin's own alone) | self |
 | PluginMenuClick | (i) → — | Run entry i of PluginMenu's list as its owner | self |
 | PluginConsent | () → {server, serial, warning, plugins={{name, file, size, sha256, short}}} \| nil | Pending consent question for the server's compiled plugins | self |
-| AnswerPluginConsent | (true\|false\|nil, serial) → ok | Answer the question with that serial (nil = ask later); false when it is not the one pending | self |
+| AnswerPluginConsent | (true\|false\|nil, serial) → ok | Answer the question with that serial (nil = ask later); false when it is not the one pending, or the caller is not the shipped interface's own code | self |
 | AddonPolicy | () → {serial, message, can_retry} \| nil | A server's required add-on that failed in the world; the same table until the failure changes. nil to plugin code and to an interface Hailstone does not ship | self |
 | AddonPolicyAction | ("retry", serial) → ok | The player's Retry: the failed required add-ons are tried again once. False when stale or not retriable; the client's own interface's file only | pack |
 
@@ -1530,7 +1530,7 @@ return `true` while nothing changed. Reading a view draws that screen in the cli
 | ServerSelect | ([revision]) → {revision, busy, status, server, servers={{name, status, canJoin, favorite}}, selected, last, addonHint}\|true\|nil | Server select view | self |
 | ServerSelectDo | (action [, i]) → ok | "select", "play", "favorite" or "back" | self |
 | CharacterSelect | ([revision]) → {revision, busy, status, world, server, scene, selected, characters={{name, level, race, raceName, classes, className, classShort, zone, canGoHome, homeQuestion}}}\|true\|nil | Character select view | self |
-| CharacterSelectDo | (action [, arg]) → ok | "select", "enter", "create", "delete", "home", "back" or "logout" | self |
+| CharacterSelectDo | (action [, arg]) → ok | "select", "enter", "create", "delete", "home", "back" or "logout". "delete" from code other than a shipped pack's asks the client's confirmation first, in a window of the client's own that no script can answer | self |
 | CharacterCreate | () → view\|nil | Creation view: name, gender, race/class/deity/city (+Name, +Index, lists), stats, pointsLeft, ready… | self |
 | CharacterCreateHelp | (kind, id) → text, title | Description of a race, class, deity, city or stat | self |
 | CharacterCreateDo | (action [, value]) → ok | "name", "randomName", "race", "class", "gender", "deity", "city", "statUp/Down/Max", "resetStats", "appearance", "create" or "cancel" | self |

@@ -526,6 +526,26 @@ TEST_CASE("TLO: Group, items, Zone and the rest") {
     CHECK(f.p("${Heading[0].ShortName}") == "N");
 }
 
+TEST_CASE("TLO: an index past the type it names is none, not the one it wraps to") {
+    Fixture f;
+    // Each wraps to something the fixture has: spell 200, spawn 1, General1 (slot 23), bag sub 0, member 0, gem 1.
+    CHECK(f.p("${Spell[200]}") == "Minor Healing");
+    CHECK(f.p("${Spell[4294967496]}") == "NULL");
+    CHECK(f.p("${Spawn[1]}") == "Tester");
+    CHECK(f.p("${Spawn[4294967297]}") == "NULL");
+    CHECK(f.p("${Me.Inventory[23]}") == "Healing Potion");
+    CHECK(f.p("${Me.Inventory[65559]}") == "NULL");
+    CHECK(f.p("${Me.Inventory[-1]}") == "NULL");
+    CHECK(f.p("${Me.Inventory[pack2].Item[1]}") == "Healing Potion");
+    CHECK(f.p("${Me.Inventory[pack2].Item[65537]}") == "NULL");
+    CHECK(f.p("${Group.Member[0]}") == "Tester");
+    CHECK(f.p("${Group.Member[4294967296]}") == "NULL");
+    CHECK(f.p("${Me.SpellReady[1]}") == "TRUE");
+    CHECK(f.p("${Me.SpellReady[4294967297]}") == "FALSE");
+    CHECK(f.p("${Me.SpellReady[2147483648]}") == "FALSE"); // (once INT_MIN - 1)
+    CHECK(f.p("${Me.SpellReady[-2147483648]}") == "FALSE");
+}
+
 TEST_CASE("TLO: an item's TimerReady, its own and its recast type's click reuse, as MQ's") {
     Fixture f;
     auto& conn = *f.world.conn;
