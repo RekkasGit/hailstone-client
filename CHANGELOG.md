@@ -51,6 +51,7 @@
   settings that changed on the server.
 - Players can run through the leaves of jungle plants in Trakanon's Teeth, Emerald Jungle and other zones that reuse those models. The stems and trunks still block movement.
 - Fixed bright rectangles around faerie dragon wings in The Wakening Land.
+- South Karana's classic gnolls animate while patrolling instead of sliding in a fixed pose.
 - Plugins and scripts can colour their chat lines with MacroQuest's colour codes (`\ag`, `\a-w`, `\a#336699`, `\ax` ...), as `WriteChatColor` takes them. A server's message or a player's text cannot: its codes are left out.
 - C++ plugins can include the SDK's new `hailstone_plugin.hpp` to register commands and TLOs as lambdas that capture `this` and other values, as MacroQuest's `mq::AddCommand` does.
 - New TLOs `${MacroQuest.Path[config]}` and `${Hailstone.Path[config]}`: the folder for scripts' settings, `scripts/config` in Hailstone's folder. Plugins can also get it from the SDK's new `get_scripts_config_dir`.
