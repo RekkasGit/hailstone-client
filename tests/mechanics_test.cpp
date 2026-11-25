@@ -833,6 +833,16 @@ TEST_CASE("Shown AC: 0x580330's x 1000 wraps in 32 bits before the divide by 847
     CHECK(shown_ac_value(INT32_MAX, INT32_MAX) == -2);  // (-2) * 1000 = -2000, / 847
 }
 
+TEST_CASE("Shown ATK: 0x584f60's x 1000 wraps in 32 bits before the divide by 744") {
+    CHECK(shown_atk_value(300, 444) == 1000);
+    CHECK(shown_atk_value(1, 1) == 2);                // 2000 / 744 truncates
+    CHECK(shown_atk_value(2147483, 0) == 2886401);    // 2147483000 still fits
+    CHECK(shown_atk_value(2147484, 0) == -2886402);   // 2147484000 wraps to -2147483296
+    CHECK(shown_atk_value(2147483, 1) == -2886402);   // the sum is the original's too
+    CHECK(shown_atk_value(0, -1) == -1);              // -1000 / 744 truncates towards zero
+    CHECK(shown_atk_value(INT32_MAX, INT32_MAX) == -2);  // (-2) * 1000 = -2000, / 744
+}
+
 TEST_CASE("Armor class, defense, item haste and carried weight") {
     World w;
     CharacterSheet s = warrior(60);

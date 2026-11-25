@@ -43,7 +43,7 @@ time. They run on plain data (`CharacterSheet`) and are covered by recorded test
 | `attack_rules.*` | who may attack whom (the PvP rules) through `AttackQueries`; live in `game/attack_check.*` |
 | `spell_gems.*` | memorising, linked timers, the usable-slot rule, gem readiness; see "Spell gems and buff stacking" |
 | `find_affect_slot.*` | buff slot choice and stacking over `AffectQueries`; live callees `game/hit_landing.*` |
-| `shown_stats.*` | the AC and ATK the inventory window shows (label cases 0x15 / 0x16), shared with the item comparison (docs/item-compare.md) |
+| `shown_stats.*` | the AC and ATK the inventory window shows (label cases 0x15 / 0x16; 0x580330 and 0x584f60, whose x 1000 wraps in 32 bits before the divide by 847 / 744), shared with the item comparison (docs/item-compare.md) |
 | `sheet_builder.*` | the sheet from the live connection; see note 4 |
 
 Notes:
@@ -2037,8 +2037,14 @@ profile race (EQ_Character::InitInnates).
 
 That attack still goes through `CanUseCombatSkill` (@0x5a2f10), which lets Bash pass without the skill or a shield
 only when the spawn's `GetRace` (vtable +0x88, 0x58b4e0: the raw race an illusion sets) is 2, 9 or 10. The citizen
-races 90, 92 and 93 have the innate Slam but not that pass, so under their illusion Slam needs Bash and a shield,
-which is also all EQEmu accepts.
+races 90, 92 and 93 have the innate Slam but not that pass, so in the original their Slam needs Bash and a shield.
+
+A second deliberate change: Slam never needs a shield. Under a 90, 92 or 93 form Hailstone's Slam (and Bash, which
+goes the Slam way there) needs only the Bash skill (`can_use_combat_skill(..., slam)`): a character with the skill
+slams shieldless, one without it sends nothing. That is what stock EQEmu accepts: `Client::OPCombatAbility` bypasses
+the skill check only for races 2, 9 and 10 by `GetRace()` and checks no shield (it uses one only for the damage).
+Bash by a form without the innate Slam keeps the original's rule: a shield in the secondary slot, one of the primary
+items 11050, 10099 and 14383, or a two-hander (item type 1, 4 or 35) with SPA 226, else 12394.
 
 #### More Hot Button States
 

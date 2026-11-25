@@ -413,7 +413,7 @@ TEST_CASE("UseSkill: each large-race illusion exposes Slam regardless of base ra
     }
 }
 
-TEST_CASE("CanUseCombatSkill: shieldless Bash is for races 2, 9 and 10 by GetRace, not their variants") {
+TEST_CASE("CanUseCombatSkill: Bash without the skill is for races 2, 9 and 10 by GetRace; Slam needs no shield") {
     Fixture f;
     f.sheet.race = 6;
     f.sheet.skills[skill::kBash] = 5;
@@ -422,13 +422,34 @@ TEST_CASE("CanUseCombatSkill: shieldless Bash is for races 2, 9 and 10 by GetRac
         c.form_race = race;
         c.form_slam = slam_innate(race);
         CHECK(c.form_slam != 0xff); // InitInnates still gives the variant its Slam slot
-        CHECK_FALSE(can_use_combat_skill(c, skill::kBash));
+        CHECK_FALSE(can_use_combat_skill(c, skill::kBash)); // the original's Bash wants a shield here
+        CHECK(can_use_combat_skill(c, skill::kBash, true));   // Hailstone's Slam does not (a deliberate change)
         const auto skills = usable_skills(f.ch, true, race);
         CHECK(std::find(skills.begin(), skills.end(), skill::kSlam) != skills.end());
         c.target = Fixture::rat(10.0f);
-        SkillState state;
-        const SkillResult r = use_skill(c, state, skill::kBash);
-        CHECK(r.sends.empty()); // Slam's DoAttack(100, 10) stops at CanUseCombatSkill without a shield
+        for (std::uint32_t id : {skill::kBash, skill::kSlam}) { // Bash goes the Slam way under these forms
+            SkillState state;
+            const SkillResult r = use_skill(c, state, id);
+            CHECK(r.messages.empty());
+            REQUIRE(r.sends.size() == 1); // shieldless, with the Bash skill
+            CHECK(r.sends[0].kind == SkillSend::Kind::CombatAbility);
+            CHECK(r.sends[0].skill == skill::kBash);
+        }
+    }
+    // Without the Bash skill nothing is sent: EQEmu bypasses the skill only for races 2, 9 and 10.
+    Fixture bard;
+    bard.sheet.race = 6;
+    bard.sheet.class_id = 8;
+    for (std::uint32_t race : {90u, 92u, 93u}) {
+        SkillContext c = bard.context(1000000);
+        c.form_race = race;
+        c.form_slam = slam_innate(race);
+        CHECK_FALSE(can_use_combat_skill(c, skill::kBash, true));
+        c.target = Fixture::rat(10.0f);
+        for (std::uint32_t id : {skill::kBash, skill::kSlam}) {
+            SkillState state;
+            CHECK(use_skill(c, state, id).sends.empty());
+        }
     }
     // The race is the spawn's current one: a Troll illusion on a Dark Elf passes, a Dark Elf one on a Troll does not.
     SkillContext c = f.context(1000000);
