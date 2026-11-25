@@ -1353,6 +1353,16 @@ The setting is on by default and saved in `hailstone.ini` as `mouse.right_click_
 Options > General > Interface. In Gamepad it is under Options > Interface and applies to the mouse. The controller's
 Interact button and the `/click right target` command keep their existing interactions.
 
+RoF2 has no such switch: its right click always ends in a consider when nothing else took the click, so the switch
+is Hailstone's. RoF2 also considers in cases this client does not yet:
+
+- a right click on a player that is not a trader considers them, then sends the inspect request when `/toggleinspect`
+  is on (this client opens the player menu or inspects);
+- an interaction that fails (a merchant or banker out of range or already open, a guildmaster even after training
+  opens, a corpse the loot request refuses) falls through to the consider;
+- the USE key goes through the same function with a range check (consider within 20, else eqstr 0x7c); the gamepad's
+  Interact and `/click right target` here do not consider.
+
 ## Death, teleports, the respawn at bind and camping
 
 Code: `game/death_report.*`, `game/zoning.*`, `net/game_connection_death.cpp`; vectors in

@@ -5,7 +5,7 @@
 - Other players see weapons, shields and instruments change or disappear when you swap equipment or activate a bandolier set.
 - Right-clicking a parcel in the Modern merchant window opens its item details. Alt-right-click still opens window settings.
 - Right-clicking an ordinary NPC shows its Consider message in chat. **Right-Click to Consider** is on by default and can be switched off in Options.
-- Item, say, and achievement links use the chat link color while you compose a message in Modern or Gamepad.
+- Item, say, and achievement links use the chat link color while you compose a message in Modern or Gamepad. Text a script or the on-screen keyboard puts in the chat field while you type now shows at once, with the cursor at its end.
 - Stock and enhanced autofollow match a swimmer's depth, including near the surface and within the horizontal stop distance.
 - Incoming trade messages in chat show a clickable item name so you can inspect what the other player offered.
 - The blue fallback Chat window stays hidden when Modern chat is active, even after moving every tab out of window 1.

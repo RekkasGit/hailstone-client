@@ -1627,7 +1627,7 @@ private:
     bool pc_names_ = true, npc_names_ = true;
     bool own_name_ = true; // Hailstone's switch for the player's own name sprite (display.own_name; game::NameSpriteSwitches)
     bool player_menu_ = true; // Hailstone's right-click menu on players (mouse.player_menu; game::opens_player_menu)
-    bool right_click_consider_ = true; // mouse.right_click_consider
+    bool right_click_consider_ = true; // mouse.right_click_consider; Hailstone: RoF2 always considers, on is RoF2
     bool con_name_colour_ = true;     // Hailstone: NPC names in their consider colour (display.con_name_colour)
     bool show_invis_undead_ = false; // Hailstone: "[Name]" for known invisibility versus undead (display.show_invis_undead)
     bool plate_overlap_fade_ = true; // Hailstone: a covered name fades (display.plate_overlap_fade)

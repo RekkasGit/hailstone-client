@@ -198,6 +198,7 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - Open: anonymous and roleplaying friends, a comparison with RoF2.
 
 ### Combat and spells (do first)
+- [ ] **Right-click consider: RoF2's remaining cases** (docs/mechanics.md "Right click on an NPC"): consider a non-trader player before the inspect, fall through to consider when a merchant, banker, guildmaster or corpse interaction fails, and the USE key's consider within 20.
 - [ ] **Target and pet window buff slot limit.** Check the original's against the 97 the client keeps (`net::kMaxSpawnBuffSlots`, docs/unknowns.md).
 - [x] **Cure counters over multiple effect slots of one buff.**
   - A cure spends against that buff's whole local counter pool and caps it at zero, leaving removal to the server's fade.

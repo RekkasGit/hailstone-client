@@ -339,7 +339,7 @@ local function generalTab()
     check("player_menu", "Player Right-Click Menu",
       "Hailstone: right-clicking another player opens a menu (Send Tell, Invite to Group, Invite to Raid, Trade, Inspect) instead of inspecting them. Needs context menus allowed.")
     check("right_click_consider", "Right-Click to Consider",
-      "Right-click an NPC to consider it. NPCs with their own right-click interaction, such as merchants, keep that action.")
+      "Right-click an NPC to consider it, as the original client always does. Hailstone: turn it off to make the right click do nothing. NPCs with their own right-click interaction, such as merchants, keep that action.")
     -- menus.lua's menus.scale (this pack's look: the size its context menus draw at; Ctrl+wheel over a menu too)
     row("Menu Size", "The size of right-click menus and their text. Ctrl+mouse wheel over a menu changes it too.", function()
       local v = math.floor((tonumber(ui.GetSetting("menus.scale")) or 1.25) * 100 + 0.5)
