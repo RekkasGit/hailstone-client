@@ -1003,7 +1003,7 @@ rectangle (`u0, v0, u1, v1`).
 | CaptureKeyboard | () → — | Keyboard goes to the UI next frame |
 | GetIO | () → {width, height, fps, ctrl, shift, alt, wheel, mouseDX, mouseDY, uiScale, nav_active, nav_visible, typing} | One shared table, its values the frame's. Read-only: a write raises an error |
 | GetTime | () → seconds | |
-| GetFrameCount | () → int | |
+| GetFrameCount | () → int | the frame number: ImGui's count widened to 64 bits, so it only grows and never wraps |
 
 #### Drag and drop (string payloads)
 

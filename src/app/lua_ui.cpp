@@ -10,10 +10,12 @@
 #include <filesystem>
 #include <format>
 #include <iterator>
+#include <optional>
 #include <limits>
 #include <cfloat>
 #include <cmath>
 #include <cctype>
+#include <cstdint>
 #include <cstdlib>
 #include <map>
 #include <set>
@@ -97,8 +99,8 @@ struct UiApi::Impl {
     // whenever the vector has grown since (the views point into each window's own name, which never changes).
     std::unordered_map<std::string_view, StockWindow*> windows_by_name;
     std::size_t windows_indexed = 0;
-    std::map<std::string, int, std::less<>> replaced_at; // screen -> frame of its last hs.ReplaceWindow
-    int frame = 0;
+    std::map<std::string, std::uint64_t, std::less<>> replaced_at; // screen -> frame of its last hs.ReplaceWindow
+    std::uint64_t frame = 0; // begin_frame's count (64-bit: it never wraps); replaced_at's entries are never after it
     // hs.ReplaceWindow and hs.WindowShown take any name a script gives (the packs' own windows are not all stock
     // ones): the names kept per window are bounded. Only the last few frames' replacements count (replaces()), so
     // past kMaxNamed names the older ones are dropped; a name past it while all are recent is not kept.
@@ -118,7 +120,8 @@ struct UiApi::Impl {
     // The cursor's hotbutton: a left press made while it was held, and the frame such a press came up (a click
     // that put it nowhere: it is dropped the next frame, as a click on the world drops CCursorAttachment's button).
     bool pressed_holding = false;
-    int stray_release = -10, stray_serial = 0;
+    std::optional<std::uint64_t> stray_release; // the frame a left release put the cursor's hot button nowhere
+    int stray_serial = 0;
     bool cursor_spell_memorizing = false; // a memorize was under way last frame while a book spell was on the cursor
     std::map<std::string, bool, std::less<>> unknown_logged;
     // Window places (ui/ui_ini.h): the layout generation and screen serial each window was placed under, its place
@@ -505,9 +508,9 @@ struct UiApi::Impl {
         const ListData* data;
     };
     std::vector<ListMemo> lists;
-    int lists_frame = -1;
+    std::optional<std::uint64_t> lists_frame;
     const ListData* list(StockWindow& w, std::string_view id) {
-        if (lists_frame != frame) {
+        if (lists_frame != frame) { // (none yet: not this frame)
             lists.clear();
             lists_frame = frame;
         }
@@ -2954,7 +2957,7 @@ void UiApi::begin_frame() {
     if (!m.host.in_game) m.host.cursor_button.reset();
     if (m.host.cursor_button) {
         // Gone with a right click or Escape, or a left click that put it nowhere (last frame's release).
-        if ((m.stray_release == m.frame - 1 && m.stray_serial == m.host.cursor_serial) || ImGui::IsMouseClicked(ImGuiMouseButton_Right) ||
+        if ((m.stray_release && *m.stray_release + 1 == m.frame && m.stray_serial == m.host.cursor_serial) || ImGui::IsMouseClicked(ImGuiMouseButton_Right) ||
             ImGui::IsKeyPressed(ImGuiKey_Escape, false))
             m.host.cursor_button.reset();
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) m.pressed_holding = true;

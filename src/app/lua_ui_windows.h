@@ -427,8 +427,8 @@ void add_login_windows(std::vector<std::unique_ptr<StockWindow>>& out);        /
 // `frame` are UiApi's replacement record (UiApi::replaces), under the names "LoginScreen", "serverselect",
 // "CharacterListWnd" and "CharacterCreateScreen".
 struct ScreenReplacements {
-    std::map<std::string, int, std::less<>>* at = nullptr;
-    const int* frame = nullptr;
+    std::map<std::string, std::uint64_t, std::less<>>* at = nullptr;
+    const std::uint64_t* frame = nullptr;
 };
 void register_pregame_api(lua_State* L, UiHost& host, ScreenReplacements& screens);
 // CHelpWnd::SetFile on the help window (help\\<file>).

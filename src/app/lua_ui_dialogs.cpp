@@ -557,7 +557,7 @@ public:
             saved_.reset();
             if (host.bug_report_capture) {
                 host.bug_report_capture();
-                capture_frame_ = ui_frame_count();
+                capture_frame_ = ui_frame();
             }
         }
         if (!open) {
@@ -578,7 +578,7 @@ public:
         }
         if (!saving_.valid() && !queued_.empty()) start_save(host);
         was_open_ = open;
-        return open && ui_frame_count() != capture_frame_;
+        return open && (!capture_frame_ || ui_frame() != *capture_frame_); // hidden on the capture's own frame
     }
     void set_shown(UiHost& host, bool show) override {
         if (host.conn) host.conn->set_bug_report_open(show);
@@ -681,7 +681,7 @@ private:
     std::uint32_t flags_ = 0;
     glm::vec3 loc_{0.0f};
     bool was_open_ = false;
-    int capture_frame_ = -1;
+    std::optional<std::uint64_t> capture_frame_; // the frame the screenshot was taken on
     std::optional<SavedBugReport> saved_;
     std::future<std::optional<SavedBugReport>> saving_; // a Send's report, while it is written
     std::uint32_t saving_seq_ = 0;                       // which Send saving_ is

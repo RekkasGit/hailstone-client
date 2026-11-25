@@ -700,7 +700,7 @@ public:
             if (left_page_ * 8 + m == c.spell_book_swap_slot()) {
                 // The slot picked up to move (SelectedBookIndex): SetBuffIcon with a static stepping -1, 0, 1 on
                 // every redraw (OnProcessFrame redraws each frame while one is picked): none, red, blue in turn.
-                const int step = ui_frame_count() % 3;
+                const auto step = ui_frame() % 3;
                 out.background = step == 0 ? none() : anim(step == 1 ? "RedIconBackground" : "BlueIconBackground");
             }
             out.decal = host.textures ? image(host.textures->spell_icon(s->spell_icon)) : none();

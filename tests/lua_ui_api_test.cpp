@@ -1490,7 +1490,7 @@ TEST_CASE("Lua UI: a completion list whose __len raises is read raw, not left to
 
 TEST_CASE("Lua UI: code editors made from changing ids are forgotten, not kept for the session") {
     std::size_t kept = 0;
-    int oldest_at_10 = -1, oldest = -1;
+    std::int64_t oldest_at_10 = -1, oldest = -1;
     CHECK(run_pack_frames("lua_ui_api_editors_test",
                           "local frame = 0\n"
                           "ui.window('C', function()\n"
