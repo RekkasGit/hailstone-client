@@ -860,7 +860,7 @@ rectangle (`u0, v0, u1, v1`).
 | Checkbox | (label, value) → value, changed | |
 | SliderFloat | (label, value [, min=0, max=1]) → value, changed | |
 | SliderInt | (label, value [, min=0, max=100 [, text]]) → value, changed | text replaces the shown number |
-| InputText | (label [, text [, cap=256 [, flags [, {history, tab, moveToEnd}]]]]) → text, changed | history(older)→text, tab(text, shift)→text |
+| InputText | (label [, text [, cap=256 [, flags [, {history, tab, moveToEnd, colorSpans}]]]]) → text, changed | history(older)→text, tab(text, shift)→text, colorSpans(text)→{{first, last, {r, g, b, a}}, ...} (hidden-label single-line fields; [dev-ui.md](dev-ui.md)) |
 | InputTextWithHint | (label, hint [, text [, cap [, flags]]]) → text, changed | |
 | InputTextMultiline | (label [, text [, cap=4096 [, w, h [, flags]]]]) → text, changed | flags limited to ReadOnly and AutoSelectAll |
 | CodeEditor | (id [, text [, w, h [, {error_line, read_only, complete}]]]) → text, changed, cursor, active | Lua editor with colours. complete(before) → start, {names} |
