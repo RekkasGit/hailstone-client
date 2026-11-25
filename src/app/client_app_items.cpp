@@ -283,7 +283,12 @@ void ClientApp::notify_command(std::string_view args) {
         return;
     }
     bool done = false;
-    if (n.notification == "listselect") done = ui_api_->select_list(n.window, n.child, n.value - 1, 0);
+    // MQ's listselect sets the list's selection. Few stock lists take a selection of their own (list_select); the
+    // rest select a row on its click, as the merchant's does, so that is the fallback.
+    // The row is the window's own (StockWindow::list), not a UI pack's sorted or filtered view of it: the same
+    // with or without a UI, as Window.Child[...].List will count it.
+    if (n.notification == "listselect")
+        done = ui_api_->select_list(n.window, n.child, n.value - 1, 0) || ui_api_->click_list(n.window, n.child, n.value - 1, 0);
     else if (n.notification == "tabselect") ui_api_->set_tab_page(n.window, n.child, n.value - 1), done = true;
     else done = ui_api_->click_child(n.window, n.child, n.notification == "rightmouseup" ? "rightup" : "left");
     if (!done) log::info("/notify: {} {} {}: nothing took it", n.window, n.child, n.notification);
