@@ -357,8 +357,10 @@ void Automation::frame() {
         m.consent_checked = now;
         m.plugins->recheck_consent();
     }
-    if (net::GameConnection* connection = m.conn())
-        mq::update_map_filter_target_path(m.map_filters, *connection, m.map_filter_target_path);
+    net::GameConnection* connection = m.conn();
+    // Checked every frame: a GM status rule can change the answer without a new hailstone.cfg.
+    m.map_filters.set_suspended(connection && !connection->server_command_allowed("/mapfilter"));
+    if (connection) mq::update_map_filter_target_path(m.map_filters, *connection, m.map_filter_target_path);
     m.hooks.pulse();
     m.scripts->pulse();
 }

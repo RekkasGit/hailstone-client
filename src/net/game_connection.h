@@ -2488,6 +2488,9 @@ public:
     void send_command(const std::string& line);
     // Also used for stock social directives, which have their own interpreter.
     bool allow_server_command(std::string_view name);
+    // The same decision without the denial notice, for a feature that keeps running after its command (/mapfilter's
+    // saved options).
+    bool server_command_allowed(std::string_view name) const;
     // A client message by eqstr id (the system colour), as the key commands print them.
     void system_message(std::uint32_t eqstr, std::uint32_t color = 0) { system(eqstr, {}, color); }
     const game::SocialState& social() const { return social_; }

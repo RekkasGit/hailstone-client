@@ -138,9 +138,15 @@ public:
     // a server can lock the effective mode on without changing that choice.
     bool vanilla_enabled() const { return vanilla_enabled_; }
     bool vanilla_locked() const { return vanilla_locked_; }
-    bool vanilla_mode() const { return vanilla_enabled_ || vanilla_locked_; }
+    bool vanilla_mode() const { return vanilla_locked_ || (vanilla_enabled_ && !suspended_); }
     void set_vanilla_enabled(bool enabled);
     void set_vanilla_locked(bool locked);
+
+    // A server's [commands] rules that deny /mapfilter suspend the player's saved options: every option reads as
+    // off (no marks, lines or circles, and TargetPath asks for nothing) and the player's vanilla choice, which the
+    // command could no longer change, no longer applies. The saved settings stay for servers that allow it.
+    bool suspended() const { return suspended_; }
+    void set_suspended(bool suspended);
 
     void set_custom(std::string_view text, const game::GuildState* guild = nullptr);
     void clear_custom();
@@ -164,6 +170,7 @@ private:
     std::optional<SpawnSearch> custom_search_;
     bool vanilla_enabled_ = false;
     bool vanilla_locked_ = false;
+    bool suspended_ = false;
 
     void changed();
     void persist();

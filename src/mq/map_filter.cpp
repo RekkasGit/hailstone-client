@@ -222,6 +222,7 @@ void MapFilters::save(Config& config) const {
 
 bool MapFilters::enabled(MapFilter filter) const {
     if (!valid(filter)) return filter == F::Invalid;
+    if (suspended_) return false;
     const auto& spec = kSpecs[index_of(filter)];
     return states_[index_of(filter)].enabled && enabled(spec.parent);
 }
@@ -312,6 +313,12 @@ void MapFilters::set_vanilla_locked(bool locked) {
     if (vanilla_locked_ == locked) return;
     vanilla_locked_ = locked;
     ++revision_; // the server's lock changes the effective mode, but is never saved as the player's choice
+}
+
+void MapFilters::set_suspended(bool suspended) {
+    if (suspended_ == suspended) return;
+    suspended_ = suspended;
+    ++revision_; // like the server's vanilla lock: the effective state changes, the saved choices do not
 }
 
 void MapFilters::set_custom(std::string_view text, const game::GuildState* guild) {

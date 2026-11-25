@@ -370,6 +370,25 @@ TEST_CASE("Map filters: NPC marks follow the server's NPC map policy; the target
     CHECK(npc_marks() == 3); // removing the flags restores the marks
 }
 
+TEST_CASE("Map filters: suspended filters draw nothing until the server allows /mapfilter again") {
+    MarkerRig r;
+    constexpr ImU32 kNpc = IM_COL32(0x40, 0x40, 0x40, 0), kTargetLine = IM_COL32(0x80, 0, 0, 0);
+    r.filters.set_enabled(mq::MapFilter::Npc, true);
+    r.filters.set_enabled(mq::MapFilter::Target, true);
+    r.filters.set_enabled(mq::MapFilter::TargetLine, true);
+    r.filters.set_suspended(true);
+    for (const auto& draw : kMapDraws) {
+        CHECK(marked_vertices(r.L, draw, kNpc) == 0);
+        CHECK(marked_vertices(r.L, draw, kTargetLine) == 0);
+        CHECK(r.group(draw) > 0); // the game's own group marks are not /mapfilter's
+    }
+    r.filters.set_suspended(false);
+    for (const auto& draw : kMapDraws) {
+        CHECK(marked_vertices(r.L, draw, kNpc) > 0);
+        CHECK(marked_vertices(r.L, draw, kTargetLine) > 0);
+    }
+}
+
 TEST_CASE("Map filters: vanilla keeps map lines and navigation but no marks or provider calls") {
     auto filter = std::make_shared<MarkerFilter>();
     filter->marks = true;
