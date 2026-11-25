@@ -964,8 +964,8 @@ private:
     // /itemnotify (game/item_notify.h): the mouse notification on the slot or item the line names, with command_keys()
     // (client_app_items.cpp).
     void itemnotify_command(std::string_view args);
-    // /notify (game/window_notify.h): a window child's click, list or tab selection; on the stock window with a UI,
-    // else the connection's call for the buttons notify_action() knows.
+    // /notify (game/window_notify.h): a window child's click, list or tab selection. The buttons notify_action()
+    // knows run the connection's call, UI or none; anything else goes to the stock window.
     void notify_command(std::string_view args);
     // The modifier keys a command's click uses: those /nomodkey, /shiftkey or /ctrlkey forced while their line runs,
     // else the keyboard's (MacroQuest's clicks read the keyboard too).

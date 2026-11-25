@@ -2,8 +2,8 @@
 
 // /notify (MacroQuest's, which E3 uses to press a window's buttons): which window and child a line names, and the
 // notification. A Hailstone addition: the original client has no such command. The app runs it
-// (ClientApp::notify_command): with a UI loaded, on the stock window as a click would; without one, the buttons below
-// run the connection's call the window's own handler makes.
+// (ClientApp::notify_command): the buttons notify_action() knows run the connection's call the window's own handler
+// makes, UI or none; anything else goes to the stock window as a click would.
 //
 //   /notify <window> <child> <notification> [value]
 //   notifications: leftmouseup, rightmouseup (a click), listselect <row> (1-based), tabselect <page> (1-based)

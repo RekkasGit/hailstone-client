@@ -251,34 +251,42 @@ void ClientApp::notify_command(std::string_view args) {
         conn_->ui_message(n.error);
         return;
     }
-    // With a UI, the stock window takes it as the player's click would, its own checks and all.
-    if (ui_api_) {
-        bool done = false;
-        if (n.notification == "listselect") done = ui_api_->select_list(n.window, n.child, n.value - 1, 0);
-        else if (n.notification == "tabselect") ui_api_->set_tab_page(n.window, n.child, n.value - 1), done = true;
-        else done = ui_api_->click_child(n.window, n.child, n.notification == "rightmouseup" ? "rightup" : "left");
-        if (!done) log::info("/notify: {} {} {}: nothing took it", n.window, n.child, n.notification);
+    // A button whose window's handler is one connection call runs it, UI or none, while its window would show (the
+    // same checks as the stock window's shown()). The confirmation's Yes and No go to the UI when there is one: its
+    // box also asks the ground drop, a window's own and the guild invite questions, which answer_confirmation()
+    // does not answer.
+    using A = game::NotifyAction;
+    const A action = n.notification == "leftmouseup" ? game::notify_action(n.window, n.child) : A::None;
+    const bool ui_question = ui_api_ && (action == A::ConfirmYes || action == A::ConfirmNo);
+    if (action != A::None && !ui_question) {
+        auto& c = *conn_;
+        switch (action) {
+        case A::TradeAccept: if (c.trade() && c.trade()->open) c.trade_accept(); break;
+        case A::TradeCancel: if (c.trade() && c.trade()->open) c.trade_cancel(); break;
+        case A::LootAll: if (c.loot_session() && c.loot_session()->open) c.loot_all(); break;
+        case A::LootDone: if (c.loot_session() && c.loot_session()->open) c.end_loot(); break;
+        case A::ConfirmYes: if (c.confirmation()) c.answer_confirmation(true); break;
+        case A::ConfirmNo: if (c.confirmation()) c.answer_confirmation(false); break;
+        case A::LargeDialogYes: if (c.large_dialog()) c.answer_large_dialog(1); break;
+        case A::LargeDialogNo: if (c.large_dialog()) c.answer_large_dialog(2); break;
+        case A::TaskDecline: if (c.tasks().offers) c.decline_tasks(); break;
+        case A::BankAuto: if (c.bank()) c.auto_bank(); break;
+        case A::BankDone: if (c.bank()) c.close_bank(); break;
+        case A::TributeToggle: c.tribute_toggle(!c.tribute().settings.active); break;
+        case A::None: break;
+        }
         return;
     }
-    // Without one (a headless client): the buttons whose handler is one connection call, while their window shows.
-    if (n.notification != "leftmouseup") return;
-    auto& c = *conn_;
-    using A = game::NotifyAction;
-    switch (game::notify_action(n.window, n.child)) {
-    case A::TradeAccept: if (c.trade() && c.trade()->open) c.trade_accept(); break;
-    case A::TradeCancel: if (c.trade() && c.trade()->open) c.trade_cancel(); break;
-    case A::LootAll: if (c.loot_session()) c.loot_all(); break;
-    case A::LootDone: if (c.loot_session()) c.end_loot(); break;
-    case A::ConfirmYes: if (c.confirmation()) c.answer_confirmation(true); break;
-    case A::ConfirmNo: if (c.confirmation()) c.answer_confirmation(false); break;
-    case A::LargeDialogYes: if (c.large_dialog()) c.answer_large_dialog(1); break;
-    case A::LargeDialogNo: if (c.large_dialog()) c.answer_large_dialog(2); break;
-    case A::TaskDecline: if (c.tasks().offers) c.decline_tasks(); break;
-    case A::BankAuto: if (c.bank()) c.auto_bank(); break;
-    case A::BankDone: if (c.bank()) c.close_bank(); break;
-    case A::TributeToggle: c.tribute_toggle(!c.tribute().settings.active); break;
-    case A::None: log::info("/notify: {} {}: needs the UI", n.window, n.child); break;
+    // Anything else: the stock window, as the player's click would (its selection and its own state held there).
+    if (!ui_api_) {
+        log::info("/notify: {} {} {}: needs the UI", n.window, n.child, n.notification);
+        return;
     }
+    bool done = false;
+    if (n.notification == "listselect") done = ui_api_->select_list(n.window, n.child, n.value - 1, 0);
+    else if (n.notification == "tabselect") ui_api_->set_tab_page(n.window, n.child, n.value - 1), done = true;
+    else done = ui_api_->click_child(n.window, n.child, n.notification == "rightmouseup" ? "rightup" : "left");
+    if (!done) log::info("/notify: {} {} {}: nothing took it", n.window, n.child, n.notification);
 }
 
 void ClientApp::itemnotify_command(std::string_view args) {
