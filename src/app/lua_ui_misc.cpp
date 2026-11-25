@@ -13,6 +13,7 @@
 #include "app/actions_ui.h"
 #include "app/lua_ui_values.h"
 #include "app/lua_ui_windows.h"
+#include "app/ui_input.h"
 #include "game/combat.h"
 #include "game/hotbuttons.h"
 #include "game/mechanics/abilities.h"
@@ -328,8 +329,8 @@ private:
         }
         // The mouse (CXWndManager +0x94 / +0x98); a click not from the mouse (a pad) opens it at the button.
         const auto& r = host.click_rect;
-        ImVec2 mp = ImGui::GetMousePos();
-        bool on_button = ImGui::IsMousePosValid(&mp) && r[2] >= 0 && mp.x >= r[0] && mp.x <= r[2] && mp.y >= r[1] && mp.y <= r[3];
+        ImVec2 mp = ui_mouse_pos();
+        bool on_button = ui_mouse_pos_valid(&mp) && r[2] >= 0 && mp.x >= r[0] && mp.x <= r[2] && mp.y >= r[1] && mp.y <= r[3];
         if (!on_button && r[2] >= 0) mp = {r[2], (r[1] + r[3]) / 2};
         host.open_menu(mp.x, mp.y, std::move(rows));
     }
@@ -699,7 +700,7 @@ public:
             if (left_page_ * 8 + m == c.spell_book_swap_slot()) {
                 // The slot picked up to move (SelectedBookIndex): SetBuffIcon with a static stepping -1, 0, 1 on
                 // every redraw (OnProcessFrame redraws each frame while one is picked): none, red, blue in turn.
-                const int step = ImGui::GetFrameCount() % 3;
+                const int step = ui_frame_count() % 3;
                 out.background = step == 0 ? none() : anim(step == 1 ? "RedIconBackground" : "BlueIconBackground");
             }
             out.decal = host.textures ? image(host.textures->spell_icon(s->spell_icon)) : none();
@@ -722,7 +723,7 @@ public:
             int slot = left_page_ * 8 + m;
             // HandleSpellInfoDisplay: the slot's spell in a spell display, on XWM_RCLICKHOLD (24) or a left click
             // with Alt; XWM_RBUTTONUPAFTERHELD (26) closes the held one again (CWndDisplayManager_CloseNewest).
-            const bool alt = ImGui::GetIO().KeyAlt;
+            const bool alt = ui_keys().alt;
             if (button == "rightheld" || (button == "left" && alt)) {
                 if (const auto* s = spell(c, m)) host.show_spell(static_cast<std::int32_t>(s->id), button == "rightheld");
                 return true;

@@ -20,6 +20,7 @@
 
 #include "app/actions_ui.h"
 #include "app/lua_ui_windows.h"
+#include "app/ui_input.h"
 #include "game/combat.h"
 #include "game/xtarget.h"
 #include "game/hot_button_state.h"
@@ -60,7 +61,7 @@ std::string eqstr(UiHost& host, std::uint32_t id, std::vector<std::string> args 
 
 // Centred on the screen by the window's XML size (CPopupWndManager's dialogs, CQuantityWnd without a point).
 std::array<int, 2> centred(UiHost& host, const char* screen) {
-    const ImVec2 ds = ImGui::GetCurrentContext() ? ImGui::GetIO().DisplaySize : ImVec2(0, 0); // no screen: none
+    const ImVec2 ds = ui_display_size(); // no screen without ImGui (app/ui_input.h)
     auto r = host.textures ? host.textures->screen_rect(screen) : std::nullopt;
     int w = r ? r->w : 300, h = r ? r->h : 200;
     return {(static_cast<int>(ds.x) - w) / 2, (static_cast<int>(ds.y) - h) / 2};
@@ -573,7 +574,7 @@ public:
     bool click_rightheld(UiHost& host, std::string_view id) {
         int n = index_after(id, "DisplayButton");
         if (!host.conn || n < 0 || n > 3 || selected_ < 0) return false;
-        host.conn->bandolier_hold(selected_, n, ImGui::GetIO().KeyShift);
+        host.conn->bandolier_hold(selected_, n, ui_keys().shift);
         return true;
     }
     void ini_loaded(UiHost&, ui::UiIni& ini, const std::filesystem::path&) override {
@@ -810,7 +811,7 @@ public:
         if (id.rfind("ETW_Role", 0) == 0) {
             if (button == "rightup" || button == "rightupheld") {
                 host.conn->select_xtarget(slot_of(id)); // notification 3: this slot for the menu, then the menu
-                ImVec2 mp = ImGui::GetMousePos();
+                ImVec2 mp = ui_mouse_pos();
                 context_menu(host, mp.x, mp.y);
             } else if (button == "left") {
                 target_row(host, slot_of(id));
@@ -1176,14 +1177,14 @@ public:
     bool click(UiHost& host, std::string_view id, std::string_view button, bool outside) override {
         int n = slot_of(id, "PotionSlot");
         if (!host.conn || n < 0) return false;
-        const ImGuiIO& io = ImGui::GetIO();
+        const UiKeys keys = ui_keys();
         if (button == "left") {
-            if (!host.conn->inventory().cursor() || io.KeyCtrl || io.KeyAlt || n >= max_slots(host)) return true;
+            if (!host.conn->inventory().cursor() || keys.ctrl || keys.alt || n >= max_slots(host)) return true;
             if (host.conn->potion_belt_set(n)) host.conn->auto_inventory();
         } else if ((button == "right" || button == "rightup") && !outside) {
             if (n < max_slots(host)) host.conn->potion_belt_use(n);
         } else if (button == "rightheld") {
-            host.conn->potion_belt_hold(n, io.KeyShift);
+            host.conn->potion_belt_hold(n, keys.shift);
         }
         return true;
     }

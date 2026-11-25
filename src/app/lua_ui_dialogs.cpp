@@ -18,6 +18,7 @@
 #include <imgui.h>
 
 #include "app/actions_ui.h"
+#include "app/ui_input.h"
 #include "core/path_utf8.h"
 #include "game/coords.h"
 #include "game/chat_windows.h"
@@ -98,7 +99,7 @@ private:
         // Without ImGui (a client that draws nothing; a script reading Window[QuantityWnd].Open) there is no screen
         // to place it on: the dialog's state is all there is.
         if (r == 2 && ImGui::GetCurrentContext()) {
-            ImVec2 ds = ImGui::GetIO().DisplaySize;
+            ImVec2 ds = ui_display_size();
             auto rect = host.textures ? host.textures->screen_rect("QuantityWnd") : std::nullopt;
             int w = rect ? rect->w : 200, h = rect ? rect->h : 100;
             if (pos) {
@@ -532,7 +533,7 @@ void saved_report_child(const SavedBugReport& saved, std::string_view id, Child&
 }
 bool saved_report_click(const SavedBugReport& saved, std::string_view id) {
     if (id == "OpenFolderButton") platform::open_folder(saved.zip.parent_path());
-    else if (id == "CopySummaryButton") ImGui::SetClipboardText(saved.summary.c_str());
+    else if (id == "CopySummaryButton") ui_set_clipboard(saved.summary.c_str());
     else return false;
     return true;
 }
@@ -556,7 +557,7 @@ public:
             saved_.reset();
             if (host.bug_report_capture) {
                 host.bug_report_capture();
-                capture_frame_ = ImGui::GetFrameCount();
+                capture_frame_ = ui_frame_count();
             }
         }
         if (!open) {
@@ -577,7 +578,7 @@ public:
         }
         if (!saving_.valid() && !queued_.empty()) start_save(host);
         was_open_ = open;
-        return open && ImGui::GetFrameCount() != capture_frame_;
+        return open && ui_frame_count() != capture_frame_;
     }
     void set_shown(UiHost& host, bool show) override {
         if (host.conn) host.conn->set_bug_report_open(show);
@@ -880,7 +881,7 @@ void open_quantity(UiHost& host, const game::QuantityOpen& in, std::function<voi
     // its line forced.
     const bool imgui = ImGui::GetCurrentContext() != nullptr;
     if (imgui) {
-        ImVec2 ds = ImGui::GetIO().DisplaySize;
+        ImVec2 ds = ui_display_size();
         q.screen_width = static_cast<std::int32_t>(ds.x);
         q.screen_height = static_cast<std::int32_t>(ds.y);
     }
@@ -891,8 +892,8 @@ void open_quantity(UiHost& host, const game::QuantityOpen& in, std::function<voi
         q.shift = (*host.forced_mods)[0];
         q.ctrl = (*host.forced_mods)[1];
     } else if (imgui) {
-        q.shift = ImGui::GetIO().KeyShift;
-        q.ctrl = ImGui::GetIO().KeyCtrl;
+        q.shift = ui_keys().shift;
+        q.ctrl = ui_keys().ctrl;
     }
     game::QuantityResult r = game::quantity_dialog_open(q);
     if (r.closed) {

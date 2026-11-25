@@ -490,6 +490,9 @@ TEST_CASE("TLO: Group, items, Zone and the rest") {
     CHECK(f.p("${FindItem[=Healing Potion].Stack}") == "5");
     CHECK(f.p("${FindItem[=Potion]}") == "NULL");
     CHECK(f.p("${FindItemCount[healing potion]}") == "7"); // 5 loose + 2 in the bag
+    // A number is the item's id, as in MQ (not a name holding those digits); an empty index is NULL.
+    CHECK(f.p("${FindItem[5001]} ${FindItemCount[5001]}") == "Healing Potion 7");
+    CHECK(f.p("${FindItemCount[500]} ${FindItem[]} ${FindItemCount[]}") == "0 NULL NULL");
     CHECK(f.p("${Me.Inventory[pack2].Container}") == "4");
     CHECK(f.p("${Me.Inventory[pack2].Item[1]}") == "Healing Potion");
     CHECK(f.p("${Me.FreeInventory}") == "11"); // 8 empty general slots + 3 in the bag

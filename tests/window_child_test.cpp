@@ -67,6 +67,8 @@ TEST_CASE("Window: DoOpen and DoClose change what Open reads, with no UI drawn")
     CHECK(r.p("${Window[InventoryWindow].Open}") == "FALSE");
     // A window this client does not have: nothing to open.
     CHECK(r.p("${Window[NoSuchWnd].DoOpen}") == "FALSE");
+    // A window whose state reads ImGui's frame count (the bug report's capture): no ImGui here, no crash.
+    CHECK(r.p("${Window[BugReportWindow].Open}") == "FALSE");
     // MQ's names for a window: the Actions window's Abilities page.
     CHECK(r.p("${Window[ActionsAbilitiesPage].DoOpen}") == "TRUE");
     CHECK(r.p("${Window[ActionsWindow].Open}") == "TRUE");

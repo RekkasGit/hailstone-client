@@ -12,6 +12,7 @@
 
 #include "app/lua_ui.h"
 #include "app/lua_ui_windows.h"
+#include "app/ui_input.h"
 #include "core/log.h"
 #include "game/bank.h"
 #include "game/hot_button_menu.h"
@@ -38,9 +39,9 @@ int index_after(std::string_view id, std::string_view prefix) {
     return ec == std::errc() && p == rest.data() + rest.size() ? v : -1;
 }
 
-// The keys held (none without ImGui: a client that draws nothing, a /notify with no UI).
-bool shift() { return ImGui::GetCurrentContext() && ImGui::GetIO().KeyShift; }
-bool ctrl() { return ImGui::GetCurrentContext() && ImGui::GetIO().KeyCtrl; }
+// The keys held (none without ImGui: app/ui_input.h).
+bool shift() { return ui_keys().shift; }
+bool ctrl() { return ui_keys().ctrl; }
 
 // The money buttons count platinum first: Money0 platinum .. Money3 copper; wire coin types count copper first.
 int coin_type(int button) { return 3 - button; }
@@ -1048,7 +1049,7 @@ public:
         if (!shown(host) || id != "ItemList" || row < 0 || static_cast<std::size_t>(row) >= keys_.size() ||
             revision_ != host.conn->shroud_bank()->revision) return false;
         selected_ = keys_[static_cast<std::size_t>(row)];
-        if (right) host.conn->inspect_shroud_bank(revision_, *selected_, ImGui::GetIO().KeyAlt);
+        if (right) host.conn->inspect_shroud_bank(revision_, *selected_, ui_keys().alt);
         return true;
     }
     void child(UiHost& host, std::string_view id, Child& out) override {
@@ -1161,8 +1162,8 @@ void open_container(UiHost& host, const net::ItemSlot& s) {
 // closes its container, a book is read, a common item is used (OP_ItemVerifyRequest: clickies, food and drink,
 // scrolls and tomes on servers that scribe them). The item display is the held button's (inspect_held).
 void item_right_click(UiHost& host, const net::ItemSlot& slot) {
-    const ImGuiIO& io = ImGui::GetIO();
-    item_right_click(host, slot, {io.KeyShift, io.KeyCtrl, io.KeyAlt});
+    const UiKeys keys = ui_keys();
+    item_right_click(host, slot, {keys.shift, keys.ctrl, keys.alt});
 }
 
 void item_right_click(UiHost& host, const net::ItemSlot& slot, net::SlotClickKeys keys) {
@@ -1179,8 +1180,8 @@ bool item_left_held(UiHost& host, const net::ItemSlot& slot) {
     const auto& inv = host.conn->inventory();
     const auto& coins = host.conn->cursor_coins();
     if (inv.cursor() || std::any_of(coins.begin(), coins.end(), [](std::uint32_t c) { return c != 0; })) return false;
-    const ImGuiIO& io = ImGui::GetIO();
-    auto b = game::inventory_hot_button(slot, inv.at(slot), io.KeyShift || io.KeyCtrl);
+    const UiKeys keys = ui_keys();
+    auto b = game::inventory_hot_button(slot, inv.at(slot), keys.shift || keys.ctrl);
     if (!b) return false;
     host.cursor_button = std::move(*b);
     ++host.cursor_serial;

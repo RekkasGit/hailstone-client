@@ -3,6 +3,7 @@
 #include "app/client_app_internal.h"
 #include "app/nameplate_layer.h"
 #include "app/nameplate_canvas_context.h"
+#include "app/ui_input.h"
 #include "core/ascii_case.h"
 #include "core/ini_file.h"
 #include "ui/lua/lua_host.h"
@@ -636,10 +637,10 @@ void ClientApp::update_ui_host() {
                 p.lua = s.lua;
                 p.bar = bar;
                 p.button = button;
-                const ImGuiIO& io = ImGui::GetIO();
-                p.shift = io.KeyShift;
-                p.ctrl = io.KeyCtrl;
-                p.alt = io.KeyAlt;
+                const UiKeys keys = ui_keys(); // (none without ImGui: a button a script pressed)
+                p.shift = keys.shift;
+                p.ctrl = keys.ctrl;
+                p.alt = keys.alt;
                 automation_->scripts().press_button(p);
             };
             hooks.stop_lua_social = [this](std::int32_t social) {

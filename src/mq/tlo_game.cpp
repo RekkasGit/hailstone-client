@@ -360,9 +360,9 @@ template <typename F> void each_banked(const Context& c, F&& fn) {
     }
 }
 
-// FindItemBank's and FindItemBankCount's index: a number is the item's id (MQ's IsNumber), else its name as
-// item_name_matches takes it ("=name" the whole name).
-bool bank_item_matches(const net::Item& it, std::string_view index) {
+// FindItem's, FindItemCount's, FindItemBank's and FindItemBankCount's index: a number is the item's id (MQ's
+// IsNumber), else its name as item_name_matches takes it ("=name" the whole name).
+bool item_query_matches(const net::Item& it, std::string_view index) {
     std::int64_t id = 0;
     if (parse_int(index, id)) return id == static_cast<std::int64_t>(it.id);
     return item_name_matches(it, index);
@@ -3148,18 +3148,20 @@ void register_game_tlos(Registry& r) {
         return item_value(c, net::ItemSlot::possessions(net::kSlotCursor));
     });
     r.add_tlo("FindItem", [](const Context& c, std::string_view index) -> V {
+        if (index.empty()) return V::nil();
         V found;
         each_carried(c, [&](const net::ItemSlot& s, const net::Item& it) {
-            if (!item_name_matches(it, index)) return false;
+            if (!item_query_matches(it, index)) return false;
             found = V::object(g.item, pack_slot(s));
             return true;
         });
         return found;
     });
-    r.add_tlo("FindItemCount", [](const Context& c, std::string_view index) {
+    r.add_tlo("FindItemCount", [](const Context& c, std::string_view index) -> V {
+        if (index.empty()) return V::nil();
         std::int64_t n = 0;
         each_carried(c, [&](const net::ItemSlot&, const net::Item& it) {
-            if (item_name_matches(it, index)) n += it.stack_count ? it.stack_count : 1;
+            if (item_query_matches(it, index)) n += it.stack_count ? it.stack_count : 1;
             return false;
         });
         return V::integer(n);
@@ -3169,7 +3171,7 @@ void register_game_tlos(Registry& r) {
         if (index.empty()) return V::nil();
         V found;
         each_banked(c, [&](const net::ItemSlot& s, const net::Item& it) {
-            if (!bank_item_matches(it, index)) return false;
+            if (!item_query_matches(it, index)) return false;
             found = V::object(g.item, pack_slot(s));
             return true;
         });
@@ -3179,7 +3181,7 @@ void register_game_tlos(Registry& r) {
         if (index.empty()) return V::nil();
         std::int64_t n = 0;
         each_banked(c, [&](const net::ItemSlot&, const net::Item& it) {
-            if (bank_item_matches(it, index)) n += it.stack_count ? it.stack_count : 1;
+            if (item_query_matches(it, index)) n += it.stack_count ? it.stack_count : 1;
             return false;
         });
         return V::integer(n);
