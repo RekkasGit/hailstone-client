@@ -44,6 +44,7 @@ namespace hailstone::ui {
 class UiTextures; class UiIni; struct ChatView; struct ServerSelectView; struct LoginView; struct CharacterSelectView;
 struct CharacterCreateView;
 struct AddonPolicyView;
+namespace lua { class LuaUi; }
 }
 namespace hailstone::game { struct ItemLink; struct QuantityOpen; struct Spawn; class CharCreateLook; class NameplateCanvasRegistry; }
 
@@ -377,6 +378,7 @@ struct UiHost {
     // Hailstone: the copy also brings the UI's window layout (the character's ui-<pack>.txt keys, LuaUi::
     // copy_character_layout) from that character's folder; an empty folder (defaults.ini) the shared layout.
     std::function<void(const std::filesystem::path& character_dir)> copy_ui_layout;
+    std::function<std::pair<ui::lua::LuaUi*, std::string_view>()> layout_profile_pack;
     std::function<std::optional<std::pair<std::uint32_t, std::vector<std::string>>>(
         const LayoutSource& from, const LayoutCopyParts& parts)> copy_layout;
     // The server select screen (eqmain's serverselect, app/lua_ui_login.cpp) while the client shows it: the client's
@@ -543,6 +545,7 @@ public:
                      const std::filesystem::path& seed);
     // Writes the character's file when a window moved or was shown or hidden.
     void save_layout();
+    void clear_layout_profile_undo();
     // The character's UI ini load_layout read (empty before one).
     const std::filesystem::path& layout_file() const;
 

@@ -19,6 +19,25 @@ Use dot calls. Methods are grouped by service (`session`, `character`, `inventor
 `tasks`, `achievements`, `map`, `scripts`, `plugins`, `pregame`, `gamepad`, ...). The full generated mapping is in
 [UI API Reference](ui-api-reference.md).
 
+## Layout profiles
+
+`hs.UI.layoutProfiles` is available to interface code during a character session. `List()` returns saved
+names for the active pack. `Preview(name)` returns
+`{name, width, height, windows, chat, rects, approximate}` or `nil, reason`.
+`rects` lists `{name, x, y, w, h}` window bounds in pixels at the saved screen size. An empty list means
+no window geometry is available. `approximate` indicates that the preview uses positions and sizes from
+an earlier save format. Previewing leaves the current layout in use. `Save(name[, overwrite])` returns `true` or
+`false, reason[, code]`. If a name is taken, the code is `"exists"`. Ask the player before retrying with
+`overwrite=true`.
+
+`Apply(name[, discard_unsaved])` uses the last preview of that profile. If the current layout does not match
+a saved profile, it returns `false, reason, "unsaved"`. An interface can offer to save the current setup or retry
+with `discard_unsaved=true` after the player chooses to apply without saving. Apply and `Undo()` otherwise return
+`true` or `false, reason`. `CanUndo()` reports whether the current
+session has a previous layout to restore. `Generation()` increases when the new positions take effect
+at the start of the next UI frame. Open pack dialogs can use that signal to refresh their placement.
+Script and plugin callers cannot read or change the saved profiles.
+
 ## Chat tabs and windows
 
 `hs.UI.chat.Windows([into])` lists visible chat windows in slot order: `slot` identifies the window, `tab` is the

@@ -33,6 +33,11 @@
 using namespace hailstone;
 namespace fs = std::filesystem;
 
+namespace hailstone::app {
+void chat_layout_loaded(ui::UiIni& ini, UiHost& host, const fs::path& user_dir, bool profile_change);
+void chat_host_gone(const UiHost& host, const ui::UiIni& ini);
+}
+
 namespace {
 
 struct Lua {
@@ -479,6 +484,48 @@ assert(calls[2][1] == 7 and calls[2][2] == 2)
     const int result = luaL_dostring(state, code.c_str());
     INFO((result == LUA_OK ? "" : lua_tostring(state, -1)));
     CHECK(result == LUA_OK);
+}
+
+TEST_CASE("Layout profiles: chat reload reroutes visible scrollback and keeps cleared messages hidden") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    hailstone::test::ScratchDir scratch("layout_profile_scrollback");
+    {
+        GameDir game(scratch.path());
+        ui::ChatView view;
+        app::UiHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game;
+        host.chat = &view;
+        app::UiApi api(host);
+        api.load_layout({}, scratch.path() / "UI.ini", {});
+        Lua lua(api);
+        lua.run(kLines + std::string("_G.lines = lines"));
+        view.add(ui::ChatChannel::Say, "cleared");
+        CHECK(lua.run("return lines(1)") == "cleared");
+        lua.run("hs.ChatClear(1)");
+        view.add(ui::ChatChannel::Say, "visible main");
+        view.add(ui::ChatChannel::Group, "visible group");
+        CHECK(lua.run("return lines(1)") == "visible main|visible group");
+        view.add(ui::ChatChannel::Group, "pending group");
+
+        IniFile saved;
+        saved.set_int("ChatManager", "NumWindows", 1);
+        saved.set_int("ChatManager", "ChatWindow1_LanguageId", 0);
+        saved.set_int("ChatManager", "ChatWindow1_FontStyle", 9);
+        saved.set_int("ChatManager", std::format("ChannelMap{}", game::chat_channel_of_color(258)), 1);
+        const auto layout_file = scratch.path() / "profile-test.ini";
+        REQUIRE(saved.save(layout_file));
+        ui::UiIni layout;
+        layout.load({}, layout_file);
+        app::chat_layout_loaded(layout, host, scratch.path(), true);
+        CHECK(lua.run("return lines(1)") == "visible main");
+        CHECK(lua.run("return lines(2)") == "visible group|pending group");
+        CHECK(lua.run("local font = hs.ChatInfo(2); return font") == "9");
+        app::chat_layout_loaded(layout, host, scratch.path(), false);
+        CHECK(lua.run("local font = hs.ChatInfo(2); return font") == "3");
+        app::chat_host_gone(host, layout);
+    }
+    ImGui::DestroyContext(ctx);
 }
 
 TEST_CASE("Chat windows: each window keeps its own last 1000 lines; a busy one does not push out a quiet one's") {

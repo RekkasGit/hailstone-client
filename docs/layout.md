@@ -231,6 +231,29 @@ A shared key still in a character's file moves into `hailstone.ini` when the cha
 UI packs' script settings (`ui/settings/<pack>.txt`) are shared too; the window layout is per character
 (`ui-<pack>.txt`).
 
+#### Named layout profiles
+
+Open **Layout Profiles** from the Modern EQ menu, **More** or **All Windows** in the Gamepad main menu, or with
+`/layoutprofiles`. Modern also offers it under **Options → Display → Interface**. Save the current setup under a
+name such as Desktop, Handheld or Raid.
+Select a saved profile and choose **Visual Preview** to see where its visible windows sat at the saved screen
+size. You can close the diagram and keep playing with the current layout. Older profiles use any complete saved
+window positions and sizes for an approximate preview.
+
+If your current layout differs from every saved profile, **Apply Profile** lets you name it and choose
+**Save & Apply**, choose **Apply Without Saving**, or cancel. The save prompt uses the same replacement
+confirmation as regular saves.
+**Undo Apply** restores the setup in use immediately before the last apply, once per apply and during the
+same character and interface session.
+
+Profiles live in `layout-profiles/<pack>/` under the Hailstone data folder. The active interface determines
+which profiles are offered, and characters using that interface can share them. Applying a profile writes
+to the active character. A profile includes stock and pack window placement, chat tabs and routing,
+filters and colors. Modern chat
+timestamps and Gamepad hotbar orientations follow the character, with old shared settings as defaults.
+The game window keeps its current size when a profile is applied. Names use up to 48 ASCII letters, numbers,
+spaces, hyphens or underscores and match without regard to case.
+
 #### Quest preferences
 
 The modern UI's quest state (tracked IDs, tracker visibility, collapsed quests, journal category and section:

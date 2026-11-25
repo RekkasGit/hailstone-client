@@ -485,6 +485,7 @@ void ClientApp::use_ui_pack(std::string_view id, bool force) {
     if (selected) ui_selected_ = selected->id;
     const ui::UiPack* pack = ui_pack_for_screen(selected);
     if (!pack || (!force && pack->id == ui_name_)) return;
+    if (ui_api_ && pack->id != ui_name_) ui_api_->clear_layout_profile_undo();
     ui_name_ = pack->id;
     ui_host_.trusted_ui = ui::trusted_ui_pack(*pack);
     loaded_ui_pack_ = *pack;
@@ -678,6 +679,7 @@ void ClientApp::leave_character() {
     if (actions_ui_) actions_ui_->save_character(); // its hot buttons' last changes (ActionsUi::save_if_due)
     layout_for_.clear(); // Even the same character gets a new connection and needs its window visibility restored.
     ui_character_dir_.clear();
+    if (ui_api_) ui_api_->clear_layout_profile_undo();
     if (lua_ui_) lua_ui_->set_character_settings({});
     use_character_settings({}); // hailstone.ini's settings again
     ui_host_.drop_session_dialogs();

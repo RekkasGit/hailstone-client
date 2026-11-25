@@ -10,7 +10,7 @@ does not bypass a function's own caller, screen or server-state checks.
 `API.version`, `API.Supports(module[, member])` and `API.Describe([module[, member]])`
 provide contract version and structural discovery. They confer no permissions.
 
-Coverage: **354/354 method implementation links**, **227/354 adjacent binding comment excerpts**, and **6/6 constant implementation links**. Excerpts below are verbatim binding comments; they preserve any documented signatures and results, and do not invent omitted arguments or results. **See binding** marks an author documentation gap.
+Coverage: **361/361 method implementation links**, **227/361 adjacent binding comment excerpts**, and **6/6 constant implementation links**. Excerpts below are verbatim binding comments; they preserve any documented signatures and results, and do not invent omitted arguments or results. **See binding** marks an author documentation gap.
 
 Unresolved method implementations: none.
 Unresolved constant implementations: none.
@@ -296,6 +296,18 @@ Unresolved constant implementations: none.
 | `API.inventory.SortItems` | `err = hs.SortItems(where, mode [, options])   -- where: "inventory", "bank" or a bag window ("Bag3"); mode: "sort",`<br>`"stack" (fill partial stacks from the later ones) or "tidy" (items into their filtered bags); options: { locked =`<br>`{ place, ... } (left alone), filters = { [bag place] = category } (hs.Item's category names) }. nil when it started`<br>`(or had nothing to do), else why not` | `hs.SortItems` · [source](../src/app/lua_ui.cpp) | actions | closed |
 | `API.inventory.StopItemJob` | `hs.StopItemJob()` | `hs.StopItemJob` · [source](../src/app/lua_ui.cpp) | actions | closed |
 | `API.inventory.TakeItemSearch` | **See binding** | `hs.TakeItemSearch` · [source](../src/app/lua_ui_inventory_manager.cpp) | none (outer gate) | closed |
+
+## layoutProfiles
+
+| Member | Documented signature / binding comment | Existing binding | Required capabilities | Hook policy |
+| --- | --- | --- | --- | --- |
+| `API.layoutProfiles.Apply` | **See binding** | `hs.LayoutProfilesApply` · [source](../src/app/lua_ui.cpp) | actions | closed |
+| `API.layoutProfiles.CanUndo` | **See binding** | `hs.LayoutProfilesCanUndo` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |
+| `API.layoutProfiles.Generation` | **See binding** | `hs.LayoutProfilesGeneration` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |
+| `API.layoutProfiles.List` | **See binding** | `hs.LayoutProfilesList` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |
+| `API.layoutProfiles.Preview` | **See binding** | `hs.LayoutProfilesPreview` · [source](../src/app/lua_ui.cpp) | none (outer gate) | closed |
+| `API.layoutProfiles.Save` | **See binding** | `hs.LayoutProfilesSave` · [source](../src/app/lua_ui.cpp) | actions | closed |
+| `API.layoutProfiles.Undo` | **See binding** | `hs.LayoutProfilesUndo` · [source](../src/app/lua_ui.cpp) | actions | closed |
 
 ## luasocials
 
