@@ -3,6 +3,7 @@
 #include <doctest/doctest.h>
 
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 #include <imgui.h>
@@ -103,7 +104,9 @@ TEST_CASE("Parcels page (modern): picking, inspecting and retrieving parcels") {
         host.item_displays = &displays.info;
         host.item_display_ids = &displays.info_ids;
         app::UiApi api(host);
-        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        const fs::path layout = dir / "UI_Test_Server.ini";
+        std::ofstream(layout) << "[Tips]\nShowTips=0\n";
+        api.load_layout(dir / "defaults.ini", layout, {});
         ui::lua::LuaUi lua(dir / "modern", dir / "modern.txt");
         lua.add_ui_api([&](lua_State* L) {
             api.register_functions(L);
@@ -121,6 +124,8 @@ ui.InvisibleButton = function(id, ...)
   test_rects[id] = { ui.GetItemRect() }
   return r
 end
+ui.SetSetting("hud.pos.MerchantWnd", "40,100")
+ui.SetSetting("hud.pos.ItemDisplayWindow", "850,100")
 hs.SetTabPage('MerchantWnd', 'MW_MerchantSubwindows', 2)
 )lua") == LUA_OK);
         auto frame = [&] {
@@ -154,8 +159,6 @@ hs.SetTabPage('MerchantWnd', 'MW_MerchantSubwindows', 2)
         };
         api.show("MerchantWnd", true);
         for (int i = 0; i < 4; ++i) frame();
-        api.show("TipWindow", false); // the merchant's first-open tip, over the window
-        for (int i = 0; i < 2; ++i) frame();
 
         SUBCASE("a picked row is the one taken") {
             click("##parcel2");
@@ -185,10 +188,6 @@ hs.SetTabPage('MerchantWnd', 'MW_MerchantSubwindows', 2)
             click("##parcel1", ImGuiMouseButton_Right);
             REQUIRE(displays.info.size() == 1);
             CHECK(displays.info.front().id == 3001);
-            // Dismiss the item display before clicking through to the merchant.
-            displays.info.clear();
-            displays.info_ids.clear();
-            frame();
             click("##retrieve");
             REQUIRE(rig.until([&] { return last_retrieved(rig.server.zone_log) >= 0; }));
             CHECK(last_retrieved(rig.server.zone_log) == 4);
