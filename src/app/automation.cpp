@@ -176,6 +176,10 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     ce.registry = &m.registry;
     ce.context = [&m]() -> const mq::Context& { return m.context(); };
     ce.echo = [&m](const std::string& t) { m.print(t); };
+    ce.echo_coded = [&m](const std::string& t) {
+        if (net::GameConnection* c = m.conn()) c->client_message(t);
+        else log::info("{}", game::strip_mq_colors(t));
+    };
     ce.run = [&m](const std::string& l) { m.run(l); };
     ce.set_target = [&m](std::uint32_t id) {
         if (net::GameConnection* c = m.conn()) c->set_target(id);

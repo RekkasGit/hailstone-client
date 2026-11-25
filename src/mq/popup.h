@@ -13,8 +13,9 @@
 // line prints MQ's usage instead. The overlay is DisplayOverlayText's: priority 10 ("always 10 in eqgame.exe"),
 // alpha 255 (100%), fades of 500 ms.
 //
-// A deliberate difference: MQ's colour codes (\ar, \ay ...) are taken out of the overlay's text, which MQ hands the
-// game as they are (shown as written). The chat line of /popupecho keeps them, as MQ's WriteChatf does.
+// Two deliberate differences: MQ's colour codes (\ar, \ay ...) are taken out of the overlay's text, which MQ hands the
+// game as they are (shown as written), and the chat line of /popupecho keeps them; and the text takes MQ's typed
+// escapes as /echo does (mq/typed_escapes.h), where MQ's popups take a typed "\ay" as written.
 
 #include <cstdint>
 #include <string>
@@ -93,13 +94,8 @@ inline void show_popup(game::TextOverlay& overlay, const Popup& p, std::uint32_t
 }
 
 // /popupecho's chat line (WriteChatf "\ayPopup\aw:: %s") for GameConnection::client_message, MQ's colour codes kept
-// for the chat window. The text's own codes are kept when a script or plugin sent the line (`text_codes`); from the
-// player's command line their BEL is taken out, as for any line no script wrote (a ${...} in it may hold a server's
-// names).
-inline std::string popup_echo_line(const Popup& p, bool text_codes) {
-    std::string text = p.text;
-    if (!text_codes) std::erase(text, game::kMqColorCode);
-    return "\ayPopup\aw:: " + text;
-}
+// for the chat window. The text is the command's after mq::typed_line (the player's escapes made codes, the BEL a
+// ${...} brought in taken out).
+inline std::string popup_echo_line(const Popup& p) { return "\ayPopup\aw:: " + p.text; }
 
 } // namespace hailstone::mq

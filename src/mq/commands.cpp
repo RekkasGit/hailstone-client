@@ -13,6 +13,7 @@
 #include "mq/nav_commands.h"
 #include "mq/parse.h"
 #include "mq/spawn_search.h"
+#include "mq/typed_escapes.h"
 #include "net/game_connection.h"
 #include "plugin/policy.h"
 
@@ -124,7 +125,11 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
     // /squelch: the chat lines its command prints are dropped.
     h.on_chat(owner_, [this](plugin::ChatLine&) { return squelch_ ? plugin::Flow::Drop : plugin::Flow::Continue; });
 
-    h.add_command(owner_, "/echo", [this](std::string_view args) { say(std::string(args)); });
+    // /echo (MQ's Echo): the line with MQ's typed escapes as colour codes (mq/typed_escapes.h; a line no script sent
+    // loses the BEL a ${...} may have brought in first).
+    h.add_command(owner_, "/echo", [this](std::string_view args) {
+        say_coded(typed_line(args, !plugin::caller_name().empty()));
+    });
     h.add_command(owner_, "/noparse", [this](std::string_view args) {
         const bool before = std::exchange(noparse_, true);
         run_nested(args);
@@ -384,6 +389,12 @@ void Commands::run_timed() {
 
 void Commands::say(const std::string& text) const {
     if (env_.echo && squelch_ == 0) env_.echo(text);
+}
+
+void Commands::say_coded(const std::string& text) const {
+    if (squelch_ != 0) return;
+    if (env_.echo_coded) env_.echo_coded(text);
+    else if (env_.echo) env_.echo(text);
 }
 
 Commands::~Commands() {

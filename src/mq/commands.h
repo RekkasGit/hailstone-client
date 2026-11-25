@@ -29,6 +29,9 @@ struct CommandEnv {
     const Registry* registry = nullptr;
     std::function<const Context&()> context;
     std::function<void(const std::string& text)> echo;    // a chat line (MQ's WriteChatColor)
+    // A chat line the client writes with MQ's colour codes it means to keep (GameConnection::client_message: /echo's
+    // line after mq::typed_line); null: echo.
+    std::function<void(const std::string& text)> echo_coded;
     std::function<void(const std::string& line)> run;     // a command line through the client (GameConnection)
     std::function<void(std::uint32_t spawn_id)> set_target;
     std::function<void(std::optional<std::uint8_t> door)> set_door_target; // /doortarget; null: none
@@ -75,6 +78,7 @@ private:
     // The last line filter: the line as it finally goes, after the plugins' rewrites.
     void final_check(std::string& line, plugin::Flow& flow);
     void say(const std::string& text) const; // a chat line, unless /squelch is running
+    void say_coded(const std::string& text) const; // the same, its MQ colour codes kept (CommandEnv::echo_coded)
     // /docommand, /noparse and /squelch: the rest of the line run as a command, at most kMaxNestedCommands deep.
     void run_nested(std::string_view args);
     // /timed: a line waiting for its time, with who sent it (run as them: CallerScope).

@@ -59,10 +59,8 @@ TEST_CASE("popup: the overlay gets the text without MQ's colour codes; the echo 
     CHECK((f->argb >> 24) == 255);
     CHECK(overlay.frame(1000 + 2000 + 500 + 1)); // the hold, then the fade-out
     CHECK_FALSE(overlay.frame(1000 + 2000 + 500 + 600));
-    // The echo: the client's own "Popup::" codes always; the text's own codes from a script, not from the player's
-    // command line (a ${...} there may hold a server's names).
-    CHECK(hailstone::mq::popup_echo_line(p, true) == "\ayPopup\aw:: \ar>>^<<\ax CANNOT CHARM");
-    CHECK(hailstone::mq::popup_echo_line(p, false) == "\ayPopup\aw:: r>>^<<x CANNOT CHARM");
+    // The echo keeps the codes: the client's own "Popup::" and the text's (after mq::typed_line).
+    CHECK(hailstone::mq::popup_echo_line(p) == "\ayPopup\aw:: \ar>>^<<\ax CANNOT CHARM");
     // Priority 10, as the game's: a popup replaces one of the same priority.
     hailstone::mq::show_popup(overlay, parse_popup("first", PopupKind::Plain), 5000);
     hailstone::mq::show_popup(overlay, parse_popup("second", PopupKind::Plain), 5100);

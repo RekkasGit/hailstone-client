@@ -3,6 +3,7 @@
 ## Unreleased
 
 - `${Window[...]}` answers from the client's own state for the casting, spell book, loot, merchant, bank, trade, give and dialog windows and `pack1`..`pack10`, so scripts that ask whether one is open work with no UI.
+- `/echo` and `/popupecho` take MacroQuest's colour codes when you type them (`\ayYellow \agGreen\ax`), and `\n` for a new line.
 - New commands `/popup`, `/popcustom` and `/popupecho`, as in MacroQuest: a line in the centre of the screen, with a colour and a time, and for `/popupecho` in chat too. E3 shows its alerts with them.
 - `${FindItem[...]}` and `${FindItemCount[...]}` take an item id as well as a name, as in MacroQuest.
 - Scripts' window reads and `/notify` keep working while the interface is reloading or failed to load.
