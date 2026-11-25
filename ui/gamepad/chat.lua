@@ -54,6 +54,10 @@ local tickerRows = {}
 -- The chat keys (Enter, '/', ...): the text they start with; opens the log with the keyboard on its input.
 local typed = nil
 local input, inputLinks, inputError = "", {}, nil
+local inputOpts = {
+  moveToEnd = true,
+  colorSpans = function(text) return chatlinks.ColorSpans(inputLinks, text, S.LINK) end,
+}
 local slotIdx = 1
 -- The longest input: the text box's (its 2048-byte buffer, less the NUL). The on-screen keys stop there, as typing
 -- in the box does, rather than growing a line the box would cut.
@@ -314,7 +318,7 @@ ui.window("Chat Log", function()
         ui.SetKeyboardFocusHere()
         GPSTATE.chatFocusInput = false
       end
-      local text, entered = ui.InputText("##chatinput", input, INPUT_MAX + 1, ui.InputTextFlags.EnterReturnsTrue, { moveToEnd = true })
+      local text, entered = ui.InputText("##chatinput", input, INPUT_MAX + 1, ui.InputTextFlags.EnterReturnsTrue, inputOpts)
       if text ~= input then inputError = nil end
       input = text
       if input == "" then inputLinks = {} end
