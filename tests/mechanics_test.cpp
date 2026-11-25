@@ -134,13 +134,15 @@ TEST_CASE("Fpu: an invalid operation gives the x87's negative default NaN on any
     };
     constexpr std::uint64_t kIndefinite = 0xfff8000000000000u;
     const double inf = std::numeric_limits<double>::infinity();
+    volatile double zero_v = 0.0; // not a constant: MSVC warns (C4723) on a division it sees is by zero
+    const double zero = zero_v;
     for (FpuPrecision p : {FpuPrecision::Single24, FpuPrecision::Double53}) {
         CAPTURE(static_cast<int>(p));
         Fpu f(p);
         CHECK(bits(f.add(inf, -inf)) == kIndefinite);
         CHECK(bits(f.sub(inf, inf)) == kIndefinite);
         CHECK(bits(f.mul(0.0, inf)) == kIndefinite);
-        CHECK(bits(f.div(0.0, 0.0)) == kIndefinite);
+        CHECK(bits(f.div(zero, zero)) == kIndefinite);
         CHECK(bits(f.div(-inf, inf)) == kIndefinite);
         CHECK(bits(f.sqrt(-1.0)) == kIndefinite);
         CHECK(bits(static_cast<double>(static_cast<float>(f.mul(0.0, inf)))) == kIndefinite);
