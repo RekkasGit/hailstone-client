@@ -105,6 +105,9 @@ manifest's `caps` (docs/addons.md).
 | `InvSlot` | MQ's slot number or name | `invslot` | a slot: 0..33 the player's (`pack1`..`pack10`, `cursor` and the worn slots' names), 262.. the slots in the packs (ten a pack), 2000.. the bank (`bank1`..), 2032.. the slots in its bags, 2500.. the shared bank (`sharedbank1`..), 2532.. the slots in its bags; an unknown name is 0 |
 | `FindItem` | name, or `=exact name` | `item` | the first carried item whose name contains the text (worn, general slots, bags, cursor) |
 | `FindItemCount` | name, or `=exact name` | int | how many such items are carried, stacks counted |
+| `FindItemBank` | name, `=exact name`, or item id | `item` | the first such item in the bank, then the shared bank, bags included (known with no banker open) |
+| `FindItemBankCount` | name, `=exact name`, or item id | int | how many such items are banked there, stacks counted |
+| `AltAbility` | name, or ability (group) id | `altability` | any AA the AA table holds, owned or not (`Me.AltAbility`: only the player's). By name, the player's own rank when they have one, else its first rank; by id, its first rank |
 | `Window` | window name | `window` | a window, to ask whether it is open |
 | `Plugin` | plugin name | `plugin` | a compiled plugin, to ask whether it is loaded |
 | `EverQuest` | | `everquest` | the game state and server name |

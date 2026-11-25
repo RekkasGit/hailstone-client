@@ -943,6 +943,65 @@ TEST_CASE("TLO: Me.AltAbility by name or ability id, with its rank, reuse and sp
     CHECK(f.p("${Me.AltAbility[Mystical Shielding]} ${Me.AltAbility[6]}") == "NULL NULL"); // not owned
 }
 
+// MQ's AltAbility TLO: any ability the AA table holds, owned or not (Me.AltAbility answers only the player's).
+TEST_CASE("TLO: AltAbility finds an ability the table holds by name or group id, owned or not") {
+    Fixture f;
+    auto& aa = net::GameConnectionTestAccess::alt_adv(*f.world.conn);
+    game::AltAbility r1;
+    r1.id = 2001;
+    r1.group = 6;
+    r1.rank = 1;
+    r1.max_rank = 2;
+    r1.title_sid = 9002; // Mystical Shielding
+    r1.spell = 11;       // Holy Armor
+    game::AltAbility r2 = r1;
+    r2.id = 2002;
+    r2.rank = 2;
+    r2.spell = 200; // Minor Healing
+    aa.add(r1);
+    aa.add(r2);
+    // Not owned: the first rank the table holds, by name (any case) or group id.
+    CHECK(f.p("${AltAbility[Mystical Shielding]} ${AltAbility[mystical shielding].Rank}") == "6 1");
+    CHECK(f.p("${AltAbility[6].Rank} ${AltAbility[6].Spell} ${AltAbility[6].Spell.ID}") == "1 Holy Armor 11");
+    // E3's check before it reads the spell's id.
+    CHECK(f.p("${Bool[${AltAbility[Mystical Shielding].Spell}]}") == "TRUE");
+    CHECK(f.p("${Me.AltAbility[Mystical Shielding]}") == "NULL");
+    // Owned: the player's rank, by name.
+    aa.owned = {{2002, 2, 0}};
+    CHECK(f.p("${AltAbility[Mystical Shielding].Rank} ${AltAbility[Mystical Shielding].Spell.ID}") == "2 200");
+    // Nothing of that name or group; an empty index.
+    CHECK(f.p("${AltAbility[Innate Strength]} ${AltAbility[99]} ${AltAbility[]}") == "NULL NULL NULL");
+}
+
+// MQ's FindItemBank and FindItemBankCount: the bank, then the shared bank, bags included; a number is an item id.
+TEST_CASE("TLO: FindItemBank and FindItemBankCount search the bank and the shared bank") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    auto& inv = A::inventory(*f.world.conn);
+    auto make = [](std::uint32_t id, const char* name, std::uint32_t count) {
+        net::Item it;
+        it.id = id;
+        it.name = name;
+        it.stack_count = count;
+        return it;
+    };
+    net::Item bag = make(17005, "Large Sack", 0);
+    bag.item_class = 1;
+    bag.bag_slots = 4;
+    REQUIRE(inv.put(net::ItemSlot{net::kInvBank, 3, -1, -1, 0, 0}, bag));
+    REQUIRE(inv.put(net::ItemSlot{net::kInvBank, 3, 1, -1, 0, 0}, make(13073, "Bone Chips", 20)));
+    REQUIRE(inv.put(net::ItemSlot{net::kInvBank, 7, -1, -1, 0, 0}, make(13073, "Bone Chips", 5)));
+    REQUIRE(inv.put(net::ItemSlot{net::kInvSharedBank, 0, -1, -1, 0, 0}, make(13074, "Zombie Skin", 2)));
+    // Carried items are not the bank's.
+    REQUIRE(inv.put(net::ItemSlot::possessions(net::kSlotGeneral1), make(13075, "Bone Chips of the Ages", 1)));
+    CHECK(f.p("${FindItemBankCount[=Bone Chips]} ${FindItemBankCount[bone]} ${FindItemBankCount[13073]}") == "25 25 25");
+    CHECK(f.p("${FindItemBankCount[=Zombie Skin]} ${FindItemBankCount[=Rusty Dagger]}") == "2 0");
+    // The first found: the bank before the shared bank, a bag's contents after the bag.
+    CHECK(f.p("${FindItemBank[=Bone Chips]} ${FindItemBank[=Bone Chips].ItemSlot}") == "Bone Chips 3");
+    CHECK(f.p("${FindItemBank[skin]} ${FindItemBank[13074].ID}") == "Zombie Skin 13074");
+    CHECK(f.p("${Bool[${FindItemBank[=Bone Chips of the Ages]}]} ${FindItemBank[]}") == "FALSE NULL");
+}
+
 TEST_CASE("TLO: item members E3 reads (ItemReady, Timer, Clicky, stacks, worn slots, augments, links)") {
     Fixture f;
     using A = net::GameConnectionTestAccess;

@@ -346,6 +346,28 @@ bool item_name_matches(const net::Item& it, std::string_view query) {
     return icontains(it.name, query);
 }
 
+// The bank's items, then the shared bank's (MQ's FindBankItem / CountBankItems: BankItems, then SharedBankItems),
+// each slot with its bag's contents after it. The client holds them whether or not a banker is open.
+template <typename F> void each_banked(const Context& c, F&& fn) {
+    if (!c.conn) return;
+    for (const std::int16_t type : {net::kInvBank, net::kInvSharedBank}) {
+        for (const auto& [key, it] : c.conn->inventory().items()) {
+            if (key.first != type) continue;
+            if (fn(net::ItemSlot{type, key.second, -1, -1, 0, 0}, it)) return;
+            for (const auto& b : it.contents)
+                if (fn(net::ItemSlot{type, key.second, static_cast<std::int16_t>(b.index), -1, 0, 0}, b.item)) return;
+        }
+    }
+}
+
+// FindItemBank's and FindItemBankCount's index: a number is the item's id (MQ's IsNumber), else its name as
+// item_name_matches takes it ("=name" the whole name).
+bool bank_item_matches(const net::Item& it, std::string_view index) {
+    std::int64_t id = 0;
+    if (parse_int(index, id)) return id == static_cast<std::int64_t>(it.id);
+    return item_name_matches(it, index);
+}
+
 constexpr const char* kSlotNames[] = {"charm",     "leftear",   "head",     "face",      "rightear", "neck",
                                       "shoulder",  "arms",      "back",     "leftwrist", "rightwrist", "range",
                                       "hands",     "mainhand",  "offhand",  "leftfinger", "rightfinger", "chest",
@@ -1577,6 +1599,26 @@ const game::AltAbility* owned_aa(const Context& c, std::string_view index) {
         const game::AltAbility* a = o.id ? aa.get(o.id) : nullptr;
         if (a && (iequals(c.conn->aa_name(*a), index) || iequals(c.conn->aa_display_name(*a), index))) return a;
     }
+    return nullptr;
+}
+
+// The AltAbility TLO's ability. A number is its group id: the first rank of that group the table holds, in rank id
+// order (MQ: the first in its table's order, with no level). A name (any case, as owned_aa matches it): the
+// player's own rank of it when they have one, else the first rank the table holds. MQ asks the game for a name's
+// "level appropriate" rank (AltAdvManager::GetAAById with the player's level), which is not decoded
+// (docs/unknowns.md); the owned rank is the one the player casts.
+const game::AltAbility* any_aa(const Context& c, std::string_view index) {
+    if (!c.conn || index.empty()) return nullptr;
+    const auto& aa = c.conn->alt_adv();
+    std::int64_t group = 0;
+    if (parse_int(index, group)) {
+        for (const auto& [id, a] : aa.table)
+            if (a.group == group) return &a;
+        return nullptr;
+    }
+    if (const game::AltAbility* own = owned_aa(c, index)) return own;
+    for (const auto& [id, a] : aa.table)
+        if (iequals(c.conn->aa_name(a), index) || iequals(c.conn->aa_display_name(a), index)) return &a;
     return nullptr;
 }
 
@@ -3121,6 +3163,31 @@ void register_game_tlos(Registry& r) {
             return false;
         });
         return V::integer(n);
+    });
+    // MQ's FindItemBank and FindItemBankCount: the same over the bank and the shared bank (each_banked).
+    r.add_tlo("FindItemBank", [](const Context& c, std::string_view index) -> V {
+        if (index.empty()) return V::nil();
+        V found;
+        each_banked(c, [&](const net::ItemSlot& s, const net::Item& it) {
+            if (!bank_item_matches(it, index)) return false;
+            found = V::object(g.item, pack_slot(s));
+            return true;
+        });
+        return found;
+    });
+    r.add_tlo("FindItemBankCount", [](const Context& c, std::string_view index) -> V {
+        if (index.empty()) return V::nil();
+        std::int64_t n = 0;
+        each_banked(c, [&](const net::ItemSlot&, const net::Item& it) {
+            if (bank_item_matches(it, index)) n += it.stack_count ? it.stack_count : 1;
+            return false;
+        });
+        return V::integer(n);
+    });
+    // MQ's AltAbility: any ability the AA table holds, owned or not (Me.AltAbility: only the player's).
+    r.add_tlo("AltAbility", [](const Context& c, std::string_view index) -> V {
+        const game::AltAbility* a = any_aa(c, index);
+        return a ? V::object(g.altability, a->id) : V::nil();
     });
     r.add_tlo("Window", [](const Context&, std::string_view index) {
         return index.empty() ? V::nil() : V::object(g.window, 0, 0, std::string(index));

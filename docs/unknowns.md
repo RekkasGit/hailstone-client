@@ -1481,6 +1481,9 @@ Real estate is built to the original (docs/protocol/rof2-packets.md "Real estate
 - **`Spell.WillLandPet` past the pet's buffs.** When the pet's buffs fill every slot from the first with no gap, the
   answer is the next slot + 1: the pet window's slot count (MQ's `GetMaxBuffs`) is not known, so a full pet bar is not
   noticed. Settle: the RoF2 pet window's buff count.
+- **`AltAbility[name]`'s rank.** MQ asks the game for the ability's "level appropriate" rank
+  (AltAdvManager::GetAAById with the player's level), which is not decoded. Now: the player's owned rank when they have
+  one (the rank they cast), else the first rank the AA table holds. Settle: GetAAById's use of the level argument.
 
 - **`Merchant.ItemsReceived` for a merchant with nothing to sell.** MQ sets it once the merchant window's list has
   been filled (CMerchantWnd's PurchasePageHandler::UpdateList). Here it is TRUE once the merchant is open and an item
