@@ -44,6 +44,7 @@
 #include "net/task_packets.h"
 #include "game/mechanics/character.h"
 #include "game/mechanics/tables.h"
+#include "mq/map_filter.h"
 #include "ui/dev_screens.h"
 #include "ui/lua/lua_host.h"
 #include "mock_server/harness.h"
@@ -324,6 +325,64 @@ TEST_CASE("UI packs (gamepad): stock Raid and Map stay inside narrow and short n
             CHECK(actions->Scroll.y == doctest::Approx(actions->ScrollMax.y));
         }
     }
+}
+
+// Vanilla maps (hs.MapVanilla): the Modern map and minimap leave out their own markers and Find marks, and keep
+// drawing the map's lines and everything around them.
+TEST_CASE("UI packs: Modern's maps leave their own marks out of vanilla maps") {
+    const fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui/modern";
+    hailstone::test::ScratchDir scratch("ui_pack_vanilla_map");
+    const fs::path dir = scratch.path();
+    fs::create_directories(dir / "game");
+    fs::create_directories(dir / "maps");
+    fs::copy(src, dir / "modern", fs::copy_options::recursive);
+    std::ofstream(dir / "maps" / "qeynos2.txt") << "L -100, -100, 0,  100, 100, 0,  0, 255, 0\n";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures; // 1.92: the atlas is built by NewFrame
+    {
+        Session s(dir, "modern");
+        mq::MapFilters filters;
+        s.host.map_filters = &filters;
+        s.host.zone_short_name = "qeynos2";
+        s.host.global_maps_dir = dir / "maps";
+        s.host.feet_valid = true;
+        auto& world = s.conn.world_for_test();
+        world.zone_short_name = "qeynos2";
+        world.player_id = 1;
+        game::Spawn me;
+        me.id = 1;
+        me.name = "Tester";
+        world.spawns[1] = me;
+        ++world.spawn_set_serial;
+        lua_State* L = s.lua.state();
+        // A red marker (the fourth colour) in the middle of the map, the sidebar off so its list draws no dot.
+        REQUIRE(luaL_dostring(L, "ui.SetSetting('map.sidebar', '0') ui.SetSetting('map.markers.qeynos2', 'Here|0.0|0.0|4') "
+                                 "hs.ShowWindow('MapViewWnd', true)") == LUA_OK);
+        auto count = [](ImU32 rgb) {
+            int n = 0;
+            const ImDrawData* data = ImGui::GetDrawData();
+            for (int i = 0; data && i < data->CmdLists.Size; ++i)
+                for (const ImDrawVert& v : data->CmdLists[i]->VtxBuffer)
+                    if ((v.col & 0x00ffffffu) == rgb) ++n;
+            return n;
+        };
+        constexpr ImU32 kMarker = IM_COL32(255, 107, 107, 0), kLine = IM_COL32(0, 255, 0, 0);
+        s.frames(3);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        REQUIRE(s.api.shown("MapViewWnd"));
+        CHECK(count(kMarker) > 0);
+        CHECK(count(kLine) > 0);
+        filters.set_vanilla_enabled(true);
+        s.frames(2);
+        CHECK(count(kMarker) == 0);
+        CHECK(count(kLine) > 0);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        filters.set_vanilla_enabled(false);
+        s.frames(2);
+        CHECK(count(kMarker) > 0);
+    }
+    ImGui::DestroyContext(ctx);
 }
 
 TEST_CASE("UI packs: context submenus cascade inward at either screen edge and accept a choice") {

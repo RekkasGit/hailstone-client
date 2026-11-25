@@ -95,6 +95,44 @@ TEST_CASE("Automation: a server's map rule locks vanilla mode without changing t
     CHECK(filters.vanilla_enabled()); // no server rule leaves the player's own choice alone
 }
 
+TEST_CASE("Automation: a server that blocks /mapfilter suspends the saved filters and TargetPath") {
+    AutomationHost h;
+    auto& filters = h.automation->map_filters();
+    filters.set_enabled(mq::MapFilter::Npc, true);
+    filters.set_enabled(mq::MapFilter::Target, true);
+    filters.set_enabled(mq::MapFilter::TargetPath, true);
+    filters.set_vanilla_enabled(true);
+    auto rules = plugin::parse_server_cfg("[commands]\nblock = /MapFilter\n");
+    rules.dir = h.world.dir / "profile";
+    net::GameConnectionTestAccess::set_server_rules(*h.world.conn, rules);
+    for (int i = 0; i < 3; ++i) h.automation->frame();
+    CHECK(filters.suspended());
+    CHECK_FALSE(filters.enabled(mq::MapFilter::Npc));
+    CHECK_FALSE(filters.enabled(mq::MapFilter::TargetPath));
+    CHECK_FALSE(filters.vanilla_mode()); // the player could not turn it off again
+    CHECK(net::GameConnectionTestAccess::find_request_count(*h.world.conn) == 0);
+    CHECK(filters.state(mq::MapFilter::Npc).enabled); // the saved choice is kept
+
+    // Only a block of the command itself suspends them; a block of add-on commands does not.
+    rules = plugin::parse_server_cfg("[commands]\nblock_groups = addon_commands\n");
+    rules.dir = h.world.dir / "profile";
+    net::GameConnectionTestAccess::set_server_rules(*h.world.conn, rules);
+    h.automation->frame();
+    CHECK_FALSE(filters.suspended());
+    CHECK(filters.enabled(mq::MapFilter::Npc));
+    CHECK(filters.vanilla_mode());
+
+    // A GM status rule is followed as the status comes and goes.
+    rules = plugin::parse_server_cfg("[commands]\ngm = /mapfilter:100\n");
+    rules.dir = h.world.dir / "profile";
+    net::GameConnectionTestAccess::set_server_rules(*h.world.conn, rules);
+    h.automation->frame();
+    CHECK(filters.suspended());
+    net::GameConnectionTestAccess::set_server_rules(*h.world.conn, std::nullopt);
+    h.automation->frame();
+    CHECK_FALSE(filters.suspended());
+}
+
 TEST_CASE("Automation: a script holds autoskill off while it runs; stopping it lets go") {
     AutomationHost h;
     h.automation->frame();

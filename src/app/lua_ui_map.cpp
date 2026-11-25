@@ -37,6 +37,8 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <tuple>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -70,7 +72,6 @@
 #include "net/game_connection.h"
 #include "plugin/lua_keep.h"
 #include "ui/dev_screens.h"
-#include "ui/lua/lua_draw_scope.h"
 #include "ui/lua/lua_host.h"
 #include "ui/ui_ini.h"
 
@@ -1128,6 +1129,7 @@ struct FilteredSpawn {
     glm::vec3 at{0.0f};
     mq::MapFilter marker_filter = mq::MapFilter::Invalid;
     bool target = false;
+    bool npc_allowed = false; // a living NPC passed the server's NPC map policy (map_markers)
 };
 struct GroundMark {
     std::uint32_t drop_id = 0;
@@ -1271,17 +1273,29 @@ MapMarkers map_markers(UiHost& h, mq::MapFilters* filters, int active_layer, boo
         const net::GameConnection& c = *h.conn;
         const auto context = c.interaction_context();
         auto current = [&] { return h.conn == &c && c.interaction_context() == context; };
-        using SourceStamp = std::pair<std::uint64_t, std::uint64_t>;
+        // The policy's flags join its revision: a provider need not advance the revision when only its flags change.
+        using SourceStamp = std::tuple<std::uint64_t, std::uint64_t, std::uint32_t>;
         auto source = [&]() -> std::optional<SourceStamp> {
             if (!current()) return std::nullopt;
-            const auto policy = c.server_ext().map_policy(c).revision;
+            const auto policy = c.server_ext().map_policy(c);
             if (!current()) return std::nullopt;
             const auto life = c.server_ext().lifecycle_revision(c);
             if (!current()) return std::nullopt;
-            return SourceStamp{policy, life};
+            return SourceStamp{policy.revision, life, policy.flags};
         };
         const auto stamp = source();
         if (!stamp) return {};
+        // /mapfilter's marks for living NPCs follow the server's NPC map policy as the packs' Find overlays do: none
+        // when it hides stock NPCs, disables NPC Find or supplies its own spawn marks; only listed NPCs with
+        // server-only Find; and each one through the Find visibility hook. The current target is exempt (the player
+        // already has it; its line, circles and mark stay), and so are corpses, which Find never lists.
+        const game::MapPolicy npc_policy{std::get<2>(*stamp), {}, 0};
+        const bool npc_marks = npc_policy.npc_find_enabled() &&
+            !(npc_policy.flags & (game::MapPolicyHideStockNpcs | game::MapPolicyCustomSpawns));
+        const bool npc_server_only = npc_policy.npc_find_server_only();
+        auto policy_npc = [](const std::optional<mq::MapFilterMark>& mark, const game::Spawn& sp) {
+            return mark && !mark->is_target() && sp.is_npc && !sp.is_corpse;
+        };
         std::optional<mq::SpawnSearchMatcher> custom_matcher;
         if (filters && filters->custom_enabled() && filters->custom_search()) {
             mq::SearchSources search_sources = mq::sources_of(c);
@@ -1353,7 +1367,10 @@ MapMarkers map_markers(UiHost& h, mq::MapFilters* filters, int active_layer, boo
             }
             if (!group && !custom && !filtered) continue;
             if (!visible && !(filtered && filtered->is_target())) continue;
+            const bool npc_check = policy_npc(filtered, *sp);
             const bool allowed = c.server_ext().map_visible(c, *sp, 0); // HAILSTONE_MAP_VISIBLE_MARKER
+            // (npc_find_visible asks the HAILSTONE_MAP_FIND hook and pins the actor it asked about)
+            const bool npc_allowed = npc_check && allowed && npc_marks && c.npc_find_visible(sp->id, npc_server_only);
             sp = copy(actor);
             if (!sp || !allowed) continue;
             const glm::vec3 admitted_at = spawn_map(*sp);
@@ -1361,6 +1378,7 @@ MapMarkers map_markers(UiHost& h, mq::MapFilters* filters, int active_layer, boo
             if (filters && (admitted_visible || sp->id == c.world().target_id)) {
                 filtered = filters->spawn_mark(*sp, filter_input(*sp, group));
                 if (filtered && !admitted_visible && !filtered->is_target()) filtered.reset();
+                if (policy_npc(filtered, *sp) && !npc_allowed) filtered.reset();
             } else {
                 filtered.reset();
             }
@@ -1383,7 +1401,8 @@ MapMarkers map_markers(UiHost& h, mq::MapFilters* filters, int active_layer, boo
                 m.rgb = filtered->rgb;
                 m.layer = active_layer;
                 m.label = std::move(filtered->label);
-                out.filtered.push_back({actor, *sp, std::move(m), spawn_map(*sp), filtered->marker_filter, filtered->is_target()});
+                out.filtered.push_back({actor, *sp, std::move(m), spawn_map(*sp), filtered->marker_filter,
+                                        filtered->is_target(), npc_allowed});
             }
             if (mark) {
                 const glm::vec3 mark_at = spawn_map(*sp);
@@ -1434,17 +1453,26 @@ MapMarkers map_markers(UiHost& h, mq::MapFilters* filters, int active_layer, boo
             if (!filters) return true;
             const auto mark = filters->spawn_mark(*sp, filter_input(*sp, same_group() && member(*sp)));
             if (!mark) return true;
+            if (policy_npc(mark, *sp) &&
+                (!f.npc_allowed || (npc_server_only && (sp->id > 0xffff || !c.findable_npcs().contains(sp->id)))))
+                return true;
             f.mark.rgb = mark->rgb;
             f.mark.label = std::move(mark->label);
             f.marker_filter = mark->marker_filter;
             f.target = mark->is_target();
             return !f.target && in_view && !in_view(f.at);
         });
+        // One table of the current ground objects for every mark, not a scan of them per mark. Nothing below calls
+        // a provider, so the pointers stay valid. (The first object with an id wins, as a scan would find it.)
+        std::unordered_map<std::uint32_t, const game::GroundObject*> ground_now;
+        if (!out.ground.empty()) {
+            ground_now.reserve(c.ground_objects().size());
+            for (const auto& object : c.ground_objects()) ground_now.emplace(object.drop_id, &object);
+        }
         std::erase_if(out.ground, [&](GroundMark& g) {
-            const auto found = std::find_if(c.ground_objects().begin(), c.ground_objects().end(),
-                                            [&](const game::GroundObject& object) { return object.drop_id == g.drop_id; });
-            if (found == c.ground_objects().end()) return true;
-            g.object = *found;
+            const auto found = ground_now.find(g.drop_id);
+            if (found == ground_now.end()) return true;
+            g.object = *found->second;
             g.at = game::world_to_map(g.object.position);
             g.mark.label = mq::MapFilters::ground_label(g.object);
             return in_view && !in_view(g.at);
@@ -1564,15 +1592,14 @@ int DrawMap(lua_State* L) {
         v.relayout = false;
     }
 
-    // Vanilla keeps the map's lines and its mouse mapping, but no labels, paths, marks or editor overlays. The Lua
-    // guard also hides marks the pack draws after this call, while leaving the frame around the map alone.
+    // Vanilla keeps the map's lines and its mouse mapping, but no labels, paths, marks or editor overlays. What the
+    // pack draws over the map itself is the pack's to leave out (hs.MapVanilla).
     if (vanilla) {
         for (auto& l : v.lines) {
             if (!v.line_shown(l, feet)) continue;
             glm::vec2 a = T(l.start.x, l.start.y), b = T(l.end.x, l.end.y);
             line(a.x, a.y, b.x, b.y, faded(color(l.color), v.z_fade(l.start.z, l.end.z, feet)));
         }
-        ui::lua::suppress_map_draws(dl, ImVec2(x0, y0), ImVec2(x1, y1));
         dl->PopClipRect();
         return 0;
     }
@@ -2096,7 +2123,6 @@ int DrawMinimap(lua_State* L) {
     zv.reach = range; // the circle's radius r is `range` map units, however the map turns
     zv.reach_from = glm::vec2(me->x, me->y);
     draw_zone_view(s, h, zv);
-    if (vanilla) ui::lua::suppress_map_draws(ImGui::GetWindowDrawList(), zv.c, r);
     MapOverlayView overlay;
     overlay.minimap = true;
     overlay.x0 = cx - r; overlay.y0 = cy - r; overlay.x1 = cx + r; overlay.y1 = cy + r;
@@ -2165,7 +2191,6 @@ int DrawZoneMap(lua_State* L) {
     zv.P = [&](float x, float y) { return glm::vec2((x - cx) * k, (y - cy) * k); };
     ImGui::GetWindowDrawList()->PushClipRect(ImVec2(x0, y0), ImVec2(x1, y1), true);
     draw_zone_view(s, h, zv);
-    if (vanilla) ui::lua::suppress_map_draws(ImGui::GetWindowDrawList(), ImVec2(x0, y0), ImVec2(x1, y1));
     MapOverlayView overlay;
     overlay.minimap = false;
     overlay.x0 = x0; overlay.y0 = y0; overlay.x1 = x1; overlay.y1 = y1;
@@ -2286,6 +2311,14 @@ int FindMapLocation(lua_State* L) {
 int FindPathShown(lua_State* L) {
     UiHost& h = *host_of(L);
     lua_pushboolean(L, (h.conn && h.conn->player_path().active()) || h.guide_line);
+    return 1;
+}
+// on = hs.MapVanilla()   -- vanilla maps (/mapfilter vanilla, or the server's [map] vanilla): the maps draw only their
+// lines; a pack or add-on leaves out what it would draw over them itself (markers, Find marks, exits), keeping its
+// text, frames and controls.
+int MapVanilla(lua_State* L) {
+    UiHost& h = *host_of(L);
+    lua_pushboolean(L, h.map_filters && h.map_filters->vanilla_mode());
     return 1;
 }
 int EndFind(lua_State* L) {
@@ -2976,7 +3009,7 @@ void register_map_api(lua_State* L, UiHost& host, std::vector<std::unique_ptr<St
     static const luaL_Reg fns[] = {{"DrawMap", DrawMap},         {"MapZoom", MapZoom},         {"MapMouseDown", MapMouseDown},
                                    {"MapMouseUp", MapMouseUp},   {"MapPanReset", MapPanReset}, {"MapRightClick", MapRightClick},
                                    {"DrawMinimap", DrawMinimap}, {"DrawZoneMap", DrawZoneMap},
-                                   {"FindMapLocation", FindMapLocation}, {"DrawAtlas", DrawAtlas}, {"FindPathShown", FindPathShown}, {"EndFind", EndFind}, {"ZoneName", ZoneName}, {"MapAutoZ", MapAutoZ}, {"MapPolicy", MapPolicy}, {"GameTime", GameTime},
+                                   {"FindMapLocation", FindMapLocation}, {"DrawAtlas", DrawAtlas}, {"FindPathShown", FindPathShown}, {"EndFind", EndFind}, {"ZoneName", ZoneName}, {"MapAutoZ", MapAutoZ}, {"MapPolicy", MapPolicy}, {"MapVanilla", MapVanilla}, {"GameTime", GameTime},
                                    {"AtlasIndex", AtlasIndex}, {"AtlasPageData", AtlasPageData}, {"AtlasTexture", AtlasTexture},
                                    {"ZoneLinks", ZoneLinks}, {"ZoneRoute", ZoneRoute}, {"ZoneExits", ZoneExits},
                                    {"ZoneExitWalk", ZoneExitWalk}, {"ShowZoneMap", ShowZoneMap}, {"MapZoneShown", MapZoneShown},

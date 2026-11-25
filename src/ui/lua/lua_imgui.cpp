@@ -1161,201 +1161,55 @@ int g_foregroundFrame = -1;
 ImDrawList *DrawTarget() {
 	return g_foregroundFrame == ImGui::GetFrameCount() ? ImGui::GetForegroundDrawList() : ImGui::GetWindowDrawList();
 }
-
-// A vanilla map still lets its pack draw the frame around it. Filled marks and text whose anchor or centre is inside
-// are hidden; an outline is hidden when any part crosses the map's interior. Concentric rings and rectangles on the
-// boundary stay visible, so minimap rings, north markers, map borders and clocks keep drawing. A control submitted
-// after the map's own hit box keeps drawing inside its item rectangle.
-constexpr float kMapDrawBoundary = 0.5f;
-constexpr float kMapDrawParallelEpsilon = 0.0001f;
-struct MapDrawSuppression {
-	ImGuiContext *context = nullptr;
-	ImDrawList *list = nullptr;
-	int frame = -1;
-	ImGuiID item = 0;
-	ImGuiWindow *window = nullptr;
-	bool circle = false;
-	ImVec2 min{}, max{}, center{};
-	float radius = 0.0f;
-};
-std::vector<MapDrawSuppression> g_mapDrawSuppressions;
-std::vector<ImGuiContext*> g_mapDrawHookContexts;
-
-void map_draw_context_shutdown(ImGuiContext* context, ImGuiContextHook*) {
-	std::erase_if(g_mapDrawSuppressions, [&](const MapDrawSuppression& area) { return area.context == context; });
-	std::erase(g_mapDrawHookContexts, context);
-}
-void map_draw_context_hook(ImGuiContext* context) {
-	if (std::find(g_mapDrawHookContexts.begin(), g_mapDrawHookContexts.end(), context) != g_mapDrawHookContexts.end()) return;
-	ImGuiContextHook hook{};
-	hook.Type = ImGuiContextHookType_Shutdown;
-	hook.Callback = map_draw_context_shutdown;
-	ImGui::AddContextHook(context, &hook);
-	g_mapDrawHookContexts.push_back(context);
-}
-
-bool map_draw_active(const MapDrawSuppression& area, ImDrawList *list) {
-	return list && area.context == ImGui::GetCurrentContext() &&
-	       area.frame == ImGui::GetFrameCount() && area.list == list;
-}
-bool map_control_visible(const MapDrawSuppression& area, ImVec2 a, ImVec2 b) {
-	const auto& item = GImGui->LastItemData;
-	if (!item.ID) return false; // text and draw primitives leave the pack's last interactive item in place
-	if (GImGui->CurrentWindow == area.window && item.ID == area.item) return false;
-	const auto& rect = item.Rect;
-	return a.x >= rect.Min.x && a.y >= rect.Min.y && b.x <= rect.Max.x && b.y <= rect.Max.y;
-}
-bool map_point_inside(const MapDrawSuppression& area, ImVec2 p) {
-	if (area.circle) {
-		const float dx = p.x - area.center.x, dy = p.y - area.center.y;
-		const float reach = std::max(0.0f, area.radius - kMapDrawBoundary);
-		return dx * dx + dy * dy < reach * reach;
-	}
-	return p.x > area.min.x + kMapDrawBoundary && p.x < area.max.x - kMapDrawBoundary &&
-	       p.y > area.min.y + kMapDrawBoundary && p.y < area.max.y - kMapDrawBoundary;
-}
-bool map_filled_hidden(ImVec2 center, ImVec2 a, ImVec2 b) {
-	for (const auto& area : g_mapDrawSuppressions)
-		if (map_draw_active(area, DrawTarget()) && !map_control_visible(area, a, b) && map_point_inside(area, center)) return true;
-	return false;
-}
-bool map_segment_inside(const MapDrawSuppression& area, ImVec2 a, ImVec2 b) {
-	if (map_point_inside(area, a) || map_point_inside(area, b)) return true;
-	const float dx = b.x - a.x, dy = b.y - a.y;
-	if (area.circle) {
-		const float length2 = dx * dx + dy * dy;
-		const float t = length2 > 0.0f
-			? std::clamp(((area.center.x - a.x) * dx + (area.center.y - a.y) * dy) / length2, 0.0f, 1.0f)
-			: 0.0f;
-		const float cx = a.x + dx * t - area.center.x, cy = a.y + dy * t - area.center.y;
-		const float reach = std::max(0.0f, area.radius - kMapDrawBoundary);
-		return cx * cx + cy * cy < reach * reach;
-	}
-	float t0 = 0.0f, t1 = 1.0f;
-	auto clip = [&](float origin, float delta, float lo, float hi) {
-		if (std::abs(delta) < kMapDrawParallelEpsilon) return origin >= lo && origin <= hi;
-		float near = (lo - origin) / delta, far = (hi - origin) / delta;
-		if (near > far) std::swap(near, far);
-		t0 = std::max(t0, near);
-		t1 = std::min(t1, far);
-		return t0 <= t1;
-	};
-	const float edge = kMapDrawBoundary;
-	return clip(a.x, dx, area.min.x + edge, area.max.x - edge) &&
-	       clip(a.y, dy, area.min.y + edge, area.max.y - edge);
-}
-bool map_outline_rect_hidden(ImVec2 a, ImVec2 b) {
-	for (const auto& area : g_mapDrawSuppressions) {
-		if (!map_draw_active(area, DrawTarget()) || map_control_visible(area, a, b)) continue;
-		if (map_segment_inside(area, a, ImVec2(b.x, a.y)) || map_segment_inside(area, ImVec2(b.x, a.y), b) ||
-		    map_segment_inside(area, b, ImVec2(a.x, b.y)) || map_segment_inside(area, ImVec2(a.x, b.y), a)) return true;
-	}
-	return false;
-}
-bool map_line_hidden(ImVec2 a, ImVec2 b) {
-	for (const auto& area : g_mapDrawSuppressions)
-		if (map_draw_active(area, DrawTarget()) && !map_control_visible(area, a, b) && map_segment_inside(area, a, b)) return true;
-	return false;
-}
-bool map_outline_circle_hidden(ImVec2 center, float radius) {
-	const ImVec2 a(center.x - radius, center.y - radius), b(center.x + radius, center.y + radius);
-	for (const auto& area : g_mapDrawSuppressions) {
-		if (!map_draw_active(area, DrawTarget()) || map_control_visible(area, a, b) || !map_point_inside(area, center)) continue;
-		// The minimap's ring and the darker ring just outside it are frame, not a mark over the map.
-		if (area.circle) {
-			const float dx = center.x - area.center.x, dy = center.y - area.center.y;
-			if (dx * dx + dy * dy <= kMapDrawBoundary * kMapDrawBoundary && radius >= area.radius - kMapDrawBoundary) continue;
-		}
-		return true;
-	}
-	return false;
-}
-bool map_text_hidden(ImFont *font, float size, ImVec2 at, const char *text) {
-	ImDrawList* list = DrawTarget();
-	if (std::none_of(g_mapDrawSuppressions.begin(), g_mapDrawSuppressions.end(),
-	                 [&](const auto& area) { return map_draw_active(area, list); })) return false;
-	const ImVec2 extent = font->CalcTextSizeA(size, FLT_MAX, 0.0f, text);
-	const ImVec2 end = ImVec2(at.x + extent.x, at.y + extent.y);
-	for (const auto& area : g_mapDrawSuppressions)
-		if (map_draw_active(area, list) && !map_control_visible(area, at, end) &&
-		    (map_point_inside(area, at) || map_point_inside(area, ImVec2(at.x + extent.x * 0.5f, at.y + extent.y * 0.5f)))) return true;
-	return false;
-}
-
 int Foreground(lua_State *L) {
 	// Over every window, the consent question's too: while it is up, the pack's own code alone.
 	g_foregroundFrame = lua_toboolean(L, 1) && (!g_guard || pack_code(L)) ? ImGui::GetFrameCount() : -1;
 	return 0;
 }
 int DrawRect(lua_State *L) {
-	const ImVec2 a(F(L, 1), F(L, 2)), b(F(L, 3), F(L, 4));
-	if (map_outline_rect_hidden(a, b)) return 0;
-	DrawTarget()->AddRect(a, b,
+	DrawTarget()->AddRect(ImVec2(F(L, 1), F(L, 2)), ImVec2(F(L, 3), F(L, 4)),
 		ImGui::GetColorU32(Color(L, 5)), F(L, 9), F(L, 10, 1),
 		ImDrawFlags_StrokeLegacy); // centred on the edge as before 1.93; packs inset or outset by half the stroke for it
 	return 0;
 }
 int DrawRectFilled(lua_State *L) {
-	const ImVec2 a(F(L, 1), F(L, 2)), b(F(L, 3), F(L, 4));
-	if (map_filled_hidden(ImVec2((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f), a, b)) return 0;
-	DrawTarget()->AddRectFilled(a, b,
+	DrawTarget()->AddRectFilled(ImVec2(F(L, 1), F(L, 2)), ImVec2(F(L, 3), F(L, 4)),
 		ImGui::GetColorU32(Color(L, 5)), F(L, 9));
 	return 0;
 }
 // ui.DrawRectGradient(x0, y0, x1, y1, r, g, b, a, r2, g2, b2, a2)   -- top colour to bottom colour
 int DrawRectGradient(lua_State *L) {
-	const ImVec2 a(F(L, 1), F(L, 2)), b(F(L, 3), F(L, 4));
-	if (map_filled_hidden(ImVec2((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f), a, b)) return 0;
 	ImU32 top = ImGui::GetColorU32(Color(L, 5)), bottom = ImGui::GetColorU32(Color(L, 9));
-	DrawTarget()->AddRectFilledMultiColor(a, b, top, top, bottom, bottom);
+	DrawTarget()->AddRectFilledMultiColor(ImVec2(F(L, 1), F(L, 2)), ImVec2(F(L, 3), F(L, 4)), top, top, bottom, bottom);
 	return 0;
 }
 // ui.DrawLine(x0, y0, x1, y1, r, g, b, a [, thickness])
 int DrawLine(lua_State *L) {
-	const ImVec2 a(F(L, 1), F(L, 2)), b(F(L, 3), F(L, 4));
-	if (map_line_hidden(a, b)) return 0;
-	DrawTarget()->AddLine(a, b, ImGui::GetColorU32(Color(L, 5)), F(L, 9, 1),
+	DrawTarget()->AddLine(ImVec2(F(L, 1), F(L, 2)), ImVec2(F(L, 3), F(L, 4)), ImGui::GetColorU32(Color(L, 5)), F(L, 9, 1),
 											 ImDrawFlags_StrokeLegacy); // scripts keep the pre-1.93 pixel placement
 	return 0;
 }
 // ui.DrawCircleFilled(x, y, radius, r, g, b, a) / ui.DrawCircle(x, y, radius, r, g, b, a [, thickness])
 int DrawCircleFilled(lua_State *L) {
-	const ImVec2 center(F(L, 1), F(L, 2));
-	const float radius = F(L, 3);
-	if (map_filled_hidden(center, ImVec2(center.x - radius, center.y - radius),
-	                      ImVec2(center.x + radius, center.y + radius))) return 0;
-	DrawTarget()->AddCircleFilled(center, radius, ImGui::GetColorU32(Color(L, 4)));
+	DrawTarget()->AddCircleFilled(ImVec2(F(L, 1), F(L, 2)), F(L, 3), ImGui::GetColorU32(Color(L, 4)));
 	return 0;
 }
 int DrawCircle(lua_State *L) {
-	const ImVec2 center(F(L, 1), F(L, 2));
-	const float radius = F(L, 3);
-	if (map_outline_circle_hidden(center, radius)) return 0;
-	DrawTarget()->AddCircle(center, radius, ImGui::GetColorU32(Color(L, 4)), 0, F(L, 8, 1), ImDrawFlags_StrokeLegacy);
+	DrawTarget()->AddCircle(ImVec2(F(L, 1), F(L, 2)), F(L, 3), ImGui::GetColorU32(Color(L, 4)), 0, F(L, 8, 1), ImDrawFlags_StrokeLegacy);
 	return 0;
 }
 // ui.DrawTriangleFilled(x1, y1, x2, y2, x3, y3, r, g, b, a)
 int DrawTriangleFilled(lua_State *L) {
-	const ImVec2 p0(F(L, 1), F(L, 2)), p1(F(L, 3), F(L, 4)), p2(F(L, 5), F(L, 6));
-	const ImVec2 center((p0.x + p1.x + p2.x) / 3.0f, (p0.y + p1.y + p2.y) / 3.0f);
-	const ImVec2 lo(std::min({p0.x, p1.x, p2.x}), std::min({p0.y, p1.y, p2.y}));
-	const ImVec2 hi(std::max({p0.x, p1.x, p2.x}), std::max({p0.y, p1.y, p2.y}));
-	if (map_filled_hidden(center, lo, hi)) return 0;
-	DrawTarget()->AddTriangleFilled(p0, p1, p2, ImGui::GetColorU32(Color(L, 7)));
+	DrawTarget()->AddTriangleFilled(ImVec2(F(L, 1), F(L, 2)), ImVec2(F(L, 3), F(L, 4)), ImVec2(F(L, 5), F(L, 6)),
+		ImGui::GetColorU32(Color(L, 7)));
 	return 0;
 }
 // ui.DrawText(x, y, r, g, b, a, text [, size])   -- size: the font's pixel height (default the current font's)
 int DrawText(lua_State *L) {
-	const ImVec2 at(F(L, 1), F(L, 2));
-	const char *text = S(L, 7);
-	if (lua_isnoneornil(L, 8)) {
-		if (map_text_hidden(ImGui::GetFont(), ImGui::GetFontSize(), at, text)) return 0;
-		DrawTarget()->AddText(at, ImGui::GetColorU32(Color(L, 3)), text);
-	} else {
-		const float size = F(L, 8);
-		if (map_text_hidden(ImGui::GetFont(), size, at, text)) return 0;
-		DrawTarget()->AddText(ImGui::GetFont(), size, at, ImGui::GetColorU32(Color(L, 3)), text);
-	}
+	if (lua_isnoneornil(L, 8))
+		DrawTarget()->AddText(ImVec2(F(L, 1), F(L, 2)), ImGui::GetColorU32(Color(L, 3)), S(L, 7));
+	else
+		DrawTarget()->AddText(ImGui::GetFont(), F(L, 8), ImVec2(F(L, 1), F(L, 2)), ImGui::GetColorU32(Color(L, 3)), S(L, 7));
 	return 0;
 }
 // ui.CaptureKeyboard()   -- the keyboard is the UI's next frame, not the game's (a window that takes key presses)
@@ -1367,9 +1221,7 @@ int CaptureKeyboard(lua_State *) {
 int DrawImage(lua_State *L) {
 	ImTextureID tex = TextureArg(L, 1);
 	if (tex) {
-		const ImVec2 a(F(L, 2), F(L, 3)), b(F(L, 4), F(L, 5));
-		if (map_filled_hidden(ImVec2((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f), a, b)) return 0;
-		DrawTarget()->AddImage(tex, a, b,
+		DrawTarget()->AddImage(tex, ImVec2(F(L, 2), F(L, 3)), ImVec2(F(L, 4), F(L, 5)),
 			ImVec2(F(L, 6, 0), F(L, 7, 0)), ImVec2(F(L, 8, 1), F(L, 9, 1)), ImGui::GetColorU32(Color(L, 10)));
 	}
 	return 0;
@@ -1415,23 +1267,6 @@ void SetInts(lua_State *L, const char *table, std::initializer_list<std::pair<co
 }
 
 } // namespace
-
-void suppress_map_draws(ImDrawList *list, ImVec2 min, ImVec2 max) {
-	ImGuiContext *context = ImGui::GetCurrentContext();
-	const int frame = ImGui::GetFrameCount();
-	if (!g_mapDrawSuppressions.empty() &&
-	    (g_mapDrawSuppressions.back().context != context || g_mapDrawSuppressions.back().frame != frame)) g_mapDrawSuppressions.clear();
-	map_draw_context_hook(context);
-	g_mapDrawSuppressions.push_back({context, list, frame, ImGui::GetItemID(), ImGui::GetCurrentWindow(), false, min, max, {}, 0.0f});
-}
-void suppress_map_draws(ImDrawList *list, ImVec2 center, float radius) {
-	ImGuiContext *context = ImGui::GetCurrentContext();
-	const int frame = ImGui::GetFrameCount();
-	if (!g_mapDrawSuppressions.empty() &&
-	    (g_mapDrawSuppressions.back().context != context || g_mapDrawSuppressions.back().frame != frame)) g_mapDrawSuppressions.clear();
-	map_draw_context_hook(context);
-	g_mapDrawSuppressions.push_back({context, list, frame, ImGui::GetItemID(), ImGui::GetCurrentWindow(), true, {}, {}, center, radius});
-}
 
 WindowDrawScope::WindowDrawScope() : before_(g_foregroundFrame) { g_foregroundFrame = -1; }
 WindowDrawScope::~WindowDrawScope() { g_foregroundFrame = before_; }

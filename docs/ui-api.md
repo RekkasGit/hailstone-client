@@ -262,6 +262,10 @@ local handle, reason = hs.UI.map.RegisterOverlay(function(view)
 end, {priority = 0})
 ```
 
+Vanilla maps (`/mapfilter vanilla`, a server's `[map] vanilla`) call no overlays. Code that draws over a map itself,
+after `hs.DrawZoneMap` or `hs.DrawMinimap`, asks `hs.UI.map.Vanilla()` and leaves its marks out while it is true,
+keeping its text and controls.
+
 `view` is one plain table, read-only by convention:
 
 | Field | Meaning |
@@ -453,6 +457,12 @@ API 1.10 adds an optional argument to `map.ZoneName` (flat `hs.ZoneName`): `Zone
 number that changes on every entry into the world, the same zone again included, and is nil outside the world.
 Without the argument it returns the name and short name as before. Compare it for equality only. The packs' map
 windows keep their zoom and centre while closed and reset them when it changes; an older host returns no third value.
+
+## Vanilla maps
+
+API 1.11 adds `map.Vanilla()` (flat `hs.MapVanilla`): true while the maps are vanilla (`/mapfilter vanilla`, or a
+server's `[map] vanilla`). The maps then draw only their lines and call no overlays; a pack or add-on that draws its
+own marks over a map leaves them out, keeping its text and controls (docs/plugins.md "Vanilla maps").
 
 ## Discovering optional features
 

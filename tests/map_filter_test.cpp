@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
@@ -12,6 +13,7 @@
 #include "game/world_state.h"
 #include "mq/map_filter.h"
 #include "mock_server/harness.h"
+#include "manual_clock.h"
 #include "mq_test_world.h"
 #include "scratch_dir.h"
 
@@ -24,6 +26,22 @@ std::vector<std::string> run(MapFilters& filters, std::string_view command, cons
     std::vector<std::string> lines;
     run_map_filter_command(filters, command, input, [&](std::string_view line) { lines.emplace_back(line); });
     return lines;
+}
+
+// One update, then another once the target has settled and the request interval has passed.
+test::ManualClock& target_path_clock() {
+    static test::ManualClock clock = [] {
+        test::ManualClock c;
+        c.hold();
+        return c;
+    }();
+    return clock;
+}
+void settle(MapFilters& filters, net::GameConnection& conn, MapFilterTargetPathState& state) {
+    auto& clock = target_path_clock();
+    update_map_filter_target_path(filters, conn, state, clock.source()());
+    clock.advance(std::chrono::duration_cast<std::chrono::milliseconds>(kTargetPathInterval));
+    update_map_filter_target_path(filters, conn, state, clock.source()());
 }
 
 struct NoNpcFind final : game::ServerExtension {
@@ -319,7 +337,7 @@ TEST_CASE("Map filters: TargetPath is silent and yields to player-started paths"
     MapFilterTargetPathState state;
     (void)conn.take_sound_cues();
 
-    update_map_filter_target_path(filters, conn, state);
+    settle(filters, conn, state);
     REQUIRE(state.requested);
     CHECK(state.owns_path);
     CHECK(state.generation != 0);
@@ -328,12 +346,12 @@ TEST_CASE("Map filters: TargetPath is silent and yields to player-started paths"
     CHECK(net::GameConnectionTestAccess::find_request_count(conn) == request_base + 1);
     CHECK(conn.take_sound_cues().empty());
 
-    update_map_filter_target_path(filters, conn, state);
+    settle(filters, conn, state);
     CHECK(state.owns_path);
     CHECK(net::GameConnectionTestAccess::find_request_count(conn) == request_base + 1);
 
     world.target_id = 102;
-    update_map_filter_target_path(filters, conn, state);
+    settle(filters, conn, state);
     CHECK(state.owns_path);
     CHECK(conn.player_path().target_id() == 102);
     CHECK(net::GameConnectionTestAccess::find_request_count(conn) == request_base + 2);
@@ -343,31 +361,31 @@ TEST_CASE("Map filters: TargetPath is silent and yields to player-started paths"
     conn.find_map_location({100.0f, 0.0f, 0.0f});
     (void)conn.take_sound_cues();
     const auto manual_requests = net::GameConnectionTestAccess::find_request_count(conn);
-    update_map_filter_target_path(filters, conn, state);
+    settle(filters, conn, state);
     CHECK_FALSE(state.owns_path);
     CHECK(conn.player_path().kind() == game::FindKind::MapLocation);
     world.target_id = 101;
-    update_map_filter_target_path(filters, conn, state);
+    settle(filters, conn, state);
     CHECK_FALSE(state.owns_path);
     CHECK(conn.player_path().kind() == game::FindKind::MapLocation);
     CHECK(net::GameConnectionTestAccess::find_request_count(conn) == manual_requests);
     filters.set_enabled(MapFilter::TargetPath, false);
-    update_map_filter_target_path(filters, conn, state);
+    settle(filters, conn, state);
     CHECK(conn.player_path().kind() == game::FindKind::MapLocation); // not ours to stop
     conn.stop_find_path();
     (void)conn.take_sound_cues();
     filters.set_enabled(MapFilter::TargetPath, true);
-    update_map_filter_target_path(filters, conn, state);
+    settle(filters, conn, state);
     REQUIRE(state.owns_path);
     CHECK(conn.player_path().target_id() == 101);
 
     // The same kind/id is not enough to keep ownership: the player's new request has a new generation.
     REQUIRE(conn.find_spawn(101));
     (void)conn.take_sound_cues();
-    update_map_filter_target_path(filters, conn, state);
+    settle(filters, conn, state);
     CHECK_FALSE(state.owns_path);
     filters.set_enabled(MapFilter::TargetPath, false);
-    update_map_filter_target_path(filters, conn, state);
+    settle(filters, conn, state);
     CHECK(conn.player_path().kind() == game::FindKind::Spawn);
     CHECK(conn.player_path().target_id() == 101);
 }
@@ -378,13 +396,13 @@ TEST_CASE("Map filters: TargetPath refreshes for a new target incarnation and in
     filters.set_enabled(MapFilter::Target, true);
     filters.set_enabled(MapFilter::TargetPath, true);
     MapFilterTargetPathState state;
-    update_map_filter_target_path(filters, *world.conn, state);
+    settle(filters, *world.conn, state);
     REQUIRE(state.owns_path);
     const auto first_generation = state.generation;
 
     auto& spawn = net::GameConnectionTestAccess::world(*world.conn).spawns.at(10);
     ++spawn.incarnation;
-    update_map_filter_target_path(filters, *world.conn, state);
+    settle(filters, *world.conn, state);
     CHECK(state.owns_path);
     CHECK(state.incarnation == spawn.incarnation);
     CHECK(state.generation != first_generation);
@@ -392,7 +410,7 @@ TEST_CASE("Map filters: TargetPath refreshes for a new target incarnation and in
     const auto generation = state.generation;
     const auto context = state.context;
     ++net::GameConnectionTestAccess::world(*world.conn).spawns.at(1).incarnation;
-    update_map_filter_target_path(filters, *world.conn, state);
+    settle(filters, *world.conn, state);
     CHECK(state.owns_path);
     CHECK(state.context != context);
     CHECK(state.generation != generation);
@@ -407,12 +425,73 @@ TEST_CASE("Map filters: a denied TargetPath request is not retried every frame")
     filters.set_enabled(MapFilter::TargetPath, true);
     MapFilterTargetPathState state;
 
-    update_map_filter_target_path(filters, *world.conn, state);
+    settle(filters, *world.conn, state);
     CHECK(state.requested);
     CHECK_FALSE(state.owns_path);
     CHECK(net::GameConnectionTestAccess::find_request_count(*world.conn) == 0);
-    update_map_filter_target_path(filters, *world.conn, state);
+    settle(filters, *world.conn, state);
     CHECK(net::GameConnectionTestAccess::find_request_count(*world.conn) == 0);
+}
+
+TEST_CASE("Map filters: TargetPath waits for a settled target and paces its requests") {
+    test::Rig rig; REQUIRE(rig.to_zone());
+    auto& conn = rig.conn;
+    auto& w = net::GameConnectionTestAccess::world(conn);
+    REQUIRE(w.spawns.contains(101));
+    REQUIRE(w.spawns.contains(102));
+    const auto base = net::GameConnectionTestAccess::find_request_count(conn);
+    test::ManualClock clock;
+    clock.hold();
+    const auto now = clock.source();
+    auto requests = [&] { return net::GameConnectionTestAccess::find_request_count(conn) - base; };
+    MapFilters filters;
+    filters.set_enabled(MapFilter::Target, true);
+    filters.set_enabled(MapFilter::TargetPath, true);
+    MapFilterTargetPathState state;
+    auto update = [&](std::chrono::milliseconds after) {
+        clock.advance(after);
+        update_map_filter_target_path(filters, conn, state, now());
+    };
+    using std::chrono::milliseconds;
+
+    w.target_id = 101;
+    update(milliseconds(0));
+    update(kTargetPathSettle - milliseconds(1));
+    CHECK(requests() == 0);
+    update(milliseconds(1));
+    CHECK(requests() == 1);
+    CHECK(state.owns_path);
+
+    // Tabbing through targets asks for none of them until one stays selected.
+    for (int i = 0; i < 6; ++i) {
+        w.target_id = i % 2 ? 101 : 102;
+        update(milliseconds(200));
+    }
+    CHECK(requests() == 1);
+    update(kTargetPathSettle);
+    CHECK(requests() == 2);
+    CHECK(conn.player_path().target_id() == 101);
+
+    // A settled target still waits for the interval since the last request.
+    w.target_id = 102;
+    update(milliseconds(0));
+    update(kTargetPathSettle);
+    CHECK(requests() == 2);
+    update(kTargetPathInterval - kTargetPathSettle - milliseconds(1));
+    CHECK(requests() == 2);
+    update(milliseconds(1));
+    CHECK(requests() == 3);
+    CHECK(conn.player_path().target_id() == 102);
+
+    // A new interaction context (zoning, a reconnect) is paced the same way.
+    conn.stop_find_path(false); // as zoning drops the old zone's path
+    ++w.spawns.at(w.player_id).incarnation;
+    update(milliseconds(0));
+    CHECK(requests() == 3);
+    update(kTargetPathInterval);
+    CHECK(requests() == 4);
+    for (int i = 0; i < 10; ++i) update(kTargetPathInterval); // nothing more while the path is ours
+    CHECK(requests() == 4);
 }
 
 TEST_CASE("Map filters: spawn types, named filtering and target precedence") {

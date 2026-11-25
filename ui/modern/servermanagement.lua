@@ -30,6 +30,7 @@ local GAMEPLAY = {
     choices = { { "off", "Allowed" }, { "on", "Blocked" } }, boolean = true },
   input("management.min_status", "Minimum GM status", "200", "Minimum account status to open or save this window.", 5, nil, true),
   toggle("abilities.autoskill", "Ability Book autoskill", "on", "Allow automatic ability use."),
+  toggle("map.vanilla", "Vanilla maps", "off", "Show only the map background, without marks or overlays."),
   toggle("movement.npc_collision", "NPC collision", "on", "Live NPCs stop player movement."),
   toggle("movement.passable_ladders", "Passable ladders", "on", "Walk or swim into passable ladders to climb them."),
   toggle("movement.solid_ladders", "Solid ladders", "on", "Treat ladder faces as a single surface for movement."),

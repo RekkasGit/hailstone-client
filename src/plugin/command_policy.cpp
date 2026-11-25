@@ -36,6 +36,7 @@ constexpr ExtendedCommand kExtended[] = {
     {"/lighting", "Switch lighting modes."},
     {"/lua", "Start, pause, stop, or list Lua scripts."},
     {"/luasocial", "Open the Lua social editor."},
+    {"/mapfilter", "Choose what the map shows: spawn filters, colours, and vanilla mode."},
     {"/moveto", "Walk directly to a position or spawn.", kMovement},
     {"/nav", "Walk a route using the navigation mesh.", kMovement},
     {"/noparse", "Run a command without macro expansion.", kHelpers},

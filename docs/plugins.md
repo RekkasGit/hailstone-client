@@ -1020,16 +1020,22 @@ the client runs it.
 
 The game's maps (map window, minimap, zone map) show the group by themselves. `/mapfilter` adds MQ2Map's own spawn and
 ground-object marks, colours, target overlays and custom searches; the command changes the shared C++ map presenter,
-so no UI-pack control is needed (`docs/commands.md`). `TargetPath` requests a silent server path when enabled and
-again when the target or zone changes; it never turns the player or plays path sounds and chat. A shown or pending
-player Find takes ownership back and is not replaced. A ground label uses its actor name (for example `IT63`) when
-the client has not received an item name; Hailstone does not invent one. `map_spawn` is still asked for every other
+so no UI-pack control is needed (`docs/commands.md`). `TargetPath` is Hailstone's own behaviour, not MQ2Map's (there it
+only lets a right-click on a map label reach the game's handler): it requests a silent server path
+(`OP_FindPersonRequest`) when enabled and again when the target or zone changes, once the target has stayed selected
+for half a second and at most once a second; it never turns the player or plays path sounds and chat. A shown or
+pending player Find takes ownership back and is not replaced. A server whose `[commands]` rules deny `/mapfilter`
+also switches off the saved options while the player is on it: no filter marks, lines or circles, no TargetPath
+requests and no player vanilla mode (the settings stay saved for other servers). A ground label uses its actor name
+(for example `IT63`) when the client has not received an item name; Hailstone does not invent one. `map_spawn` is still asked for every other
 spawn each time a map draws (the minimap: only inside its circle) and shows those it answers for, with a colour, a map
 layer (layer switches and height filter apply) and a label, prefilled from the con colour and name. A Lua plugin's
 `map_spawn(spawn)` answers true for the defaults, or a table with `color`, `layer` and `label`. Plugin marks are
 independent of `/mapfilter`: hiding a spawn type with `/mapfilter` does not hide a mark supplied by `map_spawn`.
 Vanilla mode is the exception: it hides every map mark and does not call `map_spawn`. A server's `map_visible` denial
-wins over both `/mapfilter` and plugin spawn marks; its spawn-only hook does not cover ground objects.
+wins over both `/mapfilter` and plugin spawn marks; its spawn-only hook does not cover ground objects. `/mapfilter`'s
+marks for living NPCs (NPC, Named, custom searches) also follow the map policy as the packs' Find overlays do (see
+"Map policy").
 
 #### Activity, order and compatibility
 
@@ -2210,12 +2216,15 @@ suggest = owner/repo      ; add-ons the login screen suggests to players who do 
 
 `[map] vanilla = on` makes the map window, zone map and minimap show only their background lines. Labels, player and
 group marks, `/mapfilter` marks, pins, routes, paths, target overlays, plugin spawn marks and registered map overlays
-are hidden. The Lua packs keep their map frames, minimap ring, north marker, zoom controls and clocks. Map panning,
-Find, TargetPath and other navigation keep working; only their drawn lines and markers disappear.
+are hidden. What a UI pack or add-on draws itself with `ui.Draw*` is its own to leave out: `hs.UI.map.Vanilla()`
+says whether the maps are vanilla. The Modern pack then leaves out its markers, Find marks and zone exits, and both
+packs keep their map frames, bars, text, minimap ring, north marker, zoom controls and clocks. Map panning, Find,
+TargetPath and other navigation keep working; only their drawn lines and markers disappear.
 
 The player's `/mapfilter vanilla` setting is shared by every character and saved in `hailstone.ini`. The server rule
 locks the effective mode on without overwriting that saved choice. With no rule, or `vanilla = off`, the player's
-choice decides. This is client-side and advisory: a modified client can ignore `hailstone.cfg`.
+choice decides. A GM can switch the rule in Server Management (Client & gameplay, Vanilla maps). This is client-side and
+advisory: a modified client can ignore `hailstone.cfg`.
 
 #### Autoskill
 
@@ -2519,6 +2528,10 @@ The flags:
   `OP_SendFindableNPCs` list. Show Path requests the route from the server. Client discovery, guides and Find-owned
   walks are unavailable in this mode. All Find visibility hooks still apply and `DISABLE_NPC_FIND` takes precedence.
 - Restrictive flags combine across providers; removing them restores stock defaults, saved UI preferences untouched.
+- `/mapfilter`'s marks for living NPCs follow the same rules: none with `HIDE_STOCK_NPCS`, `DISABLE_NPC_FIND` or
+  `CUSTOM_SPAWNS`, only listed NPCs with server-only Find, and each through the `HAILSTONE_MAP_FIND` hook as well as
+  the marker hook. The current target keeps its mark, line and circles; corpses, players and ground objects are not
+  NPC Find's and stay.
 - Unaffected: PC group/raid Find, coordinates, ordinary navigation, static map labels, user pins, raw spawn getters.
 - Guides and Find walks pin connection/player/NPC identity and recheck eligibility before observing or moving.
 - Invalid hook sizes, unknown flags, unterminated names and control characters abstain.

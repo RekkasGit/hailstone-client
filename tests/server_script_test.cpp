@@ -1314,6 +1314,7 @@ local _, changed = management_save(gm, token, 0,
   { "plugins", "player", "off" }, { "plugins", "player_caps", "read, ui" },
   { "assets", "player", "off" }, { "web", "allow", "example.com, [::1]" },
   { "client", "deny", "off" }, { "abilities", "autoskill", "off" }, { "movement", "solid_ladders", "off" },
+  { "map", "vanilla", "on" },
   { "socials", "mode", "press" }, { "socials", "press_commands", "10" },
   { "socials", "caps", "commands, chat" }, { "socials", "faces", "off" },
   { "addons", "enforce", "on" }, { "addons", "default", "deny" },
@@ -1327,6 +1328,7 @@ assert(changed == T.files[management_cfg] and changed:find("[::1]", 1, true))
 assert(changed:find("another/hud:1.0.0-Alpha.1+build.0", 1, true))
 assert(changed:find("gm = /nav:200, /custom!:32767, ::150", 1, true))
 assert(changed:find('blocked_message = ""', 1, true) and changed:find("min_status = 100", 1, true))
+assert(changed:find("[map]", 1, true) and changed:find("vanilla = on", 1, true))
 management_backup(changed, original)
 )lua");
 }

@@ -208,6 +208,14 @@ TEST_CASE("command catalog: stock aliases, extended commands, and live add-on re
     CHECK_FALSE(groups.allowed("/timed", 250));
     CHECK(groups.allowed("/exchange", 250));
     CHECK(groups.allowed("/unequip", 250));
+    const auto mapfilter = find("/mapfilter");
+    REQUIRE(mapfilter != rows.end());
+    CHECK(mapfilter->origin == plugin::CommandOrigin::Extended);
+    CHECK(mapfilter->groups == std::vector<std::string>{"non_rof2"});
+    // A built-in command: blocking add-on commands leaves it alone, blocking non_rof2 does not.
+    CHECK(plugin::parse_server_cfg("[commands]\nblock_groups = addon_commands\n").commands.allowed("/mapfilter"));
+    CHECK(plugin::parse_server_cfg("[commands]\nblock_groups = non_rof2\n").commands.decision("/MapFilter").reason ==
+          "non_rof2");
     auto target = find("/target");
     REQUIRE(target != rows.end());
     CHECK(target->origin == plugin::CommandOrigin::Stock);

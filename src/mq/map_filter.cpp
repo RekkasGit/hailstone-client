@@ -222,6 +222,7 @@ void MapFilters::save(Config& config) const {
 
 bool MapFilters::enabled(MapFilter filter) const {
     if (!valid(filter)) return filter == F::Invalid;
+    if (suspended_) return false;
     const auto& spec = kSpecs[index_of(filter)];
     return states_[index_of(filter)].enabled && enabled(spec.parent);
 }
@@ -312,6 +313,12 @@ void MapFilters::set_vanilla_locked(bool locked) {
     if (vanilla_locked_ == locked) return;
     vanilla_locked_ = locked;
     ++revision_; // the server's lock changes the effective mode, but is never saved as the player's choice
+}
+
+void MapFilters::set_suspended(bool suspended) {
+    if (suspended_ == suspended) return;
+    suspended_ = suspended;
+    ++revision_; // like the server's vanilla lock: the effective state changes, the saved choices do not
 }
 
 void MapFilters::set_custom(std::string_view text, const game::GuildState* guild) {
@@ -419,9 +426,15 @@ std::string MapFilters::ground_label(const game::GroundObject& object) {
 }
 
 void update_map_filter_target_path(MapFilters& filters, net::GameConnection& connection,
-                                   MapFilterTargetPathState& state) {
+                                   MapFilterTargetPathState& state, std::chrono::steady_clock::time_point now) {
+    // A fresh state keeps the time of the last request: the pacing is per connection, not per target.
+    auto reset = [&state] {
+        const auto last = state.last_request;
+        state = {};
+        state.last_request = last;
+    };
     const std::uint64_t context = connection.interaction_context();
-    if (state.context != context) state = {};
+    if (state.context != context) reset();
 
     const auto& world = connection.world();
     const auto target = world.spawns.find(world.target_id);
@@ -433,26 +446,31 @@ void update_map_filter_target_path(MapFilters& filters, net::GameConnection& con
     };
     if (!enabled) {
         if (owns_current()) connection.stop_find_path(false);
-        state = {};
+        reset();
         return;
     }
 
-    if (state.target != target->second.id || state.incarnation != target->second.incarnation) {
+    if (state.target != target->second.id || state.incarnation != target->second.incarnation ||
+        state.context != context) {
         if (owns_current()) connection.stop_find_path(false);
-        state = {};
+        reset();
         state.target = target->second.id;
         state.incarnation = target->second.incarnation;
+        state.context = context;
+        state.target_since = now;
     }
-    state.context = context;
     if (state.owns_path) {
         if (!owns_current()) state.owns_path = false;
         else return;
     }
     if (state.requested) return;
+    if (now - state.target_since < kTargetPathSettle) return;
+    if (state.last_request && now - *state.last_request < kTargetPathInterval) return;
     state.requested = true;
     // A shown or pending player Find wins, even when it points at this same target. Its generation, not only its
     // kind/id, tells us when the player has taken ownership back.
     if (connection.has_find_path()) return;
+    state.last_request = now;
     state.owns_path = connection.find_spawn(state.target, {false, true});
     if (state.owns_path) state.generation = connection.find_path_generation();
 }
