@@ -50,6 +50,7 @@ struct MovementKeys {
     // (game/cameras.h camera_active).
     game::mechanics::ControlCamera camera;
     bool camera_active = false;
+    std::optional<game::mechanics::SwimSteering> follow_swim;
 };
 
 // The zone's collision as the original's DoCollisionMovement asks it

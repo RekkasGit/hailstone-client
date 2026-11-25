@@ -677,9 +677,13 @@ swarms, so those cannot be attributed; names and target-cycling flags do not est
   the turn snaps below 1, the gap below 4, 9 above 128, else 4; the bands). Its autorun / run mode writes go to the
   movement state.
 
+**Deliberate change:** while swimming on a clear line, stock and enhanced follow steer the normal swim thrust toward
+the leader's reported spawn Z. Manual camera pitch and avatar height differences do not set the swim direction.
+Within the horizontal stop band, the follower can rise or dive in place until the depths are within one unit.
+
 **Deliberate change (switchable):** the navigation mesh helps /follow where the straight line fails
 (`docs/navigation.md` "/follow"): the mesh's path steers with the same bands measured along it, and the follow keeps
-on to 400 instead of 200. `hailstone.ini` `nav.follow=0` or `/nav option follow off` gives the original's.
+on to 400 instead of 200. `hailstone.ini` `nav.follow=0` or `/nav option follow off` disables the mesh help.
 
 ## Listener, music, spell sounds and spell gems
 
@@ -2645,7 +2649,8 @@ Which group plays what:
     or NPC bodies.
   - Full remote collision correction and the physical-radius gap remain open.
 - Other spawns' FeetWet / BodyWet (+0xa1 / +0xa2) are probed with each step (`WorldState::smooth`), so they swim and
-  tread water.
+  tread water. A swimming player's depth comes from position updates, including at the surface when only its feet
+  are wet and the floor below would put its body underwater.
 
 ## Character appearance
 
