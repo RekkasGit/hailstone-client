@@ -815,6 +815,9 @@ A deliberate difference from the original, which sends one OP_MoveCoin per move:
 than 2^24 coins goes as two packets, the first rounded down to 24 significant bits. EQEmu's OPMoveCoin scales the
 amount through a float even when the coin type stays the same, so one packet could move a slightly different amount.
 
+When another player offers an item, its name in the trade notification is a chat link you can click to inspect it.
+Updating the stack count of the same item in the same slot leaves the existing notification in place.
+
 On the merchant's Parcels page (0x698290, `GameConnection::parcel_coin_button`) the button is first outlined (+0x259,
 0x6909a0) and the merchant's item and row are cleared (0x6f2120); any later SelectSlot clears the outline. The
 original puts the answer on the cursor for its SendMoneyWnd. Hailstone (a deliberate difference: no SendMoneyWnd)
