@@ -1,11 +1,13 @@
 -- Fellowship (gamepad pack): stands in for FellowshipWnd (the EQ menu's Fellowship). Its two pages, LB / RB:
 --   Fellowship   the members (name, level, class, zone, last on, experience sharing; A selects one), the message of
 --                the day (the keyboard types it; Update sends it) and the window's buttons: Create, Invite (your
---                target), Make Leader (asked first, naming the member), Remove, Toggle XP, Leave, End Fellowship,
---                enabled as the game has them (the leader's are the leader's).
+--                target), Make Leader, Remove, Toggle XP, Leave, End Fellowship, enabled as the game has them (the
+--                leader's are the leader's).
 --   Camp         the current campsite, Create / Destroy Camp, the campsite kits (Refresh List asks for them, Show All
 --                Possible, the kind filter) and the selected kit's description.
 -- Every list, field and button is the stock window's (app/lua_ui_fellowship.cpp), so the requests are the game's.
+-- Make Leader, Remove, Leave, End Fellowship and Destroy Camp ask first: the stock window's own question, naming the
+-- member, in the confirmation dialog (dialogs.lua). This window asks nothing of its own, or they would ask twice.
 local API = hs.UI
 local T = dofile("lib/theme.lua")
 local pad = dofile("lib/pad.lua")
@@ -20,15 +22,6 @@ local page = tonumber(ui.GetSetting("test.tab.FellowshipWnd.Subwindows") or "") 
 local members, kits, desc = {}, {}, {}
 local side = {}
 local wasShown = false
-local state = {} -- the question (W.confirm): Make Leader asks first, as the guild's and raid's do
-
--- The selected member's name, nil for none.
-local function selectedMember()
-  local rows, _, sel = API.windows.ListInfo(WIN, "MemberList")
-  local t = rows and sel and sel >= 0 and API.windows.ListRow(WIN, "MemberList", sel)
-  local name = t and t[1] or ""
-  return name ~= "" and name or nil
-end
 
 local function setPage(p)
   page = p
@@ -39,7 +32,7 @@ end
 ui.window("Fellowship", function()
   CH.testOpen(WIN)
   if not W.shown(WIN) then
-    st.kb.open, st.pick, wasShown, state.confirm = false, nil, false, nil
+    st.kb.open, st.pick, wasShown = false, nil, false
     return
   end
   T.frame()
@@ -51,9 +44,7 @@ ui.window("Fellowship", function()
         hints = CH.hints(st, { { "lb", "Fellowship" }, { "rb", "Camp" }, { "a", "Select" }, { "b", "Close" } }) }) then
     local x0, y0, x1, y1, cw = W.area()
     local wx, wy = ui.GetWindowPos()
-    if state.confirm then
-      W.confirm(state)
-    elseif not CH.modal(st, x0, y0, x1, y1) then
+    if not CH.modal(st, x0, y0, x1, y1) then
       if W.pressed("lb") and page ~= 1 then setPage(1) end
       if W.pressed("rb") and page ~= 2 then setPage(2) end
       local listW = cw * 0.64
@@ -78,7 +69,7 @@ ui.window("Fellowship", function()
         buttons = {
           { "CreateFellowshipButton", "Create", "Start a fellowship" },
           { "InviteMemberButton", "Invite", "Your target" },
-          { "MakeLeaderButton", "Make Leader", "The selected member", ask = true },
+          { "MakeLeaderButton", "Make Leader", "The selected member" },
           { "RemoveMemberButton", "Remove", "The selected member" },
           { "ToggleExpSharingButton", "Toggle XP", "Sharing for the selected member" },
           { "LeaveFellowshipButton", "Leave", "Leave the fellowship" },
@@ -114,22 +105,11 @@ ui.window("Fellowship", function()
       for k, b in ipairs(buttons) do
         ui.SetCursorPos(rx0 - wx, by - wy)
         W.sideBefore(side, k)
-        if b.ask then
-          -- (asked first, naming the member; its Yes acts only while that member is still the selected one)
-          local who = selectedMember()
-          if T.button("##" .. WIN .. b[1], b[2], rw, bh, { sub = b[3], align = 0 }, pad,
-                not CH.shown(WIN, b[1]) or not CH.enabled(WIN, b[1]) or who == nil) then
-            state.confirm = { "Make " .. who .. " the fellowship leader?", function()
-              if selectedMember() == who then API.windows.ClickChild(WIN, b[1], "left") end
-            end }
-          end
-        else
-          CH.button(WIN, b[1], b[2], rw, bh, { sub = b[3], align = 0, keep = true, primary = k == 1 })
-        end
+        CH.button(WIN, b[1], b[2], rw, bh, { sub = b[3], align = 0, keep = true, primary = k == 1 })
         W.sideAfter(side, k, #buttons, page == 1 and members or kits)
         by = by + bh + T.px(10)
       end
     end
   end
-  if CH.back(st, W.back(W.finish(), state, nil, members)) then API.windows.Show(WIN, false) end
+  if CH.back(st, W.finish()) then API.windows.Show(WIN, false) end
 end)

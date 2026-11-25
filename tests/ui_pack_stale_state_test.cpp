@@ -877,7 +877,9 @@ hs.Parcels = function() return nil end
     CHECK(r.no_errors());
 }
 
-TEST_CASE("UI packs: the fellowship's Make Leader asks first, naming the member") {
+TEST_CASE("UI packs: the fellowship's asking buttons go straight to the stock window, which asks once") {
+    // The stock FellowshipWnd model asks (app/lua_ui_fellowship.cpp, the confirmation dialog) for Make Leader, Remove,
+    // Leave, End Fellowship and Destroy Camp; a question of the pack's own on top would ask twice.
     for (const char* pack : {"modern", "gamepad"}) {
         CAPTURE(std::string(pack));
         const bool modern = std::string_view(pack) == "modern";
@@ -890,23 +892,18 @@ fake.lists.FellowshipWnd = { MemberList = { sel = 1, rows = {
   { "Beta", "40", "Cleric", "", "Zone", "", "On" } } } }
 )lua");
         r.s->frames(30);
-        r.run(modern ? "calls = {} seen = {} forced['Make Leader##MakeLeaderButton'] = true"
-                     : "calls = {} seen = {} forced['##FellowshipWndMakeLeaderButton'] = true");
-        r.s->frames(2);
-        CHECK(r.saw("Make Beta the fellowship leader?"));
-        CHECK_FALSE(r.called("click MakeLeaderButton"));
-        r.run(modern ? "forced['Make Leader##askyesMakeLeaderButton'] = true" : "forced['##confirmyes'] = true");
-        r.s->frames(2);
-        CHECK(r.called("click MakeLeaderButton"));
-        // asked, then another member selected: its Yes does not hand the lead to someone else
-        r.run(modern ? "calls = {} seen = {} forced['Make Leader##MakeLeaderButton'] = true"
-                     : "calls = {} seen = {} forced['##FellowshipWndMakeLeaderButton'] = true");
-        r.s->frames(2);
-        CHECK(r.saw("Make Beta the fellowship leader?"));
-        r.run(modern ? "fake.lists.FellowshipWnd.MemberList.sel = 0 forced['Make Leader##askyesMakeLeaderButton'] = true"
-                     : "fake.lists.FellowshipWnd.MemberList.sel = 0 forced['##confirmyes'] = true");
-        r.s->frames(2);
-        CHECK_FALSE(r.called("click MakeLeaderButton"));
+        const std::pair<const char*, const char*> buttons[] = {{"MakeLeaderButton", "Make Leader"},
+                                                               {"RemoveMemberButton", "Remove"},
+                                                               {"LeaveFellowshipButton", "Leave"},
+                                                               {"EndFellowshipButton", "End Fellowship"}};
+        for (const auto& [id, label] : buttons) {
+            CAPTURE(std::string(id));
+            const std::string forced = modern ? std::string(label) + "##" + id : std::string("##FellowshipWnd") + id;
+            r.run(("calls = {} seen = {} forced['" + forced + "'] = true").c_str());
+            r.s->frames(2);
+            CHECK(r.called(std::string("click ") + id));
+            CHECK_FALSE(r.saw("fellowship leader?"));
+        }
         CHECK(r.no_errors());
     }
 }

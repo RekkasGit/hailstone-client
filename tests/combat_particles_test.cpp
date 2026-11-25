@@ -1454,3 +1454,44 @@ TEST_CASE("Spell and level-up effect cues not yet taken do not survive a zone ch
     CHECK(rig.conn.take_spell_effect_cues().empty());
     CHECK(rig.conn.take_level_effect_cues().empty());
 }
+
+TEST_CASE("Sound cues tied to the old zone's spawns do not survive a zone change") {
+    // A spell's landing sound plays at its target: a cue left untaken at a zone change would play at whichever
+    // spawn of the new zone reuses the id. The level-up sound names no spawn and stays.
+    using namespace net;
+    using namespace test;
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    rig.server.add_spawn(make_spawn("FixtureCaster", 333, 1, 1, 50, 60, 7));
+    rig.server.add_spawn(make_spawn("FixtureTarget", 334, 1, 1, 80, 90, 8));
+    REQUIRE(rig.until([&] { return rig.conn.world().spawns.contains(333) && rig.conn.world().spawns.contains(334); }));
+    auto table = std::make_shared<game::SpellTable>();
+    REQUIRE(table->parse(spell_line(600)) == 1);
+    rig.conn.set_spell_table_for_test(table);
+    REQUIRE(rig.until([&] { return rig.conn.player_status().level != 0; }));
+    (void)rig.conn.take_sound_cues();
+    Action hit;
+    hit.source = 333;
+    hit.target = 334;
+    hit.type = 231;
+    hit.spell_id = 600;
+    hit.spell_level = 50;
+    hit.effect_flag = 4;
+    LevelUpdate level;
+    level.level = rig.conn.player_status().level + 1u;
+    level.old_level = rig.conn.player_status().level;
+    const auto has = [](const std::vector<SoundCue>& cues, SoundCue::Kind kind) {
+        return std::any_of(cues.begin(), cues.end(), [&](const SoundCue& c) { return c.kind == kind; });
+    };
+    rig.conn.receive_zone_packet_for_test(encode(hit));
+    REQUIRE(has(rig.conn.take_sound_cues(), SoundCue::Kind::SpellLanded));
+    // The same again, and a level gained, are left untaken when the zone changes.
+    rig.conn.receive_zone_packet_for_test(encode(hit));
+    rig.conn.receive_zone_packet_for_test(encode(level));
+    const auto entries = rig.server.zone_entries;
+    rig.server.request_zone_change(2, 0.0f, 0.0f, 3.0f);
+    REQUIRE(rig.until([&] { return rig.server.zone_entries == entries + 1 && rig.conn.state() == ConnectionState::InZone; }));
+    const auto cues = rig.conn.take_sound_cues();
+    CHECK_FALSE(has(cues, SoundCue::Kind::SpellLanded));
+    CHECK(has(cues, SoundCue::Kind::LevelUp));
+}

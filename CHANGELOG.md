@@ -16,6 +16,7 @@
 - An accepted duel opponent can be attacked (auto attack, kick, bash, backstab, detrimental spells) on a server without PvP, and beneficial spells on players outside the duel are refused while it runs, as in the original
 - A duel, running or only offered, ends when you change zones, as the server ends it; before, a player in the new zone who happened to get the old opponent's id counted as your opponent
 - Spell and level-up effects that arrived just as you changed zones no longer play on a creature in the new zone
+- Hit, spell and door sounds that arrived just as you changed zones no longer play at a creature or place in the new zone
 - In the bazaar, a purchase answer for no purchase of yours no longer lets a later Buy go before its predecessor's answer
 - A creature that despawns and is replaced under the same id in one moment no longer starts with the old one's animation sounds and loop
 - A ground item or object the server sends again under the same id with another model, place, rotation or size is redrawn there (it kept its old model and position)
@@ -52,7 +53,7 @@
 - Moving a slider that writes to the UI ini (Window Transparency, fades) no longer rewrites the file every frame; it is saved with the window places and on quit or camp
 - Modern Guild window: Promote, Demote, Make Leader and Remove ask first and name the member, as the gamepad UI does. Selecting another member while it asks puts the question away
 - Modern Raid window: Leave and Make Leader ask first, as the gamepad UI does
-- Fellowship Make Leader (both UIs) and the modern shared task Make leader ask first and name the member. If another member is selected while it asks, the lead is not handed to them
+- The modern shared task Make leader asks first and names the member. If another member is selected while it asks, the lead is not handed to them
 - Gamepad Friends: confirming Remove after the list changed no longer removes whoever happened to be selected. If the name has left the list, the window says so
 - Gamepad Who: a new /who reply (from the Friends window or typed in chat) keeps the picked player picked if they are in it, and otherwise clears the pick, so Invite, Target and the rest no longer act on whoever took that row
 - Gamepad Merchant: a Buy, Sell or parcel Send pressed as the window closed no longer goes through at the next merchant you open

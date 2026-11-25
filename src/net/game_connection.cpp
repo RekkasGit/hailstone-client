@@ -765,6 +765,13 @@ void GameConnection::handle_world(const AppPacket& p) {
         // Cues not yet taken name the old zone's spawn ids, which the new zone reuses for others.
         effect_cues_.clear();
         level_effect_cues_.clear();
+        // The same for the sound cues tied to a spawn or a place in the old zone (a hit, a cast, a door). A 2D
+        // wave, the level-up sound and the new-mail sound name neither and would have played already in the
+        // original, which plays a sound as its packet arrives: they stay.
+        std::erase_if(sound_cues_, [](const SoundCue& c) {
+            return c.kind != SoundCue::Kind::Wave && c.kind != SoundCue::Kind::LevelUp &&
+                   c.kind != SoundCue::Kind::NewMail;
+        });
         blood_spurts_.clear();
         spells_.target_buffs.clear();
         spells_.target_buffs_entity = 0;
