@@ -156,7 +156,7 @@ discipline's name may leave out its rank.
 | Command | What it does |
 |---|---|
 | `/book [close]` | The spell book. |
-| `/memspellset <name>` | Memorize a saved spell set. |
+| `/memspellset <name>` | Memorize a saved spell set. Spell it out: `/memspell` is now MacroQuest's command (below), where RoF2 took it for this one. |
 | `/spellscribe` | Scribe the spell scrolls you carry. |
 | `/alternateadv on <percent> \| off \| list \| buy <id> \| activate <id>` | AA experience split, and listing, buying or using abilities. |
 | `/resetaas` | Ask the server to reset your AAs (the server decides). |
@@ -201,7 +201,7 @@ discipline's name may leave out its rank.
 | `/particledensity <0..3 \| off \| low \| med \| high>`, `/showspelleffects [on\|off]` | Spell effects. |
 | `/bodytint` | The body tint window. |
 | `/facepick` | Change your face (player customization). |
-| `/clickthrough` | Click through windows. |
+| `/clickthrough` | Click through windows. Spell it out: `/click` is now MacroQuest's command (below), where RoF2 took it for this one. |
 | `/mousespeed <n>` | The pointer speed, 0..10 (a number past either end is held to it: the original kept it as typed). |
 | `/combatmusic [on\|off]`, `/mixahead <1..100>`, `/reversesound <normal\|reverse>` | Sound settings. |
 | `/feedback`, `/bugreport`, `/report <name>`, `/petition <text>`, `/guidehelp <text>`, `/survey` | Feedback, bug report, reporting a player, petitions. |

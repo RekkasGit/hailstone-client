@@ -1224,6 +1224,19 @@ mq.cmd('/docommand /hpbind')
     CHECK(std::find(h.sent.begin(), h.sent.end(), "/tell Groupie x75") == h.sent.end());
 }
 
+TEST_CASE("MQ commands: /nomodkey, /shiftkey and /ctrlkey parse the line they run once") {
+    Host h;
+    net::GameConnectionTestAccess::world(*h.world.conn).spawns[11].name = "x${Me.PctHPs}";
+    // As the client registers them (ClientApp::run_with_keys): the rest of the line goes back through the filters.
+    const auto owner = h.hooks.new_owner("keys");
+    for (const char* word : {"/nomodkey", "/shiftkey", "/ctrlkey"})
+        h.hooks.add_command(owner, word, [&](std::string_view args) { h.run(std::string(args)); });
+    h.run("/nomodkey /tell Groupie ${Spawn[id 11].CleanName} ${Me.PctHPs}");
+    CHECK(h.sent.back() == "/tell Groupie x${Me.PctHPs} 75");
+    h.run("/shiftkey /ctrlkey /tell Groupie ${Spawn[id 11].CleanName}");
+    CHECK(h.sent.back() == "/tell Groupie x${Me.PctHPs}");
+}
+
 TEST_CASE("MQ commands: /timed runs its line that many tenths of a second later, expanded then, as its sender") {
     Host h;
     auto tick = [&](std::int64_t ms) {

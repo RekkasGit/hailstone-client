@@ -410,8 +410,11 @@ void Commands::filter(std::string& line, plugin::Flow& flow) {
     std::string word = first_word(line);
     // ${...} (a read: scripts and plugins need the read permission) unless /noparse is running the line or a window
     // sends it (LiteralLine).
-    // /timed's line is expanded when it runs, not now (MQ registers it unparsed).
-    if (!parsed && !noparse_ && g_literal_lines == 0 && !iequals(word, "/noparse") && !iequals(word, "/timed") &&
+    // /timed's line is expanded when it runs, not now, and /nomodkey, /shiftkey and /ctrlkey run theirs through the
+    // filters again, where it is expanded once (MQ registers all four unparsed).
+    const bool unparsed = iequals(word, "/timed") || iequals(word, "/nomodkey") || iequals(word, "/shiftkey") ||
+                          iequals(word, "/ctrlkey");
+    if (!parsed && !noparse_ && g_literal_lines == 0 && !iequals(word, "/noparse") && !unparsed &&
         line.find("${") != std::string::npos) {
         if ((plugin::caller_caps() & plugin::kCapRead) == 0) {
             if (env_.echo) env_.echo(std::format("[MQ] {}: ${{...}} needs the server's 'read' permission", plugin::caller_name()));

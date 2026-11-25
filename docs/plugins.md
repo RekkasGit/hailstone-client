@@ -440,22 +440,25 @@ Differences from MQ:
 
 Not yet:
 
-- TLOs: `Raid`, `Mercenary`, `Corpse`, `Merchant`, `Ground`, `Macro` and other MQ plugins' TLOs (`Navigation` is
-  built in: `docs/navigation.md`)
-- the `AltAbility` type (`Me.AltAbility[...]`)
+- TLOs: `Ground`, `Macro` and other MQ plugins' TLOs (`Navigation` is built in: `docs/navigation.md`; `Raid`,
+  `Mercenary`, `Corpse`, `Merchant`, `DoorTarget`, `InvSlot` and `Me.AltAbility[...]` are listed in
+  docs/scripting-reference.md)
 
 ### MQ commands
 
 `/echo`, `/target` (`id N`, `clear`, `mycorpse`, `myself`, or a spawn search; with nothing, yourself; `next` / `prev`
 walk the search's matches), `/face` (target, `id`, `heading H`, `loc y,x`,
 a search; `fast`), `/mapfilter` (MacroQuest's map filters and colours), `/keypress <command> [hold|release]` (the game's
-key command names: `forward`, `jump`, `hot1_1`, ...), `/squelch <cmd>`, `/docommand <cmd>`, `/noparse <cmd>`, `/timed <deciseconds> <cmd>`, `/lua ...`,
-`/plugin ...`. `/nav` (MQ2Nav's commands), `/moveto` and `/stick` are built in (`docs/navigation.md`).
+key command names: `forward`, `jump`, `hot1_1`, ...), `/squelch <cmd>`, `/docommand <cmd>`, `/noparse <cmd>`, `/timed <deciseconds> <cmd>`, `/nomodkey`, `/shiftkey` and
+`/ctrlkey <cmd>`, `/itemnotify`, `/doortarget`, `/memspell`, `/click`, `/makemevisible`, `/removelev`, `/removeaura`,
+`/lua ...`, `/plugin ...` (docs/commands.md). `/nav` (MQ2Nav's commands), `/moveto` and `/stick` are built in (`docs/navigation.md`).
 
 `${...}` is parsed in every command line, typed or scripted, except:
 
 - `/noparse`;
 - `/timed`, whose line is parsed when it runs, as in MQ;
+- `/nomodkey`, `/shiftkey` and `/ctrlkey`, whose command is parsed once, when it runs under the keys (MQ registers
+  them unparsed);
 - the lines the client's own windows send for a button (the guild window's Go to URL, Join Channel and Update MOTD, a
   member's or friend's name): their text is what other players and the server wrote.
 
