@@ -10,6 +10,7 @@
 #include "game/coords.h"
 #include "game/world_state.h"
 #include "mq/nav_commands.h"
+#include "mq/map_filter.h"
 #include "mq/parse.h"
 #include "mq/spawn_search.h"
 #include "net/game_connection.h"
@@ -113,6 +114,10 @@ bool movement_key(std::string_view c) {
 }
 
 Commands::Commands(CommandEnv env) : env_(std::move(env)) {
+    if (!env_.map_filters) {
+        own_map_filters_ = std::make_unique<MapFilters>();
+        env_.map_filters = own_map_filters_.get();
+    }
     plugin::Hooks& h = *env_.hooks;
     owner_ = h.new_owner("mq");
     h.on_command_line(owner_, [this](std::string& line) {
@@ -124,6 +129,7 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
     h.on_chat(owner_, [this](plugin::ChatLine&) { return squelch_ ? plugin::Flow::Drop : plugin::Flow::Continue; });
 
     h.add_command(owner_, "/echo", [this](std::string_view args) { say(std::string(args)); });
+    h.add_command(owner_, "/mapfilter", [this](std::string_view args) { map_filter(args); }, plugin::kCapCommands);
     h.add_command(owner_, "/noparse", [this](std::string_view args) {
         const bool before = std::exchange(noparse_, true);
         run_nested(args);
@@ -323,6 +329,13 @@ void Commands::run_timed() {
         plugin::CallerScope scope(t.caps, t.caller);
         env_.run(t.line);
     }
+}
+
+void Commands::map_filter(std::string_view args) {
+    const Context& ctx = env_.context();
+    MapFilterCommandInput input;
+    input.guild = ctx.conn ? &ctx.conn->guild() : nullptr;
+    run_map_filter_command(*env_.map_filters, args, input, [this](std::string_view line) { say(std::string(line)); });
 }
 
 void Commands::say(const std::string& text) const {

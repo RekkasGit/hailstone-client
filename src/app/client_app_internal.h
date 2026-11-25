@@ -461,6 +461,7 @@ public:
         aenv.web = web_service_.get();
         aenv.install_dir = platform::install_dir();
         aenv.data_dir = platform::data_dir();
+        aenv.config = &config_;
         aenv.autoload = config_.get("plugins.autoload").value_or("*");
         aenv.script_autoload = config_.get("scripts.autoload").value_or("");
         aenv.connection = [this] { return conn_.get(); };
@@ -504,6 +505,7 @@ public:
             return collision_->line_of_sight(glm::vec3(a[0], a[1], a[2]), glm::vec3(b[0], b[1], b[2]));
         };
         automation_ = std::make_unique<Automation>(aenv);
+        ui_host_.map_filters = &automation_->map_filters();
         ui_host_.nameplates = &automation_->nameplates();
         lua_ui_->add_ui_api([this](lua_State* L) { register_ui_api(L); });
         automation_->hooks().add_command(plugin::Hooks::kClient, "/lighting",

@@ -539,7 +539,7 @@ void GameConnection::bazaar_find_trader(std::size_t result, bool throttled) {
         bazaar_.found_trader = spawn;
         if (bazaar_.find_sent && eq_time() - bazaar_.last_find_ms < kFindWaitMs) return;
     }
-    if (auto it = world_.spawns.find(spawn); it != world_.spawns.end()) send_find_path(it->second, true);
+    if (auto it = world_.spawns.find(spawn); it != world_.spawns.end()) send_find_path(it->second, {true});
     bazaar_.last_find_ms = eq_time();
     bazaar_.find_sent = true;
     bazaar_.found_trader = spawn;
@@ -1221,7 +1221,7 @@ void GameConnection::barter_search_find() {
     s.found_buyer = l.buyer_spawn_id;
     send_zone(encode_find_market_spawn(l.buyer_spawn_id));
     auto it = world_.spawns.find(l.buyer_spawn_id);
-    if (it != world_.spawns.end()) send_find_path(it->second, true);
+    if (it != world_.spawns.end()) send_find_path(it->second, {true});
     s.last_find_ms = static_cast<std::uint32_t>(now_ms());
 }
 

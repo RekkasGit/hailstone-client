@@ -864,9 +864,21 @@ public:
     std::optional<ActorRef> captureActorRef(std::uint32_t id) const;
     bool matches(const ActorRef& actor) const;
     void find_target(const std::string& name = {});
-    // The path to a spawn by id, the player facing it when it comes (PlayerPath_FindSpawnByID(id, 1)); for the Find
-    // window (app/lua_ui_find.cpp). False when there is no such spawn.
-    bool find_spawn(std::uint32_t spawn_id);
+    // The path to a spawn by id. `options.face` turns the player toward it when the reply comes; `options.silent`
+    // keeps a background path (the map filter) from playing path sounds or chat. False when there is no such spawn.
+    struct FindPathOptions {
+        bool face;
+        bool silent;
+        constexpr FindPathOptions() : face(true), silent(false) {}
+        constexpr FindPathOptions(bool face_value, bool silent_value = false)
+            : face(face_value), silent(silent_value) {}
+    };
+    bool find_spawn(std::uint32_t spawn_id, FindPathOptions options = {});
+    // True while a shown Find is active or its request is still waiting for a reply. A finished/failed path is not
+    // current, so a background map filter may ask again after the player changes target.
+    bool has_find_path() const;
+    // Changes whenever a shown Find is started, replaced or stopped; lets a background owner yield to the player.
+    std::uint64_t find_path_generation() const { return shown_find_generation_; }
     bool npc_find_enabled() const;
     bool npc_find_allowed(std::uint32_t spawn_id) const;
     // Per-row visibility after the caller has read the map policy for the whole Find list.
@@ -876,8 +888,9 @@ public:
     void find_map_location(const glm::vec3& at);
     // PlayerPath_FindRealEstatePlot (the plot search window's Go with mode 0): the path to a plot.
     void find_real_estate_plot(std::uint32_t plot);
-    // PlayerPath_Stop (the find key / End Find while a path is shown): the path ends with its abort sound.
-    void stop_find_path();
+    // PlayerPath_Stop (the find key / End Find while a path is shown): the path ends with its abort sound unless it
+    // is a silent background path or the caller asks for silence.
+    void stop_find_path(bool audible = true);
     // The navigation's server path (app/navigator.h, a Hailstone addition): the same OP_FindPersonRequest as a find
     // to a spawn, but its reply goes to take_quiet_path() alone: no path drawn, no sound, no chat line, and a shown
     // find path is left as it is.
@@ -3060,7 +3073,7 @@ private:
     bool is_raid_delegate(const std::array<std::uint32_t, 3>& ids) const; // 0x57f760 / 790 / 7c0
     void set_target_of_target_window(bool show);            // CTargetOfTargetWnd's Show, through the app
     void find_path_to_player(const std::string& name);
-    void send_find_path(const game::Spawn& to, bool face = false); // PlayerPath_FindSpawnByID / FindGroupMember
+    void send_find_path(const game::Spawn& to, FindPathOptions options = {false});
     void mark_npc_command(const std::string& args, int ability, std::uint32_t usage);
     std::uint32_t group_member_roles(int slot) const; // the role bits (1 tank, 2 assist, 4 puller)
     void grouproles_command(const std::string& args);
@@ -3562,6 +3575,7 @@ private:
     // stopped or replaced it) still takes its reply, so the later ones keep theirs.
     struct PendingFindRequest {
         bool quiet = false;
+        bool silent = false; // a shown background path: no path sounds or chat
         std::int64_t sent_at = 0;
         bool npc_origin = false;
         bool discard = false;
@@ -3576,13 +3590,14 @@ private:
     std::deque<PendingFindRequest> find_requests_;
     void expire_find_requests(std::int64_t now);
     game::ServerPathLease queue_find_request(bool quiet, bool npc_origin, game::ServerPathOrigin origin,
-                                            std::optional<ActorRef> actor);
+                                            std::optional<ActorRef> actor, bool silent = false);
     bool path_request_current(const PendingFindRequest& request) const;
     void commit_find_request(const game::ServerPathLease& lease);
     void rollback_find_request(const game::ServerPathLease& lease);
     struct QuietPath { PendingFindRequest request; std::vector<glm::vec3> points; };
     std::optional<QuietPath> quiet_path_;
     game::ServerPathLease shown_find_lease_;
+    bool shown_find_silent_ = false;
     std::uint64_t shown_find_owner_ = 0, shown_find_generation_ = 0;
     mutable std::uint64_t interaction_context_ = 0, interaction_player_ = 0;
     mutable const void* interaction_session_ = nullptr;
@@ -3927,8 +3942,9 @@ private:
     std::optional<glm::vec3> path_finish_;
     bool path_settings_loaded_ = false;
     game::PathSettings path_settings_;
-    // Send_OP_FindPersonRequest; `found`: a new find (the stop sound, then PlayerPath_LoadSettings).
-    void send_find(const game::FindRequest& r, bool found = true);
+    // Send_OP_FindPersonRequest; `found`: a new find (the stop sound, then PlayerPath_LoadSettings), `silent`: a
+    // background shown path with no sound or chat.
+    void send_find(const game::FindRequest& r, bool found = true, bool silent = false);
     void path_reply(const AppPacket& p);        // PlayerPath_HandleFindPersonReply
     void path_tick();                           // PlayerPath_Update
     bool find_path_allowed() const;             // retire only a currently restricted NPC Find path

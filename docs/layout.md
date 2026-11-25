@@ -216,7 +216,7 @@ From entering the world until leaving it (camp, logout, a lost connection), a ch
 
 Some keys stay in `hailstone.ini` whoever plays (`Config::is_shared_key`):
 
-- the client's own: `assets.*`, `addons.*`, `update.*`, `news.*`, `browser.*`, `plugins.*`, `scripts.*`;
+- the client's own: `assets.*`, `addons.*`, `update.*`, `news.*`, `browser.*`, `plugins.*`, `scripts.*`, `mapfilter.*`;
 - the login screen's: `login.*`, `audio.pregame_music`;
 - the window's place and mode: `window.*`, `display.window_mode`, `display.resolution` (one window, so it does not
   jump when a character enters);

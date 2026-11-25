@@ -304,7 +304,7 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
             continue;
         }
         static constexpr std::string_view kOwn[] = {"client", "scripts", "plugins", "assets", "socials",
-                                                    "abilities", "movement", "web", "addons"};
+                                                    "abilities", "map", "movement", "web", "addons"};
         if (std::find(std::begin(kOwn), std::end(kOwn), section) == std::end(kOwn)) {
             auto& kept = r.script_sections[section];
             for (const std::string& key_name : ini.keys(section_name))
@@ -385,6 +385,11 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
             } else if (section == "abilities") {
                 if (key == "autoskill") {
                     flag(r.autoskill);
+                    continue;
+                }
+            } else if (section == "map") {
+                if (key == "vanilla") {
+                    flag(r.map_vanilla);
                     continue;
                 }
             } else if (section == "movement") {

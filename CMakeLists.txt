@@ -138,6 +138,7 @@ add_library(hailstone_engine STATIC
   src/mq/tlo.cpp
   src/mq/tlo_game.cpp
   src/mq/spawn_search.cpp
+  src/mq/map_filter.cpp
   src/mq/parse.cpp
   src/mq/commands.cpp
   src/mq/nav_commands.cpp
@@ -1270,6 +1271,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/collision_test.cpp
     tests/nav_test.cpp
     tests/map_data_test.cpp
+    tests/map_filter_test.cpp
     tests/map_files_test.cpp
     tests/player_path_test.cpp
     tests/atlas_test.cpp

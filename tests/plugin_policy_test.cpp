@@ -67,6 +67,12 @@ caps = read,target,actions,move
 press_commands = 3
 faces = no
 
+[abilities]
+autoskill = on
+
+[map]
+vanilla = on
+
 [web]
 allow = Example.org, wiki.example.net
 )",
@@ -81,6 +87,7 @@ allow = Example.org, wiki.example.net
     CHECK(r.social_caps == (plugin::kCapRead | plugin::kCapTarget | plugin::kCapActions | plugin::kCapMove));
     CHECK(r.social_press_commands == 3);
     CHECK_FALSE(r.social_faces);
+    CHECK(r.map_vanilla);
     CHECK(r.web_allow == std::vector<std::string>{"example.org", "wiki.example.net"});
 
     auto d = plugin::parse_server_cfg("");
@@ -89,6 +96,7 @@ allow = Example.org, wiki.example.net
     CHECK(d.player_plugin_caps == 0);
     CHECK(d.player_assets);
     CHECK(d.social_mode == plugin::ButtonMode::Press);
+    CHECK_FALSE(d.map_vanilla);
     CHECK(d.web_allow.empty());
 
     // "player = on" alone: every capability.
@@ -107,6 +115,18 @@ allow = Example.org, wiki.example.net
     CHECK(a.script_sections["autocombat"]["hunter"] == "off");
     CHECK(a.script_sections["autocombat"]["assist"] == "on");
     CHECK(r.script_sections.empty());
+}
+
+TEST_CASE("hailstone.cfg: [map] vanilla defaults off and warns on an invalid value") {
+    CHECK_FALSE(plugin::Rules{}.map_vanilla);
+    CHECK_FALSE(plugin::parse_server_cfg("").map_vanilla);
+    CHECK_FALSE(plugin::parse_server_cfg("[map]\nvanilla = off\n").map_vanilla);
+    std::vector<std::string> warnings;
+    CHECK(plugin::parse_server_cfg("[Map]\nVanilla = ON\n", &warnings).map_vanilla);
+    CHECK(warnings.empty());
+    CHECK_FALSE(plugin::parse_server_cfg("[map]\nvanilla = maybe\n", &warnings).map_vanilla);
+    REQUIRE(warnings.size() == 1);
+    CHECK(warnings.front() == "[map] vanilla: \"maybe\" is not on or off");
 }
 
 TEST_CASE("server_rules: none without hailstone.cfg; its own scripts and plugins listed; a changed cfg gives defaults") {

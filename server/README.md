@@ -81,6 +81,15 @@ When Hailstone receives this setting during the first zone-in, it disconnects be
 “This server does not allow Hailstone. Please contact the server owner.” The default is `deny = off`.
 This check relies on successful policy delivery and an up-to-date, unmodified Hailstone client.
 
+### Vanilla maps
+
+Set `[map] vanilla = on` in `client_files/hailstone.cfg` to show only the map background: no labels, player or
+group marks, pins, routes, paths, target overlays, plugin marks or add-on overlays. The minimap's ring, north marker,
+zoom controls and clock stay visible, and Find, TargetPath and map panning keep working.
+
+This is a client-side, advisory rule. A modified client can ignore it. It locks vanilla mode on without changing the
+player's saved `/mapfilter vanilla` choice; without the rule, or with `vanilla = off`, that choice decides.
+
 ### Automation controls
 
 Set these keys in `client_files/hailstone.cfg` to disable Ability Book autoskill and Lua socials.

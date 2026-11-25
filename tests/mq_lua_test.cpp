@@ -15,6 +15,7 @@
 #include "mq/commands.h"
 #include "mq/lua_mq.h"
 #include "mq/lua_script.h" // ScriptRun, HostWork (the host's insides)
+#include "mq/map_filter.h"
 #include "mq_test_world.h"
 #include "scratch_dir.h"
 #include "app/web_service.h"
@@ -34,6 +35,7 @@ struct Host {
     plugin::Policy policy;
     mq::Registry reg;
     mq::Context ctx;
+    mq::MapFilters filters;
     std::vector<std::string> printed, sent;
     std::vector<std::pair<std::string, int>> keys; // /keypress: the command and its mode (0 tap, 1 hold, 2 release)
     std::uint32_t target = 0;
@@ -51,6 +53,7 @@ struct Host {
         mq::CommandEnv ce;
         ce.hooks = &hooks;
         ce.registry = &reg;
+        ce.map_filters = &filters;
         ce.context = [this]() -> const mq::Context& { return ctx; };
         ce.echo = [this](const std::string& t) { printed.push_back(t); };
         ce.run = [this](const std::string& l) { run(l); };
@@ -996,6 +999,26 @@ TEST_CASE("MQ commands: /target, ${} for typed lines, /noparse, /squelch") {
     h.run("/target next Groupie");
     CHECK(h.target == 11); // unchanged
     CHECK(h.printed.back() == "There are no spawns matching: (next Groupie)");
+}
+
+TEST_CASE("MQ commands: /mapfilter shares its state with the map model") {
+    Host h;
+    h.run("/mapfilter npc show");
+    CHECK(h.filters.enabled(mq::MapFilter::Npc));
+    h.run("/mapfilter npcconcolor show");
+    CHECK(h.filters.enabled(mq::MapFilter::NpcConColor));
+    h.run("/mapfilter target show");
+    h.run("/mapfilter targetradius 40");
+    CHECK(h.filters.state(mq::MapFilter::TargetRadius).radius == 40.0f);
+    h.run("/mapfilter custom npc radius 25");
+    REQUIRE(h.filters.custom_search());
+    CHECK(h.filters.custom_search()->radius == 25.0);
+    h.run("/mapfilter");
+    bool custom_status = false;
+    for (const auto& line : h.printed)
+        custom_status |= line.find("Custom: npc radius 25") != std::string::npos;
+    CHECK(custom_status);
+    CHECK(h.sent.empty()); // the hook took the command; nothing went to the server
 }
 
 TEST_CASE("MQ commands: /keypress reads hold only after a space") {

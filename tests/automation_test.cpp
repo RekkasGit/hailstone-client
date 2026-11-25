@@ -12,6 +12,7 @@
 #include "app/addon_install.h"
 #include "app/addon_requirements.h"
 #include "mq/lua_mq.h"
+#include "mq/map_filter.h"
 #include "mq_test_world.h"
 #include "core/sha256.h"
 #include "plugin/policy.h"
@@ -62,6 +63,37 @@ struct AutomationHost {
     }
 };
 } // namespace
+
+TEST_CASE("Automation: a server's map rule locks vanilla mode without changing the player's choice") {
+    AutomationHost h;
+    h.automation->frame();
+    auto& filters = h.automation->map_filters();
+    filters.set_vanilla_enabled(true);
+    CHECK(filters.vanilla_mode());
+
+    auto rules = plugin::parse_server_cfg("[map]\nvanilla = on\n");
+    rules.dir = h.world.dir / "profile";
+    net::GameConnectionTestAccess::set_server_rules(*h.world.conn, rules);
+    h.automation->frame();
+    CHECK(filters.vanilla_locked());
+    CHECK(filters.vanilla_enabled());
+    filters.set_vanilla_enabled(false);
+    CHECK_FALSE(filters.vanilla_enabled());
+    CHECK(filters.vanilla_mode()); // the server still locks the effective mode on
+
+    rules = plugin::parse_server_cfg("[map]\nvanilla = off\n");
+    rules.dir = h.world.dir / "profile";
+    net::GameConnectionTestAccess::set_server_rules(*h.world.conn, rules);
+    h.automation->frame();
+    CHECK_FALSE(filters.vanilla_locked());
+    CHECK_FALSE(filters.vanilla_mode());
+    filters.set_vanilla_enabled(true);
+    CHECK(filters.vanilla_mode());
+    net::GameConnectionTestAccess::set_server_rules(*h.world.conn, std::nullopt);
+    h.automation->frame();
+    CHECK_FALSE(filters.vanilla_locked());
+    CHECK(filters.vanilla_enabled()); // no server rule leaves the player's own choice alone
+}
 
 TEST_CASE("Automation: a script holds autoskill off while it runs; stopping it lets go") {
     AutomationHost h;

@@ -32,8 +32,9 @@
 #include "plugin/policy.h"
 #include "plugin/world_geometry.h"
 
+namespace hailstone { class Config; }
 namespace hailstone::net { class GameConnection; }
-namespace hailstone::mq { class ScriptHost; class Registry; struct Context; }
+namespace hailstone::mq { class ScriptHost; class Registry; class MapFilters; struct Context; }
 namespace hailstone::game { class ExtensionChain; class NameplateCanvasRegistry; struct SpellData; }
 namespace hailstone::plugin { class UiBridge; class WebAccess; }
 namespace hailstone::nav { class NavControl; }
@@ -43,6 +44,7 @@ namespace hailstone::app {
 struct AutomationEnv {
     std::filesystem::path install_dir; // the folder of the binary (platform::install_dir())
     std::filesystem::path data_dir;    // the folder Hailstone writes to (platform::data_dir())
+    Config* config = nullptr;    // shared client settings, including the global map filters
     std::string autoload = "*";       // plugins.autoload
     std::string script_autoload;      // scripts.autoload: the player's scripts started when the rules allow them
     std::function<net::GameConnection*()> connection;
@@ -95,6 +97,8 @@ public:
     mq::ScriptHost& scripts();
     const mq::Registry& registry() const;
     const mq::Context& context(); // what the TLOs read now
+    mq::MapFilters& map_filters();
+    const mq::MapFilters& map_filters() const;
     // An owner's capabilities by its tag (plugin::UiBridge::owner_tag): "plugin:<name>" a compiled plugin's while it
     // is loaded, "script:<name>" a running Lua plugin's; 0 otherwise (a bare name too). Its windows in the UI pack act
     // with them (LuaUi::caller_tag).

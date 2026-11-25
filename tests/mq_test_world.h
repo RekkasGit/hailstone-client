@@ -78,6 +78,7 @@ struct GameConnectionTestAccess {
     static std::optional<NewZone>& new_zone(GameConnection& c) { return c.new_zone_; }
     static std::vector<ZonePoint>& zone_points(GameConnection& c) { return c.zone_points_; }
     static std::vector<game::Door>& doors(GameConnection& c) { return c.doors_; }
+    static std::vector<game::GroundObject>& ground_objects(GameConnection& c) { return c.ground_objects_; }
     static void handle_zone(GameConnection& c, const AppPacket& p) { c.handle_zone(p); }
     static void finish_zone_in(GameConnection& c) { c.finish_zone_in(); }
     static game::AltAdvState& alt_adv(GameConnection& c) { return c.alt_adv_; }

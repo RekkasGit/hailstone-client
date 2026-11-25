@@ -721,6 +721,9 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] **Find: Options selects a gold ground line (default) or rainbow strands,** applied at once and saved per character in both UI packs. Live acceptance open.
 - [x] Find: Walk there (the navigator to within 10, the guide path showing; gamepad X). Not tried live.
 - [x] Find: the modern minimap marks the NPCs the map marks (the same kinds and search). Not tried live.
+- [x] **MacroQuest `/mapfilter`** (`mq/map_filter.*`, `app/lua_ui_map.cpp`): the 34 useful MQ2Map options, shared settings, custom searches, spawn and ground marks, colours, markers, vectors, target overlays and TargetPath. The shared C++ map presenter applies them to the large map and minimap; no UI-pack controls were added. Unit and render tests pass; the core filters were tried live.
+- [ ] `/mapfilter vanilla` live acceptance: both packs, mouse and controller, map window and minimap, in-map controls, Find and TargetPath still working, server lock on and off, zoning and restart persistence.
+- [ ] `/mapfilter` live acceptance: a zone with players, NPCs, a pet, a corpse, a ground item and a target; colours, custom search, markers, vectors, circles, TargetPath and restart persistence.
 - [x] **Find: quest givers from the server script** (0x1436 / 0x1437; `quest_npcs`): the NPCs whose own quest file takes hand-ins or talks, made once per zone process and kept. Not tried on a live server.
 - [ ] Find: the gamepad minimap's marks; quest givers measured on a live server (the zone log's line) and the figure put in server/README.md.
 - [ ] A key binding of the client's own (the key window holds only the original's commands): walk to the target; `/nav target` on a hot button meanwhile.
