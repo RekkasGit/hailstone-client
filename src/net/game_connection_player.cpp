@@ -728,7 +728,7 @@ void GameConnection::bandolier_hold(int index, int slot, bool shift) {
 bool GameConnection::bandolier_activate(int index) {
     // PcZoneClient::BandolierSwap @0x585aa0: the original moves the items
     // itself (MultipleItemMoveManager::ProcessMove without sending) and sends
-    // only OP_Bandolier action 2; EQEmu's Client::SetBandolier makes the same
+    // OP_Bandolier action 2; EQEmu's Client::SetBandolier makes the same
     // moves without telling the client. The moves here follow SetBandolier and
     // MoveItemToInventory, which EQEmu wrote to match the client.
     //
@@ -779,8 +779,8 @@ bool GameConnection::bandolier_activate(int index) {
         system(9342); // You do not have enough room to use this bandolier.
         return false;
     }
-    for (std::int16_t weapon : game::kBandolierSlots) refresh_worn_slot(weapon);
-    send_zone(encode_bandolier(kBandolierSet, static_cast<std::uint8_t>(index)));
+    const bool sent = send_zone(encode_bandolier(kBandolierSet, static_cast<std::uint8_t>(index)));
+    for (std::int16_t weapon : game::kBandolierSlots) refresh_worn_slot(weapon, sent);
     return true;
 }
 

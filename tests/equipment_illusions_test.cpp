@@ -243,6 +243,90 @@ TEST_CASE("Mounted form changes: unseat before rebuild and re-seat against the n
     }
 }
 
+TEST_CASE("Held models: observers see an offhand swap and removal without zoning") {
+    auto config = MockConfig::standard();
+    auto& bard = config.characters.front();
+    bard.name = "TestBard";
+    bard.class_ = 8;
+    auto drum = make_item(1001, "Drum", net::kSlotSecondary);
+    drum.id_file = "IT11501";
+    drum.item_type = net::kItemTypePercussionInstrument;
+    auto shield = make_item(1002, "Shield", net::kSlotGeneral1);
+    shield.id_file = "IT200";
+    shield.ornament_off = "IT207";
+    shield.item_type = 8;
+    shield.equip_slots = 1u << net::kSlotSecondary;
+    shield.color = 0xff183044u;
+    bard.inventory = {drum, shield};
+    const auto spawn_id = config.own_spawn_id;
+    auto skeleton = make_spawn(bard.name, spawn_id, 0, 367, 0, 0, 3);
+    skeleton.class_ = bard.class_;
+    skeleton.texture_type = 0;
+    skeleton.equipment[game::kSlotSecondary].material = 11501;
+    Rig wearer(config);
+    REQUIRE(wearer.to_zone(bard.name));
+    wearer.server.add_spawn(skeleton);
+    REQUIRE(wearer.until([&] {
+        return wearer.conn.world().player()->appearance.material[game::kSlotSecondary] == 11501;
+    }));
+
+    auto observer_config = MockConfig::standard();
+    observer_config.own_spawn_id = spawn_id + 1;
+    observer_config.zones.at(2).spawns.push_back(skeleton);
+    Rig observer(observer_config);
+    REQUIRE(observer.to_zone());
+    const auto& observed = observer.conn.world().spawns.at(spawn_id).appearance;
+    REQUIRE(observed.material[game::kSlotSecondary] == 11501);
+
+    const auto offhand = net::ItemSlot::possessions(net::kSlotSecondary);
+    const auto bag_slot = net::ItemSlot::possessions(net::kSlotGeneral1);
+    wearer.conn.click_slot(bag_slot); // pick up the shield
+    REQUIRE(wearer.until([&] { return MockEqServer::count(wearer.server.zone_log, net::Op::MoveItem) == 1; }));
+    CHECK(MockEqServer::count(wearer.server.zone_log, net::Op::WearChange) == 0);
+
+    const auto check_update = [&](std::uint32_t model, std::uint32_t local_tint, const net::ItemSlot& from,
+                                  const net::ItemSlot& to) {
+        REQUIRE(wearer.until([&] { return MockEqServer::count(wearer.server.zone_log, net::Op::WearChange) == 1; },
+                             1s));
+        const auto& sent = wearer.server.zone_log;
+        const auto move_packet = std::find_if(sent.begin(), sent.end(), [](const net::AppPacket& p) {
+            return net::from_wire(p.opcode) == net::Op::MoveItem;
+        });
+        const auto wear_packet = std::find_if(sent.begin(), sent.end(), [](const net::AppPacket& p) {
+            return net::from_wire(p.opcode) == net::Op::WearChange;
+        });
+        REQUIRE(move_packet < wear_packet);
+        const auto move = net::decode_move_item(*move_packet);
+        REQUIRE(move);
+        CHECK(move->from.same(from));
+        CHECK(move->to.same(to));
+        const auto wear = net::decode_wear_change(*wear_packet);
+        REQUIRE(wear);
+        CHECK(wear->spawn_id == spawn_id);
+        CHECK(wear->slot == game::kSlotSecondary);
+        CHECK(wear->armor.material == model);
+        CHECK(wear->tint == 0);
+        // EQEmu relays the wear update to other clients in the zone.
+        observer.server.zone.send_reliable(*wear_packet);
+        REQUIRE(observer.until([&] { return observed.material[game::kSlotSecondary] == model; }));
+        const auto& worn = wearer.conn.world().player()->appearance;
+        CHECK(worn.material[game::kSlotSecondary] == model);
+        CHECK(worn.tint[game::kSlotSecondary] == local_tint);
+        CHECK(MockEqServer::count(observer.server.zone_log, net::Op::WearChange) == 0);
+    };
+
+    const auto cursor = net::ItemSlot::possessions(net::kSlotCursor);
+    wearer.server.zone_log.clear();
+    wearer.conn.click_slot(offhand); // replace the worn drum with the ornamented shield
+    check_update(207, shield.color, cursor, offhand);
+    wearer.conn.click_slot(bag_slot); // put the drum away
+    REQUIRE(wearer.until([&] { return MockEqServer::count(wearer.server.zone_log, net::Op::MoveItem) == 2; }));
+
+    wearer.server.zone_log.clear();
+    wearer.conn.click_slot(offhand); // remove the shield into the now-empty cursor
+    check_update(0, 0, offhand, cursor);
+}
+
 TEST_CASE("Held models: a bow shot shows the range item in the left hand and sends OP_WearChange") {
     auto config = MockConfig::standard();
     auto bow = make_item(1001, "Bow", net::kSlotRange);
