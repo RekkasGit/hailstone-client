@@ -1023,8 +1023,8 @@ only lets a right-click on a map label reach the game's handler): it requests a 
 for half a second and at most once a second; it never turns the player or plays path sounds and chat. A shown or
 pending player Find takes ownership back and is not replaced. A server whose `[commands]` rules deny `/mapfilter`
 also switches off the saved options while the player is on it: no filter marks, lines or circles, no TargetPath
-requests and no player vanilla mode (the settings stay saved for other servers). A ground label uses its actor name (for example `IT63`) when
-the client has not received an item name; Hailstone does not invent one. `map_spawn` is still asked for every other
+requests and no player vanilla mode (the settings stay saved for other servers). A ground label uses its actor name
+(for example `IT63`) when the client has not received an item name; Hailstone does not invent one. `map_spawn` is still asked for every other
 spawn each time a map draws (the minimap: only inside its circle) and shows those it answers for, with a colour, a map
 layer (layer switches and height filter apply) and a label, prefilled from the con colour and name. A Lua plugin's
 `map_spawn(spawn)` answers true for the defaults, or a table with `color`, `layer` and `label`. Plugin marks are
@@ -2213,8 +2213,10 @@ suggest = owner/repo      ; add-ons the login screen suggests to players who do 
 
 `[map] vanilla = on` makes the map window, zone map and minimap show only their background lines. Labels, player and
 group marks, `/mapfilter` marks, pins, routes, paths, target overlays, plugin spawn marks and registered map overlays
-are hidden. The Lua packs keep their map frames, minimap ring, north marker, zoom controls and clocks. Map panning,
-Find, TargetPath and other navigation keep working; only their drawn lines and markers disappear.
+are hidden. What a UI pack or add-on draws itself with `ui.Draw*` is its own to leave out: `hs.UI.map.Vanilla()`
+says whether the maps are vanilla. The Modern pack then leaves out its markers, Find marks and zone exits, and both
+packs keep their map frames, bars, text, minimap ring, north marker, zoom controls and clocks. Map panning, Find,
+TargetPath and other navigation keep working; only their drawn lines and markers disappear.
 
 The player's `/mapfilter vanilla` setting is shared by every character and saved in `hailstone.ini`. The server rule
 locks the effective mode on without overwriting that saved choice. With no rule, or `vanilla = off`, the player's

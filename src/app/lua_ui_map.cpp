@@ -71,7 +71,6 @@
 #include "net/game_connection.h"
 #include "plugin/lua_keep.h"
 #include "ui/dev_screens.h"
-#include "ui/lua/lua_draw_scope.h"
 #include "ui/lua/lua_host.h"
 #include "ui/ui_ini.h"
 
@@ -1586,15 +1585,14 @@ int DrawMap(lua_State* L) {
         v.relayout = false;
     }
 
-    // Vanilla keeps the map's lines and its mouse mapping, but no labels, paths, marks or editor overlays. The Lua
-    // guard also hides marks the pack draws after this call, while leaving the frame around the map alone.
+    // Vanilla keeps the map's lines and its mouse mapping, but no labels, paths, marks or editor overlays. What the
+    // pack draws over the map itself is the pack's to leave out (hs.MapVanilla).
     if (vanilla) {
         for (auto& l : v.lines) {
             if (!v.line_shown(l, feet)) continue;
             glm::vec2 a = T(l.start.x, l.start.y), b = T(l.end.x, l.end.y);
             line(a.x, a.y, b.x, b.y, faded(color(l.color), v.z_fade(l.start.z, l.end.z, feet)));
         }
-        ui::lua::suppress_map_draws(dl, ImVec2(x0, y0), ImVec2(x1, y1));
         dl->PopClipRect();
         return 0;
     }
@@ -2118,7 +2116,6 @@ int DrawMinimap(lua_State* L) {
     zv.reach = range; // the circle's radius r is `range` map units, however the map turns
     zv.reach_from = glm::vec2(me->x, me->y);
     draw_zone_view(s, h, zv);
-    if (vanilla) ui::lua::suppress_map_draws(ImGui::GetWindowDrawList(), zv.c, r);
     MapOverlayView overlay;
     overlay.minimap = true;
     overlay.x0 = cx - r; overlay.y0 = cy - r; overlay.x1 = cx + r; overlay.y1 = cy + r;
@@ -2187,7 +2184,6 @@ int DrawZoneMap(lua_State* L) {
     zv.P = [&](float x, float y) { return glm::vec2((x - cx) * k, (y - cy) * k); };
     ImGui::GetWindowDrawList()->PushClipRect(ImVec2(x0, y0), ImVec2(x1, y1), true);
     draw_zone_view(s, h, zv);
-    if (vanilla) ui::lua::suppress_map_draws(ImGui::GetWindowDrawList(), ImVec2(x0, y0), ImVec2(x1, y1));
     MapOverlayView overlay;
     overlay.minimap = false;
     overlay.x0 = x0; overlay.y0 = y0; overlay.x1 = x1; overlay.y1 = y1;
@@ -2308,6 +2304,14 @@ int FindMapLocation(lua_State* L) {
 int FindPathShown(lua_State* L) {
     UiHost& h = *host_of(L);
     lua_pushboolean(L, (h.conn && h.conn->player_path().active()) || h.guide_line);
+    return 1;
+}
+// on = hs.MapVanilla()   -- vanilla maps (/mapfilter vanilla, or the server's [map] vanilla): the maps draw only their
+// lines; a pack or add-on leaves out what it would draw over them itself (markers, Find marks, exits), keeping its
+// text, frames and controls.
+int MapVanilla(lua_State* L) {
+    UiHost& h = *host_of(L);
+    lua_pushboolean(L, h.map_filters && h.map_filters->vanilla_mode());
     return 1;
 }
 int EndFind(lua_State* L) {
@@ -2998,7 +3002,7 @@ void register_map_api(lua_State* L, UiHost& host, std::vector<std::unique_ptr<St
     static const luaL_Reg fns[] = {{"DrawMap", DrawMap},         {"MapZoom", MapZoom},         {"MapMouseDown", MapMouseDown},
                                    {"MapMouseUp", MapMouseUp},   {"MapPanReset", MapPanReset}, {"MapRightClick", MapRightClick},
                                    {"DrawMinimap", DrawMinimap}, {"DrawZoneMap", DrawZoneMap},
-                                   {"FindMapLocation", FindMapLocation}, {"DrawAtlas", DrawAtlas}, {"FindPathShown", FindPathShown}, {"EndFind", EndFind}, {"ZoneName", ZoneName}, {"MapAutoZ", MapAutoZ}, {"MapPolicy", MapPolicy}, {"GameTime", GameTime},
+                                   {"FindMapLocation", FindMapLocation}, {"DrawAtlas", DrawAtlas}, {"FindPathShown", FindPathShown}, {"EndFind", EndFind}, {"ZoneName", ZoneName}, {"MapAutoZ", MapAutoZ}, {"MapPolicy", MapPolicy}, {"MapVanilla", MapVanilla}, {"GameTime", GameTime},
                                    {"AtlasIndex", AtlasIndex}, {"AtlasPageData", AtlasPageData}, {"AtlasTexture", AtlasTexture},
                                    {"ZoneLinks", ZoneLinks}, {"ZoneRoute", ZoneRoute}, {"ZoneExits", ZoneExits},
                                    {"ZoneExitWalk", ZoneExitWalk}, {"ShowZoneMap", ShowZoneMap}, {"MapZoneShown", MapZoneShown},
