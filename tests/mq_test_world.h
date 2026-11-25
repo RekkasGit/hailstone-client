@@ -98,6 +98,12 @@ struct GameConnectionTestAccess {
     static void open_chat_log(GameConnection& c, const std::string& name) { c.open_chat_log(name); }
     static void log_command(GameConnection& c, const std::string& args) { c.log_command(args); }
     static std::FILE* chat_log_stream(GameConnection& c) { return c.chat_log_.get(); }
+    // Puts the chat log's stream in error the same way on every C runtime: a write to a stream opened for reading
+    // only fails and sets the error (the Microsoft runtime sets none for a read from an append-only stream).
+    static void fail_chat_log(GameConnection& c) {
+        c.chat_log_.reset(std::fopen(c.chat_log_open_path_.string().c_str(), "rb"));
+        if (c.chat_log_) std::fputc('x', c.chat_log_.get());
+    }
     static void chat(GameConnection& c, std::string text) { c.chat(ChatEvent::Kind::System, std::move(text)); }
     static std::string& safelock(GameConnection& c) { return c.safelock_; }
     static WorldTicket& ticket(GameConnection& c) { return c.ticket_; }

@@ -396,8 +396,7 @@ TEST_CASE("option commands: the chat log keeps its file open, each line on disk 
     CHECK(text.ends_with("] second line\n"));
 
     // A write that failed (a full disk, a file pulled away) leaves the file in error: the next line opens it anew.
-    // (Reading from the file, opened for appending only, fails and sets that error.)
-    std::fgetc(A::chat_log_stream(c));
+    A::fail_chat_log(c);
     REQUIRE(std::ferror(A::chat_log_stream(c)));
     A::chat(c, "after a failure");
     REQUIRE(A::chat_log_stream(c) != nullptr);
