@@ -367,7 +367,7 @@ The groups below are redone too, each window a resizable dialog (or frame) over 
 
 Helper: `lib/trade_common.lua`.
 
-- **MerchantWnd**: sortable goods table with search, "Usable only" (MW_UsableButton) and "Affordable only"; coin prices dimmed when unaffordable; Buy or Sell and Inspect; Recover and Parcels pages.
+- **MerchantWnd**: sortable goods table with search, "Usable only" (MW_UsableButton) and "Affordable only"; coin prices dimmed when unaffordable; Buy or Sell and Inspect; Recover and Parcels pages. Right-click an incoming parcel to inspect its item before retrieving it.
 - **TradeWnd**: both offers side by side (stacked when narrow); accepted sides framed, status from `hs.TradeState()`.
 - **GiveWnd**. The native shortcut for offering the cursor item to the target is hidden for service NPCs that
   refuse direct hand-ins, including personal and guild tribute masters. Use Donate in the tribute master's window.
