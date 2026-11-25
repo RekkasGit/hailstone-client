@@ -1635,7 +1635,7 @@ end
             login.project_page = "https://example.invalid/hailstone";
             // What's new open (test.whatsnew opens it once in the modern pack; the gamepad pack's page is below)
             REQUIRE(luaL_dostring(s.lua.state(), "ui.SetSetting('test.whatsnew', '1')") == LUA_OK);
-            for (const char* check : {"off", "checking", "uptodate", "unknown", "newer"}) {
+            for (const char* check : {"off", "checking", "uptodate", "unknown", "newer", "behind"}) {
                 login.update.check = check;
                 login.update.off_reason = "a development build";
                 s.frames(2);

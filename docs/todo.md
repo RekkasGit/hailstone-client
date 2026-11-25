@@ -570,6 +570,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] **macOS: the saved passwords use deprecated Keychain calls** (SecKeychain, deprecated since macOS 10.10; Apple Clang warns, `platform/credentials.cpp`). SecItem's calls replace them.
 - [ ] **macOS: the startup error for a missing Vulkan** names the graphics card makers' drivers (app/startup_error.cpp); on macOS it would be the missing `libMoltenVK.dylib`.
 - [ ] Resumable downloads (HTTP range requests) instead of starting over.
+- [x] **A feed that went back:** a signed manifest older than the newest one the feed showed before (`update/feed-seen.txt`) is reported, not called up to date (tests/updater_test.cpp). A feed frozen on one manifest is not detected, by choice: no re-signing schedule (docs/updater.md "A feed that went back").
 
 ### Add-ons (docs/addons.md)
 - [x] The manifest and GitHub link parsers, the library header reader; `tools/make_addon.py`, and `hailstone_sign` for add-on manifests.
@@ -585,6 +586,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] An update's approval holds only for the capabilities and version the player saw.
 - [x] **The player's word wins over a check under way:** an add-on removed meanwhile is not installed again; auto-update switched off meanwhile is not overridden; an update keeps the switch as it is at install time.
 - [x] Scripts started by a script or plugin get no more than their starter; `scripts/config/` never runs as code.
+- [x] **Permanent actions asked by code other than a shipped pack's own** (a character's delete, a bulk destroy, from a script, a plugin window or an add-on interface) are asked in the client's own window (`UiHost::client_confirm`), which no Lua code sees or answers. A script's stock-window click on ConfirmationDialogBox's Yes is refused while that box asks a destroy's question (an item's destroy, a guild's disband).
 - [x] **A server's compiled plugins load only once the player allowed their bytes for that server** (`servers/<profile>/plugin_approvals.txt`). The prompt in both packs and the client's own; changed from the add-on list.
 - [x] A module runs only in a script it may do as much as: an add-on's module is refused in a script that may do more.
 - [x] **Binding a command needs 'commands'.** Scripts and plugins cannot shadow the game's or the client's own commands (`Hooks::new_guest`, `reserved_command`).

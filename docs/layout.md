@@ -100,7 +100,9 @@ hailstone/
                              install's journal and the add-on index (index.txt); the add-ons themselves go in
                              scripts/<name>/ and plugins/<name>/
   update/                    the updater's downloads, the installed components' file lists, the files the last
-                             update replaced (until the new version has started) and its journal (docs/updater.md)
+                             update replaced (until the new version has started) and its journal (docs/updater.md);
+                             feed-seen.txt, the newest release each update feed showed (docs/updater.md "A feed
+                             that went back")
   cache/                     safe to delete while no client runs: cache/plugins/ holds the loaded plugins' copies,
                              cache/upscalers/<name>-<key>/ the loaded upscaler's copy of its folder, cache/pipelines.bin
                              the compiled Vulkan pipelines, cache/navmesh/<server>/<zone>.navmesh the zones'

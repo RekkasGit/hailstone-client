@@ -1056,7 +1056,7 @@ send a request. `OpenTask` changes the journal selection and visibility, not tas
 | SetItemKept | (id, name, on) → — | Mark or unmark every copy as Keep | actions |
 | SetItemsKept | ({{id, name}…}, on) → — | SetItemKept for many items at once, with one write (up to 4096) | actions |
 | ItemStats | () → {{key, label}} (array pairs) | Stats the window filters and sorts by | — |
-| BulkItems | (mode, {place…} [, dry]) → count, err\|nil [, asked] | Bulk "sell", "destroy", "tribute" or "withdraw" (bank to your packs, never equipped) of the chosen items; Keep-marked items are refused. A destroy asks the client's confirmation first (count, nil, true) unless Fast Item Destroy is on | actions |
+| BulkItems | (mode, {place…} [, dry]) → count, err\|nil [, asked] | Bulk "sell", "destroy", "tribute" or "withdraw" (bank to your packs, never equipped) of the chosen items; Keep-marked items are refused. A destroy asks the client's confirmation first (count, nil, true) unless Fast Item Destroy is on, in a window of the client's own that no script can answer | actions |
 | TakeItemSearch | () → text\|nil | /finditem's search, once | — |
 
 #### Abilities (lua_ui_abilities.cpp)
@@ -1357,7 +1357,7 @@ return `true` while nothing changed. Reading a view draws that screen in the cli
 | ServerSelect | ([revision]) → {revision, busy, status, server, servers={{name, status, canJoin, favorite}}, selected, last, addonHint}\|true\|nil | Server select view | self |
 | ServerSelectDo | (action [, i]) → ok | "select", "play", "favorite" or "back" | self |
 | CharacterSelect | ([revision]) → {revision, busy, status, world, server, scene, selected, characters={{name, level, race, raceName, classes, className, classShort, zone, canGoHome, homeQuestion}}}\|true\|nil | Character select view | self |
-| CharacterSelectDo | (action [, arg]) → ok | "select", "enter", "create", "delete", "home", "back" or "logout". "delete" from code other than a shipped pack's asks the client's confirmation first | self |
+| CharacterSelectDo | (action [, arg]) → ok | "select", "enter", "create", "delete", "home", "back" or "logout". "delete" from code other than a shipped pack's asks the client's confirmation first, in a window of the client's own that no script can answer | self |
 | CharacterCreate | () → view\|nil | Creation view: name, gender, race/class/deity/city (+Name, +Index, lists), stats, pointsLeft, ready… | self |
 | CharacterCreateHelp | (kind, id) → text, title | Description of a race, class, deity, city or stat | self |
 | CharacterCreateDo | (action [, value]) → ok | "name", "randomName", "race", "class", "gender", "deity", "city", "statUp/Down/Max", "resetStats", "appearance", "create" or "cancel" | self |

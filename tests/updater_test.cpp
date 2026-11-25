@@ -412,6 +412,85 @@ TEST_CASE("updater: up to date, older, skipped, refused and missing") {
     CHECK(u.status().state == UpdateState::Failed);
 }
 
+// A feed that goes back (an older release's signed manifest served again, docs/updater.md "A feed that went back"):
+// the newest release seen is kept in the data folder, and an older manifest is reported rather than taken for "up to
+// date". A fresh folder, another feed address and a release the player went back to by hand are not affected.
+TEST_CASE("updater: a feed that went back is not called up to date") {
+    test::ScratchDir dir("updater_behind");
+    const fs::path inst = dir.path() / "inst";
+    const fs::path data = dir.path() / "data";
+    Keys k;
+    Feed feed;
+    const std::string core = zip_of({{"hailstone", "x"}});
+    feed.files[kBase + std::string("core.zip")] = core;
+    auto serve = [&](const std::string& version) {
+        feed.files[kFeed] = sign(k, "hailstone-update 1\nversion " + version + "\n" + package_line("core", "core.zip", core));
+    };
+    auto status_for = [&](const std::string& running, const fs::path& data_dir) {
+        auto env = env_for(inst, feed, k, running);
+        env.data_dir = data_dir;
+        env.auto_download = false;
+        Updater u(env);
+        u.check();
+        u.wait();
+        return u.status();
+    };
+
+    // A fresh folder has seen nothing: the first manifest is taken and kept.
+    CHECK(newest_seen_release(data, kFeed).empty());
+    serve("0.3.0");
+    CHECK(status_for("0.3.0", data).state == UpdateState::UpToDate);
+    CHECK(newest_seen_release(data, kFeed) == "0.3.0");
+    CHECK(get(data / "update/feed-seen.txt") == std::string("0.3.0 ") + kFeed + "\n");
+
+    // The feed goes back to 0.2.0: not up to date, nothing offered or downloaded, and the newest seen stays.
+    serve("0.2.0");
+    const UpdateStatus behind = status_for("0.3.0", data);
+    CHECK(behind.state == UpdateState::FeedBehind);
+    CHECK(behind.version == "0.2.0");
+    CHECK(behind.seen == "0.3.0");
+    CHECK(newest_seen_release(data, kFeed) == "0.3.0");
+    // ... also for a build older than both (one the player went back to by hand): 0.2.0 is not offered from it
+    CHECK(status_for("0.1.0", data).state == UpdateState::FeedBehind);
+    CHECK(!fs::exists(inst / "update/download/core.zip"));
+
+    // The feed comes forward again: the player who went back to 0.1.0 by hand is offered the newest, as before.
+    serve("0.3.0");
+    const UpdateStatus again = status_for("0.1.0", data);
+    CHECK(again.state == UpdateState::Available);
+    CHECK(again.version == "0.3.0");
+    serve("0.4.0");
+    CHECK(status_for("0.4.0", data).state == UpdateState::UpToDate);
+    CHECK(newest_seen_release(data, kFeed) == "0.4.0");
+
+    // Another folder (a portable copy made before, or a fresh install) has its own: 0.2.0 is only up to date there.
+    serve("0.2.0");
+    CHECK(status_for("0.2.0", dir.path() / "fresh").state == UpdateState::UpToDate);
+    // No data folder given (a test drive): nothing is kept or compared.
+    CHECK(status_for("0.2.0", fs::path()).state == UpdateState::UpToDate);
+
+    // Each feed address keeps its own (update.feed pointed at a test feed does not taint the release feed).
+    const std::string test_feed = "https://example.invalid/test/hailstone-update.txt";
+    CHECK(remember_seen_release(data, test_feed, "9.0.0"));
+    CHECK(newest_seen_release(data, test_feed) == "9.0.0");
+    CHECK(newest_seen_release(data, kFeed) == "0.4.0");
+    // An older version never replaces a newer one; a newer one does.
+    CHECK(remember_seen_release(data, kFeed, "0.3.5"));
+    CHECK(newest_seen_release(data, kFeed) == "0.4.0");
+    CHECK(remember_seen_release(data, kFeed, "0.5.0-alpha"));
+    CHECK(newest_seen_release(data, kFeed) == "0.5.0-alpha");
+    CHECK_FALSE(remember_seen_release(data, kFeed, "not a version"));
+    CHECK_FALSE(remember_seen_release(data, "https://example.invalid/a b", "1.0.0"));
+    CHECK_FALSE(remember_seen_release(fs::path(), kFeed, "1.0.0"));
+
+    // A damaged file counts as nothing seen for the lines it spoils; deleting it starts afresh.
+    put(data / "update/feed-seen.txt", std::string("garbage\nx.y.z ") + kFeed + "\n1.0.0 " + test_feed + "\n");
+    CHECK(newest_seen_release(data, kFeed).empty());
+    CHECK(newest_seen_release(data, test_feed) == "1.0.0");
+    fs::remove(data / "update/feed-seen.txt");
+    CHECK(newest_seen_release(data, test_feed).empty());
+}
+
 TEST_CASE("update install: refusals leave the folder as it was") {
     test::ScratchDir dir("updater_refuse");
     const fs::path inst = dir.path();

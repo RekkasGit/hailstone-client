@@ -991,6 +991,19 @@ int WindowPlaced(lua_State* L) {
     return 0;
 }
 
+// A click on ConfirmationDialogBox's Yes from code other than the pack's own (a script, a plugin window, another Lua
+// state with the hs API) while that box asks a destroy's question (destructive_confirmation_up): refused, and logged.
+// The pack draws the box and its own code passes the player's click on; a script pressing it would destroy an item or
+// disband a guild without the player's word. Any other question, and No, stay open to scripts (an accepted rez, a
+// trade's question). A Hailstone guard of its own.
+bool script_destroy_yes(lua_State* L, const UiHost& host, std::string_view window, std::string_view child) {
+    if (window != "ConfirmationDialogBox" || child != "Yes_Button" || ui::lua::pack_code(L) ||
+        !destructive_confirmation_up(host))
+        return false;
+    log::warn("A script pressed Yes on the destroy question (ConfirmationDialogBox); refused: only the player answers it");
+    return true;
+}
+
 // hs.ShowWindow(name, show)   -- shows or hides the game window (and with it the replacement)
 int ShowWindow(lua_State* L) {
     auto& m = Impl::of(L);
@@ -1002,9 +1015,12 @@ int ShowWindow(lua_State* L) {
 // default; 3 is a buff button's right click, which removes the buff)
 int WindowButton(lua_State* L) {
     auto& m = Impl::of(L);
-    StockWindow* w = m.window(luaL_checkstring(L, 1));
+    const char* name = luaL_checkstring(L, 1);
+    StockWindow* w = m.window(name);
     int message = held_int(luaL_optinteger(L, 3, 1));
-    bool ok = w && w->click(m.host, luaL_checkstring(L, 2), message == 3 ? "remove" : "left", false);
+    const char* child = luaL_checkstring(L, 2);
+    bool ok = w && !script_destroy_yes(L, m.host, name, child) &&
+              w->click(m.host, child, message == 3 ? "remove" : "left", false);
     lua_pushboolean(L, ok);
     return 1;
 }
@@ -1014,8 +1030,13 @@ int WindowButton(lua_State* L) {
 int ClickChild(lua_State* L) {
     auto& m = Impl::of(L);
     note_click_rect(m.host);
-    StockWindow* w = m.window(luaL_checkstring(L, 1));
+    const char* name = luaL_checkstring(L, 1);
+    StockWindow* w = m.window(name);
     const char* child_arg = luaL_checkstring(L, 2);
+    if (script_destroy_yes(L, m.host, name, child_arg)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
     std::string button = lua_isstring(L, 3) ? lua_tostring(L, 3) : "left";
     std::string child = child_arg;
     bool outside = lua_toboolean(L, 4) != 0;
@@ -1052,10 +1073,11 @@ int StmlLink(lua_State* L) {
 // ok = hs.ClickChildAt(name, child, clientX, clientY [, button])   -- as ClickChild (no original to place)
 int ClickChildAt(lua_State* L) {
     auto& m = Impl::of(L);
-    StockWindow* w = m.window(luaL_checkstring(L, 1));
+    const char* name = luaL_checkstring(L, 1);
+    StockWindow* w = m.window(name);
     const char* child = w ? luaL_checkstring(L, 2) : nullptr;
     std::string button = lua_isstring(L, 5) ? lua_tostring(L, 5) : "left";
-    lua_pushboolean(L, w && w->click(m.host, child, button, false));
+    lua_pushboolean(L, w && !script_destroy_yes(L, m.host, name, child) && w->click(m.host, child, button, false));
     return 1;
 }
 
