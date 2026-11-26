@@ -1246,6 +1246,9 @@ if(HAILSTONE_BUILD_TESTS)
     tests/merchant_usable_test.cpp
     tests/ascii_case_test.cpp
     tests/ui_pack_windows_test.cpp
+    tests/ui_pack_windows2_test.cpp
+    tests/ui_pack_windows3_test.cpp
+    tests/ui_pack_windows4_test.cpp
     tests/aa_columns_ui_test.cpp
     tests/ui_pack_stale_state_test.cpp
     tests/net_session_test.cpp
