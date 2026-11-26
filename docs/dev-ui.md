@@ -393,6 +393,12 @@ Helper: `lib/dialogs_kit.lua`.
 - **ConfirmationDialogBox**: Yes is primary; Enter does not accept.
 - **LargeDialogWindow**: the server's STML text, scrolled. Both shipped interfaces display `<table>`, `<tr>` and
   `<td>` as aligned columns and rows. Cell text keeps its colours and wraps to fit the column.
+  - The tables read (`lib/stml_blocks.lua`, an identical copy in each pack) are a subset of what RoF2's
+    `CStmlWnd::ParseSTMLTable` @0x8826a0 reads: `<th>` is read as `<td>`, attributes on `<table>`, `<tr>` and the
+    cells are ignored, and `<thead>`, `<tbody>` and `<tfoot>` are skipped (EQEmu's `#npcstats` sends `<tbody>`).
+  - Not read yet: `<caption>`, `<colgroup>`, `<col>`, `rowspan` and `colspan` (docs/todo.md).
+  - A table outside the subset, or malformed (an unclosed cell or row, text between cells, a nested table, more than
+    64 cells in a row), stays in the surrounding text, so its contents still show. The text is read in one pass.
 - **TextEntryWnd**, **EditLabelWnd**, **TipWindow** (earlier tips).
 - **NoteWindow** and **BookWindow**: paper-toned pages, side by side or stacked.
 - **AlarmWnd**, **BreathWindow** (a frame; the air bar pulses in its last quarter), **RespawnWnd**.
