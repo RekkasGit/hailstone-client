@@ -595,7 +595,7 @@ cannot install another.
 
 Tests: `tests/addon_*_test.cpp` (manifest, install, manager against GitHub in memory, index and store, upscaler,
 tool, requirements, upscaler policy), plus `tests/plugin_policy_test.cpp`, `tests/lua_ui_pregame_test.cpp`,
-`tests/ui_pack_windows_test.cpp` and `tests/dev_ui_test.cpp`.
+`tests/ui_pack_windows*_test.cpp` and `tests/dev_ui_test.cpp`.
 
 Not checked yet:
 

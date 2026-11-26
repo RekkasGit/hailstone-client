@@ -529,7 +529,7 @@ Its search field filters the open tab:
 - A setting stays when every query word is in its label, tooltip or section title (on the Plugins tab, the plugin's name).
 - Words may be loose (`lib/fuzzy.lua`): initials of consecutive words ("fov" for Field of View), a word's letters in order from its first (four letters or more), or one letter off (five or more).
 - Key bindings, chat filters and colours match by name; the key list reads only rows in view without a search.
-- Empty sections are left out whole, and section buttons hide while searching. Tests: `tests/lua_scripts_test.cpp`, `tests/ui_pack_windows_test.cpp`.
+- Empty sections are left out whole, and section buttons hide while searching. Tests: `tests/lua_scripts_test.cpp`, `tests/ui_pack_windows4_test.cpp`.
 
 #### System windows
 
