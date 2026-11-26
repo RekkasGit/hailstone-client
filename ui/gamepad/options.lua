@@ -12,6 +12,7 @@ local pad = dofile("lib/pad.lua")
 local W = dofile("lib/window.lua")
 local interfaceStatus = dofile("lib/interface_status.lua")
 local V = dofile("lib/sound_volumes.lua")
+local vitals = dofile("lib/vitals.lua")
 local C = T.C
 
 local OW = "OptionsWindow"
@@ -347,6 +348,7 @@ local PAGES = {
     sizeNames[#sizeNames + 1] = "Off"; sizeValues[#sizeValues + 1] = 0
     local x = optionRow("Target ring max size", "target_ring_max_size", sizeNames, sizeValues)
     if x then rows[#rows + 1] = x end
+    vitals.addOptions(rows)
     local modes = API.chat.HitModes()
     local function addHitMode(h)
       rows[#rows + 1] = { "Hit mode: " .. h.name, h.modes[h.mode + 1] or "Mixed", function(dir)

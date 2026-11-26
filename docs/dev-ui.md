@@ -291,6 +291,10 @@ Each entry names the window and what is particular to it; the `hs.*` calls behin
 - **TargetWindow**: con colour, health, target's target, the aggro meter (AggroMeterWnd's gauge 149 and labels 302..307; `aggro.lua` keeps the game's window hidden, and the EQ menu has no Aggro Meter row), and buffs with Spell Info on a right click.
 
 - **GroupWindow** has member cards and the invite, disband, accept and decline buttons. A left click on `Gauge<n>` selects the member. A left click on `PetGauge<n>`, used by the Modern card's green pet bar, selects their pet. Solo the window shows only with an invitation or a player to invite.
+  The Modern frame's right-click menu and Gamepad's **Options > Interface** let you choose **None**, **Percentage**, **Value** (current / maximum), or **Both** separately for member HP, mana, endurance (stamina), and group pet HP. Member HP defaults to Percentage. The other group readouts default to None.
+
+- **PetInfoWindow** has a separate HP readout with the same four modes, defaulting to Percentage. Right-click the Modern Pet frame or use **Options > Interface** in Gamepad. That Gamepad setting also controls the pet HUD readout.
+  Exact values appear when the server [supplies them](../server/README.md#group-and-pet-vitals). A percentage-only server still shows percentages in Percentage and Both. An unavailable value leaves its text blank. Choices are saved separately in each UI pack's settings.
 
 - **BuffWindow** and **ShortDurationBuffWindow**: the defaults are the compact horizontal icon trays with remaining time under each icon, a transparent background, and no title bar or drag resizing. Icons fill from right to left and pulse near expiry.
   - Right-click an effect for Spell Info, Add to Blocked Buffs, Remove, and **Window options**. Right-click the title bar or an empty spot to open the options directly, or Alt-right-click anywhere in the tray.

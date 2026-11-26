@@ -1119,6 +1119,7 @@ void GameConnection::apply_spawn(const Spawn& s) {
     }
     group_.mana_percent.erase(s.spawn_id);
     group_.endurance_percent.erase(s.spawn_id);
+    forget_group_vital(s.spawn_id);
     spells_.others.erase(s.spawn_id);
     cast_stage_shown_.erase(s.spawn_id);
     if (spells_.target_buffs_entity == s.spawn_id) {
@@ -1448,6 +1449,10 @@ std::optional<TimeOfDay> GameConnection::current_time_of_day() const {
 
 void GameConnection::handle_zone(const AppPacket& p) {
     if (options_.zone_packet_tap) options_.zone_packet_tap(p);
+    if (p.opcode == kOpHsGroupVitals) {
+        handle_group_vitals(p);
+        return;
+    }
     if (p.opcode == kOpServerManagementReply) {
         handle_server_management(p);
         return;
@@ -1508,6 +1513,8 @@ void GameConnection::handle_zone(const AppPacket& p) {
             if (state_ == ConnectionState::InZone) {
                 server_management_offered_ = (v->flags & kServerManagementOffered) != 0;
                 if (!server_management_offered_) close_server_management();
+                group_vitals_offered_ = (v->flags & kServerGroupVitals) != 0;
+                if (!group_vitals_offered_) clear_group_vitals();
             }
         } else {
             log::warn("server settings: a bad OP_HailstoneSettings ({} bytes) ignored", p.data.size());
@@ -1789,6 +1796,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
             // Observations belong to this actor's lifetime, not the numerical id a later actor may reuse.
             group_.mana_percent.erase(*id);
             group_.endurance_percent.erase(*id);
+            forget_group_vital(*id);
             spells_.others.erase(*id);
             cast_stage_shown_.erase(*id);
             if (spells_.target_buffs_entity == *id) {
@@ -2839,6 +2847,8 @@ void GameConnection::simulate_link_loss() {
 
 void GameConnection::disconnect() {
     close_server_management();
+    group_vitals_offered_ = false;
+    clear_group_vitals();
     close_evolving_transfer();
     reset_fellowship();
     capture_bank();

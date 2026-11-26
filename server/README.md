@@ -1,6 +1,6 @@
 # Hailstone server support
 
-Hailstone works on any EQEmu server as is. A server can add five things:
+Hailstone works on any EQEmu server as is. A server can add the following features:
 
 - **sending the server's client files**: Hailstone downloads what the owner puts in `client_files/` at the first
   zone-in of a login, with no web server (below): spells, strings, zones, models, and the server's own plugins and
@@ -11,9 +11,10 @@ Hailstone works on any EQEmu server as is. A server can add five things:
 - **quest givers in the Find window**: besides the merchants, bankers and trainers it lists on any server, the
   Find window lists the NPCs that have quests (below);
 - **zone connections for the map's zone finder**: every zone point the server's expansion and content flags allow,
-  so the World view can route between zones the player has not visited (below).
+  so the World view can route between zones the player has not visited (below);
+- **exact group and pet vitals** show current and maximum values for members and pets in the same zone (off by default).
 
-This folder does all five with a Lua quest script: no C++ changes, rebuild or opcode edits. It runs next to the
+This folder uses a Lua quest script: no C++ changes, rebuild or opcode edits. It runs next to the
 server's own quests (Perl or Lua) without replacing any. Tested on EQEmu 23.10.3 with the PEQ quests.
 
 #### Declined group invitations
@@ -181,6 +182,7 @@ after `#reloadquest`.
 | `server_management` | 0 | enable the in-game policy editor for eligible GMs (set to 1 to enable) |
 | `server_management_history` | 0 | number of recognized backup pairs to keep (0: keep all) |
 | `group_declines` | 1 | tell the inviter when a RoF2 client declines a group invitation |
+| `group_vitals` | 0 | send exact group and pet vitals in the same zone (set to 1 to enable) |
 | `files_rescan` | 300 | seconds the `client_files/` list is kept before a player's request looks at the folder again (never under 30) |
 | `files_chunks_per_second` | 768 | file pieces (32 KB each) one player is sent in a second; more wait their turn (0: no limit) |
 | `files_chunks_per_second_zone` | 1024 | file pieces all of the zone's players together are sent in a second; more wait their turn (0: no limit) |
@@ -331,6 +333,7 @@ The client sends its requests on custom opcodes that no server's opcode table li
 | quest NPCs | 0x1436 | |
 | zone links | 0x1438 | |
 | Server Management | 0x143a | |
+| group and pet vitals | 0x143c | |
 
 So the zone passes them to the `event_unhandled_opcode` quest event, and the script replies with raw packets.
 Server Management replies on 0x143b, with bit 1 of the settings reply advertising availability to an eligible
@@ -343,6 +346,12 @@ those older clients get no cross-zone guild invitations there.)
 
 The script registers that event through an encounter loaded from `global/script_init.lua`, which EQEmu runs from
 every quest folder, so the server's own `global_player` scripts keep running.
+
+## Group and pet vitals
+
+Set `group_vitals = 1` in the encounter or set the `hailstone:group_vitals` data bucket to `1`. Hailstone learns whether this feature is available when entering a zone. A client asks at most once per second while displaying an exact readout. The encounter accepts two requests per character per second to allow for delivery jitter.
+
+Each reply covers other members of the requester's group in the same zone, their active pets, and the requester's active pet. The encounter uses the requester's raid subgroup when the raid Lua API exposes `GetGroupNumber`. It uses `GetPet()` for each owner and sends endurance values only for player characters. Stock percentages continue to work on any server. Servers with custom pet rosters can supply exact HP for additional pets in the same reply.
 
 ## Zone links
 

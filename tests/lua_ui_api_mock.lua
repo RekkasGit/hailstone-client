@@ -32,6 +32,7 @@ local descriptors = {
   {"ClassName", "character", "ClassName", "function", 0, false},
   {"ClassNamesRevision", "character", "ClassNamesRevision", "function", 0, false},
   {"Gauge", "character", "Gauge", "function", 0, true},
+  {"GaugeValues", "character", "GaugeValues", "function", 0, false},
   {"Label", "character", "Label", "function", 0, true},
   {"Money", "character", "Money", "function", 0, false},
   {"Name", "character", "Name", "function", 0, true},

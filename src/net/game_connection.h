@@ -94,6 +94,7 @@
 #include "net/aggro_packets.h"
 #include "net/door_packets.h"
 #include "net/dz_packets.h"
+#include "net/group_packets.h"
 #include "net/guild_bank_packets.h"
 #include "net/fellowship_packets.h"
 #include "net/guild_banner_packets.h"
@@ -666,6 +667,7 @@ public:
     // the corresponding roster slot (CTargetWnd::OnProcessFrame), -1 none.
     void target_group_member(std::int32_t n, GroupTargetMode mode = GroupTargetMode::CyclePet);
     const game::Spawn* group_member_pet(const game::GroupMember& member) const;
+    const game::Spawn* group_member_pet(std::uint32_t owner_id) const;
     std::int32_t group_member_targeted() const { return group_member_targeted_; }
     // The target's target (OP_TargetHoTT; PlayerZoneClient::TargetOfTarget), 0 none.
     std::uint32_t target_of_target() const { return target_of_target_; }
@@ -2153,6 +2155,9 @@ public:
     // ---- groups and pets (game/group.h; net/game_connection_group.cpp) ----
     const game::GroupState& group() const { return group_; }
     const game::PetState& pets() const { return pets_; }
+    // The exact readings from the optional server encounter expire between refreshes.
+    const GroupVital* group_vital(std::uint32_t spawn_id) const;
+    void request_group_vitals();
     // Hailstone's support for several pets: the server's list of the player's pets, from its extension (NMS:
     // OP_PetList). The focused pet stays when it is still listed, else the first one becomes it.
     void set_pet_list(std::vector<game::PetInfo> list);
@@ -3242,6 +3247,9 @@ private:
     void grouproles_command(const std::string& args);
     void groupleader_command();
     void reset_group_for_zone();
+    void handle_group_vitals(const AppPacket& p);
+    void clear_group_vitals();
+    void forget_group_vital(std::uint32_t spawn_id);
     void note_pet_spawn(const game::Spawn& s);
     void forget_pet_spawn(std::uint32_t spawn_id);
     // False when the inventory refused the swap (nothing moved, nothing sent).
@@ -4265,6 +4273,10 @@ private:
 
     // Groups and pets.
     game::GroupState group_;
+    GroupVitals group_vitals_;
+    bool group_vitals_offered_ = false;
+    bool group_vitals_waiting_ = false;
+    std::optional<std::int64_t> group_vitals_requested_ms_, group_vitals_received_ms_;
     // The local player's id and the group then raid member names Appearance::new_armor_bits were last made with.
     std::uint32_t new_armor_player_ = 0;
     std::vector<std::string> new_armor_members_;
