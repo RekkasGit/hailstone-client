@@ -181,9 +181,13 @@ and `#damage`) and a stock PEQ database. `EQ_GAME_DIR` must be set; `PLAYPROBE` 
 - `items.quest`: a summoned item reaches the inventory and stays after a zone-in.
 - `npc.quest`: hail an NPC, trade it an item it hands back, kill an NPC.
 
+`items.quest` and `npc.quest` end with `#nukeitem` on the item they summon, and check that the client saw it go, so
+nightly runs do not fill the character's bags.
+
 A script starts with `zone <name>`, which passes at once when the character is already there, so it does not
 depend on where the last session ended. Scripts and the runner name no server, account or password: pass them on the
-command line. Nothing runs them automatically; they are the scripted part of the 0.10 live checklist (docs/todo.md).
+command line. The nightly run plays them when a test server is set ("Nightly run" below); they are the scripted part
+of the 0.10 live checklist (docs/todo.md).
 A failure is a lead, not proof of a client bug: check the server's log and state too.
 
 ## Nightly run
@@ -196,15 +200,20 @@ machine:
    something.
 2. The libFuzzer targets (`HAILSTONE_LIBFUZZER`, Clang; docs/hardening.md), all at once, one core each, for
    `--fuzz-seconds` (default 1800). Their corpora are kept between nights, and a crash's input is kept for the morning.
-3. With `--publish`, and only after a night with no failure, the nightly build ("Nightly builds" below).
-4. A summary: printed, kept in the night's log folder, and posted to Discord when a webhook is set. The posted text
+3. With a test server set, the live smoke tests ("Live smoke tests" above), played by the sanitizer build's
+   `playprobe`. A sanitizer report in a script's log fails it too.
+4. With `--publish`, and only after a night with no failure, the nightly build ("Nightly builds" below).
+5. A summary: printed, kept in the night's log folder, and posted to Discord when a webhook is set. The posted text
    names no local path; after a publish it ends with the release's link.
 
 It exits 1 when a step fails. Options: `--fuzz-seconds N`, `--jobs N` (default 20, also the package containers' CPU
-limit), `--no-fuzz`, `--no-post`, `--package` (step 3 without the upload), `--publish`, `--ref REF`.
+limit), `--no-fuzz`, `--no-live`, `--no-post`, `--package` (step 4 without the upload), `--publish`, `--ref REF`.
 
 - Settings go in `${XDG_CONFIG_HOME:-~/.config}/hailstone/nightly.env`, which it sources: `EQ_GAME_DIR`,
-  `HAILSTONE_VECTORS_DIR` and, optionally, `HAILSTONE_NIGHTLY_WEBHOOK` (a Discord webhook URL). Never commit them.
+  `HAILSTONE_VECTORS_DIR` and, optionally, `HAILSTONE_NIGHTLY_WEBHOOK` (a Discord webhook URL) and the live smoke
+  tests' server and GM character (`HAILSTONE_LIVE_SERVER=HOST[:PORT]`, `HAILSTONE_LIVE_USER`,
+  `HAILSTONE_LIVE_PASSWORD`, `HAILSTONE_LIVE_CHARACTER`). Never commit them. The summary names none of the server
+  settings.
 - Everything it writes is under `${XDG_CACHE_HOME:-~/.cache}/hailstone-nightly`: the checkout it tests (a detached
   worktree of the repository, reset to the ref each night and cleaned of all but its build folders and the
   containers' compiler caches in `.docker/`), the corpora (`corpus/<target>`), crash inputs (`crashes/<target>`)
@@ -251,6 +260,8 @@ The service has a shell's environment only as set here: add the build settings t
 Type=oneshot
 ExecStart=/path/to/hailstone-client/tools/nightly.sh --publish
 Nice=10
+# Headless: CEF's helper in the browser tests can fail to draw on a busy desktop session's display.
+UnsetEnvironment=DISPLAY WAYLAND_DISPLAY
 
 # hailstone-nightly.timer
 [Timer]

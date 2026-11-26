@@ -4,15 +4,19 @@
 #      vectors set, so the tests that otherwise pass without checking anything check something.
 #   2. The libFuzzer targets (HAILSTONE_LIBFUZZER, Clang), each for --fuzz-seconds, side by side, on corpora kept
 #      between nights. A crash's input is kept for the morning.
-#   3. With --publish, after a night with no failure: the Linux and Windows packages, built as a release is
+#   3. With a test server set (HAILSTONE_LIVE_*), the live smoke tests (tools/live_smoke.sh, tests/live/*.quest)
+#      played by the sanitizer build's playprobe.
+#   4. With --publish, after a night with no failure: the Linux and Windows packages, built as a release is
 #      (tools/docker/build.sh, tools/make_update.py) with the version label nightly.<date>, the Linux package's tests
 #      run on this machine, then uploaded to the rolling `nightly` pre-release on GitHub. The updater never offers a
 #      pre-release, and the packages carry no signed manifest.
-#   4. A summary, printed and, with a webhook set, posted to Discord.
+#   5. A summary, printed and, with a webhook set, posted to Discord.
 #
-# Usage: tools/nightly.sh [--fuzz-seconds N] [--jobs N] [--no-fuzz] [--no-post] [--package | --publish] [--ref REF]
+# Usage: tools/nightly.sh [--fuzz-seconds N] [--jobs N] [--no-fuzz] [--no-live] [--no-post] [--package | --publish]
+#                         [--ref REF]
 #   --fuzz-seconds  seconds per fuzz target (default 1800; the targets run at once, one core each)
 #   --jobs          build and test jobs, and the package containers' CPU limit (default 20)
+#   --no-live       leave out the live smoke tests even with a test server set
 #   --package       build, test and zip the packages into the checkout's release-nightly/, without uploading
 #   --publish       build and publish the packages (needs gh signed in with write access, Docker, and MSVC for
 #                   tools/docker/build.sh windows-x64)
@@ -22,6 +26,8 @@
 #   EQ_GAME_DIR=...             the game folder the asset tests read
 #   HAILSTONE_VECTORS_DIR=...   the recorded vectors (*.jsonl)
 #   HAILSTONE_NIGHTLY_WEBHOOK=  a Discord webhook URL for the summary (optional)
+#   HAILSTONE_LIVE_SERVER=HOST[:PORT] HAILSTONE_LIVE_USER= HAILSTONE_LIVE_PASSWORD= HAILSTONE_LIVE_CHARACTER=
+#                               a test server and a GM character for the live smoke tests (optional; all four)
 #
 # Everything it writes is under ${XDG_CACHE_HOME:-~/.cache}/hailstone-nightly: the checkout it tests (a detached
 # worktree of this repository), its build folders, the fuzz corpora and crash inputs, and a log folder per night.
@@ -31,6 +37,7 @@ repo=$(cd "$(dirname "$0")/.." && git rev-parse --show-toplevel)
 fuzz_seconds=1800
 jobs=20
 fuzz=1
+live=1
 post=1
 publish=0
 ref=origin/main
@@ -39,6 +46,7 @@ while [ $# -gt 0 ]; do
     --fuzz-seconds) fuzz_seconds=$2; shift 2 ;;
     --jobs) jobs=$2; shift 2 ;;
     --no-fuzz) fuzz=0; shift ;;
+    --no-live) live=0; shift ;;
     --no-post) post=0; shift ;;
     --package) publish=1; shift ;;
     --publish) publish=2; shift ;;
@@ -50,6 +58,9 @@ done
 config=${XDG_CONFIG_HOME:-$HOME/.config}/hailstone/nightly.env
 # shellcheck disable=SC1090
 [ -f "$config" ] && . "$config"
+# The tests and live_smoke.sh read these from the environment; the webhook and the test account stay unexported.
+[ -n "${EQ_GAME_DIR:-}" ] && export EQ_GAME_DIR
+[ -n "${HAILSTONE_VECTORS_DIR:-}" ] && export HAILSTONE_VECTORS_DIR
 
 cache=${XDG_CACHE_HOME:-$HOME/.cache}/hailstone-nightly
 checkout=$cache/checkout
@@ -138,7 +149,30 @@ if [ "$fuzz" = 1 ]; then
   fi
 fi
 
-# 3. The packages, after a night with no failure.
+# 3. The live smoke tests. The server's address and the account stay out of the summary, which may be posted.
+if [ "$live" = 1 ] && [ -n "${HAILSTONE_LIVE_SERVER:-}" ]; then
+  if [ -z "${HAILSTONE_LIVE_USER:-}" ] || [ -z "${HAILSTONE_LIVE_PASSWORD:-}" ] ||
+     [ -z "${HAILSTONE_LIVE_CHARACTER:-}" ]; then
+    fail "live smoke tests: HAILSTONE_LIVE_SERVER is set without a user, password and character"
+  elif [ ! -x build-asan/playprobe ]; then
+    fail "live smoke tests: no playprobe (the sanitizer build failed)"
+  else
+    PLAYPROBE=build-asan/playprobe LIVE_SMOKE_LOGS="$logs/live" tools/live_smoke.sh "$HAILSTONE_LIVE_SERVER" \
+      "$HAILSTONE_LIVE_USER" "$HAILSTONE_LIVE_PASSWORD" "$HAILSTONE_LIVE_CHARACTER" > "$logs/live.log" 2>&1
+    passed=$(grep -c '^PASS ' "$logs/live.log")
+    # A sanitizer report UBSan does not stop on counts as a failure too.
+    failures=$( { grep -o '^FAIL [^:]*' "$logs/live.log" | sed 's/^FAIL //'
+                  grep -l 'ERROR: [A-Za-z]*Sanitizer\|runtime error:' "$logs"/live/*.log 2>/dev/null |
+                    xargs -r -n1 basename | sed 's/\.log$/ (sanitizer)/'; } | sort -u | paste -sd, - | sed 's/,/, /g')
+    if [ -z "$failures" ] && [ "$passed" -gt 0 ]; then
+      note "live smoke tests: $passed passed"
+    else
+      fail "live smoke tests: ${failures:-none ran} (live.log, live/)"
+    fi
+  fi
+fi
+
+# 4. The packages, after a night with no failure.
 published=""
 package_build() {
   CPUS=$jobs CMAKE_ARGS="-DHAILSTONE_BROWSER=ON -DHAILSTONE_NIGHTLY_LABEL=$2" \
@@ -230,7 +264,7 @@ if [ "$publish" != 0 ]; then
   if [ "$failed" = 0 ]; then publish_packages; else note "not published: the night had a failure"; fi
 fi
 
-# 4. The summary.
+# 5. The summary.
 status="passed"
 [ "$failed" = 1 ] && status="FAILED"
 # The posted text names no local path (it would carry the user's name); the log folder is added locally only.
