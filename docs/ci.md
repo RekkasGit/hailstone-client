@@ -238,7 +238,12 @@ them to one rolling pre-release, tagged `nightly`, on GitHub.
 ### The timer
 
 A user timer runs it nightly. Put both files in `~/.config/systemd/user/`, then run
-`systemctl --user enable --now hailstone-nightly.timer` (and `loginctl enable-linger` for it to run while logged out):
+`systemctl --user enable --now hailstone-nightly.timer`. `Persistent=true` runs a night missed while logged out at the
+next login. `loginctl enable-linger` lets it run while logged out, but the upload then needs a `gh` login that does not
+live in the desktop keyring, which is locked until the user logs in (a `GH_TOKEN` in `nightly.env`, say).
+
+The service has a shell's environment only as set here: add the build settings the maintainer's shell gives, such as
+`Environment=CMAKE_CXX_COMPILER_LAUNCHER=ccache` and `Environment=CMAKE_C_COMPILER_LAUNCHER=ccache`.
 
 ```ini
 # hailstone-nightly.service
