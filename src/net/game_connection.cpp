@@ -870,6 +870,8 @@ void GameConnection::handle_world(const AppPacket& p) {
         respawn_spawn_pending_ = false;
         respawn_placement_.reset();
         pstatus_.dead = false;
+        pstatus_.max_mana = 0;
+        reported_max_mana_.reset();
         invalidate_interaction_context();
         pstatus_.owner_status = 0;
         pstatus_.stand_state = 100;
@@ -3176,6 +3178,10 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
             if (op == Op::ManaUpdate) {
                 pstatus_.mana = u->current;
                 pstatus_.max_mana = u->maximum;
+                if (std::in_range<std::int32_t>(u->maximum))
+                    reported_max_mana_ = static_cast<std::int32_t>(u->maximum);
+                else
+                    reported_max_mana_.reset();
             } else {
                 pstatus_.endurance = u->current;
                 pstatus_.max_endurance = u->maximum;
