@@ -66,8 +66,8 @@ audio::SoundGroup footstep_group(const game::Spawn& s, bool local) {
 audio::SoundGroup wave_cue_group(const net::SoundCue& cue) {
     using Context = net::SoundCue::Context;
     switch (cue.context) {
-    case Context::BagOpen: return audio::SoundGroup::OpenBag;
-    case Context::BankBagOpen: return audio::SoundGroup::OpenBank;
+    case Context::Bag: return audio::SoundGroup::OpenBag;
+    case Context::BankBag: return audio::SoundGroup::OpenBank;
     case Context::ItemWorn: return audio::SoundGroup::Equip;
     case Context::None: break;
     }

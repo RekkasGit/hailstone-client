@@ -268,6 +268,8 @@ private:
 
 // ---------------------------------------------------------------- bag windows (CContainerMgr / CContainerWnd)
 
+bool in_bank_slot(const net::ItemSlot& s) { return s.type == net::kInvBank || s.type == net::kInvSharedBank; }
+
 // The open containers, in the order they opened ("Bag1" is the first). A container closes when its bag leaves
 // its slot.
 struct Containers {
@@ -306,7 +308,7 @@ struct Containers {
         // close wave plays as well), and 0x697e40 sets both all-closed flags.
         const auto serial = c.bank() ? c.bank()->serial : 0;
         if (bank_serial != 0 && serial != bank_serial) {
-            for (const OpenBag& o : open) c.container_sound(o.type, false);
+            for (const OpenBag& o : open) c.container_sound(o.type, false, in_bank_slot(o.slot));
             open.clear();
             all_closed = bank_all_closed = true;
         }
@@ -315,12 +317,12 @@ struct Containers {
         // original closes it through CloseContainer, which always plays (a picked-up bag, CInvSlot::HandleLButtonUp
         // @0x695670; the server's removal, Handle_OP_MoveItem_Apply @0x4c1ba0).
         std::erase_if(open, [&](const OpenBag& o) {
-            bool gone = (o.slot.type == net::kInvBank || o.slot.type == net::kInvSharedBank) && !c.bank();
+            bool gone = in_bank_slot(o.slot) && !c.bank();
             if (!gone) {
                 const net::Item* bag = c.inventory().at(o.slot);
                 gone = !bag || !bag->is_bag();
             }
-            if (gone) c.container_sound(o.type, false);
+            if (gone) c.container_sound(o.type, false, in_bank_slot(o.slot));
             return gone;
         });
     }
@@ -330,12 +332,6 @@ Containers& containers() {
     static Containers c;
     return c;
 }
-
-// Hailstone: a bag in a personal or shared bank slot opens with the bank-bag volume (audio.open_bank). Conservative
-// fallback: only those two slot types count. A slot of any other type, or one this classifier does not know, opens
-// with the ordinary bag volume (audio.open_bag), so a bag never goes quiet on a volume it was not meant for. The
-// bank window opening itself has no known sound to put on a volume (docs/todo.md, docs/unknowns.md).
-bool in_bank_slot(const net::ItemSlot& s) { return s.type == net::kInvBank || s.type == net::kInvSharedBank; }
 
 // Opens or closes a bag's window (CInvSlot::HandleRButtonUp: an open container closes, else
 // CContainerMgr::OpenContainer @0x65cae0). A tradeskill bag opens in the tradeskill window instead of its own when
@@ -349,7 +345,7 @@ void toggle_container(UiHost& host, const net::ItemSlot& s) {
     // the bag opened with, so a slot that has lost or replaced it still sounds as that bag.
     if (cs.find(s)) {
         const std::optional<std::uint32_t> type = cs.close(s);
-        if (host.conn && type) host.conn->container_sound(*type, false);
+        if (host.conn && type) host.conn->container_sound(*type, false, in_bank_slot(s));
         if (!host.conn) return;
         const auto& t = host.conn->tradeskill();
         if (t.open && !t.world && t.container_slot.same(s)) host.conn->close_tradeskill();

@@ -372,9 +372,9 @@ The synthesiser is TinySoundFont with `synthusr.sf2`, so it will not sound ident
    - `pet_footsteps`: the same animations of an NPC spawn with an owner (`pet_owner_id` set); `other_footsteps`: of
      every other spawn. A creature whose walk sound is a loop of its own (`AnimationSounds::loop_is_step`) has that loop
      at the same volume; its ambient loop is not touched.
-   - `open_bag`: the open wave (0x86 or 0x91) of a bag in a carried slot; `open_bank`: of a bag in a bank or shared
+   - `open_bag`: the opening and closing sounds of a bag in a carried slot; `open_bank`: of a bag in a bank or shared
      bank slot. No sound for the bank window itself opening is known (a quick search of the
-     decompiled client found none, docs/unknowns.md), so the bank volume is that of its bags. Closing a bag is not covered.
+     decompiled client found none, docs/unknowns.md), so the bank volume is that of its bags.
    - `money`: wave 0x8a (the cash register: merchant, trader, barter, loot, split and coin moves). The quest reward's
      coin sound (0x8d) is not.
    - `thunder`: the storm's thunder (0x8f, 0x90). The "struck down" thunder of a GM kill is not.

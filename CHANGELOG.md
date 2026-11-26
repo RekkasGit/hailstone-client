@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The Bags and Bank bags volume sliders now lower closing sounds as well as opening sounds.
+
 - Other players see weapons, shields and instruments change or disappear when you swap equipment or activate a bandolier set. As in the original, placing a range item shows it in your off hand, with the main hand empty, until your next melee swing.
 - Right-clicking a parcel in the Modern merchant window opens its item details. Alt-right-click still opens window settings.
 - Right-clicking an ordinary NPC shows its Consider message in chat. **Right-Click to Consider** is on by default and can be switched off in Options.
