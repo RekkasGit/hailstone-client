@@ -2355,7 +2355,7 @@ TEST_CASE("hs.PlaySoundTest: asks the host to play an Individual Sounds option a
 TEST_CASE("Individual Sounds: both packs' volume rules clamp, snap, step, parse typed text and reset") {
     // The values the rules are asked about, and what they must answer (0..100, steps of 5).
     constexpr int kTooHigh = 999, kBelowZero = -20, kOffStep = 37, kOnStep = 35, kNextStepUp = 40, kTopStep = 100;
-    constexpr int kFullVolume = 100, kSoundCount = 9; // the rows: three footsteps, bag, bank bag, money, thunder, equip, creatures
+    constexpr int kFullVolume = 100, kSoundCount = 10; // the rows: three footsteps, bag, bank bag, money, thunder, equip, creatures, beep
     for (const char* pack : {"modern", "gamepad"}) {
         CAPTURE(pack);
         const auto file = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack / "lib" / "sound_volumes.lua";

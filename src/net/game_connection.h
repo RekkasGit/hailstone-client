@@ -78,6 +78,7 @@
 #include "game/reward_selection.h"
 #include "game/achievements.h"
 #include "game/task_window.h"
+#include "game/remove_buff.h"
 #include "game/text_overlay.h"
 #include "game/camera_shake.h"
 #include "game/tracking.h"
@@ -374,10 +375,18 @@ public:
     GameConnection(const GameDir& game, ConnectionOptions options = {});
     ~GameConnection();
     // Tests: a zone packet handled as if it had arrived (no session needed).
-    void receive_zone_packet_for_test(const AppPacket& p) { handle_zone(p); }
-    void receive_world_packet_for_test(const AppPacket& p) { handle_world(p); }
-    game::WorldState& world_for_test() { return world_; }
-    void set_spell_table_for_test(std::shared_ptr<const game::SpellTable> t) { spell_table_ = std::move(t); }
+    void receive_zone_packet_for_test(const AppPacket& p) { invalidate_character(); handle_zone(p); invalidate_character(); }
+    void receive_world_packet_for_test(const AppPacket& p) { invalidate_character(); handle_world(p); invalidate_character(); }
+    game::WorldState& world_for_test() { invalidate_character(); return world_; }
+    void set_spell_table_for_test(std::shared_ptr<const game::SpellTable> t) {
+        invalidate_character();
+        spell_table_ = std::move(t);
+    }
+    // The MQ TLOs' shared character (with_cached_character) is built again on its next read: the state it was built
+    // from changed outside update() without a packet sent.
+    void invalidate_character() const { ++character_serial_; }
+    // Tests: how many sheets the TLOs' shared character has been built from.
+    std::uint32_t character_builds_for_test() const { return character_builds_; }
     std::size_t cast_stages_shown_for_test() const { return cast_stage_shown_.size(); }
     static constexpr std::size_t cast_stages_kept_for_test() { return kCastStagesKept; }
     void expire_poison_timer_for_test() { if (poison_started_ms_) poison_started_ms_ = 1; } // as if 10 s had passed
@@ -520,6 +529,13 @@ public:
     // MacroQuest's WriteChatColor gives it).
     void ui_message(std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0) {
         chat(ChatEvent::Kind::System, std::move(text), rgb, color);
+    }
+    // A line the client writes itself with MQ's colour codes in it (a MacroQuest command's reply: /popupecho's
+    // "Popup::", a usage line): its codes are kept though no script or plugin wrote it, where ui_message takes the
+    // BEL out of such a line. Text in it from elsewhere (the player's command line, which a ${...} may have filled
+    // with a server's names) must have its BEL taken out by the caller (game::kMqColorCode).
+    void client_message(std::string text, std::uint32_t rgb = 0) {
+        chat(ChatEvent::Kind::System, std::move(text), rgb, 0, {}, std::nullopt, true, true);
     }
     // Display the surviving lines of a local group as one collapsible entry. Only the individual rows go through
     // the chat hooks and log. Returns false for invalid input, with no rows submitted.
@@ -813,6 +829,17 @@ public:
         return std::max<std::int64_t>(0, static_cast<std::int64_t>(respawn_->time_remaining_ms) - respawn_age_ms());
     }
     void choose_respawn(std::uint32_t option_id);
+    // CRespawnWnd's selected option: the one picked in its list (set_respawn_choice, until one is sent), else the
+    // server's default. Kept here, not in the window, so a script's Select (/notify RespawnWnd SelectButton) chooses
+    // what the window shows, or the default with no UI. 0 without a window.
+    std::uint32_t respawn_selected_option() const { return respawn_ ? respawn_choice_.value_or(respawn_->selected) : 0; }
+    void set_respawn_choice(std::uint32_t option_id) {
+        if (respawn_ && !respawn_chosen_) respawn_choice_ = option_id;
+    }
+    // Select: choose_respawn(respawn_selected_option()) (it checks the delay and the option's availability).
+    void choose_selected_respawn() {
+        if (respawn_) choose_respawn(respawn_selected_option());
+    }
     // Same-zone hover completion publishes a new living spawn. The app must place its physics body there before
     // the next movement step; a full zone change uses the ordinary zone-in placement instead.
     struct RespawnPlacement {
@@ -1327,6 +1354,23 @@ public:
     const std::map<std::uint32_t, AltCurrency>& alt_currencies() const { return alt_currencies_; }
     // Reclaim: the cursor's currency item into the count (put_in), or `count` of it out onto the cursor.
     void alt_currency_reclaim(std::uint32_t currency, std::uint32_t count, bool put_in);
+    // The inventory's Alt. Currency page: the currency picked in its list (0 none) and Display Missing (the ones at
+    // 0 listed too). Kept here, not in the window, so a script's /notify picks and uses the same with or without a UI.
+    std::uint32_t alt_currency_selected() const { return alt_currency_selected_; }
+    void select_alt_currency(std::uint32_t currency) { alt_currency_selected_ = currency; }
+    bool alt_currency_show_missing() const { return alt_currency_show_missing_; }
+    void set_alt_currency_show_missing(bool show) { alt_currency_show_missing_ = show; }
+    // The page's list in its order (std::map's: by currency id), and the picked one's entry (none when not held).
+    std::vector<std::uint32_t> alt_currency_list() const {
+        std::vector<std::uint32_t> v;
+        for (const auto& [cid, a] : alt_currencies_)
+            if (alt_currency_show_missing_ || (a.amount > 0 && a.entry.shown)) v.push_back(cid);
+        return v;
+    }
+    const AltCurrency* selected_alt_currency() const {
+        auto it = alt_currencies_.find(alt_currency_selected_);
+        return it == alt_currencies_.end() ? nullptr : &it->second;
+    }
     struct PointMerchant {
         std::uint32_t npc = 0;           // the merchant while its window is open
         PointMerchantList list;          // the server's answer
@@ -1809,9 +1853,13 @@ public:
     // MacroQuest's commands on these (registered by the app, so they come before the game's abbreviations):
     // /removelev clicks off every buff with levitation (SPA 57), saying each; /removeaura <name> removes each aura
     // whose name holds the text; /memspell <gem> "<spell>" memorizes a spell of the book (by exact name, any case, or
-    // id) into gem 1..12 through MemorizeSet with only that gem, when the player's level allows it.
+    // id) into gem 1..12 through MemorizeSet with only that gem, when the player's level allows it;
+    // /removebuff [-pet|-both] <name> clicks off the first buff of the player's or the focused pet's whose name
+    // matches, /removepetbuff <name> the pet's (game/remove_buff.h).
     void removelev_command();
     void removeaura_command(std::string_view args);
+    void removebuff_command(std::string_view args);
+    void removepetbuff_command(std::string_view args);
     void memspell_command(std::string_view args);
     // Clicks off a removable beneficial buff in the focused pet's server slot.
     bool remove_pet_buff(std::uint32_t slot);
@@ -1994,6 +2042,20 @@ public:
     // 20 units): OP_ShopRequest. The server's answer opens the window and
     // sends the stock as item packets of type 0x64.
     void open_merchant(std::uint32_t npc_id);
+    // The merchant list's selection (MerchantSession::considered): consider the merchant slot's item (an inventory
+    // item picked for selling is let go, as the list's click does), or drop it.
+    void merchant_consider(std::uint32_t merchant_slot) {
+        if (!merchant_ || !merchant_->open || !merchant_->items.count(merchant_slot)) return;
+        merchant_->considered = merchant_slot;
+        merchant_unselect();
+    }
+    void merchant_drop_considered() {
+        if (merchant_) merchant_->considered.reset();
+    }
+    // PurchasePageHandler +0x60, "show every item" (MW_UsableButton unchecked): the list starts filtered to what the
+    // player can use; kept for the session, as the original's window keeps it.
+    bool merchant_show_all() const { return merchant_show_all_; }
+    void set_merchant_show_all(bool all) { merchant_show_all_ = all; }
     // CMerchantWnd RequestGetItem: buy `quantity` of the merchant slot's item.
     void merchant_buy(std::uint32_t merchant_slot, std::uint32_t quantity);
     // RequestPutItem: sell `quantity` of the inventory item at `slot`.
@@ -2435,6 +2497,17 @@ public:
     // OP_SharedTaskAcceptNew for a shared task selection); Decline sends task id 0.
     void accept_task(std::uint32_t task_id);
     void decline_tasks();
+    // The task select window's selection (TaskOffers::selected): a row of the offers, and Accept on it (nothing
+    // when no row is selected), so a script's Accept takes what the window shows, or the first offer with no UI.
+    static const game::TaskOffer* selected_task_offer(const game::TaskOffers& o) {
+        return o.selected >= 0 && o.selected < static_cast<int>(o.offers.size()) ? &o.offers[static_cast<std::size_t>(o.selected)] : nullptr;
+    }
+    void select_task_offer(int row) {
+        if (tasks_.offers && row >= 0 && row < static_cast<int>(tasks_.offers->offers.size())) tasks_.offers->selected = row;
+    }
+    void accept_selected_task() {
+        if (const auto* t = tasks_.offers ? selected_task_offer(*tasks_.offers) : nullptr) accept_task(t->task_id);
+    }
     // Abandons a task (OP_CancelTask).
     void cancel_task(std::uint32_t type, std::uint32_t sequence);
     // The task window's Remove (TASK_AbandonButton): the question (game::task_abandon_eqstr, 10 s, the task id) for
@@ -2895,9 +2968,16 @@ public:
     // (CollsnCallbackForFloor), or none. The trader stall check (0x4431a0) reads it.
     void set_touching_switch(std::optional<std::uint8_t> door) { touching_switch_ = door; }
     std::optional<std::uint8_t> touching_switch() const { return touching_switch_; }
-    void set_profile_for_test(const PlayerProfile& p) { profile_ = p; }
+    void set_profile_for_test(const PlayerProfile& p) {
+        invalidate_character();
+        profile_ = p;
+    }
     // Tests: DoPassageOfTime's timed blocks as if a frame ran at `now` (now_ms()'s clock).
-    void passage_of_time_for_test(std::int64_t now) { passage_of_time(now); }
+    void passage_of_time_for_test(std::int64_t now) {
+        invalidate_character();
+        passage_of_time(now);
+        invalidate_character();
+    }
     // ---- the barter hall (game/barter.h; net/game_connection_market.cpp) ----
     // CBarterMerchantWnd: a right click on a buyer sends OP_Barter 11 (RightClickedOnPlayer); the window opens on the
     // server's answer. A line is picked, Sell asks for the quantity (sell_start: the dialog's limit, or nothing when
@@ -3026,10 +3106,12 @@ private:
     void apply_spawn(const Spawn& s);
     void set_spawn_motion(game::Spawn& s, const Motion& m);
     void connect_world(bool zoning);
+    // `client_codes`: the client's own line keeps the MQ colour codes it wrote (client_message).
     void chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0,
-              std::string peer = {}, std::optional<std::string> display_text = std::nullopt, bool filter = true);
+              std::string peer = {}, std::optional<std::string> display_text = std::nullopt, bool filter = true,
+              bool client_codes = false);
     bool prepare_chat(ChatEvent& event, std::optional<std::string> display_text, bool filter,
-                      bool group_member = false);
+                      bool group_member = false, bool client_codes = false);
     void enqueue_chat(ChatEvent event);
     // ReportSuccessfulHit's melee line for an attack by `source`, through the chat filters (`report`: its argument).
     void report_hit(const game::HitLine& line, std::uint32_t source, bool report = true);
@@ -3181,12 +3263,30 @@ private:
     void memorize_tick(std::int64_t now);
     std::optional<std::vector<std::int64_t>> game_steps_; // set_game_steps
     void update_usable_gems();
+    // /removebuff's and /removepetbuff's click-off of the first buff `r` names.
+    void remove_named_buff(const game::RemoveBuff& r);
     // The stats port over the current profile, inventory, buffs and AAs (CharacterZoneClient's effect totals).
     void with_character(const std::function<void(game::mechanics::Character&)>& fn) const;
     // with_character's sheet, rebuilt in place on each call (build_sheet_into: no allocation for an unchanged
     // inventory); a nested call builds its own.
     mutable std::unique_ptr<game::mechanics::CharacterSheet> character_sheet_;
     mutable bool character_sheet_busy_ = false;
+    // build_sheet_into over the connection's state now.
+    void build_character_sheet(game::mechanics::CharacterSheet& sheet) const;
+    // The MQ TLOs' reads (spell_landing_slot, spell_duration_ticks, spell_range_focus and the spell bonuses): a
+    // script asks many in one frame (E3's StacksWith over each of a target's buffs), so they share one sheet and one
+    // Character, built on the first read and kept until character_serial_ moves: each update() (the packets, the
+    // clock), each packet the client sends (an action that may have changed its state at once, an item move), and
+    // each local change made without one (clear_buff_locally, the tests' setters). Inside update() and in a nested
+    // call they build their own, as with_character does. `stats`: the same sheet's Character after
+    // ProcessAllStats, run once per build and kept apart, so the effect-only one does not change with it (its
+    // haste would take in the items' then).
+    void with_cached_character(bool stats, const std::function<void(game::mechanics::Character&)>& fn) const;
+    struct CharacterCache; // net/character_cache.h
+    mutable std::unique_ptr<CharacterCache> character_cache_;
+    mutable std::uint32_t character_builds_ = 0; // the shared character's sheets built (tests)
+    mutable std::uint64_t character_serial_ = 1;
+    bool in_update_ = false;
     void update_merchant();
     void update_npc_interactions();
     void update_barter();
@@ -4177,6 +4277,10 @@ private:
     bool waiting_for_port_ = false; // PlayerZoneClient +0x1f05
     std::int64_t respawn_shown_ms_ = 0;
     bool respawn_chosen_ = false;
+    bool merchant_show_all_ = false; // merchant_show_all()
+    std::uint32_t alt_currency_selected_ = 0;   // alt_currency_selected()
+    bool alt_currency_show_missing_ = false;    // alt_currency_show_missing()
+    std::optional<std::uint32_t> respawn_choice_; // the list's pick this window (respawn_selected_option)
     bool respawn_selection_sending_ = false; // outgoing hooks cannot recursively commit another choice
     std::uint32_t respawn_session_ = 0;
 };

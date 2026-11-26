@@ -241,8 +241,11 @@ int ClientApp::run() {
         loading_under_question_ = automation_ && automation_->plugin_consent().has_value();
         if (ui_.visible()) draw_ui(fps);
         lap.mark("draw_ui");
+        // UiHost's state (its connection, the session) every frame, whether or not a Lua UI draws: the stock
+        // windows' state, /notify's actions and the scripts' Window reads use it with no UI (a pack that failed to
+        // load or is being reloaded; a client that draws nothing).
+        update_ui_host();
         if (lua_ui_) {
-            update_ui_host();
             sync_plugin_windows();
             lap.mark("hs host update");
             ui_api_->begin_frame();

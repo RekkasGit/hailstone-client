@@ -460,6 +460,19 @@ local PAGES = {
           test = name }
       end
     end
+    -- The Beep sound: left / right through the tone and the short list (a pad has no search: a sound picked from the
+    -- whole list in another interface shows by name, and left / right starts again from the tone), A plays it.
+    local beepV = API.settings.Option(V.BEEP_SOUND)
+    if beepV ~= nil then
+      local short = { "Tone" }
+      for _, name in ipairs(API.settings.OptionChoices(V.BEEP_SOUND_FEATURED) or {}) do short[#short + 1] = name end
+      local shown = short[beepV + 1]
+      if not shown then shown = (API.settings.OptionChoices(V.BEEP_SOUND) or {})[beepV + 1] or "(not in this game folder)" end
+      local cur = (beepV >= 0 and beepV < #short) and beepV or 0
+      rows[#rows + 1] = { V.BEEP_SOUND_LABEL, shown, function(dir)
+        API.settings.SetOption(V.BEEP_SOUND, (cur + dir) % #short)
+      end, test = "beep", option = V.BEEP_SOUND }
+    end
     if #rows > 0 then
       rows[#rows + 1] = { "Reset all to " .. V.FULL .. SOUND_SUFFIX, "", nil,
         press = function() V.reset(API.settings.Option, API.settings.SetOption) end }

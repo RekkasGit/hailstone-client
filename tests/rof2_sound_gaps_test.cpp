@@ -173,8 +173,11 @@ TEST_CASE("Individual sounds: the group of a Wave cue and of a spawn's footsteps
     CHECK(app::footstep_group(pet, false) == G::PetFootsteps);
     CHECK(app::footstep_group(npc, false) == G::OtherFootsteps);
 
-    // Every group the options list has a wave to test with; the others have none.
-    for (const audio::IndividualSound& sound : audio::individual_sounds()) CHECK(app::test_wave(sound.group) > 0);
+    // Every group the options list has a wave to test with but Beep, whose Test plays the chosen Beep sound (a named
+    // sound or the tone: ClientApp::beep_command); the others have none.
+    for (const audio::IndividualSound& sound : audio::individual_sounds())
+        CHECK((app::test_wave(sound.group) > 0 || sound.group == G::Beep)); // (one value: doctest takes no ||)
+    CHECK(app::test_wave(G::Beep) == 0);
     CHECK(app::test_wave(G::None) == 0);
 }
 

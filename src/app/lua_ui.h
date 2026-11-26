@@ -261,12 +261,31 @@ struct UiHost {
     // pre-game scene's camera at creation, the client's customization camera in game.
     std::vector<game::CustomizationCameraCall> customization_camera;
     int quantity_serial = 0;
+    // The open quantity dialog's slider and box (quantity_sync in app/lua_ui_dialogs.cpp): kept here, not in its
+    // window, so a script's /notify QuantityWnd sets and accepts the same dialog with or without a UI. `key`: the
+    // owner (UiQuantity::serial, -1 the connection's request, 0 none); `request`: the connection request's slot
+    // (type, slot, sub, aug) and maximum the slider was started for.
+    struct QuantityEntry {
+        int key = 0;
+        std::int32_t min = 0, max = 0, value = 0; // value: the slider, min-relative
+        std::string text;                        // QTYW_SliderInput
+        bool request_open = false;
+        std::optional<std::array<std::int32_t, 4>> request_slot;
+        std::uint32_t request_max = 0;
+    };
+    QuantityEntry quantity_entry;
+    // Shift and Ctrl as a script's line forced them (/nomodkey, /shiftkey, /ctrlkey), for the dialogs its clicks
+    // open; none: the keyboard's.
+    std::optional<std::array<bool, 2>> forced_mods;
     // The screen rectangle {x0, y0, x1, y1} of the child the last click went to (the stock callers place the quantity
     // dialog at their button or slot).
     std::array<float, 4> click_rect{-1, -1, -1, -1};
     // The ground drop's confirmation (CEverQuest::LMouseUp's ConfirmationDialog 0x6e, eqstr 9057): the client's
     // flag, set when GameConnection::request_drop_cursor() asked.
     bool* drop_confirm = nullptr;
+    // Counts the confirmation box's answers (answer_confirmation_question), from its window or a script's /notify:
+    // the next question starts its own time limit.
+    std::uint32_t confirm_answers = 0;
     // A text entry question (CTextEntryWnd::Activate): the prompt, the longest answer and the owner's handler.
     struct TextEntry {
         std::string prompt, text;
@@ -516,6 +535,14 @@ public:
     // The enabled state the window gives a child (nullopt: the XML's), and a link clicked in an STML child (testing
     // aids).
     std::optional<bool> child_state(std::string_view screen, std::string_view child);
+    // Window[w].Child[c] for the MQ TLOs (mq::Context::window_child): what the stock window gives the child (its
+    // text, enabled and shown state, a gauge's value, with `rows` a list's rows), from its own state, so it answers
+    // without anything drawn. MQ's names are taken (game::canonical_window / canonical_child, then the name as
+    // given); nullopt for a window this client does not have.
+    std::optional<mq::WindowChild> window_child(std::string_view window, std::string_view child, bool rows);
+    // Window[w].Open's UI answer and DoOpen / DoClose, with MQ's window names.
+    bool window_shown(std::string_view window) const;
+    bool show_window(std::string_view window, bool show);
     bool stml_link(std::string_view screen, std::string_view child, int message, std::string_view data);
     // The rows' first texts of a stock window's list (testing aids).
     std::vector<std::string> list_texts(std::string_view screen, std::string_view child);

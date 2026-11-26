@@ -864,3 +864,63 @@ TEST_CASE("Audio system: the global music is set once the sound archives are ind
     CHECK(playing->id == kMusicBank);
     CHECK(playing->file == "gl.xmi");
 }
+
+// MQ's /beep with no sound is Windows' Beep(0x500, 250): the tone the Beep sound "Tone" plays (app/client_app_options.cpp).
+TEST_CASE("Audio: make_tone gives a 1280 Hz tone of 250 ms, faded at both ends") {
+    constexpr std::uint32_t kRate = 48000, kMs = 250, kFadeMs = 5;
+    constexpr double kHz = 1280.0;
+    constexpr float kAmplitude = 0.5f;
+    const Pcm p = make_tone(kRate, kHz, kMs, kFadeMs, kAmplitude);
+    CHECK(p.rate == kRate);
+    CHECK(p.channels == 1);
+    REQUIRE(p.frames() == kRate * kMs / 1000);
+    CHECK(p.samples.front() == 0.0f);                   // faded in from silence
+    CHECK(std::fabs(p.samples.back()) < 0.01f);         // and out to it
+    float peak = 0.0f;
+    int crossings = 0;
+    for (std::size_t i = 0; i < p.samples.size(); ++i) {
+        peak = std::max(peak, std::fabs(p.samples[i]));
+        if (i > 0 && (p.samples[i - 1] < 0.0f) != (p.samples[i] < 0.0f)) ++crossings;
+    }
+    CHECK(peak <= kAmplitude);
+    CHECK(peak > kAmplitude * 0.99f);
+    // Two sign changes a cycle: 1280 cycles a second for a quarter of one.
+    CHECK(std::abs(crossings - static_cast<int>(2 * kHz * kMs / 1000)) <= 2);
+}
+
+TEST_CASE("Audio system: /beep's sounds, a game folder's named sound or the tone, at the Beep volume") {
+    test::ScratchDir dir("audio_beep");
+    std::filesystem::create_directories(dir.path() / "sounds");
+    std::ofstream(dir.path() / "soundassets.txt")
+        << "YouveGotMail^mail.wav\nAlertBell^bell.wav\n1^Unknown\n139^LevelUp.WAV\n140^levelup.wav\n142^Button_1.WAV\n";
+    GameDir game(dir.path());
+    AudioSystem audio(game, AudioSettings{}, false);
+    audio.set_self_advance(false);
+    // The Beep sound's choices after the tone: the named sounds, sorted.
+    CHECK(audio.named_sounds() == std::vector<std::string>{"AlertBell", "YouveGotMail"});
+    // A named sound by its name in any case, or by its wave file; a name the game folder lacks plays nothing.
+    CHECK(audio.play_named_group_2d("youvegotmail", SoundGroup::Beep));
+    CHECK(audio.play_named_group_2d("BELL.WAV", SoundGroup::Beep));
+    CHECK_FALSE(audio.play_named_group_2d("NoSuchSound", SoundGroup::Beep));
+    // A numbered entry's wave file too, in any case; "Unknown" is no sound.
+    CHECK(audio.play_named_group_2d("levelup.wav", SoundGroup::Beep));
+    CHECK_FALSE(audio.play_named_group_2d("Unknown", SoundGroup::Beep));
+    // Every file once (in any case), sorted in any case, without "Unknown": the Beep sound's search.
+    CHECK(audio.sound_files() == std::vector<std::string>{"bell.wav", "Button_1.WAV", "LevelUp.WAV", "mail.wav"});
+    // The tone is a voice on the mixer at once (no file to decode), played once: gone after its 250 ms.
+    const std::size_t before = audio.mixer().voice_count();
+    audio.play_tone_2d(1280.0, 250, SoundGroup::Beep);
+    CHECK(audio.mixer().voice_count() == before + 1);
+    const std::size_t frames = audio.mixer().rate() * 300 / 1000; // past the tone's end
+    std::vector<float> out(2 * frames);
+    audio.mixer().render(out.data(), frames);
+    CHECK(audio.mixer().voice_count() == before);
+    // At a Beep volume of 0 nothing plays.
+    AudioSettings quiet;
+    quiet.individual[SoundGroup::Beep] = kSilentPercent;
+    AudioSystem silent(game, quiet, false);
+    silent.set_self_advance(false);
+    const std::size_t none = silent.mixer().voice_count();
+    silent.play_tone_2d(1280.0, 250, SoundGroup::Beep);
+    CHECK(silent.mixer().voice_count() == none);
+}

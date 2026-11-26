@@ -18,7 +18,17 @@ M.SOUNDS = {
   { "equip", "Equipping items", "The sound of putting on or taking off an item." },
   { "creature_ambient", "Creature ambient sounds",
     "The sounds some creatures make all the time, such as a spectre's hum." },
+  { "beep", "Beep", "The /beep command's sound, a script's alert (its sound: Beep sound)." },
 }
+
+-- The Beep sound's option (hs.Option "beep_sound": an index into hs.OptionChoices "beep_sound", the tone first, -1 a
+-- sound this game folder does not have), drawn after the Beep volume.
+M.BEEP_SOUND = "beep_sound"
+-- The short list's names (hs.OptionChoices "beep_sound_featured"): the choices right after the tone; every other
+-- sound file of the game folder follows them.
+M.BEEP_SOUND_FEATURED = "beep_sound_featured"
+M.BEEP_SOUND_LABEL = "Beep sound"
+M.BEEP_SOUND_TIP = "What /beep plays: the tone, or one of your game folder's sounds. Test on the Beep row plays it."
 
 -- A volume brought into 0..100 (whole numbers).
 function M.clamp(v) return math.max(M.MIN, math.min(M.MAX, math.floor(v))) end

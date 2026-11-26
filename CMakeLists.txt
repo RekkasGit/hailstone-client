@@ -1422,6 +1422,14 @@ if(HAILSTONE_BUILD_TESTS)
     tests/exchange_test.cpp
     tests/player_commands_test.cpp
     tests/item_notify_test.cpp
+    tests/remove_buff_test.cpp
+    tests/window_notify_test.cpp
+    tests/window_child_test.cpp
+    tests/imgui_frame_test.cpp
+    tests/popup_test.cpp
+    tests/typed_escapes_test.cpp
+    tests/notify_state_test.cpp
+    tests/notify_quantity_test.cpp
     tests/bank_test.cpp
     tests/bank_snapshot_test.cpp
     tests/real_estate_test.cpp

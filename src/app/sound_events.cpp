@@ -86,6 +86,7 @@ std::int32_t test_wave(audio::SoundGroup group, std::uint32_t pick) {
     case audio::SoundGroup::Money: return game::kSoundCoin;
     case audio::SoundGroup::Thunder: return game::Weather::kThunder1;
     case audio::SoundGroup::Equip: return game::kSoundItemMoved;
+    case audio::SoundGroup::Beep: // no wave id: the chosen Beep sound (ClientApp::beep_command)
     case audio::SoundGroup::None:
     case audio::SoundGroup::Count: break;
     }

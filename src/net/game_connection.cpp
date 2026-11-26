@@ -1,4 +1,5 @@
 #include "net/game_connection.h"
+#include "net/character_cache.h"
 
 #include "net/notice_packets.h"
 #include "net/player_packets.h"
@@ -150,6 +151,7 @@ void GameConnection::reload_game_files() {
     tables_.reset();
     auto table = std::make_shared<game::SpellTable>();
     if (!table->load(game_)) log::warn("spells_us.txt not found; spell names and rules are unavailable");
+    invalidate_character();
     spell_table_ = std::move(table);
     if (spell_id_limit_ > game::kRof2StockMaxSpellId && !spell_data_ready())
         log::warn("Reloaded spells_us.txt does not support the current zone's spell ID limit {}", spell_id_limit_);
@@ -213,11 +215,12 @@ void GameConnection::fail(std::string message) {
 }
 
 bool GameConnection::prepare_chat(ChatEvent& event, std::optional<std::string> display_text, bool filter,
-                                  bool group_member) {
+                                  bool group_member, bool client_codes) {
     // MacroQuest's colour codes (game/mq_colors.h) are for the plugins' and scripts' own lines: from anyone else (a
     // server's message, a player's tell) a BEL is taken out, so their text cannot colour the chat. A hook below may
-    // still put codes into a line it rewrites, as the plugin's own.
-    if (plugin::caller_name().empty()) {
+    // still put codes into a line it rewrites, as the plugin's own. The client's own coded lines (client_message) keep
+    // theirs.
+    if (plugin::caller_name().empty() && !client_codes) {
         std::erase(event.text, game::kMqColorCode);
         if (display_text) std::erase(*display_text, game::kMqColorCode);
     }
@@ -253,9 +256,9 @@ void GameConnection::enqueue_chat(ChatEvent event) {
 }
 
 void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb, std::uint32_t color,
-                          std::string peer, std::optional<std::string> display_text, bool filter) {
+                          std::string peer, std::optional<std::string> display_text, bool filter, bool client_codes) {
     ChatEvent event{kind, std::move(text), rgb, color, std::move(peer), {}};
-    if (!prepare_chat(event, std::move(display_text), filter)) return;
+    if (!prepare_chat(event, std::move(display_text), filter, false, client_codes)) return;
     enqueue_chat(std::move(event));
 }
 
@@ -337,6 +340,20 @@ void GameConnection::connect_world(bool zoning) {
 }
 
 void GameConnection::update() {
+    // The MQ TLOs' shared character (with_cached_character) is not used while the frame changes the state, and is
+    // built again after it.
+    struct UpdateScope {
+        GameConnection& c;
+        bool was;
+        explicit UpdateScope(GameConnection& conn) : c(conn), was(conn.in_update_) {
+            conn.in_update_ = true;
+            c.invalidate_character();
+        }
+        ~UpdateScope() {
+            c.in_update_ = was;
+            c.invalidate_character();
+        }
+    } update_scope(*this);
     if (world_session_) {
         world_session_->update();
         if (world_session_->state() == SessionState::Connected && !world_login_sent_ &&
@@ -590,6 +607,7 @@ bool GameConnection::new_armor_membership_changed() {
 }
 
 void GameConnection::send_world(const AppPacket& p) {
+    invalidate_character(); // an action: what it changed at once, the TLOs' shared character no longer shows
     if (!world_session_) return;
     if (options_.hooks && options_.hooks->has_packet_hooks(plugin::Stream::World, plugin::Direction::Out)) {
         AppPacket copy = p;
@@ -601,6 +619,7 @@ void GameConnection::send_world(const AppPacket& p) {
 }
 
 bool GameConnection::send_zone(const AppPacket& p, bool reliable, const std::function<bool()>& still_current) {
+    invalidate_character(); // an action (an item move, a click-off): what it changed at once, the cache no longer shows
     if (!zone_session_ || zone_session_->state() != SessionState::Connected) return false;
     if (still_current && !still_current()) return false;
     const auto* session = zone_session_.get();
@@ -3346,6 +3365,7 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
                 const bool chosen = respawn_ && respawn_chosen_;
                 if (!respawn_) {
                     respawn_session_ = core::next_process_serial();
+                    respawn_choice_.reset();
                     clear_hover_rez();
                 }
                 respawn_ = std::move(window);
