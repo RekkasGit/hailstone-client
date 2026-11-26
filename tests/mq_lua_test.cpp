@@ -2161,7 +2161,9 @@ print('more', pcall(mq.event, 'z', 'q', fn))
 print('again', pcall(mq.event, 'e1', 'the same name', fn))
 )");
     REQUIRE(h.scripts->run("ev", {}));
-    h.pulses(1);
+    // The scripts pause after kSliceMs of real time, and 255 events can take longer in a sanitizer build: pulse until
+    // the script's last line, not once.
+    for (int i = 0; i < 500 && !printed_with(h, "again ", ""); ++i) h.pulses(1);
     CHECK(printed_with(h, "long false", "a pattern is at most 1024 bytes"));
     CHECK(printed_with(h, "name false", "a name is at most 256 bytes"));
     CHECK(h.printed_line("max true"));
@@ -2176,7 +2178,7 @@ print('total', pcall(mq.event, 'b33', 'x', function() end))
 print('smaller', pcall(mq.event, 'b1', 'x', function() end))
 )");
     REQUIRE(t.scripts->run("ev", {}));
-    t.pulses(1);
+    for (int i = 0; i < 500 && !printed_with(t, "smaller ", ""); ++i) t.pulses(1);
     CHECK(printed_with(t, "total false", "a script's patterns hold at most 32768 bytes"));
     CHECK(t.printed_line("smaller true"));
 }
