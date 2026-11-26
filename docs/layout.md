@@ -250,7 +250,9 @@ which profiles are offered, and characters using that interface can share them. 
 to the active character. A profile includes stock and pack window placement, chat tabs and routing,
 filters and colors. Modern chat
 timestamps and Gamepad hotbar orientations follow the character, with old shared settings as defaults.
-The game window keeps its current size when a profile is applied. Names use up to 48 ASCII letters, numbers,
+The game window keeps its current size when a profile is applied. A chat window other than the main one keeps a font
+size of 8 to 10 through a profile switch, a Hailstone extension past RoF2's 0 to 7; as in RoF2, the next start
+resets it to 3. Names use up to 48 ASCII letters, numbers,
 spaces, hyphens or underscores and match without regard to case.
 
 #### Quest preferences

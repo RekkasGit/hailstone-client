@@ -2759,8 +2759,10 @@ void chat_layout_loaded(ui::UiIni& ini, UiHost& host, const std::filesystem::pat
         c.tell_target = text(k + "TellTarget", "").substr(0, 0x3f);
         c.name = text(k + "Name", std::format("ChatWindow{}", w));
         c.scrollbar = num(k + "Scrollbar", 1) != 0;
-        // At login the RoF2 constructor @0x654c80 accepts 0..7 for secondary windows. Profile switches preserve
-        // the 0..10 range available from /chatfontsize and the Font Size menu while in game.
+        // The constructor @0x654c80 (as RoF2): another window's font below 0 or above 7 is the default 3, though
+        // /chatfontsize (Cmd_chatfontsize @0x4e9a10) and the Font Size menu set 0..10, so 8..10 on a window other
+        // than the main one is 3 again at the next start (our login path too). Hailstone extension past RoF2's
+        // 0..7: a layout profile switch in game keeps 8..10, which the player could already set there.
         const int font = num(k + "FontStyle", 3);
         const int max_font = profile_change ? 10 : 7;
         c.font = font < 0 || font > max_font ? 3 : font;
