@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Modern Server Management can edit advisory TLO rules, review add-ons' required and suggested TLOs, and grant individual add-ons access to otherwise denied roots. TLOs are allowed by default.
+- For add-on authors: `tools/make_addon.py`'s `--required-tlos` and `--suggested-tlos` are optional. One left out prints a warning and writes no list, which Server Management shows as unknown.
 - Identical items offered one at a time to an NPC stay in separate Give slots. Clicking an empty Give slot places the item there.
 - Resurrection offers show the spell's XP recovery percentage when available. Confirmation dialogs keep the active interface's styling when the pack claims them.
 - Rain and wind sounds fade out when the weather clears, even in a background or minimised window. Changing zones or camping to character select stops both loops immediately.

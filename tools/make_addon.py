@@ -22,7 +22,8 @@ usage:
   tools/make_addon.py --name xess --kind upscaler --version 1.0.0 \
       --platform windows-x64=dist/windows --out release/
 
-Optional: --author, --description, --notes (the release's page), --min-client (the oldest Hailstone it needs).
+Optional: --author, --description, --notes (the release's page), --min-client (the oldest Hailstone it needs), and a
+script's or plugin's --required-tlos and --suggested-tlos (left out: a warning, and the client shows them as unknown).
 Then sign it, if you want players' clients to refuse versions signed by anyone else:
   build/hailstone_sign keygen <secret-key-file>          (once; keep the file off GitHub)
   build/hailstone_sign sign <secret-key-file> release/hailstone-addon.txt
@@ -247,7 +248,10 @@ def one_line(text, what):
 
 def tlo_list(value, option):
     if value is None:
-        sys.exit(f"{option} is required for scripts and plugins; use none for an empty list")
+        # Optional, as older releases are: no line, and Server Management shows the dependencies as unknown.
+        print(f"warning: no {option}; the manifest declares no such list, and Server Management will show it as "
+              "unknown (use none for an empty list)", file=sys.stderr)
+        return None
     value = value.strip(" \t")
     if value.lower() == "none":
         return []
@@ -267,8 +271,8 @@ def main():
     ap.add_argument("--kind", required=True, choices=["script", "plugin", "tool", "upscaler", "ui"])
     ap.add_argument("--version", required=True)
     ap.add_argument("--caps", default="", help="what it needs: read,ui,actions ... (docs/plugins.md); tool/upscaler/UI packages none")
-    ap.add_argument("--required-tlos", help="essential TLO roots, or none (scripts and plugins)")
-    ap.add_argument("--suggested-tlos", help="TLO roots for optional features, or none (scripts and plugins)")
+    ap.add_argument("--required-tlos", help="essential TLO roots, or none (scripts and plugins; omitted: unknown)")
+    ap.add_argument("--suggested-tlos", help="TLO roots for optional features, or none (scripts and plugins; omitted: unknown)")
     ap.add_argument("--dir", help="a script or UI package's folder")
     ap.add_argument("--platform", action="append", default=[], help="a plugin's, a tool's or an upscaler's PLATFORM=FOLDER, once for each")
     ap.add_argument("--author", default="")
@@ -297,9 +301,10 @@ def main():
     managed = a.kind in ("script", "plugin")
     if managed:
         required_tlos = tlo_list(a.required_tlos, "--required-tlos")
-        required_names = {name.lower() for name in required_tlos}
-        suggested_tlos = [name for name in tlo_list(a.suggested_tlos, "--suggested-tlos")
-                          if name.lower() not in required_names]
+        required_names = {name.lower() for name in required_tlos or []}
+        suggested_tlos = tlo_list(a.suggested_tlos, "--suggested-tlos")
+        if suggested_tlos is not None and required_tlos is not None:
+            suggested_tlos = [name for name in suggested_tlos if name.lower() not in required_names]
     elif a.required_tlos is not None or a.suggested_tlos is not None:
         sys.exit("--required-tlos and --suggested-tlos are only for scripts and plugins")
     if a.notes and (not a.notes.startswith(("https://", "http://")) or any(c.isspace() for c in a.notes)):
@@ -340,8 +345,10 @@ def main():
         lines.append(f"description {one_line(a.description, 'description')}")
     lines.append(f"caps {','.join(caps) if caps else 'none'}")
     if managed:
-        lines.append(f"required_tlos {','.join(required_tlos) or 'none'}")
-        lines.append(f"suggested_tlos {','.join(suggested_tlos) or 'none'}")
+        if required_tlos is not None:
+            lines.append(f"required_tlos {','.join(required_tlos) or 'none'}")
+        if suggested_tlos is not None:
+            lines.append(f"suggested_tlos {','.join(suggested_tlos) or 'none'}")
     if a.notes:
         lines.append(f"notes {a.notes}")
     for plat, folder in builds:
