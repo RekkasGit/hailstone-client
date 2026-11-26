@@ -423,9 +423,29 @@ bool Registry::tlo_allowed(const Context& ctx, std::string_view name) const {
     return rules->tlos.allowed(name, identity) && plugin::addon_allowed(rules->addons, identity);
 }
 
+bool Registry::allow_tlo(const Context& ctx, std::string_view name) const {
+    if (tlo_allowed(ctx, name)) return true;
+    // Only the client's own thread tells (a lent thread's chat line could interleave with it); the notice is what
+    // keeps a blocked root from reading as "no target" in a script that just sees nil.
+    if (!denial_notice_ || !plugin::on_main_thread() || plugin::on_lent_thread()) return false;
+    if (denials_conn_ != ctx.conn || denials_serial_ != ctx.conn->server_rules_serial()) {
+        denials_told_.clear();
+        denials_conn_ = ctx.conn;
+        denials_serial_ = ctx.conn->server_rules_serial();
+    }
+    const auto it = tlos_.find(name);
+    const std::string root(it != tlos_.end() ? std::string_view(it->first) : name);
+    const std::string caller(plugin::caller_name());
+    if (!denials_told_.emplace(caller, root).second) return false;
+    // The command policy's blocked_message is for commands; this one names the root, as a script's author needs it.
+    denial_notice_(caller.empty() ? std::format("[MQ] the server blocks TLO {}", root)
+                                  : std::format("[MQ] {}: the server blocks TLO {}", caller, root));
+    return false;
+}
+
 Value Registry::tlo(const Context& ctx, std::string_view name, std::string_view index) const {
     auto it = tlos_.find(name);
-    if (it == tlos_.end() || !tlo_allowed(ctx, it->first)) return Value::nil();
+    if (it == tlos_.end() || !allow_tlo(ctx, it->first)) return Value::nil();
     return it->second.fn(ctx, index);
 }
 

@@ -237,7 +237,7 @@ TloRef& check_ref(lua_State* L, int i) { return *static_cast<TloRef*>(luaL_check
 Value resolve(lua_State* L, const TloRef& r, std::string_view index) {
     need(L, plugin::kCapRead, "mq.TLO");
     const Context& ctx = ctx_of(L);
-    if (!r.lookup_root.empty() && !reg_of(L).tlo_allowed(ctx, r.lookup_root)) return Value::nil();
+    if (!r.lookup_root.empty() && !reg_of(L).allow_tlo(ctx, r.lookup_root)) return Value::nil();
     switch (r.kind) {
     case TloRef::Kind::Tlo: return reg_of(L).tlo(ctx, r.name, index);
     case TloRef::Kind::Member: return reg_of(L).member(ctx, r.base, r.name, index);

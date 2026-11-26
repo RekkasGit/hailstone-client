@@ -91,6 +91,29 @@ TEST_CASE("TLO policy denies resolved names before running providers and leaves 
     CHECK(f.p("${Me.Name}") == "Tester");
 }
 
+TEST_CASE("TLO policy tells the player once per caller and root when it blocks a lookup") {
+    Fixture f;
+    std::vector<std::string> told;
+    f.reg.set_denial_notice([&](const std::string& text) { told.push_back(text); });
+    net::GameConnectionTestAccess::set_server_rules(*f.world.conn, plugin::parse_server_cfg("[tlos]\nblock = Target\n"));
+    CHECK(f.p("${target.Name} ${Target.Level} ${Me.Name}") == "NULL NULL Tester");
+    CHECK(f.reg.complete(f.ctx, "Targ").empty()); // completion is not a lookup: it tells nothing
+    REQUIRE(told.size() == 1);
+    CHECK(told[0] == "[MQ] the server blocks TLO Target");
+    {
+        plugin::CallerScope script(plugin::kCapAll, "demo");
+        CHECK(f.p("${Target.Name}") == "NULL");
+        CHECK(f.p("${TARGET.Name}") == "NULL");
+    }
+    REQUIRE(told.size() == 2);
+    CHECK(told[1] == "[MQ] demo: the server blocks TLO Target");
+    // New rules (a re-sync on zoning) tell again.
+    net::GameConnectionTestAccess::set_server_rules(*f.world.conn, plugin::parse_server_cfg("[tlos]\nblock = Target\n"));
+    CHECK(f.p("${Target.Name}") == "NULL");
+    REQUIRE(told.size() == 3);
+    CHECK(told[2] == told[0]);
+}
+
 // A server extension's zone_display_name changes the label the HUD and map show, not the zone's name: Zone and
 // Zone.Name stay the zone's long name, as scripts store and compare it.
 TEST_CASE("TLO: Zone.Name is the zone's own name whatever a server extension displays") {

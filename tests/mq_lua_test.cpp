@@ -152,6 +152,8 @@ assert(root.Name() == 'Tester' and member() == 'Tester')
 assert(indexed() == 25 and child() == 25)
 print('references restored')
 )lua");
+    std::vector<std::string> told;
+    h.reg.set_denial_notice([&](const std::string& text) { told.push_back(text); });
     REQUIRE(h.scripts->run("tlo_policy", {}));
     h.pulses(1);
     REQUIRE(h.printed_line("references made"));
@@ -159,6 +161,9 @@ print('references restored')
         *h.world.conn, plugin::parse_server_cfg("[tlos]\nblock = Me, Float\n"));
     h.pulses(1, 10);
     REQUIRE(h.printed_line("references denied"));
+    // Each blocked root is told once for the script, however many of its lookups were refused.
+    CHECK(told == std::vector<std::string>{"[MQ] tlo_policy: the server blocks TLO Me",
+                                           "[MQ] tlo_policy: the server blocks TLO Float"});
     net::GameConnectionTestAccess::set_server_rules(*h.world.conn, std::nullopt);
     h.pulses(1, 10);
     CHECK(h.printed_line("references restored"));

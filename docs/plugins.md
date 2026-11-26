@@ -2326,9 +2326,16 @@ These rules depend on an up-to-date, unmodified Hailstone client.
 ### TLO access policy
 
 `[tlos]` is advisory policy for named top-level object lookups in Hailstone. It covers evaluated `mq.TLO` calls,
-`${...}` expansion, `mq.parse`, and macro parsing through the compiled plug-in host API. Denied roots resolve to
-`nil` in Lua and `NULL` in macro text. Existing `read` capability checks still apply. Direct game-data APIs,
-alternate roots, and the server's gameplay permissions have their own rules.
+`${...}` expansion, `mq.parse`, and macro parsing through the compiled plug-in host API. It applies to the player's
+own lookups (typed `${...}`, hotkeys, Lua socials) as well as to scripts and add-ons. Denied roots resolve to
+`nil` in Lua and `NULL` in macro text. The first refused lookup for each caller and root prints a chat line,
+`[MQ] <script or plugin>: the server blocks TLO <Root>` (for the player, `[MQ] the server blocks TLO <Root>`), so
+a blocked root does not pass for "no target"; new rules from the server start the count again. Existing `read`
+capability checks still apply.
+
+The policy is not access control. Blocking a root does not block other routes to the same data: `${Me.Pet}` with
+`Pet` blocked, `${Group.Member[...]}`, `mq.getAllSpawns()`, the compiled plug-ins' bulk reads and other direct
+game-data APIs have their own rules (capabilities), as do the server's gameplay permissions.
 
 ```ini
 [tlos]
