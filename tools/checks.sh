@@ -25,6 +25,8 @@ layers() {
 
 wiki() {
   run python3 tools/sync_wiki.py --check
+  run python3 tools/check_unknowns.py
+  run python3 -m unittest discover -s tests -p 'test_check_unknowns.py'
 }
 
 ui_api() {

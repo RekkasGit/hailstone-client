@@ -78,7 +78,8 @@ The steps are in `docs/plan.md` "Road to 1.0". This section maps items to steps;
 
 ### 1.0 RC
 
-- [ ] Bug fixes only; a known-issues page from what is left in `docs/unknowns.md`; the wiki and changelog.
+- [ ] Bug fixes only; a known-issues page from what is left in `docs/unknowns.md` (its `player` rows: each entry
+  there is tagged `player`, `server` or `trace`); the wiki and changelog.
 
 ### After 1.0
 
