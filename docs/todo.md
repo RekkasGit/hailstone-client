@@ -467,7 +467,7 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - 0x27..0x29 play nothing while sitting.
   - An actor not standing plays nothing for P03, P08, O01, O02 or 0xc..0xf (0x4b1b97).
 - [ ] **Animation fields not traced** (docs/unknowns.md "Characters and models"). At their defaults until their readers are traced: the mount fields beyond GetMount's motion, +0x1229, the spell book's slot 0x94, +0x1198, and the jump / fall fields (+0x10, +0x163, +0x180).
-- [x] **Riding while illusioned** (Hailstone's own, switchable: `game.illusion_mounts`, on by default). The rider's model no longer refuses the mount; the mount's seat dag must still exist (docs/mechanics.md "Riding while illusioned"). Seen live 2026-11-18.
+- [x] **Riding while illusioned** (Hailstone's own, switchable: `game.illusion_mounts`, on by default). The rider's model no longer refuses the mount; the mount's seat dag must still exist (docs/mechanics.md "Riding with classic models and illusions"). Seen live 2026-11-18.
 - [x] Mounted form changes unseat before rebuilding the actor and re-seat against the saved mount identity; departure and id-reuse covered.
 - [x] **Ladders placed in the zone** (objects.wld LADDER* actors, type 6). Walking into one climbs it (CollidingType 6 from the sweep's hit); a click from the top mounts it. Seen live 2026-11-18.
 - [x] **Passable ladders** (Cabilis's LADDERCB101, every polygon passable). Clickable from the top as in the original; climbed by walking or swimming into them by Hailstone's own rule, switched by `hailstone.cfg` `[movement] passable_ladders`. Seen live 2026-11-18.
