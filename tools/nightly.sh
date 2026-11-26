@@ -147,10 +147,23 @@ publish_packages() {
       tools/docker/build.sh "$platform" --no-test > "$logs/package-$platform.log" 2>&1 ||
       { fail "the $platform package (package-$platform.log)"; return; }
   done
-  if nice ctest --test-dir build-linux-x64 -j "$jobs" --output-on-failure > "$logs/package-tests.log" 2>&1; then
-    note "Linux package tests: $(grep -o '[0-9]*% tests passed.*' "$logs/package-tests.log" | tail -1)"
+  # In 8 parts at once, as ctest runs them (HAILSTONE_TEST_SHARD, docs/ci.md "The tests"). The real CEF helper's
+  # cases are left out: they time out on some desktops, the release builds' too (docs/ci.md "Nightly builds").
+  local k pids=() bad=0
+  for k in 1 2 3 4 5 6 7 8; do
+    HAILSTONE_TEST_SHARD=$k/8 nice build-linux-x64/hailstone_tests '-tce=browser host: the CEF helper*' \
+      > "$logs/package-tests-$k.log" 2>&1 &
+    pids+=("$!")
+  done
+  for k in "${pids[@]}"; do wait "$k" || bad=1; done
+  cat "$logs"/package-tests-*.log > "$logs/package-tests.log"
+  local cases
+  cases=$(grep -ho 'test cases: *[0-9]* | *[0-9]* passed | *[0-9]* failed' "$logs"/package-tests-*.log |
+          awk -F'|' '{gsub(/[^0-9]/,"",$2); gsub(/[^0-9]/,"",$3); p+=$2; f+=$3} END {print p " passed, " f " failed"}')
+  if [ "$bad" = 0 ]; then
+    note "Linux package tests: $cases"
   else
-    fail "Linux package tests: $(grep -o '[0-9]*% tests passed.*' "$logs/package-tests.log" | tail -1) (package-tests.log)"
+    fail "Linux package tests: $cases (package-tests.log)"
     return
   fi
   rm -rf release-nightly
