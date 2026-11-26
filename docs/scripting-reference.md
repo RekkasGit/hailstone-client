@@ -547,7 +547,9 @@ MacroQuest's window methods act as they are read, as MQ's do; `/invoke ${...}` r
 - `DoOpen`, `DoClose`: the window opens or closes (its open state above: a closed merchant or trade window ends it);
 - `LeftMouseUp`, `RightMouseUp` on a child: the click `/notify` sends (`${Window[BigBankWnd].Child[BIGB_AutoButton].LeftMouseUp}`).
 
-They need the server's `actions` permission, as `/notify` does, and give TRUE when something took them.
+They need the server's `actions` permission, as `/notify` does, and give TRUE when something took them. A click on
+ConfirmationDialogBox's `Yes_Button` while it asks a destroy's or a guild disband's question gives FALSE and does
+nothing: only the player answers that.
 
 ### Pure types
 

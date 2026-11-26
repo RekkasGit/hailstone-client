@@ -1435,8 +1435,12 @@ void register_misc_types() {
         int column = 0;
         if (const auto comma = index.find(','); comma != std::string_view::npos) {
             key = index.substr(0, comma);
-            column = std::max(0, int_from_text(index.substr(comma + 1), 0) - 1);
-            if (column >= ch->columns) return V::nil();
+            // Read wide and range-checked before it is narrowed: "-2147483648" or a column past int's range is no
+            // overflow.
+            const std::int64_t wanted = int64_from_text(index.substr(comma + 1), 0);
+            const std::int64_t col = wanted < 1 ? 0 : wanted - 1;
+            if (col >= ch->columns) return V::nil();
+            column = static_cast<int>(col);
         }
         auto cell = [&](const std::vector<std::string>& row) -> std::optional<std::string_view> {
             if (static_cast<std::size_t>(column) >= row.size()) return std::nullopt;

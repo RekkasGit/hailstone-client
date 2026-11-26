@@ -43,9 +43,14 @@ TEST_CASE("popup: /popupecho and /popcustom take a colour, then seconds, then th
     p = parse_popup("14 \"two words\" left", PopupKind::Custom);
     CHECK(p.hold_ms == 3000); // "two words" does not start with a digit
     CHECK(p.text == "\"two words\" left");
-    // Huge seconds are held to the overlay's milliseconds.
+    // A hold is at most 60 s (Hailstone's cap, saturating): 99999999 s would hold the centre of the screen for weeks.
     p = parse_popup("14 99999999 long", PopupKind::Custom);
-    CHECK(p.hold_ms == UINT32_MAX);
+    CHECK(p.hold_ms == hailstone::mq::kPopupMaxHoldMs);
+    CHECK(hailstone::mq::kPopupMaxHoldMs == 60000u);
+    CHECK(parse_popup("14 60 x", PopupKind::Custom).hold_ms == 60000u);
+    CHECK(parse_popup("14 61 x", PopupKind::Custom).hold_ms == 60000u);
+    CHECK(parse_popup("14 59 x", PopupKind::Custom).hold_ms == 59000u);
+    CHECK(parse_popup("14 0 x", PopupKind::Custom).hold_ms == 0u);
     // Nothing given: MQ's usage, nothing shown.
     CHECK(parse_popup("", PopupKind::Echo).usage.find("/popupecho") != std::string::npos);
     CHECK(parse_popup("   ", PopupKind::Custom).usage.find("/popcustom") != std::string::npos);

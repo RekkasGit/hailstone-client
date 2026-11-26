@@ -106,6 +106,14 @@ TEST_CASE("Window: the merchant's label, buttons and list rows, in its own order
     CHECK(r.p(list + "[4,2]}") == "NULL");
     CHECK(r.p(list + "[1,10]}") == "NULL");
     CHECK(r.p(list + "[0,2]}") == "NULL");
+    // A column of 0 or below is the first; one at the edges of int's range (or past it) neither overflows nor wraps.
+    const std::string first = r.p(list + "[2,1]}");
+    CHECK(r.p(list + "[2,0]}") == first);
+    CHECK(r.p(list + "[2,-2147483648]}") == first);
+    CHECK(r.p(list + "[2,-9223372036854775808]}") == first);
+    CHECK(r.p(list + "[2,2147483647]}") == "NULL");
+    CHECK(r.p(list + "[2,4294967297]}") == "NULL");
+    CHECK(r.p(list + "[2,9223372036854775807]}") == "NULL");
     // MQ's item name for the list (MW_ItemList) is the same list.
     CHECK(r.p("${Window[MerchantWnd].Child[MW_ItemList].List[=Zombie Skin,2]}") == "2");
     // Nothing considered: no label, Buy disabled. Considered: its name, Buy enabled.

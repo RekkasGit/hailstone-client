@@ -1061,11 +1061,7 @@ int WindowPlaced(lua_State* L) {
 // disband a guild without the player's word. Any other question, and No, stay open to scripts (an accepted rez, a
 // trade's question). A Hailstone guard of its own.
 bool script_destroy_yes(lua_State* L, const UiHost& host, std::string_view window, std::string_view child) {
-    if (window != "ConfirmationDialogBox" || child != "Yes_Button" || ui::lua::pack_code(L) ||
-        !destructive_confirmation_up(host))
-        return false;
-    log::warn("A script pressed Yes on the destroy question (ConfirmationDialogBox); refused: only the player answers it");
-    return true;
+    return window == "ConfirmationDialogBox" && child == "Yes_Button" && refuse_code_destroy_yes(host, !ui::lua::pack_code(L));
 }
 
 // hs.ShowWindow(name, show)   -- shows or hides the game window (and with it the replacement)

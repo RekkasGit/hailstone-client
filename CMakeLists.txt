@@ -612,6 +612,7 @@ add_library(hailstone_engine STATIC
   src/app/lua_ui_map.cpp
   src/app/lua_ui_map_overlay.cpp
   src/app/lua_ui_player.cpp
+  src/app/window_notify_run.cpp
   src/app/lua_ui_market.cpp
   src/app/lua_ui_mail.cpp
   src/app/lua_ui_merc.cpp
@@ -1430,6 +1431,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/typed_escapes_test.cpp
     tests/notify_state_test.cpp
     tests/notify_quantity_test.cpp
+    tests/notify_confirm_guard_test.cpp
     tests/bank_test.cpp
     tests/bank_snapshot_test.cpp
     tests/real_estate_test.cpp

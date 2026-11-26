@@ -1,5 +1,4 @@
 #include "net/game_connection.h"
-#include "net/character_cache.h"
 
 #include "net/notice_packets.h"
 #include "net/player_packets.h"

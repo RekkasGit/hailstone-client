@@ -78,7 +78,7 @@
 #include "game/reward_selection.h"
 #include "game/achievements.h"
 #include "game/task_window.h"
-#include "game/remove_buff.h"
+#include "net/remove_buff.h"
 #include "game/text_overlay.h"
 #include "game/camera_shake.h"
 #include "game/tracking.h"
@@ -1855,7 +1855,7 @@ public:
     // whose name holds the text; /memspell <gem> "<spell>" memorizes a spell of the book (by exact name, any case, or
     // id) into gem 1..12 through MemorizeSet with only that gem, when the player's level allows it;
     // /removebuff [-pet|-both] <name> clicks off the first buff of the player's or the focused pet's whose name
-    // matches, /removepetbuff <name> the pet's (game/remove_buff.h).
+    // matches, /removepetbuff <name> the pet's (net/remove_buff.h).
     void removelev_command();
     void removeaura_command(std::string_view args);
     void removebuff_command(std::string_view args);
@@ -3264,7 +3264,7 @@ private:
     std::optional<std::vector<std::int64_t>> game_steps_; // set_game_steps
     void update_usable_gems();
     // /removebuff's and /removepetbuff's click-off of the first buff `r` names.
-    void remove_named_buff(const game::RemoveBuff& r);
+    void remove_named_buff(const RemoveBuff& r);
     // The stats port over the current profile, inventory, buffs and AAs (CharacterZoneClient's effect totals).
     void with_character(const std::function<void(game::mechanics::Character&)>& fn) const;
     // with_character's sheet, rebuilt in place on each call (build_sheet_into: no allocation for an unchanged
@@ -3282,8 +3282,12 @@ private:
     // ProcessAllStats, run once per build and kept apart, so the effect-only one does not change with it (its
     // haste would take in the items' then).
     void with_cached_character(bool stats, const std::function<void(game::mechanics::Character&)>& fn) const;
-    struct CharacterCache; // net/character_cache.h
-    mutable std::unique_ptr<CharacterCache> character_cache_;
+    // Defined, and deleted, in game_connection_spells.cpp: the header need not know Character's type.
+    struct CharacterCache;
+    struct CharacterCacheDelete {
+        void operator()(CharacterCache* c) const;
+    };
+    mutable std::unique_ptr<CharacterCache, CharacterCacheDelete> character_cache_;
     mutable std::uint32_t character_builds_ = 0; // the shared character's sheets built (tests)
     mutable std::uint64_t character_serial_ = 1;
     bool in_update_ = false;

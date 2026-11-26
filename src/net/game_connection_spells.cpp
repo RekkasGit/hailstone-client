@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <ctime>
+#include <memory>
 #include <optional>
 
 #include "core/capped_map.h"
@@ -18,12 +19,11 @@
 #include "game/coords.h"
 #include "game/counter_spas.h"
 #include "net/game_connection.h"
-#include "net/character_cache.h"
 #include "game/hit_landing.h"
 #include "game/mechanics/character.h"
 #include "game/mechanics/sheet_builder.h"
 #include "game/mechanics/spell_gems.h"
-#include "game/remove_buff.h"
+#include "net/remove_buff.h"
 #include "game/spa_ids.h"
 
 #include "game/distance.h"
@@ -33,6 +33,17 @@
 #include "game/race_models.h"
 
 namespace hailstone::net {
+
+// GameConnection::with_cached_character's state: the MQ TLOs' shared sheet and Characters. Here rather than in a
+// header, so net's headers need not include game/mechanics/character.h.
+struct GameConnection::CharacterCache {
+    game::mechanics::CharacterSheet sheet;
+    std::shared_ptr<const game::SpellTable> spells; // the table the Characters look spells up in, kept alive
+    std::optional<game::mechanics::Character> effects, stats;
+    std::uint64_t serial = 0; // character_serial_ when built
+};
+
+void GameConnection::CharacterCacheDelete::operator()(CharacterCache* c) const { delete c; }
 
 namespace {
 
@@ -282,7 +293,7 @@ void GameConnection::with_cached_character(bool stats,
         });
         return;
     }
-    if (!character_cache_) character_cache_ = std::make_unique<CharacterCache>();
+    if (!character_cache_) character_cache_.reset(new CharacterCache());
     CharacterCache& cache = *character_cache_;
     if (!cache.effects || cache.serial != character_serial_ || cache.spells != spell_table_) {
         cache.effects.reset();
@@ -337,17 +348,17 @@ void GameConnection::removeaura_command(std::string_view args) {
     for (std::uint32_t id : ids) remove_aura(id);
 }
 
-void GameConnection::removebuff_command(std::string_view args) { remove_named_buff(game::parse_remove_buff(args)); }
+void GameConnection::removebuff_command(std::string_view args) { remove_named_buff(parse_remove_buff(args)); }
 
 void GameConnection::removepetbuff_command(std::string_view args) {
-    remove_named_buff(game::parse_remove_pet_buff(args));
+    remove_named_buff(parse_remove_pet_buff(args));
 }
 
-void GameConnection::remove_named_buff(const game::RemoveBuff& r) {
+void GameConnection::remove_named_buff(const RemoveBuff& r) {
     if (!spell_table_ || r.name.empty()) return;
     auto matches = [&](std::uint32_t spell) {
         const game::SpellData* d = spell_table_->get(spell);
-        return d && game::remove_buff_matches(d->name, r.name);
+        return d && remove_buff_matches(d->name, r.name);
     };
     if (r.pet) {
         // RemovePetBuff: the pet window's first match, in its order (the server's slots).

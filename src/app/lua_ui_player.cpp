@@ -27,6 +27,7 @@
 #include "game/interact.h"
 #include "game/mechanics/character.h"
 #include "core/game_dir.h"
+#include "core/log.h"
 #include "ui/ui_ini.h"
 #include "net/game_connection.h"
 
@@ -1466,6 +1467,12 @@ bool destructive_confirmation_up(const UiHost& host) {
     if (host.drop_confirm && *host.drop_confirm && host.conn->inventory().cursor()) return false;
     const auto& c = host.conn->confirmation();
     return c && !c->ok_only && (c->id == net::kConfirmDestroy || c->id == net::kConfirmGuildDelete);
+}
+
+bool refuse_code_destroy_yes(const UiHost& host, bool by_code) {
+    if (!by_code || !destructive_confirmation_up(host)) return false;
+    log::warn("A script pressed Yes on the destroy question (ConfirmationDialogBox); refused: only the player answers it");
+    return true;
 }
 
 bool confirm_open(const UiHost& host) { return host.confirm || host.client_confirm; }

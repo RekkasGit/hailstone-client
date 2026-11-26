@@ -328,6 +328,17 @@ TEST_CASE("command catalog: stock aliases, extended commands, and live add-on re
     CHECK(plugin::canonical_command_name("/clickthrough") == "/clickthrough");
     CHECK(find("/nomodkey")->groups == std::vector<std::string>{"non_rof2", "command_helpers"});
     CHECK(plugin::parse_server_cfg("[commands]\nblock_groups = addon_commands\n").commands.allowed("/itemnotify"));
+    // PR 228's: /notify and the buff commands are built in, not RoF2's /note or /removeaura taken by prefix.
+    for (const char* name : {"/notify", "/removebuff", "/removepetbuff"}) {
+        CAPTURE(name);
+        const auto row = find(name);
+        REQUIRE(row != rows.end());
+        CHECK(row->origin == plugin::CommandOrigin::Extended);
+        CHECK(plugin::known_extended_command(name));
+        CHECK(plugin::canonical_command_name(name) == name);
+        CHECK(row->groups == std::vector<std::string>{"non_rof2"});
+        CHECK(plugin::parse_server_cfg("[commands]\nblock_groups = addon_commands\n").commands.allowed(name));
+    }
     auto target = find("/target");
     REQUIRE(target != rows.end());
     CHECK(target->origin == plugin::CommandOrigin::Stock);

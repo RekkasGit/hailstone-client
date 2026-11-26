@@ -179,7 +179,7 @@ close.
 | 1 | `read` | read game state: `mq.TLO`, `${...}`, `mq.parse`, `ParseMacroData`, spawn events, `ability_state`, `get_ability_data_bulk`, `get_spells_data_bulk` |
 | 2 | `commands` | run commands outside the groups below: windows, options, `/who`, other plugins' commands, `/lua`; add commands of its own (`mq.bind`, `AddCommand`). The player is told "run other commands (windows, options, /who, other plugins' commands)" |
 | 4 | `target` | change the target: `/target`, `/assist`, `/xtarget`, ... |
-| 8 | `actions` | act: `/cast`, `/disc`, `/doability`, `/useitem`, `/attack`, `/memspellset`, `/pet`, `/loot`, `/autoinventory`, `/alternateadv` (`/alt`), `/split`, `/consent`, `/guilddelete`, non-movement `/keypress`; Hailstone's own item commands `/destroy`, `/destroycursor`, `/stowcursor`, `/exchange` and `/unequip`, and `use_ability` |
+| 8 | `actions` | act: `/cast`, `/disc`, `/doability`, `/useitem`, `/attack`, `/memspellset`, `/pet`, `/loot`, `/autoinventory`, `/alternateadv` (`/alt`), `/split`, `/consent`, `/guilddelete`, non-movement `/keypress`, `/notify`, `/removebuff`, `/removepetbuff` and the window methods that act (`Window[...].DoOpen`, `.DoClose`, `.Child[...].LeftMouseUp`, `.RightMouseUp`); Hailstone's own item commands `/destroy`, `/destroycursor`, `/stowcursor`, `/exchange` and `/unequip`, and `use_ability`. No code presses Yes on a destroy's or a guild disband's question, by `/notify`, a window method or `hs.ClickChild`: only the player answers it |
 | 16 | `move` | move: `/face`, movement `/keypress` (forward, jump, ...), `/follow`, `/sit`, `/stand`, `/duck`, `/camp` |
 | 32 | `chat` | speak: plain text, `/say`, `/tell`, `/g`, `/gu`, `/rs`, channels, emotes |
 | 64 | `events` | see chat lines: `mq.event`, `OnIncomingChat`, and hide them (`OnFilterChat`) |
@@ -309,7 +309,10 @@ clipboard may hold a password, and what a script puts there is pasted where the 
 ### TLOs
 
 `Me`, `Target`, `Spawn[...]`, `SpawnCount[...]`, `NearestSpawn[n, ...]`, `Group`, `Zone`, `Spell[id|name]`, `Cursor`,
-`FindItem[name|=exact]`, `FindItemCount[...]`, `Pet`, `Window[name]` (`.Open`), `Plugin[name]` (`.IsLoaded`), `Time`,
+`FindItem[name|=exact]`, `FindItemCount[...]`, `FindItemBank[...]`, `FindItemBankCount[...]`, `AltAbility[name|id]`,
+`Pet`, `Window[name]` (`.Open`, `.DoOpen`, `.DoClose`, and `.Child[child]` with `.Text`, `.Enabled`, `.Value`,
+`.List[...]`, `.Open`, `.Name` and the methods `.LeftMouseUp`, `.RightMouseUp`; docs/scripting-reference.md),
+`Plugin[name]` (`.IsLoaded`), `Time`,
 `GameTime`, `EverQuest` (`.GameState`, `.Server`), `MacroQuest` (`.Path[config]`: `scripts/config/` in Hailstone's
 folder, without a trailing separator; MQ's other folder names are NULL. `.Build`: MQ's build target, 4 for Emu.
 `.BuildDate`: the day the client was built, as an int, yyyymmdd. `.Version`: Hailstone's release version. Other
@@ -450,8 +453,10 @@ Not yet:
 walk the search's matches), `/face` (target, `id`, `heading H`, `loc y,x`,
 a search; `fast`), `/mapfilter` (MacroQuest's map filters and colours), `/keypress <command> [hold|release]` (the game's
 key command names: `forward`, `jump`, `hot1_1`, ...), `/squelch <cmd>`, `/docommand <cmd>`, `/noparse <cmd>`, `/timed <deciseconds> <cmd>`, `/nomodkey`, `/shiftkey` and
-`/ctrlkey <cmd>`, `/itemnotify`, `/doortarget`, `/memspell`, `/click`, `/makemevisible`, `/removelev`, `/removeaura`,
-`/lua ...`, `/plugin ...` (docs/commands.md). `/nav` (MQ2Nav's commands), `/moveto` and `/stick` are built in (`docs/navigation.md`).
+`/ctrlkey <cmd>`, `/itemnotify`, `/notify <window> <child> <notification> [value]`, `/doortarget`, `/memspell`,
+`/click`, `/makemevisible`, `/removelev`, `/removeaura`, `/removebuff [-pet|-both] <name>`, `/removepetbuff <name>`,
+`/beep [sound]`, `/popup <text>`, `/popcustom` and `/popupecho [colour] [seconds] <text>` (a hold of at most 60 s),
+`/invoke ${...}` (reads its line for the window methods), `/lua ...`, `/plugin ...` (docs/commands.md). `/nav` (MQ2Nav's commands), `/moveto` and `/stick` are built in (`docs/navigation.md`).
 
 `${...}` is parsed in every command line, typed or scripted, except:
 
