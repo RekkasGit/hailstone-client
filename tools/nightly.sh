@@ -76,9 +76,14 @@ fi
 git -C "$checkout" checkout -q --detach -f "$ref" || { echo "nightly: cannot check out $ref" >&2; exit 1; }
 git -C "$checkout" clean -q -ffdx -e /build-asan -e /build-fuzz -e /build-linux-x64 -e /build-windows-x64 -e /.docker \
   -e /plugins/nms -e /plugins/projecttriune
-# The server plugins' clones join the build when the main checkout has them (AGENTS.md, server plugins).
+# The server plugins' clones join the build when the main checkout has them (AGENTS.md, server plugins). Each night
+# relinks them to where they really are, so a link made from a worktree since removed does not dangle.
 for p in nms projecttriune; do
-  [ -d "$repo/plugins/$p" ] && [ ! -e "$checkout/plugins/$p" ] && ln -s "$repo/plugins/$p" "$checkout/plugins/$p"
+  if [ -d "$repo/plugins/$p" ]; then
+    ln -sfn "$(cd "$repo/plugins/$p" && pwd -P)" "$checkout/plugins/$p"
+  elif [ -L "$checkout/plugins/$p" ]; then
+    rm "$checkout/plugins/$p"
+  fi
 done
 commit=$(git -C "$checkout" rev-parse --short HEAD)
 note "testing $ref at $commit"
@@ -135,6 +140,11 @@ fi
 
 # 3. The packages, after a night with no failure.
 published=""
+package_build() {
+  CPUS=$jobs CMAKE_ARGS="-DHAILSTONE_BROWSER=ON -DHAILSTONE_NIGHTLY_LABEL=$2" \
+    tools/docker/build.sh "$1" --no-test > "$3" 2>&1
+}
+
 publish_packages() {
   local base label version notes slug full asset
   base=$(sed -n 's/^project(hailstone VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
@@ -142,10 +152,15 @@ publish_packages() {
   version="$base-$label"
   # The packages as a release's (docs/updater.md "Making a release"), with tests run below rather than in the
   # containers: Linux's container cannot run the browser tests, Windows' Wine fails some (docs/ci.md).
+  # A failed build is tried once more: MSVC under Wine now and then stops a large build with an internal compiler error
+  # in its file reading (p0io.c) and a linker that cannot open an object, at a different file each time, and the same
+  # build carried on passes. Ninja resumes where it stopped, so the second try is short.
   for platform in linux-x64 windows-x64; do
-    CPUS=$jobs CMAKE_ARGS="-DHAILSTONE_BROWSER=ON -DHAILSTONE_NIGHTLY_LABEL=$label" \
-      tools/docker/build.sh "$platform" --no-test > "$logs/package-$platform.log" 2>&1 ||
-      { fail "the $platform package (package-$platform.log)"; return; }
+    if ! package_build "$platform" "$label" "$logs/package-$platform.log"; then
+      package_build "$platform" "$label" "$logs/package-$platform-retry.log" ||
+        { fail "the $platform package, twice (package-$platform.log, package-$platform-retry.log)"; return; }
+      note "the $platform package passed at the second try (package-$platform.log)"
+    fi
   done
   # In 8 parts at once, as ctest runs them (HAILSTONE_TEST_SHARD, docs/ci.md "The tests"). The cases that start the
   # real CEF helper are left out: they time out on some desktops, the release builds' too (docs/ci.md "Nightly

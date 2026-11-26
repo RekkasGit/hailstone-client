@@ -131,6 +131,7 @@ Each fix left behaviour unchanged; they explain rules in AGENTS.md.
 | MSVC under Wine | Recorded vectors CSpellBookWnd::GetSpellMemTicksLeft: `calc_dex() + calc_int()` called INT first | the calls as separate statements, in the original's order; the other query calls an operator or argument list ordered too |
 | MSVC under Wine | "http_get: cancelled ends a transfer stalled waiting for the answer" takes about 21 s (note 2) | not a client fault (note 2) |
 | MSVC under Wine | The build stops for good at `hailstone_engine.lib` (note 3) | `CMAKE_NINJA_FORCE_RESPONSE_FILE` when building for Windows on another host: the objects go in a response file |
+| MSVC under Wine (the release containers) | Now and then a large build stops with an internal compiler error (C1001, in `p0io.c`) and LNK1104 on an object, at a different file each time; the same build carried on passes | not a client fault; `tools/nightly.sh` tries a failed package build once more |
 | MSVC under Wine | 33 shared-cache, mapped-archive and animation tests: the cache never mapped (note 4) | `platform/shared_file.cpp` accepts a LocalSystem entry beside the user's (note 4) |
 | Linux, Windows | CI set-up only (SDL3 dev packages; the glslang asset name and executable name) | see the workflow |
 
@@ -229,6 +230,8 @@ them to one rolling pre-release, tagged `nightly`, on GitHub.
 - Each night moves the `nightly` tag to the commit built (a forced update of that one tag, never of a branch),
   uploads the new downloads, removes the previous night's and rewrites the notes. A plain `git fetch` leaves a clone's
   old copy of the tag alone; `git fetch --tags` refuses to move it, which is harmless.
+- A failed package build is tried once more, and the summary says so (MSVC under Wine, "Problems the first runs
+  showed" above).
 - It needs `gh` signed in with write access, Docker, and the MSVC install `tools/docker/build.sh windows-x64` uses.
 - `--package` does all but the upload, leaving the zips in the checkout's `release-nightly/`.
 
