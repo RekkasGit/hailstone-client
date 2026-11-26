@@ -1009,6 +1009,34 @@ TEST_CASE("TLO: FindItemBank and FindItemBankCount search the bank and the share
     CHECK(f.p("${Bool[${FindItemBank[=Bone Chips of the Ages]}]} ${FindItemBank[]}") == "FALSE NULL");
 }
 
+TEST_CASE("TLO: Item.Spell is the first of the click, scroll, proc, focus and worn effects (MQ's order)") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    auto& inv = A::inventory(*f.world.conn);
+    const net::ItemSlot primary = net::ItemSlot::possessions(net::kSlotPrimary);
+    net::Item sword;
+    sword.name = "Venom Blade";
+    sword.id = 6101;
+    sword.effects[net::kEffectProc].effect = 3006;  // Test Venom
+    sword.effects[net::kEffectWorn].effect = 11;    // Holy Armor
+    REQUIRE(inv.put(primary, sword));
+    CHECK(f.p("${Me.Inventory[13].Spell} ${Me.Inventory[13].Spell.ID}") == "Test Venom 3006"); // the proc before worn
+    // A click effect comes first; one whose spell the table lacks is passed over, as GetSpellByID's NULL is.
+    sword.effects[net::kEffectClick].effect = 200; // Minor Healing
+    REQUIRE(inv.put(primary, sword));
+    CHECK(f.p("${Me.Inventory[13].Spell}") == "Minor Healing");
+    sword.effects[net::kEffectClick].effect = 99999;
+    REQUIRE(inv.put(primary, sword));
+    CHECK(f.p("${Me.Inventory[13].Spell}") == "Test Venom");
+    sword.effects[net::kEffectClick].effect = 0;
+    sword.effects[net::kEffectProc].effect = 0;
+    REQUIRE(inv.put(primary, sword));
+    CHECK(f.p("${Me.Inventory[13].Spell}") == "Holy Armor");
+    sword.effects[net::kEffectWorn].effect = 0;
+    REQUIRE(inv.put(primary, sword));
+    CHECK(f.p("${Me.Inventory[13].Spell}") == "NULL");
+}
+
 TEST_CASE("TLO: item members E3 reads (ItemReady, Timer, Clicky, stacks, worn slots, augments, links)") {
     Fixture f;
     using A = net::GameConnectionTestAccess;

@@ -1866,6 +1866,16 @@ void register_e3_members() {
         const auto& e = it.effects[net::kEffectClick];
         return e.present() ? spell_value(c, static_cast<std::uint32_t>(e.effect)) : V::nil();
     });
+    // MQ's Spell (ItemMembers::Spell): the first of the click, scroll, proc, focus and worn effects whose spell the
+    // table has (GetSpellByID), NULL when none.
+    im("Spell", [](const Context& c, const Value&, const net::Item& it, std::string_view) -> V {
+        for (auto kind : {net::kEffectClick, net::kEffectScroll, net::kEffectProc, net::kEffectFocus, net::kEffectWorn}) {
+            const auto& e = it.effects[kind];
+            if (!e.present()) continue;
+            if (V spell = spell_value(c, static_cast<std::uint32_t>(e.effect)); !spell.is_nil()) return spell;
+        }
+        return V::nil();
+    });
     // MQ's EffectType: the first of scroll, click (worn / inventory), worn or focus, combat.
     im("EffectType", [](const Context&, const Value&, const net::Item& it, std::string_view) -> V {
         if (it.effects[net::kEffectScroll].present()) return V::string("Spell Scroll");

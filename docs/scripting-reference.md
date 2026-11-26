@@ -356,6 +356,7 @@ An item in a slot. Its plain value is the item's name.
 | `NoTrade` | bool | |
 | `Tradeskills` | bool | |
 | `Clicky` | `spell` | its click effect's spell; NULL without one |
+| `Spell` | `spell` | the spell of its first effect of click, scroll, proc, focus and worn, in that order (MQ's); NULL without one |
 | `EffectType` | string | `Spell Scroll`, `Click Worn`, `Click Inventory`, `Click Unknown`, `Worn` or `Combat` (the first it has) |
 | `Timer` | `ticks` | ticks left on its click effect's reuse (rounded up), 0 when ready; NULL without a click effect |
 | `StackCount` | int | how many of this item the general slots and their bags hold; 0 for an item that does not stack |
