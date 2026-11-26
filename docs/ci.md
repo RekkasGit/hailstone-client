@@ -204,8 +204,8 @@ them to one rolling pre-release, tagged `nightly`, on GitHub.
   has no `hailstone-update.txt` and nothing signs it: the downloads and a `SHA256SUMS` file only.
 - The containers do not run the tests (the Linux one cannot run the browser tests, Windows' Wine fails some): the
   Linux package's `hailstone_tests` run on this machine before the upload, in 8 parts at once. They leave out the
-  cases that start the real CEF helper (`browser host: the CEF helper*`), which time out on some desktops with
-  release builds too. The Windows package is built only.
+  cases that start the real CEF helper (`browser host: the CEF helper*`, `browser host: CEF's other processes*`),
+  which time out on some desktops with release builds too. The Windows package is built only.
 - Each night moves the `nightly` tag to the commit built (a forced update of that one tag, never of a branch),
   uploads the new downloads, removes the previous night's and rewrites the notes. A plain `git fetch` leaves a clone's
   old copy of the tag alone; `git fetch --tags` refuses to move it, which is harmless.

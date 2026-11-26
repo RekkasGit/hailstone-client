@@ -147,19 +147,22 @@ publish_packages() {
       tools/docker/build.sh "$platform" --no-test > "$logs/package-$platform.log" 2>&1 ||
       { fail "the $platform package (package-$platform.log)"; return; }
   done
-  # In 8 parts at once, as ctest runs them (HAILSTONE_TEST_SHARD, docs/ci.md "The tests"). The real CEF helper's
-  # cases are left out: they time out on some desktops, the release builds' too (docs/ci.md "Nightly builds").
+  # In 8 parts at once, as ctest runs them (HAILSTONE_TEST_SHARD, docs/ci.md "The tests"). The cases that start the
+  # real CEF helper are left out: they time out on some desktops, the release builds' too (docs/ci.md "Nightly
+  # builds").
   local k pids=() bad=0
   for k in 1 2 3 4 5 6 7 8; do
-    HAILSTONE_TEST_SHARD=$k/8 nice build-linux-x64/hailstone_tests '-tce=browser host: the CEF helper*' \
+    HAILSTONE_TEST_SHARD=$k/8 nice build-linux-x64/hailstone_tests \
+      "-tce=browser host: the CEF helper*,browser host: CEF's other processes*" \
       > "$logs/package-tests-$k.log" 2>&1 &
     pids+=("$!")
   done
   for k in "${pids[@]}"; do wait "$k" || bad=1; done
   cat "$logs"/package-tests-*.log > "$logs/package-tests.log"
   local cases
+  # Each part's report counts the whole list, so the total is one part's and the failures are summed.
   cases=$(grep -ho 'test cases: *[0-9]* | *[0-9]* passed | *[0-9]* failed' "$logs"/package-tests-*.log |
-          awk -F'|' '{gsub(/[^0-9]/,"",$2); gsub(/[^0-9]/,"",$3); p+=$2; f+=$3} END {print p " passed, " f " failed"}')
+          awk -F'|' '{gsub(/[^0-9]/,"",$1); gsub(/[^0-9]/,"",$3); n=$1; f+=$3} END {print n " cases, " f " failed"}')
   if [ "$bad" = 0 ]; then
     note "Linux package tests: $cases"
   else
