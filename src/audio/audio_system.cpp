@@ -272,6 +272,12 @@ std::shared_ptr<SoundFont> AudioSystem::font() {
 void AudioSystem::set_zone(const std::string& short_name) {
     zone_.clear(*this);
     zone_ = ZoneEmitters();
+    // Rain and wind use global assets, but their playback belongs to the departing zone. CEverQuest_ClearZoneWorldState
+    // @0x4939b0 calls Weather_StopEffect, EmitterSetRaining(0) and EmitterSetWind(0), so the original's emitters fade
+    // out over their release time (3000 ms). Hailstone cuts both loops at once, during the load screen: a deliberate
+    // presentation choice (docs/formats/audio.md).
+    set_weather(false, false);
+    weather_.clear(*this);
     std::erase_if(xmi_, [&](const auto& kv) { return kv.first == zone_xmi_; });
     zone_xmi_.clear();
     // SetCurrentZone: the room presets back to their defaults, then the zone's row of the table.

@@ -1435,8 +1435,12 @@ void register_misc_types() {
         int column = 0;
         if (const auto comma = index.find(','); comma != std::string_view::npos) {
             key = index.substr(0, comma);
-            column = std::max(0, int_from_text(index.substr(comma + 1), 0) - 1);
-            if (column >= ch->columns) return V::nil();
+            // Read wide and range-checked before it is narrowed: "-2147483648" or a column past int's range is no
+            // overflow.
+            const std::int64_t wanted = int64_from_text(index.substr(comma + 1), 0);
+            const std::int64_t col = wanted < 1 ? 0 : wanted - 1;
+            if (col >= ch->columns) return V::nil();
+            column = static_cast<int>(col);
         }
         auto cell = [&](const std::vector<std::string>& row) -> std::optional<std::string_view> {
             if (static_cast<std::size_t>(column) >= row.size()) return std::nullopt;
@@ -3006,7 +3010,8 @@ static void register_math(Registry& r) {
         const glm::vec3 b = colon == std::string_view::npos ? player : vec3_from_text(index.substr(colon + 1), player);
         return V::number(glm::distance(a, b));
     };
-    r.add_tlo("Math", [math_type](const Context&, std::string_view) { return V::object(math_type, 0); });
+    r.add_tlo("Math", [math_type](const Context&, std::string_view) { return V::object(math_type, 0); },
+              "Evaluate expressions and calculate distances.");
 
     // If[condition,whentrue,whenfalse], or with exactly two '~' If[condition~whentrue~whenfalse]: the text of one
     // branch (the false one runs to the end, commas included); NULL when the condition does not calculate.
@@ -3020,7 +3025,7 @@ static void register_math(Registry& r) {
         const auto cond = calculate(index.substr(0, first));
         if (!cond) return V::nil();
         return V::string(std::string(*cond != 0.0 ? index.substr(first + 1, second - first - 1) : index.substr(second + 1)));
-    });
+    }, "Choose one of two values using a condition.");
 
     // Range.Between[a,b:n] (a <= n <= b) and Range.Inside[a,b:n] (a < n < b); FALSE without the ':' or ','.
     Type& range = r.type("range");
@@ -3042,7 +3047,8 @@ static void register_math(Registry& r) {
     };
     range_member("Between", true);
     range_member("Inside", false);
-    r.add_tlo("Range", [range_type](const Context&, std::string_view) { return V::object(range_type, 0); });
+    r.add_tlo("Range", [range_type](const Context&, std::string_view) { return V::object(range_type, 0); },
+              "Test whether a number falls within a range.");
 }
 
 void register_game_tlos(Registry& r) {
@@ -3135,37 +3141,39 @@ void register_game_tlos(Registry& r) {
         if (!a || !b) return V::nil();
         const auto seen = c.line_of_sight({a->x, a->y, a->z}, {b->x, b->y, b->z});
         return seen ? V::boolean(*seen) : V::nil();
-    });
+    }, "Check line of sight between zone coordinates.");
     r.add_tlo("Navigation", [](const Context& c, std::string_view) -> V {
         return c.nav ? V::object(g.navigation, 0) : V::nil();
-    });
-    r.add_tlo("Stick", [](const Context& c, std::string_view) -> V { return c.nav ? V::object(g.stick, 0) : V::nil(); });
-    r.add_tlo("MoveTo", [](const Context& c, std::string_view) -> V { return c.nav ? V::object(g.moveto, 0) : V::nil(); });
+    }, "Navigation mesh and active path status.");
+    r.add_tlo("Stick", [](const Context& c, std::string_view) -> V { return c.nav ? V::object(g.stick, 0) : V::nil(); },
+              "Stick movement and positioning status.");
+    r.add_tlo("MoveTo", [](const Context& c, std::string_view) -> V { return c.nav ? V::object(g.moveto, 0) : V::nil(); },
+              "MoveTo movement and arrival status.");
     r.add_tlo("MoveUtils", [](const Context& c, std::string_view) -> V {
         return c.nav ? V::object(g.moveutils, 0) : V::nil();
     });
     r.add_tlo("AdvPath", [](const Context& c, std::string_view) -> V {
         return c.nav ? V::object(g.advpath, 0) : V::nil();
-    });
+    }, "Path-following status.");
     r.add_tlo("Me", [](const Context& c, std::string_view) -> V {
         return c.conn && c.conn->world().player() ? V::object(g.character, c.conn->world().player_id) : V::nil();
-    });
+    }, "Your character and its attributes.");
     r.add_tlo("Target", [](const Context& c, std::string_view) -> V {
         const game::Spawn* s = c.conn ? spawn_of(c, c.conn->world().target_id) : nullptr;
         return s ? V::object(g.target, s->id) : V::nil();
-    });
+    }, "Your current target.");
     r.add_tlo("Spawn", [](const Context& c, std::string_view index) -> V {
         if (!c.conn) return V::nil();
         std::int64_t id = 0;
         if (parse_int(index, id)) return spawn_value(spawn_of(c, id));
         auto found = find_spawns(index, *c.conn, c.can_see);
         return found.empty() ? V::nil() : spawn_value(found.front());
-    });
+    }, "Find a spawn by ID or search.");
     r.add_tlo("SpawnCount", [](const Context& c, std::string_view index) -> V {
         if (!c.conn) return V::integer(0);
         return V::integer(static_cast<std::int64_t>(
             find_spawns(index, *c.conn, c.can_see).size()));
-    });
+    }, "Count matching spawns.");
     r.add_tlo("NearestSpawn", [](const Context& c, std::string_view index) -> V {
         if (!c.conn) return V::nil();
         // "N,search", "N" or "search".
@@ -3181,15 +3189,17 @@ void register_game_tlos(Registry& r) {
         auto found = find_spawns(search, *c.conn, c.can_see);
         if (n < 1 || n > static_cast<std::int64_t>(found.size())) return V::nil();
         return spawn_value(found[static_cast<std::size_t>(n - 1)]);
-    });
+    }, "Find the nearest matching spawn.");
     r.add_tlo("Group", [](const Context& c, std::string_view) -> V {
         return c.conn && c.conn->group().active ? V::object(g.group, 0) : V::nil();
-    });
-    r.add_tlo("Zone", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.zone, c.conn->zone_id()) : V::nil(); });
-    r.add_tlo("Spell", [](const Context& c, std::string_view index) { return spell_by_index(c, index); });
+    }, "Your group and its members.");
+    r.add_tlo("Zone", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.zone, c.conn->zone_id()) : V::nil(); },
+              "The zone you are in.");
+    r.add_tlo("Spell", [](const Context& c, std::string_view index) { return spell_by_index(c, index); },
+              "Find a spell by name or ID.");
     r.add_tlo("Cursor", [](const Context& c, std::string_view) {
         return item_value(c, net::ItemSlot::possessions(net::kSlotCursor));
-    });
+    }, "The item on your cursor.");
     r.add_tlo("FindItem", [](const Context& c, std::string_view index) -> V {
         if (index.empty()) return V::nil();
         V found;
@@ -3199,7 +3209,7 @@ void register_game_tlos(Registry& r) {
             return true;
         });
         return found;
-    });
+    }, "Find an item in your inventory.");
     r.add_tlo("FindItemCount", [](const Context& c, std::string_view index) -> V {
         if (index.empty()) return V::nil();
         std::int64_t n = 0;
@@ -3208,7 +3218,7 @@ void register_game_tlos(Registry& r) {
             return false;
         });
         return V::integer(n);
-    });
+    }, "Count matching items in your inventory.");
     // MQ's FindItemBank and FindItemBankCount: the same over the bank and the shared bank (each_banked).
     r.add_tlo("FindItemBank", [](const Context& c, std::string_view index) -> V {
         if (index.empty()) return V::nil();
@@ -3219,7 +3229,7 @@ void register_game_tlos(Registry& r) {
             return true;
         });
         return found;
-    });
+    }, "Find an item in your bank or shared bank.");
     r.add_tlo("FindItemBankCount", [](const Context& c, std::string_view index) -> V {
         if (index.empty()) return V::nil();
         std::int64_t n = 0;
@@ -3228,45 +3238,49 @@ void register_game_tlos(Registry& r) {
             return false;
         });
         return V::integer(n);
-    });
+    }, "Count matching items in your bank and shared bank.");
     // MQ's AltAbility: any ability the AA table holds, owned or not (Me.AltAbility: only the player's).
     r.add_tlo("AltAbility", [](const Context& c, std::string_view index) -> V {
         const game::AltAbility* a = any_aa(c, index);
         return a ? V::object(g.altability, a->id) : V::nil();
-    });
+    }, "Look up an alternate advancement ability.");
     r.add_tlo("Window", [](const Context&, std::string_view index) {
         return index.empty() ? V::nil() : V::object(g.window, 0, 0, std::string(index));
-    });
+    }, "Look up a game window by name.");
     r.add_tlo("Plugin", [](const Context&, std::string_view index) {
         return index.empty() ? V::nil() : V::object(g.plugin, 0, 0, std::string(index));
-    });
+    }, "Check whether a named plugin is loaded.");
     r.add_tlo("Time", [](const Context&, std::string_view) {
         return V::object(g.time, static_cast<std::int64_t>(std::time(nullptr)));
-    });
+    }, "The local system time.");
     r.add_tlo("GameTime", [](const Context& c, std::string_view) -> V {
         return c.conn && c.conn->time_of_day() ? V::object(g.gametime, 0) : V::nil();
-    });
-    r.add_tlo("EverQuest", [](const Context&, std::string_view) { return V::object(g.everquest, 0); });
-    r.add_tlo("MacroQuest", [](const Context&, std::string_view) { return V::object(g.macroquest, 0); });
-    r.add_tlo("Hailstone", [](const Context&, std::string_view) { return V::object(g.hailstone, 0); });
+    }, "The current in-game time.");
+    r.add_tlo("EverQuest", [](const Context&, std::string_view) { return V::object(g.everquest, 0); },
+              "Game state and client window information.");
+    r.add_tlo("MacroQuest", [](const Context&, std::string_view) { return V::object(g.macroquest, 0); },
+              "MacroQuest-compatible client information.");
+    r.add_tlo("Hailstone", [](const Context&, std::string_view) { return V::object(g.hailstone, 0); },
+              "Hailstone client information.");
     r.add_tlo("Heading", [](const Context&, std::string_view index) -> V {
         double d = 0;
         return parse_float(index, d) && std::isfinite(d) ? heading_value(std::fmod(std::fmod(d, 360.0) + 360.0, 360.0)) : V::nil();
-    });
+    }, "Convert a heading and read its direction.");
     r.add_tlo("Int", [](const Context&, std::string_view index) -> V {
         double d = 0;
         const auto n = parse_float(index, d) ? whole_number(d) : std::nullopt;
         return n ? V::integer(*n) : V::nil();
-    });
+    }, "Convert text to an integer.");
     r.add_tlo("Float", [](const Context&, std::string_view index) -> V {
         double d = 0;
         return parse_float(index, d) ? V::number(d) : V::nil();
-    });
+    }, "Convert text to a decimal number.");
     r.add_tlo("Bool", [](const Context&, std::string_view index) {
         std::string l = lower(index);
         return V::boolean(!(l.empty() || l == "false" || l == "null" || l == "0"));
-    });
-    r.add_tlo("String", [](const Context&, std::string_view index) { return V::string(std::string(index)); });
+    }, "Convert text to a boolean.");
+    r.add_tlo("String", [](const Context&, std::string_view index) { return V::string(std::string(index)); },
+              "Treat its argument as text.");
     register_math(r);
     r.add_tlo("Select", [](const Context&, std::string_view index) {
         // Select[x,a,b,c]: the 1-based position of x among the rest, 0 when absent.
@@ -3274,35 +3288,40 @@ void register_game_tlos(Registry& r) {
         for (std::size_t i = 1; i < a.size(); ++i)
             if (iequals(a[0], a[i])) return V::integer(static_cast<std::int64_t>(i));
         return V::integer(0);
-    });
+    }, "Find a value in a list.");
     // MQ's Raid and Corpse are always there (Raid's members say whether there is a raid, Corpse.Open whether a
     // corpse is open).
     // MQ's InvSlot[n|name]: a slot by MQ's number or name (an unknown name is slot 0, as in MQ).
     r.add_tlo("InvSlot", [](const Context& c, std::string_view index) -> V {
         if (!c.conn || index.empty()) return V::nil();
         return V::object(g.invslot, inv_slot_number(index).value_or(0));
-    });
+    }, "Look up an inventory slot.");
     // MQ's Merchant (always there: Open says whether one is), DoorTarget (/doortarget's door, NULL for none) and
     // Mercenary (always there: its state says whether there is one).
-    r.add_tlo("Merchant", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.merchant, 0) : V::nil(); });
+    r.add_tlo("Merchant", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.merchant, 0) : V::nil(); },
+              "The open merchant and its stock.");
     r.add_tlo("DoorTarget", [](const Context& c, std::string_view) -> V {
         if (!c.conn) return V::nil();
         auto id = c.conn->door_target();
         return id && c.conn->door(*id) ? V::object(g.door, *id) : V::nil();
-    });
-    r.add_tlo("Mercenary", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.mercenary, 0) : V::nil(); });
-    r.add_tlo("Raid", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.raid, 0) : V::nil(); });
-    r.add_tlo("Corpse", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.corpse, 0) : V::nil(); });
-    r.add_tlo("Pet", [](const Context& c, std::string_view) -> V { return pet_value(my_pet(c)); });
+    }, "The door you have targeted.");
+    r.add_tlo("Mercenary", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.mercenary, 0) : V::nil(); },
+              "Your mercenary and its state.");
+    r.add_tlo("Raid", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.raid, 0) : V::nil(); },
+              "Your raid and its members.");
+    r.add_tlo("Corpse", [](const Context& c, std::string_view) -> V { return c.conn ? V::object(g.corpse, 0) : V::nil(); },
+              "The corpse currently open for looting.");
+    r.add_tlo("Pet", [](const Context& c, std::string_view) -> V { return pet_value(my_pet(c)); },
+              "Your current pet.");
     // Debuff: the player's counters; Debuff[pet] the pet's, NULL without a pet (as the Pet TLO finds it). Other
     // indexes are NULL.
     r.add_tlo("Debuff", [](const Context& c, std::string_view index) -> V {
         if (!c.conn) return V::nil();
         if (index.empty()) return V::object(g.debuff, 0);
         if (!iequals(index, "pet")) return V::nil();
-        const V pet = c.registry ? c.registry->tlo(c, "Pet") : V::nil();
-        return pet.kind == Value::Kind::Object ? V::object(g.debuff, 1) : V::nil();
-    });
+        // Debuff is an independent lookup. Pet's rule applies to lookups of the Pet root.
+        return my_pet(c) ? V::object(g.debuff, 1) : V::nil();
+    }, "Detrimental effects on you or your pet.");
 }
 
 } // namespace hailstone::mq

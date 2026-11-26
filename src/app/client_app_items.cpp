@@ -5,8 +5,6 @@
 #include "app/spawn_interaction.h"
 #include "game/interact.h"
 #include "game/item_notify.h"
-#include "game/window_notify.h"
-#include "plugin/policy.h"
 
 namespace hailstone::app::client_internal {
 
@@ -179,120 +177,18 @@ void ClientApp::run_with_keys(std::string_view line, net::SlotClickKeys keys) {
     ui_host_.forced_mods = mods_before;
 }
 
+void ClientApp::notify_command(std::string_view args) {
+    if (conn_) run_notify_command(ui_host_, ui_api_.get(), args);
+}
+
+bool ClientApp::window_act(std::string_view window, std::string_view child, std::string_view action) {
+    return run_window_act(ui_host_, ui_api_.get(), window, child, action);
+}
+
 // MQ's ItemNotify on Hailstone's own clicks: leftmouseup is the slot's left click (CInvSlot::HandleLButtonUp: pick up,
 // put down, loot), rightmouseup its right click (use, read, open or close a bag), rightmouseheld the item's display.
 // MQ clicks the slot's window, so a closed bag's slot works only through its fallbacks; here every slot works as if
 // its window were open.
-void ClientApp::notify_command(std::string_view args) {
-    if (!conn_) return;
-    const game::WindowNotify n = game::parse_window_notify(args);
-    if (!n.error.empty()) {
-        conn_->ui_message(n.error);
-        return;
-    }
-    // What E3 presses runs from the client's state, UI or none (game/window_notify.h's maps): each with the call its
-    // window's handler makes, and only while that window would show (the stock window's shown()'s checks). The
-    // windows read and write the same state (the merchant's and the alternate currency's selection, the task and
-    // respawn choice, the quantity dialog's slider, the confirmation's question), so the two agree.
-    using A = game::NotifyAction;
-    using L = game::NotifyList;
-    auto& c = *conn_;
-    if (n.notification == "leftmouseup")
-        if (const A action = game::notify_action(n.window, n.child); action != A::None) {
-            switch (action) {
-            case A::TradeAccept: if (c.trade() && c.trade()->open) c.trade_accept(); break;
-            case A::TradeCancel: if (c.trade() && c.trade()->open) c.trade_cancel(); break;
-            case A::LootAll: if (c.loot_session() && c.loot_session()->open) c.loot_all(); break;
-            case A::LootDone: if (c.loot_session() && c.loot_session()->open) c.end_loot(); break;
-            // The box's question, whichever it is: the ground drop, the server's, a window's own, the guild invite.
-            case A::ConfirmYes: answer_confirmation_question(ui_host_, true); break;
-            case A::ConfirmNo: answer_confirmation_question(ui_host_, false); break;
-            case A::LargeDialogYes: if (c.large_dialog()) c.answer_large_dialog(1); break;
-            case A::LargeDialogNo: if (c.large_dialog()) c.answer_large_dialog(2); break;
-            case A::TaskAccept: c.accept_selected_task(); break;
-            case A::TaskDecline: if (c.tasks().offers) c.decline_tasks(); break;
-            case A::BankAuto: if (c.bank()) c.auto_bank(); break;
-            case A::BankDone: if (c.bank()) c.close_bank(); break;
-            case A::TributeToggle: c.tribute_toggle(!c.tribute().settings.active); break;
-            case A::RespawnSelect: c.choose_selected_respawn(); break;
-            case A::RaidLock:
-            case A::RaidUnlock: {
-                // RAID_LockButton is enabled for the leader of an unlocked raid, RAID_UnlockButton of a locked one.
-                const auto& r = c.raid();
-                const bool lock = action == A::RaidLock;
-                if (r.active && r.leader == c.character_name() && r.locked != lock) c.raid_lock(lock);
-                break;
-            }
-            case A::MerchantBuy: merchant_buy_button(ui_host_); break;
-            case A::MerchantSell: merchant_sell_button(ui_host_); break;
-            case A::MerchantDone: if (c.merchant() && c.merchant()->open) c.close_merchant(); break;
-            case A::QuantityAccept: quantity_accept(ui_host_); break;
-            case A::AltCurrencyReclaim: alt_currency_reclaim_button(ui_host_); break;
-            case A::AltCurrencyCreate: alt_currency_create_button(ui_host_); break;
-            case A::Money0: case A::Money1: case A::Money2: case A::Money3:
-                inventory_money_button(ui_host_, static_cast<int>(action) - static_cast<int>(A::Money0));
-                break;
-            case A::None: break;
-            }
-            return;
-        }
-    if (n.notification == "listselect")
-        if (const L list = game::notify_list(n.window, n.child); list != L::None) {
-            const int row = n.value - 1;
-            switch (list) {
-            case L::MerchantItems: merchant_select_row(ui_host_, row); break;
-            case L::AltCurrencies: alt_currency_select_row(ui_host_, row); break;
-            case L::TaskOffers: c.select_task_offer(row); break;
-            case L::RespawnOptions:
-                if (const auto& w = c.respawn_window(); w && row >= 0 && row < static_cast<int>(w->options.size()))
-                    c.set_respawn_choice(w->options[static_cast<std::size_t>(row)].id);
-                break;
-            case L::None: break;
-            }
-            return;
-        }
-    if (n.notification == "newvalue" && game::notify_quantity_slider(n.window, n.child)) {
-        quantity_set_slider(ui_host_, n.value);
-        return;
-    }
-    // Anything else (a page's tab, a window E3 does not use): the stock window, as the player's click would.
-    if (!ui_api_) {
-        log::info("/notify: {} {} {}: needs the UI", n.window, n.child, n.notification);
-        return;
-    }
-    bool done = false;
-    // MQ's listselect sets the list's selection. Few stock lists take a selection of their own (list_select); the
-    // rest select a row on its click, so that is the fallback. The row is the window's own (StockWindow::list), not
-    // a UI pack's sorted or filtered view of it.
-    if (n.notification == "listselect")
-        done = ui_api_->select_list(n.window, n.child, n.value - 1, 0) || ui_api_->click_list(n.window, n.child, n.value - 1, 0);
-    else if (n.notification == "tabselect") ui_api_->set_tab_page(n.window, n.child, n.value - 1), done = true;
-    else if (n.notification != "newvalue")
-        done = ui_api_->click_child(n.window, n.child, n.notification == "rightmouseup" ? "rightup" : "left");
-    if (!done) log::info("/notify: {} {} {}: nothing took it", n.window, n.child, n.notification);
-}
-
-bool ClientApp::window_act(std::string_view window, std::string_view child, std::string_view action) {
-    // A read that acts, held to what /notify needs: a script without 'actions' cannot click or close (a merchant's
-    // or trade's DoClose ends it) by reading a member instead of sending the command.
-    if ((plugin::caller_caps() & plugin::kCapActions) == 0) {
-        if (conn_)
-            conn_->ui_message(std::format("{}: the window method {} needs the server's 'actions' permission",
-                                          plugin::caller_name(), action));
-        return false;
-    }
-    // MQ's SendWndClick2 on a child: the click /notify would send (its game-state actions first, the UI after).
-    if (action == "leftmouseup" || action == "rightmouseup") {
-        if (child.empty() || !conn_) return false;
-        notify_command(std::string(window) + " " + std::string(child) + " " + std::string(action));
-        return true;
-    }
-    // CXWnd::Show(true / false): the stock window's own open state (UiApi's windows are state alone, built with or
-    // without anything drawn), which Window[...].Open then reads.
-    if (action == "doopen" || action == "doclose") return ui_api_ && ui_api_->show_window(window, action == "doopen");
-    return false;
-}
-
 void ClientApp::itemnotify_command(std::string_view args) {
     if (!conn_) return;
     const game::ItemNotify n = game::parse_item_notify(args);

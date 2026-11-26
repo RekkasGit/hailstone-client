@@ -78,7 +78,7 @@
 #include "game/reward_selection.h"
 #include "game/achievements.h"
 #include "game/task_window.h"
-#include "game/remove_buff.h"
+#include "net/remove_buff.h"
 #include "game/text_overlay.h"
 #include "game/camera_shake.h"
 #include "game/tracking.h"
@@ -94,6 +94,7 @@
 #include "net/aggro_packets.h"
 #include "net/door_packets.h"
 #include "net/dz_packets.h"
+#include "net/group_packets.h"
 #include "net/guild_bank_packets.h"
 #include "net/fellowship_packets.h"
 #include "net/guild_banner_packets.h"
@@ -285,9 +286,9 @@ struct SoundCue {
     // bag wave opening and closing); the app picks the Individual Sounds volume from it.
     enum class Context : std::uint8_t {
         None,
-        BagOpen,     // a bag in a carried slot opening
-        BankBagOpen, // a bag in a bank or shared bank slot opening
-        ItemWorn,    // an item put into or taken out of a worn slot
+        Bag,      // a bag in a carried slot opening or closing
+        BankBag,  // a bag in a bank or shared bank slot opening or closing
+        ItemWorn, // an item put into or taken out of a worn slot
     };
     Context context = Context::None;
 };
@@ -666,6 +667,7 @@ public:
     // the corresponding roster slot (CTargetWnd::OnProcessFrame), -1 none.
     void target_group_member(std::int32_t n, GroupTargetMode mode = GroupTargetMode::CyclePet);
     const game::Spawn* group_member_pet(const game::GroupMember& member) const;
+    const game::Spawn* group_member_pet(std::uint32_t owner_id) const;
     std::int32_t group_member_targeted() const { return group_member_targeted_; }
     // The target's target (OP_TargetHoTT; PlayerZoneClient::TargetOfTarget), 0 none.
     std::uint32_t target_of_target() const { return target_of_target_; }
@@ -1721,7 +1723,7 @@ public:
     // from CBazaarWnd::WndNotification @0x63a31b and CBarterWnd::WndNotification @0x631fc3).
     void offlinemode_command();
     // What the rider-mount link asks of the client (the app's models and collision; game/mounts.h). Null: the
-    // defaults (Luclin models loaded, every mount has its rider dag, no room test).
+    // defaults (every mount has its rider dag, no room test).
     void set_mount_queries(game::MountQueries* q) { mount_queries_ = q; }
     // The spawn the local player moves (pinstControlledPlayer): its mount while it rides one, else 0.
     std::uint32_t controlled_id() const { return world_.controlled_id; }
@@ -1855,7 +1857,7 @@ public:
     // whose name holds the text; /memspell <gem> "<spell>" memorizes a spell of the book (by exact name, any case, or
     // id) into gem 1..12 through MemorizeSet with only that gem, when the player's level allows it;
     // /removebuff [-pet|-both] <name> clicks off the first buff of the player's or the focused pet's whose name
-    // matches, /removepetbuff <name> the pet's (game/remove_buff.h).
+    // matches, /removepetbuff <name> the pet's (net/remove_buff.h).
     void removelev_command();
     void removeaura_command(std::string_view args);
     void removebuff_command(std::string_view args);
@@ -2092,8 +2094,11 @@ public:
     // (CEverQuest::DropItemOrMoneyOnPlayer): starts a trade or give, or drops
     // the cursor item into the open one.
     void give_to(std::uint32_t spawn_id);
-    // CTradeWnd::DropItemIntoTrade: the cursor item into the first free trade slot.
-    void trade_drop_cursor();
+    // The cursor item into the trade. With an NPC, `clicked_slot` (a Give slot clicked, CInvSlot::HandleLButtonUp
+    // @0x6963d2) takes the whole item only when that slot is empty; without one (a click on the NPC,
+    // CTradeWnd::DropItemIntoTrade @0x77f6d0) it goes to the first free slot. A player trade ignores
+    // `clicked_slot`: a stack merges into a matching trade stack, else the first free slot (docs/todo.md).
+    void trade_drop_cursor(std::optional<std::int16_t> clicked_slot = std::nullopt);
     void trade_drop_cursor_coin();
     // Puts coin of one type (0 copper .. 3 platinum) into the trade (through the cursor, as the original).
     void trade_coin(int type, std::uint32_t amount);
@@ -2150,6 +2155,9 @@ public:
     // ---- groups and pets (game/group.h; net/game_connection_group.cpp) ----
     const game::GroupState& group() const { return group_; }
     const game::PetState& pets() const { return pets_; }
+    // The exact readings from the optional server encounter expire between refreshes.
+    const GroupVital* group_vital(std::uint32_t spawn_id) const;
+    void request_group_vitals();
     // Hailstone's support for several pets: the server's list of the player's pets, from its extension (NMS:
     // OP_PetList). The focused pet stays when it is still listed, else the first one becomes it.
     void set_pet_list(std::vector<game::PetInfo> list);
@@ -3239,6 +3247,9 @@ private:
     void grouproles_command(const std::string& args);
     void groupleader_command();
     void reset_group_for_zone();
+    void handle_group_vitals(const AppPacket& p);
+    void clear_group_vitals();
+    void forget_group_vital(std::uint32_t spawn_id);
     void note_pet_spawn(const game::Spawn& s);
     void forget_pet_spawn(std::uint32_t spawn_id);
     // False when the inventory refused the swap (nothing moved, nothing sent).
@@ -3264,7 +3275,7 @@ private:
     std::optional<std::vector<std::int64_t>> game_steps_; // set_game_steps
     void update_usable_gems();
     // /removebuff's and /removepetbuff's click-off of the first buff `r` names.
-    void remove_named_buff(const game::RemoveBuff& r);
+    void remove_named_buff(const RemoveBuff& r);
     // The stats port over the current profile, inventory, buffs and AAs (CharacterZoneClient's effect totals).
     void with_character(const std::function<void(game::mechanics::Character&)>& fn) const;
     // with_character's sheet, rebuilt in place on each call (build_sheet_into: no allocation for an unchanged
@@ -3282,8 +3293,12 @@ private:
     // ProcessAllStats, run once per build and kept apart, so the effect-only one does not change with it (its
     // haste would take in the items' then).
     void with_cached_character(bool stats, const std::function<void(game::mechanics::Character&)>& fn) const;
-    struct CharacterCache; // net/character_cache.h
-    mutable std::unique_ptr<CharacterCache> character_cache_;
+    // Defined, and deleted, in game_connection_spells.cpp: the header need not know Character's type.
+    struct CharacterCache;
+    struct CharacterCacheDelete {
+        void operator()(CharacterCache* c) const;
+    };
+    mutable std::unique_ptr<CharacterCache, CharacterCacheDelete> character_cache_;
     mutable std::uint32_t character_builds_ = 0; // the shared character's sheets built (tests)
     mutable std::uint64_t character_serial_ = 1;
     bool in_update_ = false;
@@ -3615,6 +3630,7 @@ private:
 
     // Combat.
     PlayerStatus pstatus_;
+    std::optional<std::int32_t> reported_max_mana_; // own OP_ManaUpdate, separate from add-ons' PlayerStatus writes
     std::uint32_t consciousness_changes_ = 0;
     OwnHp own_hp_items_; // what own_hp() adds to pstatus_ (set_own_hp_items)
     void set_own_spawn_hp(); // the player's spawn's HP percent from own_hp() (SetSpawnHP)
@@ -4257,6 +4273,10 @@ private:
 
     // Groups and pets.
     game::GroupState group_;
+    GroupVitals group_vitals_;
+    bool group_vitals_offered_ = false;
+    bool group_vitals_waiting_ = false;
+    std::optional<std::int64_t> group_vitals_requested_ms_, group_vitals_received_ms_;
     // The local player's id and the group then raid member names Appearance::new_armor_bits were last made with.
     std::uint32_t new_armor_player_ = 0;
     std::vector<std::string> new_armor_members_;

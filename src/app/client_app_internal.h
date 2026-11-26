@@ -1798,7 +1798,6 @@ private:
     // (client_app_player.cpp), and the mount the controls moved last frame (0: the player itself).
     struct MountAnswers final : game::MountQueries {
         ClientApp* app = nullptr;
-        bool new_models_loaded() override;
         bool mount_point(const game::Spawn& rider, const game::Spawn& mount) override;
         bool can_i_fit_here() override;
         double room_above() override;

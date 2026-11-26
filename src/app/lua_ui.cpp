@@ -781,6 +781,21 @@ int Gauge(lua_State* L) {
     return 6;
 }
 
+// current, maximum, percent = hs.GaugeValues(eqType [, petIndex [, requestExact]])
+// Group HP (11–15), pet HP (16–21), group mana (31–35) and endurance (36–40). Missing readings return nil.
+// For type 16, petIndex 1 (the default) selects the focused pet and 2/3 select the extra Pet window rows.
+// Percent is 0–100. Pass false for requestExact to read available readings without polling for exact points.
+int GaugeValues(lua_State* L) {
+    const int type = held_int(luaL_checkinteger(L, 1));
+    const int pet_index = held_int(luaL_optinteger(L, 2, 1));
+    const bool request_exact = lua_isnoneornil(L, 3) || lua_toboolean(L, 3);
+    const auto values = ui_group_gauge_vitals(Impl::of(L).host, type, pet_index, request_exact);
+    if (values.current) lua_pushinteger(L, *values.current); else lua_pushnil(L);
+    if (values.maximum) lua_pushinteger(L, *values.maximum); else lua_pushnil(L);
+    if (values.percent) lua_pushinteger(L, *values.percent); else lua_pushnil(L);
+    return 3;
+}
+
 // ok = hs.ClickSlot(slot, bagSlot|nil, "left"|"leftheld"|"right"|right-button phase [, outside])
 // The game's slot logic: a left click picks up, drops, swaps or splits (Shift whole stack, Ctrl one; the original
 // on the button's release, HandleLButtonUp); "leftheld", the left button held on the slot, puts a hotbutton for it
@@ -1061,11 +1076,7 @@ int WindowPlaced(lua_State* L) {
 // disband a guild without the player's word. Any other question, and No, stay open to scripts (an accepted rez, a
 // trade's question). A Hailstone guard of its own.
 bool script_destroy_yes(lua_State* L, const UiHost& host, std::string_view window, std::string_view child) {
-    if (window != "ConfirmationDialogBox" || child != "Yes_Button" || ui::lua::pack_code(L) ||
-        !destructive_confirmation_up(host))
-        return false;
-    log::warn("A script pressed Yes on the destroy question (ConfirmationDialogBox); refused: only the player answers it");
-    return true;
+    return window == "ConfirmationDialogBox" && child == "Yes_Button" && refuse_code_destroy_yes(host, !ui::lua::pack_code(L));
 }
 
 // hs.ShowWindow(name, show)   -- shows or hides the game window (and with it the replacement)
@@ -3647,6 +3658,7 @@ void UiApi::register_functions(lua_State* L) {
         {"InGame", InGame}, {"UiReady", UiReady}, {"GameState", GameState}, {"Name", Name}, {"SlotName", SlotName},
         {"ClassName", ClassName}, {"ClassNamesRevision", ClassNamesRevision},
         {"Item", Item}, {"ItemIcon", ItemIcon}, {"Money", Money}, {"Label", Label}, {"Gauge", Gauge},
+        {"GaugeValues", GaugeValues},
         {"ClickSlot", ClickSlot}, {"HasSlot", HasSlot}, {"AltCurrencies", AltCurrencies}, {"UiTexture", UiTexture}, {"UiImage", UiImage}, {"UiAnimation", UiAnimation},
         {"ReplaceWindow", ReplaceWindow}, {"WindowPlaced", WindowPlaced}, {"ShowWindow", ShowWindow}, {"WindowButton", WindowButton},
         {"WindowText", WindowText}, {"ChildShown", ChildShown}, {"WindowList", WindowList}, {"ChildArt", ChildArtFn},
@@ -3684,7 +3696,7 @@ void UiApi::register_functions(lua_State* L) {
     // The functions that only read: the rest may change what a window's lists hold, so each drops the lists read
     // this frame (Impl::list) before it runs. A function missing here costs only a list built again.
     static constexpr std::string_view kReads[] = {
-        "InGame", "UiReady", "GameState", "Name", "SlotName", "Item", "ItemIcon", "Money", "Label", "Gauge", "HasSlot",
+        "InGame", "UiReady", "GameState", "Name", "SlotName", "Item", "ItemIcon", "Money", "Label", "Gauge", "GaugeValues", "HasSlot",
         "AltCurrencies", "UiTexture", "UiImage", "UiAnimation", "ReplaceWindow", "WindowShown", "WindowPlaced", "WindowText", "ChildShown",
         "WindowList", "ChildArt", "GemTint", "GemOverlay", "ButtonCoolDown", "CoolDownColor", "ItemPreviewImage",
         "BuffSlot", "BuffOverlay", "HotButton", "HotButtonFace", "HotButtonChecked", "HotButtonState", "HotButtonInfo",

@@ -75,6 +75,8 @@ struct UiHost {
     std::function<std::optional<ServerManagementView>(std::uint32_t known_serial, std::uint32_t known_catalog_serial)>
         server_management;
     std::function<bool(std::string_view expected_revision, const std::vector<ServerManagementEdit>&)> save_server_management;
+    std::function<std::optional<ServerManagementAddonTlos>(std::string_view source, bool request)>
+        server_management_addon_tlos;
     std::function<void()> close_server_management;
     int game_state = 0;                    // CEverQuest::GameState: 1 character select, 2 creation, 5 in game
     const game::mechanics::Character* character = nullptr; // the player as the original computes it
@@ -458,6 +460,10 @@ void draw_client_confirm(UiHost& host);
 // Whether ConfirmationDialogBox now asks a question whose Yes destroys something for good (an item's destroy, a
 // guild's disband): code other than the pack's own may not press its Yes (hs.ClickChild, WindowButton, ClickChildAt).
 bool destructive_confirmation_up(const UiHost& host);
+// Whether a Yes on ConfirmationDialogBox from code (`by_code`: a script, a plugin, code other than the pack's own)
+// is refused because destructive_confirmation_up: logged when it is. Every way code can press that Yes asks it
+// (hs.ClickChild, WindowButton, ClickChildAt, a script's /notify and Window[...].Child[...].LeftMouseUp).
+bool refuse_code_destroy_yes(const UiHost& host, bool by_code);
 
 // CQuantityWnd::Open (game/quantity_dialog.h) for a window: accepted at once calls `done`, else shows the dialog.
 void open_quantity(UiHost& host, const game::QuantityOpen& in, std::function<void(std::int32_t)> done,
@@ -581,6 +587,15 @@ public:
 private:
     std::unique_ptr<Impl> impl_;
 };
+
+// /notify <window> <child> <notification> [value] (MQ's WindowNotify, app/window_notify_run.cpp): the client's
+// state for what E3 presses (game/window_notify.h), else the stock window through `api` (null: no UI). A script's
+// (plugin::caller_name() not empty) Yes on a destroy's question is refused (refuse_code_destroy_yes). False when the
+// line was refused (no connection, a bad line, that Yes); true when it went to the client or the window.
+bool run_notify_command(UiHost& host, UiApi* api, std::string_view args);
+// MQ's window methods read in a line (mq::Context::window_act): LeftMouseUp / RightMouseUp go as /notify sends
+// them, DoOpen / DoClose show or hide the stock window. Held to the caller's 'actions' capability.
+bool run_window_act(UiHost& host, UiApi* api, std::string_view window, std::string_view child, std::string_view action);
 
 // The chat keys (game/chat_input.h; app/lua_ui_chat.cpp): the active chat window's input takes the keyboard with
 // `text` added (hs.ChatTakeFocus), and the chat buffer is cleared (slots 479 / 480).

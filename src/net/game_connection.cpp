@@ -1,5 +1,4 @@
 #include "net/game_connection.h"
-#include "net/character_cache.h"
 
 #include "net/notice_packets.h"
 #include "net/player_packets.h"
@@ -73,6 +72,8 @@ constexpr auto kZoneChangeRetryDelay = std::chrono::milliseconds(500);
 constexpr auto kWorldDropWait = std::chrono::seconds(30);
 constexpr auto kZoneDropWait = std::chrono::seconds(120);
 constexpr auto kLogoutDropWait = std::chrono::seconds(3);
+
+constexpr std::int32_t kSpaSummonToCorpse = 332; // SPA 0x14c: Handle_OP_RezzRequest's corpse-return question
 
 // PlayerZoneClient::ChangePosition @0x5a0bc0 stops a spawn (StopMoving: SpeedRun +0x7c and the turn rate +0x8c 0)
 // that sits, loots or lies down.
@@ -833,6 +834,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         // No target into the new zone: its spawn ids are the new zone's, so the old one would name another NPC.
         world_.target_id = 0;
         target_of_target_ = 0;
+        weather_messages_.clear(); // unconsumed weather from the departing zone session
         own_spawn_seen_ = weather_seen_ = client_spawn_requested_ = zone_ready_ = false;
         instrument_published_ = false;
         // The new local EQPlayer (its constructor @0x596ac0): Send_OP_FloatListThing(1) for it, then the samples
@@ -868,6 +870,8 @@ void GameConnection::handle_world(const AppPacket& p) {
         respawn_spawn_pending_ = false;
         respawn_placement_.reset();
         pstatus_.dead = false;
+        pstatus_.max_mana = 0;
+        reported_max_mana_.reset();
         invalidate_interaction_context();
         pstatus_.owner_status = 0;
         pstatus_.stand_state = 100;
@@ -1115,6 +1119,7 @@ void GameConnection::apply_spawn(const Spawn& s) {
     }
     group_.mana_percent.erase(s.spawn_id);
     group_.endurance_percent.erase(s.spawn_id);
+    forget_group_vital(s.spawn_id);
     spells_.others.erase(s.spawn_id);
     cast_stage_shown_.erase(s.spawn_id);
     if (spells_.target_buffs_entity == s.spawn_id) {
@@ -1246,12 +1251,16 @@ bool GameConnection::update_server_rules() {
         // A failed sync can leave an earlier login's rules on disk. Only this login's policy decides access.
         if (synced) allow_client = !received.deny_client;
         if (!options_.server_files_dir.empty()) rules = std::move(received);
-        else if (synced) rules.commands = std::move(received.commands);
+        else if (synced) {
+            rules.commands = std::move(received.commands);
+            rules.tlos = std::move(received.tlos);
+        }
     }
+    const bool transient_policy = rules.commands.enabled || !rules.tlos.default_allow || !rules.tlos.block.empty();
     log::info("server rules: {}", rules.configured ? std::format("{} ({} scripts and plugins of its own)", plugin::kServerCfgName,
                                                                  rules.server_files.size())
-                                                   : std::string(rules.commands.enabled ? "command policy (transient login)"
-                                                                                        : "none: plugins and scripts run freely"));
+                                                   : std::string(transient_policy ? "client policy (transient login)"
+                                                                                  : "none: plugins and scripts run freely"));
     server_rules_ = std::move(rules);
     ++server_rules_serial_;
     return allow_client;
@@ -1440,6 +1449,10 @@ std::optional<TimeOfDay> GameConnection::current_time_of_day() const {
 
 void GameConnection::handle_zone(const AppPacket& p) {
     if (options_.zone_packet_tap) options_.zone_packet_tap(p);
+    if (p.opcode == kOpHsGroupVitals) {
+        handle_group_vitals(p);
+        return;
+    }
     if (p.opcode == kOpServerManagementReply) {
         handle_server_management(p);
         return;
@@ -1500,6 +1513,8 @@ void GameConnection::handle_zone(const AppPacket& p) {
             if (state_ == ConnectionState::InZone) {
                 server_management_offered_ = (v->flags & kServerManagementOffered) != 0;
                 if (!server_management_offered_) close_server_management();
+                group_vitals_offered_ = (v->flags & kServerGroupVitals) != 0;
+                if (!group_vitals_offered_) clear_group_vitals();
             }
         } else {
             log::warn("server settings: a bad OP_HailstoneSettings ({} bytes) ignored", p.data.size());
@@ -1781,6 +1796,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
             // Observations belong to this actor's lifetime, not the numerical id a later actor may reuse.
             group_.mana_percent.erase(*id);
             group_.endurance_percent.erase(*id);
+            forget_group_vital(*id);
             spells_.others.erase(*id);
             cast_stage_shown_.erase(*id);
             if (spells_.target_buffs_entity == *id) {
@@ -2232,27 +2248,54 @@ void GameConnection::handle_zone(const AppPacket& p) {
             ask(Confirmation{kConfirmSharedTask, strings_.format(8934, std::vector<std::string>{i->inviter, i->task}), {},
                              ItemSlot::invalid(), p});
         break;
-    case Op::Translocate:
-    case Op::RezzRequest: {
+    case Op::Translocate: {
         // Unanswered, the server waits (its own time limit applies). This client's questions (the original's dialogs
         // are not decoded).
-        bool tl = op == Op::Translocate;
-        auto t = tl ? decode_translocate(p) : std::nullopt;
-        auto rz = tl ? std::nullopt : decode_rezz_request(p);
-        if (!t && !rz) break;
-        if (rz) {
-            if (respawn_spawn_pending_ || (respawn_ && respawn_chosen_)) break;
-            clear_hover_rez();
-            // A new server resurrection offer replaces the old one; queued dialogs must not answer superseded
-            // corpse/spell data after the current offer has been accepted or the hover timeout has completed.
-            discard_questions([](const Confirmation& c) { return c.id == kConfirmRezz; });
+        const auto offer = decode_translocate(p);
+        if (!offer) break;
+        std::string where = game::zone_long_name(offer->zone);
+        if (where.empty()) where = std::format("zone {}", offer->zone);
+        std::string text = std::format("{} offers to move you to {}. Go?", game::display_name(offer->caster), where);
+        ask(Confirmation{kConfirmTranslocate, std::move(text), {}, ItemSlot::invalid(), p});
+        break;
+    }
+    case Op::RezzRequest: {
+        // Handle_OP_RezzRequest @0x4bead0: an offer for another character (+0x18, compared without case) is ignored.
+        const auto offer = decode_rezz_request(p);
+        if (!offer || !iequals(offer->your_name, character_)) break;
+        if (respawn_spawn_pending_ || (respawn_ && respawn_chosen_)) break;
+        clear_hover_rez();
+        // A new server resurrection offer replaces the old one; queued dialogs must not answer superseded
+        // corpse/spell data after the current offer has been accepted or the hover timeout has completed.
+        discard_questions([](const Confirmation& c) { return c.id == kConfirmRezz; });
+
+        // The question, with the caster's trimmed name: eqstr 9046 for an invalid or unknown spell, 3563 for a spell
+        // with SPA 332 (summon to corpse), else 9047 with the spell's name and its Base[0] as a plain integer (no
+        // check of its range or of the resurrection SPA). The text is quoted when the game folder lacks the string.
+        const auto rezzer = game::display_name(offer->rezzer);
+        const auto eq = [&](std::uint32_t id, std::string fallback, std::vector<std::string> args) {
+            return strings_.has(id) ? strings_.format(id, args) : std::move(fallback);
+        };
+        std::string text;
+        const auto* spell = spell_table_->get(offer->spell);
+        if (!spell) {
+            text = eq(9046, std::format("{} wants to RESURRECT you. Do you wish this?", rezzer), {rezzer});
+        } else if (spell->has_effect(kSpaSummonToCorpse)) {
+            text = eq(3563,
+                      std::format("{} is attempting to return you to your corpse.  If you accept this, you will "
+                                  "still be able to get a resurrection later.  Do you wish this?", rezzer),
+                      {rezzer});
+        } else {
+            const std::string percent = std::to_string(spell->base[0]);
+            text = eq(9047, std::format("{} wants to cast {} ({} percent) upon you. Do you wish this?", rezzer,
+                                        spell->name, percent),
+                      {rezzer, spell->name, percent});
         }
-        std::uint32_t zone = t ? t->zone : rz->zone;
-        std::string where = game::zone_long_name(zone);
-        if (where.empty()) where = std::format("zone {}", zone);
-        std::string text = t ? std::format("{} offers to move you to {}. Go?", game::display_name(t->caster), where)
-                             : std::format("{} offers to resurrect you. Accept?", game::display_name(rz->rezzer));
-        ask(Confirmation{tl ? kConfirmTranslocate : kConfirmRezz, std::move(text), {}, ItemSlot::invalid(), p});
+        // Then eqstr 4632 in chat colour 0x108, and ConfirmationDialog 0x67: Yes / No (flags 0xc), 300 s.
+        chat(ChatEvent::Kind::System, eq(4632, "You have been offered a resurrection.", {}), 0, 0x108);
+        Confirmation question{kConfirmRezz, std::move(text), {}, ItemSlot::invalid(), p};
+        question.timeout_ms = 300000;
+        ask(std::move(question));
         break;
     }
     case Op::FindPersonReply:
@@ -2804,6 +2847,8 @@ void GameConnection::simulate_link_loss() {
 
 void GameConnection::disconnect() {
     close_server_management();
+    group_vitals_offered_ = false;
+    clear_group_vitals();
     close_evolving_transfer();
     reset_fellowship();
     capture_bank();
@@ -3143,6 +3188,10 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
             if (op == Op::ManaUpdate) {
                 pstatus_.mana = u->current;
                 pstatus_.max_mana = u->maximum;
+                if (std::in_range<std::int32_t>(u->maximum))
+                    reported_max_mana_ = static_cast<std::int32_t>(u->maximum);
+                else
+                    reported_max_mana_.reset();
             } else {
                 pstatus_.endurance = u->current;
                 pstatus_.max_endurance = u->maximum;

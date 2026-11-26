@@ -1,6 +1,8 @@
 // mq/tlo.h, mq/spawn_search.h and mq/parse.h: MacroQuest's TLOs over a small world (tests/mq_test_world.h).
 #include <doctest/doctest.h>
 
+#include <algorithm>
+
 #include "core/build_info.h"
 #include "manual_clock.h"
 #include "game/doors.h"
@@ -32,6 +34,85 @@ struct Fixture {
 };
 
 } // namespace
+
+TEST_CASE("TLO policy denies resolved names before running providers and leaves their catalog visible") {
+    Fixture f;
+    int calls = 0;
+    const auto before = f.reg.tlo_catalog_serial();
+    auto provider = [&](const mq::Context&, std::string_view index) {
+        ++calls;
+        return Value::string(std::string(index));
+    };
+    f.reg.add_tlo("AddonNotes", provider, {}, mq::TloOrigin::Addon);
+    CHECK(f.reg.tlo_catalog_serial() != before);
+    CHECK(f.p("${aDdOnNoTeS[before]}") == "before");
+    CHECK(calls == 1);
+
+    auto rules = plugin::parse_server_cfg("[tlos]\ndefault = allow\nblock = AddonNotes, SpawnCount, Target\n");
+    rules.provisional = true;
+    net::GameConnectionTestAccess::set_server_rules(*f.world.conn, rules);
+    CHECK(f.p("${AddonNotes[cached]}") == "cached");
+    CHECK(calls == 2);
+    rules.provisional = false;
+    net::GameConnectionTestAccess::set_server_rules(*f.world.conn, rules);
+    CHECK(f.reg.tlo(f.ctx, "addonnotes", "direct").is_nil());
+    CHECK(f.p("${aDdOnNoTeS[blocked].Length} ${sPaWnCoUnT[npc]} ${Math.Calc[2+3]}") == "NULL NULL 5.00");
+    CHECK(f.p("${${String[AddonNotes]}[nested]}") == "NULL");
+    CHECK(calls == 2);
+    CHECK(f.reg.complete(f.ctx, "Addon").empty());
+    CHECK(f.reg.complete(f.ctx, "Target.Na").empty());
+    const auto me_members = f.reg.complete(f.ctx, "Me.Na");
+    CHECK(std::find(me_members.begin(), me_members.end(), "Name") != me_members.end());
+    CHECK(f.reg.has_tlo("AddonNotes"));
+
+    const auto catalog = f.reg.tlo_catalog();
+    const auto addon = std::find_if(catalog.begin(), catalog.end(), [](const auto& row) { return row.name == "AddonNotes"; });
+    REQUIRE(addon != catalog.end());
+    CHECK(addon->origin == mq::TloOrigin::Addon);
+    CHECK(std::count_if(catalog.begin(), catalog.end(), [](const auto& row) { return row.origin == mq::TloOrigin::Addon; }) == 1);
+    const auto me = std::find_if(catalog.begin(), catalog.end(), [](const auto& row) { return row.name == "Me"; });
+    REQUIRE(me != catalog.end());
+    CHECK(me->origin == mq::TloOrigin::BuiltIn);
+
+    const auto registered = f.reg.tlo_catalog_serial();
+    f.reg.add_tlo("addonnotes", provider, {}, mq::TloOrigin::Addon);
+    CHECK(f.reg.tlo_catalog_serial() == registered);
+    // A built-in without a description is still built in: the origin is its own field.
+    f.reg.add_tlo("addonnotes", provider);
+    CHECK(f.reg.tlo_catalog_serial() != registered);
+    const auto relabelled = f.reg.tlo_catalog();
+    CHECK(std::find_if(relabelled.begin(), relabelled.end(), [](const auto& row) {
+              return row.name == "AddonNotes";
+          })->origin == mq::TloOrigin::BuiltIn);
+    f.reg.remove_tlo("ADDONNOTES");
+    CHECK(f.reg.tlo_catalog_serial() != registered);
+    CHECK_FALSE(f.reg.has_tlo("AddonNotes"));
+    net::GameConnectionTestAccess::set_server_rules(*f.world.conn, std::nullopt);
+    CHECK(f.p("${Me.Name}") == "Tester");
+}
+
+TEST_CASE("TLO policy tells the player once per caller and root when it blocks a lookup") {
+    Fixture f;
+    std::vector<std::string> told;
+    f.reg.set_denial_notice([&](const std::string& text) { told.push_back(text); });
+    net::GameConnectionTestAccess::set_server_rules(*f.world.conn, plugin::parse_server_cfg("[tlos]\nblock = Target\n"));
+    CHECK(f.p("${target.Name} ${Target.Level} ${Me.Name}") == "NULL NULL Tester");
+    CHECK(f.reg.complete(f.ctx, "Targ").empty()); // completion is not a lookup: it tells nothing
+    REQUIRE(told.size() == 1);
+    CHECK(told[0] == "[MQ] the server blocks TLO Target");
+    {
+        plugin::CallerScope script(plugin::kCapAll, "demo");
+        CHECK(f.p("${Target.Name}") == "NULL");
+        CHECK(f.p("${TARGET.Name}") == "NULL");
+    }
+    REQUIRE(told.size() == 2);
+    CHECK(told[1] == "[MQ] demo: the server blocks TLO Target");
+    // New rules (a re-sync on zoning) tell again.
+    net::GameConnectionTestAccess::set_server_rules(*f.world.conn, plugin::parse_server_cfg("[tlos]\nblock = Target\n"));
+    CHECK(f.p("${Target.Name}") == "NULL");
+    REQUIRE(told.size() == 3);
+    CHECK(told[2] == told[0]);
+}
 
 // A server extension's zone_display_name changes the label the HUD and map show, not the zone's name: Zone and
 // Zone.Name stay the zone's long name, as scripts store and compare it.
@@ -1326,6 +1407,9 @@ TEST_CASE("TLO: Me.Pet and Pet read the pet window's buffs, targeted or not") {
     // Targeted, with no target buffs from the server: still the pet window's.
     A::world(*f.world.conn).target_id = 14;
     CHECK(f.p("${Me.Pet.Buff[1]} ${Target.Buff[Test Plague]}") == "Test Plague Test Plague");
+
+    A::set_server_rules(*f.world.conn, plugin::parse_server_cfg("[tlos]\nblock = Pet\n"));
+    CHECK(f.p("${Pet.ID} ${Me.Pet.ID} ${Debuff[pet].Count}") == "NULL 14 4");
 }
 
 TEST_CASE("TLO: Me.Bank, the bank's coin, and InvSlot") {

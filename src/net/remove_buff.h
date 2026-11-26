@@ -18,7 +18,7 @@
 
 #include "core/ascii_case.h"
 
-namespace hailstone::game {
+namespace hailstone::net {
 
 struct RemoveBuff {
     bool self = true;
@@ -87,4 +87,4 @@ inline bool remove_buff_matches(std::string_view spell_name, std::string_view ne
     return false;
 }
 
-} // namespace hailstone::game
+} // namespace hailstone::net
