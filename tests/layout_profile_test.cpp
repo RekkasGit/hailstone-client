@@ -35,7 +35,6 @@ TEST_CASE("Layout profiles: durable save, name matching and malformed file handl
     CHECK(saved->chat.to_string() == profile.chat.to_string());
     CHECK(saved->pack_settings == profile.pack_settings);
     CHECK(saved->rects == profile.rects);
-    CHECK(ui::layout_profile_preview_rects(*saved) == profile.rects);
     CHECK_FALSE(ui::read_layout_profile(scratch.path() / "gamepad", "Raid Wide"));
     CHECK_FALSE(ui::read_layout_profile(directory, "../modern"));
 
@@ -53,76 +52,10 @@ TEST_CASE("Layout profiles: durable save, name matching and malformed file handl
     const auto path = directory / "profile-raid wide.hslayout";
     const auto contents = read_text_file(path);
     REQUIRE(contents);
-    CHECK(contents->starts_with("Hailstone layout profile 3\n"));
+    CHECK(contents->starts_with("Hailstone layout profile 1\n"));
     REQUIRE(write_file_atomic(path, contents->substr(0, contents->size() - 1)));
     CHECK_FALSE(ui::read_layout_profile(directory, profile.name));
     CHECK(ui::list_layout_profiles(directory).empty());
-}
-
-TEST_CASE("Layout profiles: earlier saves keep window and chat layout and discard binding data") {
-    test::ScratchDir scratch("layout_legacy");
-    constexpr std::string_view magic = "Hailstone layout profile 1\n";
-    ByteWriter writer;
-    writer.fixed_string(magic, magic.size());
-    const auto field = [&](std::string_view text) {
-        writer.le(static_cast<std::uint32_t>(text.size()));
-        writer.fixed_string(text, text.size());
-    };
-    field("Desktop");
-    writer.le<std::int32_t>(1920);
-    writer.le<std::int32_t>(1080);
-    field("[GroupWindow]\nXPosWindowed=112\n[LayoutProfilesWindow]\nXPosWindowed=20\n");
-    field("[Keys]\nOldKeyBinding=99\n[Gamepad]\nOldPadBinding=move\n");
-    field("[Options]\nFilterGuildChat=1\n");
-    field("hud.pos.GroupWindow=26,19\nhud.pos.LayoutProfilesWindow=20,20\n");
-    const auto& data = writer.data();
-    const auto path = scratch.path() / "profile-desktop.hslayout";
-    REQUIRE(write_file_atomic(path, {reinterpret_cast<const char*>(data.data()), data.size()}));
-    const auto loaded = ui::read_layout_profile(scratch.path(), "Desktop");
-    REQUIRE(loaded);
-    CHECK(loaded->windows.get_int("GroupWindow", "XPosWindowed", 0) == 112);
-    CHECK_FALSE(loaded->windows.get("LayoutProfilesWindow", "XPosWindowed"));
-    CHECK(loaded->chat.get_int("Options", "FilterGuildChat", 0) == 1);
-    CHECK(loaded->pack_settings == "hud.pos.GroupWindow=26,19\n");
-    REQUIRE(ui::save_layout_profile(scratch.path(), *loaded, true) == ui::LayoutProfileSave::Saved);
-    const auto saved = read_text_file(path);
-    REQUIRE(saved);
-    CHECK(saved->starts_with("Hailstone layout profile 3\n"));
-    CHECK(saved->find("OldKeyBinding") == std::string::npos);
-    CHECK(saved->find("OldPadBinding") == std::string::npos);
-}
-
-TEST_CASE("Layout profiles: a previous-version preview uses complete stock rectangles") {
-    test::ScratchDir scratch("layout_legacy_preview");
-    constexpr std::string_view magic = "Hailstone layout profile 2\n";
-    constexpr std::string_view windows =
-        "[GroupWindow]\nShow=1\nXPosWindowed=3796\nYPosWindowed=1950\nWidthWindowed=240\nHeightWindowed=200\n"
-        "[Hidden]\nShow=0\nXPosWindowed=40\nYPosWindowed=10\nWidthWindowed=100\nHeightWindowed=100\n"
-        "[Incomplete]\nXPosWindowed=20\nYPosWindowed=10\nWidthWindowed=200\n"
-        "[Malformed]\nXPosWindowed=-2147483648\nYPosWindowed=20\nWidthWindowed=50\nHeightWindowed=50\n"
-        "[LayoutProfilesWindow]\nXPosWindowed=20\nYPosWindowed=10\nWidthWindowed=300\nHeightWindowed=200\n";
-    ByteWriter writer;
-    writer.fixed_string(magic, magic.size());
-    auto field = [&](std::string_view text) {
-        writer.le(static_cast<std::uint32_t>(text.size()));
-        writer.fixed_string(text, text.size());
-    };
-    field("Desktop");
-    writer.le<std::int32_t>(1920);
-    writer.le<std::int32_t>(1080);
-    field(windows);
-    field("");
-    field("hud.pos.GroupWindow=1,2\n");
-    const auto& bytes = writer.data();
-    REQUIRE(write_file_atomic(scratch.path() / "profile-desktop.hslayout",
-                              {reinterpret_cast<const char*>(bytes.data()), bytes.size()}));
-    auto loaded = ui::read_layout_profile(scratch.path(), "Desktop");
-    REQUIRE(loaded);
-    CHECK(loaded->rects.empty());
-    const std::vector<ui::LayoutProfileRect> restored = {{"GroupWindow", 1620, 442, 240, 200}};
-    CHECK(ui::layout_profile_preview_rects(*loaded) == restored);
-    loaded->windows.erase_section("GroupWindow");
-    CHECK(ui::layout_profile_preview_rects(*loaded).empty());
 }
 
 TEST_CASE("Layout profiles: preview geometry ignores unusable bounds and rejects a corrupt record count") {
@@ -135,10 +68,12 @@ TEST_CASE("Layout profiles: preview geometry ignores unusable bounds and rejects
         {"Hidden", 2000, 0, 60, 80}, {"Flat", 0, 2, 0, 20}, {"Overlarge", 0, 0, 2000000000, 20},
         {"Line\nBreak", 0, 0, 100, 80}, {std::string(129, 'a'), 0, 0, 100, 80}
     };
-    CHECK(ui::layout_profile_preview_rects(profile).empty());
+    REQUIRE(ui::save_layout_profile(scratch.path(), profile, false) == ui::LayoutProfileSave::Saved);
+    REQUIRE(ui::read_layout_profile(scratch.path(), profile.name));
+    CHECK(ui::read_layout_profile(scratch.path(), profile.name)->rects.empty());
     for (std::size_t i = 0; i < ui::kLayoutProfileMaxRects + 10; ++i)
         profile.rects.push_back({std::to_string(i), -20, 500, 400, 180});
-    REQUIRE(ui::save_layout_profile(scratch.path(), profile, false) == ui::LayoutProfileSave::Saved);
+    REQUIRE(ui::save_layout_profile(scratch.path(), profile, true) == ui::LayoutProfileSave::Saved);
     const auto loaded = ui::read_layout_profile(scratch.path(), profile.name);
     REQUIRE(loaded);
     REQUIRE(loaded->rects.size() == ui::kLayoutProfileMaxRects);

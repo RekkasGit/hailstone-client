@@ -29,6 +29,7 @@ struct LayoutProfile {
     int width = 0, height = 0;
     IniFile windows, chat;
     std::string pack_settings;
+    // Preview bounds in the saved viewport's coordinates. Reading and saving drop unusable ones.
     std::vector<LayoutProfileRect> rects;
 };
 
@@ -40,8 +41,6 @@ bool has_saved_layout_profile(const std::filesystem::path& directory, const Layo
 enum class LayoutProfileSave { Saved, Exists, Failed };
 LayoutProfileSave save_layout_profile(const std::filesystem::path& directory, const LayoutProfile& profile,
                                       bool overwrite);
-// Recorded bounds use the saved viewport's coordinates. Earlier profiles may have a partial stock preview.
-std::vector<LayoutProfileRect> layout_profile_preview_rects(const LayoutProfile& profile);
 
 // The stock UI.ini also contains unrelated character settings. Replace only window placement and chat layout keys.
 IniFile capture_layout_windows(const IniFile& current);

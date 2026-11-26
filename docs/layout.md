@@ -237,8 +237,7 @@ Open **Layout Profiles** from the Modern EQ menu, **More** or **All Windows** in
 `/layoutprofiles`. Modern also offers it under **Options → Display → Interface**. Save the current setup under a
 name such as Desktop, Handheld or Raid.
 Select a saved profile and choose **Visual Preview** to see where its visible windows sat at the saved screen
-size. You can close the diagram and keep playing with the current layout. Older profiles use any complete saved
-window positions and sizes for an approximate preview.
+size. You can close the diagram and keep playing with the current layout.
 
 If your current layout differs from every saved profile, **Apply Profile** lets you name it and choose
 **Save & Apply**, choose **Apply Without Saving**, or cancel. The save prompt uses the same replacement

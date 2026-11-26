@@ -602,7 +602,7 @@ TEST_CASE("UI packs: visual layout preview draws saved positions without applyin
             local profiles = hs.UI.layoutProfiles
             assert(profiles.Save('Desktop'))
             local model = assert(profiles.Preview('Desktop'))
-            assert(model.width == 1280 and model.height == 720 and not model.approximate)
+            assert(model.width == 1280 and model.height == 720 and model.approximate == nil)
             assert(#model.rects == 2)
             local rect = {}
             for _, item in ipairs(model.rects) do rect[item.name] = item end
@@ -649,7 +649,6 @@ TEST_CASE("UI packs: visual layout preview draws saved positions without applyin
         run(R"lua(
             assert(visualText['Saved Frame'] and visualText['Second Frame'])
             assert(visualText['Read-only view of the saved window positions.'])
-            assert(not visualText['Approximate positions. Re-save the layout for an updated preview.'])
             assert(visualActions == 0 and not hs.UI.layoutProfiles.CanUndo())
         )lua");
         CHECK(s.lua.setting("hud.locked") == "0");
@@ -665,22 +664,11 @@ TEST_CASE("UI packs: visual layout preview draws saved positions without applyin
             s.frames(2);
             press("Visual Preview", "##profile-visual-preview");
         };
-        ui::LayoutProfile legacy;
-        legacy.name = "Desktop";
-        legacy.width = 1280;
-        legacy.height = 720;
-        legacy.windows.set_int("Legacy Frame", "XPosWindowed", 42);
-        legacy.windows.set_int("Legacy Frame", "YPosWindowed", 32);
-        legacy.windows.set_int("Legacy Frame", "WidthWindowed", 292);
-        legacy.windows.set_int("Legacy Frame", "HeightWindowed", 170);
-        preview_saved_file(legacy);
-        run(R"lua(
-            assert(visualText['Legacy Frame'])
-            assert(visualText['Approximate positions. Re-save the layout for an updated preview.'])
-        )lua");
-        press("Close Preview", "##close-visual-preview");
-        legacy.windows = {};
-        preview_saved_file(legacy);
+        ui::LayoutProfile empty;
+        empty.name = "Desktop";
+        empty.width = 1280;
+        empty.height = 720;
+        preview_saved_file(empty);
         run(R"lua(
             assert(visualText['No window positions are available. Save this layout again to capture a visual preview.'])
             assert(visualActions == 0 and not hs.UI.layoutProfiles.CanUndo())

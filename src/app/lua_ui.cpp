@@ -3024,7 +3024,6 @@ int LayoutProfilesPreview(lua_State* L) {
     }
     std::set<std::string> windows;
     std::size_t chat = 0;
-    std::vector<ui::LayoutProfileRect> rects;
     plugin::cxx_guard(L, [&] {
         for (const auto& section : profile->windows.sections())
             if (!game::same_no_case(section, "ChatManager")) windows.insert(section);
@@ -3039,9 +3038,9 @@ int LayoutProfilesPreview(lua_State* L) {
         }
         chat = profile->windows.keys("ChatManager").size();
         for (const auto& section : profile->chat.sections()) chat += profile->chat.keys(section).size();
-        rects = ui::layout_profile_preview_rects(*profile);
     });
-    lua_createtable(L, 0, 7);
+    const auto& rects = profile->rects;
+    lua_createtable(L, 0, 6);
     lua_pushlstring(L, profile->name.data(), profile->name.size());
     lua_setfield(L, -2, "name");
     auto number = [L](const char* key, lua_Integer value) {
@@ -3052,8 +3051,6 @@ int LayoutProfilesPreview(lua_State* L) {
     number("height", profile->height);
     number("windows", static_cast<lua_Integer>(windows.size()));
     number("chat", static_cast<lua_Integer>(chat));
-    lua_pushboolean(L, profile->rects.empty() && !rects.empty());
-    lua_setfield(L, -2, "approximate");
     lua_createtable(L, static_cast<int>(rects.size()), 0);
     for (std::size_t i = 0; i < rects.size(); ++i) {
         const auto& rect = rects[i];
