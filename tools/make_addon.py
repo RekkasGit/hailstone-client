@@ -12,8 +12,10 @@ release's asset and the packages beside it.
 
 usage:
   tools/make_addon.py --name autoloot --kind script --version 1.3.0 --caps read,events,actions \\
+      --required-tlos Me,Target --suggested-tlos Spawn \\
       --dir path/to/autoloot --out release/
   tools/make_addon.py --name MQ2Hud --kind plugin --version 2.0.0 --caps read,ui \\
+      --required-tlos Me --suggested-tlos none \\
       --platform linux-x64=build-linux/MQ2Hud --platform windows-x64=build-win/MQ2Hud --out release/
   tools/make_addon.py --name texstudio --kind tool --version 1.0.0 \
       --platform linux-x64=dist/linux --platform windows-x64=dist/windows --out release/
@@ -41,6 +43,8 @@ MANIFEST = "hailstone-addon.txt"
 VERSION = re.compile(r"^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$")
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
 PLATFORM = re.compile(r"^[a-z0-9_-]{1,32}$")
+TLO_NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]*")
+MAX_TLO_LIST = 8192  # core/addon_manifest.cpp
 CAPS = {"read", "commands", "target", "actions", "move", "chat", "events", "ui", "packets", "extend", "login", "net",
         "web", "all"}
 PROGRAMS = (".exe", ".dll", ".so", ".dylib", ".com", ".bat", ".cmd", ".ps1", ".sh", ".asi", ".flt", ".py", ".js",
@@ -241,12 +245,30 @@ def one_line(text, what):
     return text
 
 
+def tlo_list(value, option):
+    if value is None:
+        sys.exit(f"{option} is required for scripts and plugins; use none for an empty list")
+    value = value.strip(" \t")
+    if value.lower() == "none":
+        return []
+    names = [name for name in re.split(r"[, \t]+", value) if name]
+    invalid_name = any(not TLO_NAME.fullmatch(name) or name.lower() == "none" for name in names)
+    if len(value) > MAX_TLO_LIST or not names or invalid_name:
+        sys.exit(f"{option}: use exact TLO root names (for example Me,Target), or none (at most {MAX_TLO_LIST} bytes)")
+    roots = {}
+    for name in names:
+        roots.setdefault(name.lower(), name)
+    return list(roots.values())
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--name", required=True)
     ap.add_argument("--kind", required=True, choices=["script", "plugin", "tool", "upscaler", "ui"])
     ap.add_argument("--version", required=True)
     ap.add_argument("--caps", default="", help="what it needs: read,ui,actions ... (docs/plugins.md); tool/upscaler/UI packages none")
+    ap.add_argument("--required-tlos", help="essential TLO roots, or none (scripts and plugins)")
+    ap.add_argument("--suggested-tlos", help="TLO roots for optional features, or none (scripts and plugins)")
     ap.add_argument("--dir", help="a script or UI package's folder")
     ap.add_argument("--platform", action="append", default=[], help="a plugin's, a tool's or an upscaler's PLATFORM=FOLDER, once for each")
     ap.add_argument("--author", default="")
@@ -272,6 +294,14 @@ def main():
             sys.exit("--caps: an upscaler asks for none (it sees only the frames it upscales)")
     elif not caps or any(c not in CAPS for c in caps):
         sys.exit(f"--caps: some of {', '.join(sorted(CAPS))}")
+    managed = a.kind in ("script", "plugin")
+    if managed:
+        required_tlos = tlo_list(a.required_tlos, "--required-tlos")
+        required_names = {name.lower() for name in required_tlos}
+        suggested_tlos = [name for name in tlo_list(a.suggested_tlos, "--suggested-tlos")
+                          if name.lower() not in required_names]
+    elif a.required_tlos is not None or a.suggested_tlos is not None:
+        sys.exit("--required-tlos and --suggested-tlos are only for scripts and plugins")
     if a.notes and (not a.notes.startswith(("https://", "http://")) or any(c.isspace() for c in a.notes)):
         sys.exit("--notes: an http(s) address")
     if a.notes:
@@ -309,6 +339,9 @@ def main():
     if a.description:
         lines.append(f"description {one_line(a.description, 'description')}")
     lines.append(f"caps {','.join(caps) if caps else 'none'}")
+    if managed:
+        lines.append(f"required_tlos {','.join(required_tlos) or 'none'}")
+        lines.append(f"suggested_tlos {','.join(suggested_tlos) or 'none'}")
     if a.notes:
         lines.append(f"notes {a.notes}")
     for plat, folder in builds:

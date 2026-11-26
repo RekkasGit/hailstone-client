@@ -128,6 +128,42 @@ struct Host {
 
 } // namespace
 
+TEST_CASE("MQ Lua: TLO policy also gates retained named references when rules change") {
+    Host h;
+    h.write("tlo_policy.lua", R"lua(
+local mq = require('mq')
+local root = mq.TLO.Me
+local member = root.Name
+local indexed = mq.TLO.Float('25')
+local child = indexed.Int
+assert(member() == 'Tester')
+assert(indexed() == 25 and child() == 25)
+print('references made')
+mq.delay(10)
+assert(root() == nil and member() == nil)
+assert(indexed() == nil and child() == nil)
+assert(mq.TLO.mE.Name() == nil and mq.TLO.Float('25').Int() == nil)
+assert(mq.parse('${mE.Name} ${Float[25]}') == 'NULL NULL')
+local spawns = mq.getAllSpawns()
+assert(#spawns > 0 and spawns[1].ID() ~= nil)
+print('references denied')
+mq.delay(10)
+assert(root.Name() == 'Tester' and member() == 'Tester')
+assert(indexed() == 25 and child() == 25)
+print('references restored')
+)lua");
+    REQUIRE(h.scripts->run("tlo_policy", {}));
+    h.pulses(1);
+    REQUIRE(h.printed_line("references made"));
+    net::GameConnectionTestAccess::set_server_rules(
+        *h.world.conn, plugin::parse_server_cfg("[tlos]\nblock = Me, Float\n"));
+    h.pulses(1, 10);
+    REQUIRE(h.printed_line("references denied"));
+    net::GameConnectionTestAccess::set_server_rules(*h.world.conn, std::nullopt);
+    h.pulses(1, 10);
+    CHECK(h.printed_line("references restored"));
+}
+
 TEST_CASE("MQ Lua: spell data exposes raw display fields") {
     Host h;
     h.write("spell_fields.lua", R"(
@@ -147,6 +183,101 @@ print('spell fields ok')
     REQUIRE(h.scripts->run("spell_fields", {}));
     h.pulses(1);
     CHECK(h.printed_line("spell fields ok"));
+}
+
+TEST_CASE("MQ Lua: TLO grants follow the verified managed entry and its verified modules") {
+    Host h;
+    const std::string entry = R"lua(
+local mq = require('mq')
+if ... == 'copy' then
+    assert(mq.TLO.Me.Name() == nil)
+    print('copy denied')
+    return
+end
+local member = mq.TLO.Me.Name
+assert(member() == 'Tester')
+assert(require('same_addon') == 'Tester')
+assert(mq.parse('${mE.Name} ${Float[25]}') == 'Tester NULL')
+local spawns = mq.getAllSpawns()
+assert(#spawns > 0 and spawns[1].ID() ~= nil)
+mq.cmd('/timed 1 /echo grant ${Me.Name}')
+mq.cmd('/timed 2 /echo revoked ${Me.Name}')
+mq.delay(110)
+assert(require('foreign'))
+assert(member() == nil and mq.parse('${Me.Name}') == 'NULL')
+print('retained reference denied')
+mq.delay(200)
+)lua";
+    const std::string module = "return require('mq').TLO.Me.Name()";
+    h.write("verified/init.lua", entry);
+    h.write("verified/same_addon.lua", module);
+    h.write("copied/init.lua", entry);
+    h.write("foreign.lua", R"lua(
+assert(require('mq').TLO.Me.Name() == nil)
+return true
+)lua");
+    h.policy.set_ceilings({
+        {plugin::FileKind::Script, sha256(entry), plugin::kCapAll, "Verified", "OWNER/Verified", true, true,
+         h.lua_dir / "verified/init.lua"},
+        {plugin::FileKind::Script, sha256(module), plugin::kCapAll, "Verified", "owner/verified", true, false,
+         h.lua_dir / "verified/same_addon.lua"},
+    });
+    net::GameConnectionTestAccess::set_server_rules(
+        *h.world.conn, plugin::parse_server_cfg("[tlos]\nblock = Me, Float\naddon_allow = owner/verified:Me\n"));
+    REQUIRE(h.scripts->run("verified", {}));
+    REQUIRE(h.scripts->run("copied", {"copy"}));
+    h.pulses(1);
+    REQUIRE(h.printed_line("copy denied"));
+    CHECK(h.reg.tlo(h.ctx, "Me", {}).kind == mq::Value::Kind::Nil);
+    h.clock = 100;
+    h.hooks.pulse();
+    CHECK(h.printed_line("grant Tester"));
+    h.pulses(1, 10);
+    REQUIRE(h.printed_line("retained reference denied"));
+    h.clock = 200;
+    h.hooks.pulse();
+    CHECK(h.printed_line("revoked NULL"));
+}
+
+TEST_CASE("MQ Lua: external bind and synthetic chat cannot borrow a managed TLO grant after yielding") {
+    Host h;
+    const std::string entry = R"lua(
+local mq = require('mq')
+local function check(source)
+    print(source .. ' before ' .. (mq.TLO.Me.Name() or 'denied'))
+    mq.delay(1)
+    print(source .. ' after ' .. (mq.TLO.Me.Name() or 'denied'))
+end
+mq.bind('/tlofixture', check)
+mq.event('fixture', 'fixture!', function() check('chat') end)
+while true do
+    mq.doevents()
+    mq.delay(1)
+end
+)lua";
+    h.write("verified/init.lua", entry);
+    h.policy.set_ceilings({
+        {plugin::FileKind::Script, sha256(entry), plugin::kCapAll, "Verified", "owner/verified", true, true,
+         h.lua_dir / "verified/init.lua"},
+    });
+    net::GameConnectionTestAccess::set_server_rules(
+        *h.world.conn, plugin::parse_server_cfg("[tlos]\nblock = Me\naddon_allow = owner/verified:Me\n"));
+    REQUIRE(h.scripts->run("verified", {}));
+    h.pulses(1);
+    h.run("/tlofixture player");
+    {
+        plugin::CallerScope unverified(plugin::kCapAll, "Verified");
+        h.run("/tlofixture foreign");
+        plugin::ChatLine line{"fixture!", 0, 0, true, plugin::kCapAll};
+        h.hooks.chat(line);
+    }
+    h.pulses(4, 10);
+    CHECK(h.printed_line("player before Tester"));
+    CHECK(h.printed_line("player after Tester"));
+    CHECK(h.printed_line("foreign before denied"));
+    CHECK(h.printed_line("foreign after denied"));
+    CHECK(h.printed_line("chat before denied"));
+    CHECK(h.printed_line("chat after denied"));
 }
 
 TEST_CASE("MQ Lua: hailstone.raid is a columnar roster") {

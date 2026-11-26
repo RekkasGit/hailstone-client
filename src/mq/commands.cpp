@@ -158,7 +158,7 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
             return;
         }
         timed_.push_back({now_ms() + static_cast<std::int64_t>(d) * 100, std::string(rest), plugin::caller_caps(),
-                          std::string(plugin::caller_name())});
+                          std::string(plugin::caller_name()), plugin::caller_tlo_proof()});
     });
     h.on_pulse(owner_, [this] { run_timed(); });
     // /doortarget [id <n> | <name>] | clear (MQ's DoorTarget): the door with that id, or the nearest (in 3D) whose name
@@ -380,8 +380,12 @@ void Commands::run_timed() {
     timed_.erase(keep, timed_.end());
     std::stable_sort(due.begin(), due.end(), [](const Timed& a, const Timed& b) { return a.due_ms < b.due_ms; });
     for (const Timed& t : due) {
-        plugin::CallerScope scope(t.caps, t.caller);
-        env_.run(t.line);
+        if (t.tlo_caller) {
+            plugin::CallerScope scope(t.caps, t.caller, *t.tlo_caller);
+            env_.run(t.line);
+        } else {
+            env_.run(t.line);
+        }
     }
 }
 

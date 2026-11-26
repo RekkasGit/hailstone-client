@@ -75,6 +75,8 @@ struct UiHost {
     std::function<std::optional<ServerManagementView>(std::uint32_t known_serial, std::uint32_t known_catalog_serial)>
         server_management;
     std::function<bool(std::string_view expected_revision, const std::vector<ServerManagementEdit>&)> save_server_management;
+    std::function<std::optional<ServerManagementAddonTlos>(std::string_view source, bool request)>
+        server_management_addon_tlos;
     std::function<void()> close_server_management;
     int game_state = 0;                    // CEverQuest::GameState: 1 character select, 2 creation, 5 in game
     const game::mechanics::Character* character = nullptr; // the player as the original computes it

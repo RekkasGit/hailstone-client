@@ -1639,6 +1639,7 @@ local management = (function()
 			allow = "repos", block = "repos" },
 		commands = { default = "mode", allow = "commands", block = "commands", gm = "gm_commands", allow_groups = "groups",
 			block_groups = "groups", blocked_message = "message" },
+		tlos = { default = "mode", allow = "tlo_roots", block = "tlo_roots", addon_allow = "tlo_grants" },
 		management = { min_status = "min_status" },
 	}
 
@@ -1895,17 +1896,26 @@ local management = (function()
 		return result
 	end
 
-	local function valid_command_word(kind, word)
+	local function tlo_name(name)
+		return name:match("^[0-9A-Za-z_][0-9A-Za-z_-]*$")
+	end
+
+	local function valid_rule_word(kind, word)
 		if kind == "groups" then return groups[word:lower()] end
 		if kind == "commands" then return word ~= "/" end
+		if kind == "tlo_roots" then return tlo_name(word) end
+		if kind == "tlo_grants" then
+			local repo, root = word:match("^([^:]+):([^:]+)$")
+			return repo and repo_identity(repo) == repo:lower() and tlo_name(root)
+		end
 		local command, status = word:match("^(.+):([0-9]+)$")
 		return command and command ~= "/" and unsigned(status, 1, 32767)
 	end
 
-	local function valid_command_list(kind, value, original)
+	local function valid_rule_list(kind, value, original)
 		local existing
 		for word in value:gmatch("[^ ,]+") do
-			if not valid_command_word(kind, word) then
+			if not valid_rule_word(kind, word) then
 				-- Another row may be edited without rewriting the author's malformed tokens. Only carry exact
 				-- tokens that appeared in this key of the snapshot, without adding copies.
 				if not existing then
@@ -1929,8 +1939,8 @@ local management = (function()
 		if kind == "press_commands" then return unsigned(value, 0, 2147483647) end
 		if kind == "min_status" then return unsigned(value, 1, 32767) end
 		if kind == "repos" or kind == "required" then return repositories(value, kind == "required") ~= nil end
-		if kind == "groups" or kind == "commands" or kind == "gm_commands" then
-			return valid_command_list(kind, value, original)
+		if kind == "groups" or kind == "commands" or kind == "gm_commands" or kind == "tlo_roots" or kind == "tlo_grants" then
+			return valid_rule_list(kind, value, original)
 		end
 		for word in value:gmatch("[^ ,]+") do
 			local low = word:lower()
@@ -1965,7 +1975,7 @@ local management = (function()
 			section, key = section:lower(), key:lower()
 			local kind = schema[section] and schema[section][key]
 			local id = section .. "." .. key
-			local original = section == "commands" and read_control(raw or "", section, key) or nil
+			local original = (section == "commands" or section == "tlos") and read_control(raw or "", section, key) or nil
 			if not kind or seen[id] or value:find("[%z\1-\31\127]")
 				or not valid_value(kind, kind == "message" and value or trim(value), original) then
 				return nil, "Invalid or duplicate setting: [" .. (schema[section] and section or "unknown") .. "]"

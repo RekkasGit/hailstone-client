@@ -34,6 +34,68 @@ TEST_CASE("hailstone.cfg: shipped templates leave player code disabled and ident
     }
 }
 
+TEST_CASE("hailstone.cfg: TLO rules apply by case-insensitive root name") {
+    CHECK(plugin::Rules{}.tlos.allowed("Spawn"));
+    CHECK(plugin::parse_server_cfg("[tlos]\n").tlos.allowed("Unlisted"));
+    CHECK_FALSE(plugin::parse_server_cfg("[tlos]\nblock = sPawN\n").tlos.allowed("Spawn"));
+    CHECK(plugin::parse_server_cfg("[tlos]\nblock = Spawn\n").tlos.allowed("SpawnCount"));
+
+    std::vector<std::string> warnings;
+    const auto rules = plugin::parse_server_cfg(R"cfg(
+[Tlos]
+Default = Deny
+allow = Zone
+ALLOW = Me, Target, 2nd-AddOn	Some_Root, Me.Bank
+block = tARGet, target, [Bad]
+unrelated = data for scripts
+)cfg", &warnings);
+    CHECK_FALSE(rules.tlos.default_allow);
+    CHECK(rules.tlos.allowed("mE"));
+    CHECK(rules.tlos.allowed("2nd-addon"));
+    CHECK(rules.tlos.allowed("Some_Root"));
+    CHECK_FALSE(rules.tlos.allowed("TARGET"));
+    CHECK_FALSE(rules.tlos.allowed("Spawn"));
+    CHECK_FALSE(rules.tlos.allowed("Zone"));
+    CHECK_FALSE(rules.tlos.allowed("Me.Bank"));
+    CHECK(rules.tlos.block.size() == 1);
+    CHECK(rules.script_sections.at("tlos").at("unrelated") == "data for scripts");
+    CHECK(std::any_of(warnings.begin(), warnings.end(), [](const auto& warning) {
+        return warning.find("Me.Bank") != std::string::npos;
+    }));
+    CHECK(std::any_of(warnings.begin(), warnings.end(), [](const auto& warning) {
+        return warning.find("block wins") != std::string::npos;
+    }));
+    CHECK(plugin::parse_server_cfg("[tlos]\ndefault = invalid\n").tlos.allowed("Spawn"));
+}
+
+TEST_CASE("hailstone.cfg: verified add-on TLO grants are exact exceptions to global denial") {
+    const auto defaults = plugin::parse_server_cfg("[tlos]\n").tlos;
+    CHECK(defaults.allowed("Me"));
+    CHECK(defaults.allowed("Unlisted", "owner/repo"));
+    CHECK(defaults.addon_allow.empty());
+
+    std::vector<std::string> warnings;
+    const auto rules = plugin::parse_server_cfg(R"cfg(
+[tlos]
+default = deny
+allow = Target, Me
+block = Me
+addon_allow = Owner/Repo:Me, owner/repo:Spawn, other/addon:NearestSpawn, repo:Me, owner/repo:Me.Bank, owner/repo@v1:Me, owner/repo.git:Me, https://github.com/owner/repo:Me, owner/repo:*
+)cfg", &warnings);
+    CHECK_FALSE(rules.tlos.allowed("Me"));
+    CHECK_FALSE(rules.tlos.allowed("Me", "owner/other"));
+    CHECK_FALSE(rules.tlos.allowed("Me", "other/addon"));
+    CHECK(rules.tlos.allowed("mE", "oWnEr/rEpO"));
+    CHECK(rules.tlos.allowed("Spawn", "owner/repo"));
+    CHECK_FALSE(rules.tlos.allowed("SpawnCount", "owner/repo"));
+    CHECK_FALSE(rules.tlos.allowed("Me.Bank", "owner/repo"));
+    CHECK(rules.tlos.allowed("NearestSpawn", "other/addon"));
+    CHECK(rules.tlos.allowed("Target", "owner/other"));
+    REQUIRE(rules.tlos.addon_allow.size() == 2);
+    CHECK(rules.tlos.addon_allow.at("owner/repo").size() == 2);
+    CHECK(warnings.size() == 7);
+}
+
 TEST_CASE("hailstone.cfg: [client] deny is off by default and can deny Hailstone access") {
     CHECK_FALSE(plugin::Rules{}.deny_client);
     CHECK_FALSE(plugin::parse_server_cfg("").deny_client);
