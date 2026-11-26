@@ -815,6 +815,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         // No target into the new zone: its spawn ids are the new zone's, so the old one would name another NPC.
         world_.target_id = 0;
         target_of_target_ = 0;
+        weather_messages_.clear(); // unconsumed weather from the departing zone session
         own_spawn_seen_ = weather_seen_ = client_spawn_requested_ = zone_ready_ = false;
         instrument_published_ = false;
         // The new local EQPlayer (its constructor @0x596ac0): Send_OP_FloatListThing(1) for it, then the samples

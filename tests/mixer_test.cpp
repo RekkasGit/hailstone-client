@@ -20,6 +20,8 @@
 #include "audio/sound_control.h"
 #include "audio/sound_library.h"
 #include "core/config.h"
+#include "core/step_clock.h"
+#include "game/weather.h"
 #include "game_files.h"
 #include "pfs_fixtures.h"
 #include "scratch_dir.h"
@@ -60,6 +62,21 @@ std::vector<std::byte> wav16(std::uint32_t rate, const std::vector<std::int16_t>
     u32(static_cast<std::uint32_t>(s.size() * 2));
     put(s.data(), s.size() * 2);
     return d;
+}
+
+void write_weather_waves(const std::filesystem::path& dir) {
+    std::filesystem::create_directories(dir / "sounds");
+    std::ofstream(dir / "soundassets.txt") << "159^rainloop.wav\n158^wind_lp1.wav\n";
+    const auto wav = wav16(48000, {16384, 16384, 16384, 16384});
+    for (const char* name : {"rainloop.wav", "wind_lp1.wav"})
+        std::ofstream(dir / "sounds" / name, std::ios::binary)
+            .write(reinterpret_cast<const char*>(wav.data()), static_cast<std::streamsize>(wav.size()));
+}
+
+bool mix_is_audible(Mixer& mixer) {
+    std::vector<float> out(2 * 512);
+    mixer.render(out.data(), out.size() / 2);
+    return std::any_of(out.begin(), out.end(), [](float sample) { return sample != 0.0f; });
 }
 
 } // namespace
@@ -457,6 +474,95 @@ TEST_CASE("Audio system: voice pools, rain and wind emitters") {
     audio.set_indoors(false);
     audio.set_weather(false, true);
     CHECK(audio.weather_emitters().enabled(1));
+}
+
+TEST_CASE("Audio system: unloading a zone stops rain and wind loops until new weather") {
+    test::ScratchDir dir("weather_audio_unload");
+    write_weather_waves(dir.path());
+    GameDir game(dir.path());
+
+    auto check_unload = [&](bool rain, bool fading) {
+        CAPTURE(rain);
+        AudioSystem audio(game, AudioSettings{}, false);
+        audio.set_self_advance(false);
+        audio.set_zone("greatdivide");
+        audio.library().wait_idle();
+        audio.set_weather(rain, !rain);
+        audio.update(10);
+        REQUIRE(audio.mixer().voice_count() == 1);
+        REQUIRE(mix_is_audible(audio.mixer()));
+
+        if (fading) {
+            audio.set_weather(false, false);
+            audio.update(20);
+            REQUIRE(audio.mixer().voice_count() == 1);
+            REQUIRE(mix_is_audible(audio.mixer()));
+        }
+
+        audio.set_zone("");
+        CHECK(audio.mixer().voice_count() == 0);
+        audio.update(30);
+        CHECK_FALSE(mix_is_audible(audio.mixer()));
+
+        audio.set_zone("eastwastes");
+        audio.update(40);
+        CHECK_FALSE(mix_is_audible(audio.mixer()));
+        audio.set_weather(rain, !rain);
+        audio.update(50);
+        CHECK(audio.mixer().voice_count() == 1);
+        CHECK(mix_is_audible(audio.mixer()));
+    };
+
+    SUBCASE("active loops") {
+        check_unload(true, false);
+        check_unload(false, false);
+    }
+    SUBCASE("loops fading after the weather clears") {
+        check_unload(true, true);
+        check_unload(false, true);
+    }
+}
+
+TEST_CASE("Audio system: clearing rain or snow fades its loop while staying in the zone") {
+    test::ScratchDir dir("weather_audio_clear");
+    write_weather_waves(dir.path());
+    GameDir game(dir.path());
+
+    for (const bool snow : {false, true}) {
+        CAPTURE(snow);
+        AudioSystem audio(game, AudioSettings{}, false);
+        audio.set_zone("greatdivide");
+        audio.library().wait_idle();
+        game::Weather weather;
+        core::StepClock clock;
+        std::uint32_t now_ms = 100;
+        // An unfocused client can tick at 10 Hz with no graphics frames.
+        auto advance_ticks = [&](int count) {
+            for (int i = 0; i < count; ++i, now_ms += 100) {
+                for (const auto& step : clock.advance(static_cast<std::uint64_t>(now_ms) * 1000))
+                    weather.update(static_cast<double>(step.ms) / 1000.0, true, [] { return 50; });
+                audio.set_weather(weather.raining(), weather.windy());
+                audio.update(now_ms);
+            }
+        };
+        weather.handle_message(snow ? 1 : 0, 10);
+        advance_ticks(14);
+        REQUIRE(weather.raining() == !snow);
+        REQUIRE(weather.windy() == snow);
+        REQUIRE(audio.mixer().voice_count() == 1);
+        REQUIRE(mix_is_audible(audio.mixer()));
+
+        weather.handle_message(0, 0); // EQEmu's clear command uses a zero-filled packet for either kind.
+        advance_ticks(10);
+        CHECK_FALSE(weather.raining());
+        CHECK_FALSE(weather.windy());
+        CHECK(audio.mixer().voice_count() == 1); // normal three-second audio fade after weather clears
+        CHECK(mix_is_audible(audio.mixer()));
+
+        advance_ticks(35);
+        CHECK(audio.mixer().voice_count() == 0);
+        CHECK_FALSE(mix_is_audible(audio.mixer()));
+    }
 }
 
 TEST_CASE("Audio settings: SoundMixAhead (SoundManager::SetMixAhead's 4..96 fragments of 8 ms)") {
