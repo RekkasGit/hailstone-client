@@ -18,6 +18,7 @@
 
 #include "lua_ui_api_mock.h"
 
+#include "ui/imgui_frame.h"
 #include "ui/imgui_layer.h"
 #include "ui/lua/lua_host.h"
 #include "ui/texture_ids.h"
@@ -1490,7 +1491,9 @@ TEST_CASE("Lua UI: a completion list whose __len raises is read raw, not left to
 
 TEST_CASE("Lua UI: code editors made from changing ids are forgotten, not kept for the session") {
     std::size_t kept = 0;
-    std::int64_t oldest_at_10 = -1, oldest = -1;
+    // The editors are kept for the process, so ones an earlier test drew may still be there at the start: the frame
+    // 'kept' was made in (frame 0, read before frame 1 begins) is what the oldest must be at the end.
+    std::int64_t kept_made = -1, oldest = -1;
     CHECK(run_pack_frames("lua_ui_api_editors_test",
                           "local frame = 0\n"
                           "ui.window('C', function()\n"
@@ -1502,7 +1505,7 @@ TEST_CASE("Lua UI: code editors made from changing ids are forgotten, not kept f
                           "  done = true\n"
                           "end)\n",
                           400, [&](int i) {
-                              if (i == 10) oldest_at_10 = hailstone::ui::lua::code_editors_oldest();
+                              if (i == 1) kept_made = static_cast<std::int64_t>(hailstone::ui::imgui_frame());
                               if (i == 399) {
                                   kept = hailstone::ui::lua::code_editors_kept();
                                   oldest = hailstone::ui::lua::code_editors_oldest();
@@ -1510,8 +1513,8 @@ TEST_CASE("Lua UI: code editors made from changing ids are forgotten, not kept f
                           }));
     CHECK(kept > 0);
     CHECK(kept <= 258); // past 256, those not drawn last frame go
-    REQUIRE(oldest_at_10 >= 0);
-    CHECK(oldest == oldest_at_10); // the one drawn every frame was never forgotten
+    REQUIRE(kept_made > 0);
+    CHECK(oldest == kept_made); // the one drawn every frame was never forgotten, and the earlier tests' are gone
 }
 
 TEST_CASE("Lua UI: the code editor places text as CalcTextSize from the line's start does") {

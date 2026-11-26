@@ -13,6 +13,7 @@
 - Save named window and chat Layout Profiles in Modern and Gamepad. See the saved window arrangement in Visual Preview, save your current layout before switching if needed, and undo the last apply. Open the manager from the EQ menu or with `/layoutprofiles`. Interfaces reach them through `hs.UI.layoutProfiles` (UI API 1.12).
 - Modern chat timestamps and Gamepad vertical hotbar settings are now saved per character, where every character shared them before. Each character starts from the shared setting it had.
 - Server popups display STML tables in aligned rows and columns in Modern and Gamepad.
+- `/useitem` also takes an item's name, as in MacroQuest: `/useitem Rations` finds the first carried item whose name holds the text, `/useitem "Short Sword"` the one with that whole name. A single number past the slot numbers is an item id when you carry that item: `/useitem 1001`. The slot form is unchanged. E3 uses the name form for manastones and food.
 - New TLO `${MoveUtils}`, as in MacroQuest's MQ2MoveUtils: `.Stuck` is TRUE while a `/moveto` or `/stick` walk is stuck, and `.Command` names the walk. E3's follow uses it to switch to `/nav` when stuck.
 - `${Window[...]}` answers from the client's own state for the casting, spell book, loot, merchant, bank, trade, give and dialog windows and `pack1`..`pack10`, so scripts that ask whether one is open work with no UI.
 - New command `/beep` (MacroQuest's): plays a sound. Individual Sounds has a Beep volume and a Beep sound choice: a tone or any of your game folder's sounds.
