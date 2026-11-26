@@ -20,7 +20,7 @@
 - `${Window[...]}` answers from the client's own state for the casting, spell book, loot, merchant, bank, trade, give and dialog windows and `pack1`..`pack10`, so scripts that ask whether one is open work with no UI.
 - New command `/beep` (MacroQuest's): plays a sound. Individual Sounds has a Beep volume and a Beep sound choice: a tone or any of your game folder's sounds.
 - `/echo` and `/popupecho` take MacroQuest's colour codes when you type them (`\ayYellow \agGreen\ax`), and `\n` for a new line.
-- New commands `/popup`, `/popcustom` and `/popupecho`, as in MacroQuest: a line in the centre of the screen, with a colour and a time, and for `/popupecho` in chat too. E3 shows its alerts with them.
+- New commands `/popup`, `/popcustom` and `/popupecho`, as in MacroQuest: a line in the centre of the screen, with a colour and a time of up to 60 seconds, and for `/popupecho` in chat too. E3 shows its alerts with them.
 - `${FindItem[...]}` and `${FindItemCount[...]}` take an item id as well as a name, as in MacroQuest.
 - Scripts' window reads and `/notify` keep working while the interface is reloading or failed to load.
 - New TLOs, as in MacroQuest: `${FindItemBank[...]}` and `${FindItemBankCount[...]}` search the bank and shared bank (bags included, by name or item id) with no banker open, and `${AltAbility[...]}` finds any AA by name or id, owned or not. E3 checks its bank before looting or selling with them.

@@ -13,10 +13,11 @@
 // line prints MQ's usage instead. The overlay is DisplayOverlayText's: priority 10 ("always 10 in eqgame.exe"),
 // alpha 255 (100%), fades of 500 ms.
 //
-// Two deliberate differences: MQ's colour codes (\ar, \ay ...) are taken out of the overlay's text, which MQ hands the
+// Three deliberate differences: the hold is at most 60 s (kPopupMaxHoldMs); MQ's colour codes (\ar, \ay ...) are taken out of the overlay's text, which MQ hands the
 // game as they are (shown as written), and the chat line of /popupecho keeps them; and the text takes MQ's typed
 // escapes as /echo does (mq/typed_escapes.h), where MQ's popups take a typed "\ay" as written.
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -38,6 +39,9 @@ struct Popup {
 
 inline constexpr std::int32_t kPopupPriority = 10, kPopupAlpha = 255;
 inline constexpr std::uint32_t kPopupFadeMs = 500;
+// The longest hold a popup takes (Hailstone): 60 s. MQ takes any (an int of milliseconds, up to some 24 days), so a
+// script could hold the centre of the screen for weeks; a longer one is held for 60 s.
+inline constexpr std::uint32_t kPopupMaxHoldMs = 60000;
 
 // MQ's GetNextArg(line, n) with its default separators: the rest of the line after its first n words (spaces and tabs
 // separate them, a "quoted run" keeps them together), leading separators skipped. An unclosed quote takes the rest.
@@ -77,9 +81,9 @@ inline Popup parse_popup(std::string_view line, PopupKind kind) {
     p.colour = int_from_text(first, p.colour);
     const std::string second = get_arg(line, 2);
     if (digit(second)) {
-        // MQ: GetIntFromString(word, 3000) * 1000 in an int; held here to the overlay's unsigned milliseconds.
+        // MQ: GetIntFromString(word, 3000) * 1000 in an int; held here to 0..kPopupMaxHoldMs (saturating).
         const std::int64_t ms = std::int64_t{int_from_text(second, 3000)} * 1000;
-        p.hold_ms = ms <= 0 ? 0u : ms >= std::int64_t{UINT32_MAX} ? UINT32_MAX : static_cast<std::uint32_t>(ms);
+        p.hold_ms = static_cast<std::uint32_t>(std::clamp<std::int64_t>(ms, 0, kPopupMaxHoldMs));
         p.text = std::string(popup_next_arg(line, 2));
     } else {
         p.text = std::string(popup_next_arg(line, 1));
