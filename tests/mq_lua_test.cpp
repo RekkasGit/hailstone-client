@@ -244,6 +244,36 @@ return true
     CHECK(h.printed_line("revoked NULL"));
 }
 
+TEST_CASE("MQ Lua: a managed TLO grant carries over to deferred work across a policy refresh, and a revoked one does not") {
+    Host h;
+    const std::string entry = R"lua(
+local mq = require('mq')
+mq.cmd('/timed 1 /echo kept ${Me.Name}')
+mq.cmd('/timed 2 /echo dropped ${Me.Name}')
+mq.delay(1000)
+)lua";
+    h.write("verified/init.lua", entry);
+    const plugin::Ceiling verified{plugin::FileKind::Script, sha256(entry), plugin::kCapAll, "Verified", "owner/verified",
+                                   true, true, h.lua_dir / "verified/init.lua"};
+    h.policy.set_ceilings({verified});
+    net::GameConnectionTestAccess::set_server_rules(
+        *h.world.conn, plugin::parse_server_cfg("[tlos]\nblock = Me\naddon_allow = owner/verified:Me\n"));
+    REQUIRE(h.scripts->run("verified", {}));
+    h.pulses(1);
+    // A re-sync (a zone-in) makes a new policy generation; the grant is still there.
+    h.policy.set(*h.policy.current());
+    h.scripts->policy_changed({});
+    h.clock = 100;
+    h.hooks.pulse();
+    CHECK(h.printed_line("kept Tester"));
+    // The add-on's record is gone (it no longer verifies): its queued line fails closed.
+    h.policy.set_ceilings({});
+    h.scripts->policy_changed({});
+    h.clock = 200;
+    h.hooks.pulse();
+    CHECK(h.printed_line("dropped NULL"));
+}
+
 TEST_CASE("MQ Lua: external bind and synthetic chat cannot borrow a managed TLO grant after yielding") {
     Host h;
     const std::string entry = R"lua(

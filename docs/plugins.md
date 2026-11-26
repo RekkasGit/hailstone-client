@@ -2350,7 +2350,9 @@ scripts may rely on roots such as `Me`, `If`, and `Math`. An explicit block wins
 `addon_allow` grants specific roots to a verified managed add-on, using comma-separated `owner/repo:Root` entries.
 Grants apply across releases from the same repository, and a newly declared root needs its own grant. Add-on
 admission and the add-on's `read` capability still apply. A Lua add-on loses its grants for the current run if it
-loads a module outside its verified package.
+loads a module outside its verified package. Work an add-on deferred (a `/timed` line, a queued event) keeps a grant
+across a policy refresh such as a zone-in when the new rules still give it and the add-on's files still verify;
+otherwise the deferred lookup is denied.
 Names match without regard to case. Separate names with commas or whitespace. A name starts with an ASCII
 letter, digit, or underscore and can also contain hyphens after its first character. Whole roots are configurable.
 For example, the rule for `Me` applies to every member of `Me`, including `Me.Bank`. Add-on roots with other

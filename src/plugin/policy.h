@@ -69,18 +69,26 @@ std::string_view caller_name(); // "" for the player
 
 // A server TLO grant can be used only from code loaded from a verified installed add-on file. Runtime owners
 // keep the proof alive. Deferrals hold a weak reference so unloading or invalidating the code revokes it.
+// A new policy (Policy::set, set_ceilings) leaves every proof without an identity until its owner re-verifies
+// its file and renews it: renewing keeps the same object, so the work it deferred (a /timed line, a queued
+// event) uses the grant the new policy gives, if any. An owner whose file no longer verifies revokes it instead.
 class VerifiedTloCaller {
 public:
     std::string_view identity() const { return revoked_ || generation_.expired() ? std::string_view{} : source_; }
     bool same_addon(const VerifiedTloCaller& other) const { return source_ == other.source_; }
     void revoke() const { revoked_ = true; }
+    // Takes `current`'s generation: a proof Policy::verified_tlo_caller has just made for the same add-on. Only
+    // the Policy makes proofs, so this cannot lend an identity; a revoked proof stays revoked.
+    void renew(const VerifiedTloCaller& current) const {
+        if (same_addon(current)) generation_ = current.generation_;
+    }
 
 private:
     friend class Policy;
     VerifiedTloCaller(std::string_view source, const std::shared_ptr<const void>& generation)
         : source_(source), generation_(generation) {}
     std::string source_;
-    std::weak_ptr<const void> generation_;
+    mutable std::weak_ptr<const void> generation_;
     mutable bool revoked_ = false;
 };
 using TloCaller = std::shared_ptr<const VerifiedTloCaller>;

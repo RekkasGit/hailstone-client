@@ -2049,7 +2049,13 @@ void ScriptHost::policy_changed(const std::vector<std::string>& autoload, bool z
                                                                false) != current->identity();
                 }))
                 current.reset();
-            s.tlo_caller = std::move(current);
+            // The same proof, renewed: the /timed lines and events the script queued under the old policy hold it.
+            if (current) {
+                s.tlo_caller->renew(*current);
+            } else {
+                s.tlo_caller->revoke();
+                s.tlo_caller.reset();
+            }
         }
         if (caps == 0) {
             m.end(s, "stopped: it may not run here", zone_policy);
