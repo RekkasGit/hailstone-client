@@ -44,6 +44,11 @@ class CheckUnknownsTest(unittest.TestCase):
         self.assertIn("docs/unknowns.md:2: - **Untagged.**", out)
         self.assertEqual(len(out.splitlines()), 1)
 
+    def test_entry_without_a_bold_name_fails_in_a_section(self):
+        code, out = run("# Known gaps\n\n- Unknown: a label.\n\n## Area\n\n- **Tagged.** `player`\n- Plain words.\n")
+        self.assertEqual(code, 1)
+        self.assertIn("docs/unknowns.md:8: - Plain words. (no bold name)", out)
+
     def test_unknown_tag_fails(self):
         self.assertEqual(run("- **Name.** `maybe`\n")[0], 1)
 

@@ -21,11 +21,16 @@ ANY_TAG = re.compile(r"`(?:" + "|".join(TAGS) + r")`")
 
 
 def untagged(text: str) -> list[str]:
-    """Each entry line without exactly one tag right after its bold name, as `<line>: <entry>`."""
+    """Each entry line without exactly one tag right after its bold name, as `<line>: <entry>`. Past the first `##`
+    heading (the header's own lists come before it), a top-level `- ` line without a bold name counts too."""
     bad = []
+    in_sections = False
     for number, line in enumerate(text.splitlines(), 1):
+        in_sections = in_sections or line.startswith("## ")
         entry = ENTRY.match(line)
         if not entry:
+            if in_sections and line.startswith("- "):
+                bad.append(f"{number}: {line[:60]} (no bold name)")
             continue
         rest = line[entry.end():]
         if not TAG.match(rest) or len(ANY_TAG.findall(rest)) != 1:

@@ -1409,7 +1409,9 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
     290, 348, 349). Those keep RoF2's channels here, and are in no menu.
   - Settle: a capture of an EQEmu server that sends these colours.
 
-- Chat codes (docs/mechanics.md "Chat codes"): `%M` names the pet window's pet. The original takes the first spawn in its spawn list whose MasterID is the player, temporary pets included. A capture with a pet and a swarm pet out would settle which pet the original picks.
+- **Chat code `%M` with a swarm pet out.** `player` (docs/mechanics.md "Chat codes") `%M` names the pet window's pet.
+  The original takes the first spawn in its spawn list whose MasterID is the player, temporary pets included. A
+  capture with a pet and a swarm pet out would settle which pet the original picks.
 
 ## Real estate
 
