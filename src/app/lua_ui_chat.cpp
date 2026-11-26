@@ -154,7 +154,6 @@ constexpr std::size_t kWindowLines = 1000;
 // put where the restored lines end. It keeps what the windows keep (trim_windows).
 constexpr std::size_t kHistoryLines = 32000;
 constexpr std::string_view kHistoryHeader = "# Hailstone chat history 2";
-constexpr std::string_view kHistoryHeaderV3 = "# Hailstone chat history 3"; // first group prototype
 constexpr std::string_view kHistoryHeaderV1 = "# Hailstone chat history 1"; // no time column
 constexpr std::string_view kHistoryMark = "-- the chat from before --";
 constexpr std::string_view kHistoryGroup = "# Hailstone chat group\t";
@@ -2542,12 +2541,10 @@ void restore_chat_history(UiHost& host, const std::filesystem::path& file) {
     s.history_restored = true;
     std::ifstream in(file);
     std::string line;
-    if (!in || !std::getline(in, line) || (line != kHistoryHeader && line != kHistoryHeaderV3 &&
-                                           line != kHistoryHeaderV1)) return;
-    const bool group_markers = line == kHistoryHeader;
-    const bool prototype = line == kHistoryHeaderV3;
-    const bool timed = line != kHistoryHeaderV1;
-    const int fields = prototype ? 6 : timed ? 5 : 4;
+    if (!in || !std::getline(in, line) || (line != kHistoryHeader && line != kHistoryHeaderV1)) return;
+    const bool timed = line == kHistoryHeader;
+    const bool group_markers = timed;
+    const int fields = timed ? 5 : 4;
     std::deque<ui::ChatLine> old;
     std::size_t group_begin = 0, group_count = 0;
     std::string group_title;
@@ -2583,20 +2580,7 @@ void restore_chat_history(UiHost& host, const std::filesystem::path& file) {
         l.color = static_cast<std::uint32_t>(std::strtoul(std::string(f[2]).c_str(), nullptr, 10));
         if (timed) l.time = std::strtoll(std::string(f[3]).c_str(), nullptr, 10);
         l.peer = history_unescape(f[timed ? 4 : 3]);
-        std::string_view payload = std::string_view(line).substr(at);
-        if (prototype && f[5] == "group") {
-            l.text = ui::kClientSystemMessages;
-            while (true) {
-                const auto separator = payload.find('\t');
-                l.group_messages.push_back(history_unescape(payload.substr(0, separator)));
-                if (separator == std::string_view::npos) break;
-                payload.remove_prefix(separator + 1);
-            }
-        } else if (!prototype || f[5] == "line") {
-            l.text = history_unescape(payload);
-        } else {
-            continue;
-        }
+        l.text = history_unescape(std::string_view(line).substr(at));
         l.restored = true;
         old.push_back(std::move(l));
         if (group_count && old.size() == group_begin + group_count) {
@@ -2759,8 +2743,10 @@ void chat_layout_loaded(ui::UiIni& ini, UiHost& host, const std::filesystem::pat
         c.tell_target = text(k + "TellTarget", "").substr(0, 0x3f);
         c.name = text(k + "Name", std::format("ChatWindow{}", w));
         c.scrollbar = num(k + "Scrollbar", 1) != 0;
-        // At login the RoF2 constructor @0x654c80 accepts 0..7 for secondary windows. Profile switches preserve
-        // the 0..10 range available from /chatfontsize and the Font Size menu while in game.
+        // The constructor @0x654c80 (as RoF2): another window's font below 0 or above 7 is the default 3, though
+        // /chatfontsize (Cmd_chatfontsize @0x4e9a10) and the Font Size menu set 0..10, so 8..10 on a window other
+        // than the main one is 3 again at the next start (our login path too). Hailstone extension past RoF2's
+        // 0..7: a layout profile switch in game keeps 8..10, which the player could already set there.
         const int font = num(k + "FontStyle", 3);
         const int max_font = profile_change ? 10 : 7;
         c.font = font < 0 || font > max_font ? 3 : font;

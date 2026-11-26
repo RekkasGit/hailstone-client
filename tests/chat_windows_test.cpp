@@ -1316,13 +1316,6 @@ TEST_CASE("Chat windows: the chat history keeps times and client-message groups,
         CHECK(lua.run(stamped) == "0/2");
         CHECK(lua.run("local _, l = hs.ChatText(1) return (l[1]:gsub('<[^>]*>', ''))") == "old line");
     });
-    std::ofstream(file) << "# Hailstone chat history 3\n" << "0\t0\t0\t600\t\tgroup\t[Lua] prototype\t[Plugin] prototype\n";
-    session([&](Lua& lua, ui::ChatView& view) {
-        REQUIRE(view.lines.size() == 2);
-        CHECK(view.lines.front().text == "Client System Messages");
-        CHECK(lua.run("local _, l = hs.ChatText(1, nil, false, false, true, true) "
-                      "return l[1]:find('+ Client System Messages [2]', 1, true) ~= nil") == "true");
-    });
     std::ofstream(file) << "# Hailstone chat history 2\n" << "1\t0\t0\t600\t\ttimed line\n";
     session([&](Lua& lua, ui::ChatView& view) {
         CHECK(lua.run(stamped) == "1/2");

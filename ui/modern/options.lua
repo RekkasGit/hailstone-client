@@ -460,7 +460,7 @@ local function displayTab()
   end)
   section("Interface", function()
     if API.layoutProfiles and API.layoutProfiles.List then
-      row("Layout Profiles", "Save and switch between named window layouts, bindings and chat settings.", function()
+      row("Layout Profiles", "Save and switch between named window layouts and chat settings.", function()
         if ui.Button("Manage Profiles", -1, 0) then API.windows.Show("LayoutProfilesWindow", true) end
       end)
     end

@@ -84,8 +84,8 @@ struct Automation::Impl {
         else log::info("{}", game::strip_mq_colors(text)); // the log is plain text (game/mq_colors.h)
     }
 
-    void zone_notice(const std::string& text) {
-        if (net::GameConnection* c = conn()) c->zone_client_message(text);
+    void zone_notice(const std::string& text, const std::string& subject, bool stop) {
+        if (net::GameConnection* c = conn()) c->zone_client_message(text, subject, stop);
         else log::info("{}", text);
     }
 
@@ -203,7 +203,7 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     se.registry = &m.registry;
     se.context = ce.context;
     se.print = ce.echo;
-    se.zone_notice = [&m](const std::string& t) { m.zone_notice(t); };
+    se.zone_notice = [&m](const std::string& t, const std::string& subject, bool stop) { m.zone_notice(t, subject, stop); };
     se.run = ce.run;
     se.dirs = search_dirs(m.env.data_dir / "scripts", m.env.install_dir / "scripts");
     se.config_dir = m.env.data_dir / "scripts" / "config";

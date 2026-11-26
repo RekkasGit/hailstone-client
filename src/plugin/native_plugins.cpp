@@ -103,6 +103,13 @@ bool iequal(std::string_view a, std::string_view b) {
            });
 }
 
+// The subject of a plugin's zoning notices (PluginEnv::zone_notice): its name, case folded as plugins are found.
+std::string notice_subject(std::string_view name) {
+    std::string subject = "plugin:";
+    for (char c : name) subject += ascii_lower(c);
+    return subject;
+}
+
 mq::Value from_c(const HailstoneValue& v) {
     switch (v.kind) {
     case HAILSTONE_BOOL: return mq::Value::boolean(v.i != 0);
@@ -191,8 +198,10 @@ struct NativePlugins::Impl {
         return env.policy && env.policy->current() && env.policy->current()->configured &&
                (env.policy->server_file(FileKind::Plugin, hash) || env.policy->required_file(FileKind::Plugin, hash));
     }
-    void say(const std::string& text, bool zone_policy = false) const {
-        if (zone_policy && env.zone_notice) env.zone_notice(text);
+    // `subject` names the plugin a zoning notice is about; `stop` marks one that unloads it (PluginEnv::zone_notice).
+    void say(const std::string& text, bool zone_policy = false, const std::string& subject = {},
+             bool stop = false) const {
+        if (zone_policy && env.zone_notice) env.zone_notice(text, subject, stop);
         else if (env.print) env.print(text, 0);
     }
     void command(std::string_view args);
@@ -3870,7 +3879,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
             return x && x->active();
         });
     }
-    m.say(std::format("[Plugin] {} loaded ({})", name, caps_text(caps)), zone_policy);
+    m.say(std::format("[Plugin] {} loaded ({})", name, caps_text(caps)), zone_policy, notice_subject(name));
     log::info("plugin {} loaded from {} (sha256 {}, caps {})", name, file->string(), to_hex(hash), caps_text(caps));
     return true;
 }
@@ -3899,7 +3908,7 @@ bool NativePlugins::unload_file(std::string_view name, bool zone_policy) {
     m.loaded.erase(it);
     const std::string gone = l->name;
     discard(m, std::move(l), true);
-    m.say("[Plugin] " + gone + " unloaded", zone_policy);
+    m.say("[Plugin] " + gone + " unloaded", zone_policy, notice_subject(gone), true);
     return true;
 }
 
@@ -3948,7 +3957,7 @@ void NativePlugins::policy_changed(const std::vector<std::string>& autoload, boo
         if (!l->can(kCapNet)) l->tcp.clear();
     }
     for (const auto& n : drop) {
-        m.say("[Plugin] " + n + ": it may not run here", zone_policy);
+        m.say("[Plugin] " + n + ": it may not run here", zone_policy, notice_subject(n), true);
         unload_file(n, zone_policy);
     }
     for (const auto& n : revoked) {

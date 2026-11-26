@@ -43,7 +43,9 @@ struct NativeEnv {
     mq::Registry* registry = nullptr;
     std::function<const mq::Context&()> context;
     std::function<void(const std::string& text, std::uint32_t color)> print; // a chat line
-    std::function<void(const std::string& text)> zone_notice; // routine automatic load or unload during zoning
+    // A routine automatic load or unload during zoning: `subject` names the plugin ("plugin:<name>"), `stop` is true
+    // when the notice unloads it (as ScriptEnv::zone_notice).
+    std::function<void(const std::string& text, const std::string& subject, bool stop)> zone_notice;
     std::function<void(const std::string& line)> run;                        // a command line (through the hooks)
     std::function<void(Stream stream, const net::AppPacket& p)> send;        // a packet to the server
     std::function<void*()> imgui_context;

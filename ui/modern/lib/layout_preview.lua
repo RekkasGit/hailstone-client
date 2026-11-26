@@ -2,8 +2,7 @@
 local V = {}
 
 function V.prepare(profile)
-  local view = { name = profile.name, width = profile.width, height = profile.height,
-    approximate = profile.approximate, boxes = {} }
+  local view = { name = profile.name, width = profile.width, height = profile.height, boxes = {} }
   if not view.width or not view.height or view.width <= 0 or view.height <= 0 then return view end
 
   for _, r in ipairs(profile.rects or {}) do

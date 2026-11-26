@@ -1061,8 +1061,15 @@ void ClientApp::update_window_title() {
 void ClientApp::show_zone_client_messages(bool collapse) {
     if (!conn_) return;
     auto messages = conn_->take_zone_client_messages();
-    if (collapse) game_view_.chat.add_client_messages(std::move(messages));
-    else for (auto& message : messages) game_view_.chat.add(ui::ChatChannel::System, std::move(message));
+    if (!collapse) {
+        for (auto& message : messages) game_view_.chat.add(ui::ChatChannel::System, std::move(message.text));
+        return;
+    }
+    // Only the churn that cancels out goes in the group: a script or plugin still stopped is shown on its own line.
+    std::vector<std::string> routine, lasting;
+    for (auto& message : messages) (message.lasting ? lasting : routine).push_back(std::move(message.text));
+    game_view_.chat.add_client_messages(std::move(routine));
+    for (auto& message : lasting) game_view_.chat.add(ui::ChatChannel::System, std::move(message));
 }
 
 void ClientApp::update_connection() {

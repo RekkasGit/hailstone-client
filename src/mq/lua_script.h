@@ -109,8 +109,10 @@ struct ScriptHost::Impl {
         return env.now_ms ? env.now_ms()
                           : std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
     }
-    void say(const std::string& text, bool zone_policy = false) const {
-        if (zone_policy && env.zone_notice) env.zone_notice(text);
+    // `subject` names the script a zoning notice is about; `stop` marks one that stops it (ScriptEnv::zone_notice).
+    void say(const std::string& text, bool zone_policy = false, const std::string& subject = {},
+             bool stop = false) const {
+        if (zone_policy && env.zone_notice) env.zone_notice(text, subject, stop);
         else if (env.print) env.print(text);
     }
     Script* find(std::string_view name) const;

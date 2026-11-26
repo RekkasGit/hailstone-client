@@ -21,8 +21,12 @@ bool write_file_synced(const std::filesystem::path& path, std::string_view text)
 bool replace_file_synced(const std::filesystem::path& from, const std::filesystem::path& to, std::error_code& ec);
 
 // Publish an already-synced temporary file at a new name, failing if the destination exists.
-// On success the caller can remove the temporary name if it was left as a second link to the file.
+// On success the caller can remove the temporary name if it was left as a second link to the file. POSIX uses a hard
+// link; where the file system has none, it claims `to` with an exclusive create and renames `from` over the claim.
 bool create_file_synced(const std::filesystem::path& from, const std::filesystem::path& to, std::error_code& ec);
+
+// Tests: make create_file_synced take its path for file systems without hard links. POSIX only.
+void set_no_hard_links_for_tests(bool on);
 
 // A second name `to` for the file `from` (a hard link; `to` must not exist), on the disk before it returns (POSIX: the
 // folder synced). The updater keeps an old file in place this way while previous/ gets it, so the new file can then

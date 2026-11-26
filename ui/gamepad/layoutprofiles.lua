@@ -114,9 +114,6 @@ local function drawVisualPreview(x, y, bottom, width)
   T.heading("Visual Preview")
   ui.TextWrapped(visual.name)
   ui.TextWrapped("Read-only view of the saved window positions.")
-  if visual.approximate and #visual.boxes > 0 then
-    ui.TextWrapped("Approximate positions. Re-save the layout for an updated preview.")
-  end
   local _, top = ui.GetCursorScreenPos()
   local bh = T.px(54)
   local height = bottom - top - bh - T.px(10)

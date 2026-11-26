@@ -21,16 +21,16 @@ Use dot calls. Methods are grouped by service (`session`, `character`, `inventor
 
 ## Layout profiles
 
-`hs.UI.layoutProfiles` is available to interface code during a character session. `List()` returns saved
+API 1.12 adds `hs.UI.layoutProfiles`. It is available to interface code during a character session. `List()` returns saved
 names for the active pack. `Preview(name)` returns
-`{name, width, height, windows, chat, rects, approximate}` or `nil, reason`.
+`{name, width, height, windows, chat, rects}` or `nil, reason`.
 `rects` lists `{name, x, y, w, h}` window bounds in pixels at the saved screen size. An empty list means
-no window geometry is available. `approximate` indicates that the preview uses positions and sizes from
-an earlier save format. Previewing leaves the current layout in use. `Save(name[, overwrite])` returns `true` or
+no window geometry is available. Previewing leaves the current layout in use. `Save(name[, overwrite])` returns `true` or
 `false, reason[, code]`. If a name is taken, the code is `"exists"`. Ask the player before retrying with
 `overwrite=true`.
 
-`Apply(name[, discard_unsaved])` uses the last preview of that profile. If the current layout does not match
+`Apply(name[, discard_unsaved])` needs a preview of that profile first, then reads the saved file again, so a
+later overwrite from another client is the one applied. If the current layout does not match
 a saved profile, it returns `false, reason, "unsaved"`. An interface can offer to save the current setup or retry
 with `discard_unsaved=true` after the player chooses to apply without saving. Apply and `Undo()` otherwise return
 `true` or `false, reason`. `CanUndo()` reports whether the current

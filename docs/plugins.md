@@ -506,7 +506,7 @@ local client = require('hailstone')
 client.chat_group('Inventory Check', {'Checked four bags.', 'Seven slots are free.'})
 ```
 
-The title appears in the system chat window with a count. The player can expand it to read the individual rows. Pass a plain-text title of up to 80 bytes and a dense list of one to 32 nonempty strings of up to 1024 bytes each. The function returns `true` for accepted input and `false` if the arguments are invalid or there is no session. Existing chat filters, hooks, and logging receive the individual messages.
+The title appears in the system chat window with a count. The player can expand it to read the individual rows. Pass a plain-text title of up to 80 bytes and a dense list of one to 32 nonempty strings of up to 1024 bytes each. The title and rows refuse control bytes (anything below 0x20 but a tab, 0x7f, and U+0080 to U+009F), so a group carries no MacroQuest colour codes and no item or other chat links; a call with one is refused whole. The function returns `true` for accepted input and `false` if the arguments are invalid or there is no session. Existing chat filters, hooks, and logging receive the individual messages.
 
 #### The nameplate hook
 
@@ -1074,7 +1074,8 @@ effects completed before it are not retried or undone.
 `write_chat_group` submits one collapsed group with a title the plugin supplies. It needs a game connection
 and no capability. Call on the client's thread or on a thread using `lend_thread`. The client copies the title
 and rows during the call. Use a title of 1 to 80 bytes and 1 to 32 rows of 1 to 1024 bytes each. Pass one line
-of text per row. The function returns 1 on acceptance and 0 if the input is invalid or the service is unavailable.
+of plain text per row: the title and rows refuse control bytes (as the Lua `chat_group`), so no colour codes or
+chat links. The function returns 1 on acceptance and 0 if the input is invalid or the service is unavailable.
 
 ```c
 const char* rows[] = {"Checked four bags.", "Seven slots are free.", "One item is ready to parcel."};

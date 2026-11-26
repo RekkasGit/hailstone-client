@@ -55,7 +55,9 @@ struct ScriptEnv {
     const Registry* registry = nullptr;
     std::function<const Context&()> context;
     std::function<void(const std::string& text)> print; // a chat line
-    std::function<void(const std::string& text)> zone_notice; // routine automatic start or stop during zoning
+    // A routine automatic start or stop during zoning: `subject` names the script ("lua:<name>"), `stop` is true when
+    // the notice stops it. A stop no start follows before the notices are shown is not routine (GameConnection).
+    std::function<void(const std::string& text, const std::string& subject, bool stop)> zone_notice;
     std::function<void(const std::string& line)> run;   // a command line through the client (with the hooks)
     std::vector<std::filesystem::path> dirs;            // where scripts are looked for, in order
     std::filesystem::path config_dir;                   // mq.configDir: mq.pickle and data loadfile

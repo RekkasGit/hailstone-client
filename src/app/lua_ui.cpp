@@ -3024,7 +3024,6 @@ int LayoutProfilesPreview(lua_State* L) {
     }
     std::set<std::string> windows;
     std::size_t chat = 0;
-    std::vector<ui::LayoutProfileRect> rects;
     plugin::cxx_guard(L, [&] {
         for (const auto& section : profile->windows.sections())
             if (!game::same_no_case(section, "ChatManager")) windows.insert(section);
@@ -3039,9 +3038,9 @@ int LayoutProfilesPreview(lua_State* L) {
         }
         chat = profile->windows.keys("ChatManager").size();
         for (const auto& section : profile->chat.sections()) chat += profile->chat.keys(section).size();
-        rects = ui::layout_profile_preview_rects(*profile);
     });
-    lua_createtable(L, 0, 7);
+    const auto& rects = profile->rects;
+    lua_createtable(L, 0, 6);
     lua_pushlstring(L, profile->name.data(), profile->name.size());
     lua_setfield(L, -2, "name");
     auto number = [L](const char* key, lua_Integer value) {
@@ -3052,8 +3051,6 @@ int LayoutProfilesPreview(lua_State* L) {
     number("height", profile->height);
     number("windows", static_cast<lua_Integer>(windows.size()));
     number("chat", static_cast<lua_Integer>(chat));
-    lua_pushboolean(L, profile->rects.empty() && !rects.empty());
-    lua_setfield(L, -2, "approximate");
     lua_createtable(L, static_cast<int>(rects.size()), 0);
     for (std::size_t i = 0; i < rects.size(); ++i) {
         const auto& rect = rects[i];
@@ -3077,12 +3074,16 @@ int LayoutProfilesApply(lua_State* L) {
     if (!layout_profiles_allowed() || !m.layout_profiles_ready())
         return layout_profile_result(L, "Layout profiles are unavailable.");
     if (m.reload_layout) return layout_profile_result(L, "Wait for the layout change to finish.");
-    const auto& profile = m.layout_profile_preview;
-    if (!profile || !game::same_no_case(profile->name, std::string_view(name, length)))
+    const auto& preview = m.layout_profile_preview;
+    if (!preview || !game::same_no_case(preview->name, std::string_view(name, length)))
         return layout_profile_result(L, "Select a saved profile to preview it first.");
     const bool discard_unsaved = lua_toboolean(L, 2) != 0;
     const char* error = nullptr;
     bool unsaved = false;
+    std::optional<ui::LayoutProfile> profile;
+    // Read the file again: another client may have overwritten the profile since it was previewed.
+    plugin::cxx_guard(L, [&] { profile = ui::read_layout_profile(m.layout_profile_directory(), {name, length}); });
+    if (!profile) return layout_profile_result(L, "Layout profile is unavailable.");
     plugin::cxx_guard(L, [&] {
         auto previous = m.capture_layout_profile({});
         if (!discard_unsaved && !ui::has_saved_layout_profile(m.layout_profile_directory(), previous)) {
