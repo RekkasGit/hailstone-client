@@ -91,7 +91,6 @@ Not blocking 1.0:
 - Frame generation's pacing and 3x/4x.
 - FSR's water mask.
 - Zone flora rules.
-- An allocator of the client's own.
 - Shared GPU textures on Linux and past 16 clients.
 - The MacroQuest alert lists and `/target next`.
 - The "trace the original" rows that change nothing a player sees.
@@ -865,12 +864,18 @@ Voice macros and audio triggers; the commercial-service windows (the marketplace
   - Next:
     - measure fresh and repeated-zone memory and decode counts with the retained set, and pick its budget from that;
     - compare Windows private commit with resident checkpoints and model animation/geometry subtotals after shared/compacted animation keys;
-    - attribute name tables, parsed EQG source data and allocator retention before further cache policies.
+    - attribute name tables and parsed EQG source data before further cache policies (allocator retention is
+      small: see the allocator item below).
 - [ ] **The base cost.**
   - About 492 MB before any zone is loaded: the sound library's index over the 17 `snd*.pfs` at 119 MB, the spell particle definitions, the sky colour maps, the hero's forge tags, the fonts.
   - About 200 MB of shadow maps at the defaults (six 2048² cascades and the point-light cubes).
   - The split has not been measured one by one; nor has the transient above the end-of-zone figure.
-- [ ] An allocator of the client's own (mimalloc or jemalloc): the client uses the system allocator throughout, so the memory it asks for is not the memory it holds.
+- [x] An allocator of the client's own: measured, not worth it. On 2026-11-26 a client linked with mimalloc v3.6.1 in
+  place of glibc's allocator (Linux, the same source, the same live login to Qeynos Hills on the stock PEQ test server)
+  was resident 25-135 MiB higher at every startup and zone-load checkpoint and 200-300 MiB higher once settled in the
+  zone; with `MIMALLOC_PURGE_DELAY=0` still 50-100 MiB higher. Two runs with the system allocator differed by at most
+  about 100 MiB, at the end. So glibc does not hold much the client freed: the character archives' cost above is data,
+  not allocator retention. jemalloc was not tried.
 
 ### Server add-on host services
 
