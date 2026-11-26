@@ -30,7 +30,6 @@
 #include "game/race_models.h"
 #include "game/combat.h"
 #include "game/sound_rules.h"
-#include "game/spa_ids.h"
 #include "game/spawn_heights.h"
 #include "game/coords.h"
 #include "game/mq_colors.h"
@@ -74,6 +73,8 @@ constexpr auto kZoneChangeRetryDelay = std::chrono::milliseconds(500);
 constexpr auto kWorldDropWait = std::chrono::seconds(30);
 constexpr auto kZoneDropWait = std::chrono::seconds(120);
 constexpr auto kLogoutDropWait = std::chrono::seconds(3);
+
+constexpr std::int32_t kSpaSummonToCorpse = 332; // SPA 0x14c: Handle_OP_RezzRequest's corpse-return question
 
 // PlayerZoneClient::ChangePosition @0x5a0bc0 stops a spawn (StopMoving: SpeedRun +0x7c and the turn rate +0x8c 0)
 // that sits, loots or lies down.
@@ -2250,22 +2251,42 @@ void GameConnection::handle_zone(const AppPacket& p) {
         break;
     }
     case Op::RezzRequest: {
+        // Handle_OP_RezzRequest @0x4bead0: an offer for another character (+0x18, compared without case) is ignored.
         const auto offer = decode_rezz_request(p);
-        if (!offer || respawn_spawn_pending_ || (respawn_ && respawn_chosen_)) break;
+        if (!offer || !iequals(offer->your_name, character_)) break;
+        if (respawn_spawn_pending_ || (respawn_ && respawn_chosen_)) break;
         clear_hover_rez();
         // A new server resurrection offer replaces the old one; queued dialogs must not answer superseded
         // corpse/spell data after the current offer has been accepted or the hover timeout has completed.
         discard_questions([](const Confirmation& c) { return c.id == kConfirmRezz; });
 
+        // The question, with the caster's trimmed name: eqstr 9046 for an invalid or unknown spell, 3563 for a spell
+        // with SPA 332 (summon to corpse), else 9047 with the spell's name and its Base[0] as a plain integer (no
+        // check of its range or of the resurrection SPA). The text is quoted when the game folder lacks the string.
         const auto rezzer = game::display_name(offer->rezzer);
+        const auto eq = [&](std::uint32_t id, std::string fallback, std::vector<std::string> args) {
+            return strings_.has(id) ? strings_.format(id, args) : std::move(fallback);
+        };
+        std::string text;
         const auto* spell = spell_table_->get(offer->spell);
-        // EQEmu's Client::OPRezzAnswer uses the spell's first base value as the percentage. Corpse-return
-        // effects can also send OP_RezzRequest, so only advertise a rate for spells with the resurrection effect.
-        const bool has_rate = spell && spell->has_effect(game::SPA_RESURRECT) && spell->base[0] >= 0 && spell->base[0] <= 100;
-        std::string text = has_rate
-            ? std::format("{} offers to resurrect you ({}% XP recovery). Accept?", rezzer, spell->base[0])
-            : std::format("{} offers to resurrect you. Accept?", rezzer);
-        ask(Confirmation{kConfirmRezz, std::move(text), {}, ItemSlot::invalid(), p});
+        if (!spell) {
+            text = eq(9046, std::format("{} wants to RESURRECT you. Do you wish this?", rezzer), {rezzer});
+        } else if (spell->has_effect(kSpaSummonToCorpse)) {
+            text = eq(3563,
+                      std::format("{} is attempting to return you to your corpse.  If you accept this, you will "
+                                  "still be able to get a resurrection later.  Do you wish this?", rezzer),
+                      {rezzer});
+        } else {
+            const std::string percent = std::to_string(spell->base[0]);
+            text = eq(9047, std::format("{} wants to cast {} ({} percent) upon you. Do you wish this?", rezzer,
+                                        spell->name, percent),
+                      {rezzer, spell->name, percent});
+        }
+        // Then eqstr 4632 in chat colour 0x108, and ConfirmationDialog 0x67: Yes / No (flags 0xc), 300 s.
+        chat(ChatEvent::Kind::System, eq(4632, "You have been offered a resurrection.", {}), 0, 0x108);
+        Confirmation question{kConfirmRezz, std::move(text), {}, ItemSlot::invalid(), p};
+        question.timeout_ms = 300000;
+        ask(std::move(question));
         break;
     }
     case Op::FindPersonReply:

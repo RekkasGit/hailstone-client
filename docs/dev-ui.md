@@ -672,8 +672,9 @@ Lua socials for `ui/modern/luasocial.lua` and `ui/gamepad/luasocial.lua` (`hs.Lu
 - **RespawnWnd**: server destination names; the marker cell as Handle_OP_RespawnWindow fills it ("*" default, "r" for a row whose final byte is set); unavailable rows `texts.disabled`; accepted hover resurrection enables the reserved final row locally; resurrection text red/green; Select needs an available destination and the packet delay; timer gauge EQType 28.
 
 The original Respawn window stays drawn beside confirmation dialogs; the packs put a resurrection offer in front once, as it appears. ConfirmationDialogBox's `ResurrectionOffer` child (not in the XML) shows while the question is that offer.
-The confirmation shows the spell's XP recovery percentage when available. The native confirmation draws only after
-the active pack has had a chance to claim the dialog for that frame.
+The offer's text is the original's (docs/protocol/rof2-packets.md, "Combat: resurrection while hovering"), which
+names the spell and its percentage. The native confirmation draws only after the active pack has had a chance to
+claim the dialog for that frame.
 
 #### `lua_ui_tint.cpp`
 
