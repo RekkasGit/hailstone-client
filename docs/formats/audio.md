@@ -197,7 +197,8 @@ Two global 2D emitters are created disabled: rain (wave 159 `rainloop.wav`) and 
 has gain 0.5, looping, no delay, no range limit, fading in over 2000 ms and out over 3000 ms, pool 0.
 
 Rain is enabled while raining (weather kind 0) and wind while windy (kind 1, snow), neither indoors. A zero-intensity
-`OP_Weather` stops the active weather kind, including when EQEmu sends an all-zero clear packet during snow. Repeated
+`OP_Weather` stops the active weather kind, including when EQEmu sends an all-zero clear packet during snow. That is a
+deliberate change to RoF2, which leaves the wind loop playing after such a clear (docs/graphics.md "Weather"). Repeated
 stop messages preserve the fade in progress. Weather keeps updating in background and minimised windows so the loops
 finish fading. The emitter fades also apply to listener changes within a zone.
 

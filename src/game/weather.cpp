@@ -73,8 +73,13 @@ void Weather::update(double now, bool outdoor, const std::function<std::int32_t(
     // Weather_Update: the pending message, then the precipitation manager's update.
     if (state_.pending) {
         const auto intensity = state_.pending_intensity;
-        // EQEmu can use an all-zero packet to clear snow. Fade out the active kind, and let a fade already
-        // underway finish even if another clear packet arrives.
+        // Hailstone: a deliberate change to RoF2 (a fixed bug). Weather_StartEffect @0x5a9cf0 takes a zero intensity
+        // with the packet's kind: EQEmu's all-zero clear (Zone::weatherSend, #weather 0) during snow turns the
+        // weather into fading rain, and the end of the fade (ApplyWeatherState) then stops only the rain emitter,
+        // so the wind loop plays on until the zone is left. A repeated clear turns the fade count around again, and
+        // the same kind returning while it fades out changes nothing, so the fade still ends with the sound off.
+        // Here a zero intensity fades out the active kind, a repeated clear leaves the fade alone, and the same
+        // kind returning reverses the fade from its progress (docs/graphics.md "Weather").
         if (intensity != 0 || state_.on) {
             const auto kind = intensity == 0 ? state_.kind : state_.pending_kind;
             if (intensity > 0 && kind == state_.kind && state_.active && !state_.on) {
