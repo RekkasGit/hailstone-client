@@ -339,7 +339,9 @@ build/hailstone_sign sign <secret-key-file> release/hailstone-addon.txt
   - the names its zip reader takes (no `\`, `:` or control character, no part ending in `.` or a space, no Windows
     device name such as `aux.lua`);
   - the version as the client parses it (no leading zeros);
-  - both `--required-tlos` and `--suggested-tlos` when publishing a script or plugin;
+  - the TLO roots given in `--required-tlos` and `--suggested-tlos`. Both are optional. One that is left out prints
+    a warning and writes no line, so Server Management shows that list as unknown; give `none` to declare an empty
+    list;
   - one `--platform` a platform (a second would overwrite the first's zip and leave two package lines).
 - It leaves out files and folders whose name starts with `.`, stores a link as what it points to only when that lies
   inside the package's folder, and refuses an `--out` inside a package's folder, where old zips would be packed.

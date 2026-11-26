@@ -171,6 +171,7 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     m.env = std::move(env);
     if (m.env.config) m.map_filters.load(*m.env.config);
     mq::register_game_tlos(m.registry);
+    m.registry.set_denial_notice([&m](const std::string& t) { m.print(t); });
     m.ctx.window_open = [&m](std::string_view w) { return m.env.window_open && m.env.window_open(w); };
     m.ctx.window_child = m.env.window_child;
     m.ctx.window_act = m.env.window_act;

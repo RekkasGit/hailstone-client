@@ -2326,9 +2326,16 @@ These rules depend on an up-to-date, unmodified Hailstone client.
 ### TLO access policy
 
 `[tlos]` is advisory policy for named top-level object lookups in Hailstone. It covers evaluated `mq.TLO` calls,
-`${...}` expansion, `mq.parse`, and macro parsing through the compiled plug-in host API. Denied roots resolve to
-`nil` in Lua and `NULL` in macro text. Existing `read` capability checks still apply. Direct game-data APIs,
-alternate roots, and the server's gameplay permissions have their own rules.
+`${...}` expansion, `mq.parse`, and macro parsing through the compiled plug-in host API. It applies to the player's
+own lookups (typed `${...}`, hotkeys, Lua socials) as well as to scripts and add-ons. Denied roots resolve to
+`nil` in Lua and `NULL` in macro text. The first refused lookup for each caller and root prints a chat line,
+`[MQ] <script or plugin>: the server blocks TLO <Root>` (for the player, `[MQ] the server blocks TLO <Root>`), so
+a blocked root does not pass for "no target"; new rules from the server start the count again. Existing `read`
+capability checks still apply.
+
+The policy is not access control. Blocking a root does not block other routes to the same data: `${Me.Pet}` with
+`Pet` blocked, `${Group.Member[...]}`, `mq.getAllSpawns()`, the compiled plug-ins' bulk reads and other direct
+game-data APIs have their own rules (capabilities), as do the server's gameplay permissions.
 
 ```ini
 [tlos]
@@ -2343,7 +2350,9 @@ scripts may rely on roots such as `Me`, `If`, and `Math`. An explicit block wins
 `addon_allow` grants specific roots to a verified managed add-on, using comma-separated `owner/repo:Root` entries.
 Grants apply across releases from the same repository, and a newly declared root needs its own grant. Add-on
 admission and the add-on's `read` capability still apply. A Lua add-on loses its grants for the current run if it
-loads a module outside its verified package.
+loads a module outside its verified package. Work an add-on deferred (a `/timed` line, a queued event) keeps a grant
+across a policy refresh such as a zone-in when the new rules still give it and the add-on's files still verify;
+otherwise the deferred lookup is denied.
 Names match without regard to case. Separate names with commas or whitespace. A name starts with an ASCII
 letter, digit, or underscore and can also contain hyphens after its first character. Whole roots are configurable.
 For example, the rule for `Me` applies to every member of `Me`, including `Me.Bank`. Add-on roots with other

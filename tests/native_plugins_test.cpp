@@ -2,6 +2,7 @@
 // the server's rules allow it, its MQ callbacks on the hook bus, held to its capabilities.
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <deque>
@@ -688,6 +689,12 @@ TEST_CASE("native plugins: MQ callbacks, commands and TLOs, then unloaded cleanl
     h.run("/hello there");
     CHECK(h.printed_line("[MQ2Example] Hello, there!"));
     CHECK(h.p("${Example}") == "Example");
+    {
+        const auto catalog = h.reg.tlo_catalog();
+        const auto row = std::find_if(catalog.begin(), catalog.end(), [](const auto& r) { return r.name == "Example"; });
+        REQUIRE(row != catalog.end());
+        CHECK(row->origin == mq::TloOrigin::Addon);
+    }
     h.hooks.pulse();
     h.hooks.pulse();
     CHECK(h.p("${Example.Pulses}") == "2");

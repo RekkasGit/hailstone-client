@@ -96,6 +96,43 @@ addon_allow = Owner/Repo:Me, owner/repo:Spawn, other/addon:NearestSpawn, repo:Me
     CHECK(warnings.size() == 7);
 }
 
+TEST_CASE("policy: a renewed TLO proof keeps its object across a new generation; a revoked one stays revoked") {
+    plugin::Policy policy;
+    const auto file = std::filesystem::absolute("addon/init.lua").lexically_normal();
+    const Sha256Digest hash = sha256("print('hi')");
+    const plugin::Ceiling mine{plugin::FileKind::Script, hash, plugin::kCapAll, "Mine", "owner/mine", true, true, file};
+    policy.set_ceilings({mine});
+    policy.set(plugin::Rules{});
+    const auto proof = policy.verified_tlo_caller(plugin::FileKind::Script, hash, file);
+    REQUIRE(proof);
+    CHECK(proof->identity() == "owner/mine");
+    const plugin::WeakTloCaller deferred = proof; // what a /timed line holds
+
+    policy.set(plugin::Rules{});
+    CHECK(proof->identity().empty()); // a new generation, not yet re-verified
+    const auto current = policy.verified_tlo_caller(plugin::FileKind::Script, hash, file);
+    REQUIRE(current);
+    proof->renew(*current);
+    CHECK(deferred.lock() == proof);
+    CHECK(deferred.lock()->identity() == "owner/mine");
+
+    // Another add-on's proof lends nothing.
+    auto other = mine;
+    other.addon_source = "owner/other";
+    policy.set_ceilings({other});
+    const auto foreign = policy.verified_tlo_caller(plugin::FileKind::Script, hash, file);
+    REQUIRE(foreign);
+    proof->renew(*foreign);
+    CHECK(proof->identity().empty());
+
+    policy.set_ceilings({mine});
+    const auto again = policy.verified_tlo_caller(plugin::FileKind::Script, hash, file);
+    REQUIRE(again);
+    proof->revoke();
+    proof->renew(*again);
+    CHECK(proof->identity().empty());
+}
+
 TEST_CASE("hailstone.cfg: [client] deny is off by default and can deny Hailstone access") {
     CHECK_FALSE(plugin::Rules{}.deny_client);
     CHECK_FALSE(plugin::parse_server_cfg("").deny_client);

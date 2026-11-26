@@ -305,7 +305,8 @@ local function commands(s)
 end
 
 local function tlos(s)
-  heading("Top-level objects", "Set which TLOs scripts and add-ons can look up by name.")
+  heading("Top-level objects", "Set which TLOs can be looked up by name: by the player's own ${...}, hotkeys "
+    .. "and Lua socials, and by scripts and add-ons.")
   local state = M.tloRules(draft)
   ui.Text("Default policy")
   ui.SameLine()
@@ -316,7 +317,9 @@ local function tlos(s)
     state = M.tloRules(draft)
     localMessage = nil
   end
-  wrap("Applies to TLO lookups. Direct game-data APIs have separate permissions.", C.muted)
+  wrap("Advisory: blocking a root does not block other routes to the same data, such as Me.Pet with Pet "
+    .. "blocked, Group.Member, mq.getAllSpawns or plugins' bulk reads. Direct game-data APIs have separate "
+    .. "permissions.", C.muted)
   warnTloAllowlist(state.default)
   ui.Spacing()
 

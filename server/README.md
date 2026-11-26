@@ -133,7 +133,12 @@ untouched settings in the file. Command list edits preserve the spelling of reta
 if your policy restricts `/camp`, `/quit`, `/exit`, or `/servermanagement`. Creating the first file through this
 editor retains the server's pre-existing script, plugin, and Lua social defaults.
 
-Use **TLO access** to control which top-level objects scripts and add-ons can look up by name. Search built-in
+Use **TLO access** to set which top-level objects can be looked up by name. The rules cover the player's own
+`${...}` text, hotkeys and Lua socials as well as scripts and add-ons. A blocked lookup reads as `NULL` (`nil` in
+Lua), and the client says once in chat, per script or plugin and root, that the server blocks it. These rules are
+advisory, not access control: blocking a root does not block other routes to the same data, such as `${Me.Pet}`
+with `Pet` blocked, `${Group.Member[...]}`, `mq.getAllSpawns()` or a plugin's bulk reads. Enforce real
+restrictions on the server. Search built-in
 objects or add-on objects registered on the GM's client. A configured add-on name remains editable after its
 provider unloads or before it registers. Each rule can inherit the default, allow the root, or deny it.
 The default allows all TLOs. Under **Add-ons**, use **Review TLOs** to check a release's required and suggested

@@ -2,6 +2,7 @@
 goes into a package (no --out inside it, no link out of it, no dotfiles)."""
 import importlib.util
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -58,18 +59,31 @@ class ZipNameTests(unittest.TestCase):
 
 
 class PackageContentTests(unittest.TestCase):
-    def test_make_addon_requires_valid_tlo_declarations_for_scripts_and_plugins(self):
+    def test_make_addon_validates_optional_tlo_declarations_for_scripts_and_plugins(self):
         with tempfile.TemporaryDirectory() as tmp:
-            src, out = Path(tmp) / "src", Path(tmp) / "out"
+            src, lib, out = Path(tmp) / "src", Path(tmp) / "lib", Path(tmp) / "out"
             src.mkdir()
+            lib.mkdir()
             (src / "init.lua").write_text("print('hi')\n")
+            (lib / "demo.dll").write_bytes(b"MZ")
             common = ("--name", "demo", "--version", "1.0.0", "--caps", "read", "--out", out)
             for options in (("--kind", "script", "--dir", src),
-                            ("--kind", "plugin", "--platform", f"windows-x64={src}")):
+                            ("--kind", "plugin", "--platform", f"windows-x64={lib}")):
                 for field, other in (("--required-tlos", "--suggested-tlos"), ("--suggested-tlos", "--required-tlos")):
+                    shutil.rmtree(out, ignore_errors=True)
                     result = run("make_addon.py", *common, *options, other, "none")
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertIn(f"{field} is required", result.stderr)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn(f"warning: no {field}", result.stderr)
+                    manifest = (out / "hailstone-addon.txt").read_text()
+                    self.assertIn(f"{other[2:].replace('-', '_')} none\n", manifest)
+                    self.assertNotIn(field[2:].replace("-", "_"), manifest)
+            shutil.rmtree(out)
+            result = run("make_addon.py", *common, "--kind", "script", "--dir", src)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("warning: no --required-tlos", result.stderr)
+            self.assertIn("warning: no --suggested-tlos", result.stderr)
+            self.assertNotIn("_tlos", (out / "hailstone-addon.txt").read_text())
+            shutil.rmtree(out)
             script = (*common, "--kind", "script", "--dir", src)
             for invalid in ("Me.Name", "Spawn[1]", "none,Me", "A" * (make_addon.MAX_TLO_LIST + 1)):
                 result = run("make_addon.py", *script, "--required-tlos", invalid, "--suggested-tlos", "none")

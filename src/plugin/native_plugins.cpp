@@ -846,9 +846,9 @@ int h_add_tlo(void* h, const char* name, HailstoneTloFn fn, void* user) {
         return from_c(out);
     };
     const mq::Type* tp = &t;
-    reg.add_tlo(name, [tp](const mq::Context&, std::string_view index) {
-        return mq::Value::object(tp, 0, 0, std::string(index));
-    });
+    reg.add_tlo(
+        name, [tp](const mq::Context&, std::string_view index) { return mq::Value::object(tp, 0, 0, std::string(index)); },
+        {}, mq::TloOrigin::Addon);
     l.tlos.emplace_back(name);
     return 1;
 }
@@ -3946,8 +3946,13 @@ void NativePlugins::policy_changed(const std::vector<std::string>& autoload, boo
         l->caps = caps;
         if (l->tlo_caller && l->tlo_caller->identity().empty()) {
             auto current = m.env.policy->verified_tlo_caller(FileKind::Plugin, l->hash, l->file);
-            if (!current || !l->tlo_caller->same_addon(*current)) current.reset();
-            l->tlo_caller = std::move(current);
+            // The same proof, renewed: the /timed lines the plugin queued under the old policy hold it.
+            if (current && l->tlo_caller->same_addon(*current)) {
+                l->tlo_caller->renew(*current);
+            } else {
+                l->tlo_caller->revoke();
+                l->tlo_caller.reset();
+            }
         }
         if (!l->can(kNameplateCaps)) remove_nameplates(*l);
         if (!l->can(kCapUi | kCapExtend)) {
