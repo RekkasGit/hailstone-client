@@ -291,10 +291,15 @@ From EQEmu's source; tests: `tests/hover_respawn_test.cpp`.
 #### Combat: resurrection while hovering
 
 A resurrection uses the ordinary `OP_RezzRequest` / `OP_RezzAnswer` confirmation, even when no refreshed respawn window arrives.
-The request identifies the spell at +156. Hailstone looks it up in the active spell table and shows the recovery
-percentage from the first base value of a resurrection spell (0–100), the field EQEmu uses to calculate the refund.
-The amount of XP on the corpse stays server-side. Offers with unavailable rates, including corpse-return spells,
-use the generic confirmation.
+The question follows Handle_OP_RezzRequest @0x4bead0. An offer whose name at +0x18 is not the local character's
+(compared without case; EQEmu puts the corpse owner's name there) is ignored. Otherwise the spell at +0x9c picks the
+text, each with the caster's trimmed name (+0x5c): eqstr 9046 for an invalid spell or one missing from the spell
+table; eqstr 3563 for a spell with SPA 332 (summon to corpse); else eqstr 9047 with the spell's name and its first
+base value as a plain integer (no range check, and no need for the resurrection SPA; it is the field EQEmu's
+Client::OPRezzAnswer takes as the XP percentage). eqstr 4632 then goes to chat in colour 0x108, and the question is a
+Yes / No ConfirmationDialog (0x67, flags 0xc) with a 300 s limit, answered No when it runs out. When the game folder
+lacks one of these strings the client shows the original's English text for it. The amount of XP on the corpse stays
+server-side.
 
 - **Yes, same zone.** While hovering, Yes to an offer whose zone dword (+4, zone and instance) is the current zone records consent locally and enables the reserved final resurrection option. It sends nothing and does not restart the countdown. Checked: ConfirmationDialog_HandleResponse @0x52d540 case 0x67.
 - **Yes, another zone or instance:** echoed in `OP_RezzAnswer` at once.
@@ -393,7 +398,7 @@ Only OP_ShopPlayerBuy/Sell (field copies) and OP_CancelTrade have a RoF2 transla
 1. ShopRequest stock: item packets type 0x64 (header slot type 9, slot = instance id = merchant slot, price = per-unit copper, merchant_slot = stock, -1 unlimited).
 2. ShopPlayerBuy reply: the item arrives first as an item packet type 0x67. There is **no** OP_MoneyUpdate: the client takes the price itself (smallest coins first; the split may differ from the server's, the total agrees) and prints 1437 "You give%1 to %2." in the Merchants colour 0x114. Wave 0x8a (the cash register) plays only when the purse could pay; otherwise the coin is zeroed silently (FinishBuyingItem @0x6ef220, also a trader purchase, TraderShop 10 method 0).
 3. TradeRequest C→Z is sent on a left click on a spawn while holding an item or coin (within AvatarHeight + 20, 12294). Banker-type classes 40/63/64/66/74 refuse (8505). Z→C (a player asks): the client opens its trade window and replies with the Ack if it can trade.
-4. TradeRequestAck: for an NPC the server answers itself ({me, NPC}). After the Ack for a pending request, the client opens the window and moves the held item (OP_MoveItem cursor → {3, slot}) or coin (OP_MoveCoin cursor → trade) into the offer. Clicking an NPC with a held item puts it in the first free Give slot. Clicking an empty Give slot uses that slot. Both moves send count 0 to offer the whole cursor item. NPCs get four slots. Player trades have eight slots and merge matching stacks first, sending the quantity moved when merging.
+4. TradeRequestAck: for an NPC the server answers itself ({me, NPC}). After the Ack for a pending request, the client opens the window and moves the held item (OP_MoveItem cursor → {3, slot}) or coin (OP_MoveCoin cursor → trade) into the offer. Clicking an NPC with a held item puts it in the first free Give slot. Clicking an empty Give slot uses that slot. Both moves send count 0 to offer the whole cursor item. NPCs get four slots. Player trades have eight slots and merge matching stacks first, sending the quantity moved when merging. A click on an empty player trade slot also goes through that first-free/merge path in Hailstone, unlike the original, whose CInvSlot::HandleLButtonUp @0x695670 (trade branch at @0x6963d2) moves the cursor item into the clicked empty slot for player trades too (docs/todo.md).
 5. CancelTrade: the client prints 1448/1450 and sends its own cancel back while a partner is set. Refunds come as item packets and OP_MoneyUpdate, then OP_FinishWindow/2 (empty).
 6. Say links: EQEmu say links are item links to item 0xF423F with the phrase id in augment 1 (augment 2 for silent links).
 

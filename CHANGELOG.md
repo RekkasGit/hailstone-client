@@ -7,7 +7,7 @@
 - A TLO the server's policy blocks now says so once in chat for each script, plug-in or the player and each root (`[MQ] the server blocks TLO Target`), instead of silently reading as NULL. Server Management and the docs say the policy also covers the player's own lookups and is advisory: other routes to the same data stay open.
 - An add-on's TLO grant still applies to its `/timed` lines and queued events after a zone-in or other policy refresh, while the server still grants it.
 - Identical items offered one at a time to an NPC stay in separate Give slots. Clicking an empty Give slot places the item there.
-- Resurrection offers show the spell's XP recovery percentage when available. Confirmation dialogs keep the active interface's styling when the pack claims them.
+- Resurrection offers use the original's wording: the caster, the spell and its percentage, or the corpse-return question for a summon-to-corpse spell. Each offer also prints "You have been offered a resurrection." in chat, a question left unanswered for five minutes is declined, and an offer meant for another character is ignored. Confirmation dialogs keep the active interface's styling when the pack claims them.
 - Rain and wind sounds fade out when the weather clears, even in a background or minimised window. Changing zones or camping to character select stops both loops immediately.
 - Other players see weapons, shields and instruments change or disappear when you swap equipment or activate a bandolier set. As in the original, placing a range item shows it in your off hand, with the main hand empty, until your next melee swing.
 - Right-clicking a parcel in the Modern merchant window opens its item details. Alt-right-click still opens window settings.

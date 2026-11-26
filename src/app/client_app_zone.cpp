@@ -354,6 +354,9 @@ void ClientApp::unload_zone() {
     weather_.reset();
     weather_look_ = {};
     haze_blend_.reset();
+    // CEverQuest_ClearZoneWorldState @0x4939b0: Weather_StopEffect, EmitterSetRaining(0), EmitterSetWind(0). The
+    // original's emitters fade out over their release time; set_zone("") cuts the loops at once during the load
+    // screen (a deliberate presentation choice, audio/audio_system.cpp).
     if (audio_) audio_->set_zone("");
     if (zone_renderer_ || world_geometry_renderer_) vk_.wait_idle();
     world_geometry_renderer_.reset();

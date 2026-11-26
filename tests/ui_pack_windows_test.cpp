@@ -1713,7 +1713,7 @@ TEST_CASE("UI packs: a resurrection offer uses the pack's confirmation from the 
             REQUIRE(luaL_dostring(s.lua.state(), R"lua(
 local TextWrapped, TextColored, DrawText = ui.TextWrapped, ui.TextColored, ui.DrawText
 local function observe(text)
-  if type(text) == "string" and text:find("96%", 1, true) then RezPercentPainted = true end
+  if type(text) == "string" and text:find("(96 percent)", 1, true) then RezPercentPainted = true end
 end
 ui.TextWrapped = function(text, ...)
   observe(text)
