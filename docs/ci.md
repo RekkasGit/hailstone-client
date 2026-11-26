@@ -25,8 +25,11 @@ into `tools/checks.sh`, not into the workflow alone.
     code page lacks (`core/path_utf8.h`). The calls already there are counted per file in
     `tools/data/path_string_counts.txt`. A file with more fails, and a file with fewer fails until its count is
     lowered (`--update` lowers counts and never raises one).
-- `wiki`: `tools/sync_wiki.py --check`. Every document of `docs/`, `CONTRIBUTING.md` and `server/README.md` has a
-  wiki page, and no link points at a missing file (docs/wiki.md).
+- `wiki`: the documents the wiki is built from.
+  - `tools/sync_wiki.py --check`. Every document of `docs/`, `CONTRIBUTING.md` and `server/README.md` has a wiki
+    page, and no link points at a missing file (docs/wiki.md).
+  - `tools/check_unknowns.py`: every entry of `docs/unknowns.md` has exactly one of the tags `player`, `server` or
+    `trace` right after its bold name (the file's header), and `tests/test_check_unknowns.py`, the script's tests.
 - `ui-api`: the shared UI contract's generated files are fresh.
   - `tools/migrate_ui_api.py --check` (the shipped packs call `hs.UI`) and its `--mock-adapter --check`
     (`tests/lua_ui_api_mock.lua`).

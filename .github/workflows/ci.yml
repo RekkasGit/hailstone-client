@@ -41,7 +41,8 @@ jobs:
       - name: Check src/
         run: tools/checks.sh layers
 
-  # The wiki is built from docs/ (docs/wiki.md): every document has a page and no link points at a missing file.
+  # The wiki is built from docs/ (docs/wiki.md): every document has a page and no link points at a missing file, and
+  # every entry of docs/unknowns.md has its tag.
   wiki:
     name: docs build into the wiki
     runs-on: ubuntu-24.04
