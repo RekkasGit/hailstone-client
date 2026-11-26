@@ -938,8 +938,7 @@ void GameConnection::container_sound(std::uint32_t bag_type, bool open, bool in_
     SoundCue cue;
     cue.kind = SoundCue::Kind::Wave;
     cue.spell = static_cast<std::uint32_t>(game::container_sound(bag_type, open));
-    // Hailstone: only the opening has a volume of its own, in a bank slot a second one.
-    if (open) cue.context = in_bank ? SoundCue::Context::BankBagOpen : SoundCue::Context::BagOpen;
+    cue.context = in_bank ? SoundCue::Context::BankBag : SoundCue::Context::Bag;
     sound_cues_.push_back(cue);
 }
 

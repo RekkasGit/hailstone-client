@@ -9,6 +9,7 @@
 - Identical items offered one at a time to an NPC stay in separate Give slots. Clicking an empty Give slot places the item there.
 - Resurrection offers use the original's wording: the caster, the spell and its percentage, or the corpse-return question for a summon-to-corpse spell. Each offer also prints "You have been offered a resurrection." in chat, a question left unanswered for five minutes is declined, and an offer meant for another character is ignored. Confirmation dialogs keep the active interface's styling when the pack claims them.
 - Rain and wind sounds fade out when the weather clears, even in a background or minimised window. Changing zones or camping to character select stops both loops immediately.
+- The Bags and Bank bags volume sliders now lower closing sounds as well as opening sounds.
 - Other players see weapons, shields and instruments change or disappear when you swap equipment or activate a bandolier set. As in the original, placing a range item shows it in your off hand, with the main hand empty, until your next melee swing.
 - Right-clicking a parcel in the Modern merchant window opens its item details. Alt-right-click still opens window settings.
 - Right-clicking an ordinary NPC shows its Consider message in chat. **Right-Click to Consider** is on by default and can be switched off in Options.

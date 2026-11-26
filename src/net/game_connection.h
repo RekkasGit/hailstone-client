@@ -285,8 +285,8 @@ struct SoundCue {
     // bag wave opening and closing); the app picks the Individual Sounds volume from it.
     enum class Context : std::uint8_t {
         None,
-        BagOpen,     // a bag in a carried slot opening
-        BankBagOpen, // a bag in a bank or shared bank slot opening
+        Bag,     // a bag in a carried slot opening or closing
+        BankBag, // a bag in a bank or shared bank slot opening or closing
         ItemWorn,    // an item put into or taken out of a worn slot
     };
     Context context = Context::None;
