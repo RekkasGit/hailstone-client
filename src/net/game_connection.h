@@ -3158,9 +3158,12 @@ private:
     // `context`: ItemWorn when the move touched a worn slot (worn_context), given by each caller.
     void item_moved_sound(SoundCue::Context context = SoundCue::Context::None);
     SoundCue::Context worn_context(const ItemSlot& from, const ItemSlot& to) const;
-    void refresh_worn_slot(int slot, bool publish_held_model = false);
-    void send_held_model(std::uint8_t slot, std::uint32_t material);
-    // The local player's PlayerState bit 0x10 tracks instruments (item types 23..26) in either hand.
+    void refresh_worn_slot(int slot);
+    // PlayerClient::DoItemSlot @0x593680 after a move through weapon slot `slot` (11, 13 or 14): the held models
+    // (set_held_model) the hands show now, sent to the zone.
+    void do_item_slot(int slot);
+    // PcClient_RefreshWornSlotVisual's instrument bit (0x5923f0): the local player's PlayerState bit 0x10, set when
+    // the primary or secondary hand holds an instrument (item types 23..26).
     void refresh_instrument_state();
     void init_spells_from_profile();
     void update_spells();

@@ -666,6 +666,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] The item display's placeable, collectible, No Destroy, No Storage and trophy lines (stock EQEmu sends none of this data).
 - [x] **Context tips** for experience, invites, consent, red-con target, world containers and more. Tip table ids fixed (two missing entries had shifted every tip from 0x38); OP_ConsentResponse / OP_DenyResponse handled. Open: the tips listed in unknowns.md.
 - [x] The chat server's per-window channel state is saved.
+- [ ] **Popup STML tables: the rest of RoF2's table markup.** `<caption>`, `<colgroup>`, `<col>`, `rowspan` and `colspan` (and the WIDTH, HEIGHT and BGCOLOR attributes) are read by `CStmlWnd::ParseSTMLTable` @0x8826a0 but not by `lib/stml_blocks.lua`; a table that uses the tags is shown as text (docs/dev-ui.md "LargeDialogWindow").
 - [ ] **The chat log (/log): match the original's file handling.** Trace `CEverQuest::OutputTextToLog` @0x5130c0: opened and closed per line, or held open. The client holds the file open while logging (docs/unknowns.md).
 - [x] Tracking window: the controls run the /track commands, auto update saved (modern checked live).
 - [x] Tracking death cleanup (WORLD-007): tracked-target deaths send the stop request and tracking message;

@@ -963,6 +963,11 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   +0x570 is not traced, so Hailstone sends 0 (stock EQEmu also sends 0 for the spawn's tint indexes). Tracing the
   item unserialiser's write to +0x570 would settle it.
 
+- **DoItemSlot's animation 9.** `PlayerClient::DoItemSlot` @0x593680 sets no held model after a move through the
+  primary or secondary slot while the local player's `Animation` (+0x10c0) is 9. Which animation 9 is (a sequence
+  code, or a state the field also holds) is not traced, so Hailstone always sets both hands
+  (`net::GameConnection::do_item_slot`). Tracing what writes 9 to +0x10c0 would settle it.
+
 - **ActorTagInfo.txt beyond the shield flag** (docs/formats/characters.md "ActorTagInfo.txt").
   - Unknown: what fields 3 to 10 and kind 2 mean. Their layout is known (the loader @0x7f4130 keeps field 3 as an
     integer, fields 5 to 7 when field 4 is non-zero, fields 8 to 10 when all are above 0); their use is not traced.

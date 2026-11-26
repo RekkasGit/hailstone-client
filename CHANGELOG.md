@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Other players see weapons, shields and instruments change or disappear when you swap equipment or activate a bandolier set.
+- Other players see weapons, shields and instruments change or disappear when you swap equipment or activate a bandolier set. As in the original, placing a range item shows it in your off hand, with the main hand empty, until your next melee swing.
 - Right-clicking a parcel in the Modern merchant window opens its item details. Alt-right-click still opens window settings.
 - Right-clicking an ordinary NPC shows its Consider message in chat. **Right-Click to Consider** is on by default and can be switched off in Options.
 - Item, say, and achievement links use the chat link color while you compose a message in Modern or Gamepad. Text a script or the on-screen keyboard puts in the chat field while you type now shows at once, with the cursor at its end.

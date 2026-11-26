@@ -122,22 +122,26 @@ TEST_CASE("bandolier swap: publishes the equipped primary and cleared secondary 
     CHECK(id_at(conn, net::kSlotSecondary) == 0);
     CHECK(appearance.material[game::kSlotPrimary] == 2);
     CHECK(appearance.material[game::kSlotSecondary] == 0);
-    REQUIRE(rig.until([&] { return MockEqServer::count(rig.server.zone_log, net::Op::WearChange) >= 2; }));
+    REQUIRE(rig.until([&] {
+        return MockEqServer::count(rig.server.zone_log, net::Op::WearChange) >= 2 &&
+               MockEqServer::count(rig.server.zone_log, net::Op::Bandolier) >= 1;
+    }));
 
     std::vector<const net::AppPacket*> sent;
     for (const auto& packet : rig.server.zone_log) {
         if (net::is_op(packet, net::Op::Bandolier) || net::is_op(packet, net::Op::WearChange)) sent.push_back(&packet);
     }
+    // PcZoneClient::BandolierSwap @0x585aa0: SetHeldModel 7, then 8, then OP_Bandolier.
     REQUIRE(sent.size() == 3);
-    REQUIRE(net::is_op(*sent[0], net::Op::Bandolier));
-    auto swap = net::decode_bandolier(*sent[0]);
+    REQUIRE(net::is_op(*sent[0], net::Op::WearChange));
+    REQUIRE(net::is_op(*sent[1], net::Op::WearChange));
+    REQUIRE(net::is_op(*sent[2], net::Op::Bandolier));
+    auto swap = net::decode_bandolier(*sent[2]);
     REQUIRE(swap);
     CHECK(swap->action == net::kBandolierSet);
     CHECK(swap->number == 0);
-    REQUIRE(net::is_op(*sent[1], net::Op::WearChange));
-    REQUIRE(net::is_op(*sent[2], net::Op::WearChange));
-    auto primary = net::decode_wear_change(*sent[1]);
-    auto secondary = net::decode_wear_change(*sent[2]);
+    auto primary = net::decode_wear_change(*sent[0]);
+    auto secondary = net::decode_wear_change(*sent[1]);
     REQUIRE(primary);
     REQUIRE(secondary);
     CHECK(primary->spawn_id == conn.world().player_id);

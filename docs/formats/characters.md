@@ -561,10 +561,20 @@ grip space; skeletal ones are baked in their rest pose.
 - EQG models use `ARMR_WEAP`, `ARML_WEAP`, `ARML_SHLD` and the bone's bind matrix.
 - Items are not tinted (`itmt.ini[Primary/SecondaryTintIndex]` is not read).
 
-After a client-side inventory move or bandolier activation, Hailstone sends `OP_WearChange` for the refreshed hands.
-It uses the same model number as the local appearance, including ornaments, or 0 for an empty hand. EQEmu's
-inventory move only broadcasts armor slots, and its bandolier activation sends no wear changes. EQEmu relays the
-client's held-model updates to the other players in the zone. Server-driven inventory refreshes apply locally.
+The client sets the held models itself after its own inventory moves, as the original does; each is a
+`SetHeldModel` that sends `OP_WearChange` (below), so the other players see the change:
+
+- A move through possessions slot 11, 13 or 14 (`ItemGlobalIndex_IsWeaponSlot` @0x694020) calls
+  `PlayerClient::DoItemSlot` @0x593680 with that slot (`net::GameConnection::do_item_slot`). For 13 or 14 it sets 7 to
+  the primary and 8 to the secondary ("0" for an empty hand), then 8 to the range item when both hands are empty. For
+  11 it sets 7 to "0" and 8 to the range item, or, with no range item, 7 and 8 to the primary and the secondary. It
+  sets nothing for 13 or 14 while the player's animation is 9, which Hailstone does not model (docs/unknowns.md).
+- A bandolier set (`PcZoneClient::BandolierSwap` @0x585aa0) moves the items, sets 7 and 8 the same way (with both
+  hands empty, 7 "0" and 8 the range item), and then sends `OP_Bandolier`.
+
+Inventory changes the server makes (an item packet, a summoned item) change only the local model. Stock EQEmu's own
+moves send no held models (`Client::SwapItem` broadcasts only the armour slots; `Client::SetBandolier` sends none),
+so these packets are the only way the other players learn of the change.
 
 The local player's ranged attack changes the held models as the original does. `PlayerZoneClient::DoAttack`
 @0x5a5000 for the range slot (after another kind of attack) sets 7 and 8 to "0" and 8 to the range item;

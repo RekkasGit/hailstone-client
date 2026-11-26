@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <optional>
@@ -5243,6 +5244,72 @@ check(S.plain(S.parse("one <b>two</b> three")) == "one two three", "closed tags 
 return "ok"
 )lua";
     CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_stml_lt_test") == "ok");
+}
+
+// Popup STML tables (lib/stml_blocks.lua, the same file in both packs): the subset RoF2's ParseSTMLTable reads that
+// servers send (attributes, <th>, EQEmu's <tbody>), malformed tables left as text, and a hostile popup read in one
+// pass rather than one scan of the rest of the text per <table>.
+TEST_CASE("UI packs: popup STML tables read what servers send and leave malformed ones as text") {
+    const fs::path ui = fs::path(__FILE__).parent_path().parent_path() / "ui";
+    const auto slurp = [](const fs::path& path) {
+        std::ifstream in(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    };
+    const std::string modern = slurp(ui / "modern" / "lib" / "stml_blocks.lua");
+    CHECK(!modern.empty());
+    CHECK(modern == slurp(ui / "gamepad" / "lib" / "stml_blocks.lua"));
+
+    constexpr const char* kScript = R"lua(
+local M = dofile("lib/stml_blocks.lua")
+local function check(ok, what) if not ok then error(what, 2) end end
+local function text(raw)
+  local b = M.parse(raw)
+  check(#b == 1 and b[1].text == raw, "left as text: " .. raw:sub(1, 80))
+end
+local function cells(block)
+  local out = {}
+  for _, row in ipairs(block.rows) do out[#out + 1] = table.concat(row, "|") end
+  return table.concat(out, "/")
+end
+
+-- Attributes, <th> and the sections (EQEmu's #npcstats: zone/mob_info.cpp).
+local b = M.parse('<TABLE border="1"><thead><tr><th width=40>Stat</th><TH>Value</TH></tr></thead>'
+  .. '<tbody><tr align="left"><td bgcolor="#202020">AC</td><td>10</td></tr></tbody><tfoot></tfoot></TABLE>')
+check(#b == 1 and b[1].columns == 2 and cells(b[1]) == "Stat|Value/AC|10", "attributes and sections")
+b = M.parse("<c \"#FFFF66\">Stats</c><br><table><tbody><tr><td>HP</td><td>5</td></tr></tbody></table>")
+check(#b == 2 and b[1].text == "<c \"#FFFF66\">Stats</c><br>" and cells(b[2]) == "HP|5", "tbody")
+
+-- Malformed: an unclosed cell, row or table, text between cells, a section inside a cell, an unread tag.
+text("<table><tr><td>a</tr></table>")
+text("<table><tr><td>a</td></table>")
+text("<table><tr><td>a</td></tr>")
+text("<table><tr><td>a</td>stray<td>b</td></tr></table>")
+text("<table><tr><td><tbody>a</td></tr></table>")
+text("<table><caption>x</caption><tr><td>a</td></tr></table>")
+text("<table></table>")
+
+-- 64 cells in a row are read; a 65th leaves the table as text.
+b = M.parse("<table><tr>" .. string.rep("<td>x</td>", 64) .. "</tr></table>")
+check(#b == 1 and b[1].columns == 64, "64 cells")
+text("<table><tr>" .. string.rep("<td>x</td>", 65) .. "</tr></table>")
+
+-- A nested table: the outer one stays text, the inner one is read, and a table after it still is.
+b = M.parse("<table><tr><td><table><tr><td>in</td></tr></table></td></tr></table><table><tr><td>next</td></tr></table>")
+check(#b == 4 and b[1].text == "<table><tr><td>" and cells(b[2]) == "in" and b[3].text == "</td></tr></table>"
+  and cells(b[4]) == "next", "nested")
+
+-- Hostile: ~200 KB of tables that never close a cell, or close one only at the very end. (Scanning the rest of the
+-- text for each <table> took seconds here.)
+for _, tail in ipairs({ "", "</td>", "</td></tr></table>" }) do
+  local raw = string.rep("<table><tbody><tr><td width=1>", 7000) .. tail
+  local start = os.clock()
+  b = M.parse(raw)
+  check(os.clock() - start < 2, "hostile popup took " .. (os.clock() - start) .. " s")
+  check(#b == (tail:find("table") and 2 or 1), "hostile result")
+end
+return "ok"
+)lua";
+    CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_stml_tables_test") == "ok");
 }
 
 // The gamepad bag grids' cell ids (lib/items.lua I.cellId) are the strings they were, made once.
