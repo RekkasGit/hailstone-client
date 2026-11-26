@@ -748,6 +748,23 @@ TEST_CASE("GameConnection: local chat groups validate together and filter their 
 
 // ---------------------------------------------------------------- zoning
 
+TEST_CASE("mock server: zoning discards queued weather from the departing zone") {
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    REQUIRE(rig.conn.take_weather().size() == 1);
+
+    // The old zone delivers snow before it answers the zone change, while no consumer is draining the queue.
+    rig.server.zone.send_reliable(encode(Weather{1, 7, 0}));
+    REQUIRE(rig.conn.request_zone_change(1, 0, glm::vec3(10.0f, 20.0f, 3.0f)));
+    REQUIRE(rig.until([&] { return rig.server.zone_entries == 2 && rig.conn.state() == ConnectionState::InZone; }));
+
+    // The destination's weather arrives before OP_NewZone and must survive the handoff.
+    const auto weather = rig.conn.take_weather();
+    REQUIRE(weather.size() == 1);
+    CHECK(weather.front().kind == 0xff);
+    CHECK(weather.front().intensity == 0);
+}
+
 TEST_CASE("mock server: zone lines and server-requested zoning go through world again") {
     // docs/protocol/rof2-packets.md, "Zoning, camp": C->Z OP_ClientUpdate and OP_ZoneChange (success 0); the zone
     // answers success 1; the client leaves, reconnects to world with LoginInfo::zoning and enters the new zone.

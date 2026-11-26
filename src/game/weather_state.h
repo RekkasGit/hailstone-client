@@ -103,6 +103,8 @@ RainSnowRequest rain_snow_request(std::int32_t kind, std::int32_t on, std::uint8
 
 class Precipitation : public PrecipitationSink {
 public:
+    // Drop the current weather while keeping the particle pool and its definitions.
+    void reset();
     void create() override { created_ = true; }
     // +0x04 (0x1007f3b0).
     void set_kind(std::int32_t kind) override {

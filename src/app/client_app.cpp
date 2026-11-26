@@ -415,9 +415,10 @@ int ClientApp::run() {
         if (in_game && conn_)
             camera_.position = conn_->camera_shake().offset(
                 camera_.position, static_cast<std::uint32_t>(net::GameConnection::now_ms()));
-        if (conn_)
-            for (const auto& w : conn_->take_weather()) weather_.handle_message(w.kind, w.intensity);
         if (in_game) {
+            // The destination can send weather before its scenery loads and unload_zone clears the old weather.
+            if (conn_)
+                for (const auto& w : conn_->take_weather()) weather_.handle_message(w.kind, w.intensity);
             auto random = [this] { return std::uniform_int_distribution<std::int32_t>(0, 0x7fff)(weather_random_); };
             const std::uint16_t zone_id = conn_ ? conn_->zone_id() : std::uint16_t{0};
             // LightningStrike plays the thunder with the flash, WavePlay(id, 0); ApplyWeatherState shows the start.

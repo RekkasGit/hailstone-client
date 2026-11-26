@@ -41,6 +41,15 @@ void Weather::handle_message(std::int32_t kind, std::int32_t intensity) {
     weather_handle_message(state_, kind, intensity);
 }
 
+void Weather::reset() {
+    state_ = {};
+    display_ = {};
+    precipitation_.reset();
+    raining_ = windy_ = false;
+    thunder_ = 0;
+    message_ = 0;
+}
+
 WeatherKind Weather::kind() const {
     return state_.kind == 0xff && precipitation_.target() <= 0.0f && precipitation() <= 0.0f
                ? WeatherKind::None

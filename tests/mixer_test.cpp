@@ -459,6 +459,63 @@ TEST_CASE("Audio system: voice pools, rain and wind emitters") {
     CHECK(audio.weather_emitters().enabled(1));
 }
 
+TEST_CASE("Audio system: unloading a zone stops rain and wind loops until new weather") {
+    test::ScratchDir dir("weather_audio_unload");
+    std::filesystem::create_directories(dir.path() / "sounds");
+    std::ofstream(dir.path() / "soundassets.txt") << "159^rainloop.wav\n158^wind_lp1.wav\n";
+    const auto wav = wav16(48000, {16384, 16384, 16384, 16384});
+    for (const char* name : {"rainloop.wav", "wind_lp1.wav"})
+        std::ofstream(dir.path() / "sounds" / name, std::ios::binary)
+            .write(reinterpret_cast<const char*>(wav.data()), static_cast<std::streamsize>(wav.size()));
+    GameDir game(dir.path());
+
+    auto check_unload = [&](bool rain, bool fading) {
+        CAPTURE(rain);
+        AudioSystem audio(game, AudioSettings{}, false);
+        audio.set_self_advance(false);
+        audio.set_zone("greatdivide");
+        audio.library().wait_idle();
+        audio.set_weather(rain, !rain);
+        audio.update(10);
+        REQUIRE(audio.mixer().voice_count() == 1);
+        std::vector<float> out(2 * 512);
+        auto render = [&] {
+            audio.mixer().render(out.data(), out.size() / 2);
+            return std::any_of(out.begin(), out.end(), [](float sample) { return sample != 0.0f; });
+        };
+        REQUIRE(render());
+
+        if (fading) {
+            audio.set_weather(false, false);
+            audio.update(20);
+            REQUIRE(audio.mixer().voice_count() == 1);
+            REQUIRE(render());
+        }
+
+        audio.set_zone("");
+        CHECK(audio.mixer().voice_count() == 0);
+        audio.update(30);
+        CHECK_FALSE(render());
+
+        audio.set_zone("eastwastes");
+        audio.update(40);
+        CHECK_FALSE(render());
+        audio.set_weather(rain, !rain);
+        audio.update(50);
+        CHECK(audio.mixer().voice_count() == 1);
+        CHECK(render());
+    };
+
+    SUBCASE("active loops") {
+        check_unload(true, false);
+        check_unload(false, false);
+    }
+    SUBCASE("loops fading after the weather clears") {
+        check_unload(true, true);
+        check_unload(false, true);
+    }
+}
+
 TEST_CASE("Audio settings: SoundMixAhead (SoundManager::SetMixAhead's 4..96 fragments of 8 ms)") {
     CHECK(mix_ahead_ms(8) == 64);
     CHECK(mix_ahead_ms(1) == 32);   // below 4: 4

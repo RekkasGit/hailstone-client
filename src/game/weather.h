@@ -54,8 +54,8 @@ public:
     }
     void update_particles(const PrecipitationField::Frame& frame) { precipitation_.update_particles(frame); }
     const PrecipitationField& particles() const { return precipitation_.field(); }
-    // Every particle gone (a zone change: their ground was the old zone's).
-    void clear_particles() { precipitation_.field().stop(true, true); }
+    // Leaving a zone drops its current and pending weather, keeping the shared particle definitions.
+    void reset();
 
     static constexpr std::int32_t kThunder1 = 0x8f, kThunder2 = 0x90; // thunder1.wav, thunder2.wav
 

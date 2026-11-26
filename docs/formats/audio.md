@@ -196,8 +196,10 @@ A voice is busy while the mixer plays it.
 Two global 2D emitters are created disabled: rain (wave 159 `rainloop.wav`) and wind (wave 158 `wind_lp1.wav`). Each
 has gain 0.5, looping, no delay, no range limit, fading in over 2000 ms and out over 3000 ms, pool 0.
 
-Rain is enabled while raining (weather kind 0) and wind while windy (kind 1, snow), neither indoors. An install may
-ship `sounds\rainloop.wav` and `wind_lp1.wav` as 80-byte files without samples, so nothing is heard.
+Rain is enabled while raining (weather kind 0) and wind while windy (kind 1, snow), neither indoors. Leaving a zone,
+including when camping to character select, stops both loops and clears the zone's weather state. The fades apply
+to weather and listener changes within a zone. An install may ship `sounds\rainloop.wav` and `wind_lp1.wav` as
+80-byte files without samples, so nothing is heard.
 
 ## Which sound for which event
 
