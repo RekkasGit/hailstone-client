@@ -71,6 +71,11 @@ std::vector<std::uint32_t> loot_descendants(const Item& root, bool& complete) {
 constexpr int kMergeAll = 0, kMergeNothing = 2;
 
 bool is_worn(const ItemSlot& s) { return s.type == kInvPossessions && s.sub < 0 && s.slot >= 0 && s.slot < kEquipmentSlots; }
+// ItemGlobalIndex_IsWeaponSlot @0x694020: possessions slot 11 (range), 13 (primary) or 14 (secondary), not in a bag.
+bool is_weapon_slot(const ItemSlot& s) {
+    return s.type == kInvPossessions && s.sub < 0 &&
+           (s.slot == kSlotRange || s.slot == kSlotPrimary || s.slot == kSlotSecondary);
+}
 
 } // namespace
 
@@ -437,22 +442,42 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
 
 // ---------------------------------------------------------------- moves
 
-void GameConnection::refresh_worn_slot(int slot, bool publish_held_model) {
-    // PcClient_RefreshWornSlotVisual sets our own worn appearance with ornaments.
-    const int ms = game::material_slot(slot);
+void GameConnection::refresh_worn_slot(int slot) {
+    // PcClient_RefreshWornSlotVisual: our own model shows what we wear, its
+    // ornament included (game::worn_look). The server sends OP_WearChange to
+    // everyone else, not to us. The held models are DoItemSlot's (do_item_slot).
+    int ms = game::material_slot(slot);
     if (ms < 0) return;
     auto it = world_.spawns.find(world_.player_id);
     if (it == world_.spawns.end()) return;
     const Item* item = inventory_.at(ItemSlot::possessions(static_cast<std::int16_t>(slot)));
     game::WornLook look;
     if (item) look = game::worn_look(*item, ms);
-    const auto material_slot = static_cast<std::uint8_t>(ms);
-    game::apply_wear_change(it->second.appearance, material_slot, look.material, look.hero_forge, look.tint);
-    // EQEmu's SwapItem only maps armor slots through SlotConvert2, and SetBandolier sends no wear changes.
-    // Publish the worn hand model through the wear-change relay after a client-initiated equipment change.
-    if (publish_held_model && (ms == game::kSlotPrimary || ms == game::kSlotSecondary))
-        send_held_model(material_slot, look.material);
+    game::apply_wear_change(it->second.appearance, static_cast<std::uint8_t>(ms), look.material, look.hero_forge,
+                            look.tint);
     refresh_instrument_state();
+}
+
+void GameConnection::do_item_slot(int slot) {
+    // PlayerClient::DoItemSlot @0x593680, which CInvSlot calls after a move through a weapon slot
+    // (ItemGlobalIndex_IsWeaponSlot @0x694020: possessions 11, 13 or 14). Each SetHeldModel tells the zone.
+    // - 13 or 14: both hands show the primary and the secondary ("0" for an empty one); with both empty, hand 8
+    //   then shows the range item.
+    // - 11: with a range item, hand 7 is "0" and hand 8 the range item; without one, the primary and secondary.
+    // It returns first for 13 or 14 while the player's Animation (+0x10c0) is 9, which is not modelled
+    // (docs/unknowns.md).
+    const auto holds = [this](std::int16_t s) { return inventory_.at(ItemSlot::possessions(s)) != nullptr; };
+    if (slot == kSlotRange) {
+        const bool range = holds(kSlotRange);
+        set_held_model(game::kSlotPrimary, range ? -1 : kSlotPrimary);
+        set_held_model(game::kSlotSecondary, range ? kSlotRange : kSlotSecondary);
+        return;
+    }
+    if (slot != kSlotPrimary && slot != kSlotSecondary) return;
+    set_held_model(game::kSlotPrimary, kSlotPrimary);
+    set_held_model(game::kSlotSecondary, kSlotSecondary);
+    if (!holds(kSlotPrimary) && !holds(kSlotSecondary) && holds(kSlotRange))
+        set_held_model(game::kSlotSecondary, kSlotRange);
 }
 
 void GameConnection::set_held_model(int held, int item_slot) {
@@ -468,16 +493,15 @@ void GameConnection::set_held_model(int held, int item_slot) {
     game::Appearance& a = it->second.appearance;
     const auto slot = static_cast<std::uint8_t>(held);
     game::apply_wear_change(a, slot, look.material, 0, look.tint);
-    send_held_model(slot, look.material);
-}
-
-void GameConnection::send_held_model(std::uint8_t slot, std::uint32_t material) {
-    // EQEmu's Client::Handle_OP_WearChange relays SetHeldModel's update to the other clients. The four words after
-    // material are zero. The palette tint index is not known to be serialized with the item (docs/unknowns.md).
+    // SetHeldModel's last step (quiet 0, online): {spawn id, the model number, tint, slot}. Stock EQEmu relays it to
+    // the other clients in the zone (Client::Handle_OP_WearChange) and keeps no state of it, so a later zone-in shows
+    // the worn primary and secondary again. The model is the IT number (0 for "0"); the four dwords after it stay 0
+    // as SetHeldModel leaves them. The tint is ItemBase_GetPaletteTintIndex of the primary (slot 7) or secondary
+    // (slot 8) item, a definition field (+0x570) the item serialisation is not known to carry: 0 (docs/unknowns.md).
     if (!zone_ready_) return;
     WearChange w;
     w.spawn_id = static_cast<std::uint16_t>(world_.player_id);
-    w.armor.material = material;
+    w.armor.material = look.material;
     w.slot = slot;
     send_zone(encode(w));
 }
@@ -520,8 +544,12 @@ bool GameConnection::move_item(const ItemSlot& from, const ItemSlot& to, std::ui
     m.to = to;
     m.count = count;
     const bool sent = send_zone(encode(m));
-    if (is_worn(from)) refresh_worn_slot(from.slot, sent);
-    if (is_worn(to)) refresh_worn_slot(to.slot, sent);
+    if (is_worn(from)) refresh_worn_slot(from.slot);
+    if (is_worn(to)) refresh_worn_slot(to.slot);
+    // CInvSlot calls DoItemSlot with the slot clicked (the one that is not the cursor) when it is a weapon slot. A
+    // move the zone was not told of is shown to no one else.
+    if (sent && is_weapon_slot(to)) do_item_slot(to.slot);
+    else if (sent && is_weapon_slot(from)) do_item_slot(from.slot);
     // CTradeWnd_OnTradeItemMoved (game/trade_rules.h): a move into or out of a trade slot clears both ready flags.
     if (trade_) {
         game::TradeFlags f{trade_->their_ready, trade_->my_ready};
