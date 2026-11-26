@@ -56,8 +56,9 @@ Optional libFuzzer targets (`-DHAILSTONE_LIBFUZZER=ON`, Clang) come from `tests/
 - `fuzz_models`: EQGL layers, PTS, PRT, texture animations, ECO flora, RFD and the old `spells.eff`, byte 0
   choosing.
 
-These are only syntax-checked (no Clang build of the dependencies has been run); the deterministic tests are the
-verified part.
+They were first built with Clang on 2026-11-26 (`fuzz_decoders` lacked four decoders' headers until then), and the
+nightly run (docs/ci.md "Nightly run") builds and runs them all on corpora kept between nights. A first two-minute run
+of each found nothing. The deterministic tests stay the always-on part.
 
 ## Findings and fixes
 

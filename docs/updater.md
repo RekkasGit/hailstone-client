@@ -19,9 +19,9 @@ Code: `src/app/updater.*` (check, download), `src/app/update_install.*` (install
   - "Not up to date: the update feed went back to 0.6.0 (0.7.0 was out)" (see "A feed that went back");
   - "Updates are off: <why>" (a development build, `update.check=0`, no HTTPS, a test run, a box set's other window).
 
-  Under it, **What's new** (this version's part of the shipped `CHANGELOG.md`, `core/changelog.h`; greyed when
-  missing) and **GitHub** (CMake `HAILSTONE_PROJECT_PAGE`, in the system browser). The Gamepad pack puts both under
-  More, About Hailstone.
+  Under it, **What's new** (this version's part of the shipped `CHANGELOG.md`, a nightly's its Unreleased part,
+  `core/changelog.h`; greyed when missing) and **GitHub** (CMake `HAILSTONE_PROJECT_PAGE`, in the system browser).
+  The Gamepad pack puts both under More, About Hailstone.
 - **A newer release.** "Hailstone 0.2.0-alpha is out (this is 0.1.0-alpha)." with **Download**, **Release notes**
   and **Skip** (the Gamepad pack: under Log in). The notice shows the download's progress. With `update.download` on
   it starts by itself.

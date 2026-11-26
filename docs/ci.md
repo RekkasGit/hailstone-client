@@ -185,6 +185,74 @@ depend on where the last session ended. Scripts and the runner name no server, a
 command line. Nothing runs them automatically; they are the scripted part of the 0.10 live checklist (docs/todo.md).
 A failure is a lead, not proof of a client bug: check the server's log and state too.
 
+## Nightly run
+
+`tools/nightly.sh` runs what a normal run leaves out, on `origin/main`, and is meant for a timer on a maintainer's
+machine:
+
+1. The sanitizer build (`HAILSTONE_SANITIZE`, docs/hardening.md) and every `hailstone_tests` case, with
+   `EQ_GAME_DIR` and `HAILSTONE_VECTORS_DIR` set, so the tests that otherwise pass without checking anything check
+   something.
+2. The libFuzzer targets (`HAILSTONE_LIBFUZZER`, Clang; docs/hardening.md), all at once, one core each, for
+   `--fuzz-seconds` (default 1800). Their corpora are kept between nights, and a crash's input is kept for the morning.
+3. With `--publish`, and only after a night with no failure, the nightly build ("Nightly builds" below).
+4. A summary: printed, kept in the night's log folder, and posted to Discord when a webhook is set. The posted text
+   names no local path; after a publish it ends with the release's link.
+
+It exits 1 when a step fails. Options: `--fuzz-seconds N`, `--jobs N` (default 20, also the package containers' CPU
+limit), `--no-fuzz`, `--no-post`, `--package` (step 3 without the upload), `--publish`, `--ref REF`.
+
+- Settings go in `${XDG_CONFIG_HOME:-~/.config}/hailstone/nightly.env`, which it sources: `EQ_GAME_DIR`,
+  `HAILSTONE_VECTORS_DIR` and, optionally, `HAILSTONE_NIGHTLY_WEBHOOK` (a Discord webhook URL). Never commit them.
+- Everything it writes is under `${XDG_CACHE_HOME:-~/.cache}/hailstone-nightly`: the checkout it tests (a detached
+  worktree of the repository, reset to the ref each night and cleaned of all but its build folders and the
+  containers' compiler caches in `.docker/`), the corpora (`corpus/<target>`), crash inputs (`crashes/<target>`)
+  and a log folder per night (`logs/<time>`, with `summary.txt`).
+- The server plugins' clones join the build when the main checkout has them. A lock keeps two runs apart.
+- A crash input replays with `build-fuzz/<target> <file>` in the checkout.
+
+### Nightly builds
+
+`--publish` builds the Linux x64 and Windows x64 packages as a release is built (docs/updater.md "Making a release":
+`tools/docker/build.sh <platform> --no-test` with `-DHAILSTONE_BROWSER=ON`, then `tools/make_update.py`) and uploads
+them to one rolling pre-release, tagged `nightly`, on GitHub.
+
+- The version is the release's number with the label `nightly.<date>` (`HAILSTONE_NIGHTLY_LABEL`, which
+  `release_options.sh` resets for a release). SemVer ranks `0.7.3-nightly.20261126` above `0.7.3-beta` and below
+  `0.7.4-beta`, so a nightly's updater offers the next release and never the beta it came after.
+- The updater reads `releases/latest`, which is never a pre-release, so no player is offered a nightly. The upload
+  has no `hailstone-update.txt` and nothing signs it: the downloads and a `SHA256SUMS` file only.
+- The containers do not run the tests (the Linux one cannot run the browser tests, Windows' Wine fails some): the
+  Linux package's `hailstone_tests` run on this machine before the upload, in 8 parts at once. They leave out the
+  cases that start the real CEF helper (`browser host: the CEF helper*`, `browser host: CEF's other processes*`),
+  which time out on some desktops with release builds too. The Windows package is built only.
+- Each night moves the `nightly` tag to the commit built (a forced update of that one tag, never of a branch),
+  uploads the new downloads, removes the previous night's and rewrites the notes. A plain `git fetch` leaves a clone's
+  old copy of the tag alone; `git fetch --tags` refuses to move it, which is harmless.
+- It needs `gh` signed in with write access, Docker, and the MSVC install `tools/docker/build.sh windows-x64` uses.
+- `--package` does all but the upload, leaving the zips in the checkout's `release-nightly/`.
+
+### The timer
+
+A user timer runs it nightly. Put both files in `~/.config/systemd/user/`, then run
+`systemctl --user enable --now hailstone-nightly.timer` (and `loginctl enable-linger` for it to run while logged out):
+
+```ini
+# hailstone-nightly.service
+[Service]
+Type=oneshot
+ExecStart=/path/to/hailstone-client/tools/nightly.sh --publish
+Nice=10
+
+# hailstone-nightly.timer
+[Timer]
+OnCalendar=*-*-* 03:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
 ## Not covered
 
 - A change merged without the builds above is not built anywhere, unless the self-hosted build is switched on.
@@ -194,7 +262,7 @@ A failure is a lead, not proof of a client bug: check the server's log and state
   workflow is started.
 - No macOS build has been run on a Mac with a display; on the runner the window, MoltenVK and the rendering are
   compiled and linked only.
-- Nothing runs against a real game install or a server unless run by hand.
+- Nothing runs against a real game install or a server unless run by hand, or by the nightly run (game install only).
 
 ## Windows builds from Linux
 
