@@ -1,10 +1,10 @@
-// /removebuff's line (game/remove_buff.h): who it names, the name as MacroQuest takes it and how a name matches.
+// /removebuff's line (net/remove_buff.h): who it names, the name as MacroQuest takes it and how a name matches.
 #include <doctest/doctest.h>
 
-#include "game/remove_buff.h"
+#include "net/remove_buff.h"
 
-using hailstone::game::parse_remove_buff;
-using hailstone::game::remove_buff_matches;
+using hailstone::net::parse_remove_buff;
+using hailstone::net::remove_buff_matches;
 
 TEST_CASE("removebuff: the player's, the pet's or both; the rest of the line or a quoted name") {
     auto self = parse_remove_buff("Spirit of Wolf");
@@ -30,14 +30,14 @@ TEST_CASE("removebuff: the player's, the pet's or both; the rest of the line or 
 }
 
 TEST_CASE("removepetbuff: the pet's only; the whole line or a quoted name") {
-    auto p = hailstone::game::parse_remove_pet_buff("Spirit of Wolf");
+    auto p = hailstone::net::parse_remove_pet_buff("Spirit of Wolf");
     CHECK_FALSE(p.self);
     CHECK(p.pet);
     CHECK(p.name == "Spirit of Wolf");
-    CHECK(hailstone::game::parse_remove_pet_buff("\"Burnout IV\" more").name == "Burnout IV");
+    CHECK(hailstone::net::parse_remove_pet_buff("\"Burnout IV\" more").name == "Burnout IV");
     // As MQ's RemovePetBuff, the whole line is the name: "-pet" is no option here.
-    CHECK(hailstone::game::parse_remove_pet_buff("-pet Haste").name == "-pet Haste");
-    CHECK(hailstone::game::parse_remove_pet_buff("  ").name.empty());
+    CHECK(hailstone::net::parse_remove_pet_buff("-pet Haste").name == "-pet Haste");
+    CHECK(hailstone::net::parse_remove_pet_buff("  ").name.empty());
 }
 
 TEST_CASE("removebuff: a name matches anywhere in any case; =name the whole name") {
