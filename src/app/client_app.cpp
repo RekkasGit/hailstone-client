@@ -254,6 +254,7 @@ int ClientApp::run() {
             lap.mark(kLuaFrame);
             core::frame_sections::add_bytes(kLuaFrame, lua_ui_->allocated_bytes() - lua_bytes);
         }
+        if (ui_.visible() && screen_ == Screen::InGame && conn_) market_ui_.draw_confirmation_fallback(*conn_);
         window_.set_text_input(std::exchange(web_text_input_, false) && ui_.visible()); // a page that has the keys (app/lua_ui_web.cpp)
         settle_frame_.ui = true; // UI maintenance ran; loading/settling presentations are always visible
         if (screen_ == Screen::InGame && zone_settling() && !loading_under_question_) ui::loading_overlay(loading_view_);
