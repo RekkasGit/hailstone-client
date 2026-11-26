@@ -541,6 +541,7 @@ Server side: zone `Handle_OP_Group*` (client_packet.cpp), `Group::*` (groups.cpp
 | GroupMentor | C→Z | 0x3342 | 68 B: i32 percent, `char[64]` name ("" clears) |
 | GroupRoles | both | 0x70e2 | 148 B: `char[64]` member, `char[64]` leader, 3 × u32, i32 role at +0x8c (1 Main Tank, 2 Main Assist, 3 Puller), u8 on at +0x90 (0 clear, 1 assign), 3 B padding (note 6) |
 | MobManaUpdate / MobEnduranceUpdate | Z→C | 0x2404 / 0x1c81 | 3 B: u16 spawn, u8 percent; group members' mana and endurance |
+| HsGroupVitalsRequest / HsGroupVitals (Hailstone) | C→Z / Z→C | 0x143c / 0x143d | Request: u32 magic `HSPV`, u16 version 1. Reply: same header, u16 count (0–12), then count × {u32 spawn id, i64 current HP, i64 max HP, i64 current mana, i64 max mana, i64 current endurance, i64 max endurance}. A zero maximum means the resource is unavailable. Settings reply bit 3 enables requests. |
 | MobHealth | Z→C | 0x37b1 | 3 B (above); group members' HP percentages come this way too |
 
 1. GroupFollow: the client copies the u32 at +148 of the invitation (past EQEmu's 148 bytes; sent as 0). Accept with GroupFollow when the invitation came as 0x6110, else GroupFollow2. EQEmu echoes it to the inviter.

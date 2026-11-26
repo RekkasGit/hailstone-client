@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Choose separate HP, mana, and endurance readouts for group members and HP readouts for pets. Modern puts the choices in the Group and Pet frame menus, and Gamepad puts them under Options > Interface. Current / maximum values appear on servers that supply them.
 - Modern Server Management can edit advisory TLO rules, review add-ons' required and suggested TLOs, and grant individual add-ons access to otherwise denied roots. TLOs are allowed by default.
 - For add-on authors: `tools/make_addon.py`'s `--required-tlos` and `--suggested-tlos` are optional. One left out prints a warning and writes no list, which Server Management shows as unknown.
 - A TLO the server's policy blocks now says so once in chat for each script, plug-in or the player and each root (`[MQ] the server blocks TLO Target`), instead of silently reading as NULL. Server Management and the docs say the policy also covers the player's own lookups and is advisory: other routes to the same data stay open.
