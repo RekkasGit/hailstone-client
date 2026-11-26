@@ -1266,10 +1266,10 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 
 - **Reverb and music.** Reverb is simplified (no Miles DSP). Music synthesis uses TinySoundFont rather than a DLS
   synthesiser, ignoring sysex and branch controllers.
-- **The sound of the bank window opening.** Hailstone's Individual Sounds volume "Opening a bank bag" (`audio.open_bank`)
+- **The sound of the bank window opening.** Hailstone's Individual Sounds volume "Bank bags" (`audio.open_bank`)
   - Unknown: whether the original plays a sound when the bank window itself opens; a quick search of the decompiled
     client found none.
-  - Now: the volume covers the open wave of a bag in a bank or shared bank slot (`GameConnection::container_sound`).
+  - Now: the volume covers the open and close waves of a bag in a bank or shared bank slot (`GameConnection::container_sound`).
   - Settle: a trace of the original opening the bank window with sound on.
 - **Duplicate sound names** across archives resolve to the highest-numbered archive.
 - **Non-finite values.** A NaN or infinite volume, level, send or reverb parameter (an EMT gain of "nan" read with

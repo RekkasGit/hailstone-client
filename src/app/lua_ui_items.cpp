@@ -286,6 +286,10 @@ private:
 
 // ---------------------------------------------------------------- bag windows (CContainerMgr / CContainerWnd)
 
+// Hailstone: a bag in a personal or shared bank slot opens and closes with the bank-bag volume (audio.open_bank).
+// Conservative fallback: only those two slot types count. A slot of any other type, or one this classifier does not
+// know, uses the ordinary bag volume (audio.open_bag), so a bag never goes quiet on a volume it was not meant for. The
+// bank window opening itself has no known sound to put on a volume (docs/todo.md, docs/unknowns.md).
 bool in_bank_slot(const net::ItemSlot& s) { return s.type == net::kInvBank || s.type == net::kInvSharedBank; }
 
 // The open containers, in the order they opened ("Bag1" is the first). A container closes when its bag leaves
