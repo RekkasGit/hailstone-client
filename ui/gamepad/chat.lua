@@ -211,6 +211,7 @@ local shift = false
 -- the two (the focused button is gone then).
 local focusFirst = false
 local chatDrawn = -10
+local groupHint = false -- last frame: the focused log showed a group, which A opens or closes
 local function focusHere()
   if focusFirst then
     ui.SetKeyboardFocusHere()
@@ -260,13 +261,15 @@ ui.window("Chat Log", function()
     mode, typed, inputError = "keys", nil, nil
     GPSTATE.chatFocusInput = GPSTATE.chatByKeyboard -- (the pad uses the on-screen keys)
   end
+  local hints = { { "lb", "Window" }, { "rb", "Window" }, { "x", "Channel: " .. CHANNELS[channel][1] },
+    { "y", mode == "quick" and "Keyboard" or "Quick chat" }, { "b", "Close" } }
+  if groupHint then table.insert(hints, 1, { "a", "Open / close group" }) end
   local windows = chatWindows()
   if slotIdx > #windows then slotIdx = 1 end
   local win = windows[slotIdx]
   local slot = win and win.slot or 1
   if W.begin("Chat Log", { w = 1600, h = 960, title = "Chat", subtitle = win and win.title or "",
-        hints = { { "lb", "Window" }, { "rb", "Window" }, { "x", "Channel: " .. CHANNELS[channel][1] },
-          { "y", mode == "quick" and "Keyboard" or "Quick chat" }, { "b", "Close" } } }) then
+        hints = hints }) then
     if #windows > 1 then
       if W.pressed("lb") then slotIdx = (slotIdx - 2) % #windows + 1 scroll = 0 end
       if W.pressed("rb") then slotIdx = slotIdx % #windows + 1 scroll = 0 end
@@ -327,7 +330,8 @@ ui.window("Chat Log", function()
       if y < y0 then break end
     end
     ui.PopClipRect()
-    if not clickedGroup and visibleGroup and logFocused and W.pressed("a") then clickedGroup = visibleGroup end
+    groupHint = visibleGroup ~= nil and logFocused
+    if not clickedGroup and groupHint and W.pressed("a") then clickedGroup = visibleGroup end
     if clickedGroup then API.chat.Link(slot, CHAT_GROUP_LINK, clickedGroup) end
     if scroll > 0 then T.textIn(x0, y0 + T.px(8), logX1 - T.px(16), y0 + T.px(8) + lh, scroll .. " lines up", C.dim, 1) end
     T.unfont()
