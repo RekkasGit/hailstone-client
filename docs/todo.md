@@ -826,15 +826,16 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
   - Sustained play with zoning; Intel hardware.
 - [ ] Shared GPU textures on Linux (a Unix socket passing opaque FDs) and more than 16 clients (docs/research/shared-gpu-memory.md).
 
-- [ ] **The layer order does not hold for `net` and `assets`: they include `game/` headers.**
+- [ ] **The layer order does not hold for `net`, `assets` and `platform`: they include headers from above.**
   - The documented order: `app` -> `game` / ... -> `assets` / `net` / `web` -> `core` / `platform` (docs/plan.md and AGENTS.md).
   - In `net`: every `game_connection*.cpp` (GameConnection keeps the game state); the packet codecs `zone_packets.cpp` (`game/mechanics/remote_spawns.h`: the bit-packed positions), `spell_packets.h` (`game::mechanics::cast::Packet`), `task_packets.h` (`game::Task`), `training_packets.h` (`game::kTrainSkills`, `kTrainLanguages`), `aa_packets.h` (`game/alt_adv.h`) and `ability_packets.h` (`game/mechanics/abilities.h`).
   - In `assets`: `wld_zone.cpp` (`game/zone_names.h`), `model_points.cpp` (`game/sine_table.h`); `eqg_character.cpp` (`game/mechanics/anim_select.h`, `game/race_models.h`); `character.cpp`, `character_parts.cpp` and `character_dress.cpp` (`game/appearance*.h`, `game/actor_look.h`, `game/race_models.h`).
-  - All of it builds into the one `hailstone_engine` library, so nothing fails to link, and no check enforces the order.
+  - `net` also includes `plugin/` (`plugin/hooks.h` in `game_connection.cpp` and `game_connection_social.cpp`, `plugin/policy.h` in `game_connection.h` and `server_files.*`), and `platform/window.cpp` includes `game/mouse_look.h`.
+  - All of it builds into the one `hailstone_engine` library, so nothing fails to link.
+  - [x] A check: `tools/check_layers.py` (CI's `layers` job) fails on any new upward include and on a listed one that is fixed. The 235 above are listed in `tools/data/layer_exceptions.txt`; remove each line as it is fixed.
   - Fix, one of:
     - move the shared pieces down: the position unpacking, race and appearance tables, zone names and the sine table into `core/` or the layer that reads them, and the packet structs out of `game::` types;
     - or write the real order into docs/plan.md and AGENTS.md: GameConnection above `game`; the tables `assets` reads as a lower part of `game`.
-  - Then add a check (a CI grep like the NMS one) so it stays true.
 - [ ] Far shadow cascades are redrawn every frame; reusing them needs per-cascade tracking of moving casters first.
 - [ ] Session-long caches (`ModelArchiveStore` libraries' dress and model caches, `EqgCharacterStore`) never evict.
 - [ ] `tlo_index` makes a finalized userdata holding a `std::string` and a `Value` for every `.Member` step; it could keep the name as a Lua string.
@@ -843,7 +844,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] The client's own plugin consent prompt (app/automation.cpp) has no arming delay; the packs' wait a second before Allow and Don't allow work.
 - [ ] Plugin windows' memory: plugin code may use 3/4 of the UI state's limit (a reserve for the pack), not a budget per folder.
 - [ ] The Lua review fixes (vendored lstrlib match check, longjmp paths in lua_host/lua_imgui/lua_mq) have not been built with MSVC under Wine.
-- [ ] Windows: about 260 `path::string()` calls rely on `cmake/utf8.manifest` making UTF-8 the ANSI code page. Sweep them to `core/path_utf8.h`, or record that the manifest is required.
+- [ ] Windows: 279 `path::string()` and `generic_string()` calls (in 65 files) rely on `cmake/utf8.manifest` making UTF-8 the ANSI code page. Sweep them to `core/path_utf8.h`, or record that the manifest is required. `tools/check_path_strings.py` (CI's `layers` job) keeps each file's count from growing (`tools/data/path_string_counts.txt`).
 - [ ] Tests for /camera, /mousespeed and /copylayout through ClientApp itself (their helpers are tested), and for the gamepad pack's browser change.
 - [ ] `net::server_file_destination` still accepts versioned shared libraries (`.so.N`) in scripts and plugins as data, while `tools/make_addon.py` refuses them.
 - [ ] Updates: `kept-<time>/` folders left by a rollback are never cleaned up; offer to remove them.

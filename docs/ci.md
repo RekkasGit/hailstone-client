@@ -1,7 +1,9 @@
 # Continuous integration and local builds
 
 GitHub Actions runs checks only (`.github/workflows/ci.yml`), on every push to `main`, `cloud/**` or `claude/**` and
-on pull requests to `main`:
+on pull requests to `main`. Each job runs one group of `tools/checks.sh` (`tools/checks.sh <group>`; with no group,
+all of them), so the same checks run locally and in `tools/premerge.sh` ("Before a merge" below). A new check goes
+into `tools/checks.sh`, not into the workflow alone.
 
 - `core-names`: `tools/check_core_names.py` checks that the client's sources name no server outside comments. Lua
   long strings and C++ raw strings count as code, and Objective-C++ and the ini, JSON and text files under those
@@ -13,6 +15,16 @@ on pull requests to `main`:
     (`plugins/nms`, `HAILSTONE_NMS_*`), to build and test it beside the client.
   - The one exception, let through by file and exact line shape: the updater's table of files old releases shipped
     under `plugins/nms/` (`retired_release_files()` in `src/app/update_install.cpp`).
+- `layers`: two debts whose lists only shrink, and `tests/test_debt_checks.py`, the tests of both scripts.
+  - `tools/check_layers.py`: no source under `src/` includes a header from a higher row of the layers
+    (docs/plan.md "Architecture"). Comments do not count. The upward includes made before the check are listed in
+    `tools/data/layer_exceptions.txt`, `<file> <header>` per line. An include not listed fails, and so does a listed
+    one that is gone: a fix removes its line (`tools/check_layers.py --update` removes every such line and never adds
+    one). A new folder under `src/` fails until it is given a row.
+  - `tools/check_path_strings.py`: `path::string()` and `generic_string()` throw on Windows for a character the ANSI
+    code page lacks (`core/path_utf8.h`). The calls already there are counted per file in
+    `tools/data/path_string_counts.txt`. A file with more fails, and a file with fewer fails until its count is
+    lowered (`--update` lowers counts and never raises one).
 - `wiki`: `tools/sync_wiki.py --check`. Every document of `docs/`, `CONTRIBUTING.md` and `server/README.md` has a
   wiki page, and no link points at a missing file (docs/wiki.md).
 - `ui-api`: the shared UI contract's generated files are fresh.
@@ -32,7 +44,17 @@ One workflow builds: `.github/workflows/macos.yml` ("macOS arm64" below), for th
 started by hand or by a push to a `macos/**` branch.
 
 Everything else is built and tested on the developer's machine, to save Actions minutes (the old build legs are in
-the workflow's history). Before a merge to `main`:
+the workflow's history), or on a maintainer's machine registered as a runner ("Self-hosted build" below).
+
+## Before a merge
+
+Run `tools/premerge.sh` in the branch's worktree with its changes committed. It runs `tools/checks.sh`, configures
+the build directory if it is new (`--build-dir`, default `build`), builds with up to 20 jobs (`--jobs` or
+`HAILSTONE_JOBS`), runs `hailstone_tests` through `ctest`, and ends with `premerge: passed on <commit>`. With
+uncommitted changes it says so and exits 1, since the commit it names is not what was tested. It also says when
+`EQ_GAME_DIR` or `HAILSTONE_VECTORS_DIR` is unset, as those tests then check nothing.
+
+It covers the Linux row of the table below. The other rows, the sanitizer build and live sessions stay separate:
 
 | Platform | How | When |
 |---|---|---|
@@ -123,9 +145,29 @@ Notes:
    checks that a leaf granting Everyone is still refused. Wine also reports a DACL set on an existing folder from
    its Unix mode, so a test that needs one sets it when it creates the folder.
 
+## Self-hosted build
+
+`.github/workflows/build.yml` runs `tools/premerge.sh` on pushes to `main`, on pull requests to `main` and by hand,
+on a self-hosted runner labelled `hailstone` (with `self-hosted`, `linux`, `x64`). It stays off until the repository
+variable `HAILSTONE_SELF_HOSTED` is `true`, since a job with no runner waits in the queue for good.
+
+- The runner runs whatever code it is handed, so the workflow takes pull requests only from this repository's own
+  branches, which need write access. A fork's pull request skips the job, and nothing uses `pull_request_target`. Keep
+  the repository's Actions setting that asks for approval of outside contributors' workflows.
+- The build directory is `~/.cache/hailstone-ci/<runner name>/build`, outside the workspace that checkout cleans, so
+  builds are incremental. `HAILSTONE_JOBS` in the runner's environment (its `.env` file) sets the job count, 20 by
+  default.
+- `EQ_GAME_DIR` and `HAILSTONE_VECTORS_DIR` can be set in the runner's `.env` too; without them those tests check
+  nothing, as locally. The server plugins' clones (`plugins/nms`, `plugins/projecttriune`) are not checked out, so
+  their tests do not run there.
+- To set one up: in the repository's Settings, Actions, Runners, add a Linux x64 runner. Follow GitHub's commands as
+  an unprivileged user with the build tools installed (the "Linux" row of the table above), give it the `hailstone`
+  label, and run it as a service (`./svc.sh install`). Then set the variable under Settings, Secrets and variables,
+  Actions, Variables.
+
 ## Not covered
 
-- A change merged without the builds above is not built anywhere.
+- A change merged without the builds above is not built anywhere, unless the self-hosted build is switched on.
 - Linux arm64 is built only by hand, under QEMU on an x64 machine (`tools/docker/build.sh linux-arm64`, "Builds in
   containers" below), and only for a release. Its release has been run on one device only: a Qualcomm Snapdragon 8
   Elite (AYN Odin 3 Max, Kettle Linux, Mesa Turnip). Windows arm64 is not built. macOS arm64 is built only when its
