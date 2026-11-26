@@ -53,6 +53,8 @@ public:
         precipitation_.field().set_definitions(std::move(defs));
     }
     void update_particles(const PrecipitationField::Frame& frame) { precipitation_.update_particles(frame); }
+    // A skipped draw still advances weather but contributes no particle spawns to the next frame.
+    void discard_particle_steps() { precipitation_.discard_steps(); }
     const PrecipitationField& particles() const { return precipitation_.field(); }
     // Leaving a zone drops its current and pending weather, keeping the shared particle definitions.
     void reset();

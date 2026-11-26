@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Rain and wind sounds stop when you change zones or log out to character select.
+- Rain and wind sounds fade out when the weather clears, even in a background or minimised window. Changing zones or camping to character select stops both loops immediately.
 - Other players see weapons, shields and instruments change or disappear when you swap equipment or activate a bandolier set. As in the original, placing a range item shows it in your off hand, with the main hand empty, until your next melee swing.
 - Right-clicking a parcel in the Modern merchant window opens its item details. Alt-right-click still opens window settings.
 - Right-clicking an ordinary NPC shows its Consider message in chat. **Right-Click to Consider** is on by default and can be switched off in Options.

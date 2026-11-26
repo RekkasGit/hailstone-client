@@ -1,5 +1,7 @@
 #include "game/weather.h"
 
+#include <algorithm>
+
 namespace hailstone::game {
 
 namespace {
@@ -70,11 +72,21 @@ void Weather::update(double now, bool outdoor, const std::function<std::int32_t(
 
     // Weather_Update: the pending message, then the precipitation manager's update.
     if (state_.pending) {
-        StartEffectEnv env;
-        env.now = ms;
-        env.stop_weather = [&](std::int32_t old_kind) { weather_stop(state_, display_, fx, old_kind, false); };
-        weather_start_effect(mechanics::Fpu{}, state_, display_, precipitation_, env, state_.pending_kind,
-                             state_.pending_intensity);
+        const auto intensity = state_.pending_intensity;
+        // EQEmu can use an all-zero packet to clear snow. Fade out the active kind, and let a fade already
+        // underway finish even if another clear packet arrives.
+        if (intensity != 0 || state_.on) {
+            const auto kind = intensity == 0 ? state_.kind : state_.pending_kind;
+            if (intensity > 0 && kind == state_.kind && state_.active && !state_.on) {
+                // The weather returned before the fade finished. Reverse it from the current progress.
+                state_.on = 1;
+                state_.fade = std::max(0, 0x100 - state_.fade);
+            }
+            StartEffectEnv env;
+            env.now = ms;
+            env.stop_weather = [&](std::int32_t old_kind) { weather_stop(state_, display_, fx, old_kind, false); };
+            weather_start_effect(mechanics::Fpu{}, state_, display_, precipitation_, env, kind, intensity);
+        }
         state_.pending = 0;
     }
     precipitation_.update(ms);

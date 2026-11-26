@@ -128,6 +128,7 @@ public:
     // The rest of +0 (0x10081860): the particles, over the same seconds. `frame`'s seconds and intensity are filled
     // in here.
     void update_particles(PrecipitationField::Frame frame);
+    void discard_steps() { steps_.clear(); }
 
     bool created() const { return created_; }
     std::int32_t kind() const { return kind_; }
