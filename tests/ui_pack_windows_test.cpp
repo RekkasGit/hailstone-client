@@ -33,6 +33,7 @@
 #include "app/chat_tabs.h"
 #include "app/lua_ui.h"
 #include "app/gamepad.h"
+#include "app/market_ui.h"
 #include "core/byte_io.h"
 #include "core/config.h"
 #include "core/game_dir.h"
@@ -1672,6 +1673,102 @@ TEST_CASE("UI packs: the respawn window leaves the focus alone for a question th
             s.frames(3);
             REQUIRE(GImGui->NavWindow);
             CHECK(GImGui->NavWindow->RootWindow == respawn);
+        }
+        ImGui::DestroyContext(ctx);
+    }
+}
+
+TEST_CASE("UI packs: a resurrection offer uses the pack's confirmation from the first frame") {
+    for (const char* pack : {"modern", "gamepad", "custom"}) {
+        INFO(pack);
+        const bool custom = std::string_view(pack) == "custom";
+        const bool gamepad = std::string_view(pack) == "gamepad";
+        const fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / (gamepad ? "gamepad" : "modern");
+        test::ScratchDir scratch("ui_pack_resurrection_confirmation");
+        const fs::path dir = scratch.path();
+        fs::create_directories(dir / "game");
+        fs::copy(src, dir / pack, fs::copy_options::recursive);
+        if (custom) REQUIRE(fs::remove(dir / pack / "confirmationdialogbox.lua"));
+        ImGuiContext* ctx = ImGui::CreateContext();
+        ImGui::GetIO().IniFilename = nullptr;
+        ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+        {
+            test::Rig rig;
+            REQUIRE(rig.to_zone());
+            auto& conn = rig.conn;
+            Session s(dir, pack);
+            s.host.conn = &conn;
+            ReplacementCheck replacements(s.api);
+
+            auto spells = std::make_shared<game::SpellTable>();
+            std::vector<std::string> fields(237, "0");
+            fields[0] = "100";
+            fields[1] = "Test Resurrection";
+            fields[20] = "96"; // first effect's base value
+            fields[86] = "81"; // first effect: resurrection
+            std::string spell_line = fields[0];
+            for (std::size_t i = 1; i < fields.size(); ++i) spell_line += '^' + fields[i];
+            REQUIRE(spells->parse(spell_line) == 1);
+            conn.set_spell_table_for_test(spells);
+            REQUIRE(luaL_dostring(s.lua.state(), R"lua(
+local TextWrapped, TextColored, DrawText = ui.TextWrapped, ui.TextColored, ui.DrawText
+local function observe(text)
+  if type(text) == "string" and text:find("96%", 1, true) then RezPercentPainted = true end
+end
+ui.TextWrapped = function(text, ...)
+  observe(text)
+  return TextWrapped(text, ...)
+end
+ui.TextColored = function(r, g, b, a, text, ...)
+  observe(text)
+  return TextColored(r, g, b, a, text, ...)
+end
+ui.DrawText = function(x, y, r, g, b, a, text, ...)
+  observe(text)
+  return DrawText(x, y, r, g, b, a, text, ...)
+end
+)lua") == LUA_OK);
+
+            net::Death death;
+            death.spawn_id = death.corpse_id = conn.world().player_id;
+            death.killer_id = 101;
+            death.damage = 5000;
+            conn.receive_zone_packet_for_test(net::encode(death));
+            conn.receive_zone_packet_for_test(respawn_window_packet(1));
+            conn.receive_zone_packet_for_test(resurrection_offer_packet());
+            REQUIRE(conn.confirmation());
+            CHECK_FALSE(s.api.replaces("ConfirmationDialogBox"));
+
+            app::MarketUi market;
+            ImGui::GetIO().DisplaySize = s.display_size;
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            auto frame = [&] {
+                ImGui::NewFrame();
+                market.draw(conn, false);
+                s.api.begin_frame();
+                s.lua.frame();
+                market.draw_confirmation_fallback(conn);
+                ImGui::Render();
+            };
+            frame();
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+            ImGuiWindow* respawn = ImGui::FindWindowByName(gamepad ? "Respawn" : "###modern.RespawnWnd");
+            REQUIRE(respawn);
+            CHECK(respawn->Active);
+            ImGuiWindow* fallback = ImGui::FindWindowByName("Confirm###market_confirm");
+            if (custom) {
+                REQUIRE(fallback);
+                CHECK(fallback->Active);
+                CHECK_FALSE(s.api.replaces("ConfirmationDialogBox"));
+            } else {
+                ImGuiWindow* confirm = ImGui::FindWindowByName(gamepad ? "Confirm" : "###modern.ConfirmationDialogBox");
+                REQUIRE(confirm);
+                CHECK(confirm->Active);
+                CHECK(s.api.replaces("ConfirmationDialogBox"));
+                CHECK(fallback == nullptr);
+                frame();
+                REQUIRE(luaL_dostring(s.lua.state(), "assert(RezPercentPainted)") == LUA_OK);
+            }
         }
         ImGui::DestroyContext(ctx);
     }

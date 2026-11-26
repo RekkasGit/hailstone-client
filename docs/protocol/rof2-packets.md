@@ -291,6 +291,10 @@ From EQEmu's source; tests: `tests/hover_respawn_test.cpp`.
 #### Combat: resurrection while hovering
 
 A resurrection uses the ordinary `OP_RezzRequest` / `OP_RezzAnswer` confirmation, even when no refreshed respawn window arrives.
+The request identifies the spell at +156. Hailstone looks it up in the active spell table and shows the recovery
+percentage from the first base value of a resurrection spell (0–100), the field EQEmu uses to calculate the refund.
+The amount of XP on the corpse stays server-side. Offers with unavailable rates, including corpse-return spells,
+use the generic confirmation.
 
 - **Yes, same zone.** While hovering, Yes to an offer whose zone dword (+4, zone and instance) is the current zone records consent locally and enables the reserved final resurrection option. It sends nothing and does not restart the countdown. Checked: ConfirmationDialog_HandleResponse @0x52d540 case 0x67.
 - **Yes, another zone or instance:** echoed in `OP_RezzAnswer` at once.

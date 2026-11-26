@@ -29,6 +29,7 @@
 #include "game/race_models.h"
 #include "game/combat.h"
 #include "game/sound_rules.h"
+#include "game/spa_ids.h"
 #include "game/spawn_heights.h"
 #include "game/coords.h"
 #include "game/mq_colors.h"
@@ -2213,27 +2214,34 @@ void GameConnection::handle_zone(const AppPacket& p) {
             ask(Confirmation{kConfirmSharedTask, strings_.format(8934, std::vector<std::string>{i->inviter, i->task}), {},
                              ItemSlot::invalid(), p});
         break;
-    case Op::Translocate:
-    case Op::RezzRequest: {
+    case Op::Translocate: {
         // Unanswered, the server waits (its own time limit applies). This client's questions (the original's dialogs
         // are not decoded).
-        bool tl = op == Op::Translocate;
-        auto t = tl ? decode_translocate(p) : std::nullopt;
-        auto rz = tl ? std::nullopt : decode_rezz_request(p);
-        if (!t && !rz) break;
-        if (rz) {
-            if (respawn_spawn_pending_ || (respawn_ && respawn_chosen_)) break;
-            clear_hover_rez();
-            // A new server resurrection offer replaces the old one; queued dialogs must not answer superseded
-            // corpse/spell data after the current offer has been accepted or the hover timeout has completed.
-            discard_questions([](const Confirmation& c) { return c.id == kConfirmRezz; });
-        }
-        std::uint32_t zone = t ? t->zone : rz->zone;
-        std::string where = game::zone_long_name(zone);
-        if (where.empty()) where = std::format("zone {}", zone);
-        std::string text = t ? std::format("{} offers to move you to {}. Go?", game::display_name(t->caster), where)
-                             : std::format("{} offers to resurrect you. Accept?", game::display_name(rz->rezzer));
-        ask(Confirmation{tl ? kConfirmTranslocate : kConfirmRezz, std::move(text), {}, ItemSlot::invalid(), p});
+        const auto offer = decode_translocate(p);
+        if (!offer) break;
+        std::string where = game::zone_long_name(offer->zone);
+        if (where.empty()) where = std::format("zone {}", offer->zone);
+        std::string text = std::format("{} offers to move you to {}. Go?", game::display_name(offer->caster), where);
+        ask(Confirmation{kConfirmTranslocate, std::move(text), {}, ItemSlot::invalid(), p});
+        break;
+    }
+    case Op::RezzRequest: {
+        const auto offer = decode_rezz_request(p);
+        if (!offer || respawn_spawn_pending_ || (respawn_ && respawn_chosen_)) break;
+        clear_hover_rez();
+        // A new server resurrection offer replaces the old one; queued dialogs must not answer superseded
+        // corpse/spell data after the current offer has been accepted or the hover timeout has completed.
+        discard_questions([](const Confirmation& c) { return c.id == kConfirmRezz; });
+
+        const auto rezzer = game::display_name(offer->rezzer);
+        const auto* spell = spell_table_->get(offer->spell);
+        // EQEmu's Client::OPRezzAnswer uses the spell's first base value as the percentage. Corpse-return
+        // effects can also send OP_RezzRequest, so only advertise a rate for spells with the resurrection effect.
+        const bool has_rate = spell && spell->has_effect(game::SPA_RESURRECT) && spell->base[0] >= 0 && spell->base[0] <= 100;
+        std::string text = has_rate
+            ? std::format("{} offers to resurrect you ({}% XP recovery). Accept?", rezzer, spell->base[0])
+            : std::format("{} offers to resurrect you. Accept?", rezzer);
+        ask(Confirmation{kConfirmRezz, std::move(text), {}, ItemSlot::invalid(), p});
         break;
     }
     case Op::FindPersonReply:

@@ -7,6 +7,7 @@
 
 #include "core/byte_io.h"
 #include "game/coords.h"
+#include "game/spa_ids.h"
 #include "mock_server/harness.h"
 #include "net/item_packets.h"
 #include "net/notice_packets.h"
@@ -657,6 +658,51 @@ TEST_CASE("Resurrection outside hover: Yes still echoes the accepted offer immed
     REQUIRE(answer != log.end());
     CHECK(answer->data == answer_rezz(rez_offer(), true).data);
     CHECK(MockEqServer::count(log, Op::RespawnWindow) == 0);
+}
+
+TEST_CASE("Resurrection offers show the recovery rate from the latest offered spell") {
+    struct Offer {
+        std::uint32_t spell;
+        int effect;
+        int base;
+        const char* expected_rate;
+    };
+    const Offer offers[] = {
+        {100, game::SPA_RESURRECT, 96, "96%"},
+        {101, game::SPA_RESURRECT, 0, "0%"},
+        {102, game::SPA_RESURRECT, 100, "100%"},
+        {103, game::SPA_SUMMON_TO_CORPSE, 1, nullptr},
+        {104, game::SPA_RESURRECT, -1, nullptr},
+        {105, game::SPA_RESURRECT, 101, nullptr},
+        {106, 0, 0, nullptr}, // absent from the local spell table
+    };
+    std::string spell_rows;
+    for (const auto& offer : offers) {
+        if (offer.effect == 0) continue;
+        std::vector<std::string> fields(237, "0");
+        fields[0] = std::to_string(offer.spell);
+        fields[1] = "Test Offer";
+        fields[20] = std::to_string(offer.base);
+        fields[86] = std::to_string(offer.effect);
+        for (std::size_t i = 0; i < fields.size(); ++i) spell_rows += (i ? "^" : "") + fields[i];
+        spell_rows += "\n";
+    }
+    auto spells = std::make_shared<game::SpellTable>();
+    REQUIRE(spells->parse(spell_rows) == 6);
+    HoverRig h;
+    REQUIRE(h.rig.to_zone());
+    auto& c = h.rig.conn;
+    c.set_spell_table_for_test(spells);
+    for (const auto& offer : offers) {
+        CAPTURE(offer.spell);
+        c.receive_zone_packet_for_test(rez_offer(offer.spell));
+        REQUIRE(c.confirmation());
+        CHECK(c.confirmation()->id == kConfirmRezz);
+        const std::string expected = offer.expected_rate
+            ? std::string("Healer offers to resurrect you (") + offer.expected_rate + " XP recovery). Accept?"
+            : "Healer offers to resurrect you. Accept?";
+        CHECK(c.confirmation()->text == expected);
+    }
 }
 
 TEST_CASE("Hover respawn: a new death discards an unanswered offer for an earlier corpse") {
