@@ -235,7 +235,14 @@ them to one rolling pre-release, tagged `nightly`, on GitHub.
 - The containers do not run the tests (the Linux one cannot run the browser tests, Windows' Wine fails some): the
   Linux package's `hailstone_tests` run on this machine before the upload, in 8 parts at once. They leave out the
   cases that start the real CEF helper (`browser host: the CEF helper*`, `browser host: CEF's other processes*`),
-  which time out on some desktops with release builds too. The Windows package is built only.
+  which time out on some desktops with release builds too.
+- The Windows package is then started under Wine (a copy, with the night's log folder as its data folder): it logs
+  in to the live smoke tests' server with their character, enters the world and stops after 3600 frames at 60 per
+  second, with a screenshot (`windows.png`). Not reaching the world fails the night. It needs Wine, the desktop's
+  display (Vulkan presents to a window, which shows for that minute) and the `HAILSTONE_LIVE_*` settings; without
+  them the summary says it was not started. Its Wine prefix is kept in the cache folder.
+- The tests run without the desktop's display (`DISPLAY` and `WAYLAND_DISPLAY` unset), so the browser tests use
+  headless Chromium: CEF's helper can fail to draw on a busy desktop session's display.
 - Each night moves the `nightly` tag to the commit built (a forced update of that one tag, never of a branch),
   uploads the new downloads, removes the previous night's and rewrites the notes. A plain `git fetch` leaves a clone's
   old copy of the tag alone; `git fetch --tags` refuses to move it, which is harmless.
@@ -260,8 +267,6 @@ The service has a shell's environment only as set here: add the build settings t
 Type=oneshot
 ExecStart=/path/to/hailstone-client/tools/nightly.sh --publish
 Nice=10
-# Headless: CEF's helper in the browser tests can fail to draw on a busy desktop session's display.
-UnsetEnvironment=DISPLAY WAYLAND_DISPLAY
 
 # hailstone-nightly.timer
 [Timer]
