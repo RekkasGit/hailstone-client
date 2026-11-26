@@ -506,9 +506,11 @@ void ClientApp::update_ui_host() {
             }
             if (registry) {
                 for (auto& tlo : registry->tlo_catalog()) {
-                    const bool builtin = !tlo.description.empty();
-                    view.tlos.push_back({std::move(tlo.name), builtin ? std::move(tlo.description) : "Provided by an add-on.",
-                                        builtin ? "builtin" : "addon"});
+                    const bool builtin = tlo.origin == mq::TloOrigin::BuiltIn;
+                    std::string description = !tlo.description.empty() ? std::move(tlo.description)
+                                              : builtin                ? std::string()
+                                                                       : std::string("Provided by an add-on.");
+                    view.tlos.push_back({std::move(tlo.name), std::move(description), builtin ? "builtin" : "addon"});
                 }
             }
             return view;

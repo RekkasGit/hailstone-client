@@ -43,7 +43,7 @@ TEST_CASE("TLO policy denies resolved names before running providers and leaves 
         ++calls;
         return Value::string(std::string(index));
     };
-    f.reg.add_tlo("AddonNotes", provider);
+    f.reg.add_tlo("AddonNotes", provider, {}, mq::TloOrigin::Addon);
     CHECK(f.reg.tlo_catalog_serial() != before);
     CHECK(f.p("${aDdOnNoTeS[before]}") == "before");
     CHECK(calls == 1);
@@ -68,12 +68,22 @@ TEST_CASE("TLO policy denies resolved names before running providers and leaves 
     const auto catalog = f.reg.tlo_catalog();
     const auto addon = std::find_if(catalog.begin(), catalog.end(), [](const auto& row) { return row.name == "AddonNotes"; });
     REQUIRE(addon != catalog.end());
-    CHECK(addon->description.empty());
-    CHECK(std::count_if(catalog.begin(), catalog.end(), [](const auto& row) { return row.description.empty(); }) == 1);
+    CHECK(addon->origin == mq::TloOrigin::Addon);
+    CHECK(std::count_if(catalog.begin(), catalog.end(), [](const auto& row) { return row.origin == mq::TloOrigin::Addon; }) == 1);
+    const auto me = std::find_if(catalog.begin(), catalog.end(), [](const auto& row) { return row.name == "Me"; });
+    REQUIRE(me != catalog.end());
+    CHECK(me->origin == mq::TloOrigin::BuiltIn);
 
     const auto registered = f.reg.tlo_catalog_serial();
-    f.reg.add_tlo("addonnotes", provider);
+    f.reg.add_tlo("addonnotes", provider, {}, mq::TloOrigin::Addon);
     CHECK(f.reg.tlo_catalog_serial() == registered);
+    // A built-in without a description is still built in: the origin is its own field.
+    f.reg.add_tlo("addonnotes", provider);
+    CHECK(f.reg.tlo_catalog_serial() != registered);
+    const auto relabelled = f.reg.tlo_catalog();
+    CHECK(std::find_if(relabelled.begin(), relabelled.end(), [](const auto& row) {
+              return row.name == "AddonNotes";
+          })->origin == mq::TloOrigin::BuiltIn);
     f.reg.remove_tlo("ADDONNOTES");
     CHECK(f.reg.tlo_catalog_serial() != registered);
     CHECK_FALSE(f.reg.has_tlo("AddonNotes"));

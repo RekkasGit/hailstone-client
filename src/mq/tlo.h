@@ -154,9 +154,14 @@ struct Context {
     std::string config_path;
 };
 
+// Who registered a TLO: the client itself, or an add-on (a compiled plugin's AddTopLevelObject). The Server
+// Management view lists the two apart; a description is text only and says nothing about where a TLO came from.
+enum class TloOrigin : std::uint8_t { BuiltIn, Addon };
+
 struct TloCatalogEntry {
     std::string name;
-    std::string description; // Published by the built-in provider.
+    std::string description; // empty: none given
+    TloOrigin origin = TloOrigin::BuiltIn;
 };
 
 class Registry {
@@ -167,7 +172,7 @@ public:
     // A new type (or the one of that name); keep the pointer, it stays valid.
     Type& type(const std::string& name);
     const Type* find_type(std::string_view name) const;
-    void add_tlo(std::string name, TloFn fn, std::string_view description = {});
+    void add_tlo(std::string name, TloFn fn, std::string_view description = {}, TloOrigin origin = TloOrigin::BuiltIn);
     void remove_tlo(std::string_view name);
     bool has_tlo(std::string_view name) const;
     std::vector<std::string> tlos() const;
@@ -197,6 +202,7 @@ private:
     struct TloRegistration {
         TloFn fn;
         std::string description;
+        TloOrigin origin = TloOrigin::BuiltIn;
     };
     std::map<std::string, std::unique_ptr<Type>, CaseLess> types_;
     std::map<std::string, TloRegistration, CaseLess> tlos_;

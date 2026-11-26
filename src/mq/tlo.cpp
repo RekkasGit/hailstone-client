@@ -315,13 +315,13 @@ const Type* Registry::find_type(std::string_view name) const {
     return it == types_.end() ? nullptr : it->second.get();
 }
 
-void Registry::add_tlo(std::string name, TloFn fn, std::string_view description) {
-    TloRegistration entry{std::move(fn), std::string(description)};
+void Registry::add_tlo(std::string name, TloFn fn, std::string_view description, TloOrigin origin) {
+    TloRegistration entry{std::move(fn), std::string(description), origin};
     const auto [it, inserted] = tlos_.try_emplace(std::move(name), std::move(entry));
     if (inserted) {
         ++tlo_catalog_serial_;
     } else {
-        if (it->second.description != description) ++tlo_catalog_serial_;
+        if (it->second.description != description || it->second.origin != origin) ++tlo_catalog_serial_;
         it->second = std::move(entry);
     }
 }
@@ -346,7 +346,7 @@ std::vector<std::string> Registry::tlos() const {
 std::vector<TloCatalogEntry> Registry::tlo_catalog() const {
     std::vector<TloCatalogEntry> out;
     out.reserve(tlos_.size());
-    for (const auto& [name, entry] : tlos_) out.push_back({name, entry.description});
+    for (const auto& [name, entry] : tlos_) out.push_back({name, entry.description, entry.origin});
     return out;
 }
 

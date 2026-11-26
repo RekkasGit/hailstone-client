@@ -846,9 +846,9 @@ int h_add_tlo(void* h, const char* name, HailstoneTloFn fn, void* user) {
         return from_c(out);
     };
     const mq::Type* tp = &t;
-    reg.add_tlo(name, [tp](const mq::Context&, std::string_view index) {
-        return mq::Value::object(tp, 0, 0, std::string(index));
-    });
+    reg.add_tlo(
+        name, [tp](const mq::Context&, std::string_view index) { return mq::Value::object(tp, 0, 0, std::string(index)); },
+        {}, mq::TloOrigin::Addon);
     l.tlos.emplace_back(name);
     return 1;
 }
