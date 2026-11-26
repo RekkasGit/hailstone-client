@@ -3622,6 +3622,7 @@ private:
 
     // Combat.
     PlayerStatus pstatus_;
+    std::optional<std::int32_t> reported_max_mana_; // own OP_ManaUpdate, separate from add-ons' PlayerStatus writes
     std::uint32_t consciousness_changes_ = 0;
     OwnHp own_hp_items_; // what own_hp() adds to pstatus_ (set_own_hp_items)
     void set_own_spawn_hp(); // the player's spawn's HP percent from own_hp() (SetSpawnHP)

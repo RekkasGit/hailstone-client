@@ -2270,6 +2270,10 @@ The periodic update drives the timed mechanics. It and UseSkill send uninitialis
 Without the game folder's BaseData.txt row for the character the ticks wait. The server's HP, mana and endurance
 updates overwrite the pools whenever they come; the ticks move them on in between, as in the original.
 
+Hailstone caps the mana predicted by the six-second tick at the maximum from the player's latest `OP_ManaUpdate`.
+Until the server sends a maximum, the tick uses the client formula. Mana vitals supplied by a server extension still
+take priority. The Character diagnostics still compare the client formula with the server's reported maximum.
+
 #### Held buff countdowns
 
 A countdown is held while:
