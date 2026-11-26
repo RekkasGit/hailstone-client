@@ -21,7 +21,7 @@ Use dot calls. Methods are grouped by service (`session`, `character`, `inventor
 
 ## Layout profiles
 
-`hs.UI.layoutProfiles` is available to interface code during a character session. `List()` returns saved
+API 1.12 adds `hs.UI.layoutProfiles`. It is available to interface code during a character session. `List()` returns saved
 names for the active pack. `Preview(name)` returns
 `{name, width, height, windows, chat, rects}` or `nil, reason`.
 `rects` lists `{name, x, y, w, h}` window bounds in pixels at the saved screen size. An empty list means
