@@ -386,6 +386,9 @@ public:
         ui_host_.copy_ui_layout = [this](const std::filesystem::path& dir) {
             if (lua_ui_) lua_ui_->copy_character_layout(CharacterFiles{dir}.ui_settings(ui_name_));
         };
+        ui_host_.layout_profile_pack = [this] {
+            return std::pair<ui::lua::LuaUi*, std::string_view>{lua_ui_.get(), ui_name_};
+        };
         apply_video_options();
         game_view_.dev_windows = config_.get_bool("ui.dev_windows", false);
         lua_ui_->set_show_control(game_view_.dev_windows);
@@ -465,6 +468,7 @@ public:
         aenv.web = web_service_.get();
         aenv.install_dir = platform::install_dir();
         aenv.data_dir = platform::data_dir();
+        aenv.config = &config_;
         aenv.autoload = config_.get("plugins.autoload").value_or("*");
         aenv.script_autoload = config_.get("scripts.autoload").value_or("");
         aenv.connection = [this] { return conn_.get(); };
@@ -520,6 +524,7 @@ public:
             return collision_->line_of_sight(glm::vec3(a[0], a[1], a[2]), glm::vec3(b[0], b[1], b[2]));
         };
         automation_ = std::make_unique<Automation>(aenv);
+        ui_host_.map_filters = &automation_->map_filters();
         ui_host_.nameplates = &automation_->nameplates();
         lua_ui_->add_ui_api([this](lua_State* L) { register_ui_api(L); });
         automation_->hooks().add_command(plugin::Hooks::kClient, "/lighting",
@@ -864,6 +869,7 @@ private:
     // The 302 / 114 play reply's question ("remove the character still logged in?"), Yes / No to the login client.
     void draw_kick_question();
     void update_connection();
+    void show_zone_client_messages(bool collapse);
     // The OS window's title: the picked server's name, and the character's in the world (client_window_title).
     void update_window_title();
     // The original's slash commands that act on the client (app/client_app_commands.cpp), by handler name; true =
@@ -1234,8 +1240,8 @@ private:
     bool activate_nameplate(std::uint32_t id);
     // CEverQuest::LeftClickedOnPlayer.
     void left_click_spawn(std::uint32_t id);
-    // CEverQuest::RightClickedOnPlayer (update_item_input): false when the spawn has no right-click action.
-    bool right_click_spawn(std::uint32_t id);
+    // False when the spawn has no right-click action. Only mouse callers enable the Consider shortcut.
+    bool right_click_spawn(std::uint32_t id, bool consider_npc = false);
     // Doors and ground objects (app/world_objects.h): a left click or the
     // USE key on one, the open tradeskill container, the --auto-door test.
     bool click_world(const PickTarget& hit);
@@ -1682,6 +1688,7 @@ private:
     bool pc_names_ = true, npc_names_ = true;
     bool own_name_ = true; // Hailstone's switch for the player's own name sprite (display.own_name; game::NameSpriteSwitches)
     bool player_menu_ = true; // Hailstone's right-click menu on players (mouse.player_menu; game::opens_player_menu)
+    bool right_click_consider_ = true; // mouse.right_click_consider; Hailstone: RoF2 always considers, on is RoF2
     bool con_name_colour_ = true;     // Hailstone: NPC names in their consider colour (display.con_name_colour)
     bool show_invis_undead_ = false; // Hailstone: "[Name]" for known invisibility versus undead (display.show_invis_undead)
     bool plate_overlap_fade_ = true; // Hailstone: a covered name fades (display.plate_overlap_fade)

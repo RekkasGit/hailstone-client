@@ -218,7 +218,7 @@ From entering the world until leaving it (camp, logout, a lost connection), a ch
 
 Some keys stay in `hailstone.ini` whoever plays (`Config::is_shared_key`):
 
-- the client's own: `assets.*`, `addons.*`, `update.*`, `news.*`, `browser.*`, `plugins.*`, `scripts.*`;
+- the client's own: `assets.*`, `addons.*`, `update.*`, `news.*`, `browser.*`, `plugins.*`, `scripts.*`, `mapfilter.*`;
 - the login screen's: `login.*`, `audio.pregame_music`;
 - the window's place and mode: `window.*`, `display.window_mode`, `display.resolution` (one window, so it does not
   jump when a character enters);
@@ -230,6 +230,30 @@ Some keys stay in `hailstone.ini` whoever plays (`Config::is_shared_key`):
 A shared key still in a character's file moves into `hailstone.ini` when the character enters, if that has none. The
 UI packs' script settings (`ui/settings/<pack>.txt`) are shared too; the window layout is per character
 (`ui-<pack>.txt`).
+
+#### Named layout profiles
+
+Open **Layout Profiles** from the Modern EQ menu, **More** or **All Windows** in the Gamepad main menu, or with
+`/layoutprofiles`. Modern also offers it under **Options → Display → Interface**. Save the current setup under a
+name such as Desktop, Handheld or Raid.
+Select a saved profile and choose **Visual Preview** to see where its visible windows sat at the saved screen
+size. You can close the diagram and keep playing with the current layout.
+
+If your current layout differs from every saved profile, **Apply Profile** lets you name it and choose
+**Save & Apply**, choose **Apply Without Saving**, or cancel. The save prompt uses the same replacement
+confirmation as regular saves.
+**Undo Apply** restores the setup in use immediately before the last apply, once per apply and during the
+same character and interface session.
+
+Profiles live in `layout-profiles/<pack>/` under the Hailstone data folder. The active interface determines
+which profiles are offered, and characters using that interface can share them. Applying a profile writes
+to the active character. A profile includes stock and pack window placement, chat tabs and routing,
+filters and colors. Modern chat
+timestamps and Gamepad hotbar orientations follow the character, with old shared settings as defaults.
+The game window keeps its current size when a profile is applied. A chat window other than the main one keeps a font
+size of 8 to 10 through a profile switch, a Hailstone extension past RoF2's 0 to 7; as in RoF2, the next start
+resets it to 3. Names use up to 48 ASCII letters, numbers,
+spaces, hyphens or underscores and match without regard to case.
 
 #### Quest preferences
 

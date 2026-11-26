@@ -677,9 +677,13 @@ swarms, so those cannot be attributed; names and target-cycling flags do not est
   the turn snaps below 1, the gap below 4, 9 above 128, else 4; the bands). Its autorun / run mode writes go to the
   movement state.
 
+**Deliberate change:** while swimming on a clear line, stock and enhanced follow steer the normal swim thrust toward
+the leader's reported spawn Z. Manual camera pitch and avatar height differences do not set the swim direction.
+Within the horizontal stop band, the follower can rise or dive in place until the depths are within one unit.
+
 **Deliberate change (switchable):** the navigation mesh helps /follow where the straight line fails
 (`docs/navigation.md` "/follow"): the mesh's path steers with the same bands measured along it, and the follow keeps
-on to 400 instead of 200. `hailstone.ini` `nav.follow=0` or `/nav option follow off` gives the original's.
+on to 400 instead of 200. `hailstone.ini` `nav.follow=0` or `/nav option follow off` disables the mesh help.
 
 ## Listener, music, spell sounds and spell gems
 
@@ -810,6 +814,9 @@ client refuses another player's request as busy, since on EQEmu the late answer 
 A deliberate difference from the original, which sends one OP_MoveCoin per move: a same-denomination move of more
 than 2^24 coins goes as two packets, the first rounded down to 24 significant bits. EQEmu's OPMoveCoin scales the
 amount through a float even when the coin type stays the same, so one packet could move a slightly different amount.
+
+When another player offers an item, its name in the trade notification is a chat link you can click to inspect it.
+Updating the stack count of the same item in the same slot leaves the existing notification in place.
 
 On the merchant's Parcels page (0x698290, `GameConnection::parcel_coin_button`) the button is first outlined (+0x259,
 0x6909a0) and the merchant's item and row are cleared (0x6f2120); any later SelectSlot clears the outline. The
@@ -1334,6 +1341,27 @@ Inspect. Each row runs its command's path (`/invite`, `/raidinvite`, the trade r
 Options > General "Player Right-Click Menu" (hailstone.ini `mouse.player_menu`, on by default) switches it off. With
 context menus off (the ContextMenus option, or the player down) the original's right click happens; the gamepad's
 Interact keeps the original's.
+
+#### Right click on an NPC
+
+With **Right-Click to Consider** enabled, a mouse right click on a targetable NPC without another right-click action
+uses the same Consider request and chat reply as `/consider`. It considers the clicked NPC and preserves the current
+target, as in RoF2 (CEverQuest::RightClickedOnPlayer, call at 0x537cf8). Merchant, banker and other NPC interactions,
+boat controls and corpse looting take priority. Click-to-move still walks into range before acting.
+
+The setting is on by default and saved in `hailstone.ini` as `mouse.right_click_consider`. In Modern it is under
+Options > General > Interface. In Gamepad it is under Options > Interface and applies to the mouse. The controller's
+Interact button and the `/click right target` command keep their existing interactions.
+
+RoF2 has no such switch: its right click always ends in a consider when nothing else took the click, so the switch
+is Hailstone's. RoF2 also considers in cases this client does not yet:
+
+- a right click on a player that is not a trader considers them, then sends the inspect request when `/toggleinspect`
+  is on (this client opens the player menu or inspects);
+- an interaction that fails (a merchant or banker out of range or already open, a guildmaster even after training
+  opens, a corpse the loot request refuses) falls through to the consider;
+- the USE key goes through the same function with a range check (consider within 20, else eqstr 0x7c); the gamepad's
+  Interact and `/click right target` here do not consider.
 
 ## Death, teleports, the respawn at bind and camping
 
@@ -2493,6 +2521,8 @@ The blood spurt (`PlayerClient_SpawnBloodSpurt` @0x58f1c0) goes with the player'
 
 Classic (WLD) models take old-style numbers (C01..T09), with the old-style movement and idle choice, the sitting
 substitutions, the replacement for a missing clip, and a 100 ms cross-fade.
+For classic movement, Hailstone treats one-frame walk and run clips as missing so the animated gait can take over.
+South Karana's classic gnolls use their run clip while walking because their walk clip is a single pose.
 
 New-style models (EQG races) take sequence codes 0x4f..0xb6 (old-style numbers go through the old-to-new map), with
 the movement selection while moving, the idle choice while still, and the track search:
@@ -2632,7 +2662,8 @@ Which group plays what:
     or NPC bodies.
   - Full remote collision correction and the physical-radius gap remain open.
 - Other spawns' FeetWet / BodyWet (+0xa1 / +0xa2) are probed with each step (`WorldState::smooth`), so they swim and
-  tread water.
+  tread water. A swimming player's depth comes from position updates, including at the surface when only its feet
+  are wet and the floor below would put its body underwater.
 
 ## Character appearance
 

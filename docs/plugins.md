@@ -440,22 +440,25 @@ Differences from MQ:
 
 Not yet:
 
-- TLOs: `Raid`, `Mercenary`, `Corpse`, `Merchant`, `Ground`, `Macro` and other MQ plugins' TLOs (`Navigation` is
-  built in: `docs/navigation.md`)
-- the `AltAbility` type (`Me.AltAbility[...]`)
+- TLOs: `Ground`, `Macro` and other MQ plugins' TLOs (`Navigation` is built in: `docs/navigation.md`; `Raid`,
+  `Mercenary`, `Corpse`, `Merchant`, `DoorTarget`, `InvSlot` and `Me.AltAbility[...]` are listed in
+  docs/scripting-reference.md)
 
 ### MQ commands
 
 `/echo`, `/target` (`id N`, `clear`, `mycorpse`, `myself`, or a spawn search; with nothing, yourself; `next` / `prev`
 walk the search's matches), `/face` (target, `id`, `heading H`, `loc y,x`,
-a search; `fast`), `/keypress <command> [hold|release]` (the game's key command names: `forward`, `jump`, `hot1_1`, ...),
-`/squelch <cmd>`, `/docommand <cmd>`, `/noparse <cmd>`, `/timed <deciseconds> <cmd>`, `/lua ...`, `/plugin ...`. `/nav` (MQ2Nav's commands),
-`/moveto` and `/stick` are built in (`docs/navigation.md`).
+a search; `fast`), `/mapfilter` (MacroQuest's map filters and colours), `/keypress <command> [hold|release]` (the game's
+key command names: `forward`, `jump`, `hot1_1`, ...), `/squelch <cmd>`, `/docommand <cmd>`, `/noparse <cmd>`, `/timed <deciseconds> <cmd>`, `/nomodkey`, `/shiftkey` and
+`/ctrlkey <cmd>`, `/itemnotify`, `/doortarget`, `/memspell`, `/click`, `/makemevisible`, `/removelev`, `/removeaura`,
+`/lua ...`, `/plugin ...` (docs/commands.md). `/nav` (MQ2Nav's commands), `/moveto` and `/stick` are built in (`docs/navigation.md`).
 
 `${...}` is parsed in every command line, typed or scripted, except:
 
 - `/noparse`;
 - `/timed`, whose line is parsed when it runs, as in MQ;
+- `/nomodkey`, `/shiftkey` and `/ctrlkey`, whose command is parsed once, when it runs under the keys (MQ registers
+  them unparsed);
 - the lines the client's own windows send for a button (the guild window's Go to URL, Join Channel and Update MOTD, a
   member's or friend's name): their text is what other players and the server wrote.
 
@@ -488,12 +491,22 @@ compiled plugin does. Each part needs the same capability as in a compiled plugi
 | `hs.DisplaySpellId(n)`, `hs.DisplayItemData(n)` | see "Display instances" below |
 | `right_click_item(slot [, class])`, `close_spell_book()`, `clear_spell_recovery()`, `set_window_pet(id)`, `inspect_item(id [, augments])`, `set_max_camera_distance(d)` | the client's own actions (`actions`) |
 | `chat(text [, color])`, `server_dir()`, `character_dir()`, `max_camera_distance()` | a chat line in one of the game's colours; its folders for the server and the character (see "Lua plugin folders" below) |
+| `chat_group(title, lines)` | a locally displayed, initially collapsed chat group. Uses the same permissions as `chat` |
 | `server_rule(section, key)` | a setting from a non-client section of the server's `hailstone.cfg` (`[autocombat] hunter = off`), as written; nil when absent |
 | `autoskill_list()` | the player's autoskill list in order: `{key, name, endurance, mana, target_hp_below, target_hp_above, self_hp_below, when, keep_buff}` (`read`) |
 | `alt_abilities()` | the abilities the AA window lists, in its order (by tab, then rank id); see "Alternate abilities" below (`read`) |
 | `train_aa(group)` | buys the next rank of an ability as `/alternateadv buy` does (no question), when the window's own check allows it; false, with nothing sent, otherwise. One rank a call; points and ranks change when the server answers (`actions`) |
 | `use_ability(kind, name)` | uses a skill (`"skill"`), combat ability (`"disc"`) or activated AA (`"aa"`) by name (a combat ability's also without its rank), an AA's group or a skill's number, as its hot button does; false when the player has none such (`actions`) |
 | `hold_autoskill(on)` | the Ability Book's autoskill uses nothing while held (its switch stays; the button shows "On (held)"); the hold goes when the script stops (`actions`) |
+
+#### Collapsible chat groups from Lua
+
+```lua
+local client = require('hailstone')
+client.chat_group('Inventory Check', {'Checked four bags.', 'Seven slots are free.'})
+```
+
+The title appears in the system chat window with a count. The player can expand it to read the individual rows. Pass a plain-text title of up to 80 bytes and a dense list of one to 32 nonempty strings of up to 1024 bytes each. The title and rows refuse control bytes (anything below 0x20 but a tab, 0x7f, and U+0080 to U+009F), so a group carries no MacroQuest colour codes and no item or other chat links; a call with one is refused whole. The function returns `true` for accepted input and `false` if the arguments are invalid or there is no session. Existing chat filters, hooks, and logging receive the individual messages.
 
 #### The nameplate hook
 
@@ -1015,10 +1028,24 @@ the client runs it.
 
 #### Spawns on the maps
 
-The game's maps (map window, minimap, zone map) show only the group, as RoF2's does. `map_spawn` is asked for every
-other spawn each time a map draws (the minimap: only inside its circle) and shows those it answers for, with a colour,
-a map layer (layer switches and height filter apply) and a label, prefilled from the con colour and name. A Lua
-plugin's `map_spawn(spawn)` answers true for the defaults, or a table with `color`, `layer` and `label`.
+The game's maps (map window, minimap, zone map) show the group by themselves. `/mapfilter` adds MQ2Map's own spawn and
+ground-object marks, colours, target overlays and custom searches; the command changes the shared C++ map presenter,
+so no UI-pack control is needed (`docs/commands.md`). `TargetPath` is Hailstone's own behaviour, not MQ2Map's (there it
+only lets a right-click on a map label reach the game's handler): it requests a silent server path
+(`OP_FindPersonRequest`) when enabled and again when the target or zone changes, once the target has stayed selected
+for half a second and at most once a second; it never turns the player or plays path sounds and chat. A shown or
+pending player Find takes ownership back and is not replaced. A server whose `[commands]` rules deny `/mapfilter`
+also switches off the saved options while the player is on it: no filter marks, lines or circles, no TargetPath
+requests and no player vanilla mode (the settings stay saved for other servers). A ground label uses its actor name
+(for example `IT63`) when the client has not received an item name; Hailstone does not invent one. `map_spawn` is still asked for every other
+spawn each time a map draws (the minimap: only inside its circle) and shows those it answers for, with a colour, a map
+layer (layer switches and height filter apply) and a label, prefilled from the con colour and name. A Lua plugin's
+`map_spawn(spawn)` answers true for the defaults, or a table with `color`, `layer` and `label`. Plugin marks are
+independent of `/mapfilter`: hiding a spawn type with `/mapfilter` does not hide a mark supplied by `map_spawn`.
+Vanilla mode is the exception: it hides every map mark and does not call `map_spawn`. A server's `map_visible` denial
+wins over both `/mapfilter` and plugin spawn marks; its spawn-only hook does not cover ground objects. `/mapfilter`'s
+marks for living NPCs (NPC, Named, custom searches) also follow the map policy as the packs' Find overlays do (see
+"Map policy").
 
 #### Activity, order and compatibility
 
@@ -1041,6 +1068,25 @@ Several plugins may extend the client at once: they are asked in load order and 
 
 A C++ allocation or provider exception at an SDK entry point returns the ordinary zero/void failure result. Side
 effects completed before it are not retried or undone.
+
+#### Collapsible local chat
+
+`write_chat_group` submits one collapsed group with a title the plugin supplies. It needs a game connection
+and no capability. Call on the client's thread or on a thread using `lend_thread`. The client copies the title
+and rows during the call. Use a title of 1 to 80 bytes and 1 to 32 rows of 1 to 1024 bytes each. Pass one line
+of plain text per row: the title and rows refuse control bytes (as the Lua `chat_group`), so no colour codes or
+chat links. The function returns 1 on acceptance and 0 if the input is invalid or the service is unavailable.
+
+```c
+const char* rows[] = {"Checked four bags.", "Seven slots are free.", "One item is ready to parcel."};
+if (HAILSTONE_HOST_HAS(host, write_chat_group)) {
+    host->write_chat_group(host->host, "Inventory Check", rows, 3);
+} else {
+    for (size_t i = 0; i < sizeof(rows) / sizeof(rows[0]); ++i) {
+        host->write_chat(host->host, rows[i], 0);
+    }
+}
+```
 
 #### Extended spell IDs
 
@@ -2171,6 +2217,10 @@ faces = on                ; button faces (default on)
 autoskill = on            ; the Ability Book's autoskill (default on). Off: its switch is greyed out and a
                           ; running autoskill stops
 
+[map]
+vanilla = off            ; only the map background, without labels, marks, routes or overlays (default off).
+                          ; Navigation keeps working; the minimap's ring, north marker, controls and clock stay
+
 [movement]
 npc_collision = on        ; live NPCs stop the player, who slides along them (default on, with or without this
                           ; file). Off: everyone walks through everyone, as in the original client
@@ -2190,6 +2240,20 @@ suggest = owner/repo      ; add-ons the login screen suggests to players who do 
                           ; between; docs/addons.md "Suggested add-ons"). They come with this file, so at the
                           ; first zone-in: Hailstone's add-on index is how a first-time player hears of one
 ```
+
+#### Vanilla maps
+
+`[map] vanilla = on` makes the map window, zone map and minimap show only their background lines. Labels, player and
+group marks, `/mapfilter` marks, pins, routes, paths, target overlays, plugin spawn marks and registered map overlays
+are hidden. What a UI pack or add-on draws itself with `ui.Draw*` is its own to leave out: `hs.UI.map.Vanilla()`
+says whether the maps are vanilla. The Modern pack then leaves out its markers, Find marks and zone exits, and both
+packs keep their map frames, bars, text, minimap ring, north marker, zoom controls and clocks. Map panning, Find,
+TargetPath and other navigation keep working; only their drawn lines and markers disappear.
+
+The player's `/mapfilter vanilla` setting is shared by every character and saved in `hailstone.ini`. The server rule
+locks the effective mode on without overwriting that saved choice. With no rule, or `vanilla = off`, the player's
+choice decides. A GM can switch the rule in Server Management (Client & gameplay, Vanilla maps). This is client-side and
+advisory: a modified client can ignore `hailstone.cfg`.
 
 #### Autoskill
 
@@ -2493,6 +2557,10 @@ The flags:
   `OP_SendFindableNPCs` list. Show Path requests the route from the server. Client discovery, guides and Find-owned
   walks are unavailable in this mode. All Find visibility hooks still apply and `DISABLE_NPC_FIND` takes precedence.
 - Restrictive flags combine across providers; removing them restores stock defaults, saved UI preferences untouched.
+- `/mapfilter`'s marks for living NPCs follow the same rules: none with `HIDE_STOCK_NPCS`, `DISABLE_NPC_FIND` or
+  `CUSTOM_SPAWNS`, only listed NPCs with server-only Find, and each through the `HAILSTONE_MAP_FIND` hook as well as
+  the marker hook. The current target keeps its mark, line and circles; corpses, players and ground objects are not
+  NPC Find's and stay.
 - Unaffected: PC group/raid Find, coordinates, ordinary navigation, static map labels, user pins, raw spawn getters.
 - Guides and Find walks pin connection/player/NPC identity and recheck eligibility before observing or moving.
 - Invalid hook sizes, unknown flags, unterminated names and control characters abstain.

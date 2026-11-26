@@ -140,6 +140,7 @@ add_library(hailstone_engine STATIC
   src/mq/tlo.cpp
   src/mq/tlo_game.cpp
   src/mq/spawn_search.cpp
+  src/mq/map_filter.cpp
   src/mq/parse.cpp
   src/mq/commands.cpp
   src/mq/nav_commands.cpp
@@ -578,6 +579,7 @@ add_library(hailstone_engine STATIC
   src/ui/ui_textures.cpp
   src/ui/ui_packs.cpp
   src/ui/ui_ini.cpp
+  src/ui/layout_profile.cpp
   src/app/lua_ui.cpp
   src/app/automation.cpp
   src/app/navigator.cpp
@@ -599,6 +601,7 @@ add_library(hailstone_engine STATIC
   src/app/lua_ui_customization.cpp
   src/app/lua_ui_dialogs.cpp
   src/app/lua_ui_menu.cpp
+  src/app/spawn_interaction.cpp
   src/app/lua_ui_social.cpp
   src/app/lua_ui_realestate.cpp
   src/app/lua_ui_progress.cpp
@@ -1283,6 +1286,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/collision_test.cpp
     tests/nav_test.cpp
     tests/map_data_test.cpp
+    tests/map_filter_test.cpp
     tests/map_files_test.cpp
     tests/player_path_test.cpp
     tests/atlas_test.cpp
@@ -1410,6 +1414,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/lua_folders_test.cpp
     tests/lua_keep_test.cpp
     tests/lua_character_settings_test.cpp
+    tests/layout_profile_test.cpp
     tests/lua_plugin_test.cpp
     tests/spell_projectiles_test.cpp
     tests/commerce_test.cpp

@@ -233,6 +233,15 @@ UI_METHOD("SortItems", "inventory", "SortItems", kCapActions)
 UI_METHOD("StopItemJob", "inventory", "StopItemJob", kCapActions)
 UI_METHOD("TakeItemSearch", "inventory", "TakeItemSearch", 0)
 
+// layoutProfiles
+UI_METHOD("LayoutProfilesApply", "layoutProfiles", "Apply", kCapActions)
+UI_METHOD("LayoutProfilesCanUndo", "layoutProfiles", "CanUndo", 0)
+UI_METHOD("LayoutProfilesGeneration", "layoutProfiles", "Generation", 0)
+UI_METHOD("LayoutProfilesList", "layoutProfiles", "List", 0)
+UI_METHOD("LayoutProfilesPreview", "layoutProfiles", "Preview", 0)
+UI_METHOD("LayoutProfilesSave", "layoutProfiles", "Save", kCapActions)
+UI_METHOD("LayoutProfilesUndo", "layoutProfiles", "Undo", kCapActions)
+
 // luasocials
 UI_METHOD("LuaComplete", "luasocials", "Complete", 0)
 UI_METHOD("LuaSocialDryRun", "luasocials", "DryRun", kCapCommands | kCapActions)
@@ -265,6 +274,7 @@ UI_METHOD("MapOverlayRegister", "map", "RegisterOverlay", kCapRead | kCapUi)
 UI_METHOD("MapRightClick", "map", "RightClick", kCapCommands)
 UI_METHOD("ShowZoneMap", "map", "ShowZone", 0)
 UI_METHOD("MapOverlayUnregister", "map", "UnregisterOverlay", 0)
+UI_METHOD("MapVanilla", "map", "Vanilla", 0)
 UI_METHOD("ZoneExitWalk", "map", "ZoneExitWalk", kCapMove)
 UI_METHOD("ZoneExits", "map", "ZoneExits", 0)
 UI_METHOD("ZoneLinks", "map", "ZoneLinks", 0)

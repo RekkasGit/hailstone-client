@@ -103,6 +103,13 @@ bool iequal(std::string_view a, std::string_view b) {
            });
 }
 
+// The subject of a plugin's zoning notices (PluginEnv::zone_notice): its name, case folded as plugins are found.
+std::string notice_subject(std::string_view name) {
+    std::string subject = "plugin:";
+    for (char c : name) subject += ascii_lower(c);
+    return subject;
+}
+
 mq::Value from_c(const HailstoneValue& v) {
     switch (v.kind) {
     case HAILSTONE_BOOL: return mq::Value::boolean(v.i != 0);
@@ -191,8 +198,11 @@ struct NativePlugins::Impl {
         return env.policy && env.policy->current() && env.policy->current()->configured &&
                (env.policy->server_file(FileKind::Plugin, hash) || env.policy->required_file(FileKind::Plugin, hash));
     }
-    void say(const std::string& text) const {
-        if (env.print) env.print(text, 0);
+    // `subject` names the plugin a zoning notice is about; `stop` marks one that unloads it (PluginEnv::zone_notice).
+    void say(const std::string& text, bool zone_policy = false, const std::string& subject = {},
+             bool stop = false) const {
+        if (zone_policy && env.zone_notice) env.zone_notice(text, subject, stop);
+        else if (env.print) env.print(text, 0);
     }
     void command(std::string_view args);
 
@@ -2729,6 +2739,30 @@ void h_write_chat_color(void* h, const char* text, std::uint32_t color) {
     else if (l.host->env.print) l.host->env.print(text, 0);
 }
 
+int h_write_chat_group(void* h, const char* title, const char* const* lines, std::uint32_t count) {
+    net::GameConnection* connection = connection_of(Loaded::of(h));
+    if (!connection || !lines || count == 0 || count > net::kChatGroupMaxRows) return 0;
+
+    const auto bounded_text = [](const char* text, std::size_t max_bytes) -> std::string_view {
+        if (text) {
+            for (std::size_t size = 0; size <= max_bytes; ++size) {
+                if (text[size] == '\0') return {text, size};
+            }
+        }
+        return {};
+    };
+    const auto group_title = bounded_text(title, net::kChatGroupMaxTitleBytes);
+    if (group_title.empty()) return 0;
+    std::vector<std::string> messages;
+    messages.reserve(count);
+    for (std::uint32_t index = 0; index < count; ++index) {
+        const auto line = bounded_text(lines[index], net::kChatGroupMaxRowBytes);
+        if (line.empty()) return 0;
+        messages.emplace_back(line);
+    }
+    return connection->write_chat_group(std::string(group_title), std::move(messages)) ? 1 : 0;
+}
+
 int h_get_scripts_config_dir(void* h, char* out, std::size_t out_size) {
     const Loaded& l = Loaded::of(h);
     if (l.host->env.scripts_config_dir.empty()) return 0;
@@ -3496,7 +3530,7 @@ bool NativePlugins::load(std::string_view name, std::string* why) {
     return load_file(name, why, caller_name().empty() ? Asker::Player : Asker::Script);
 }
 
-bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker asker) {
+bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker asker, bool zone_policy) {
     Impl& m = *impl_;
     std::string name(name_in);
     auto refuse = [&](std::string text, bool say = true) {
@@ -3725,6 +3759,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.world_placement_start = main_only<h_world_placement_start>;
     p.table.world_placement_get = main_only<h_world_placement_get>;
     p.table.world_placement_cancel = main_only<h_world_placement_cancel>;
+    p.table.write_chat_group = main_only<h_write_chat_group>;
     Hooks& hooks = *m.env.hooks;
     Loaded* lp = &p;
     // Each callback runs with the plugin's capabilities and counts as the plugin being busy (no unloading under it).
@@ -3844,7 +3879,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
             return x && x->active();
         });
     }
-    m.say(std::format("[Plugin] {} loaded ({})", name, caps_text(caps)));
+    m.say(std::format("[Plugin] {} loaded ({})", name, caps_text(caps)), zone_policy, notice_subject(name));
     log::info("plugin {} loaded from {} (sha256 {}, caps {})", name, file->string(), to_hex(hash), caps_text(caps));
     return true;
 }
@@ -3859,7 +3894,7 @@ bool NativePlugins::unload(std::string_view name) {
     return unload_file(name);
 }
 
-bool NativePlugins::unload_file(std::string_view name) {
+bool NativePlugins::unload_file(std::string_view name, bool zone_policy) {
     Impl& m = *impl_;
     auto it = std::find_if(m.loaded.begin(), m.loaded.end(), [&](const auto& l) { return iequal(l->name, name); });
     if (it == m.loaded.end()) return false;
@@ -3873,7 +3908,7 @@ bool NativePlugins::unload_file(std::string_view name) {
     m.loaded.erase(it);
     const std::string gone = l->name;
     discard(m, std::move(l), true);
-    m.say("[Plugin] " + gone + " unloaded");
+    m.say("[Plugin] " + gone + " unloaded", zone_policy, notice_subject(gone), true);
     return true;
 }
 
@@ -3883,7 +3918,7 @@ void NativePlugins::unload_all() {
     for (auto it = names.rbegin(); it != names.rend(); ++it) unload_file(*it);
 }
 
-void NativePlugins::policy_changed(const std::vector<std::string>& autoload) {
+void NativePlugins::policy_changed(const std::vector<std::string>& autoload, bool zone_policy) {
     Impl& m = *impl_;
     std::vector<std::string> drop, revoked;
     for (auto& l : m.loaded) {
@@ -3922,8 +3957,8 @@ void NativePlugins::policy_changed(const std::vector<std::string>& autoload) {
         if (!l->can(kCapNet)) l->tcp.clear();
     }
     for (const auto& n : drop) {
-        m.say("[Plugin] " + n + ": it may not run here");
-        unload_file(n);
+        m.say("[Plugin] " + n + ": it may not run here", zone_policy, notice_subject(n), true);
+        unload_file(n, zone_policy);
     }
     for (const auto& n : revoked) {
         m.say("[Plugin] " + n + ": you no longer allow it on this server");
@@ -3958,7 +3993,7 @@ void NativePlugins::policy_changed(const std::vector<std::string>& autoload) {
         });
         bool wanted = i.server || required || all ||
                       std::any_of(autoload.begin(), autoload.end(), [&](const std::string& a) { return iequal(a, i.name); });
-        if (wanted) load_file(i.name, nullptr, Asker::Rules);
+        if (wanted) load_file(i.name, nullptr, Asker::Rules, zone_policy);
     }
 }
 

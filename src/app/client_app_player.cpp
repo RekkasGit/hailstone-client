@@ -791,7 +791,8 @@ void ClientApp::update_player(float dt) {
                 conn_->stop_follow(false);
             } else if (stand == net::kStandStanding || stand == net::kStandCrouching) {
                 const game::Spawn& t = it->second;
-                glm::vec3 me = game::world_to_server(feet_ + glm::vec3(0, 0, floor_offset_));
+                const glm::vec3 body = feet_ + glm::vec3(0, 0, floor_offset_);
+                glm::vec3 me = game::world_to_server(body);
                 glm::vec3 to = game::world_to_server(t.position);
                 game::FollowInput fi;
                 fi.y = me.y;
@@ -808,8 +809,12 @@ void ClientApp::update_player(float dt) {
                 fi.target_animation = t.is_corpse ? game::kFollowDeadAnimation : t.stand_state;
                 fi.distance = game::true_distance(me, to, 0.0f); // CDisplay::TrueDistance(..., 0): flat
                 // __CastRay(target, player): the line between them is clear.
-                fi.clear_line = !collision_ || collision_->line_of_sight(t.position, feet_ + glm::vec3(0, 0, floor_offset_));
+                fi.clear_line = !collision_ || collision_->line_of_sight(t.position, body);
                 const bool assist = !enhanced_profile && nav_ && nav_->follow_assist_on();
+                // At entry into the water the previous movement step can still report dry.
+                const bool swimming = !player_moved && zone_ && (zone_->regions.lookup(body).flags & 0xff) >= 5;
+                const bool target_wet = t.body_wet >= 5 || t.feet_wet >= 5;
+                const glm::vec3 target_feet = t.position - glm::vec3(0, 0, t.heights.avatar_height);
                 const float distance = fi.distance;
                 // With the mesh's help the follow keeps on past the original's 200, to the navigator's leash.
                 if (assist && fi.distance > game::kFollowTooFar && fi.distance <= Navigator::kFollowLeash)
@@ -830,9 +835,11 @@ void ClientApp::update_player(float dt) {
                     if (nav_) nav_->end_follow();
                 } else {
                     Navigator::FollowAssist help;
-                    if (assist)
-                        help = nav_->assist_follow(feet_, t.position - glm::vec3(0, 0, t.heights.avatar_height), fi.clear_line,
-                                                   nav_now);
+                    if (assist) {
+                        // A clear route between swimmers can be taken directly at the leader's depth.
+                        if (swimming && target_wet && fi.clear_line) nav_->end_follow();
+                        else help = nav_->assist_follow(feet_, target_feet, fi.clear_line, nav_now);
+                    }
                     if (help.detour) {
                         // The original's bands (stop inside 15 + both heights, walk inside 30 + both when the target is
                         // slower), measured along the path.
@@ -847,11 +854,23 @@ void ClientApp::update_player(float dt) {
                     } else {
                         yaw_ = game::heading_to_yaw(step.heading);
                     }
-                    // Swimming: the look pitch towards the path's next corner, or the spawn (forward follows it).
-                    if (assist && step.move) {
-                        glm::vec3 aim = help.detour ? help.aim : t.position - glm::vec3(0, 0, t.heights.avatar_height);
-                        if (auto p = nav_->swim_pitch(nf, aim, help.detour ? std::optional<glm::vec3>(help.along) : std::nullopt))
-                            pitch_ = *p;
+                    if (swimming) {
+                        auto swim_frame = nf;
+                        swim_frame.swimming = true;
+                        if (assist && (help.detour || !target_wet || Navigator::swim_needs_air(swim_frame))) {
+                            // The mesh still steers detours and keeps its shore and breathing rules.
+                            const glm::vec3 aim = help.detour ? help.aim : target_feet;
+                            const auto along = help.detour ? std::optional<glm::vec3>(help.along) : std::nullopt;
+                            if (step.move) {
+                                if (auto p = nav_->swim_pitch(swim_frame, aim, along)) {
+                                    pitch_ = *p;
+                                    mk.follow_swim = game::mechanics::SwimSteering{*p * 256.0f / glm::pi<float>(), false};
+                                }
+                            }
+                        } else {
+                            const auto swim = game::follow_swim_step(fi, step.move);
+                            mk.follow_swim = game::mechanics::SwimSteering{swim.pitch, swim.vertical_only};
+                        }
                     }
                     if (follow_logged_ != follow || step.move != follow_move_ || (step.move && step.run != follow_run_) ||
                         help.detour != follow_detour_)

@@ -403,7 +403,7 @@ void ClientApp::update_iso_clicks(bool player_moved) {
         if (glm::length(glm::vec2(p - feet_)) > iso_spawn_arrive(hit.id) + 2.0f) return;
         // Facing it, as a player walking up to it would be.
         yaw_ = game::heading_to_yaw(game::heading_to(feet_, p));
-        if (pending.right) right_click_spawn(hit.id);
+        if (pending.right) right_click_spawn(hit.id, right_click_consider_);
         else left_click_spawn(hit.id);
         return;
     }

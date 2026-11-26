@@ -244,6 +244,10 @@ enum class ConnectionState : std::uint8_t {
 
 const char* to_string(ConnectionState state);
 
+inline constexpr std::size_t kChatGroupMaxTitleBytes = 80;
+inline constexpr std::size_t kChatGroupMaxRows = 32;
+inline constexpr std::size_t kChatGroupMaxRowBytes = 1024;
+
 struct ChatEvent {
     enum class Kind : std::uint8_t { System, Say, Tell, Group, Guild, Raid, Shout, Auction, OOC, Emote, Combat, Spell, Other };
     Kind kind = Kind::System;
@@ -254,6 +258,7 @@ struct ChatEvent {
     std::uint32_t color = 0;
     std::string peer; // the player the line is from: a tell's other player (the sender, or whom we told), a channel's
                       // speaker (Hailstone: the modern chat's name links)
+    std::vector<std::string> group; // the group's plain text rows. When nonempty, text is its title.
 };
 
 // Something the client plays a sound for (audio/; the wave each gets is
@@ -532,6 +537,21 @@ public:
     void client_message(std::string text, std::uint32_t rgb = 0) {
         chat(ChatEvent::Kind::System, std::move(text), rgb, 0, {}, std::nullopt, true, true);
     }
+    // Display the surviving lines of a local group as one collapsible entry. Only the individual rows go through
+    // the chat hooks and log. Returns false for invalid input, with no rows submitted.
+    bool write_chat_group(std::string title, std::vector<std::string> messages);
+    // A routine add-on policy notice goes through the normal hooks and log. During a zone transfer, the UI
+    // can present these notices together. The first zone-in has no transfer. `subject` names the script or plugin
+    // the notice is about; `stop` marks a notice that stops it.
+    void zone_client_message(std::string text, std::string subject = {}, bool stop = false);
+    // The transfer's notices, in order. A subject's stop notices with no start after them are `lasting`: the
+    // script or plugin stays stopped, so the UI shows them on their own, outside the collapsed group.
+    struct ZoneClientMessage {
+        std::string text;
+        bool lasting = false;
+        bool operator==(const ZoneClientMessage&) const = default;
+    };
+    std::vector<ZoneClientMessage> take_zone_client_messages();
     // The spell effect stages queued since the last call, in order (cast stages from OP_BeginCast and procs, impact
     // stages from OP_Action 231); a zone change drops those not yet taken.
     std::vector<SpellEffectCue> take_spell_effect_cues() { return std::exchange(effect_cues_, {}); }
@@ -754,6 +774,7 @@ public:
     void set_spell_hit_modes(const game::SpellHitModes& modes) { spell_hit_modes_ = modes; }
     // OP_Consider for the current target; the answer prints the con line.
     void consider();
+    void consider(std::uint32_t spawn_id);
     // unk_SetStandState @0x5a0bc0 (PlayerZoneClient::ChangePosition)
     // for the player: 100 stand, 105
     // kneel (looting, bind wound), 110 sit, 111 crouch, 115 lie down (feign
@@ -911,9 +932,21 @@ public:
     std::optional<ActorRef> captureActorRef(std::uint32_t id) const;
     bool matches(const ActorRef& actor) const;
     void find_target(const std::string& name = {});
-    // The path to a spawn by id, the player facing it when it comes (PlayerPath_FindSpawnByID(id, 1)); for the Find
-    // window (app/lua_ui_find.cpp). False when there is no such spawn.
-    bool find_spawn(std::uint32_t spawn_id);
+    // The path to a spawn by id. `options.face` turns the player toward it when the reply comes; `options.silent`
+    // keeps a background path (the map filter) from playing path sounds or chat. False when there is no such spawn.
+    struct FindPathOptions {
+        bool face;
+        bool silent;
+        constexpr FindPathOptions() : face(true), silent(false) {}
+        constexpr FindPathOptions(bool face_value, bool silent_value = false)
+            : face(face_value), silent(silent_value) {}
+    };
+    bool find_spawn(std::uint32_t spawn_id, FindPathOptions options = {});
+    // True while a shown Find is active or its request is still waiting for a reply. A finished/failed path is not
+    // current, so a background map filter may ask again after the player changes target.
+    bool has_find_path() const;
+    // Changes whenever a shown Find is started, replaced or stopped; lets a background owner yield to the player.
+    std::uint64_t find_path_generation() const { return shown_find_generation_; }
     bool npc_find_enabled() const;
     bool npc_find_allowed(std::uint32_t spawn_id) const;
     // Per-row visibility after the caller has read the map policy for the whole Find list.
@@ -923,8 +956,9 @@ public:
     void find_map_location(const glm::vec3& at);
     // PlayerPath_FindRealEstatePlot (the plot search window's Go with mode 0): the path to a plot.
     void find_real_estate_plot(std::uint32_t plot);
-    // PlayerPath_Stop (the find key / End Find while a path is shown): the path ends with its abort sound.
-    void stop_find_path();
+    // PlayerPath_Stop (the find key / End Find while a path is shown): the path ends with its abort sound unless it
+    // is a silent background path or the caller asks for silence.
+    void stop_find_path(bool audible = true);
     // The navigation's server path (app/navigator.h, a Hailstone addition): the same OP_FindPersonRequest as a find
     // to a spawn, but its reply goes to take_quiet_path() alone: no path drawn, no sound, no chat line, and a shown
     // find path is left as it is.
@@ -2548,6 +2582,9 @@ public:
     void send_command(const std::string& line);
     // Also used for stock social directives, which have their own interpreter.
     bool allow_server_command(std::string_view name);
+    // The same decision without the denial notice, for a feature that keeps running after its command (/mapfilter's
+    // saved options).
+    bool server_command_allowed(std::string_view name) const;
     // A client message by eqstr id (the system colour), as the key commands print them.
     void system_message(std::uint32_t eqstr, std::uint32_t color = 0) { system(eqstr, {}, color); }
     const game::SocialState& social() const { return social_; }
@@ -2682,6 +2719,9 @@ public:
     // The Options window's chat filters: the setting changed, kept in eqclient.ini [Options] and sent to the zone
     // (OP_SetServerFilter: EQEmu leaves out what the filters hide, Client::ServerFilter).
     void change_chat_filter(int filter, std::int32_t value);
+    // Named layout profiles capture the active filters and effective user colours from the character's chat settings.
+    IniFile capture_layout_chat() const;
+    bool apply_layout_chat(const IniFile& chat);
     // The Options window's game options (game/client_options.h): the character's options.ini over eqclient.ini's.
     const game::ClientOptions& client_options() const { return client_options_; }
     bool client_option(game::ClientOption id) const { return client_options_.on(id); }
@@ -3070,6 +3110,9 @@ private:
     void chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0,
               std::string peer = {}, std::optional<std::string> display_text = std::nullopt, bool filter = true,
               bool client_codes = false);
+    bool prepare_chat(ChatEvent& event, std::optional<std::string> display_text, bool filter,
+                      bool group_member = false, bool client_codes = false);
+    void enqueue_chat(ChatEvent event);
     // ReportSuccessfulHit's melee line for an attack by `source`, through the chat filters (`report`: its argument).
     void report_hit(const game::HitLine& line, std::uint32_t source, bool report = true);
     void handle_combat(Op op, const AppPacket& p);
@@ -3190,7 +3233,7 @@ private:
     bool is_raid_delegate(const std::array<std::uint32_t, 3>& ids) const; // 0x57f760 / 790 / 7c0
     void set_target_of_target_window(bool show);            // CTargetOfTargetWnd's Show, through the app
     void find_path_to_player(const std::string& name);
-    void send_find_path(const game::Spawn& to, bool face = false); // PlayerPath_FindSpawnByID / FindGroupMember
+    void send_find_path(const game::Spawn& to, FindPathOptions options = {false});
     void mark_npc_command(const std::string& args, int ability, std::uint32_t usage);
     std::uint32_t group_member_roles(int slot) const; // the role bits (1 tank, 2 assist, 4 puller)
     void grouproles_command(const std::string& args);
@@ -3205,6 +3248,9 @@ private:
     void item_moved_sound(SoundCue::Context context = SoundCue::Context::None);
     SoundCue::Context worn_context(const ItemSlot& from, const ItemSlot& to) const;
     void refresh_worn_slot(int slot);
+    // PlayerClient::DoItemSlot @0x593680 after a move through weapon slot `slot` (11, 13 or 14): the held models
+    // (set_held_model) the hands show now, sent to the zone.
+    void do_item_slot(int slot);
     // PcClient_RefreshWornSlotVisual's instrument bit (0x5923f0): the local player's PlayerState bit 0x10, set when
     // the primary or secondary hand holds an instrument (item types 23..26).
     void refresh_instrument_state();
@@ -3537,6 +3583,11 @@ private:
     bool server_files_changed_ = false;
     void finish_server_files();
     std::deque<ChatEvent> chat_;
+    struct ZoneClientNotice {
+        std::string text, subject;
+        bool stop = false;
+    };
+    std::optional<std::vector<ZoneClientNotice>> zone_client_messages_;
     std::vector<ZonePoint> zone_points_;
     bool zone_change_pending_ = false;
     ZoneChange zone_change_request_; // the pending request, for "not ready" retries
@@ -3721,6 +3772,7 @@ private:
     // stopped or replaced it) still takes its reply, so the later ones keep theirs.
     struct PendingFindRequest {
         bool quiet = false;
+        bool silent = false; // a shown background path: no path sounds or chat
         std::int64_t sent_at = 0;
         bool npc_origin = false;
         bool discard = false;
@@ -3735,13 +3787,14 @@ private:
     std::deque<PendingFindRequest> find_requests_;
     void expire_find_requests(std::int64_t now);
     game::ServerPathLease queue_find_request(bool quiet, bool npc_origin, game::ServerPathOrigin origin,
-                                            std::optional<ActorRef> actor);
+                                            std::optional<ActorRef> actor, bool silent = false);
     bool path_request_current(const PendingFindRequest& request) const;
     void commit_find_request(const game::ServerPathLease& lease);
     void rollback_find_request(const game::ServerPathLease& lease);
     struct QuietPath { PendingFindRequest request; std::vector<glm::vec3> points; };
     std::optional<QuietPath> quiet_path_;
     game::ServerPathLease shown_find_lease_;
+    bool shown_find_silent_ = false;
     std::uint64_t shown_find_owner_ = 0, shown_find_generation_ = 0;
     mutable std::uint64_t interaction_context_ = 0, interaction_player_ = 0;
     mutable const void* interaction_session_ = nullptr;
@@ -4106,8 +4159,9 @@ private:
     std::optional<glm::vec3> path_finish_;
     bool path_settings_loaded_ = false;
     game::PathSettings path_settings_;
-    // Send_OP_FindPersonRequest; `found`: a new find (the stop sound, then PlayerPath_LoadSettings).
-    void send_find(const game::FindRequest& r, bool found = true);
+    // Send_OP_FindPersonRequest; `found`: a new find (the stop sound, then PlayerPath_LoadSettings), `silent`: a
+    // background shown path with no sound or chat.
+    void send_find(const game::FindRequest& r, bool found = true, bool silent = false);
     void path_reply(const AppPacket& p);        // PlayerPath_HandleFindPersonReply
     void path_tick();                           // PlayerPath_Update
     bool find_path_allowed() const;             // retire only a currently restricted NPC Find path

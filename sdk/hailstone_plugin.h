@@ -1229,6 +1229,11 @@ typedef struct PluginHostApi {
     int (*world_placement_start)(void* host);
     int (*world_placement_get)(void* host, HailstoneWorldPlacement* out);
     void (*world_placement_cancel)(void* host);
+    /* Local chat group. Pass a NUL-terminated title (1 to 80 bytes) and 1 to 32 NUL-terminated rows
+     * (1 to 1024 bytes each). The client copies the strings during the call. Returns 1 accepted, 0 invalid or
+     * unavailable. Needs no capability. Call on the client's thread or on a thread using lend_thread. Use
+     * HAILSTONE_HOST_HAS(host, write_chat_group) before calling this appended ABI 4 service. */
+    int (*write_chat_group)(void* host, const char* title, const char* const* lines, uint32_t count);
 } PluginHostApi;
 /* What use_ability and ability_state take: the kinds of ability the Ability Book lists. The values are stable. */
 enum HS_AbilityKinds {

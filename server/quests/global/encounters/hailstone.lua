@@ -1632,6 +1632,7 @@ local management = (function()
 		assets = { player = "boolean" },
 		socials = { mode = "social_mode", caps = "caps", press_commands = "press_commands", faces = "boolean" },
 		abilities = { autoskill = "boolean" },
+		map = { vanilla = "boolean" },
 		movement = { npc_collision = "boolean", passable_ladders = "boolean", solid_ladders = "boolean" },
 		web = { allow = "hosts" },
 		addons = { enforce = "boolean", default = "mode", suggest = "suggest", required = "required",

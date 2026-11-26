@@ -198,6 +198,7 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - Open: anonymous and roleplaying friends, a comparison with RoF2.
 
 ### Combat and spells (do first)
+- [ ] **Right-click consider: RoF2's remaining cases** (docs/mechanics.md "Right click on an NPC"): consider a non-trader player before the inspect, fall through to consider when a merchant, banker, guildmaster or corpse interaction fails, and the USE key's consider within 20.
 - [ ] **Target and pet window buff slot limit.** Check the original's against the 97 the client keeps (`net::kMaxSpawnBuffSlots`, docs/unknowns.md).
 - [x] **Cure counters over multiple effect slots of one buff.**
   - A cure spends against that buff's whole local counter pool and caps it at zero, leaving removal to the server's fade.
@@ -283,6 +284,8 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
   - One instanced model per definition, a few matrices a frame.
   - Without an authored volume, solid where the animation has them, so the rings let a player into the water shaft and out at the top. Seen live 2026-11-18.
   - Authored skeleton volumes keep the trunks solid and the branches passable in Warsliks Woods and other classic zones.
+  - The verified jungle leaf cards are passable in Trakanon's Teeth and other zones that reuse the models, matching
+    their server collision maps (docs/formats/wld.md, "Placed-object animation").
 - [ ] **Animated zone objects, open** (docs/unknowns.md).
   - The phase against the original's clock.
   - D3DX's key compression.
@@ -668,6 +671,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] The item display's placeable, collectible, No Destroy, No Storage and trophy lines (stock EQEmu sends none of this data).
 - [x] **Context tips** for experience, invites, consent, red-con target, world containers and more. Tip table ids fixed (two missing entries had shifted every tip from 0x38); OP_ConsentResponse / OP_DenyResponse handled. Open: the tips listed in unknowns.md.
 - [x] The chat server's per-window channel state is saved.
+- [ ] **Popup STML tables: the rest of RoF2's table markup.** `<caption>`, `<colgroup>`, `<col>`, `rowspan` and `colspan` (and the WIDTH, HEIGHT and BGCOLOR attributes) are read by `CStmlWnd::ParseSTMLTable` @0x8826a0 but not by `lib/stml_blocks.lua`; a table that uses the tags is shown as text (docs/dev-ui.md "LargeDialogWindow").
 - [ ] **The chat log (/log): match the original's file handling.** Trace `CEverQuest::OutputTextToLog` @0x5130c0: opened and closed per line, or held open. The client holds the file open while logging (docs/unknowns.md).
 - [x] Tracking window: the controls run the /track commands, auto update saved (modern checked live).
 - [x] Tracking death cleanup (WORLD-007): tracked-target deaths send the stop request and tracking message;
@@ -730,6 +734,9 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] **Find: Options selects a gold ground line (default) or rainbow strands,** applied at once and saved per character in both UI packs. Live acceptance open.
 - [x] Find: Walk there (the navigator to within 10, the guide path showing; gamepad X). Not tried live.
 - [x] Find: the modern minimap marks the NPCs the map marks (the same kinds and search). Not tried live.
+- [x] **MacroQuest `/mapfilter`** (`mq/map_filter.*`, `app/lua_ui_map.cpp`): the 34 useful MQ2Map options, shared settings, custom searches, spawn and ground marks, colours, markers, vectors, target overlays and TargetPath. The shared C++ map presenter applies them to the large map and minimap; no UI-pack controls were added. Unit and render tests pass; the core filters were tried live.
+- [ ] `/mapfilter vanilla` live acceptance: both packs, mouse and controller, map window and minimap, in-map controls, Find and TargetPath still working, server lock on and off, zoning and restart persistence.
+- [ ] `/mapfilter` live acceptance: a zone with players, NPCs, a pet, a corpse, a ground item and a target; colours, custom search, markers, vectors, circles, TargetPath and restart persistence.
 - [x] **Find: quest givers from the server script** (0x1436 / 0x1437; `quest_npcs`): the NPCs whose own quest file takes hand-ins or talks, made once per zone process and kept. Not tried on a live server.
 - [ ] Find: the gamepad minimap's marks; quest givers measured on a live server (the zone log's line) and the figure put in server/README.md.
 - [ ] A key binding of the client's own (the key window holds only the original's commands): walk to the target; `/nav target` on a hot button meanwhile.

@@ -11,6 +11,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -25,6 +26,7 @@
 #include "core/frame_sections.h"
 #include "core/log.h"
 #include "core/lua_keep.h"
+#include "ui/layout_profile.h"
 
 namespace hailstone::ui::lua {
 
@@ -309,22 +311,28 @@ struct LuaUi::Impl {
     }
 
     // ---- settings: key=value lines, for window options the scripts keep
-    static Settings read_settings(const fs::path& file) {
+    static Settings read_settings(std::istream& input) {
         Settings out;
-        std::ifstream f(file);
         std::string line;
-        while (std::getline(f, line)) {
+        while (std::getline(input, line)) {
             if (!line.empty() && line.back() == '\r') line.pop_back();
             if (auto separator = line.find('='); separator != std::string::npos)
                 out[line.substr(0, separator)] = line.substr(separator + 1);
         }
         return out;
     }
+    static Settings read_settings(const fs::path& file) {
+        std::ifstream input(file);
+        return read_settings(input);
+    }
     // Atomically (core/atomic_file.h): a crash, a full disk or another client reading it never finds it half written.
-    static void write_settings(const fs::path& file, const Settings& values) {
+    static std::string settings_text(const Settings& values) {
         std::string text;
         for (const auto& [k, v] : values) text += k + '=' + v + '\n';
-        write_file_atomic(file, text);
+        return text;
+    }
+    static void write_settings(const fs::path& file, const Settings& values) {
+        write_file_atomic(file, settings_text(values));
     }
     void load_settings() {
         settings = read_settings(settings_file);
@@ -1904,6 +1912,11 @@ LuaUi::~LuaUi() {
 
 bool LuaUi::layout_setting(std::string_view key) { return key.starts_with("hud.") || key == "tasks.listw"; }
 
+static bool layout_profile_setting(std::string_view key) {
+    return (LuaUi::layout_setting(key) && key != "hud.unlocked" && !layout_profile_manager_setting(key)) ||
+           key == "chat.timestamps" || key.starts_with("hotbar.vertical.");
+}
+
 std::string LuaUi::setting(std::string_view key) const {
     if (auto v = impl_->get_setting(key)) return *v;
     return {};
@@ -1914,8 +1927,9 @@ bool LuaUi::set_setting(std::string_view key, std::string_view value) {
 }
 
 bool LuaUi::character_setting(std::string_view key) {
-    return layout_setting(key) || key.starts_with("items.") || key.starts_with("tasks.tracked.") ||
-           key.starts_with("tasks.tracker.") || key.starts_with("tasks.section.") || key == "tasks.category";
+    return layout_setting(key) || layout_profile_setting(key) || key.starts_with("items.") ||
+           key.starts_with("tasks.tracked.") || key.starts_with("tasks.tracker.") ||
+           key.starts_with("tasks.section.") || key == "tasks.category";
 }
 
 void LuaUi::set_character_settings(const fs::path& file) {
@@ -1940,6 +1954,30 @@ void LuaUi::copy_character_layout(const fs::path& from) {
     m.plugin_settings.clear(); // (counted again)
     m.character_dirty = true;
     m.save_settings_now();
+}
+
+std::string LuaUi::capture_layout_profile_settings() const {
+    const Impl& m = *impl_;
+    Impl::Settings snapshot;
+    // Include inherited placement defaults so the same profile can be loaded on another character.
+    for (const auto* settings : {&m.settings, &m.character_settings})
+        for (const auto& [key, value] : *settings)
+            if (layout_profile_setting(key)) snapshot[key] = value;
+    return Impl::settings_text(snapshot);
+}
+
+bool LuaUi::apply_layout_profile_settings(std::string_view snapshot) {
+    Impl& m = *impl_;
+    if (m.character_file.empty()) return false;
+    auto updated = m.character_settings;
+    std::erase_if(updated, [](const auto& entry) { return layout_profile_setting(entry.first); });
+    std::istringstream input{std::string(snapshot)};
+    for (auto& [key, value] : Impl::read_settings(input))
+        if (layout_profile_setting(key) && Impl::storable(key, value)) updated[key] = std::move(value);
+    if (!write_file_atomic(m.character_file, Impl::settings_text(updated))) return false;
+    m.character_settings = std::move(updated);
+    m.character_dirty = false;
+    return true;
 }
 
 lua_State* LuaUi::state() const { return impl_->L; }

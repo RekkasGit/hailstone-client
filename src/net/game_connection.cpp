@@ -80,6 +80,19 @@ bool stops_motion(std::uint8_t state) {
     return state == kStandSitting || state == kStandLooting || state == kStandLying;
 }
 
+bool valid_chat_group_text(std::string_view text, std::size_t max_bytes) {
+    if (text.empty() || text.size() > max_bytes) return false;
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        const auto byte = static_cast<unsigned char>(text[i]);
+        if ((byte < 0x20 && byte != '\t') || byte == 0x7f) return false;
+        if (byte == 0xc2 && i + 1 < text.size()) {
+            const auto next = static_cast<unsigned char>(text[i + 1]);
+            if (next >= 0x80 && next <= 0x9f) return false; // UTF-8 U+0080 through U+009F
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 const char* to_string(ConnectionState s) {
@@ -200,40 +213,103 @@ void GameConnection::fail(std::string message) {
     if (world_session_) world_session_->disconnect();
 }
 
-void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb, std::uint32_t color,
-                          std::string peer, std::optional<std::string> display_text, bool filter, bool client_codes) {
+bool GameConnection::prepare_chat(ChatEvent& event, std::optional<std::string> display_text, bool filter,
+                                  bool group_member, bool client_codes) {
     // MacroQuest's colour codes (game/mq_colors.h) are for the plugins' and scripts' own lines: from anyone else (a
     // server's message, a player's tell) a BEL is taken out, so their text cannot colour the chat. A hook below may
     // still put codes into a line it rewrites, as the plugin's own. The client's own coded lines (client_message) keep
     // theirs.
     if (plugin::caller_name().empty() && !client_codes) {
-        auto drop = [](std::string& t) { std::erase(t, game::kMqColorCode); };
-        drop(text);
-        if (display_text) drop(*display_text);
+        std::erase(event.text, game::kMqColorCode);
+        if (display_text) std::erase(*display_text, game::kMqColorCode);
     }
     if (filter && options_.hooks) { // OnIncomingChat, OnFilterChat (a server's client may drop lines in dsp_chat)
         // A deliberate difference from MQ, whose hook hangs off dsp_chat and sees a hit line as displayed: hooks get
         // the full sentence whatever the hit mode (docs/plugins.md), so a parser matches one form.
-        plugin::ChatLine line{text, rgb, static_cast<int>(kind)};
+        plugin::ChatLine line{event.text, event.rgb, static_cast<int>(event.kind)};
         line.from_code = !plugin::caller_name().empty();
         line.origin_caps = plugin::caller_caps();
-        if (options_.hooks->chat(line) == plugin::Flow::Drop) return;
+        if (options_.hooks->chat(line) == plugin::Flow::Drop) return false;
         // A hook's replacement is authoritative; a precomputed abbreviation no longer describes it.
-        if (line.text != text) display_text.reset();
-        text = std::move(line.text);
-        rgb = line.color;
+        if (line.text != event.text) display_text.reset();
+        event.text = std::move(line.text);
+        event.rgb = line.color;
     }
+    if (group_member && !valid_chat_group_text(event.text, kChatGroupMaxRowBytes)) return false;
     // Hit modes change presentation only: logs and incoming-chat parsers retain the complete sentence.
-    if (text.find(game::kMqColorCode) == std::string::npos) {
-        log::info("chat: {}", text);
-        if (chat_logging()) write_chat_log(text); // dsp_chat's OutputTextToLog (Log on)
+    if (event.text.find(game::kMqColorCode) == std::string::npos) {
+        log::info("chat: {}", event.text);
+        if (chat_logging()) write_chat_log(event.text); // dsp_chat's OutputTextToLog (Log on)
     } else {
-        const std::string plain = game::strip_mq_colors(text); // the logs are plain text
+        const std::string plain = game::strip_mq_colors(event.text); // the logs are plain text
         log::info("chat: {}", plain);
         if (chat_logging()) write_chat_log(plain);
     }
-    chat_.push_back({kind, display_text ? std::move(*display_text) : std::move(text), rgb, color, std::move(peer)});
+    if (display_text) event.text = std::move(*display_text);
+    return true;
+}
+
+void GameConnection::enqueue_chat(ChatEvent event) {
+    chat_.push_back(std::move(event));
     if (chat_.size() > 500) chat_.pop_front();
+}
+
+void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb, std::uint32_t color,
+                          std::string peer, std::optional<std::string> display_text, bool filter, bool client_codes) {
+    ChatEvent event{kind, std::move(text), rgb, color, std::move(peer), {}};
+    if (!prepare_chat(event, std::move(display_text), filter, false, client_codes)) return;
+    enqueue_chat(std::move(event));
+}
+
+bool GameConnection::write_chat_group(std::string title, std::vector<std::string> messages) {
+    if (!valid_chat_group_text(title, kChatGroupMaxTitleBytes) || messages.empty() || messages.size() > kChatGroupMaxRows)
+        return false;
+    if (std::any_of(messages.begin(), messages.end(), [](const auto& message) {
+            return !valid_chat_group_text(message, kChatGroupMaxRowBytes);
+        })) return false;
+
+    ChatEvent group;
+    group.text = std::move(title);
+    group.group.reserve(messages.size());
+    std::vector<ChatEvent> colored;
+    for (auto& message : messages) {
+        ChatEvent row;
+        row.text = std::move(message);
+        if (!prepare_chat(row, std::nullopt, true, true)) continue;
+        if (row.rgb) colored.push_back(std::move(row));
+        else group.group.push_back(std::move(row.text));
+    }
+    // As with zoning notices, keep the hook's color on its own visible line.
+    for (auto& row : colored) enqueue_chat(std::move(row));
+    if (!group.group.empty()) enqueue_chat(std::move(group));
+    return true;
+}
+
+void GameConnection::zone_client_message(std::string text, std::string subject, bool stop) {
+    ChatEvent event{ChatEvent::Kind::System, std::move(text), 0, 0, {}, {}};
+    if (!prepare_chat(event, std::nullopt, true)) return;
+    // Preserve a chat hook's explicit colour on the individual line.
+    if (zone_client_messages_ && event.rgb == 0) {
+        zone_client_messages_->push_back({std::move(event.text), std::move(subject), stop});
+        return;
+    }
+    enqueue_chat(std::move(event));
+}
+
+std::vector<GameConnection::ZoneClientMessage> GameConnection::take_zone_client_messages() {
+    if (!zone_client_messages_) return {};
+    auto notices = std::move(*zone_client_messages_);
+    zone_client_messages_.reset();
+    // A stop a later start of the same script or plugin cancels is routine churn. One with no start after it lasts.
+    std::vector<ZoneClientMessage> messages;
+    messages.reserve(notices.size());
+    for (std::size_t i = 0; i < notices.size(); ++i) {
+        bool lasting = notices[i].stop && !notices[i].subject.empty();
+        for (std::size_t j = i + 1; lasting && j < notices.size(); ++j)
+            if (!notices[j].stop && notices[j].subject == notices[i].subject) lasting = false;
+        messages.push_back({std::move(notices[i].text), lasting});
+    }
+    return messages;
 }
 
 void GameConnection::start(const WorldTicket& ticket) {
@@ -248,6 +324,7 @@ void GameConnection::start(const WorldTicket& ticket) {
     ticket_ = ticket;
     camped_out_.reset();
     link_death_.reset();
+    zone_client_messages_.reset();
     zoning_ = false;
     connect_world(false);
 }
@@ -848,6 +925,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         npc_find_identity_.reset();
         quiet_path_.reset();
         shown_find_lease_ = {};
+        shown_find_silent_ = false;
         ++shown_find_generation_;
         retire_tracking();
         tracking_request_.reset(); tracking_data_.reset(); tracking_actors_.clear();
@@ -2348,6 +2426,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 camp_kind_ = 0;
                 pause_server_management_for_zone();
                 state_ = ConnectionState::Zoning;
+                if (!zone_client_messages_) zone_client_messages_.emplace();
                 reset_fellowship(true);
                 reset_guild_banner();
                 reset_achievements();
@@ -2910,8 +2989,12 @@ void GameConnection::attack_command(const std::string& args) {
 }
 
 void GameConnection::consider() {
+    consider(world_.target_id);
+}
+
+void GameConnection::consider(std::uint32_t spawn_id) {
     if (state_ != ConnectionState::InZone) return;
-    auto it = world_.spawns.find(world_.target_id);
+    auto it = world_.spawns.find(spawn_id);
     // Cmd_consider @0x4df830 prints its lines with dsp_chat_2 (colour 0x111, the default). With no target it is
     // 13063 "Consider whom?"; 12240 "Consider who?" is the reply handler's (CEverQuest::Consider @0x5239a0).
     if (it == world_.spawns.end()) {
@@ -2927,7 +3010,7 @@ void GameConnection::consider() {
     }
     Consider c;
     c.player_id = world_.player_id;
-    c.target_id = world_.target_id;
+    c.target_id = spawn_id;
     // Cmd_consider @0x4df830: spawn type 2 and up (a corpse) sends OP_ConsiderCorpse with the same 20 bytes and no
     // consider tip; the server answers in chat (decay, and a player corpse's resurrection time).
     const auto op = it->second.is_corpse ? Op::ConsiderCorpse : Op::Consider;

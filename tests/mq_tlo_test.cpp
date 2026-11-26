@@ -909,6 +909,9 @@ TEST_CASE("TLO: Me's endurance, AA points, auto fire, cast and gem timers, disci
     CHECK(gem_left <= 5000);
     CHECK(f.p("${Me.GemTimer[1].TotalSeconds}") == std::to_string(gem_left / 1000));
     CHECK(f.p("${Me.GemTimer[5]}") == "NULL");
+    // Past int: no gem, not the one it wraps to (gem 1), nor INT_MIN - 1.
+    CHECK(f.p("${Me.GemTimer[4294967297]}") == "NULL");
+    CHECK(f.p("${Me.GemTimer[2147483648]}") == "NULL");
     // The active discipline: the last buff slot's.
     CHECK(f.p("${Me.ActiveDisc}") == "NULL");
     CHECK(f.p("${Bool[${Me.ActiveDisc.ID}]}") == "FALSE");
@@ -938,6 +941,7 @@ TEST_CASE("TLO: Me.AltAbility by name or ability id, with its rank, reuse and sp
     aa.owned = {{1003, 3, 0}};
     CHECK(f.p("${Me.AltAbility[Innate Strength]}") == "5");
     CHECK(f.p("${Me.AltAbility[5].Name}") == "Innate Strength");
+    CHECK(f.p("${Me.AltAbility[4294967301]}") == "NULL"); // 5 + 2^32: no group, not group 5
     CHECK(f.p("${Me.AltAbility[innate strength].ID} ${Me.AltAbility[5].Rank} ${Me.AltAbility[5].MaxRank}") == "5 3 5");
     CHECK(f.p("${Me.AltAbility[5].ReuseTime} ${Me.AltAbility[5].Passive}") == "600 FALSE");
     CHECK(f.p("${Me.AltAbility[5].Spell} ${Me.AltAbility[5].Spell.ID} ${Me.AltAbility[5].Spell.Mana}") ==
@@ -1030,6 +1034,8 @@ TEST_CASE("TLO: item members E3 reads (ItemReady, Timer, Clicky, stacks, worn sl
     // An item without a click effect is never ready and has no timer.
     CHECK(f.p("${Me.ItemReady[Healing Potion]} ${FindItem[Healing Potion].Timer}") == "FALSE NULL");
     CHECK(f.p("${Me.ItemReady[Nothing Like It]}") == "FALSE");
+    // Past uint32: no item, not the id it wraps to (6001), and -1 is not 0xffffffff.
+    CHECK(f.p("${Me.ItemReady[4294973297]} ${Me.ItemReady[-1]}") == "FALSE FALSE");
     // Stacks over the packs and their bags (5 + 2 of 20 each).
     CHECK(f.p("${FindItem[Healing Potion].StackCount} ${FindItem[Healing Potion].FreeStack}") == "7 33");
     CHECK(f.p("${FindItem[Wand].StackCount} ${FindItem[Wand].FreeStack}") == "0 0");

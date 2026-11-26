@@ -2,13 +2,24 @@
 
 ## Unreleased
 
+- Other players see weapons, shields and instruments change or disappear when you swap equipment or activate a bandolier set. As in the original, placing a range item shows it in your off hand, with the main hand empty, until your next melee swing.
+- Right-clicking a parcel in the Modern merchant window opens its item details. Alt-right-click still opens window settings.
+- Right-clicking an ordinary NPC shows its Consider message in chat. **Right-Click to Consider** is on by default and can be switched off in Options.
+- Item, say, and achievement links use the chat link color while you compose a message in Modern or Gamepad. Text a script or the on-screen keyboard puts in the chat field while you type now shows at once, with the cursor at its end.
+- Stock and enhanced autofollow match a swimmer's depth, including near the surface and within the horizontal stop distance.
+- Incoming trade messages in chat show a clickable item name so you can inspect what the other player offered.
+- The blue fallback Chat window stays hidden when Modern chat is active, even after moving every tab out of window 1.
+- Chat groups routine Lua and plug-in notices from each zone transfer in a gold **Client System Messages [n]** row. Select the row to read the notices. A script or plug-in that stays stopped after the transfer still shows its notice on its own line. First sign-in shows each notice individually. Lua scripts and compiled plug-ins can post their own titled groups.
+- Save named window and chat Layout Profiles in Modern and Gamepad. See the saved window arrangement in Visual Preview, save your current layout before switching if needed, and undo the last apply. Open the manager from the EQ menu or with `/layoutprofiles`. Interfaces reach them through `hs.UI.layoutProfiles` (UI API 1.12).
+- Modern chat timestamps and Gamepad vertical hotbar settings are now saved per character, where every character shared them before. Each character starts from the shared setting it had.
+- Server popups display STML tables in aligned rows and columns in Modern and Gamepad.
 - `${Window[...]}` answers from the client's own state for the casting, spell book, loot, merchant, bank, trade, give and dialog windows and `pack1`..`pack10`, so scripts that ask whether one is open work with no UI.
-- New command `/beep` (MacroQuest's): plays a sound. Individual Sounds has a Beep volume and a Beep sound choice: a tone or any of your game folder's sounds.
-- `/echo` and `/popupecho` take MacroQuest's colour codes when you type them (`\ayYellow \agGreen\ax`), and `\n` for a new line.
-- New commands `/popup`, `/popcustom` and `/popupecho`, as in MacroQuest: a line in the centre of the screen, with a colour and a time, and for `/popupecho` in chat too. E3 shows its alerts with them.
-- `${FindItem[...]}` and `${FindItemCount[...]}` take an item id as well as a name, as in MacroQuest.
-- Scripts' window reads and `/notify` keep working while the interface is reloading or failed to load.
-- New TLOs, as in MacroQuest: `${FindItemBank[...]}` and `${FindItemBankCount[...]}` search the bank and shared bank (bags included, by name or item id) with no banker open, and `${AltAbility[...]}` finds any AA by name or id, owned or not. E3 checks its bank before looting or selling with them.
+- New command `/beep` (MacroQuest's): plays a sound. Individual Sounds has a Beep volume and a Beep sound choice: a tone or any of your game folder's sounds.
+- `/echo` and `/popupecho` take MacroQuest's colour codes when you type them (`\ayYellow \agGreen\ax`), and `\n` for a new line.
+- New commands `/popup`, `/popcustom` and `/popupecho`, as in MacroQuest: a line in the centre of the screen, with a colour and a time, and for `/popupecho` in chat too. E3 shows its alerts with them.
+- `${FindItem[...]}` and `${FindItemCount[...]}` take an item id as well as a name, as in MacroQuest.
+- Scripts' window reads and `/notify` keep working while the interface is reloading or failed to load.
+- New TLOs, as in MacroQuest: `${FindItemBank[...]}` and `${FindItemBankCount[...]}` search the bank and shared bank (bags included, by name or item id) with no banker open, and `${AltAbility[...]}` finds any AA by name or id, owned or not. E3 checks its bank before looting or selling with them.
 - `${Window[...].Child[...]}` reads a window's child as MacroQuest does (`Text`, `Enabled`, `Value`, `List`, `Open`), from the window's own state, so E3's merchant, trade, quantity and gauge reads work with no UI drawn. The window methods `DoOpen`, `DoClose`, `LeftMouseUp` and `RightMouseUp` act as they are read, and `/invoke` is accepted, so E3's `/invoke ${Window[InventoryWindow].DoOpen}` opens it for a following `Window[...].Open`.
 - `/notify` runs everything E3 presses from the client's own state, UI or none: merchant buy and sell with their quantity, coin and alternate currency buttons, task and respawn choices, raid lock, and the confirmation box's questions.
 - New command `/notify` (MacroQuest's): clicks a window's button, or selects a list row or tab, by MacroQuest's window and child names. E3 accepts trades and gives, finishes looting and answers dialogs with it; those buttons work with no UI too.
@@ -27,7 +38,6 @@
   - on `${Group}`: `Present`, `Injured[pct]`, `LowMana[pct]`, and `Member[n].PctAggro`.
 - New TLOs `${Raid}` (`.Members`, `.Leader`, `.Member[n|name]` with `.Name`, `.Group`, `.Class` ... and the member's spawn) and `${Corpse}` (`.Open`, `.Items`, `.Item[n|name]` with every item member), as in MacroQuest, and new members `${Me.Invulnerable}`, `${Me.Mount}`, `${Me.CurrentFavor}`, `${Me.TributeActive}`, `${Me.SpellShieldBonus}`, `${Me.SpellDamageBonus}`, `${Me.PetBuff[n|name]}`, and a spell's or buff's `CounterType` and `CounterNumber`.
 - `${Spell[...].Duration}` is now in ticks at your level, as in MacroQuest, where it gave the spell file's longest duration in milliseconds.
-
 - Under a Barbarian, Troll or Ogre citizen illusion (races 90, 92 and 93), Slam and Bash need the Bash skill, instead of sending an attack the server ignores, but no shield: Slam never needs one (the original client asked those forms for a shield; the server does not)
 - A game archive in the asset folder that another program shortens while Hailstone runs (a patcher writing in place) no longer crashes the client on Linux; what can no longer be read from it is treated as a damaged file
 - Under an add-on or hand-made interface, deleting a character or bulk-destroying items asks in a window of the client's own, so the question always appears (before, an interface that drew no confirmation box left the action waiting with no prompt)
@@ -57,6 +67,9 @@
   command rules can require a minimum GM status, and the add-on command list updates as commands register.
   The encounter keeps a backup of each previous configuration. **Reload policy** keeps your draft and shows
   settings that changed on the server.
+- Players can run through the leaves of jungle plants in Trakanon's Teeth, Emerald Jungle and other zones that reuse those models. The stems and trunks still block movement.
+- Fixed bright rectangles around faerie dragon wings in The Wakening Land.
+- South Karana's classic gnolls animate while patrolling instead of sliding in a fixed pose.
 - Plugins and scripts can colour their chat lines with MacroQuest's colour codes (`\ag`, `\a-w`, `\a#336699`, `\ax` ...), as `WriteChatColor` takes them. A server's message or a player's text cannot: its codes are left out.
 - C++ plugins can include the SDK's new `hailstone_plugin.hpp` to register commands and TLOs as lambdas that capture `this` and other values, as MacroQuest's `mq::AddCommand` does.
 - New TLOs `${MacroQuest.Path[config]}` and `${Hailstone.Path[config]}`: the folder for scripts' settings, `scripts/config` in Hailstone's folder. Plugins can also get it from the SDK's new `get_scripts_config_dir`.
@@ -78,6 +91,8 @@
 - Plugins can ask whether a command exists with the SDK's new `command_exists`. It says whether a plugin, a script or the client added the command, or whether it is one of the game's own.
 - Modern Spell Gems has optional spell names, a background toggle, and resize grips that wrap the tiles into rows and columns. Icon size is adjustable, and existing layouts keep their defaults
 - Native add-ons can preview and confirm a mouse-aimed ground position through the world placement SDK. **Plugin authors:** `world_capabilities` now reports `HAILSTONE_WORLD_PLACEMENT` in the zone before a geometry frame is ready; test `HAILSTONE_WORLD_GEOMETRY` for the frame
+- `/mapfilter` brings MacroQuest's map filters to Hailstone: spawn types, colours, target lines, paths and circles, markers, vectors and custom spawn searches. `on` and `off` work as aliases for `show` and `hide`. The settings are shared by every character; target lines and circles also reach into the minimap from an off-screen target, and TargetPath leaves player-started routes alone without turning or making sounds. NPC marks follow the server's NPC map policy as the Find overlays do, so a server that hides NPCs or turns off NPC Find does not show them through `/mapfilter`. A server whose command rules block `/mapfilter` also switches the saved filters and TargetPath off while you play there. TargetPath (Hailstone's own; MacroQuest's only lets a right-click on a map label through) asks for a path once the target has stayed selected for half a second, and at most once a second
+- `/mapfilter vanilla` shows only the map background, without labels, marks, routes or overlays, while navigation keeps working. A server can lock it on with `[map] vanilla = on` in `hailstone.cfg` (or the Vanilla maps switch in Server Management) without changing the player's saved choice. A server's `[commands]` rules treat `/mapfilter` as one of Hailstone's built-in commands (`non_rof2`), not an add-on's. Vanilla maps keep the packs' own text and controls (the Modern map's Viewing bar, route banner and "No map" notice, the gamepad map's zoom label) and leave out only the Modern pack's markers, Find marks and exits; add-ons can ask `hs.UI.map.Vanilla()` (UI API 1.11)
 - Trees with authored collision hulls let players move through their branches while their trunks still block movement. This fixes the invisible walls near the Field of Bone entrance to Warsliks Woods and in other classic zones
 - Decorative slime no longer blocks movement over the Veksar ramp and doorway or through passages in several Lost Dungeons of Norrath layouts
 - Spells that require line of sight now report “You cannot see your target” before casting through a solid door or moving obstacle
@@ -116,6 +131,7 @@
 - Gamepad Loot: LB no longer loots everything while the window's Loot All is disabled
 - Gamepad character select: the Delete and Return Home questions start on Cancel, so an A press carried over can't answer them
 - **Plugin authors:** a table or function a plugin window hands the UI pack's code (an argument to a pack function, or what its callback returns or raises) now reaches the pack as a view, as what it writes into the pack's shared tables does, so a pack that keeps it and uses it later runs the plugin's code as the plugin, never with the player's authority. `next` and `rawget` see nothing through such a view, and the plugin's metamethods for `==`, `<`, `..`, calls and `tostring` no longer run from the pack's code
+- `/who` shows illusion race names such as Skeleton, Tree, and Earth Elemental where it showed a numeric race code
 
 ## 0.7.3-beta (2026-11-23)
 

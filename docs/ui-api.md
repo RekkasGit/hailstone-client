@@ -19,6 +19,25 @@ Use dot calls. Methods are grouped by service (`session`, `character`, `inventor
 `tasks`, `achievements`, `map`, `scripts`, `plugins`, `pregame`, `gamepad`, ...). The full generated mapping is in
 [UI API Reference](ui-api-reference.md).
 
+## Layout profiles
+
+API 1.12 adds `hs.UI.layoutProfiles`. It is available to interface code during a character session. `List()` returns saved
+names for the active pack. `Preview(name)` returns
+`{name, width, height, windows, chat, rects}` or `nil, reason`.
+`rects` lists `{name, x, y, w, h}` window bounds in pixels at the saved screen size. An empty list means
+no window geometry is available. Previewing leaves the current layout in use. `Save(name[, overwrite])` returns `true` or
+`false, reason[, code]`. If a name is taken, the code is `"exists"`. Ask the player before retrying with
+`overwrite=true`.
+
+`Apply(name[, discard_unsaved])` needs a preview of that profile first, then reads the saved file again, so a
+later overwrite from another client is the one applied. If the current layout does not match
+a saved profile, it returns `false, reason, "unsaved"`. An interface can offer to save the current setup or retry
+with `discard_unsaved=true` after the player chooses to apply without saving. Apply and `Undo()` otherwise return
+`true` or `false, reason`. `CanUndo()` reports whether the current
+session has a previous layout to restore. `Generation()` increases when the new positions take effect
+at the start of the next UI frame. Open pack dialogs can use that signal to refresh their placement.
+Script and plugin callers cannot read or change the saved profiles.
+
 ## Chat tabs and windows
 
 `hs.UI.chat.Windows([into])` lists visible chat windows in slot order: `slot` identifies the window, `tab` is the
@@ -45,6 +64,13 @@ can move during the session.
 Tab records expose `unread` (also with flashing off), `flash`, `flashColor` (nil for red) and `highlighted` (draw the
 highlight this frame). A background message flashes the label every half second for five seconds, then leaves it
 highlighted until selected. Mutations need `commands`. Feature-check with `hs.UI.Supports('chat', 'SplitTab')`.
+
+`hs.UI.chat.Text(slot, version, names, timestamps, incremental, groups)` accepts an optional sixth argument.
+When true, a chat group occupies one STML entry. Its coloured heading shows the title and count in both states
+and carries a `WndNotify="1003,id"` disclosure link. An expanded group includes its messages on subsequent lines.
+An interface can use
+`hs.UI.chat.Link(slot, 1003, id)` to toggle the group in that tab. The toggle resets its cached text. Calls that
+omit the sixth argument receive the individual messages as ordinary lines.
 
 ## Optional world nameplate presentations
 
@@ -262,6 +288,10 @@ local handle, reason = hs.UI.map.RegisterOverlay(function(view)
 end, {priority = 0})
 ```
 
+Vanilla maps (`/mapfilter vanilla`, a server's `[map] vanilla`) call no overlays. Code that draws over a map itself,
+after `hs.DrawZoneMap` or `hs.DrawMinimap`, asks `hs.UI.map.Vanilla()` and leaves its marks out while it is true,
+keeping its text and controls.
+
 `view` is one plain table, read-only by convention:
 
 | Field | Meaning |
@@ -453,6 +483,12 @@ API 1.10 adds an optional argument to `map.ZoneName` (flat `hs.ZoneName`): `Zone
 number that changes on every entry into the world, the same zone again included, and is nil outside the world.
 Without the argument it returns the name and short name as before. Compare it for equality only. The packs' map
 windows keep their zoom and centre while closed and reset them when it changes; an older host returns no third value.
+
+## Vanilla maps
+
+API 1.11 adds `map.Vanilla()` (flat `hs.MapVanilla`): true while the maps are vanilla (`/mapfilter vanilla`, or a
+server's `[map] vanilla`). The maps then draw only their lines and call no overlays; a pack or add-on that draws its
+own marks over a map leaves them out, keeping its text and controls (docs/plugins.md "Vanilla maps").
 
 ## Discovering optional features
 

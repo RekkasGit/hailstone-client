@@ -1356,6 +1356,21 @@ TEST_CASE("native plugins: web pages of the plugin's own (ABI 3), under 'web', c
 }
 #endif
 
+TEST_CASE("native plugins: write_chat_group writes bounded local chat without chat permission") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapCommands);
+    REQUIRE(h.plugins->load("HostProbe"));
+    h.run("/probechatgroup");
+    CHECK(h.printed_line("[Probe] chat group: accepted 1, count 0, title 0, empty 0, row 0, thread 0"));
+    auto event = h.world.conn->poll_chat();
+    REQUIRE(event);
+    CHECK(event->text == "Probe Status");
+    const std::vector<std::string> expected{"First probe row.", "Second probe row."};
+    CHECK(event->group == expected);
+    CHECK_FALSE(h.world.conn->poll_chat());
+    CHECK(h.packets.empty());
+}
+
 TEST_CASE("native plugins: host functions from another thread do nothing; the caller's capabilities are none there") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);

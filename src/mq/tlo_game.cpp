@@ -1557,6 +1557,8 @@ std::optional<net::ItemSlot> find_carried(const Context& c, std::string_view ind
     std::optional<net::ItemSlot> found;
     std::int64_t id = 0;
     const bool by_id = parse_int(index, id);
+    // An id past uint32 is no item's (4294967296 + id would otherwise match id, -1 would match 0xffffffff).
+    if (by_id && (id < 0 || id > std::numeric_limits<std::uint32_t>::max())) return std::nullopt;
     each_carried(c, [&](const net::ItemSlot& s, const net::Item& it) {
         if (by_id ? it.id == static_cast<std::uint32_t>(id) : item_name_matches(it, index)) {
             found = s;
@@ -1594,7 +1596,9 @@ const game::AltAbility* owned_aa(const Context& c, std::string_view index) {
     if (!c.conn || index.empty()) return nullptr;
     const auto& aa = c.conn->alt_adv();
     std::int64_t group = 0;
-    if (parse_int(index, group)) return aa.owned_rank(static_cast<std::int32_t>(group));
+    if (parse_int(index, group)) // a group id past int32 is no group (it would wrap onto one)
+        return group >= 0 && group <= std::numeric_limits<std::int32_t>::max()
+                   ? aa.owned_rank(static_cast<std::int32_t>(group)) : nullptr;
     for (const auto& o : aa.owned) {
         const game::AltAbility* a = o.id ? aa.get(o.id) : nullptr;
         if (a && (iequals(c.conn->aa_name(*a), index) || iequals(c.conn->aa_display_name(*a), index))) return a;
@@ -1681,7 +1685,7 @@ void register_e3_members() {
         std::int64_t n = 0;
         int gem = -1;
         if (parse_int(index, n)) {
-            gem = static_cast<int>(n) - 1;
+            if (n >= 1 && n <= game::kSpellGems) gem = static_cast<int>(n) - 1; // as SpellReady (2147483648 is no gem)
         } else {
             for (int i = 0; i < game::kSpellGems && gem < 0; ++i) {
                 const game::SpellData* s = spell_data(ctx, st.gems[static_cast<std::size_t>(i)].spell);

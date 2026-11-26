@@ -841,12 +841,23 @@ public:
         return &data_;
     }
 
-    // Hailstone: "ItemList:<row>", the merchant's item on that row of the list as last read (hs.SlotItem,
-    // hs.CompareSlotItem: the item comparison of a row under the mouse).
+    // Hailstone: "ItemList:<row>" refers to a goods row as last read. "ParcelList:<slot>" uses the parcel's
+    // server slot so a change in the order of the visible rows cannot change the item being inspected.
     const net::Item* slot_item(UiHost& host, std::string_view id) override {
         const auto* m = session(host);
+        if (!m) return nullptr;
+        constexpr std::string_view parcel_prefix = "ParcelList:";
+        if (id.starts_with(parcel_prefix)) {
+            if (page_ != 2) return nullptr;
+            const auto key = id.substr(parcel_prefix.size());
+            std::uint32_t slot = 0;
+            auto [end, ec] = std::from_chars(key.data(), key.data() + key.size(), slot);
+            if (ec != std::errc() || end != key.data() + key.size()) return nullptr;
+            const auto it = m->parcels.find(slot);
+            return it == m->parcels.end() ? nullptr : &it->second.item;
+        }
         const int row = index_after(id, "ItemList:");
-        if (!m || row < 0 || row >= static_cast<int>(slots_.size())) return nullptr;
+        if (row < 0 || row >= static_cast<int>(slots_.size())) return nullptr;
         auto it = m->items.find(slots_[static_cast<std::size_t>(row)]);
         return it == m->items.end() ? nullptr : &it->second;
     }

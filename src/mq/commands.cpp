@@ -11,6 +11,7 @@
 #include "game/doors.h"
 #include "game/world_state.h"
 #include "mq/nav_commands.h"
+#include "mq/map_filter.h"
 #include "mq/parse.h"
 #include "mq/spawn_search.h"
 #include "mq/typed_escapes.h"
@@ -115,6 +116,10 @@ bool movement_key(std::string_view c) {
 }
 
 Commands::Commands(CommandEnv env) : env_(std::move(env)) {
+    if (!env_.map_filters) {
+        own_map_filters_ = std::make_unique<MapFilters>();
+        env_.map_filters = own_map_filters_.get();
+    }
     plugin::Hooks& h = *env_.hooks;
     owner_ = h.new_owner("mq");
     h.on_command_line(owner_, [this](std::string& line) {
@@ -130,6 +135,7 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
     h.add_command(owner_, "/echo", [this](std::string_view args) {
         say_coded(typed_line(args, !plugin::caller_name().empty()));
     });
+    h.add_command(owner_, "/mapfilter", [this](std::string_view args) { map_filter(args); }, plugin::kCapCommands);
     h.add_command(owner_, "/noparse", [this](std::string_view args) {
         const bool before = std::exchange(noparse_, true);
         run_nested(args);
@@ -387,6 +393,13 @@ void Commands::run_timed() {
     }
 }
 
+void Commands::map_filter(std::string_view args) {
+    const Context& ctx = env_.context();
+    MapFilterCommandInput input;
+    input.guild = ctx.conn ? &ctx.conn->guild() : nullptr;
+    run_map_filter_command(*env_.map_filters, args, input, [this](std::string_view line) { say(std::string(line)); });
+}
+
 void Commands::say(const std::string& text) const {
     if (env_.echo && squelch_ == 0) env_.echo(text);
 }
@@ -411,8 +424,11 @@ void Commands::filter(std::string& line, plugin::Flow& flow) {
     std::string word = first_word(line);
     // ${...} (a read: scripts and plugins need the read permission) unless /noparse is running the line or a window
     // sends it (LiteralLine).
-    // /timed's line is expanded when it runs, not now (MQ registers it unparsed).
-    if (!parsed && !noparse_ && g_literal_lines == 0 && !iequals(word, "/noparse") && !iequals(word, "/timed") &&
+    // /timed's line is expanded when it runs, not now, and /nomodkey, /shiftkey and /ctrlkey run theirs through the
+    // filters again, where it is expanded once (MQ registers all four unparsed).
+    const bool unparsed = iequals(word, "/timed") || iequals(word, "/nomodkey") || iequals(word, "/shiftkey") ||
+                          iequals(word, "/ctrlkey");
+    if (!parsed && !noparse_ && g_literal_lines == 0 && !iequals(word, "/noparse") && !unparsed &&
         line.find("${") != std::string::npos) {
         if ((plugin::caller_caps() & plugin::kCapRead) == 0) {
             if (env_.echo) env_.echo(std::format("[MQ] {}: ${{...}} needs the server's 'read' permission", plugin::caller_name()));

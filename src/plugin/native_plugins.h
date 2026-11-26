@@ -43,6 +43,9 @@ struct NativeEnv {
     mq::Registry* registry = nullptr;
     std::function<const mq::Context&()> context;
     std::function<void(const std::string& text, std::uint32_t color)> print; // a chat line
+    // A routine automatic load or unload during zoning: `subject` names the plugin ("plugin:<name>"), `stop` is true
+    // when the notice unloads it (as ScriptEnv::zone_notice).
+    std::function<void(const std::string& text, const std::string& subject, bool stop)> zone_notice;
     std::function<void(const std::string& line)> run;                        // a command line (through the hooks)
     std::function<void(Stream stream, const net::AppPacket& p)> send;        // a packet to the server
     std::function<void*()> imgui_context;
@@ -149,7 +152,7 @@ public:
 
     // After the server's rules changed: unloads what they no longer allow; loads the server's own plugins and the
     // allowed ones `autoload` names ("*" all) that are not loaded yet.
-    void policy_changed(const std::vector<std::string>& autoload);
+    void policy_changed(const std::vector<std::string>& autoload, bool zone_policy = false);
     // Required add-ons are active, and no loaded plugin is forbidden by the current add-on rules. False with an
     // empty problem waits for native-code consent; a nonempty problem is a refusal or a load failure.
     bool required_addons_ready(std::string* problem = nullptr) const;
@@ -181,8 +184,8 @@ private:
     // Who loads: the player (asks, after a "Don't allow" too), the rules' automatic loads (ask only about a plugin
     // never answered) or a plugin or script (never asks).
     enum class Asker : std::uint8_t { Player, Rules, Script };
-    bool load_file(std::string_view name, std::string* why, Asker asker);
-    bool unload_file(std::string_view name);
+    bool load_file(std::string_view name, std::string* why, Asker asker, bool zone_policy = false);
+    bool unload_file(std::string_view name, bool zone_policy = false);
     bool check_required_addons(std::string* problem) const; // required_addons_ready's work, uncached
 
     std::unique_ptr<Impl> impl_;

@@ -208,6 +208,27 @@ TEST_CASE("command catalog: stock aliases, extended commands, and live add-on re
     CHECK_FALSE(groups.allowed("/timed", 250));
     CHECK(groups.allowed("/exchange", 250));
     CHECK(groups.allowed("/unequip", 250));
+    const auto mapfilter = find("/mapfilter");
+    REQUIRE(mapfilter != rows.end());
+    CHECK(mapfilter->origin == plugin::CommandOrigin::Extended);
+    CHECK(mapfilter->groups == std::vector<std::string>{"non_rof2"});
+    // A built-in command: blocking add-on commands leaves it alone, blocking non_rof2 does not.
+    CHECK(plugin::parse_server_cfg("[commands]\nblock_groups = addon_commands\n").commands.allowed("/mapfilter"));
+    CHECK(plugin::parse_server_cfg("[commands]\nblock_groups = non_rof2\n").commands.decision("/MapFilter").reason ==
+          "non_rof2");
+    // PR 210's commands are built in too; /click and /memspell are their own, not RoF2's /clickthrough and
+    // /memspellset taken by prefix, and the modifier-key commands are helpers like /docommand.
+    for (const char* name : {"/click", "/ctrlkey", "/doortarget", "/itemnotify", "/makemevisible", "/memspell",
+                             "/nomodkey", "/removeaura", "/removelev", "/shiftkey"}) {
+        CAPTURE(name);
+        const auto row = find(name);
+        REQUIRE(row != rows.end());
+        CHECK(row->origin == plugin::CommandOrigin::Extended);
+        CHECK(plugin::canonical_command_name(name) == name);
+    }
+    CHECK(plugin::canonical_command_name("/clickthrough") == "/clickthrough");
+    CHECK(find("/nomodkey")->groups == std::vector<std::string>{"non_rof2", "command_helpers"});
+    CHECK(plugin::parse_server_cfg("[commands]\nblock_groups = addon_commands\n").commands.allowed("/itemnotify"));
     auto target = find("/target");
     REQUIRE(target != rows.end());
     CHECK(target->origin == plugin::CommandOrigin::Stock);
@@ -241,6 +262,12 @@ caps = read,target,actions,move
 press_commands = 3
 faces = no
 
+[abilities]
+autoskill = on
+
+[map]
+vanilla = on
+
 [web]
 allow = Example.org, wiki.example.net
 )",
@@ -255,6 +282,7 @@ allow = Example.org, wiki.example.net
     CHECK(r.social_caps == (plugin::kCapRead | plugin::kCapTarget | plugin::kCapActions | plugin::kCapMove));
     CHECK(r.social_press_commands == 3);
     CHECK_FALSE(r.social_faces);
+    CHECK(r.map_vanilla);
     CHECK(r.web_allow == std::vector<std::string>{"example.org", "wiki.example.net"});
 
     auto d = plugin::parse_server_cfg("");
@@ -263,6 +291,7 @@ allow = Example.org, wiki.example.net
     CHECK(d.player_plugin_caps == 0);
     CHECK(d.player_assets);
     CHECK(d.social_mode == plugin::ButtonMode::Press);
+    CHECK_FALSE(d.map_vanilla);
     CHECK(d.web_allow.empty());
 
     // "player = on" alone: every capability.
@@ -281,6 +310,18 @@ allow = Example.org, wiki.example.net
     CHECK(a.script_sections["autocombat"]["hunter"] == "off");
     CHECK(a.script_sections["autocombat"]["assist"] == "on");
     CHECK(r.script_sections.empty());
+}
+
+TEST_CASE("hailstone.cfg: [map] vanilla defaults off and warns on an invalid value") {
+    CHECK_FALSE(plugin::Rules{}.map_vanilla);
+    CHECK_FALSE(plugin::parse_server_cfg("").map_vanilla);
+    CHECK_FALSE(plugin::parse_server_cfg("[map]\nvanilla = off\n").map_vanilla);
+    std::vector<std::string> warnings;
+    CHECK(plugin::parse_server_cfg("[Map]\nVanilla = ON\n", &warnings).map_vanilla);
+    CHECK(warnings.empty());
+    CHECK_FALSE(plugin::parse_server_cfg("[map]\nvanilla = maybe\n", &warnings).map_vanilla);
+    REQUIRE(warnings.size() == 1);
+    CHECK(warnings.front() == "[map] vanilla: \"maybe\" is not on or off");
 }
 
 TEST_CASE("server_rules: none without hailstone.cfg; its own scripts and plugins listed; a changed cfg gives defaults") {

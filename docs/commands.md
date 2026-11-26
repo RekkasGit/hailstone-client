@@ -156,7 +156,7 @@ discipline's name may leave out its rank.
 | Command | What it does |
 |---|---|
 | `/book [close]` | The spell book. |
-| `/memspellset <name>` | Memorize a saved spell set. |
+| `/memspellset <name>` | Memorize a saved spell set. Spell it out: `/memspell` is now MacroQuest's command (below), where RoF2 took it for this one. |
 | `/spellscribe` | Scribe the spell scrolls you carry. |
 | `/alternateadv on <percent> \| off \| list \| buy <id> \| activate <id>` | AA experience split, and listing, buying or using abilities. |
 | `/resetaas` | Ask the server to reset your AAs (the server decides). |
@@ -192,6 +192,7 @@ discipline's name may leave out its rank.
 | `/hotbutton <name> [colour] <text>` | Make a hot button from a line and put it on the cursor. |
 | `/loadskin <name> [keep]` | Load a UI skin. |
 | `/copylayout` | Open Copy Layout to copy another character's layout and optionally their keyboard bindings. For a direct copy with arguments, use a bare file name beside the current layout file. |
+| `/layoutprofiles` | Open Layout Profiles to save a named setup, preview its saved window size and contents, apply it to the active character, or undo the last apply. |
 | `/import` | List character INIs in the configured game data folder and preview eligible socials and hotbar buttons for the active character. Apply and restore require confirmation in the dialog. |
 | `/fontface <name>` | The UI font. |
 | `/viewport reset`, `/viewport <x> <y> <w> <h> [scale]` | The 3D view's area on screen. |
@@ -201,7 +202,7 @@ discipline's name may leave out its rank.
 | `/particledensity <0..3 \| off \| low \| med \| high>`, `/showspelleffects [on\|off]` | Spell effects. |
 | `/bodytint` | The body tint window. |
 | `/facepick` | Change your face (player customization). |
-| `/clickthrough` | Click through windows. |
+| `/clickthrough` | Click through windows. Spell it out: `/click` is now MacroQuest's command (below), where RoF2 took it for this one. |
 | `/mousespeed <n>` | The pointer speed, 0..10 (a number past either end is held to it: the original kept it as typed). |
 | `/combatmusic [on\|off]`, `/mixahead <1..100>`, `/reversesound <normal\|reverse>` | Sound settings. |
 | `/feedback`, `/bugreport`, `/report <name>`, `/petition <text>`, `/guidehelp <text>`, `/survey` | Feedback, bug report, reporting a player, petitions. |
@@ -271,6 +272,7 @@ one, the server's add-on rules decide whether it may.
 | `/moveto loc <y> <x> [z] \| id [#] \| dist <n> \| off` | Walk in a straight line, without the mesh; it stops within 10 unless `dist` (or `mdist`, also inline after `loc` or `id`) set another distance. |
 | `/stick [<distance>] [behind] [id <#>]`, `/stick off`, `/stick pause`, `/stick unpause` | Stay with the target or a spawn. MQ2MoveUtils' `hold`, `snaproll`, `uw`, `delaystrafe`, `moveback` and `imsafe` are taken too (docs/navigation.md). |
 | `/target ...`, `/face ...` | Target or face by MacroQuest's spawn search (`/target` is above). |
+| `/mapfilter [help \| option [show\|hide\|on\|off] \| color R G B \| radius]` | MacroQuest's map filters: spawn types, colours, target lines, paths and circles, markers, vectors and custom spawn searches. `vanilla` shows only the map background, without labels, marks, routes or overlays; navigation keeps working. Settings are shared by every character; a custom search lasts until cleared or the client exits. `on`/`off` are aliases for `show`/`hide`. `targetpath` is Hailstone's own: it keeps a silent server path on the target (MQ2Map's only lets a right-click on a map label through), asked once the target has stayed selected for half a second and at most once a second. NPC marks follow the server's map policy (docs/plugins.md "Map policy"), and a server whose `[commands]` rules deny `/mapfilter` switches the saved options off while you play there. |
 | `/keypress <command> [hold\|release]` | Press a key command by name. |
 | `/echo <text>` | Print a line to chat. As in MacroQuest, `\a` then a colour letter colours what follows (`\ayYellow \agGreen\ax`), `\n` breaks the line and `\\` is a backslash. A colour that comes from a `${...}` in a typed line (a server's text) does not colour. |
 | `/beep [sound]` | Play a sound (MacroQuest's; scripts use it as an alert). With nothing given, the Beep sound chosen in Individual Sounds: the tone (1280 Hz for a quarter second, as MacroQuest), a short list of game sounds that suit an alert, or any sound of your game folder (the drop-down has a search). With a sound name or any game sound file (`/beep LevelUp.WAV`) it plays that instead; MacroQuest plays any file path, Hailstone only the game folder's own sounds, and a name it lacks plays the tone. All at the Beep volume. |

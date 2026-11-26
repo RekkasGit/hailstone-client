@@ -471,6 +471,8 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - Settle: a live session with GM `#set flymode` and buffs, or a trace of the cache flag's writers.
 
 - **Animated zone objects** (docs/formats/wld.md "Placed-object animation", docs/mechanics.md "Animated zone objects").
+  - The jungle leaf correction follows the server collision maps. An original-client traversal of the same foliage
+    has yet to be recorded. The generic WLD polygon sweep reads the authored solid flags.
   - Phase: each definition's controller starts with the zone's load here; the original's starts when its first actor
     is made, also at the zone's load. The gap between the original's object creation and its first frame was not
     measured, so the phase may differ by that much.
@@ -960,6 +962,11 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   (item definition +0x570) of the primary (slot 7) or secondary (slot 8) item. Which serialised item field fills
   +0x570 is not traced, so Hailstone sends 0 (stock EQEmu also sends 0 for the spawn's tint indexes). Tracing the
   item unserialiser's write to +0x570 would settle it.
+
+- **DoItemSlot's animation 9.** `PlayerClient::DoItemSlot` @0x593680 sets no held model after a move through the
+  primary or secondary slot while the local player's `Animation` (+0x10c0) is 9. Which animation 9 is (a sequence
+  code, or a state the field also holds) is not traced, so Hailstone always sets both hands
+  (`net::GameConnection::do_item_slot`). Tracing what writes 9 to +0x10c0 would settle it.
 
 - **ActorTagInfo.txt beyond the shield flag** (docs/formats/characters.md "ActorTagInfo.txt").
   - Unknown: what fields 3 to 10 and kind 2 mean. Their layout is known (the loader @0x7f4130 keeps field 3 as an

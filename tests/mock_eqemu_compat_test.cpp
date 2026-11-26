@@ -7,6 +7,7 @@
 #include <memory>
 #include <string_view>
 
+#include "app/spawn_interaction.h"
 #include "game/mechanics/attack_rules.h"
 #include "game/spells.h"
 #include "mock_server/harness.h"
@@ -14,6 +15,7 @@
 #include "net/market_packets.h"
 #include "net/player_packets.h"
 #include "net/trade_packets.h"
+#include "net/zone_packets.h"
 
 using namespace hailstone;
 using namespace hailstone::net;
@@ -160,6 +162,67 @@ TEST_CASE("mock server: /consider refuses without a target and for a ship or boa
     REQUIRE(living.size() == 1);
     CHECK(u32_at(*living.front(), 4) == kRival);
     CHECK(sent(rig, kCorpseConsider).size() == 1);
+}
+
+TEST_CASE("mock server: right-click Consider uses the clicked NPC and keeps the usual interactions") {
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    REQUIRE(add_rival(rig));
+
+    constexpr std::uint32_t kNpc = 61;
+    constexpr std::uint32_t kBanker = 62;
+    constexpr std::uint32_t kCorpse = 63;
+    constexpr std::uint32_t kShip = 64;
+    constexpr std::uint16_t kConsider = 0x742b;
+    constexpr std::uint16_t kCorpseConsider = 0x5204;
+
+    rig.server.add_spawn(make_spawn("Gnoll", kNpc, 1, 1, -282.0f, -148.0f, 3.5f));
+    auto banker = make_spawn("Banker", kBanker, 1, 1, -283.0f, -148.0f, 3.5f);
+    banker.class_ = 40;
+    rig.server.add_spawn(banker);
+    rig.server.add_spawn(make_spawn("Gnoll's corpse", kCorpse, 2, 1, -284.0f, -148.0f, 3.5f));
+    rig.server.add_spawn(make_spawn("Ship", kShip, 1, 72, -285.0f, -148.0f, 3.5f));
+    REQUIRE(rig.until([&] {
+        const auto& spawns = rig.conn.world().spawns;
+        return spawns.contains(kNpc) && spawns.contains(kBanker) && spawns.contains(kCorpse) && spawns.contains(kShip);
+    }));
+
+    rig.conn.set_target(kRival);
+    CHECK_FALSE(app::right_click_spawn(rig.conn, kNpc, false));
+    CHECK(rig.conn.world().target_id == kRival);
+
+    REQUIRE(app::right_click_spawn(rig.conn, kNpc, true));
+    CHECK(rig.conn.world().target_id == kRival);
+    REQUIRE(rig.until([&] { return !sent(rig, kConsider).empty(); }));
+    auto considers = sent(rig, kConsider);
+    REQUIRE(considers.size() == 1);
+    REQUIRE(considers.front()->data.size() == kConsiderSize);
+    CHECK(u32_at(*considers.front(), 0) == rig.conn.world().player_id);
+    CHECK(u32_at(*considers.front(), 4) == kNpc);
+
+    rig.server.zone.send_reliable(encode(Consider{rig.conn.world().player_id, kNpc, 5, 10, 0}));
+    REQUIRE(rig.until([&] {
+        for (const auto& line : rig.chat()) {
+            if (line.kind == ChatEvent::Kind::System && line.text.starts_with("[12239] Gnoll [12216]")) return true;
+        }
+        return false;
+    }));
+
+    CHECK_FALSE(app::right_click_spawn(rig.conn, kShip, true));
+    CHECK(rig.conn.world().target_id == kRival);
+    CHECK_FALSE(has_line(rig.chat(), "[13064]"));
+
+    REQUIRE(app::right_click_spawn(rig.conn, kBanker, true));
+    REQUIRE(rig.conn.bank());
+    CHECK(rig.conn.bank()->banker_id == kBanker);
+    rig.conn.close_bank();
+
+    REQUIRE(app::right_click_spawn(rig.conn, kCorpse, true));
+    REQUIRE(rig.conn.loot_session());
+    CHECK(rig.conn.loot_session()->corpse_id == kCorpse);
+    REQUIRE(rig.until([&] { return MockEqServer::count(rig.server.zone_log, Op::LootRequest) == 1; }));
+    CHECK(sent(rig, kConsider).size() == 1);
+    CHECK(sent(rig, kCorpseConsider).empty());
 }
 
 TEST_CASE("mock server: /decline sends the original's 0x52f7 and EQEmu's 12-byte OP_DuelDecline") {
