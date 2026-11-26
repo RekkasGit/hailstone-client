@@ -128,6 +128,42 @@ struct Host {
 
 } // namespace
 
+TEST_CASE("MQ Lua: TLO policy also gates retained named references when rules change") {
+    Host h;
+    h.write("tlo_policy.lua", R"lua(
+local mq = require('mq')
+local root = mq.TLO.Me
+local member = root.Name
+local indexed = mq.TLO.Float('25')
+local child = indexed.Int
+assert(member() == 'Tester')
+assert(indexed() == 25 and child() == 25)
+print('references made')
+mq.delay(10)
+assert(root() == nil and member() == nil)
+assert(indexed() == nil and child() == nil)
+assert(mq.TLO.mE.Name() == nil and mq.TLO.Float('25').Int() == nil)
+assert(mq.parse('${mE.Name} ${Float[25]}') == 'NULL NULL')
+local spawns = mq.getAllSpawns()
+assert(#spawns > 0 and spawns[1].ID() ~= nil)
+print('references denied')
+mq.delay(10)
+assert(root.Name() == 'Tester' and member() == 'Tester')
+assert(indexed() == 25 and child() == 25)
+print('references restored')
+)lua");
+    REQUIRE(h.scripts->run("tlo_policy", {}));
+    h.pulses(1);
+    REQUIRE(h.printed_line("references made"));
+    net::GameConnectionTestAccess::set_server_rules(
+        *h.world.conn, plugin::parse_server_cfg("[tlos]\nblock = Me, Float\n"));
+    h.pulses(1, 10);
+    REQUIRE(h.printed_line("references denied"));
+    net::GameConnectionTestAccess::set_server_rules(*h.world.conn, std::nullopt);
+    h.pulses(1, 10);
+    CHECK(h.printed_line("references restored"));
+}
+
 TEST_CASE("MQ Lua: spell data exposes raw display fields") {
     Host h;
     h.write("spell_fields.lua", R"(

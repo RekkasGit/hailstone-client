@@ -133,6 +133,11 @@ untouched settings in the file. Command list edits preserve the spelling of reta
 if your policy restricts `/camp`, `/quit`, `/exit`, or `/servermanagement`. Creating the first file through this
 editor retains the server's pre-existing script, plugin, and Lua social defaults.
 
+Use **TLO access** to control which top-level objects scripts and add-ons can look up by name. Search built-in
+objects or add-on objects registered on the GM's client. A configured add-on name remains editable after its
+provider unloads or before it registers. Each rule can inherit the default, allow the root, or deny it.
+The [TLO policy guide](../docs/plugins.md#tlo-access-policy) describes the file format and the limits of these rules.
+
 The editor can stay open while you review. Writes compare the revision opened by the GM before modifying the file.
 If the policy changes or the server loses its snapshot, choose **Reload policy** in the window. It keeps your draft
 and asks you to resolve any settings that changed on the server before you save. During a zone transfer, the window

@@ -72,7 +72,7 @@ std::uint32_t known_serial(lua_State* L, int arg) {
     return serial > 0 && serial <= std::numeric_limits<std::uint32_t>::max() ? static_cast<std::uint32_t>(serial) : 0u;
 }
 
-// The pack can keep its draft during zoning and when only the command catalog changes.
+// The pack can keep its draft during zoning and when only the local catalogs change.
 int ServerManagementViewFn(lua_State* L) {
     const UiHost& host = host_of(L);
     if (!host.trusted_ui || !ui::lua::pack_code(L) || !host.server_management) return 0;
@@ -92,7 +92,7 @@ int ServerManagementViewFn(lua_State* L) {
         scratch.release();
         return 1;
     }
-    lua_createtable(L, 0, 12);
+    lua_createtable(L, 0, 13);
     record::text(L, "revision", view->revision);
     record::text(L, "file_revision", view->file_revision);
     record::text(L, "message", view->message);
@@ -139,6 +139,16 @@ int ServerManagementViewFn(lua_State* L) {
         lua_rawseti(L, -2, ++index);
     }
     lua_setfield(L, -2, "commands");
+    index = 0;
+    lua_createtable(L, static_cast<int>(view->tlos.size()), 0);
+    for (const auto& tlo : view->tlos) {
+        lua_createtable(L, 0, 3);
+        record::text(L, "name", tlo.name);
+        record::text(L, "description", tlo.description);
+        record::text(L, "origin", tlo.origin);
+        lua_rawseti(L, -2, ++index);
+    }
+    lua_setfield(L, -2, "tlos");
     scratch.release();
     return 1;
 }

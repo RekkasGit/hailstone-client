@@ -220,6 +220,15 @@ std::string value_without_comment(std::string_view v) {
 // The same, lower-cased.
 std::string value_of(std::string_view v) { return lower(value_without_comment(v)); }
 
+bool valid_tlo_name(std::string_view name) {
+    auto identifier = [](char c) {
+        c = ascii_lower(c);
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+    };
+    return !name.empty() && identifier(name.front()) &&
+           std::all_of(name.begin() + 1, name.end(), [&](char c) { return identifier(c) || c == '-'; });
+}
+
 std::optional<std::string_view> blocked_message_value(std::string_view value) {
     value = trim(value);
     if (!value.empty() && (value.front() == '"' || value.front() == '\'')) {
@@ -320,7 +329,7 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
         }
         static constexpr std::string_view kOwn[] = {"client", "scripts", "plugins", "assets", "socials",
                                                     "abilities", "map", "movement", "web", "addons", "commands",
-                                                    "management"};
+                                                    "management", "tlos"};
         if (std::find(std::begin(kOwn), std::end(kOwn), section) == std::end(kOwn)) {
             auto& kept = r.script_sections[section];
             for (const std::string& key_name : ini.keys(section_name))
@@ -332,7 +341,7 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
             std::string key = lower(key_name);
             std::string v = value_of(ini.get_string(section_name, key_name));
             // These sections were formerly script-defined. Preserve the existing reads through hailstone.server_rule.
-            const bool formerly_custom = section == "commands" || section == "management";
+            const bool formerly_custom = section == "commands" || section == "management" || section == "tlos";
             if (formerly_custom) r.script_sections[section][key] = v;
             std::string where = std::format("[{}] {}", section, key);
             auto flag = [&](bool& out) {
@@ -353,6 +362,27 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
                 if (ec == std::errc() && p == v.data() + v.size() && n >= 1 && n <= 32767) r.management_min_status = n;
                 else warn(where + ": expected a GM status from 1 through 32767");
                 continue;
+            }
+            if (section == "tlos") {
+                if (key == "default") {
+                    if (v == "allow" || v == "deny") r.tlos.default_allow = v == "allow";
+                    else warn(where + ": expected allow or deny");
+                    continue;
+                }
+                if (key == "allow" || key == "block") {
+                    auto& list = key == "allow" ? r.tlos.allow : r.tlos.block;
+                    const auto spelling = value_without_comment(ini.get_string(section_name, key_name));
+                    std::string_view rest = spelling;
+                    while (!rest.empty()) {
+                        const auto end = rest.find_first_of(", \t\r\n\v\f");
+                        const auto token = rest.substr(0, end);
+                        rest = end == std::string_view::npos ? std::string_view() : rest.substr(end + 1);
+                        if (token.empty()) continue;
+                        if (valid_tlo_name(token)) list.emplace(token);
+                        else warn(std::format("{}: expected a TLO root name, got \"{}\"", where, token));
+                    }
+                    continue;
+                }
             }
             if (section == "commands") {
                 auto& policy = r.commands;
@@ -606,6 +636,9 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
     for (const auto& group : r.commands.block_groups)
         if (std::find(r.commands.allow_groups.begin(), r.commands.allow_groups.end(), group) != r.commands.allow_groups.end())
             warn(std::format("[commands] group {} is both allowed and blocked; block wins", group));
+    for (const auto& name : r.tlos.block)
+        if (r.tlos.allow.contains(name))
+            warn(std::format("[tlos] {} is both allowed and blocked; block wins", name));
     for (int scripts = 0; scripts < 2; ++scripts) {
         if (player_caps[scripts] && !player_on[scripts])
             warn(std::format("[{}] player_caps: has no effect without player = on", scripts ? "scripts" : "plugins"));

@@ -28,7 +28,8 @@ function M.setCommands(draft, commands)
 end
 
 function M.new(view, resolveCommand)
-  local draft = { saved = {}, edits = {}, newAddons = {}, resolveCommand = resolveCommand, resolvedCommands = {} }
+  local draft = { saved = {}, edits = {}, newAddons = {}, resolveCommand = resolveCommand, resolvedCommands = {},
+    tlos = view.tlos or {} }
   for _, field in ipairs(view.fields) do
     draft.saved[field.section .. "." .. field.key] = field.value
   end
@@ -218,6 +219,64 @@ function M.filterCommands(draft, origin, pattern)
       end
     end
   end
+  return result
+end
+
+function M.validTloName(name)
+  return name:match("^[A-Za-z0-9_][A-Za-z0-9_-]*$") ~= nil
+end
+
+function M.tloRules(draft)
+  local default = M.get(draft, "tlos.default", "allow"):lower()
+  local state = { default = default == "deny" and "deny" or "allow", rules = {}, names = {} }
+  for _, rule in ipairs({ "allow", "block" }) do
+    for _, name in ipairs(tokens(M.get(draft, "tlos." .. rule))) do
+      if M.validTloName(name) then
+        local key = name:lower()
+        state.rules[key] = rule
+        state.names[key] = name
+      end
+    end
+  end
+  return state
+end
+
+function M.tloEffective(state, tlo)
+  local direct = state.rules[tlo.name:lower()]
+  if direct then return direct, "Explicit TLO rule" end
+  return state.default == "deny" and "block" or "allow", "Default policy"
+end
+
+function M.setTloRule(draft, tlo, rule, state)
+  if not M.validTloName(tlo.name) then return end
+  local key = tlo.name:lower()
+  local spelling = state.names[key] or tlo.name
+  local function match(item) return item:lower() == key end
+  for _, policy in ipairs({ "allow", "block" }) do
+    listUpdate(draft, "tlos." .. policy, false, match, rule == policy and spelling or nil, keepSpelling)
+  end
+end
+
+function M.filterTlos(draft, state, origin, pattern)
+  local result, registered = {}, {}
+  pattern = M.trim(pattern):lower()
+  local function include(row)
+    if row.origin == origin and (row.name:lower():find(pattern, 1, true)
+        or row.description:lower():find(pattern, 1, true)) then
+      result[#result + 1] = row
+    end
+  end
+  for _, row in ipairs(draft.tlos) do
+    registered[row.name:lower()] = true
+    include(row)
+  end
+  if origin == "addon" then
+    for key, name in pairs(state.names) do
+      if not registered[key] then include({ name = name, description = "Configured name with no registered provider.",
+        origin = "addon" }) end
+    end
+  end
+  table.sort(result, function(a, b) return a.name:lower() < b.name:lower() end)
   return result
 end
 

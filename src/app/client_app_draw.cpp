@@ -447,8 +447,10 @@ void ClientApp::update_ui_host() {
             if (!conn_->server_management_available()) return std::nullopt;
             const auto& snapshot = *conn_->server_management_snapshot();
             const auto* hooks = automation_ ? &automation_->hooks() : nullptr;
+            const auto* registry = automation_ ? &automation_->registry() : nullptr;
             view.serial = conn_->server_management_serial();
-            view.catalog_serial = hooks ? hooks->command_catalog_serial() : 1u;
+            view.catalog_serial = (hooks ? hooks->command_catalog_serial() : 0u) +
+                                  (registry ? registry->tlo_catalog_serial() : 0u);
             view.revision = std::to_string(snapshot.revision);
             constexpr std::string_view marker = "; hailstone-policy-revision = ";
             if (snapshot.text.starts_with(marker)) {
@@ -494,6 +496,13 @@ void ClientApp::update_ui_host() {
             for (auto& command : plugin::command_catalog(registered)) {
                 view.commands.push_back({std::move(command.name), std::move(command.description),
                     std::string(plugin::command_origin_text(command.origin)), std::move(command.aliases), std::move(command.groups)});
+            }
+            if (registry) {
+                for (auto& tlo : registry->tlo_catalog()) {
+                    const bool builtin = !tlo.description.empty();
+                    view.tlos.push_back({std::move(tlo.name), builtin ? std::move(tlo.description) : "Provided by an add-on.",
+                                        builtin ? "builtin" : "addon"});
+                }
             }
             return view;
         };

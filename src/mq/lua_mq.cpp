@@ -205,7 +205,11 @@ struct TloRef {
     enum class Kind : std::uint8_t { Tlo, Member, Value } kind = Kind::Tlo;
     std::string name;
     Value base;
+    // Keep the policy identity of a resolved member or indexed result across server rule changes.
+    std::string lookup_root;
 };
+
+std::string_view root_name(const TloRef& r) { return r.kind == TloRef::Kind::Tlo ? r.name : r.lookup_root; }
 
 constexpr const char* kTloMeta = "hailstone.mq.tlo";
 
@@ -225,7 +229,7 @@ void ref_fill(lua_State* L, void* mem, TloRef&& ref) {
 
 void push_ref(lua_State* L, TloRef::Kind kind, const char* name) {
     void* mem = ref_slot(L);
-    ref_fill(L, mem, TloRef{kind, name ? name : "", {}});
+    ref_fill(L, mem, TloRef{kind, name ? name : "", {}, {}});
 }
 
 TloRef& check_ref(lua_State* L, int i) { return *static_cast<TloRef*>(luaL_checkudata(L, i, kTloMeta)); }
@@ -233,6 +237,7 @@ TloRef& check_ref(lua_State* L, int i) { return *static_cast<TloRef*>(luaL_check
 Value resolve(lua_State* L, const TloRef& r, std::string_view index) {
     need(L, plugin::kCapRead, "mq.TLO");
     const Context& ctx = ctx_of(L);
+    if (!r.lookup_root.empty() && !reg_of(L).tlo_allowed(ctx, r.lookup_root)) return Value::nil();
     switch (r.kind) {
     case TloRef::Kind::Tlo: return reg_of(L).tlo(ctx, r.name, index);
     case TloRef::Kind::Member: return reg_of(L).member(ctx, r.base, r.name, index);
@@ -298,16 +303,16 @@ int tlo_index(lua_State* L) {
     }
     void* mem = ref_slot(L);
     Value base = resolve(L, r, {});
-    ref_fill(L, mem, TloRef{TloRef::Kind::Member, lua_tostring(L, 2), std::move(base)});
+    ref_fill(L, mem, TloRef{TloRef::Kind::Member, lua_tostring(L, 2), std::move(base), std::string(root_name(r))});
     return 1;
 }
 
 int tlo_call(lua_State* L) {
-    check_ref(L, 1);
+    const TloRef& r = check_ref(L, 1);
     need(L, plugin::kCapRead, "mq.TLO");
     int top = lua_gettop(L);
     if (top < 2) {
-        const Plain p = plain_of(L, resolve(L, *static_cast<TloRef*>(lua_touserdata(L, 1)), {}));
+        const Plain p = plain_of(L, resolve(L, r, {}));
         push_plain(L, p);
         return 1;
     }
@@ -315,8 +320,8 @@ int tlo_call(lua_State* L) {
     std::size_t n = 0;
     const char* index = lua_tolstring(L, -1, &n);
     void* mem = ref_slot(L);
-    Value v = resolve(L, *static_cast<TloRef*>(lua_touserdata(L, 1)), std::string_view(index, n));
-    ref_fill(L, mem, TloRef{TloRef::Kind::Value, {}, std::move(v)});
+    Value v = resolve(L, r, std::string_view(index, n));
+    ref_fill(L, mem, TloRef{TloRef::Kind::Value, {}, std::move(v), std::string(root_name(r))});
     return 1;
 }
 
@@ -860,7 +865,7 @@ int l_get_all_spawns(lua_State* L) {
     lua_Integer n = 0;
     for (auto id : ids) {
         void* mem = ref_slot(L);
-        ref_fill(L, mem, TloRef{TloRef::Kind::Value, {}, Value::object(spawn, id)});
+        ref_fill(L, mem, TloRef{TloRef::Kind::Value, {}, Value::object(spawn, id), {}});
         lua_rawseti(L, -2, ++n);
     }
     return 1;

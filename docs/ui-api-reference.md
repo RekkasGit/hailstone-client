@@ -450,7 +450,7 @@ called it, by priority and registration order.
 | `API.serverManagement.Close` | **See binding** | `hs.ServerManagementClose` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
 | `API.serverManagement.Open` | **See binding** | `hs.ServerManagementOpen` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
 | `API.serverManagement.Save` | **See binding** | `hs.ServerManagementSave` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
-| `API.serverManagement.View` | `The pack can keep its draft during zoning and when only the command catalog changes.` | `hs.ServerManagementView` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
+| `API.serverManagement.View` | `The pack can keep its draft during zoning and when only the local catalogs change.` | `hs.ServerManagementView` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
 
 ## session
 

@@ -10,6 +10,7 @@
 #include "core/float_chars.h"
 #include "game/item_links.h"
 #include "mq/calc.h"
+#include "net/game_connection.h"
 
 namespace hailstone::mq {
 
@@ -313,18 +314,38 @@ const Type* Registry::find_type(std::string_view name) const {
     return it == types_.end() ? nullptr : it->second.get();
 }
 
-void Registry::add_tlo(std::string name, TloFn fn) { tlos_[std::move(name)] = std::move(fn); }
+void Registry::add_tlo(std::string name, TloFn fn, std::string_view description) {
+    TloRegistration entry{std::move(fn), std::string(description)};
+    const auto [it, inserted] = tlos_.try_emplace(std::move(name), std::move(entry));
+    if (inserted) {
+        ++tlo_catalog_serial_;
+    } else {
+        if (it->second.description != description) ++tlo_catalog_serial_;
+        it->second = std::move(entry);
+    }
+}
 
 void Registry::remove_tlo(std::string_view name) {
     auto it = tlos_.find(name);
-    if (it != tlos_.end()) tlos_.erase(it);
+    if (it != tlos_.end()) {
+        tlos_.erase(it);
+        ++tlo_catalog_serial_;
+    }
 }
 
 bool Registry::has_tlo(std::string_view name) const { return tlos_.find(name) != tlos_.end(); }
 
 std::vector<std::string> Registry::tlos() const {
     std::vector<std::string> out;
-    for (const auto& [name, fn] : tlos_) out.push_back(name);
+    out.reserve(tlos_.size());
+    for (const auto& entry : tlos_) out.push_back(entry.first);
+    return out;
+}
+
+std::vector<TloCatalogEntry> Registry::tlo_catalog() const {
+    std::vector<TloCatalogEntry> out;
+    out.reserve(tlos_.size());
+    for (const auto& [name, entry] : tlos_) out.push_back({name, entry.description});
     return out;
 }
 
@@ -352,10 +373,12 @@ std::vector<std::string> Registry::complete(const Context& ctx, std::string_view
     };
     std::vector<std::string> out;
     if (parts.size() == 1) {
-        for (const auto& [name, fn] : tlos_)
-            if (starts(name)) out.push_back(name);
+        for (const auto& entry : tlos_)
+            if (starts(entry.first) && tlo_allowed(ctx, entry.first)) out.push_back(entry.first);
         return out;
     }
+    // A blocked root does not get the fallback member completion of a temporarily absent object.
+    if (!tlo_allowed(ctx, parts[0].name)) return out;
     Value v = tlo(ctx, parts[0].name, parts[0].index);
     const Type* t = nullptr;
     if (v.is_nil() && parts.size() == 2) {
@@ -388,10 +411,16 @@ std::vector<std::string> Registry::complete(const Context& ctx, std::string_view
     return out;
 }
 
+bool Registry::tlo_allowed(const Context& ctx, std::string_view name) const {
+    if (!ctx.conn) return true;
+    const auto& rules = ctx.conn->server_rules();
+    return !rules || rules->provisional || rules->tlos.allowed(name);
+}
+
 Value Registry::tlo(const Context& ctx, std::string_view name, std::string_view index) const {
     auto it = tlos_.find(name);
-    if (it == tlos_.end()) return Value::nil();
-    return it->second(ctx, index);
+    if (it == tlos_.end() || !tlo_allowed(ctx, it->first)) return Value::nil();
+    return it->second.fn(ctx, index);
 }
 
 Value Registry::member(const Context& ctx, const Value& self, std::string_view name, std::string_view index) const {

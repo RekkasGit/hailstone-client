@@ -729,6 +729,21 @@ TEST_CASE("native plugins: a TLO name already taken is refused, and stays after 
     CHECK(h.reg.has_tlo("Me"));
 }
 
+TEST_CASE("native plugins: TLO policy gates registered roots and SDK macro parsing") {
+    Host h;
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("MQ2Example"));
+    CHECK(h.p("${Example.MyHP}") == "75");
+    net::GameConnectionTestAccess::set_server_rules(
+        *h.world.conn, plugin::parse_server_cfg("[tlos]\nblock = Me\n"));
+    // Example.MyHP parses Me through the SDK. The example converts the resulting NULL with atoi.
+    CHECK(h.p("${Example.MyHP}") == "0");
+    net::GameConnectionTestAccess::set_server_rules(
+        *h.world.conn, plugin::parse_server_cfg("[tlos]\nblock = Example\n"));
+    CHECK(h.p("${example.MyHP} ${Me.Name}") == "NULL Tester");
+    CHECK(h.reg.has_tlo("Example"));
+}
+
 TEST_CASE("native plugins: callbacks it may not use are left off; the policy can unload it") {
     Host h;
     h.approve(plugin::kCapCommands); // no read, events or packets

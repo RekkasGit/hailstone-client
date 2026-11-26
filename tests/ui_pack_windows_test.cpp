@@ -4538,6 +4538,161 @@ assert(not hs.UI.serverManagement.Save("46", {}))
     ImGui::DestroyContext(ctx);
 }
 
+TEST_CASE("Modern Server Management edits TLO policy and keeps the draft during catalog changes and reloads") {
+    const fs::path source = fs::path(__FILE__).parent_path().parent_path() / "ui/modern";
+    hailstone::test::ScratchDir scratch("ui_server_tlo_policy_");
+    const fs::path dir = scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(source, dir / "modern", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    {
+        Session session(dir, "modern");
+        app::ServerManagementView snapshot;
+        snapshot.serial = snapshot.catalog_serial = 1;
+        snapshot.revision = "42";
+        snapshot.fields = {{"tlos", "allow", "mE, Unloaded"}, {"tlos", "block", "sPaWn, Me, Retained"},
+                           {"local_extension", "keep_me", "original"}};
+        snapshot.tlos = {{"Me", "Your character", "builtin"}, {"Spawn", "Search nearby spawns", "builtin"},
+                         {"RaidNotes", "Live notes", "addon"}, {"Odd.Name", "Name outside the policy format", "addon"}};
+        session.host.server_management = [&](std::uint32_t known, std::uint32_t known_catalog)
+            -> std::optional<app::ServerManagementView> {
+            auto view = snapshot;
+            if (known == view.serial) {
+                view.fields.clear();
+                if (known_catalog == view.catalog_serial) view.tlos.clear();
+            }
+            return view;
+        };
+        int reloads = 0;
+        session.host.open_server_management = [&] {
+            CHECK(snapshot.reload_required);
+            snapshot.reloading = true;
+            ++reloads;
+            return true;
+        };
+        int saves = 0;
+        session.host.save_server_management = [&](std::string_view revision, const auto& edits) {
+            ++saves;
+            CHECK(revision == "43");
+            REQUIRE(edits.size() == 3);
+            for (const auto& edit : edits) CHECK(edit.section == "tlos");
+            CHECK(edits[0].key == "allow");
+            CHECK(edits[0].value == "mE, Unloaded, sPaWn");
+            CHECK(edits[1].key == "block");
+            CHECK(edits[1].value == "Retained, futureTLO");
+            CHECK(edits[2].key == "default");
+            CHECK(edits[2].value == "deny");
+            return true;
+        };
+        lua_State* L = session.lua.state();
+        auto lua = [&](const char* body) {
+            const int result = luaL_dostring(L, body);
+            REQUIRE_MESSAGE(result == LUA_OK, (result == LUA_OK ? "" : lua_tostring(L, -1)));
+        };
+        lua(R"lua(
+local begin, finish, select, input, color, button, tab, header =
+    ui.BeginCombo, ui.EndCombo, ui.Selectable, ui.InputTextWithHint, ui.TextColored, ui.Button,
+    ui.InvisibleButton, ui.CollapsingHeader
+local faked, current
+tloSeen, tloEffective = {}, {}
+ui.BeginCombo = function(id, ...)
+  if id == "##smtloruleodd.name" then invalidTloRule = true end
+  if tloCombo and id == tloCombo then faked = true return true end
+  return begin(id, ...)
+end
+ui.EndCombo = function()
+  if faked then faked = false return end
+  finish()
+end
+ui.Selectable = function(label, ...)
+  if faked then
+    if label == tloPick then tloPick, tloCombo = nil, nil return true end
+    return false
+  end
+  local clicked = select(label, ...)
+  if label == tloPage then tloPage = nil return true end
+  return clicked
+end
+ui.InputTextWithHint = function(id, ...)
+  if id == "##smtlolisearch" and tloSearch ~= nil then
+    local text = tloSearch tloSearch = nil return text, true
+  end
+  if id == "##tlos.block" and tloBlock ~= nil then
+    local text = tloBlock tloBlock = nil return text, true
+  end
+  return input(id, ...)
+end
+ui.CollapsingHeader = function(label, ...)
+  return header(label, ...) or (label == "TLO lists" and tloBlock ~= nil)
+end
+ui.TextColored = function(r, g, b, a, label)
+  if label == "Me" or label == "Spawn" or label == "Odd.Name" or label == "RaidNotes" or label == "RaidPlan"
+      or label == "Unloaded" or label == "Retained" or label == "futureTLO" then
+    tloSeen[label], current = true, label
+  elseif current and (label == "Allowed" or label == "Blocked") then
+    tloEffective[current], current = label, nil
+  end
+  if label == "Top-level objects" then tloHeading = true end
+  if label == "Deny by default can break scripts that depend on TLOs such as Me, If, or Math." then
+    if tloReviewSeen then tloReviewWarning = true else tloPageWarning = true end
+  end
+  if label == "Review changes" then tloReviewSeen = true end
+  color(r, g, b, a, label)
+end
+ui.Button = function(label, ...)
+  local clicked = button(label, ...)
+  if label == tloAction then tloAction = nil return true end
+  return clicked
+end
+ui.InvisibleButton = function(label, ...)
+  local clicked = tab(label, ...)
+  if label == tloTab then tloTab = nil return true end
+  return clicked
+end
+tloPage = "TLO access"
+)lua");
+        session.frames(3);
+        lua("assert(tloHeading and tloEffective.Me == 'Blocked' and tloEffective.Spawn == 'Blocked')");
+        lua("tloSeen = {}; tloSearch = 'NEARBY SPAWNS'");
+        session.frames(2);
+        lua("assert(tloSeen.Spawn and not tloSeen.Me); tloSearch = ''; tloCombo, tloPick = '##tlos.default', 'Deny'");
+        session.frames(2);
+        lua("assert(tloPageWarning); tloCombo, tloPick = '##smtloruleme', 'Allow'");
+        session.frames(2);
+        lua("assert(tloEffective.Me == 'Allowed'); tloCombo, tloPick = '##smtlorulespawn', 'Allow'");
+        session.frames(2);
+        lua("assert(tloEffective.Spawn == 'Allowed'); tloTab = '##smtloorigin2'");
+        session.frames(2);
+        lua("assert(tloSeen.RaidNotes and tloSeen.Unloaded and tloSeen.Retained and tloSeen['Odd.Name']); "
+            "assert(tloEffective.Unloaded == 'Allowed' and tloEffective['Odd.Name'] == 'Blocked' and not invalidTloRule); tloSeen = {}");
+        ++snapshot.catalog_serial;
+        snapshot.tlos[2] = {"RaidPlan", "Live plans", "addon"};
+        session.frames(2);
+        lua("assert(tloSeen.RaidPlan and tloSeen.Retained and not tloSeen.RaidNotes); tloBlock = 'Retained, futureTLO'");
+        session.frames(2);
+        lua("assert(tloEffective.futureTLO == 'Blocked'); tloAction = 'Review changes##sm'");
+        session.frames(2);
+        lua("assert(tloReviewSeen and tloReviewWarning)");
+        CHECK(saves == 0);
+        snapshot.reload_required = true;
+        lua("tloAction = 'Reload policy##sm'");
+        session.frames(2);
+        CHECK(reloads == 1);
+        ++snapshot.serial;
+        snapshot.revision = "43";
+        snapshot.reload_required = snapshot.reloading = false;
+        snapshot.reloaded = true;
+        session.frames(2);
+        lua("tloAction = 'Save policy##sm'");
+        session.frames(2);
+        CHECK(saves == 1);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 // A click meant for something else the instant the question pops up must not answer it: both buttons wait a
 // second after the question shows. The real loading cover must leave both answers reachable afterward.
 TEST_CASE("UI packs: both plugin answers arm and remain reachable above the loading cover") {

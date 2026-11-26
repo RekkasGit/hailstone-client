@@ -136,6 +136,11 @@ struct Context {
     std::string config_path;
 };
 
+struct TloCatalogEntry {
+    std::string name;
+    std::string description; // Published by the built-in provider.
+};
+
 class Registry {
 public:
     Registry();
@@ -144,11 +149,14 @@ public:
     // A new type (or the one of that name); keep the pointer, it stays valid.
     Type& type(const std::string& name);
     const Type* find_type(std::string_view name) const;
-    void add_tlo(std::string name, TloFn fn);
+    void add_tlo(std::string name, TloFn fn, std::string_view description = {});
     void remove_tlo(std::string_view name);
     bool has_tlo(std::string_view name) const;
     std::vector<std::string> tlos() const;
+    std::vector<TloCatalogEntry> tlo_catalog() const;
+    std::uint32_t tlo_catalog_serial() const { return tlo_catalog_serial_; }
 
+    bool tlo_allowed(const Context& ctx, std::string_view name) const;
     Value tlo(const Context& ctx, std::string_view name, std::string_view index = {}) const;
     Value member(const Context& ctx, const Value& self, std::string_view name, std::string_view index = {}) const;
     // An object's plain value (its type's to_value, until it is not an object); other values as they are.
@@ -168,8 +176,13 @@ public:
     const Type* bool_type() const { return bool_; }
 
 private:
+    struct TloRegistration {
+        TloFn fn;
+        std::string description;
+    };
     std::map<std::string, std::unique_ptr<Type>, CaseLess> types_;
-    std::map<std::string, TloFn, CaseLess> tlos_;
+    std::map<std::string, TloRegistration, CaseLess> tlos_;
+    std::uint32_t tlo_catalog_serial_ = 0;
     const Type *int_ = nullptr, *float_ = nullptr, *string_ = nullptr, *bool_ = nullptr;
 };
 

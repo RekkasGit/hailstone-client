@@ -460,7 +460,9 @@ account's server-side status. This module is closed to add-on code and custom in
   `serial`, `catalog_serial`, `revision`, `file_revision`, `message`, `saving`, `reload_required`, and `reloading`.
   A new snapshot serial adds `minimum_status`, `reloaded`, and `fields` (an array of `{section, key, value}`).
   `reloaded` indicates that a policy refresh replaced an open snapshot. A new snapshot or catalog serial adds
-  `commands` (an array of `{name, description, origin, aliases, groups}`). The catalog can update during a draft edit.
+  `commands` (an array of `{name, description, origin, aliases, groups}`) and `tlos`
+  (an array of `{name, description, origin}`, with `origin` equal to `builtin` or `addon`).
+  The catalogs can update during a draft edit.
   During a zone transfer the result contains only `paused = true` so the window can retain its draft while hidden.
 - `Save(revision, edits)` sends only edited `{section, key, value}` records and returns whether submission started.
   Success supplies a new snapshot serial. A stale or unconfirmed save requires an `Open()` refresh before the next

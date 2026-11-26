@@ -11,12 +11,14 @@
 #include <filesystem>
 #include <map>
 #include <optional>
+#include <set>
 #include <span>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "core/ascii_case.h"
 #include "core/sha256.h"
 #include "core/version.h"
 
@@ -199,6 +201,20 @@ struct CommandRules {
     }
 };
 
+// Advisory client policy for named TLO lookups. The default preserves existing behavior.
+struct TloRules {
+    struct NameLess {
+        using is_transparent = void;
+        bool operator()(std::string_view a, std::string_view b) const { return icompare(a, b) < 0; }
+    };
+    bool default_allow = true;
+    std::set<std::string, NameLess> allow, block;
+
+    bool allowed(std::string_view name) const {
+        return !block.contains(name) && (default_allow || allow.contains(name));
+    }
+};
+
 // The server's rules: its hailstone.cfg, or none.
 struct Rules {
     bool configured = false; // false: no hailstone.cfg, no rules
@@ -233,6 +249,7 @@ struct Rules {
     std::vector<std::string> suggest_addons;
     AddonRules addons;
     CommandRules commands;
+    TloRules tlos;
     std::vector<ServerFile> server_files; // the server's scripts and plugins
     // Custom and formerly custom sections for hailstone.server_rule. Case and inline comments follow the
     // existing script lookup behavior.

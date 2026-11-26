@@ -1227,12 +1227,16 @@ bool GameConnection::update_server_rules() {
         // A failed sync can leave an earlier login's rules on disk. Only this login's policy decides access.
         if (synced) allow_client = !received.deny_client;
         if (!options_.server_files_dir.empty()) rules = std::move(received);
-        else if (synced) rules.commands = std::move(received.commands);
+        else if (synced) {
+            rules.commands = std::move(received.commands);
+            rules.tlos = std::move(received.tlos);
+        }
     }
+    const bool transient_policy = rules.commands.enabled || !rules.tlos.default_allow || !rules.tlos.block.empty();
     log::info("server rules: {}", rules.configured ? std::format("{} ({} scripts and plugins of its own)", plugin::kServerCfgName,
                                                                  rules.server_files.size())
-                                                   : std::string(rules.commands.enabled ? "command policy (transient login)"
-                                                                                        : "none: plugins and scripts run freely"));
+                                                   : std::string(transient_policy ? "client policy (transient login)"
+                                                                                  : "none: plugins and scripts run freely"));
     server_rules_ = std::move(rules);
     ++server_rules_serial_;
     return allow_client;
