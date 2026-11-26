@@ -525,9 +525,17 @@ public:
     // the chat hooks and log. Returns false for invalid input, with no rows submitted.
     bool write_chat_group(std::string title, std::vector<std::string> messages);
     // A routine add-on policy notice goes through the normal hooks and log. During a zone transfer, the UI
-    // can present these notices together. The first zone-in has no transfer.
-    void zone_client_message(std::string text);
-    std::vector<std::string> take_zone_client_messages();
+    // can present these notices together. The first zone-in has no transfer. `subject` names the script or plugin
+    // the notice is about; `stop` marks a notice that stops it.
+    void zone_client_message(std::string text, std::string subject = {}, bool stop = false);
+    // The transfer's notices, in order. A subject's stop notices with no start after them are `lasting`: the
+    // script or plugin stays stopped, so the UI shows them on their own, outside the collapsed group.
+    struct ZoneClientMessage {
+        std::string text;
+        bool lasting = false;
+        bool operator==(const ZoneClientMessage&) const = default;
+    };
+    std::vector<ZoneClientMessage> take_zone_client_messages();
     // The spell effect stages queued since the last call, in order (cast stages from OP_BeginCast and procs, impact
     // stages from OP_Action 231); a zone change drops those not yet taken.
     std::vector<SpellEffectCue> take_spell_effect_cues() { return std::exchange(effect_cues_, {}); }
@@ -3019,8 +3027,7 @@ private:
     void set_spawn_motion(game::Spawn& s, const Motion& m);
     void connect_world(bool zoning);
     void chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0,
-              std::string peer = {}, std::optional<std::string> display_text = std::nullopt, bool filter = true,
-              bool zone_client_notice = false);
+              std::string peer = {}, std::optional<std::string> display_text = std::nullopt, bool filter = true);
     bool prepare_chat(ChatEvent& event, std::optional<std::string> display_text, bool filter,
                       bool group_member = false);
     void enqueue_chat(ChatEvent event);
@@ -3473,7 +3480,11 @@ private:
     bool server_files_changed_ = false;
     void finish_server_files();
     std::deque<ChatEvent> chat_;
-    std::optional<std::vector<std::string>> zone_client_messages_;
+    struct ZoneClientNotice {
+        std::string text, subject;
+        bool stop = false;
+    };
+    std::optional<std::vector<ZoneClientNotice>> zone_client_messages_;
     std::vector<ZonePoint> zone_points_;
     bool zone_change_pending_ = false;
     ZoneChange zone_change_request_; // the pending request, for "not ready" retries

@@ -9,7 +9,7 @@
 - Stock and enhanced autofollow match a swimmer's depth, including near the surface and within the horizontal stop distance.
 - Incoming trade messages in chat show a clickable item name so you can inspect what the other player offered.
 - The blue fallback Chat window stays hidden when Modern chat is active, even after moving every tab out of window 1.
-- Chat groups routine Lua and plug-in notices from each zone transfer in a gold **Client System Messages [n]** row. Select the row to read the notices. First sign-in shows each notice individually. Lua scripts and compiled plug-ins can post their own titled groups.
+- Chat groups routine Lua and plug-in notices from each zone transfer in a gold **Client System Messages [n]** row. Select the row to read the notices. A script or plug-in that stays stopped after the transfer still shows its notice on its own line. First sign-in shows each notice individually. Lua scripts and compiled plug-ins can post their own titled groups.
 - Save named window and chat Layout Profiles in Modern and Gamepad. See the saved window arrangement in Visual Preview, save your current layout before switching if needed, and undo the last apply. Open the manager from the EQ menu or with `/layoutprofiles`. Interfaces reach them through `hs.UI.layoutProfiles` (UI API 1.12).
 - Modern chat timestamps and Gamepad vertical hotbar settings are now saved per character, where every character shared them before. Each character starts from the shared setting it had.
 - Server popups display STML tables in aligned rows and columns in Modern and Gamepad.

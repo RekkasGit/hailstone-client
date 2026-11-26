@@ -200,8 +200,52 @@ TEST_CASE("Automation: groups routine zone transfer notices after the first sign
 #ifdef HAILSTONE_EXAMPLE_PLUGIN
     expected.push_back(plugin_loaded);
 #endif
-    CHECK(conn.take_zone_client_messages() == expected);
+    // Everything stopped was started again: all of it is routine and goes in the group.
+    std::vector<net::GameConnection::ZoneClientMessage> taken;
+    for (auto& text : expected) taken.push_back({text, false});
+    CHECK(conn.take_zone_client_messages() == taken);
     CHECK(conn.take_zone_client_messages().empty());
+}
+
+TEST_CASE("Automation: a zone transfer's lasting stop is not hidden in the group") {
+    AutomationHost h("loader");
+    auto& conn = *h.world.conn;
+    using Access = net::GameConnectionTestAccess;
+    h.write("loader.lua", "while true do require('mq').delay(10) end\n");
+    h.write("manual.lua", "while true do require('mq').delay(10) end\n");
+    plugin::Rules live;
+    live.configured = true;
+    const auto caps = plugin::kCapAll & ~plugin::kCapLogin;
+    live.player_script_caps = live.player_plugin_caps = caps;
+    Access::set_server_rules(conn, live);
+    h.automation->frame();
+    REQUIRE(h.automation->scripts().run("manual", {}));
+    (void)h.chat();
+
+    net::ZoneChange answer;
+    answer.success = 1;
+    Access::handle_zone(conn, net::encode(answer));
+    REQUIRE(conn.state() == net::ConnectionState::Zoning);
+    auto provisional = live;
+    provisional.provisional = true;
+    Access::set_server_rules(conn, provisional);
+    h.automation->frame();
+    CHECK_FALSE(h.automation->scripts().running("loader"));
+    CHECK_FALSE(h.automation->scripts().running("manual"));
+    Access::state(conn) = net::ConnectionState::InZone;
+    Access::set_server_rules(conn, live);
+    h.automation->frame();
+    CHECK(h.automation->scripts().running("loader"));
+    CHECK_FALSE(h.automation->scripts().running("manual"));
+
+    // loader is autoloaded and starts again: its stop and start go in the group. Nothing starts manual again after
+    // the zone, so its stop is shown as a line of its own.
+    const std::vector<net::GameConnection::ZoneClientMessage> expected{
+        {"[Lua] loader stopped: it may not run here", false},
+        {"[Lua] manual stopped: it may not run here", true},
+        {"[Lua] running loader (" + plugin::caps_text(caps) + ")", false},
+    };
+    CHECK(conn.take_zone_client_messages() == expected);
 }
 
 TEST_CASE("Automation: a script holds autoskill off while it runs; stopping it lets go") {

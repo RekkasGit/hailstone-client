@@ -65,7 +65,7 @@ while (window.poll_events()) {
 
 ### Modern chat tabs
 
-After changing zones, routine Lua and compiled plug-in lifecycle notices appear in a gold **Client System Messages [n]** row in the window that receives those system messages. Select the row to expand it, and select it again to collapse it. The initial entry after signing in shows the notices individually. Server messages, add-on errors, and manual command responses still appear individually. Add-ons can post groups with their own titles through the Lua module or compiled plug-in SDK.
+After changing zones, routine Lua and compiled plug-in lifecycle notices appear in a gold **Client System Messages [n]** row in the window that receives those system messages. Select the row to expand it, and select it again to collapse it. The initial entry after signing in shows the notices individually. Only stops that a restart cancels go in the row: a script or plug-in the new zone stops and nothing starts again shows its stop notice as a line of its own. Server messages, add-on errors, and manual command responses still appear individually. Add-ons can post groups with their own titles through the Lua module or compiled plug-in SDK.
 
 Right-click any tab or the chat output for the chat menu: create, rename and close tabs and windows, detach, move
 or reorder a tab, and combine windows into the one you clicked. **Switch Tab** lists that window's tabs, **Chat

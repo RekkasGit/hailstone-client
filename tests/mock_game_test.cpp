@@ -726,7 +726,7 @@ TEST_CASE("GameConnection: local chat groups validate together and filter their 
     const std::vector<std::string> expected{plain, "rewritten row"};
     CHECK(event->group == expected);
     CHECK_FALSE(conn.poll_chat());
-    CHECK(conn.take_zone_client_messages() == std::vector<std::string>{"transfer notice"});
+    CHECK(conn.take_zone_client_messages() == std::vector<net::GameConnection::ZoneClientMessage>{{"transfer notice"}});
     REQUIRE(seen.size() == 5);
     CHECK(seen[0].text == plain);
     CHECK(seen[0].from_code);
@@ -826,7 +826,7 @@ TEST_CASE("mock server: zone lines and server-requested zoning go through world 
     }
     CHECK(saw_zoning);
     CHECK(saw_tinted_notice);
-    CHECK(conn.take_zone_client_messages() == std::vector<std::string>{"rewritten notice"});
+    CHECK(conn.take_zone_client_messages() == std::vector<net::GameConnection::ZoneClientMessage>{{"rewritten notice"}});
     // MoveToZone: on the success answer OP_DeleteSpawn with our own id (4 bytes); the zone drops the link, then world.
     auto own_delete = std::find_if(server.zone_log.begin(), server.zone_log.end(),
                                    [](const AppPacket& p) { return is_op(p, Op::DeleteSpawn); });

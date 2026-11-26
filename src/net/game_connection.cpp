@@ -252,15 +252,9 @@ void GameConnection::enqueue_chat(ChatEvent event) {
 }
 
 void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb, std::uint32_t color,
-                          std::string peer, std::optional<std::string> display_text, bool filter,
-                          bool zone_client_notice) {
+                          std::string peer, std::optional<std::string> display_text, bool filter) {
     ChatEvent event{kind, std::move(text), rgb, color, std::move(peer), {}};
     if (!prepare_chat(event, std::move(display_text), filter)) return;
-    // Preserve a chat hook's explicit colour on the individual line.
-    if (zone_client_notice && zone_client_messages_ && event.rgb == 0) {
-        zone_client_messages_->push_back(std::move(event.text));
-        return;
-    }
     enqueue_chat(std::move(event));
 }
 
@@ -288,14 +282,30 @@ bool GameConnection::write_chat_group(std::string title, std::vector<std::string
     return true;
 }
 
-void GameConnection::zone_client_message(std::string text) {
-    chat(ChatEvent::Kind::System, std::move(text), 0, 0, {}, std::nullopt, true, true);
+void GameConnection::zone_client_message(std::string text, std::string subject, bool stop) {
+    ChatEvent event{ChatEvent::Kind::System, std::move(text), 0, 0, {}, {}};
+    if (!prepare_chat(event, std::nullopt, true)) return;
+    // Preserve a chat hook's explicit colour on the individual line.
+    if (zone_client_messages_ && event.rgb == 0) {
+        zone_client_messages_->push_back({std::move(event.text), std::move(subject), stop});
+        return;
+    }
+    enqueue_chat(std::move(event));
 }
 
-std::vector<std::string> GameConnection::take_zone_client_messages() {
+std::vector<GameConnection::ZoneClientMessage> GameConnection::take_zone_client_messages() {
     if (!zone_client_messages_) return {};
-    auto messages = std::move(*zone_client_messages_);
+    auto notices = std::move(*zone_client_messages_);
     zone_client_messages_.reset();
+    // A stop a later start of the same script or plugin cancels is routine churn. One with no start after it lasts.
+    std::vector<ZoneClientMessage> messages;
+    messages.reserve(notices.size());
+    for (std::size_t i = 0; i < notices.size(); ++i) {
+        bool lasting = notices[i].stop && !notices[i].subject.empty();
+        for (std::size_t j = i + 1; lasting && j < notices.size(); ++j)
+            if (!notices[j].stop && notices[j].subject == notices[i].subject) lasting = false;
+        messages.push_back({std::move(notices[i].text), lasting});
+    }
     return messages;
 }
 

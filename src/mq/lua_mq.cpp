@@ -1697,7 +1697,7 @@ bool ScriptHost::run_file(const std::string& name, const std::vector<std::string
     lua_xmove(L, sc.co, 1); // the chunk onto the coroutine
     sc.co_ref = luaL_ref(L, LUA_REGISTRYINDEX);
     watch(sc.co);
-    m.say(std::format("[Lua] running {} ({})", key, plugin::caps_text(caps)), zone_policy);
+    m.say(std::format("[Lua] running {} ({})", key, plugin::caps_text(caps)), zone_policy, "lua:" + key);
     log::info("lua: running {} from {}, sha256 {}, caps {}", key, entry->string(), to_hex(hash), plugin::caps_text(caps));
     m.scripts.push_back(std::move(s));
     return true;
@@ -1712,7 +1712,7 @@ bool ScriptHost::Impl::kept(const Script& s) const {
 void ScriptHost::Impl::end(Script& s, const std::string& why, bool zone_policy) {
     s.stop_requested = true;
     if (s.status == Script::Status::Running || s.status == Script::Status::Paused) s.status = Script::Status::Exited;
-    say("[Lua] " + s.name + " " + why, zone_policy);
+    say("[Lua] " + s.name + " " + why, zone_policy, "lua:" + lower(s.name), true);
 }
 
 bool ScriptHost::Impl::may_control(const Script& s) const { return (s.caps & ~plugin::caller_caps()) == 0; }
@@ -2010,7 +2010,8 @@ void ScriptHost::policy_changed(const std::vector<std::string>& autoload, bool z
         Script& s = *sp;
         if (r.mode != plugin::ButtonMode::Full) {
             if (button_running(social))
-                m.say("[Lua] " + s.name + " stopped: this server does not let it run on", zone_policy);
+                m.say("[Lua] " + s.name + " stopped: this server does not let it run on", zone_policy,
+                      "lua-button:" + lower(s.name), true);
             m.stop_threads(s);
         } else {
             if (s.caps != r.caps) invalidate_plugin_lifecycle(s);
