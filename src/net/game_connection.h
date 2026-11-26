@@ -2092,7 +2092,10 @@ public:
     // (CEverQuest::DropItemOrMoneyOnPlayer): starts a trade or give, or drops
     // the cursor item into the open one.
     void give_to(std::uint32_t spawn_id);
-    // CTradeWnd::DropItemIntoTrade: the cursor item into the first free trade slot.
+    // The cursor item into the trade. With an NPC, `clicked_slot` (a Give slot clicked, CInvSlot::HandleLButtonUp
+    // @0x6963d2) takes the whole item only when that slot is empty; without one (a click on the NPC,
+    // CTradeWnd::DropItemIntoTrade @0x77f6d0) it goes to the first free slot. A player trade ignores
+    // `clicked_slot`: a stack merges into a matching trade stack, else the first free slot (docs/todo.md).
     void trade_drop_cursor(std::optional<std::int16_t> clicked_slot = std::nullopt);
     void trade_drop_cursor_coin();
     // Puts coin of one type (0 copper .. 3 platinum) into the trade (through the cursor, as the original).
