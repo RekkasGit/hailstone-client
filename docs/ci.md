@@ -165,6 +165,23 @@ variable `HAILSTONE_SELF_HOSTED` is `true`, since a job with no runner waits in 
   label, and run it as a service (`./svc.sh install`). Then set the variable under Settings, Secrets and variables,
   Actions, Variables.
 
+## Live smoke tests
+
+`tools/live_smoke.sh HOST[:PORT] USER PASS CHARACTER [script ...]` plays each `tests/live/*.quest` with
+`playprobe --quest` (`tools/quest_probe.h`, which lists the steps) against a test server, and prints a PASS or FAIL
+line for each. It exits 1 when any fails. The scripts need a GM character (they use `#zone`, `#goto`, `#summonitem`
+and `#damage`) and a stock PEQ database. `EQ_GAME_DIR` must be set; `PLAYPROBE` picks the binary (default
+`build/playprobe`) and `LIVE_SMOKE_LOGS` the log folder (default `build/live-smoke/<time>`).
+
+- `zoning.quest`: after each zone-in the client's possessions match the server's; `#goto` moves within a zone.
+- `items.quest`: a summoned item reaches the inventory and stays after a zone-in.
+- `npc.quest`: hail an NPC, trade it an item it hands back, kill an NPC.
+
+A script starts with `zone <name>`, which passes at once when the character is already there, so it does not
+depend on where the last session ended. Scripts and the runner name no server, account or password: pass them on the
+command line. Nothing runs them automatically; they are the scripted part of the 0.10 live checklist (docs/todo.md).
+A failure is a lead, not proof of a client bug: check the server's log and state too.
+
 ## Not covered
 
 - A change merged without the builds above is not built anywhere, unless the self-hosted build is switched on.
