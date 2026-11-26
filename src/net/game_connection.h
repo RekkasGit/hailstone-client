@@ -1721,7 +1721,7 @@ public:
     // from CBazaarWnd::WndNotification @0x63a31b and CBarterWnd::WndNotification @0x631fc3).
     void offlinemode_command();
     // What the rider-mount link asks of the client (the app's models and collision; game/mounts.h). Null: the
-    // defaults (Luclin models loaded, every mount has its rider dag, no room test).
+    // defaults (every mount has its rider dag, no room test).
     void set_mount_queries(game::MountQueries* q) { mount_queries_ = q; }
     // The spawn the local player moves (pinstControlledPlayer): its mount while it rides one, else 0.
     std::uint32_t controlled_id() const { return world_.controlled_id; }
