@@ -4815,23 +4815,23 @@ TEST_CASE("Modern Server Management reviews add-on dependencies and writes only 
         int lookups = 0;
         bool loaded = false;
         session.host.server_management_addon_tlos =
-            [&](std::string_view source, bool request) -> std::optional<app::ServerManagementAddonTlos> {
+            [&](std::string_view addon, bool request) -> std::optional<app::ServerManagementAddonTlos> {
             if (request) {
-                CHECK(source == "team/raidnotes");
+                CHECK(addon == "team/raidnotes");
                 ++lookups;
             }
-            if (source == "team/raidnotes") {
+            if (addon == "team/raidnotes") {
                 if (loaded) {
                     return app::ServerManagementAddonTlos{"team/raidnotes", "2.1.0", "ready",
                         std::vector<std::string>{"Me", "Target"}, std::vector<std::string>{"Spawn", "mE"}};
                 }
                 return app::ServerManagementAddonTlos{"team/raidnotes", "", lookups ? "pending" : "unchecked", {}, {}};
             }
-            if (source == "other/needsme") {
+            if (addon == "other/needsme") {
                 return app::ServerManagementAddonTlos{"other/needsme", "1.2.0", "ready",
                     std::vector<std::string>{"Me"}, std::vector<std::string>{}};
             }
-            if (source == "team/checks") {
+            if (addon == "team/checks") {
                 return app::ServerManagementAddonTlos{"team/checks", "1.2.0", "ready",
                     std::vector<std::string>{"Spawn"}, std::vector<std::string>{}};
             }
