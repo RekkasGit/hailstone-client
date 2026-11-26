@@ -154,7 +154,6 @@ constexpr std::size_t kWindowLines = 1000;
 // put where the restored lines end. It keeps what the windows keep (trim_windows).
 constexpr std::size_t kHistoryLines = 32000;
 constexpr std::string_view kHistoryHeader = "# Hailstone chat history 2";
-constexpr std::string_view kHistoryHeaderV3 = "# Hailstone chat history 3"; // first group prototype
 constexpr std::string_view kHistoryHeaderV1 = "# Hailstone chat history 1"; // no time column
 constexpr std::string_view kHistoryMark = "-- the chat from before --";
 constexpr std::string_view kHistoryGroup = "# Hailstone chat group\t";
@@ -2542,12 +2541,10 @@ void restore_chat_history(UiHost& host, const std::filesystem::path& file) {
     s.history_restored = true;
     std::ifstream in(file);
     std::string line;
-    if (!in || !std::getline(in, line) || (line != kHistoryHeader && line != kHistoryHeaderV3 &&
-                                           line != kHistoryHeaderV1)) return;
-    const bool group_markers = line == kHistoryHeader;
-    const bool prototype = line == kHistoryHeaderV3;
-    const bool timed = line != kHistoryHeaderV1;
-    const int fields = prototype ? 6 : timed ? 5 : 4;
+    if (!in || !std::getline(in, line) || (line != kHistoryHeader && line != kHistoryHeaderV1)) return;
+    const bool timed = line == kHistoryHeader;
+    const bool group_markers = timed;
+    const int fields = timed ? 5 : 4;
     std::deque<ui::ChatLine> old;
     std::size_t group_begin = 0, group_count = 0;
     std::string group_title;
@@ -2583,20 +2580,7 @@ void restore_chat_history(UiHost& host, const std::filesystem::path& file) {
         l.color = static_cast<std::uint32_t>(std::strtoul(std::string(f[2]).c_str(), nullptr, 10));
         if (timed) l.time = std::strtoll(std::string(f[3]).c_str(), nullptr, 10);
         l.peer = history_unescape(f[timed ? 4 : 3]);
-        std::string_view payload = std::string_view(line).substr(at);
-        if (prototype && f[5] == "group") {
-            l.text = ui::kClientSystemMessages;
-            while (true) {
-                const auto separator = payload.find('\t');
-                l.group_messages.push_back(history_unescape(payload.substr(0, separator)));
-                if (separator == std::string_view::npos) break;
-                payload.remove_prefix(separator + 1);
-            }
-        } else if (!prototype || f[5] == "line") {
-            l.text = history_unescape(payload);
-        } else {
-            continue;
-        }
+        l.text = history_unescape(std::string_view(line).substr(at));
         l.restored = true;
         old.push_back(std::move(l));
         if (group_count && old.size() == group_begin + group_count) {
