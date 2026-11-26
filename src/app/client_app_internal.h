@@ -541,6 +541,10 @@ public:
         automation_->hooks().add_command(plugin::Hooks::kClient, "/removepetbuff", [this](std::string_view args) {
             if (conn_) conn_->removepetbuff_command(args);
         }, plugin::kCapActions);
+        // MQ's /beep: a sound only, as /echo writes only (beep_command).
+        automation_->hooks().add_command(plugin::Hooks::kClient, "/beep", [this](std::string_view args) {
+            beep_command(args);
+        });
         // MQ's popups on the game's centre-screen text (mq/popup.h); display only, as /echo.
         static constexpr std::pair<const char*, mq::PopupKind> kPopups[] = {
             {"/popup", mq::PopupKind::Plain},
@@ -1017,6 +1021,17 @@ private:
     // MQ's window methods read in a line (mq::Context::window_act): a click goes as /notify sends it, DoOpen and
     // DoClose show or hide the stock window.
     bool window_act(std::string_view window, std::string_view child, std::string_view action);
+    // /beep [sound]: the chosen Beep sound, a game sound by name, or MQ's tone (client_app_options.cpp).
+    void beep_command(std::string_view args);
+    static constexpr const char* kBeepTone = "Tone"; // option_choices("beep_sound")[0]
+    // option_choices("beep_sound"): the tone, the short list (beep_featured_ entries), every other sound file; kept
+    // for the sound system they were read from (client_app_options.cpp).
+    const std::vector<std::string>& beep_choices() const;
+    mutable std::vector<std::string> beep_choices_;
+    mutable std::size_t beep_featured_ = 0;
+    mutable const audio::AudioSystem* beep_choices_for_ = nullptr;
+    static constexpr double kBeepToneHz = 1280.0;    // MQ's Beep(0x500, 250)
+    static constexpr std::uint32_t kBeepToneMs = 250;
     // The modifier keys a command's click uses: those /nomodkey, /shiftkey or /ctrlkey forced while their line runs,
     // else the keyboard's (MacroQuest's clicks read the keyboard too).
     net::SlotClickKeys command_keys() const;

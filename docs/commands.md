@@ -273,6 +273,7 @@ one, the server's add-on rules decide whether it may.
 | `/target ...`, `/face ...` | Target or face by MacroQuest's spawn search (`/target` is above). |
 | `/keypress <command> [hold\|release]` | Press a key command by name. |
 | `/echo <text>` | Print a line to chat. As in MacroQuest, `\a` then a colour letter colours what follows (`\ayYellow \agGreen\ax`), `\n` breaks the line and `\\` is a backslash. A colour that comes from a `${...}` in a typed line (a server's text) does not colour. |
+| `/beep [sound]` | Play a sound (MacroQuest's; scripts use it as an alert). With nothing given, the Beep sound chosen in Individual Sounds: the tone (1280 Hz for a quarter second, as MacroQuest), a short list of game sounds that suit an alert, or any sound of your game folder (the drop-down has a search). With a sound name or any game sound file (`/beep LevelUp.WAV`) it plays that instead; MacroQuest plays any file path, Hailstone only the game folder's own sounds, and a name it lacks plays the tone. All at the Beep volume. |
 | `/docommand <line>`, `/noparse <line>` | Run a line; run it without expanding `${...}`. |
 | `/invoke ${...}` | Read the line's `${...}` and do nothing else: what acts is the read, for MacroQuest's window methods (`${Window[InventoryWindow].DoOpen}`, `${Window[BigBankWnd].Child[BIGB_AutoButton].LeftMouseUp}`). |
 | `/squelch <line>` | Run a line without the chat lines it prints. |

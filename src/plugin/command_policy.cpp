@@ -21,6 +21,7 @@ struct ExtendedCommand {
 constexpr ExtendedCommand kExtended[] = {
     {"/abilitybook", "Open the Ability Book or toggle autoskill."},
     {"/afollow", "Follow a target or spawn along its path.", kMovement},
+    {"/beep", "Play the Beep sound, or a game sound by name.", kHelpers},
     {"/camera", "Change camera mode and settings."},
     {"/chattabs", "Manage tabs and windows in chat."},
     {"/debug_animinfo", "Inspect model and animation state."},
