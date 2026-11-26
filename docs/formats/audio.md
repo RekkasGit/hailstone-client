@@ -203,7 +203,10 @@ stop messages preserve the fade in progress. Weather keeps updating in backgroun
 finish fading. The emitter fades also apply to listener changes within a zone.
 
 Leaving a zone, including when camping to character select, stops both loops immediately and clears the zone's weather
-state. An install may ship `sounds\rainloop.wav` and `wind_lp1.wav` as 80-byte files without samples, so nothing is heard.
+state. The original's CEverQuest_ClearZoneWorldState @0x4939b0 calls Weather_StopEffect, EmitterSetRaining(0) and
+EmitterSetWind(0), so its emitters fade out over their 3000 ms release. Hailstone cuts the loops at once, during the
+load screen, as a deliberate presentation choice. An install may ship `sounds\rainloop.wav` and `wind_lp1.wav` as
+80-byte files without samples, so nothing is heard.
 
 ## Which sound for which event
 
