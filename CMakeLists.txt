@@ -6,6 +6,13 @@ project(hailstone VERSION 0.7.3 LANGUAGES C CXX)
 # The release's pre-release label (SemVer: "0.1.0-alpha"); empty for a final release. With the version it is what the
 # updater compares against a release's manifest (core/version.h, docs/updater.md), so change both with each release.
 set(HAILSTONE_VERSION_LABEL "beta")
+# A nightly build's label in place of the release's ("nightly.20261126", tools/nightly.sh). SemVer ranks it above a
+# "beta" label of the same version, so the updater offers a nightly the next release, not this one. Release builds reset
+# it (tools/docker/release_options.sh).
+set(HAILSTONE_NIGHTLY_LABEL "" CACHE STRING "A nightly build's version label, in place of the release's")
+if(NOT HAILSTONE_NIGHTLY_LABEL STREQUAL "")
+  set(HAILSTONE_VERSION_LABEL "${HAILSTONE_NIGHTLY_LABEL}")
+endif()
 if(HAILSTONE_VERSION_LABEL STREQUAL "")
   set(HAILSTONE_RELEASE_VERSION ${PROJECT_VERSION})
 else()

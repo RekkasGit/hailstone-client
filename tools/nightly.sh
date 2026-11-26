@@ -4,11 +4,18 @@
 #      vectors set, so the tests that otherwise pass without checking anything check something.
 #   2. The libFuzzer targets (HAILSTONE_LIBFUZZER, Clang), each for --fuzz-seconds, side by side, on corpora kept
 #      between nights. A crash's input is kept for the morning.
-#   3. A summary, printed and, with a webhook set, posted to Discord.
+#   3. With --publish, after a night with no failure: the Linux and Windows packages, built as a release is
+#      (tools/docker/build.sh, tools/make_update.py) with the version label nightly.<date>, the Linux package's tests
+#      run on this machine, then uploaded to the rolling `nightly` pre-release on GitHub. The updater never offers a
+#      pre-release, and the packages carry no signed manifest.
+#   4. A summary, printed and, with a webhook set, posted to Discord.
 #
-# Usage: tools/nightly.sh [--fuzz-seconds N] [--jobs N] [--no-fuzz] [--no-post] [--ref REF]
+# Usage: tools/nightly.sh [--fuzz-seconds N] [--jobs N] [--no-fuzz] [--no-post] [--package | --publish] [--ref REF]
 #   --fuzz-seconds  seconds per fuzz target (default 1800; the targets run at once, one core each)
-#   --jobs          build and test jobs (default 20)
+#   --jobs          build and test jobs, and the package containers' CPU limit (default 20)
+#   --package       build, test and zip the packages into the checkout's release-nightly/, without uploading
+#   --publish       build and publish the packages (needs gh signed in with write access, Docker, and MSVC for
+#                   tools/docker/build.sh windows-x64)
 #   --ref           what to test (default origin/main, fetched first)
 #
 # Settings, in ${XDG_CONFIG_HOME:-~/.config}/hailstone/nightly.env (sourced; never in the repository):
@@ -25,6 +32,7 @@ fuzz_seconds=1800
 jobs=20
 fuzz=1
 post=1
+publish=0
 ref=origin/main
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -32,6 +40,8 @@ while [ $# -gt 0 ]; do
     --jobs) jobs=$2; shift 2 ;;
     --no-fuzz) fuzz=0; shift ;;
     --no-post) post=0; shift ;;
+    --package) publish=1; shift ;;
+    --publish) publish=2; shift ;;
     --ref) ref=$2; shift 2 ;;
     *) echo "nightly: unknown option $1" >&2; exit 2 ;;
   esac
@@ -64,7 +74,8 @@ if [ ! -e "$checkout/.git" ]; then
   git -C "$repo" worktree add -q --detach "$checkout" "$ref" || { echo "nightly: cannot make $checkout" >&2; exit 1; }
 fi
 git -C "$checkout" checkout -q --detach -f "$ref" || { echo "nightly: cannot check out $ref" >&2; exit 1; }
-git -C "$checkout" clean -q -ffdx -e /build-asan -e /build-fuzz -e /plugins/nms -e /plugins/projecttriune
+git -C "$checkout" clean -q -ffdx -e /build-asan -e /build-fuzz -e /build-linux-x64 -e /build-windows-x64 -e /.docker \
+  -e /plugins/nms -e /plugins/projecttriune
 # The server plugins' clones join the build when the main checkout has them (AGENTS.md, server plugins).
 for p in nms projecttriune; do
   [ -d "$repo/plugins/$p" ] && [ ! -e "$checkout/plugins/$p" ] && ln -s "$repo/plugins/$p" "$checkout/plugins/$p"
@@ -122,11 +133,78 @@ if [ "$fuzz" = 1 ]; then
   fi
 fi
 
-# 3. The summary.
+# 3. The packages, after a night with no failure.
+published=""
+publish_packages() {
+  local base label version notes slug full asset
+  base=$(sed -n 's/^project(hailstone VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+  label="nightly.$(date +%Y%m%d)"
+  version="$base-$label"
+  # The packages as a release's (docs/updater.md "Making a release"), with tests run below rather than in the
+  # containers: Linux's container cannot run the browser tests, Windows' Wine fails some (docs/ci.md).
+  for platform in linux-x64 windows-x64; do
+    CPUS=$jobs CMAKE_ARGS="-DHAILSTONE_BROWSER=ON -DHAILSTONE_NIGHTLY_LABEL=$label" \
+      tools/docker/build.sh "$platform" --no-test > "$logs/package-$platform.log" 2>&1 ||
+      { fail "the $platform package (package-$platform.log)"; return; }
+  done
+  if nice ctest --test-dir build-linux-x64 -j "$jobs" --output-on-failure > "$logs/package-tests.log" 2>&1; then
+    note "Linux package tests: $(grep -o '[0-9]*% tests passed.*' "$logs/package-tests.log" | tail -1)"
+  else
+    fail "Linux package tests: $(grep -o '[0-9]*% tests passed.*' "$logs/package-tests.log" | tail -1) (package-tests.log)"
+    return
+  fi
+  rm -rf release-nightly
+  for platform in linux-x64 windows-x64; do
+    python3 tools/make_update.py --version "$version" --platform "$platform" --dist "dist/$platform/hailstone" \
+      --out release-nightly >> "$logs/package-zip.log" 2>&1 || { fail "zipping $platform (package-zip.log)"; return; }
+  done
+  # No manifest: nothing should install a nightly as an update.
+  rm -f release-nightly/hailstone-update.txt
+  (cd release-nightly && sha256sum -- *.zip > SHA256SUMS)
+  if [ "$publish" = 1 ]; then
+    note "packaged $version, not uploaded"
+    return
+  fi
+
+  slug=$(gh repo view --json nameWithOwner --jq .nameWithOwner) || { fail "gh cannot see the repository"; return; }
+  full=$(git rev-parse HEAD)
+  notes=$logs/release-notes.md
+  {
+    echo "Built from $full on $(date -u +%Y-%m-%d) after the night's checks passed. Untested in live play."
+    echo
+    echo "A pre-release: the updater never offers it, and a nightly is offered the next release as usual."
+    echo "The version is $version; \`SHA256SUMS\` has the downloads' checksums."
+    echo
+    echo "The night's checks:"
+    printf -- '- %s\n' "${summary[@]}"
+  } > "$notes"
+  if gh release view nightly > /dev/null 2>&1; then
+    # The one ref this moves, and never a branch: a plain git fetch leaves a clone's old copy of the tag alone.
+    gh api -X PATCH "repos/$slug/git/refs/tags/nightly" -f sha="$full" -F force=true > /dev/null ||
+      { fail "moving the nightly tag"; return; }
+  else
+    gh release create nightly --prerelease --title "Nightly" --target "$full" --notes-file "$notes" > /dev/null ||
+      { fail "creating the nightly release"; return; }
+  fi
+  gh release upload nightly release-nightly/* --clobber > /dev/null || { fail "uploading the packages"; return; }
+  # The previous night's downloads, now replaced (their names carry the date).
+  for asset in $(gh release view nightly --json assets --jq '.assets[].name'); do
+    [ -e "release-nightly/$asset" ] || gh release delete-asset nightly "$asset" -y > /dev/null
+  done
+  gh release edit nightly --prerelease --notes-file "$notes" > /dev/null
+  published="https://github.com/$slug/releases/tag/nightly"
+  note "published $version"
+}
+if [ "$publish" != 0 ]; then
+  if [ "$failed" = 0 ]; then publish_packages; else note "not published: the night had a failure"; fi
+fi
+
+# 4. The summary.
 status="passed"
 [ "$failed" = 1 ] && status="FAILED"
 # The posted text names no local path (it would carry the user's name); the log folder is added locally only.
 text="Hailstone nightly $status on $commit"$'\n'"$(printf -- '- %s\n' "${summary[@]}")"
+[ -n "$published" ] && text+=$'\n'"Downloads: $published"
 printf '%s\n' "$text" > "$logs/summary.txt"
 printf '%s\nLogs: %s\n' "$text" "$logs"
 if [ "$post" = 1 ] && [ -n "${HAILSTONE_NIGHTLY_WEBHOOK:-}" ]; then
