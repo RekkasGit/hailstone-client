@@ -2031,7 +2031,7 @@ public:
     // the cursor item into the open one.
     void give_to(std::uint32_t spawn_id);
     // CTradeWnd::DropItemIntoTrade: the cursor item into the first free trade slot.
-    void trade_drop_cursor();
+    void trade_drop_cursor(std::optional<std::int16_t> clicked_slot = std::nullopt);
     void trade_drop_cursor_coin();
     // Puts coin of one type (0 copper .. 3 platinum) into the trade (through the cursor, as the original).
     void trade_coin(int type, std::uint32_t amount);
