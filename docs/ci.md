@@ -165,6 +165,50 @@ variable `HAILSTONE_SELF_HOSTED` is `true`, since a job with no runner waits in 
   label, and run it as a service (`./svc.sh install`). Then set the variable under Settings, Secrets and variables,
   Actions, Variables.
 
+## Nightly run
+
+`tools/nightly.sh` runs what a normal run leaves out, on `origin/main`, and is meant for a timer on a maintainer's
+machine:
+
+1. The sanitizer build (`HAILSTONE_SANITIZE`, docs/hardening.md) and every `hailstone_tests` case, with
+   `EQ_GAME_DIR` and `HAILSTONE_VECTORS_DIR` set, so the tests that otherwise pass without checking anything check
+   something.
+2. The libFuzzer targets (`HAILSTONE_LIBFUZZER`, Clang; docs/hardening.md), all at once, one core each, for
+   `--fuzz-seconds` (default 1800). Their corpora are kept between nights, and a crash's input is kept for the morning.
+3. A summary: printed, kept in the night's log folder, and posted to Discord when a webhook is set. The posted text
+   names no local path.
+
+It exits 1 when a step fails. Options: `--fuzz-seconds N`, `--jobs N` (default 20), `--no-fuzz`, `--no-post`,
+`--ref REF`.
+
+- Settings go in `${XDG_CONFIG_HOME:-~/.config}/hailstone/nightly.env`, which it sources: `EQ_GAME_DIR`,
+  `HAILSTONE_VECTORS_DIR` and, optionally, `HAILSTONE_NIGHTLY_WEBHOOK` (a Discord webhook URL). Never commit them.
+- Everything it writes is under `${XDG_CACHE_HOME:-~/.cache}/hailstone-nightly`: the checkout it tests (a detached
+  worktree of the repository, reset to the ref each night and cleaned of all but its `build-asan` and `build-fuzz`
+  folders), the corpora (`corpus/<target>`), crash inputs (`crashes/<target>`) and a log folder per night
+  (`logs/<time>`, with `summary.txt`).
+- The server plugins' clones join the build when the main checkout has them. A lock keeps two runs apart.
+- A crash input replays with `build-fuzz/<target> <file>` in the checkout.
+
+A user timer runs it nightly. Put both files in `~/.config/systemd/user/`, then run
+`systemctl --user enable --now hailstone-nightly.timer` (and `loginctl enable-linger` for it to run while logged out):
+
+```ini
+# hailstone-nightly.service
+[Service]
+Type=oneshot
+ExecStart=/path/to/hailstone-client/tools/nightly.sh
+Nice=10
+
+# hailstone-nightly.timer
+[Timer]
+OnCalendar=*-*-* 03:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
 ## Not covered
 
 - A change merged without the builds above is not built anywhere, unless the self-hosted build is switched on.
@@ -174,7 +218,7 @@ variable `HAILSTONE_SELF_HOSTED` is `true`, since a job with no runner waits in 
   workflow is started.
 - No macOS build has been run on a Mac with a display; on the runner the window, MoltenVK and the rendering are
   compiled and linked only.
-- Nothing runs against a real game install or a server unless run by hand.
+- Nothing runs against a real game install or a server unless run by hand, or by the nightly run (game install only).
 
 ## Windows builds from Linux
 
