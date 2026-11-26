@@ -118,6 +118,7 @@ manifest's `caps` (docs/addons.md).
 | `Navigation` | | `navigation` | the client's navigation (docs/navigation.md) |
 | `Stick` | | `stick` | `/stick`'s state (docs/navigation.md) |
 | `MoveTo` | | `moveto` | `/moveto`'s state (docs/navigation.md) |
+| `MoveUtils` | | `moveutils` | whether a `/moveto` or `/stick` walk is stuck (docs/navigation.md) |
 | `AdvPath` | | `advpath` | `/afollow`'s state (docs/navigation.md) |
 | `Int` | number | int | the number cut toward zero; NULL for NaN, infinity or a number beyond 64 bits |
 | `Float` | number | float | the number |
@@ -132,7 +133,7 @@ manifest's `caps` (docs/addons.md).
 1 000 000 in size.
 
 A compiled plugin can add TLOs (`AddTopLevelObject`). It cannot replace one that exists. `Spell.StacksWithDiscs` is
-not given (docs/unknowns.md). MQ TLOs that are missing:
+not given: it is a later live client's spell field (ToB and after), not in the RoF2 spell file. MQ TLOs that are missing:
 `Ground`, `Macro`, and other MQ plugins' TLOs (`Navigation` and
 `Stick` are built in).
 
@@ -499,6 +500,7 @@ An AA the player owns. Its plain value is its ability (group) id.
 | `bandolieritem` | its name | `ID`, `IconID`, `Name` |
 | `advpath` | `TRUE` | `Active`, `State` (1 following, 0 not), `Status` (0 off, 1 on, 2 paused), `Following`, `Paused`, `WaitingWarp`, `Waypoints`, `Length`, `Monitor` (spawn), `Playing` and `Recording` (FALSE); docs/navigation.md |
 | `moveto` | `ON`, `PAUSED` or `OFF` | `Moving`, `Stopped` (the last `/moveto` arrived), `ArrivalDist`, `Broken` (always FALSE); docs/navigation.md |
+| `moveutils` | `STICK`, `MOVETO` or `NONE` | `Stuck` (a `/moveto` or `/stick` walk has stalled), `Command` (as the text); docs/navigation.md |
 | `math` | NULL | `Calc[expr]`, `Sqrt`, `Abs`, `Sin`, `Cos`, `Tan`, `Asin`, `Acos`, `Atan` (degrees), `Rand[max]` or `Rand[min,max]`, `Not`, `Hex`, `Dec[hex]`, `Clamp[n,min,max]`, `Distance[y,x,z:y,x,z]` (a missing point or coordinate is the player's) |
 
 `Debuff` is the MQ2Debuffs plugin's TLO, which E3 reads. Only detrimental spells count: some beneficial buffs carry

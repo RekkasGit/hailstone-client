@@ -43,7 +43,7 @@ using net::GameConnection;
 
 struct Types {
     const Type *spawn, *character, *cls, *race, *heading, *spell, *buff, *timestamp, *item, *zone, *group, *member,
-        *everquest, *macroquest, *hailstone, *window, *plugin, *time, *gametime, *navigation, *stick, *debuff, *moveto,
+        *everquest, *macroquest, *hailstone, *window, *plugin, *time, *gametime, *navigation, *stick, *debuff, *moveto, *moveutils,
         *bandolier, *bandolier_item, *advpath, *target, *xtarget, *altability, *aug, *ticks, *body, *raid, *raidmember, *corpse, *pet, *invslot, *merchant, *door, *mercenary;
 };
 
@@ -2705,6 +2705,30 @@ void register_stick() {
 // ArrivalDistX are not here.
 void register_moveto();
 
+// The MoveUtils TLO (MQ2MoveUtils' members): Stuck, a /moveto's or /stick's walk that has stalled and not moved on
+// since (NavStatus::stuck: the walk found no progress for a second, and is jumping and strafing or asking for a new
+// path). MQ2MoveUtils' own test (under a tenth of a unit moved per pulse, its StuckLogic) is not taken: Hailstone's
+// walk has its own (nav/path_follower.h), so Stuck turns TRUE later than MQ2MoveUtils' would. Command and its text: the
+// command walking, "STICK", "MOVETO" or "NONE" (MQ2MoveUtils' CIRCLE and MAKECAMP are not in Hailstone). Its settings
+// and the rest (Summoned, StuckLogic, Verbosity, Aggro, the pause delays, PulseCheck, PulseUnstuck, TryToJump,
+// DistStuck, Version, MovePause, GM) are not here.
+void register_moveutils() {
+    auto status = [](const Context& c) { return c.nav ? std::optional(c.nav->status()) : std::nullopt; };
+    auto command = [status](const Context& c) {
+        auto s = status(c);
+        return std::string(!s ? "NONE" : s->stick_spawn != 0 ? "STICK" : s->moveto ? "MOVETO" : "NONE");
+    };
+    add(g.moveutils, "Stuck", [status](const Context& c, const Value&, std::string_view) {
+        auto s = status(c);
+        return V::boolean(s && s->stuck);
+    });
+    add(g.moveutils, "Command", [command](const Context& c, const Value&, std::string_view) {
+        return V::string(command(c));
+    });
+    Type& t = const_cast<Type&>(*g.moveutils);
+    t.to_value = [command](const Context& c, const Value&) { return V::string(command(c)); };
+}
+
 // Me.Bandolier[name|#] (MQ's CharacterMembers::Bandolier and MQ2BandolierType): a set by its name, any case, or its
 // number (1..20, clamped as MQ clamps it); NULL for a name no set has. A set without a name answers NULL to every
 // member, as MQ's GetMember fails on it. Its text is its name. i: the set's index (0..19).
@@ -3034,6 +3058,7 @@ void register_game_tlos(Registry& r) {
     g.navigation = &r.type("navigation");
     g.stick = &r.type("stick");
     g.moveto = &r.type("moveto");
+    g.moveutils = &r.type("moveutils");
     g.bandolier = &r.type("bandolier");
     g.bandolier_item = &r.type("bandolieritem");
     g.advpath = &r.type("advpath");
@@ -3063,6 +3088,7 @@ void register_game_tlos(Registry& r) {
     register_navigation();
     register_stick();
     register_moveto();
+    register_moveutils();
     register_bandolier();
     register_advpath();
     register_e3_members();
@@ -3105,6 +3131,9 @@ void register_game_tlos(Registry& r) {
     });
     r.add_tlo("Stick", [](const Context& c, std::string_view) -> V { return c.nav ? V::object(g.stick, 0) : V::nil(); });
     r.add_tlo("MoveTo", [](const Context& c, std::string_view) -> V { return c.nav ? V::object(g.moveto, 0) : V::nil(); });
+    r.add_tlo("MoveUtils", [](const Context& c, std::string_view) -> V {
+        return c.nav ? V::object(g.moveutils, 0) : V::nil();
+    });
     r.add_tlo("AdvPath", [](const Context& c, std::string_view) -> V {
         return c.nav ? V::object(g.advpath, 0) : V::nil();
     });

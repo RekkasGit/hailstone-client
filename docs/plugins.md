@@ -318,7 +318,7 @@ members are `EverQuest`'s, as in MQ, so `.Server` is the server's name), `Hailst
 `Heading[deg]`, `Int`, `Float`, `Bool`, `String`, `Select`, `Math`,
 `If`, `Range`, `LineOfSight[...]`, `Debuff` and `Debuff[pet]` (`.Count`, `.Poisoned`, `.Diseased`, `.Cursed`,
 `.Corrupted`: the counters on the player or the pet; `.Silenced`; docs/scripting-reference.md), `Navigation`, `Stick`,
-`MoveTo` and `AdvPath` (below).
+`MoveTo`, `MoveUtils` and `AdvPath` (below).
 Compiled plugins can add more.
 
 The data types use MQ's member names and inheritance:
