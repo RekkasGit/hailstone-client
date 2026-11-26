@@ -11,6 +11,7 @@
 #include "game/item_links.h"
 #include "mq/calc.h"
 #include "net/game_connection.h"
+#include "plugin/policy.h"
 
 namespace hailstone::mq {
 
@@ -414,7 +415,12 @@ std::vector<std::string> Registry::complete(const Context& ctx, std::string_view
 bool Registry::tlo_allowed(const Context& ctx, std::string_view name) const {
     if (!ctx.conn) return true;
     const auto& rules = ctx.conn->server_rules();
-    return !rules || rules->provisional || rules->tlos.allowed(name);
+    if (!rules || rules->provisional || rules->tlos.allowed(name)) return true;
+    const auto scoped = plugin::caller_tlo_proof();
+    const auto proof = scoped ? scoped->lock() : plugin::TloCaller{};
+    if (!proof) return false;
+    const auto identity = proof->identity();
+    return rules->tlos.allowed(name, identity) && plugin::addon_allowed(rules->addons, identity);
 }
 
 Value Registry::tlo(const Context& ctx, std::string_view name, std::string_view index) const {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,11 @@ struct ServerManagementCommand {
 
 struct ServerManagementTlo {
     std::string name, description, origin;
+};
+
+struct ServerManagementAddonTlos {
+    std::string repo, version, status;
+    std::optional<std::vector<std::string>> required_tlos, suggested_tlos;
 };
 
 // The config snapshot and locally registered commands and TLOs have independent revisions.

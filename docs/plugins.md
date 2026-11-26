@@ -2335,11 +2335,15 @@ alternate roots, and the server's gameplay permissions have their own rules.
 default = allow
 allow = Target
 block = Spawn, SpawnCount, NearestSpawn
+addon_allow = owner/raidnotes:Spawn
 ```
 
-Omit the section to keep normal behavior. `default = deny` makes `allow` an allowlist. Use it carefully because
-scripts may rely on roots such as `Me`, `If`, and `Math`. An explicit block wins if a name is in both lists.
-The same TLO rules apply to required, suggested, and allowed add-ons.
+Omit the section to allow all TLOs. `default = deny` makes `allow` an allowlist. Use it carefully because
+scripts may rely on roots such as `Me`, `If`, and `Math`. An explicit block wins if a name is in both global lists.
+`addon_allow` grants specific roots to a verified managed add-on, using comma-separated `owner/repo:Root` entries.
+Grants apply across releases from the same repository, and a newly declared root needs its own grant. Add-on
+admission and the add-on's `read` capability still apply. A Lua add-on loses its grants for the current run if it
+loads a module outside its verified package.
 Names match without regard to case. Separate names with commas or whitespace. A name starts with an ASCII
 letter, digit, or underscore and can also contain hyphens after its first character. Whole roots are configurable.
 For example, the rule for `Me` applies to every member of `Me`, including `Me.Bank`. Add-on roots with other
@@ -2347,8 +2351,10 @@ spellings follow the default policy.
 
 Edit the rules in the built-in Modern **Server Management** window under **TLO access**. The catalog lists
 built-in TLOs and the add-on roots registered on the GM's client. Rules can name an add-on root before it
-registers. Supporting Hailstone clients receive updated rules at their next login. The in-game editor needs the
-updated server encounter.
+registers. In **Add-ons**, **Review TLOs** shows the selected manifest's `required_tlos` and `suggested_tlos`,
+highlights conflicts with the draft policy, and lets you explicitly grant or revoke access. A missing declaration
+shows as **Unknown**. Declarations are metadata and carry no grants on their own. Supporting Hailstone clients
+receive updated rules at their next login. The in-game editor needs the updated server encounter.
 
 ### Opt-in add-on policies
 

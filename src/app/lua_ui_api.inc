@@ -344,6 +344,7 @@ UI_METHOD("SetScriptAutorun", "scripts", "SetAutorun", 0)
 UI_METHOD("ScriptStop", "scripts", "Stop", 0)
 
 // serverManagement
+UI_METHOD("ServerManagementAddonTlos", "serverManagement", "AddonTlos", 0)
 UI_METHOD("ServerManagementAvailable", "serverManagement", "Available", 0)
 UI_METHOD("ServerManagementCanonicalCommandName", "serverManagement", "CanonicalCommandName", 0)
 UI_METHOD("ServerManagementClose", "serverManagement", "Close", 0)

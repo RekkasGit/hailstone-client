@@ -155,6 +155,7 @@ namespace {
 // The client's thread's: plugins and scripts run there (another thread sees none of it, on_main_thread).
 std::uint32_t g_caller_caps = kCapAll;
 std::string g_caller_name;
+const CallerScope* g_tlo_scope = nullptr;
 // Set during the program's static initialisation, which runs on the thread that starts it.
 const std::thread::id g_main_thread = std::this_thread::get_id();
 thread_local bool t_lent = false; // a ThreadLent is live on this thread
@@ -169,18 +170,44 @@ ThreadLent::~ThreadLent() { t_lent = prev_; }
 std::uint32_t caller_caps() { return on_main_thread() ? g_caller_caps : 0; }
 std::string_view caller_name() { return on_main_thread() ? std::string_view(g_caller_name) : "another thread"; }
 
-CallerScope::CallerScope(std::uint32_t caps, std::string_view name) : active_(on_main_thread()) {
+std::optional<WeakTloCaller> caller_tlo_proof() {
+    if (!on_main_thread()) return WeakTloCaller{};
+    if (!g_tlo_scope) return std::nullopt;
+    const auto proof = g_tlo_scope->tlo_.lock();
+    const std::string_view identity = proof ? proof->identity() : std::string_view{};
+    if (identity.empty()) return WeakTloCaller{};
+    for (const auto* parent = g_tlo_scope->prev_tlo_scope_; parent; parent = parent->prev_tlo_scope_) {
+        const auto caller = parent->tlo_.lock();
+        if (!caller || caller->identity() != identity) return WeakTloCaller{};
+    }
+    return g_tlo_scope->tlo_;
+}
+
+bool may_inherit_tlo_proof(const TloCaller& proof) {
+    if (!proof || proof->identity().empty()) return false;
+    const auto parent = caller_tlo_proof();
+    if (!parent) return true;
+    const auto caller = parent->lock();
+    return caller && caller->identity() == proof->identity();
+}
+
+CallerScope::CallerScope(std::uint32_t caps, std::string_view name, WeakTloCaller tlo)
+    : active_(on_main_thread()), tlo_(std::move(tlo)) {
     if (!active_) return;
+    std::string new_name(name);
     prev_caps_ = g_caller_caps;
     prev_name_ = std::move(g_caller_name);
     g_caller_caps = caps & prev_caps_; // a script a plugin runs gets no more than the plugin
-    g_caller_name = name;
+    g_caller_name = std::move(new_name);
+    prev_tlo_scope_ = g_tlo_scope;
+    g_tlo_scope = this;
 }
 
 CallerScope::~CallerScope() {
     if (!active_) return;
     g_caller_caps = prev_caps_;
     g_caller_name = std::move(prev_name_);
+    g_tlo_scope = prev_tlo_scope_;
 }
 
 HostCallerScope::HostCallerScope() : active_(on_main_thread()) {
@@ -369,7 +396,7 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
                     else warn(where + ": expected allow or deny");
                     continue;
                 }
-                if (key == "allow" || key == "block") {
+                if (key == "allow" || key == "block" || key == "addon_allow") {
                     auto& list = key == "allow" ? r.tlos.allow : r.tlos.block;
                     const auto spelling = value_without_comment(ini.get_string(section_name, key_name));
                     std::string_view rest = spelling;
@@ -378,8 +405,21 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
                         const auto token = rest.substr(0, end);
                         rest = end == std::string_view::npos ? std::string_view() : rest.substr(end + 1);
                         if (token.empty()) continue;
-                        if (valid_tlo_name(token)) list.emplace(token);
-                        else warn(std::format("{}: expected a TLO root name, got \"{}\"", where, token));
+                        if (key == "addon_allow") {
+                            const auto colon = token.find(':');
+                            const auto repo = token.substr(0, colon);
+                            const auto identity = normalize_addon_identity(repo);
+                            if (colon != std::string_view::npos && identity && iequals(repo, *identity) &&
+                                valid_tlo_name(token.substr(colon + 1))) {
+                                r.tlos.addon_allow[*identity].emplace(token.substr(colon + 1));
+                            } else {
+                                warn(std::format("{}: expected owner/repo:TLO, got \"{}\"", where, token));
+                            }
+                        } else if (valid_tlo_name(token)) {
+                            list.emplace(token);
+                        } else {
+                            warn(std::format("{}: expected a TLO root name, got \"{}\"", where, token));
+                        }
                     }
                     continue;
                 }
@@ -713,12 +753,14 @@ std::optional<std::uint32_t> Policy::ceiling(FileKind kind, const Sha256Digest& 
 }
 
 void Policy::set(Rules rules) {
+    tlo_generation_ = std::make_shared<const int>(0);
     rules_ = std::move(rules);
     ++serial_;
 }
 
 void Policy::clear() {
     if (!rules_) return;
+    tlo_generation_.reset();
     rules_.reset();
     ++serial_;
 }
@@ -731,9 +773,50 @@ bool Policy::server_file(FileKind kind, const Sha256Digest& hash) const {
 
 void Policy::set_ceilings(std::vector<Ceiling> ceilings) {
     // Sources in normalize_addon_identity's form once, so the checks each frame compare strings only.
-    for (auto& c : ceilings) c.addon_source = addon_identity(c.addon_source);
+    for (auto& c : ceilings) {
+        c.addon_source = addon_identity(c.addon_source);
+        if (c.installed_path.empty()) continue;
+        std::error_code error;
+        c.installed_path = std::filesystem::absolute(c.installed_path, error).lexically_normal();
+        if (error) c.installed_path.clear();
+    }
+    tlo_generation_ = std::make_shared<const int>(0);
     ceilings_ = std::move(ceilings);
     ++serial_;
+}
+
+std::string_view Policy::verified_tlo_identity(FileKind kind, const Sha256Digest& hash,
+                                               const std::filesystem::path& file, bool entry_point) const {
+    if (file.empty()) return {};
+    std::error_code error;
+    const auto path = std::filesystem::absolute(file, error).lexically_normal();
+    if (error) return {};
+    const auto same_path = [&](const std::filesystem::path& expected) {
+        if (expected == path) return true;
+        if (expected.empty()) return false;
+        // Lua resolves a typed add-on name without regard to case. Permit a case variant only when the
+        // filesystem confirms that it opens the same file. Links from a different path cannot lend identity.
+        const auto actual_name = path.generic_u8string();
+        const auto expected_name = expected.generic_u8string();
+        if (!iequals(std::string(actual_name.begin(), actual_name.end()),
+                     std::string(expected_name.begin(), expected_name.end()))) return false;
+        std::error_code comparison;
+        return std::filesystem::equivalent(expected, path, comparison);
+    };
+    std::string_view source;
+    for (const auto& record : ceilings_) {
+        if (!record.verified || record.kind != kind || record.sha256 != hash || record.addon_source.empty() ||
+            (entry_point && !record.entry_point) || !same_path(record.installed_path))
+            continue;
+        if (!source.empty() && source != record.addon_source) return {};
+        source = record.addon_source;
+    }
+    return source;
+}
+
+TloCaller Policy::verified_tlo_caller(FileKind kind, const Sha256Digest& hash, const std::filesystem::path& file) const {
+    auto identity = verified_tlo_identity(kind, hash, file, true);
+    return identity.empty() ? TloCaller{} : TloCaller(new VerifiedTloCaller(identity, tlo_generation_));
 }
 
 bool Policy::addon_file_allowed(FileKind kind, const Sha256Digest& hash, std::string_view name) const {

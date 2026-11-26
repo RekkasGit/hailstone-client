@@ -21,6 +21,7 @@
 
 #include "mq/tlo.h"
 #include "plugin/hooks.h"
+#include "plugin/policy.h"
 
 namespace hailstone::mq {
 
@@ -87,6 +88,7 @@ private:
         std::string line;
         std::uint32_t caps = 0;
         std::string caller;
+        std::optional<plugin::WeakTloCaller> tlo_caller;
     };
     std::int64_t now_ms() const;
     void run_timed(); // each pulse: the lines due, in the order they fall due (sent order for the same time)

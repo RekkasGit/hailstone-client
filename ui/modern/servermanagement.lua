@@ -84,6 +84,7 @@ local section, origin, page, search = 1, 2, 1, ""
 local tloOrigin, tloPage, tloSearch = 1, 1, ""
 local results, filteredText, filteredOrigin
 local reviewing, confirmClose, addPackage, localMessage
+local addonTloSelection
 local conflicts = {}
 local fieldsById = {}
 for _, collection in ipairs({ GAMEPLAY, SCRIPTS, SOCIALS, ASSETS, ADDONS }) do
@@ -94,6 +95,7 @@ local changeLabels = {
   ["commands.allow"] = "Allowed commands", ["commands.block"] = "Blocked commands", ["commands.gm"] = "GM command rules",
   ["commands.allow_groups"] = "Allowed command groups", ["commands.block_groups"] = "Blocked command groups",
   ["tlos.default"] = "Default TLO policy", ["tlos.allow"] = "Allowed TLOs", ["tlos.block"] = "Blocked TLOs",
+  ["tlos.addon_allow"] = "Add-on TLO grants",
   ["addons.allow"] = "Allowed add-ons", ["addons.block"] = "Blocked add-ons",
   ["addons.required"] = "Required add-ons and minimum versions", ["addons.suggest"] = "Suggested add-ons",
 }
@@ -389,11 +391,83 @@ local function tlos(s)
   ui.EndDisabled()
 end
 
+local function addonTloInfo(row, request)
+  if manager.AddonTlos then return manager.AddonTlos(row.source or row.id, request == true) end
+end
+
+local function addonTloDetail(s, addon, grants)
+  if ui.Button("Back to add-ons##smaddontlo") then addonTloSelection = nil end
+  ui.Spacing()
+  heading("TLO dependencies", addon.id)
+  local info = addonTloInfo(addon)
+  local pending = info ~= nil and info.status == "pending"
+  ui.BeginDisabled(pending)
+  if ui.Button((info and info.status == "ready" and "Refresh dependencies" or "Check dependencies") .. "##smaddontlo") then
+    info = addonTloInfo(addon, true) or info
+    pending = info ~= nil and info.status == "pending"
+  end
+  ui.EndDisabled()
+  if pending then wrap("Checking the add-on manifest…", C.muted) end
+  if info and info.status == "unavailable" then wrap("The add-on manifest could not be checked.", C.muted) end
+  if info and info.version and info.version ~= "" then wrap("Version " .. info.version, C.muted) end
+  if not info or info.required_tlos == nil then wrap("Required TLOs are unknown.", C.muted)
+  elseif #info.required_tlos == 0 then wrap("No required TLOs.", C.muted) end
+  if not info or info.suggested_tlos == nil then wrap("Suggested TLOs are unknown.", C.muted)
+  elseif #info.suggested_tlos == 0 then wrap("No suggested TLOs.", C.muted) end
+  wrap("Grants apply only to this add-on. The add-on still needs the read permission.", C.muted)
+  ui.Spacing()
+
+  local state = M.tloRules(draft)
+  local rows = M.addonTloRows(info, grants)
+  local flags = ui.TableFlags.SizingStretchProp | ui.TableFlags.BordersInnerH | ui.TableFlags.RowBg
+  ui.PushStyleVar(ui.StyleVar.CellPadding, 6 * s, 5 * s)
+  if #rows > 0 and ui.BeginTable("##smaddontlos", 4, flags) then
+    ui.TableSetupColumn("Object", ui.TableColumnFlags.WidthStretch, 1)
+    ui.TableSetupColumn("Dependency", ui.TableColumnFlags.WidthFixed, 95 * s)
+    ui.TableSetupColumn("Access", ui.TableColumnFlags.WidthFixed, 64 * s)
+    ui.TableSetupColumn("Grant", ui.TableColumnFlags.WidthFixed, 65 * s)
+    ui.TableHeadersRow()
+    for _, row in ipairs(rows) do
+      ui.TableNextRow()
+      ui.TableNextColumn()
+      wrap(row.name, C.accent)
+      ui.TableNextColumn()
+      wrap(row.kind, C.muted)
+      ui.TableNextColumn()
+      local access = M.addonTloEffective(state, grants, row)
+      if addon.mode == "block" then colored("Blocked", C.danger)
+      elseif access == "granted" then colored("Granted", C.pet)
+      elseif access == "allow" then colored("Allowed", C.pet)
+      else colored(row.kind == "Required" and "Conflict" or "Denied", row.kind == "Required" and C.danger or C.muted) end
+      ui.TableNextColumn()
+      if access == "granted" then
+        if ui.Button("Revoke##smaddontlo" .. row.name:lower()) then
+          M.setAddonTloGrant(draft, addon.id, row.name, false)
+          localMessage = nil
+        end
+      elseif access == "block" and addon.mode ~= "block" and info and info.status == "ready" then
+        if ui.Button("Grant##smaddontlo" .. row.name:lower()) then
+          M.setAddonTloGrant(draft, addon.id, row.name, true)
+          localMessage = nil
+        end
+      end
+    end
+    ui.EndTable()
+  end
+  ui.PopStyleVar()
+end
+
 local function addons(s)
+  local grants = M.addonTloGrants(draft)
+  local rows, index = M.addons(draft, grants)
+  if addonTloSelection and index[addonTloSelection] then
+    addonTloDetail(s, index[addonTloSelection], grants[addonTloSelection])
+    return
+  end
+  addonTloSelection = nil
   heading("Add-on policy", "Manage packages by repository identity.")
   drawFields(ADDONS)
   ui.Spacing()
-  local rows, index = M.addons(draft)
   local flags = ui.TableFlags.SizingStretchProp | ui.TableFlags.BordersInnerH | ui.TableFlags.RowBg
   ui.PushStyleVar(ui.StyleVar.CellPadding, 6 * s, 5 * s)
   if #rows > 0 and ui.BeginTable("##smaddons", 4, flags) then
@@ -408,6 +482,7 @@ local function addons(s)
       ui.TableNextColumn()
       wrap(row.id, C.accent)
       if row.source and ui.IsItemHovered() then ui.SetTooltip(row.source) end
+      if ui.Button("Review TLOs##smaddon" .. row.id) then addonTloSelection = row.id end
       ui.TableNextColumn()
       ui.SetNextItemWidth(-1)
       local mode = selectValue("##smaddonmode", ADDON_MODE, row.mode or "")
@@ -455,11 +530,40 @@ local function selectPage(index)
   if index ~= section then section, reviewing, localMessage = index, false, nil end
 end
 
+local function warnAddonTloConflicts()
+  local state, grants = M.tloRules(draft), M.addonTloGrants(draft)
+  local unknown = 0
+  for _, addon in ipairs(M.addons(draft, grants)) do
+    if addon.mode ~= "block" and (addon.suggested or addon.mode == "allow" or addon.mode == "required") then
+      local info = addonTloInfo(addon)
+      if info and info.required_tlos then
+        local denied = {}
+        for _, name in ipairs(info.required_tlos) do
+          if M.addonTloEffective(state, grants[addon.id], { name = name }) == "block" then denied[#denied + 1] = name end
+        end
+        if #denied > 0 then
+          wrap(addon.id .. " requires denied TLOs: " .. table.concat(denied, ", "), C.gold)
+        end
+      else unknown = unknown + 1 end
+    end
+  end
+  if unknown > 0 then
+    local count = unknown == 1 and "1 add-on" or tostring(unknown) .. " add-ons"
+    wrap("Required TLOs are unknown for " .. count .. ". Check dependencies on the Add-ons page.", C.muted)
+  end
+end
+
 local function review(changes)
   heading("Review changes", "Saved policy takes effect on players' next login.")
   warnRestrictedCommands(M.commandRules(draft))
   if draft.edits["tlos.default"] or draft.edits["tlos.allow"] or draft.edits["tlos.block"] then
     warnTloAllowlist(M.tloRules(draft).default)
+  end
+  for _, change in ipairs(changes) do
+    if change.section == "addons" or change.section == "tlos" then
+      warnAddonTloConflicts()
+      break
+    end
   end
   for _, change in ipairs(changes) do
     local field = fieldsById[change.id]
@@ -624,6 +728,7 @@ ui.window("Server Management", function()
     else
       draft, conflicts = M.new(active, manager.CanonicalCommandName), {}
       filteredText, filteredOrigin, addPackage = nil, nil, ""
+      addonTloSelection = nil
       reviewing = false
     end
     serial, minimumStatus = active.serial, active.minimum_status

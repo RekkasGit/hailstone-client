@@ -273,6 +273,7 @@ local descriptors = {
   {"ScriptRun", "scripts", "Run", "function", 0, false},
   {"SetScriptAutorun", "scripts", "SetAutorun", "function", 0, false},
   {"ScriptStop", "scripts", "Stop", "function", 0, false},
+  {"ServerManagementAddonTlos", "serverManagement", "AddonTlos", "function", 0, false},
   {"ServerManagementAvailable", "serverManagement", "Available", "function", 0, false},
   {"ServerManagementCanonicalCommandName", "serverManagement", "CanonicalCommandName", "function", 0, false},
   {"ServerManagementClose", "serverManagement", "Close", "function", 0, false},

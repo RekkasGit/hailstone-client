@@ -10,7 +10,7 @@ does not bypass a function's own caller, screen or server-state checks.
 `API.version`, `API.Supports(module[, member])` and `API.Describe([module[, member]])`
 provide contract version and structural discovery. They confer no permissions.
 
-Coverage: **361/361 method implementation links**, **227/361 adjacent binding comment excerpts**, and **6/6 constant implementation links**. Excerpts below are verbatim binding comments; they preserve any documented signatures and results, and do not invent omitted arguments or results. **See binding** marks an author documentation gap.
+Coverage: **362/362 method implementation links**, **227/362 adjacent binding comment excerpts**, and **6/6 constant implementation links**. Excerpts below are verbatim binding comments; they preserve any documented signatures and results, and do not invent omitted arguments or results. **See binding** marks an author documentation gap.
 
 Unresolved method implementations: none.
 Unresolved constant implementations: none.
@@ -445,6 +445,7 @@ called it, by priority and registration order.
 
 | Member | Documented signature / binding comment | Existing binding | Required capabilities | Hook policy |
 | --- | --- | --- | --- | --- |
+| `API.serverManagement.AddonTlos` | **See binding** | `hs.ServerManagementAddonTlos` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
 | `API.serverManagement.Available` | **See binding** | `hs.ServerManagementAvailable` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
 | `API.serverManagement.CanonicalCommandName` | **See binding** | `hs.ServerManagementCanonicalCommandName` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |
 | `API.serverManagement.Close` | **See binding** | `hs.ServerManagementClose` · [source](../src/app/lua_ui_server_management.cpp) | none (outer gate) | closed |

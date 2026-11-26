@@ -4693,6 +4693,129 @@ tloPage = "TLO access"
     ImGui::DestroyContext(ctx);
 }
 
+TEST_CASE("Modern Server Management reviews add-on dependencies and writes only explicit TLO grants") {
+    const fs::path source = fs::path(__FILE__).parent_path().parent_path() / "ui/modern";
+    hailstone::test::ScratchDir scratch("ui_server_addon_tlo_grants_");
+    const fs::path dir = scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(source, dir / "modern", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    {
+        Session session(dir, "modern");
+        app::ServerManagementView view;
+        view.serial = view.catalog_serial = 1;
+        view.revision = "42";
+        view.fields = {{"addons", "allow", "Team/RaidNotes, old/legacy"},
+                       {"addons", "required", "other/needsme:1.2.0"},
+                       {"addons", "suggest", "team/checks"},
+                       {"tlos", "block", "Me, Spawn"},
+                       {"tlos", "addon_allow", "Team/RaidNotes:Retired, other/unloaded:Me"}};
+        session.host.server_management = [&](std::uint32_t, std::uint32_t) -> std::optional<app::ServerManagementView> {
+            return view;
+        };
+        int lookups = 0;
+        bool loaded = false;
+        session.host.server_management_addon_tlos =
+            [&](std::string_view source, bool request) -> std::optional<app::ServerManagementAddonTlos> {
+            if (request) {
+                CHECK(source == "team/raidnotes");
+                ++lookups;
+            }
+            if (source == "team/raidnotes") {
+                if (loaded) {
+                    return app::ServerManagementAddonTlos{"team/raidnotes", "2.1.0", "ready",
+                        std::vector<std::string>{"Me", "Target"}, std::vector<std::string>{"Spawn", "mE"}};
+                }
+                return app::ServerManagementAddonTlos{"team/raidnotes", "", lookups ? "pending" : "unchecked", {}, {}};
+            }
+            if (source == "other/needsme") {
+                return app::ServerManagementAddonTlos{"other/needsme", "1.2.0", "ready",
+                    std::vector<std::string>{"Me"}, std::vector<std::string>{}};
+            }
+            if (source == "team/checks") {
+                return app::ServerManagementAddonTlos{"team/checks", "1.2.0", "ready",
+                    std::vector<std::string>{"Spawn"}, std::vector<std::string>{}};
+            }
+            return std::nullopt;
+        };
+        int saves = 0;
+        session.host.save_server_management = [&](std::string_view revision, const auto& edits) {
+            ++saves;
+            CHECK(revision == "42");
+            REQUIRE(edits.size() == 1);
+            CHECK(edits[0].section == "tlos");
+            CHECK(edits[0].key == "addon_allow");
+            CHECK(edits[0].value == "other/unloaded:Me, team/raidnotes:Me, team/raidnotes:Spawn");
+            return true;
+        };
+        lua_State* L = session.lua.state();
+        auto lua = [&](const char* body) {
+            const int result = luaL_dostring(L, body);
+            REQUIRE_MESSAGE(result == LUA_OK, (result == LUA_OK ? "" : lua_tostring(L, -1)));
+        };
+        lua(R"lua(
+local select, button, colored = ui.Selectable, ui.Button, ui.TextColored
+local current
+labels, access, dependency = {}, {}, {}
+ui.Selectable = function(label, ...)
+  local clicked = select(label, ...)
+  if label == pageChoice then pageChoice = nil return true end
+  return clicked
+end
+ui.Button = function(label, ...)
+  local clicked = button(label, ...)
+  if label == actionChoice then actionChoice = nil return true end
+  return clicked
+end
+ui.TextColored = function(r, g, b, a, label)
+  labels[label] = true
+  if label == "Me" or label == "Spawn" or label == "Target" or label == "Retired" then
+    current = label
+  elseif current and (label == "Required" or label == "Suggested" or label == "Existing grant") then
+    dependency[current] = label
+  elseif current and (label == "Conflict" or label == "Denied" or label == "Allowed" or label == "Granted") then
+    access[current], current = label, nil
+  end
+  colored(r, g, b, a, label)
+end
+pageChoice = "Add-ons"
+)lua");
+        session.frames(3);
+        lua("actionChoice = 'Review TLOs##smaddonteam/raidnotes'");
+        session.frames(2);
+        lua("assert(labels['TLO dependencies'] and labels['Required TLOs are unknown.']); "
+            "actionChoice = 'Check dependencies##smaddontlo'");
+        session.frames(2);
+        CHECK(lookups == 1);
+        loaded = true;
+        session.frames(2);
+        lua("assert(labels['Version 2.1.0'] and access.Me == 'Conflict' and access.Spawn == 'Denied' and "
+            "access.Target == 'Allowed' and access.Retired == 'Granted'); "
+            "assert(dependency.Me == 'Required' and dependency.Spawn == 'Suggested' and "
+            "dependency.Retired == 'Existing grant'); actionChoice = 'Grant##smaddontlome'");
+        session.frames(2);
+        lua("assert(access.Me == 'Granted'); actionChoice = 'Grant##smaddontlospawn'");
+        session.frames(2);
+        lua("assert(access.Spawn == 'Granted'); actionChoice = 'Revoke##smaddontloretired'");
+        session.frames(2);
+        lua("actionChoice = 'Review changes##sm'");
+        session.frames(2);
+        lua("assert(labels['other/needsme requires denied TLOs: Me'] and labels['team/checks requires denied TLOs: Spawn'] "
+            "and labels['Required TLOs are unknown for 1 add-on. Check dependencies on the Add-ons page.']); "
+            "assert(not labels['team/raidnotes requires denied TLOs: Me']); actionChoice = 'Save policy##sm'");
+        session.frames(2);
+        CHECK(lookups == 1);
+        CHECK(saves == 1);
+        session.host.trusted_ui = false;
+        lua("assert(hs.UI.serverManagement.AddonTlos('team/raidnotes', true) == nil)");
+        CHECK(lookups == 1);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 // A click meant for something else the instant the question pops up must not answer it: both buttons wait a
 // second after the question shows. The real loading cover must leave both answers reachable afterward.
 TEST_CASE("UI packs: both plugin answers arm and remain reachable above the loading cover") {

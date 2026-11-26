@@ -1639,7 +1639,7 @@ local management = (function()
 			allow = "repos", block = "repos" },
 		commands = { default = "mode", allow = "commands", block = "commands", gm = "gm_commands", allow_groups = "groups",
 			block_groups = "groups", blocked_message = "message" },
-		tlos = { default = "mode", allow = "tlo_roots", block = "tlo_roots" },
+		tlos = { default = "mode", allow = "tlo_roots", block = "tlo_roots", addon_allow = "tlo_grants" },
 		management = { min_status = "min_status" },
 	}
 
@@ -1896,10 +1896,18 @@ local management = (function()
 		return result
 	end
 
+	local function tlo_name(name)
+		return name:match("^[0-9A-Za-z_][0-9A-Za-z_-]*$")
+	end
+
 	local function valid_rule_word(kind, word)
 		if kind == "groups" then return groups[word:lower()] end
 		if kind == "commands" then return word ~= "/" end
-		if kind == "tlo_roots" then return word:match("^[0-9A-Za-z_][0-9A-Za-z_-]*$") end
+		if kind == "tlo_roots" then return tlo_name(word) end
+		if kind == "tlo_grants" then
+			local repo, root = word:match("^([^:]+):([^:]+)$")
+			return repo and repo_identity(repo) == repo:lower() and tlo_name(root)
+		end
 		local command, status = word:match("^(.+):([0-9]+)$")
 		return command and command ~= "/" and unsigned(status, 1, 32767)
 	end
@@ -1931,7 +1939,7 @@ local management = (function()
 		if kind == "press_commands" then return unsigned(value, 0, 2147483647) end
 		if kind == "min_status" then return unsigned(value, 1, 32767) end
 		if kind == "repos" or kind == "required" then return repositories(value, kind == "required") ~= nil end
-		if kind == "groups" or kind == "commands" or kind == "gm_commands" or kind == "tlo_roots" then
+		if kind == "groups" or kind == "commands" or kind == "gm_commands" or kind == "tlo_roots" or kind == "tlo_grants" then
 			return valid_rule_list(kind, value, original)
 		end
 		for word in value:gmatch("[^ ,]+") do

@@ -436,6 +436,12 @@ void ClientApp::update_ui_host() {
             for (const auto& change : changes) edits.push_back({change.section, change.key, change.value});
             return conn_->save_server_management(token, edits);
         };
+        h.server_management_addon_tlos = [this](std::string_view source, bool request)
+            -> std::optional<ServerManagementAddonTlos> {
+            if (!server_management_ui() || !conn_ || !conn_->server_management_available() ||
+                !conn_->server_management_snapshot() || !addons_) return std::nullopt;
+            return addons_->addon_tlos(source, request);
+        };
         h.server_management = [this](std::uint32_t known_serial,
                                      std::uint32_t known_catalog_serial) -> std::optional<ServerManagementView> {
             if (!server_management_ui() || !conn_ || !conn_->server_management_snapshot()) return std::nullopt;

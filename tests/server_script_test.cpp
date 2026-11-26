@@ -1477,6 +1477,35 @@ management_backup(cfg, original)
 )lua");
 }
 
+TEST_CASE("Server script: management authorizes and revisions exact add-on TLO grants") {
+    check_run(R"lua(
+local original = "[tlos]\nblock = Me\n[addons]\nenforce = on\nallow = owner/current\n"
+T.files[management_cfg] = original
+management_zone("tlo_grants")
+local gm = client(3, "GM", 200)
+local low = client(4, "Low GM", 199)
+local token = management_open(gm)
+local edit = { "tlos", "addon_allow", "Owner/Repo:Me, owner/repo:Spawn" }
+local scans = T.policy_scans
+management_save(low, token, 1, edit)
+assert(T.policy_scans == scans, "unauthorized grant edits do not scan or write")
+
+for _, value in ipairs({ "owner/repo:Me.Bank", "owner/repo:/Me", "owner/repo@v1:Spawn", "repo:Me",
+  "https://github.com/owner/repo:Me", "owner/repo.git:Me", "owner/repo:Me\r\n[client]" }) do
+  management_save(gm, token, 2, { "tlos", "addon_allow", value })
+end
+assert(T.files[management_cfg] == original and not T.dirs[management_history])
+
+local _, cfg = management_save(gm, token, 0, edit, { "addons", "allow", "owner/current, owner/repo" })
+assert(cfg:find("addon_allow = Owner/Repo:Me, owner/repo:Spawn", 1, true))
+assert(cfg:find("allow = owner/current, owner/repo", 1, true))
+assert(cfg:find("block = Me", 1, true))
+management_backup(cfg, original)
+local _, snapshot = management_open(gm)
+assert(snapshot == cfg)
+)lua");
+}
+
 TEST_CASE("Server script: management reports potentially stale locks and makes history pruning opt-in") {
     check_run(R"lua(
 for _, separator in ipairs({ "/", "\\" }) do

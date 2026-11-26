@@ -300,6 +300,59 @@ function M.addonIdentity(text, required)
   end
 end
 
+local function addonTloToken(token)
+  local source, name = token:match("^([A-Za-z0-9-]+/[A-Za-z0-9_.-]+):(.+)$")
+  local repo = source and M.addonIdentity(source)
+  if repo and repo == source:lower() and M.validTloName(name) then return repo, name end
+end
+
+function M.addonTloGrants(draft)
+  local grants = {}
+  for _, token in ipairs(tokens(M.get(draft, "tlos.addon_allow"))) do
+    local repo, name = addonTloToken(token)
+    if repo then
+      local names = grants[repo] or {}
+      grants[repo] = names
+      names[name:lower()] = name
+    end
+  end
+  return grants
+end
+
+function M.setAddonTloGrant(draft, repo, name, grant)
+  local id = M.addonIdentity(repo)
+  if not id or not M.validTloName(name) then return end
+  local root = name:lower()
+  local function match(token)
+    local owner, tlo = addonTloToken(token)
+    return owner == id and tlo:lower() == root
+  end
+  listUpdate(draft, "tlos.addon_allow", false, match, grant and id .. ":" .. name or nil, keepSpelling)
+end
+
+function M.addonTloRows(info, grants)
+  local rows, seen = {}, {}
+  local function add(name, kind)
+    if M.validTloName(name) then
+      local key = name:lower()
+      if not seen[key] then
+        seen[key] = true
+        rows[#rows + 1] = { name = name, kind = kind }
+      end
+    end
+  end
+  for _, name in ipairs(info and info.required_tlos or {}) do add(name, "Required") end
+  for _, name in ipairs(info and info.suggested_tlos or {}) do add(name, "Suggested") end
+  for _, name in pairs(grants or {}) do add(name, "Existing grant") end
+  table.sort(rows, function(a, b) return a.name:lower() < b.name:lower() end)
+  return rows
+end
+
+function M.addonTloEffective(state, grants, tlo)
+  if grants and grants[tlo.name:lower()] then return "granted" end
+  return M.tloEffective(state, tlo)
+end
+
 local function versionNumber(text)
   if #text > 10 or not text:match("^[0-9]+$") or (#text > 1 and text:sub(1, 1) == "0") then return nil end
   local n = tonumber(text)
@@ -361,10 +414,13 @@ local function higherMinimum(candidate, current)
   return #ap > #bp
 end
 
-function M.addons(draft)
+function M.addons(draft, tloGrants)
   local rows, index = {}, {}
   for id, source in pairs(draft.newAddons) do
     index[id] = { id = id, source = source }
+  end
+  for id in pairs(tloGrants or M.addonTloGrants(draft)) do
+    if not index[id] then index[id] = { id = id } end
   end
   for _, key in ipairs({ "suggest", "allow", "required", "block" }) do
     for _, token in ipairs(tokens(M.get(draft, "addons." .. key), key ~= "suggest")) do
