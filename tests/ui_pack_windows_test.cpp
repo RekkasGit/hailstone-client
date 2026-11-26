@@ -822,6 +822,19 @@ TEST_CASE("UI packs: unsaved layout switch can cancel, skip, or save before appl
         s.frames(2);
         CHECK(s.lua.setting("hud.locked") == "1");
         CHECK(actions.keymap().binding(forward, 0) == remap);
+
+        // Another client overwrites the profile after the preview: Apply uses the file as it is now.
+        run("assert(hs.UI.layoutProfiles.Preview('Desktop'))");
+        const auto saved_dir = dir / "layout-profiles" / platform::ui_settings_file(pack).stem();
+        auto later = ui::read_layout_profile(saved_dir, "Desktop");
+        REQUIRE(later);
+        const auto at = later->pack_settings.find("hud.locked=1\n");
+        REQUIRE(at != std::string::npos);
+        later->pack_settings.replace(at, 13, "hud.locked=0\n");
+        REQUIRE(ui::save_layout_profile(saved_dir, *later, true) == ui::LayoutProfileSave::Saved);
+        run("assert(hs.UI.layoutProfiles.Apply('Desktop', true))");
+        s.frames(2);
+        CHECK(s.lua.setting("hud.locked") == "0");
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
     }
 }

@@ -3074,12 +3074,16 @@ int LayoutProfilesApply(lua_State* L) {
     if (!layout_profiles_allowed() || !m.layout_profiles_ready())
         return layout_profile_result(L, "Layout profiles are unavailable.");
     if (m.reload_layout) return layout_profile_result(L, "Wait for the layout change to finish.");
-    const auto& profile = m.layout_profile_preview;
-    if (!profile || !game::same_no_case(profile->name, std::string_view(name, length)))
+    const auto& preview = m.layout_profile_preview;
+    if (!preview || !game::same_no_case(preview->name, std::string_view(name, length)))
         return layout_profile_result(L, "Select a saved profile to preview it first.");
     const bool discard_unsaved = lua_toboolean(L, 2) != 0;
     const char* error = nullptr;
     bool unsaved = false;
+    std::optional<ui::LayoutProfile> profile;
+    // Read the file again: another client may have overwritten the profile since it was previewed.
+    plugin::cxx_guard(L, [&] { profile = ui::read_layout_profile(m.layout_profile_directory(), {name, length}); });
+    if (!profile) return layout_profile_result(L, "Layout profile is unavailable.");
     plugin::cxx_guard(L, [&] {
         auto previous = m.capture_layout_profile({});
         if (!discard_unsaved && !ui::has_saved_layout_profile(m.layout_profile_directory(), previous)) {

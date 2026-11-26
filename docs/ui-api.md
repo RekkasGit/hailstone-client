@@ -29,7 +29,8 @@ no window geometry is available. Previewing leaves the current layout in use. `S
 `false, reason[, code]`. If a name is taken, the code is `"exists"`. Ask the player before retrying with
 `overwrite=true`.
 
-`Apply(name[, discard_unsaved])` uses the last preview of that profile. If the current layout does not match
+`Apply(name[, discard_unsaved])` needs a preview of that profile first, then reads the saved file again, so a
+later overwrite from another client is the one applied. If the current layout does not match
 a saved profile, it returns `false, reason, "unsaved"`. An interface can offer to save the current setup or retry
 with `discard_unsaved=true` after the player chooses to apply without saving. Apply and `Undo()` otherwise return
 `true` or `false, reason`. `CanUndo()` reports whether the current
