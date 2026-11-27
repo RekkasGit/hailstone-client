@@ -1316,6 +1316,10 @@ enum HS_AbilityKinds {
  *   void OnAddSpawn(uint32_t spawn_id);  void OnRemoveSpawn(uint32_t spawn_id);
  *   int  OnIncomingChat(const char* line, uint32_t color);   (HAILSTONE_CAP_EVENTS; the result is ignored, as in MQ)
  *   int  OnFilterChat(const char* line, uint32_t color);     (HAILSTONE_CAP_EVENTS; nonzero hides the line)
+ *   int  OnIncomingPluginScriptChat(const char* line, uint32_t color);
+ *                                   (HAILSTONE_CAP_EVENTS; the lines plugins and scripts write, which the two above
+ *                                   never get: MQ's OnWriteChatColor. MacroQuest's colour codes kept; the result is
+ *                                   ignored. A plugin's own lines too, but not one it writes from inside this call)
  *   void OnUpdateImGui(void);                                (HAILSTONE_CAP_UI)
  *   int  OnPacket(int stream, int direction, HailstonePacket* p);  (HAILSTONE_CAP_PACKETS; nonzero drops it)
  *   const HailstoneHooks* hailstone_plugin_hooks(void);

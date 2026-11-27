@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Plugins can see the lines other plugins and scripts write, as MacroQuest's `OnWriteChatColor` gives them: the new optional export `OnIncomingPluginScriptChat(line, color)` (the `events` permission). `OnIncomingChat` stays game chat only.
 - Each chat tab can have a font of its own: right-click the tab and pick **Font** (Same as UI, or any font in the UI font list). Hailstone's Roboto is now in the UI, name plate and chat font lists too. Interfaces reach it through `hs.UI.chat.FontFace` and `SetFontFace` (UI API 1.13).
 - Plugins and their scripts can use MacroQuest's fonts: "RobotoRegular" and "RobotoRegular (Large)" with FontAwesome's icons (Hailstone now ships Roboto 3 and FontAwesome 4.7, both under the SIL Open Font License, in `fonts/`), and EverQuest's font table 0 to 10 (the SDK's `ui_font`). E3's windows under HSMono get their "robo" font, its icon buttons and its EQ fonts.
 - Plugins can draw the game's spell and spell gem icons in their own windows (the SDK's `ui_icon`), and `get_spell` gives a spell's icon. HSMono's C# scripts (E3) now show spell icons where they had a blank space.

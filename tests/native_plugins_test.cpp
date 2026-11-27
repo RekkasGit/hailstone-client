@@ -1594,9 +1594,11 @@ TEST_CASE("native plugins: a line a script or plugin wrote is not incoming chat"
     spam.origin_caps = plugin::kCapRead;
     CHECK(h.hooks.chat(spam) == plugin::Flow::Continue); // neither OnFilterChat's drop
     CHECK(h.p("${Example.Chats}") == "0");               // nor OnIncomingChat
+    CHECK(h.p("${Example.ScriptChats}") == "1");         // but OnIncomingPluginScriptChat (MQ's OnWriteChatColor)
     plugin::ChatLine server{"buy spam now", 0, 0};
     CHECK(h.hooks.chat(server) == plugin::Flow::Drop);
     CHECK(h.p("${Example.Chats}") == "1");
+    CHECK(h.p("${Example.ScriptChats}") == "1"); // game chat is not a plugin's or script's line
 }
 
 TEST_CASE("native plugins: an exception out of a plugin is caught; out of InitializePlugin it leaves nothing behind") {

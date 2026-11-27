@@ -182,7 +182,7 @@ close.
 | 8 | `actions` | act: `/cast`, `/disc`, `/doability`, `/useitem`, `/attack`, `/memspellset`, `/pet`, `/loot`, `/autoinventory`, `/alternateadv` (`/alt`), `/split`, `/consent`, `/guilddelete`, non-movement `/keypress`, `/notify`, `/removebuff`, `/removepetbuff` and the window methods that act (`Window[...].DoOpen`, `.DoClose`, `.Child[...].LeftMouseUp`, `.RightMouseUp`); Hailstone's own item commands `/destroy`, `/destroycursor`, `/stowcursor`, `/exchange` and `/unequip`, and `use_ability`. No code presses Yes on a destroy's or a guild disband's question, by `/notify`, a window method or `hs.ClickChild`: only the player answers it |
 | 16 | `move` | move: `/face`, `/look`, movement `/keypress` (forward, jump, ...), `/follow`, `/sit`, `/stand`, `/duck`, `/camp` |
 | 32 | `chat` | speak: plain text, `/say`, `/tell`, `/g`, `/gu`, `/rs`, channels, emotes |
-| 64 | `events` | see chat lines: `mq.event`, `OnIncomingChat`, and hide them (`OnFilterChat`) |
+| 64 | `events` | see chat lines: `mq.event`, `OnIncomingChat`, `OnIncomingPluginScriptChat`, and hide them (`OnFilterChat`) |
 | 128 | `ui` | draw windows: `mq.imgui.init`, `OnUpdateImGui` |
 | 256 | `packets` | see, change, drop and send raw packets (compiled plugins: `OnPacket`, `send_packet`) |
 | 512 | `extend` | change the client's rules as a server's own client does (compiled plugins: the server extension below) |
@@ -733,7 +733,8 @@ Callbacks:
 
 - `InitializePlugin`, `ShutdownPlugin`, `OnPulse`, `SetGameState(state)`
 - `OnBeginZone`, `OnEndZone`, `OnZoned`, `OnAddSpawn(id)`, `OnRemoveSpawn(id)`
-- `OnIncomingChat(line, color)`, `OnFilterChat(line, color)` (nonzero hides the line); see "Chat hooks" below
+- `OnIncomingChat(line, color)`, `OnFilterChat(line, color)` (nonzero hides the line),
+  `OnIncomingPluginScriptChat(line, color)` (the plugins' and scripts' own lines); see "Chat hooks" below
 - `OnUpdateImGui`, `OnPacket(stream, direction, packet)` (nonzero drops it)
 
 Host functions:
@@ -826,7 +827,10 @@ with MacroQuest's colour codes, as `WriteChatColor` takes them: BEL (`\a` in C, 
 #### Chat hooks
 
 `OnIncomingChat` and `OnFilterChat` get the server's lines and the client's own, not those a script or plugin writes
-(`print`, `/echo`, `WriteChatf`, a reply to its command; MQ hands those to `OnWriteChatColor`).
+(`print`, `/echo`, `WriteChatf`, a reply to its command). Those go to `OnIncomingPluginScriptChat(line, color)`
+instead, MacroQuest's `OnWriteChatColor` (`events` too): every plugin's and script's line, the plugin's own included,
+with MacroQuest's colour codes as written (`\ag...`). A line the plugin writes from inside that call is not handed
+back to it. Its result is ignored: such a line cannot be hidden.
 
 Combat hit lines (melee and spell damage, heals) always arrive as the full sentence, whatever the player's Hit Modes,
 so a parser matches one form. A hook that rewrites such a line shows its rewrite in full.

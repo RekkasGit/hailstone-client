@@ -9,7 +9,7 @@
 
 HAILSTONE_PLUGIN
 
-static int pulses, chats, zones;
+static int pulses, chats, zones, script_chats;
 static uint32_t page; /* the plugin's web tab (0: none) */
 
 static void hello(void* user, const char* args) {
@@ -36,7 +36,7 @@ static void webexample(void* user, const char* args) {
     if (page) WriteChatf("[MQ2Example] page %u open", page);
 }
 
-/* ${Example}, ${Example.Pulses}, ${Example.Chats}, ${Example.Zones}, ${Example[x].Index}, ${Example.Twice[21]},
+/* ${Example}, ${Example.Pulses}, ${Example.Chats}, ${Example.ScriptChats}, ${Example.Zones}, ${Example[x].Index}, ${Example.Twice[21]},
  * ${Example.MyHP} (the plugin reading a TLO of the client's) */
 static int example_tlo(void* user, const char* index, const char* member, const char* member_index, HailstoneValue* out) {
     static char hp[32];
@@ -54,6 +54,11 @@ static int example_tlo(void* user, const char* index, const char* member, const 
     if (strcmp(member, "Chats") == 0) {
         out->kind = HAILSTONE_INT;
         out->i = chats;
+        return 1;
+    }
+    if (strcmp(member, "ScriptChats") == 0) {
+        out->kind = HAILSTONE_INT;
+        out->i = script_chats;
         return 1;
     }
     if (strcmp(member, "Zones") == 0) {
@@ -110,6 +115,14 @@ HAILSTONE_EXPORT int OnIncomingChat(const char* line, uint32_t color) {
     (void)line;
     (void)color;
     ++chats;
+    return 0;
+}
+
+/* The lines plugins and scripts write (MQ's OnWriteChatColor), this one's own among them. */
+HAILSTONE_EXPORT int OnIncomingPluginScriptChat(const char* line, uint32_t color) {
+    (void)line;
+    (void)color;
+    ++script_chats;
     return 0;
 }
 

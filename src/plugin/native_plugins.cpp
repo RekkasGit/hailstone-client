@@ -284,6 +284,10 @@ struct Loaded {
     void (*remove_spawn)(std::uint32_t) = nullptr;
     int (*incoming_chat)(const char*, std::uint32_t) = nullptr;
     int (*filter_chat)(const char*, std::uint32_t) = nullptr;
+    // OnIncomingPluginScriptChat: the lines a plugin or script wrote (MQ's OnWriteChatColor); `in_plugin_script_chat`
+    // while it runs, so a line it writes there is not handed back to it.
+    int (*plugin_script_chat)(const char*, std::uint32_t) = nullptr;
+    bool in_plugin_script_chat = false;
     void (*update_imgui)() = nullptr;
     std::uint32_t built_abi = 0; // the ABI the plugin reported
     int (*packet)(int, int, HailstonePacket*) = nullptr;
@@ -3653,6 +3657,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.remove_spawn = symbol<void (*)(std::uint32_t)>(p.lib, "OnRemoveSpawn");
     p.incoming_chat = symbol<int (*)(const char*, std::uint32_t)>(p.lib, "OnIncomingChat");
     p.filter_chat = symbol<int (*)(const char*, std::uint32_t)>(p.lib, "OnFilterChat");
+    p.plugin_script_chat = symbol<int (*)(const char*, std::uint32_t)>(p.lib, "OnIncomingPluginScriptChat");
     p.update_imgui = symbol<void (*)()>(p.lib, "OnUpdateImGui");
     if (p.update_imgui && !p.imgui_compatible())
         log::warn("plugin {}: built for plugin ABI {}, before Dear ImGui 1.92 (ABI 4); its OnUpdateImGui is not called",
@@ -3821,18 +3826,31 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
             p.denied("OnAddSpawn / OnRemoveSpawn", kCapRead);
         }
     }
-    if (p.incoming_chat || p.filter_chat) {
+    if (p.incoming_chat || p.filter_chat || p.plugin_script_chat) {
         if (p.can(kCapEvents)) {
             hooks.on_chat(p.owner, scoped([lp](ChatLine& line) {
-                // A line a script or plugin wrote is not incoming chat (MQ's own lines go to OnWriteChatColor, not
-                // here): a plugin that acts on "Bob tells you, ..." would act on whatever another add-on printed.
-                if (!lp->can(kCapEvents) || line.from_code) return Flow::Continue;
+                if (!lp->can(kCapEvents)) return Flow::Continue;
+                // A line a script or plugin wrote is not incoming chat: a plugin that acts on "Bob tells you, ..."
+                // would act on whatever another add-on printed. It goes to OnIncomingPluginScriptChat instead, as
+                // MQ's own lines go to OnWriteChatColor: the plugin's own lines too, as there, but not one it writes
+                // from inside that call. Its colour codes are kept; it cannot be hidden.
+                if (line.from_code) {
+                    if (lp->plugin_script_chat && !lp->in_plugin_script_chat) {
+                        lp->in_plugin_script_chat = true;
+                        struct Done {
+                            bool& flag;
+                            ~Done() { flag = false; }
+                        } done{lp->in_plugin_script_chat};
+                        lp->plugin_script_chat(line.text.c_str(), line.color);
+                    }
+                    return Flow::Continue;
+                }
                 if (lp->incoming_chat) lp->incoming_chat(line.text.c_str(), line.color);
                 if (lp->filter_chat && lp->filter_chat(line.text.c_str(), line.color)) return Flow::Drop;
                 return Flow::Continue;
             }));
         } else {
-            p.denied("OnIncomingChat", kCapEvents);
+            p.denied(p.incoming_chat || p.filter_chat ? "OnIncomingChat" : "OnIncomingPluginScriptChat", kCapEvents);
         }
     }
     if (p.packet) {
