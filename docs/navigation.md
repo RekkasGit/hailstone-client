@@ -331,6 +331,15 @@ Not yet: `/nav item`, waypoints (`/nav waypoint`, `/nav recordwaypoint`).
 it), `.ArrivalDist` (the distance above), `.Broken` (always FALSE: MQ2MoveUtils' walk ended by aggro or a hit, which
 Hailstone's never is). Not yet: `.UseWalk`, `.ArrivalDistY`, `.ArrivalDistX`, `.CampStopped`.
 
+`${MoveUtils}` (MQ2MoveUtils' TLO): `.Stuck` is TRUE while a `/moveto`'s or `/stick`'s walk has stalled: it made no
+progress toward its next corner for a second and is jumping and strafing, or asking for a new path. It is FALSE
+again once the walk gains ground (half a unit nearer the corner, or the corner reached), a door it waited on opens,
+or the walk ends. E3's follow reads it to fall back on `/nav`. Hailstone's test is its walk's own, not MQ2MoveUtils'
+(which counts a tenth of a unit moved per pulse), so it turns TRUE about a second into a stall where MQ2MoveUtils'
+would sooner. `.Command` and the text: the command walking, `STICK`, `MOVETO` or `NONE` (MQ2MoveUtils' `CIRCLE` and
+`MAKECAMP` are not in Hailstone). Not yet: its settings (`StuckLogic`, `PulseCheck`, `DistStuck` and the rest),
+`.Summoned`, `.Aggro`, `.MovePause`, `.GM`.
+
 **/stick** (MQ2MoveUtils' words; Hailstone's own walk, `NavControl::stick`) keeps to the target until `/stick off`, the
 player's own movement keys, or the spawn dying or leaving. Near enough it holds still and faces the spawn. Further, it
 walks, the path found again as the spawn moves: straight when the spot is within 40, in plain sight, and the straight

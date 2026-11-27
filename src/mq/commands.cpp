@@ -142,6 +142,7 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
         noparse_ = before;
     });
     h.add_command(owner_, "/docommand", [this](std::string_view args) { run_nested(args); });
+    h.add_command(owner_, "/loadcfg", [this](std::string_view args) { load_cfg(args); });
     // /invoke ${Window[...].DoOpen} (MQ's InvokeCmd sets bRunNextCommand and nothing else): the line's ${...} were
     // read before the command got it, and reading a window method is what acts (Window's LeftMouseUp, DoOpen ...).
     h.add_command(owner_, "/invoke", [](std::string_view) {});
@@ -353,15 +354,17 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
 
 // Each level is a few frames of the native stack (and two passes through the hooks for a script's line), so a line
 // that nests them without end ("/docommand /docommand ...") is cut off here rather than overflowing it.
+bool Commands::too_deep() const {
+    if (nested_ < kMaxNestedCommands) return false;
+    if (env_.echo)
+        env_.echo(std::format("[MQ] /docommand, /noparse, /squelch and /loadcfg nest at most {} deep: the rest of the "
+                              "line is dropped",
+                              kMaxNestedCommands));
+    return true;
+}
+
 void Commands::run_nested(std::string_view args) {
-    if (!env_.run) return;
-    if (nested_ >= kMaxNestedCommands) {
-        if (env_.echo)
-            env_.echo(std::format("[MQ] /docommand, /noparse and /squelch nest at most {} deep: the rest of the line is "
-                                  "dropped",
-                                  kMaxNestedCommands));
-        return;
-    }
+    if (!env_.run || too_deep()) return;
     // The outer line was parsed (or left as written) before its command got it: its rest is not parsed again, or a
     // value holding "${" would be read after all (docs/plugins.md "MQ commands"). A one-line flag rather than
     // noparse_, so that a bind's own mq.cmd lines under /docommand are still parsed.
@@ -369,6 +372,26 @@ void Commands::run_nested(std::string_view args) {
     nested_parsed_ = true;
     env_.run(std::string(args));
     nested_parsed_ = false; // a run that did not reach the filters
+    --nested_;
+}
+
+// The file's lines are run as written in it, so each is parsed (${...}) as it runs, as MacroQuest's DoCommand parses a
+// .cfg line; they run as whoever sent /loadcfg (a script's with its own capabilities), not as the player.
+void Commands::load_cfg(std::string_view args) {
+    while (!args.empty() && (args.front() == ' ' || args.front() == '\t')) args.remove_prefix(1);
+    while (!args.empty() && (args.back() == ' ' || args.back() == '\t')) args.remove_suffix(1);
+    if (args.empty()) {
+        say("Usage: /loadcfg <filename>");
+        return;
+    }
+    auto lines = env_.load_cfg ? env_.load_cfg(args) : std::nullopt;
+    if (!lines) {
+        say(std::format("Could not /loadcfg '{}'", args));
+        return;
+    }
+    if (!env_.run || too_deep()) return;
+    ++nested_;
+    for (const std::string& line : *lines) env_.run(line);
     --nested_;
 }
 

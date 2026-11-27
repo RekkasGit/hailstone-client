@@ -1237,9 +1237,10 @@ void ClientApp::update_connection() {
     if (auto z = conn_->take_zone_to_load()) load_zone(*z);
     while (auto c = conn_->poll_chat()) {
         if (c->group.empty())
-            game_view_.chat.add(chat_channel(c->kind), std::move(c->text), c->rgb, c->color, std::move(c->peer));
+            game_view_.chat.add(chat_channel(c->kind), std::move(c->text), c->rgb, c->color, std::move(c->peer),
+                                c->from_code);
         else
-            game_view_.chat.add_chat_group(std::move(c->text), std::move(c->group));
+            game_view_.chat.add_chat_group(std::move(c->text), std::move(c->group), c->from_code);
     }
     // Hailstone: the chat history every few minutes too (a crash keeps most of it).
     if (screen_ == Screen::InGame && Clock::now() - chat_saved_ > std::chrono::minutes(3)) {

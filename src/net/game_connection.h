@@ -260,6 +260,9 @@ struct ChatEvent {
     std::string peer; // the player the line is from: a tell's other player (the sender, or whom we told), a channel's
                       // speaker (Hailstone: the modern chat's name links)
     std::vector<std::string> group; // the group's plain text rows. When nonempty, text is its title.
+    // Hailstone: a plugin or script wrote it while its code ran (plugin::caller_name()); the chat windows route such
+    // a line to its own channel (game::kChatChannelCode), not by its colour.
+    bool from_code = false;
 };
 
 // Something the client plays a sound for (audio/; the wave each gets is

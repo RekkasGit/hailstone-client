@@ -220,7 +220,8 @@ bool GameConnection::prepare_chat(ChatEvent& event, std::optional<std::string> d
     // server's message, a player's tell) a BEL is taken out, so their text cannot colour the chat. A hook below may
     // still put codes into a line it rewrites, as the plugin's own. The client's own coded lines (client_message) keep
     // theirs.
-    if (plugin::caller_name().empty() && !client_codes) {
+    event.from_code = !plugin::caller_name().empty();
+    if (!event.from_code && !client_codes) {
         std::erase(event.text, game::kMqColorCode);
         if (display_text) std::erase(*display_text, game::kMqColorCode);
     }
@@ -271,6 +272,7 @@ bool GameConnection::write_chat_group(std::string title, std::vector<std::string
 
     ChatEvent group;
     group.text = std::move(title);
+    group.from_code = !plugin::caller_name().empty();
     group.group.reserve(messages.size());
     std::vector<ChatEvent> colored;
     for (auto& message : messages) {

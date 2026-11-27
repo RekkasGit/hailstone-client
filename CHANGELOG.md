@@ -5,6 +5,10 @@
 - Left-click the target's target health bar in Modern or Gamepad to select that target.
 - The Tracking window can stay open, be reopened, and refresh its list during the camp countdown.
 - The Combat skill picker offers Slam only when your current form can use it. Saved Slam buttons are dimmed while unavailable and become usable again when you regain Slam.
+- MacroQuest's `.cfg` command files run: `AutoExec.cfg`, `CharSelect.cfg`, `InGame.cfg`, `<server>_<character>.cfg`, `<Class>.cfg`, `zoned.cfg`, `<zone>.cfg`, `<plugin>-AutoExec.cfg` (and `<script>-AutoExec.cfg` for Lua scripts), from `cfg/` in the data folder, a server's folder or a character's folder, the most specific copy only. `/loadcfg <name>` runs one by hand. See docs/autoexec.md.
+- `${Group.Member[name]}` now gives the group member, as in MacroQuest, so `${Group.Member[name].Index}` and the member's other fields work (E3's heals and buffs by name use it). The `Group` TLO also gains `AnyoneMissing`, `MercenaryCount` (and the tank, healer, melee and caster counts), `AvgHPs`, `Cleric`, `MarkNpc`, `MasterLooter` and `MouseOver`, and each member `MarkNpc`, `MasterLooter` and `Present`.
+- Chat timestamps are set per tab: right-click a tab and pick **Timestamps** to change that tab only. Tabs keep the format they had until you change them.
+- New chat filter **Plugins and Scripts** (Filters menu, after System Messages): every line a plugin or Lua script writes goes to the window you pick, whatever its colour. It stays in the main window until moved.
 - Mana regeneration now uses the server's reported maximum, fixing mana bars that stopped short of full when the client's calculated maximum was lower.
 - Players can ride with classic or Luclin character models. Switching zones no longer drops the mount buff while the rider or mount model is still being built.
 - Choose separate HP, mana, and endurance readouts for group members and HP readouts for pets. Modern puts the choices in the Group and Pet frame menus, and Gamepad puts them under Options > Interface. Current / maximum values appear on servers that supply them.
@@ -28,6 +32,12 @@
 - Save named window and chat Layout Profiles in Modern and Gamepad. See the saved window arrangement in Visual Preview, save your current layout before switching if needed, and undo the last apply. Open the manager from the EQ menu or with `/layoutprofiles`. Interfaces reach them through `hs.UI.layoutProfiles` (UI API 1.12).
 - Modern chat timestamps and Gamepad vertical hotbar settings are now saved per character, where every character shared them before. Each character starts from the shared setting it had.
 - Server popups display STML tables in aligned rows and columns in Modern and Gamepad.
+- `/cast` also takes a memorized spell's name, as in MacroQuest: `/cast "Minor Heal"` casts the first gem whose spell starts with it, `/cast "=Minor Healing"` the one with that whole name. `/cast <gem>` is unchanged.
+- `Spell.CastTime`, `.RecastTime` and `.RecoveryTime` are in milliseconds, as in MacroQuest and as `.MyCastTime` already was; they were seconds. New `Item.CastTime`: an item's click cast time in milliseconds. E3 reads these for its spell and item timings.
+- `${...Item.Spell}` (for example `${Me.Inventory[13].Spell}`) gives the item's spell, as in MacroQuest: its click effect's, else its scroll's, proc's, focus's or worn effect's. It read NULL before.
+- `/useitem` also takes an item's name, as in MacroQuest: `/useitem Rations` finds the first carried item whose name holds the text, `/useitem "Short Sword"` the one with that whole name. A single number past the slot numbers is an item id when you carry that item: `/useitem 1001`. The slot form is unchanged. E3 uses the name form for manastones and food.
+- New TLO member `${Me.Aura[#|name]}` (`.ID`, `.Name`, `.SpawnID`, `.Find[text]`), as in MacroQuest. E3 reads `${Me.Aura[1]}` to see which aura is up before casting a new one.
+- New TLO `${MoveUtils}`, as in MacroQuest's MQ2MoveUtils: `.Stuck` is TRUE while a `/moveto` or `/stick` walk is stuck, and `.Command` names the walk. E3's follow uses it to switch to `/nav` when stuck.
 - `${Window[...]}` answers from the client's own state for the casting, spell book, loot, merchant, bank, trade, give and dialog windows and `pack1`..`pack10`, so scripts that ask whether one is open work with no UI.
 - New command `/beep` (MacroQuest's): plays a sound. Individual Sounds has a Beep volume and a Beep sound choice: a tone or any of your game folder's sounds.
 - `/echo` and `/popupecho` take MacroQuest's colour codes when you type them (`\ayYellow \agGreen\ax`), and `\n` for a new line.

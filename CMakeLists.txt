@@ -589,6 +589,7 @@ add_library(hailstone_engine STATIC
   src/ui/layout_profile.cpp
   src/app/lua_ui.cpp
   src/app/automation.cpp
+  src/app/autoexec.cpp
   src/app/navigator.cpp
   src/app/guide_path.cpp
   src/app/lua_ui_values.cpp
@@ -1172,6 +1173,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mq_calc_test.cpp
     tests/mq_combat_test.cpp
     tests/automation_test.cpp
+    tests/autoexec_test.cpp
     tests/mq_lua_test.cpp
     tests/mq_script_path_test.cpp
     tests/mq_event_pattern_test.cpp
@@ -1434,6 +1436,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/player_commands_test.cpp
     tests/item_notify_test.cpp
     tests/remove_buff_test.cpp
+    tests/use_item_test.cpp
+    tests/cast_line_test.cpp
     tests/window_notify_test.cpp
     tests/window_child_test.cpp
     tests/imgui_frame_test.cpp
