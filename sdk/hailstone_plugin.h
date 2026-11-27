@@ -718,6 +718,9 @@ typedef struct HailstoneSpell {
 #define HAILSTONE_UI_ICON_SPELL 1 /* A_SpellIcons (spells01.tga ..., 40 x 40 cells): a spell's spell_icon */
 #define HAILSTONE_UI_ICON_GEM 2   /* A_SpellGems (gemicons01.tga ..., 24 x 24 cells): a spell's gem_icon */
 
+/* ui_font's kinds. */
+#define HAILSTONE_UI_FONT_EQ 1 /* EverQuest's font table, 0 .. 10 (MacroQuest's GetEQImFont) */
+
 /* ui_icon's answer: the cell's texture as the client's Dear ImGui takes it (an ImTextureID) and its corners in it. */
 typedef struct HailstoneUiImage {
     uint32_t size; /* initialize to sizeof(HailstoneUiImage) */
@@ -1255,6 +1258,16 @@ typedef struct PluginHostApi {
      * the texture (the UI's art reloads). Call on the client's thread or on a thread using lend_thread. Added later
      * in ABI 4: test HAILSTONE_HOST_HAS(host, ui_icon) first. */
     int (*ui_icon)(void* host, int32_t kind, int32_t icon, HailstoneUiImage* out);
+    /* UI. One of the client's fonts for the plugin's own Dear ImGui drawing: an ImFont* of the client's atlas, for
+     * ImGui::PushFont(font, size) (font->LegacySize for its own size). `kind` HAILSTONE_UI_FONT_EQ, `index` 0 .. 10:
+     * EverQuest's font table (MacroQuest's GetEQImFont; the chat window's /chatfontsize fonts), Arial-class at 10,
+     * 12, 14, 15, 16, 20, 24, 20, 24, 14 and 40 px, 5, 6 and 10 bold. NULL for another kind or index, without `ui`,
+     * or for a plugin the client gives no imgui_context. Use it in the same OnUpdateImGui: the client rebuilds its
+     * fonts when the player changes them. The fonts Hailstone ships for plugins, "RobotoRegular" and "RobotoRegular
+     * (Large)" with FontAwesome 4.7 merged in, are found by name in the atlas instead (docs/plugins.md). Call on the
+     * client's thread or on a thread using lend_thread. Added later in ABI 4: test HAILSTONE_HOST_HAS(host, ui_font)
+     * first. */
+    void* (*ui_font)(void* host, int32_t kind, int32_t index);
 } PluginHostApi;
 /* What use_ability and ability_state take: the kinds of ability the Ability Book lists. The values are stable. */
 enum HS_AbilityKinds {

@@ -15,6 +15,10 @@ hailstone/
                              on Windows the icon is built into hailstone.exe instead, cmake/windows/hailstone.ico)
   pictures/                  shipped: the default picture behind the pre-game and loading screens, shown when
                              neither the server nor ui/loadingbackgrounds/ (below) has any
+  fonts/                     shipped: fonts for plugins and scripts that name MacroQuest's (docs/plugins.md "Fonts"):
+                             Roboto-Regular.ttf and Roboto-Bold.ttf (Roboto 3.016) and fontawesome-webfont.ttf
+                             (FontAwesome 4.7), each with its SIL Open Font License text; Roboto is also in the UI,
+                             name plate and chat tab font lists; replaced by an update
   flora/                     shipped: Hailstone's flora rules for zones without flora of their own (docs/graphics.md
                              "Zone flora"): default.txt for every outdoor classic zone, <zone>.txt for one, the
                              shared parts and climate families they include; replaced
@@ -644,7 +648,7 @@ saved import revision. Edits after an import prevent that backup from overwritin
 
 ## Builds and installs
 
-A build makes the same folder at `build/hailstone/`: the binary, `shaders/`, `ui/`, `icons/`, `pictures/`,
+A build makes the same folder at `build/hailstone/`: the binary, `shaders/`, `ui/`, `icons/`, `pictures/`, `fonts/`,
 `CHANGELOG.md`, `browser/` (with `HAILSTONE_BROWSER`), the runtime DLLs on Windows, `libMoltenVK.dylib` on macOS, and
 the example plugin in `plugins/`. Run it as `build/hailstone/hailstone`; it keeps its `hailstone.ini`, logs and
 servers beside the binary. The tools (`pfsdump`, `hailstone_check` ...) and the tests stay in `build/`.
@@ -657,7 +661,7 @@ into `plugins/nms/` or `plugins/projecttriune/`, each builds into `build/hailsto
 
 `cmake --install build --prefix <dir>` writes the shipped parts only:
 
-- `<dir>/hailstone(.exe)`, `shaders/`, `ui/`, `icons/`, `pictures/`, `CHANGELOG.md`;
+- `<dir>/hailstone(.exe)`, `shaders/`, `ui/`, `icons/`, `pictures/`, `fonts/`, `CHANGELOG.md`;
 - `browser/` (about 390 MB on Linux with `libcef.so` stripped);
 - the shared libraries the build made (SDL3 when fetched), found through an rpath of the binary's folder;
 - on macOS, `libMoltenVK.dylib` and its `MoltenVK-LICENSE.txt`, loaded from beside the binary

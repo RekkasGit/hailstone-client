@@ -187,7 +187,7 @@ local function body(slot, c, w, x, y, width, height, s)
   local cb = C.chatBg -- (a light palette's: a dark page under the lines, whose colours are the player's user colours)
   if cb[4] > 0 then ui.DrawRectFilled(x + pad - 4 * s, oy - 2 * s, x + width - pad + 4 * s, oy + math.max(oh, 10) + 2 * s, cb[1], cb[2], cb[3], cb[4], 6 * s) end
   ui.SetCursorPos(x - wx + pad, oy - wy)
-  ui.PushChatFont(font)
+  ui.PushChatFont(font, API.chat.FontFace and API.chat.FontFace(slot) or nil) -- (the tab's own face, if any)
   ui.PushStyleColor(ui.Col.ChildBg, 0, 0, 0, 0)
   local selected = w.tabs[w.tab] or {}
   local scrollFlags = selected.scrollbar == false and ui.WindowFlags.NoScrollbar or 0

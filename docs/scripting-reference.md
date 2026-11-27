@@ -1406,6 +1406,8 @@ achievement and reward-selection APIs.
 | ChatSetFont | (slot, font) → — | Tab font index | commands |
 | ChatTimestamps | (slot) → format | The timestamp format of the tab that is up (`off`, `12h-seconds`, `24h-minutes`, `24h-seconds`), for ChatText's `stamps`. A tab with none of its own follows the pack's old shared `chat.timestamps` | — |
 | ChatSetTimestamps | (slot, format) → — | The tab's own timestamp format (`true` and `"1"` are `24h-seconds`, anything else off), kept in the UI ini | commands |
+| ChatFontFace | (slot) → face | The font face of the tab that is up, a family of the UI font list; `""` for the UI's own | — |
+| ChatSetFontFace | (slot, face) → — | The tab's own font face (`""` or nil: the UI's), kept in the UI ini | commands |
 | ChatDefaultChannels | () → {names} | Channel menu items (0-based order) | — |
 | ChatSetDefault | (slot, index) → — | Default channel for the tab | commands |
 | ChatClear | (slot [, tab]) → — | Empty the tab that is up, or the given one | commands |

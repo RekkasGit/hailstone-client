@@ -18,6 +18,8 @@ separate library shipped beside the macOS binary, with its licence.
 | doctest | MIT | tests only |
 | Dear ImGui (github.com/ocornut/imgui, v1.93.0, with its SDL3 and Vulkan backends) | MIT | the immediate-mode UI the Lua UI packs and the developer screens draw with |
 | dr_wav, dr_mp3 (github.com/mackron/dr_libs, tag wav-0.14.5) | public domain or MIT No Attribution | WAV and MP3 decoding (`src/audio/pcm.cpp`) |
+| Roboto 3.016 (github.com/googlefonts/roboto-3-classic, release v3.016, `unhinted/static/Roboto-Regular.ttf` and `Roboto-Bold.ttf`), copyright 2011 The Roboto Project Authors | SIL Open Font License 1.1 (`fonts/Roboto-OFL.txt`) | `fonts/Roboto-Regular.ttf` and `fonts/Roboto-Bold.ttf`, unchanged: MacroQuest's "RobotoRegular" fonts for plugins and scripts (`src/ui/imgui_layer.cpp`), and a face in the UI, name plate and chat tab font lists |
+| Font Awesome 4.7.0 (github.com/FortAwesome/Font-Awesome, tag v4.7.0, `fonts/fontawesome-webfont.ttf`), Font Awesome by Dave Gandy - http://fontawesome.io | SIL Open Font License 1.1 (`fonts/FontAwesome-OFL.txt`) | `fonts/fontawesome-webfont.ttf`, unchanged: icons merged into the "RobotoRegular" fonts |
 | TinySoundFont (github.com/schellingb/TinySoundFont, commit 853a0a1) | MIT | SoundFont synthesis of the XMI music (`src/audio/xmi_player.cpp`) with a General MIDI SoundFont |
 | stb_image (github.com/nothings/stb, commit 2c980bb) | public domain / MIT | JPEG pictures on the pre-game and loading screens (`src/assets/jpeg_read.cpp`) |
 | Lua 5.5.1 (`third_party/lua`; one change, see note) | MIT | the Lua UI's scripting (`src/ui/lua`) and the MQ-style scripts (`src/mq`) |

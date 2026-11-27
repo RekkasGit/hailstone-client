@@ -2487,7 +2487,7 @@ display options):
 
 | Option | Key | Default | What it does |
 |---|---|---|---|
-| `plate_font_face` | `display.plate_font_face` | empty | A system font family (as /fontface lists them); empty or not found: the UI's font. |
+| `plate_font_face` | `display.plate_font_face` | empty | A font family as /fontface lists them (the system's and Hailstone's own `fonts/`); empty or not found: the UI's font. |
 | `plate_font_size` | `display.plate_font_size` | 15 | Points at 100 % UI scale, 8 to 48. |
 | `plate_font_bold` | `display.plate_font_bold` | 0 | The face's bold file; a face with none is struck twice, a pixel apart. |
 | `plate_edge` | `display.plate_edge` | 0 | 0 drop shadow one pixel down and right, 1 dark outline all round, 2 none. |

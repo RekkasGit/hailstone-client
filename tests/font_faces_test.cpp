@@ -97,6 +97,47 @@ TEST_CASE("UI fonts: built-in chat glyphs draw curly quotes with straight quote 
     CHECK(baked->GetCharAdvance(0x2019) == apostrophe->AdvanceX);
 }
 
+TEST_CASE("UI fonts: the shipped Roboto is MacroQuest's RobotoRegular, with FontAwesome 4.7's icons merged in") {
+    ImFontAtlas atlas;
+    detail::add_bundled_fonts(atlas, HAILSTONE_CLIENT_FONTS_DIR, 2.0f);
+    REQUIRE(atlas.Fonts.Size == 2);
+    ImFont* regular = atlas.Fonts[0];
+    ImFont* large = atlas.Fonts[1];
+    CHECK(std::string(regular->GetDebugName()) == detail::kRobotoFontName);
+    CHECK(std::string(large->GetDebugName()) == detail::kRobotoLargeFontName);
+    CHECK(regular->LegacySize == 32.0f); // 16 px, 22 px, times the scale
+    CHECK(large->LegacySize == 44.0f);
+    REQUIRE(detail::build_ui_font_atlas(atlas));
+    // Roboto alone, to see that the icons replace none of its letters.
+    ImFontAtlas plain;
+    const ImFontConfig cfg = detail::ui_font_config();
+    ImFont* roboto =
+        plain.AddFontFromFileTTF((std::string(HAILSTONE_CLIENT_FONTS_DIR) + "/Roboto-Regular.ttf").c_str(), 32.0f, &cfg);
+    REQUIRE(roboto);
+    REQUIRE(detail::build_ui_font_atlas(plain));
+    ImFontBaked* plain_baked = roboto->GetFontBaked(32.0f);
+    REQUIRE(plain_baked);
+    for (ImFont* font : {regular, large}) {
+        ImFontBaked* baked = font->GetFontBaked(font->LegacySize);
+        REQUIRE(baked);
+        CHECK(baked->FindGlyphNoFallback('A'));
+        CHECK(baked->FindGlyphNoFallback(0xf14c)); // E3's FAExternalLinkSquare
+        CHECK(baked->FindGlyphNoFallback(0xf013)); // FontAwesome's cog
+    }
+    for (ImWchar c : {ImWchar('A'), ImWchar('g'), ImWchar(' '), ImWchar('0')}) {
+        const ImFontGlyph* merged = regular->GetFontBaked(32.0f)->FindGlyphNoFallback(c);
+        const ImFontGlyph* own = plain_baked->FindGlyphNoFallback(c);
+        REQUIRE(merged);
+        REQUIRE(own);
+        CHECK(merged->AdvanceX == own->AdvanceX);
+    }
+    // No folder, or one without Roboto: nothing added.
+    ImFontAtlas none;
+    detail::add_bundled_fonts(none, {}, 1.0f);
+    detail::add_bundled_fonts(none, HAILSTONE_TEST_DATA_DIR, 1.0f);
+    CHECK(none.Fonts.Size == 0);
+}
+
 TEST_CASE("UI fonts: installed regular and bold faces retain their typographic chat glyphs") {
     const auto faces = scan_font_faces(system_font_dirs());
     FontFiles files;

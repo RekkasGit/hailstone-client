@@ -130,6 +130,9 @@ struct UiHost {
     // lists (hs.OptionChoices: "resolution").
     std::function<std::optional<int>(std::string_view option)> find_option;
     std::function<std::vector<std::string>(std::string_view option)> option_choices;
+    // Hailstone: the font faces the chat tabs use (hs.ChatSetFontFace), each once, for the client to load
+    // (ui::ImGuiLayer::set_chat_faces); told when they change and when a character's chat settings load.
+    std::function<void(const std::vector<std::string>& families)> chat_font_faces;
     // The Test button of the Individual Sounds window (hs.PlaySoundTest): plays the sound of that option name at its
     // volume; false for a name that is not one of them.
     std::function<bool(std::string_view option)> play_sound_test;

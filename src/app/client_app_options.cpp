@@ -308,8 +308,13 @@ void ClientApp::apply_classic_folder() {
 
 const std::vector<ui::FontFace>& ClientApp::font_faces() const {
     if (!font_faces_) {
+        // Hailstone's own fonts/ first (Roboto), so its copy of a face the system also has is the one used; its
+        // FontAwesome is an icon font with no letters, so not a face to pick.
         auto dirs = ui::system_font_dirs();
+        dirs.insert(dirs.begin(), platform::fonts_dir());
         font_faces_ = ui::scan_font_faces(dirs);
+        const std::filesystem::path icons = platform::fonts_dir() / "fontawesome-webfont.ttf";
+        std::erase_if(*font_faces_, [&icons](const ui::FontFace& f) { return f.file == icons; });
         log::info("fonts: {} faces in {} folders", font_faces_->size(), dirs.size());
     }
     return *font_faces_;

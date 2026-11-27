@@ -1376,10 +1376,19 @@ int PushFont(lua_State *L) {
 	ImGui::PushFont(font, font ? font->LegacySize : 0.0f); // size 0 keeps the current one
 	return 0;
 }
-// ui.PushChatFont(index)   -- a chat window's font 0..10 (/chatfontsize; the original's font list); pop with PopFont
+// ui.PushChatFont(index [, face])   -- a chat window's font 0..10 (/chatfontsize; the original's font list); pop with
+//                                     PopFont. face: Hailstone's font per tab (hs.ChatFontFace), at that font's size;
+//                                     a face not loaded, or "", keeps the UI's
 int PushChatFont(lua_State *L) {
-	ImFont *font = chat_font(static_cast<int>(I(L, 1, 2)));
-	ImGui::PushFont(font, font ? font->LegacySize : 0.0f);
+	const int index = static_cast<int>(I(L, 1, 2));
+	ImFont *font = chat_font(index);
+	const float size = font ? font->LegacySize : 0.0f;
+	if (lua_type(L, 2) == LUA_TSTRING) {
+		std::size_t length = 0;
+		const char *face = lua_tolstring(L, 2, &length);
+		if (ImFont *own = chat_face_font(std::string_view(face, length), chat_font_bold(index))) font = own;
+	}
+	ImGui::PushFont(font, size);
 	return 0;
 }
 // px = ui.ChatFontSize(index)   -- that font's cell height in pixels at UI scale 1 (0 outside 0..10)

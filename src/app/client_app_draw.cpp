@@ -714,6 +714,16 @@ void ClientApp::update_ui_host() {
         h.find_option = [this](std::string_view o) { return option_value(o); };
         h.set_option = [this](std::string_view o, int v) { set_option_value(o, v); };
         h.option_choices = [this](std::string_view o) { return option_choices(o); };
+        h.chat_font_faces = [this](const std::vector<std::string>& families) {
+            std::vector<ui::ChatFaceFiles> faces;
+            for (const std::string& family : families) {
+                ui::FontFiles files = ui::find_font_family(font_faces(), family);
+                if (files.regular.empty()) files.regular = files.bold; // a face with only a bold file
+                if (files.regular.empty()) continue;                    // not on this system (a copied ini)
+                faces.push_back({family, files.regular, files.bold});
+            }
+            ui_.set_chat_faces(std::move(faces));
+        };
         h.play_sound_test = [this](std::string_view o) { return play_sound_test(o); };
         h.run_command = [this](int command) {
             if (conn_) key_command({command, true});

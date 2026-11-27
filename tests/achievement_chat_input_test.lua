@@ -91,6 +91,7 @@ for _,pack in ipairs({"modern","gamepad"})do
     GameState=function()return gameState end,Name=function()return charName end,
     ChatWindows=function()return {chatWindow}end,ChatText=function()return 0,{},true,0 end,
     ChatTimestamps=function()return "off" end,
+    ChatFontFace=function()return "" end,
     ChatInfo=function()return 3,true,"Say"end,ChatPage=function()return nil end,
     ChatHistory=function()
       local line = recalled

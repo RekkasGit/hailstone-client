@@ -29,6 +29,7 @@
 #include "app/lua_ui.h"
 #include "app/lua_ui_record.h"
 #include "app/ui_input.h"
+#include "core/ascii_case.h"
 #include "core/character_files.h"
 #include "core/game_dir.h"
 #include "core/ini_file.h"
@@ -505,6 +506,8 @@ struct ChatWnd {
     // Hailstone: the tab's timestamp format (a kTimestampOptions value, _Timestamps). Empty: none of its own yet, so
     // the UI pack's old shared setting (chat.timestamps), which kept one format for every tab.
     std::string timestamps;
+    // Hailstone: the tab's own font face, a family of the UI font list (_FontFace). Empty: the UI's face.
+    std::string face;
     int language = 0;           // +0x274
     bool tell = false;          // bIsTellWnd
     int group = 0;              // visible frame slot (1-based)
@@ -634,6 +637,8 @@ void save_window(ui::UiIni& ini, int w) {
     else ini.erase("ChatManager", k + "HighlightColor");
     if (!c.timestamps.empty()) put("Timestamps", c.timestamps);
     else ini.erase("ChatManager", k + "Timestamps");
+    if (!c.face.empty()) put("FontFace", c.face);
+    else ini.erase("ChatManager", k + "FontFace");
 }
 
 // CChatWindowManager::SaveChatSettings @0x64fe40. The original counts NumWindows less its tell windows, which then
@@ -659,6 +664,7 @@ void save_manager(ui::UiIni& ini) {
         ini.erase("ChatManager", std::format("ChatWindow{}_Highlight", w));
         ini.erase("ChatManager", std::format("ChatWindow{}_HighlightColor", w));
         ini.erase("ChatManager", std::format("ChatWindow{}_Timestamps", w));
+        ini.erase("ChatManager", std::format("ChatWindow{}_FontFace", w));
     }
     for (int g = 1; g <= kMaxChatWindows; ++g) {
         const auto& group = group_at(g);
@@ -688,9 +694,34 @@ void save_manager() {
     if (auto* ini = manager().ini) save_manager(*ini);
 }
 
+// The faces the tabs use, each once, to the client when they differ from the last told (UiHost::chat_font_faces).
+void sync_font_faces(bool always = false) {
+    static std::vector<std::string> told;
+    std::vector<std::string> faces;
+    for (int w = 0; w < kMaxChatWindows; ++w) {
+        const ChatWnd& c = wnd(w);
+        if (!c.used || c.face.empty()) continue;
+        if (std::find_if(faces.begin(), faces.end(), [&c](const std::string& f) { return iequals(f, c.face); }) ==
+            faces.end())
+            faces.push_back(c.face);
+    }
+    if (!always && faces == told) return;
+    told = faces;
+    if (UiHost* h = chat_host(); h && h->chat_font_faces) h->chat_font_faces(faces);
+}
+
 void changed() {
     ++manager().serial;
     save_manager();
+    sync_font_faces();
+}
+
+// A face name as hs.ChatSetFontFace and the ini take it: at most 128 bytes, no control characters; else none.
+std::string font_face_name(std::string_view face) {
+    if (face.size() > 128) return {};
+    for (char ch : face)
+        if (static_cast<unsigned char>(ch) < 32) return {};
+    return std::string(face);
 }
 
 void set_tab_timestamps(int w, TimestampFormat format) {
@@ -1581,6 +1612,25 @@ std::vector<Row> chat_menu(int w) {
         }
         return out;
     });
+    // Hailstone: the tab's own font face (the menu's tab), from the UI font list; "Same as UI" its face.
+    sub("Font", [](int win) {
+        std::vector<Row> out;
+        out.push_back(action("Same as UI", on_window(win, [](int page) {
+            wnd(page).face.clear();
+            changed();
+        }), true, wnd(win).face.empty()));
+        const UiHost* ui_host = chat_host();
+        std::vector<std::string> families = ui_host && ui_host->option_choices ? ui_host->option_choices("font_face")
+                                                                               : std::vector<std::string>{};
+        if (!families.empty()) families.erase(families.begin()); // ("Default", the UI's: Same as UI)
+        for (const std::string& family : families) {
+            out.push_back(action(family, on_window(win, [family](int page) {
+                wnd(page).face = family;
+                changed();
+            }), true, iequals(wnd(win).face, family)));
+        }
+        return out;
+    });
     rows.push_back(action("Use Tell Windows", [] { set_tell_windows(!tell_windows_on()); }, true, tell_windows_on()));
     const bool can_set_timestamps = h && h->layout_setting && h->set_layout_setting;
     // Hailstone: the tab's own format (the menu's tab); the other tabs keep theirs.
@@ -2173,6 +2223,27 @@ int ChatSetFont(lua_State* L) {
     int w = up_window(L, 1);
     if (w < 0) return 0;
     wnd(w).font = static_cast<int>(std::clamp<lua_Integer>(luaL_checkinteger(L, 2), 0, 10));
+    changed();
+    return 0;
+}
+
+// face = hs.ChatFontFace(slot)   -- Hailstone: the font face of the tab that is up, a family of the UI font list;
+// "" for the UI's own face
+int ChatFontFace(lua_State* L) {
+    int w = up_window(L, 1);
+    if (w < 0) return 0;
+    lua_pushlstring(L, wnd(w).face.data(), wnd(w).face.size());
+    return 1;
+}
+
+// hs.ChatSetFontFace(slot, face)   -- Hailstone: the font face of the tab that is up ("" or nil: the UI's), kept with
+// the tab; drawn once the client has loaded it (from the next frame), else in the UI's face
+int ChatSetFontFace(lua_State* L) {
+    int w = up_window(L, 1);
+    if (w < 0) return 0;
+    std::size_t length = 0;
+    const char* face = lua_type(L, 2) == LUA_TSTRING ? lua_tolstring(L, 2, &length) : "";
+    wnd(w).face = font_face_name(std::string_view(face, length));
     changed();
     return 0;
 }
@@ -2826,6 +2897,7 @@ void chat_layout_loaded(ui::UiIni& ini, UiHost& host, const std::filesystem::pat
         c.flash = num(key + "Highlight", 1) != 0;
         if (auto stamps = ini.get("ChatManager", key + "Timestamps"); stamps && !stamps->empty())
             c.timestamps = std::string(timestamp_value(timestamp_format(*stamps)));
+        if (auto face = ini.get("ChatManager", key + "FontFace")) c.face = font_face_name(*face);
         if (auto rgb = ini.get("ChatManager", key + "HighlightColor")) {
             std::uint32_t value = 0;
             const char* end = rgb->data() + rgb->size();
@@ -2881,6 +2953,7 @@ void chat_layout_loaded(ui::UiIni& ini, UiHost& host, const std::filesystem::pat
     }
     push_hit_modes();
     ++m.serial;
+    sync_font_faces(true); // (a new character: the client loads its tabs' faces)
 }
 
 void request_chat_link_all(std::vector<std::string> tags) {
@@ -3049,6 +3122,7 @@ void register_chat_api(lua_State* L, UiHost& h) {
                                    {"ChatFilterGroups", ChatFilterGroups},
                                    {"ChatSetFilter", ChatSetFilter}, {"ChatSetFont", ChatSetFont},
                                    {"ChatTimestamps", ChatTimestamps}, {"ChatSetTimestamps", ChatSetTimestamps},
+                                   {"ChatFontFace", ChatFontFace}, {"ChatSetFontFace", ChatSetFontFace},
                                    {"ChatDefaultChannels", ChatDefaultChannels}, {"ChatSetDefault", ChatSetDefault},
                                    {"ChatClear", ChatClear}, {"ChatNewTab", ChatNewTab},
                                    {"ChatCloseTab", ChatCloseTab}, {"ChatSelectTab", ChatSelectTab},

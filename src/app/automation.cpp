@@ -359,6 +359,7 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     ne.max_camera_distance = m.env.max_camera_distance;
     ne.set_max_camera_distance = m.env.set_max_camera_distance;
     ne.ui_icon = m.env.ui_icon;
+    ne.ui_font = m.env.ui_font;
     ne.hot_button = m.env.hot_button;
     ne.set_hot_button = m.env.set_hot_button;
     ne.hot_bar_page = m.env.hot_bar_page;

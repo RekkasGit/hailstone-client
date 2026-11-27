@@ -47,6 +47,7 @@ struct Host {
     fs::path plugin_dir = world.dir / "plugins";
     plugin::Hooks hooks;
     game::NameplateCanvasRegistry canvas;
+    int fake_font = 0; // what ne.ui_font hands out for an EQ font
     plugin::Policy policy;
     mq::Registry reg;
     mq::Context ctx;
@@ -104,6 +105,10 @@ struct Host {
             if (kind == plugin::UiIconKind::Spell && icon == 7) return plugin::UiIconImage{41, 0.25f, 0.5f, 0.75f, 1.0f};
             if (kind == plugin::UiIconKind::Gem && icon == 3) return plugin::UiIconImage{42, 0, 0, 0.5f, 0.5f};
             return std::nullopt;
+        };
+        // The client's fonts: EQ fonts 0 .. 10, as ui::chat_font has them.
+        ne.ui_font = [this](plugin::UiFontKind, std::int32_t index) -> void* {
+            return index >= 0 && index <= 10 ? static_cast<void*>(&fake_font) : nullptr;
         };
         ne.use_ability = [this](mq::AbilityKind kind, std::string_view name) {
             used.emplace_back(static_cast<int>(kind), std::string(name));
@@ -1428,6 +1433,21 @@ TEST_CASE("native plugins: ui_icon gives a stock UI icon's texture and cell, wit
     REQUIRE(h.plugins->load("HostProbe"));
     h.run("/probeuiicon");
     CHECK(h.printed_line("[Probe] ui icon: spell 0 0 0.00 0.00 0.00 0.00, gem 0 0, missing 0, kind 0, size 0, thread 0"));
+}
+
+TEST_CASE("native plugins: ui_font gives EverQuest's fonts 0 to 10, with the 'ui' capability only") {
+    {
+        Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+        h.approve(plugin::kCapCommands | plugin::kCapUi);
+        REQUIRE(h.plugins->load("HostProbe"));
+        h.run("/probeuifont");
+        CHECK(h.printed_line("[Probe] ui font: eq 4 set, eq 11 null, kind null, thread null"));
+    }
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapCommands); // no 'ui': nothing
+    REQUIRE(h.plugins->load("HostProbe"));
+    h.run("/probeuifont");
+    CHECK(h.printed_line("[Probe] ui font: eq 4 null, eq 11 null, kind null, thread null"));
 }
 
 TEST_CASE("native plugins: write_chat_group writes bounded local chat without chat permission") {

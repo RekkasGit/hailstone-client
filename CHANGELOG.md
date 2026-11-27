@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Each chat tab can have a font of its own: right-click the tab and pick **Font** (Same as UI, or any font in the UI font list). Hailstone's Roboto is now in the UI, name plate and chat font lists too. Interfaces reach it through `hs.UI.chat.FontFace` and `SetFontFace` (UI API 1.13).
+- Plugins and their scripts can use MacroQuest's fonts: "RobotoRegular" and "RobotoRegular (Large)" with FontAwesome's icons (Hailstone now ships Roboto 3 and FontAwesome 4.7, both under the SIL Open Font License, in `fonts/`), and EverQuest's font table 0 to 10 (the SDK's `ui_font`). E3's windows under HSMono get their "robo" font, its icon buttons and its EQ fonts.
 - Plugins can draw the game's spell and spell gem icons in their own windows (the SDK's `ui_icon`), and `get_spell` gives a spell's icon. HSMono's C# scripts (E3) now show spell icons where they had a blank space.
 - `${Navigation.PathExists[spawn <search>]}` and `PathLength` take MQ2Nav's `spawn` keyword, as `/nav spawn` does. They searched for a spawn named with the word `spawn` in it and answered FALSE (and -1).
 - MacroQuest's `/look <angle>` sets how far up or down you look, and `${Spawn.FeetWet}` and `${Spawn.Levitating}` (and `${Me...}`) say whether a spawn's feet are in water and whether it levitates.

@@ -71,6 +71,7 @@ struct AutomationEnv {
     std::function<void(float)> set_max_camera_distance;
     // The stock UI's icons for the plugins' own ImGui drawing (plugin::NativeEnv::ui_icon); null: none.
     std::function<std::optional<plugin::UiIconImage>(plugin::UiIconKind, std::int32_t)> ui_icon;
+    std::function<void*(plugin::UiFontKind, std::int32_t)> ui_font; // the client's ImGui fonts (NativeEnv::ui_font)
     // The in-game browser for the scripts (mq.web) and plugins (the host table's web_*); null: none.
     plugin::WebAccess* web = nullptr;
     // The hot buttons for plugins (plugin::NativeEnv hot_button ...).

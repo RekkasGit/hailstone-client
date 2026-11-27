@@ -5,6 +5,7 @@
 //   /probechatgroup   writes a valid group and tries invalid and off-thread local chat submissions
 //   /probeuiicon      asks ui_icon for a spell and a gem icon, a missing cell, another kind, a short struct and
 //                     from another thread
+//   /probeuifont      asks ui_font for EQ fonts 4 and 11, another kind, and from another thread
 //   /probethrow    lets an exception out (not a std::exception); so do ${Probe.Throw} and OnUpdateImGui
 //   /probestate n  web_state(tab 1) with a struct whose size says n bytes, as a plugin built with a shorter one
 //   /probemessage n  web_message(tab 1) into a buffer of n bytes (0: no buffer)
@@ -93,6 +94,7 @@ static_assert(offsetof(PluginHostApi, write_chat_group) ==
               offsetof(PluginHostApi, world_placement_cancel) + sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, ui_icon) ==
               offsetof(PluginHostApi, write_chat_group) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, ui_font) == offsetof(PluginHostApi, ui_icon) + sizeof(PluginHostApi::caps));
 
 namespace {
 
@@ -141,6 +143,17 @@ void probe_ui_icon(void*, const char*) {
     WriteChatf("[Probe] ui icon: spell %d %u %.2f %.2f %.2f %.2f, gem %d %u, missing %d, kind %d, size %d, thread %d",
                got, static_cast<unsigned>(spell.texture), spell.u0, spell.v0, spell.u1, spell.v1, gem_got,
                static_cast<unsigned>(gem.texture), missing, bad_kind, too_small, off_thread);
+}
+
+void probe_ui_font(void*, const char*) {
+    if (!HAILSTONE_HOST_HAS(host, ui_font)) return;
+    const void* eq4 = host->ui_font(host->host, HAILSTONE_UI_FONT_EQ, 4);
+    const void* eq11 = host->ui_font(host->host, HAILSTONE_UI_FONT_EQ, 11);
+    const void* kind = host->ui_font(host->host, 2, 4);
+    const void* off_thread = &eq4;
+    std::thread([&] { off_thread = host->ui_font(host->host, HAILSTONE_UI_FONT_EQ, 4); }).join();
+    WriteChatf("[Probe] ui font: eq 4 %s, eq 11 %s, kind %s, thread %s", eq4 ? "set" : "null", eq11 ? "set" : "null",
+               kind ? "set" : "null", off_thread ? "set" : "null");
 }
 
 void probe_chat_group(void*, const char*) {
@@ -1239,6 +1252,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probethrow", probe_throw, nullptr);
     AddCommand("/probechatgroup", probe_chat_group, nullptr);
     AddCommand("/probeuiicon", probe_ui_icon, nullptr);
+    AddCommand("/probeuifont", probe_ui_font, nullptr);
     AddCommand("/probestate", probe_state, nullptr);
     AddCommand("/probemessage", probe_message, nullptr);
     AddCommand("/probetcp", probe_tcp, nullptr);
@@ -1288,6 +1302,7 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probethrow");
     RemoveCommand("/probechatgroup");
     RemoveCommand("/probeuiicon");
+    RemoveCommand("/probeuifont");
     RemoveCommand("/probestate");
     RemoveCommand("/probemessage");
     RemoveCommand("/probetcp");

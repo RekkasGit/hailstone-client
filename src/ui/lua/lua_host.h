@@ -32,6 +32,10 @@ ImFont* ui_font(int index);
 inline constexpr std::size_t kChatFonts = 11;
 ImFont* chat_font(int index);
 float chat_font_size(int index);
+// Hailstone: whether chat font `index` is a bold one (5, 6 and 10), and a chat tab's own face (ImGuiLayer::
+// set_chat_faces) by its family, in any case: its bold file for a bold font when it has one. Null: not loaded.
+bool chat_font_bold(int index);
+ImFont* chat_face_font(std::string_view family, bool bold);
 // The display scale the UI fonts were built for (ui/imgui_layer.cpp): the EQ fonts are their XML sizes times it.
 float ui_scale();
 void set_ui_scale(float scale); // testing: the scale without an ImGui layer

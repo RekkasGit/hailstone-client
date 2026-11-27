@@ -898,6 +898,23 @@ A plugin that draws with Dear ImGui must be built with the client's Dear ImGui v
 the draw callbacks), so the client does not call `OnUpdateImGui` of a plugin built for an older ABI (it logs that when the
 plugin loads), and `imgui_context` and `web_view` give such a plugin nothing. Rebuild it against this SDK.
 
+#### Fonts
+
+Besides `ImGui::GetFont()`, the UI's own face, a plugin drawing with the client's Dear ImGui can push:
+
+- **"RobotoRegular"** (16 px) and **"RobotoRegular (Large)"** (22 px): the names MacroQuest gives its default and
+  large fonts, found by name in `ImGui::GetIO().Fonts->Fonts` (`GetDebugName()`). Both are Roboto 3.016 with
+  FontAwesome 4.7's icons (U+F000 to U+F2E0) merged in, as MacroQuest merges them, so a MacroQuest plugin's or
+  script's icon labels draw. Hailstone ships both fonts in `fonts/`, under the SIL Open Font License (THIRD_PARTY.md);
+  MacroQuest's Roboto is the older 2.0, so the letters differ slightly. MacroQuest's Material Design icons are not
+  shipped (Apache-2.0).
+- **EverQuest's font table** with `ui_font` (added later in ABI 4): `HAILSTONE_UI_FONT_EQ` and 0 to 10, MacroQuest's
+  `GetEQImFont`, the chat window's `/chatfontsize` fonts: the UI face at 10, 12, 14, 15, 16, 20, 24, 20, 24, 14 and
+  40 px, 5, 6 and 10 bold.
+
+The client builds its fonts again when the player changes the UI face or scale, so look a font up in each
+`OnUpdateImGui` rather than keeping it.
+
 `ui_icon` (added later in ABI 4) gives such a plugin the stock UI's icons from the player's game folder, the same
 textures the client's own windows draw: `HAILSTONE_UI_ICON_SPELL` for a cell of A_SpellIcons (a spell's
 `spell_icon`, MacroQuest's `SpellIcon`; `HailstoneSpell` carries it since ABI 4) and `HAILSTONE_UI_ICON_GEM` for

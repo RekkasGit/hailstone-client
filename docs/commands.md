@@ -196,7 +196,7 @@ discipline's name may leave out its rank.
 | `/copylayout` | Open Copy Layout to copy another character's layout and optionally their keyboard bindings. For a direct copy with arguments, use a bare file name beside the current layout file. |
 | `/layoutprofiles` | Open Layout Profiles to save a named setup, preview its saved window size and contents, apply it to the active character, or undo the last apply. |
 | `/import` | List character INIs in the configured game data folder and preview eligible socials and hotbar buttons for the active character. Apply and restore require confirmation in the dialog. |
-| `/fontface <name>` | The UI font. |
+| `/fontface <name>` | The UI font: a family of the system's font folders or of Hailstone's own `fonts/` (Roboto). |
 | `/viewport reset`, `/viewport <x> <y> <w> <h> [scale]` | The 3D view's area on screen. |
 | `/fullscreen [on \| off \| toggle]` | Full screen or windowed. |
 | `/shownames [1..6 \| off]` | Name plates above heads. |

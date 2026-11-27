@@ -84,8 +84,8 @@ in the remaining frames when moves or combines leave frame 1 empty. The fallback
 provides no chat, and `ui.cpp_windows=1` can show it alongside the pack for debugging.
 
 The menu's first rows are the original's, in its order (Window, Scrollbar, New Chat Window, Rename Window, Always
-Chat Here, the tell menus, Filters, Channel, Language, Hit Modes); the tab rows, highlight settings, Font Size, Use
-Tell Windows and Timestamps are Hailstone's and follow. Rename Window renames the frame, Rename Tab the chat window it
+Chat Here, the tell menus, Filters, Channel, Language, Hit Modes); the tab rows, highlight settings, Font Size, Font,
+Use Tell Windows and Timestamps are Hailstone's and follow. Rename Window renames the frame, Rename Tab the chat window it
 shows; both take 15 characters, as the original's. Checked: CChatWindowManager::InitContextMenu @0x6513c0.
 
 The output's text can be selected with the mouse and copied, a Hailstone addition (`ui/modern/lib/textselect.lua`):
@@ -318,6 +318,11 @@ Each entry names the window and what is particular to it; the `hs.*` calls behin
 - **Chat windows**: tabs, the channel chip, the chat menu.
   - A button at the strip's right end folds the window into its tab strip.
   - Always Chat Here (`hs.ChatSetAlwaysHere`, `hs.ChatInfo`'s fifth value) picks the window Enter and '/' start a line in; the main window by default.
+  - Right-click a chat window and open **Font** to draw that tab in a face of its own: **Same as UI** (the default,
+    the UI font's face), or any family of the UI font list, Hailstone's Roboto among them. Font Size still picks the
+    size (`/chatfontsize`), and the bold sizes (5, 6 and 10) use the face's bold file when it has one. Each tab keeps
+    its own (`ChatWindow<n>_FontFace` in the character's UI ini, `hs.ChatFontFace` / `hs.ChatSetFontFace`); a face
+    the system no longer has draws in the UI's.
   - Right-click a chat window and open **Timestamps** to choose **Off**, 12-hour with seconds (`[09:07:43 PM]`),
     24-hour without seconds (`[21:07]`), or 24-hour with seconds (`[21:07:43]`) for that tab. Each tab keeps its
     own (`ChatWindow<n>_Timestamps` in the character's UI ini, `hs.ChatTimestamps` / `hs.ChatSetTimestamps`), and it

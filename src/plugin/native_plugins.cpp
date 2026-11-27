@@ -917,6 +917,15 @@ int h_ui_icon(void* h, std::int32_t kind, std::int32_t icon, HailstoneUiImage* o
     return 1;
 }
 
+static_assert(HAILSTONE_UI_FONT_EQ == static_cast<int>(UiFontKind::Eq));
+
+void* h_ui_font(void* h, std::int32_t kind, std::int32_t index) {
+    Loaded& l = Loaded::of(h);
+    if (!l.can(kCapUi) || !l.imgui_compatible() || !l.host->env.ui_font) return nullptr;
+    if (kind != HAILSTONE_UI_FONT_EQ) return nullptr;
+    return l.host->env.ui_font(UiFontKind::Eq, index);
+}
+
 // ---- ABI 2: the server extension
 
 // A struct the plugin passes for the client to fill: it gets what both know (its `size`, the client's sizeof).
@@ -3782,6 +3791,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.world_placement_cancel = main_only<h_world_placement_cancel>;
     p.table.write_chat_group = main_only<h_write_chat_group>;
     p.table.ui_icon = main_only<h_ui_icon>;
+    p.table.ui_font = main_only<h_ui_font>;
     Hooks& hooks = *m.env.hooks;
     Loaded* lp = &p;
     // Each callback runs with the plugin's capabilities and counts as the plugin being busy (no unloading under it).

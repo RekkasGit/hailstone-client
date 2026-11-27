@@ -282,7 +282,8 @@ public:
           vk_(window_, options.validation, start_upscaler_provider(options)),
           ui_(window_, vk_,
               ui::ImGuiLayerDesc{.scale_override = ui_scale_setting(options),
-                                 .ini_path = platform::imgui_ini()}) {
+                                 .ini_path = platform::imgui_ini(),
+                                 .bundled_fonts_dir = platform::fonts_dir()}) {
         core::wipe(options.login_launch.ticket); // opts_ owns the only application copy now
         log_memory("startup: window, Vulkan, fonts");
         vk_.screenshot_generated(options.screenshot_generated);
@@ -510,6 +511,11 @@ public:
         };
         aenv.keypress = [this](std::string_view command, int mode) { return script_keypress(command, mode); };
         aenv.max_camera_distance = [this] { return max_camera_distance_; };
+        // EverQuest's font table is the chat windows' (ui::chat_font, the same EQGraphicsDX9 table MQ's GetEQImFont
+        // reads).
+        aenv.ui_font = [](plugin::UiFontKind kind, std::int32_t index) -> void* {
+            return kind == plugin::UiFontKind::Eq ? static_cast<void*>(ui::chat_font(index)) : nullptr;
+        };
         aenv.ui_icon = [this](plugin::UiIconKind kind, std::int32_t icon) -> std::optional<plugin::UiIconImage> {
             if (!ui_textures_) return std::nullopt;
             const auto cell =

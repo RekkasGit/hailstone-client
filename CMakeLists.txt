@@ -970,6 +970,7 @@ add_custom_command(TARGET hailstone POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/icons $<TARGET_FILE_DIR:hailstone>/icons
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/pictures $<TARGET_FILE_DIR:hailstone>/pictures
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/flora $<TARGET_FILE_DIR:hailstone>/flora
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:hailstone>/fonts
   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md $<TARGET_FILE_DIR:hailstone>)
 if(HAILSTONE_MOLTENVK_DYLIB)
   add_custom_command(TARGET hailstone POST_BUILD
@@ -992,6 +993,7 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/ui/ DESTINATION ui)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/icons/ DESTINATION icons)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/pictures/ DESTINATION pictures)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/flora/ DESTINATION flora)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/fonts/ DESTINATION fonts) # with their OFL licences (THIRD_PARTY.md)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md DESTINATION .) # the login screen's What's new
 # The licence (GPL-2.0-or-later, NOTICE.md) and the third-party notices travel with the binary.
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE DESTINATION . RENAME LICENSE.txt)
@@ -1674,6 +1676,7 @@ if(HAILSTONE_BUILD_TESTS)
     HAILSTONE_EXTEND_PLUGIN_NEW="$<TARGET_FILE:ExtendTestNew>"
     HAILSTONE_TEST_UPSCALERS_DIR="${HAILSTONE_TEST_UPSCALERS_DIR}"
     HAILSTONE_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/data" HAILSTONE_CLIENT_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/ui"
+    HAILSTONE_CLIENT_FONTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fonts"
     # The recorded vectors are looked for beside the source tree (tests/vector_files.h), whatever the run's directory.
     HAILSTONE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     HAILSTONE_MOCK_WEB_HELPER="$<TARGET_FILE:hailstone_mock_web_helper>"

@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <map>
 #include <stdexcept>
 #include <system_error>
 #include <utility>
@@ -40,6 +41,15 @@ constexpr std::array<float, kChatFonts> kChatFontSizes = {10, 12, 14, 15, 16, 20
 constexpr std::array<bool, kChatFonts> kChatFontBold = {false, false, false, false, false, true, true, false, false, false, true};
 std::array<ImFont*, kChatFonts> g_chat_fonts{};
 float g_ui_scale = 1.0f; // the display scale the fonts were built for
+// The chat tabs' own faces (ImGuiLayer::set_chat_faces), by family in lower case: regular and bold (null: none).
+std::map<std::string, std::pair<ImFont*, ImFont*>> g_chat_faces;
+
+std::string lower_ascii(std::string_view s) {
+    std::string out(s);
+    for (char& c : out) c = (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+    return out;
+}
+
 // The name plates' (ImGuiLayer::set_plate_font).
 ImFont* g_plate_font = nullptr;
 float g_plate_font_size = 15.0f;
@@ -107,6 +117,31 @@ ImFontConfig detail::ui_font_config() {
     // Since ImGui 1.92 glyphs are rasterised on demand, at the density the backend reports
     // (io.DisplayFramebufferScale), so there are no glyph ranges to give and no per-font density.
     return ImFontConfig();
+}
+
+void detail::add_bundled_fonts(ImFontAtlas& atlas, const std::filesystem::path& dir, float scale) {
+    if (dir.empty()) return;
+    std::error_code ec;
+    const std::filesystem::path roboto = dir / "Roboto-Regular.ttf";
+    const std::filesystem::path awesome = dir / "fontawesome-webfont.ttf";
+    if (!std::filesystem::is_regular_file(roboto, ec)) return;
+    const bool icons = std::filesystem::is_regular_file(awesome, ec);
+    // FontAwesome 4.7's glyphs (ICON_MIN_FA .. ICON_MAX_FA), so none of Roboto's own is replaced.
+    static constexpr ImWchar kIconRanges[] = {0xf000, 0xf2e0, 0};
+    const auto add = [&](const char* name, float size) {
+        ImFontConfig cfg = ui_font_config();
+        std::snprintf(cfg.Name, sizeof cfg.Name, "%s", name);
+        if (!atlas.AddFontFromFileTTF(utf8(roboto).c_str(), std::round(size * scale), &cfg) || !icons) return;
+        // MQ's faConfig: merged, at 14 px into the 16 px font, each icon at least 14 px wide.
+        ImFontConfig fa = ui_font_config();
+        std::snprintf(fa.Name, sizeof fa.Name, "%s", "FontAwesome");
+        fa.MergeMode = true;
+        const float icon_size = std::round(size * 14.0f / 16.0f * scale);
+        fa.GlyphMinAdvanceX = icon_size;
+        atlas.AddFontFromFileTTF(utf8(awesome).c_str(), icon_size, &fa, kIconRanges);
+    };
+    add(kRobotoFontName, 16.0f);
+    add(kRobotoLargeFontName, 22.0f);
 }
 
 bool detail::build_ui_font_atlas(ImFontAtlas& atlas) {
@@ -195,6 +230,7 @@ ImGuiLayer::ImGuiLayer(platform::Window& window, render::VkContext& vk, const Im
     ImGuiIO& io = ImGui::GetIO();
     // The client's own windows keep their places (ImGui saves them every few seconds and at the end).
     ini_path_ = utf8(desc.ini_path);
+    bundled_fonts_dir_ = desc.bundled_fonts_dir;
     io.IniFilename = ini_path_.empty() ? nullptr : ini_path_.c_str();
     // No keyboard navigation: as in the original, the keyboard stays the game's after a click on a window (with it
     // on, a focused window took every key, and Space / Enter pressed its last clicked button). Only an edit box
@@ -269,6 +305,7 @@ void ImGuiLayer::build_fonts() {
     io.Fonts->Clear();
     g_ui_fonts.fill(nullptr);
     g_chat_fonts.fill(nullptr);
+    g_chat_faces.clear();
     g_plate_font = nullptr;
     g_plate_font_size = std::round(plate_size_ * scale_);
     g_plate_faux_bold = false;
@@ -296,6 +333,8 @@ void ImGuiLayer::build_fonts() {
         ImFontConfig def = cfg;
         def.SizePixels = std::round(13.0f * scale_);
         io.Fonts->AddFontDefault(&def);
+        detail::add_bundled_fonts(*io.Fonts, bundled_fonts_dir_, scale_);
+        add_chat_faces();
         detail::build_ui_font_atlas(*io.Fonts);
         log::debug("UI font: built-in, scale {:.2f}", scale_);
     };
@@ -328,6 +367,8 @@ void ImGuiLayer::build_fonts() {
         g_plate_faux_bold = plate_bold_ && plate_bold.empty();
         g_plate_font = io.Fonts->AddFontFromFileTTF(utf8(file).c_str(), g_plate_font_size, &cfg);
     }
+    detail::add_bundled_fonts(*io.Fonts, bundled_fonts_dir_, scale_);
+    add_chat_faces();
     // A file that reads but is not a font the rasteriser can parse fails here, not when the texture is made.
     if (!detail::build_ui_font_atlas(*io.Fonts)) {
         log::warn("UI font {} could not be built; using the built-in font", utf8(font));
@@ -340,6 +381,38 @@ void ImGuiLayer::set_font_face(const std::filesystem::path& regular, const std::
     face_ = regular;
     face_bold_ = bold;
     fonts_dirty_ = true;
+}
+
+void ImGuiLayer::set_chat_faces(std::vector<ChatFaceFiles> faces) {
+    if (faces == chat_faces_) return;
+    chat_faces_ = std::move(faces);
+    fonts_dirty_ = true;
+}
+
+// Each at the UI font's size (a chat tab pushes it at its chat font's). A file the rasteriser cannot parse has no
+// glyph for anything: taken out again, so one bad face never costs the whole UI its fonts (build_ui_font_atlas).
+void ImGuiLayer::add_chat_faces() {
+    ImGuiIO& io = ImGui::GetIO();
+    const ImFontConfig cfg = detail::ui_font_config();
+    const float size = std::round(font_size_ * scale_);
+    auto add = [&](const std::filesystem::path& file, const std::string& name) -> ImFont* {
+        std::error_code ec;
+        if (file.empty() || !std::filesystem::is_regular_file(file, ec)) return nullptr;
+        ImFontConfig c = cfg;
+        std::snprintf(c.Name, sizeof c.Name, "%s", name.c_str());
+        ImFont* font = io.Fonts->AddFontFromFileTTF(utf8(file).c_str(), size, &c);
+        if (font && !font->IsGlyphInFont('A') && !font->IsGlyphInFont(' ')) {
+            log::warn("chat font {} could not be read; that tab draws in the UI font", utf8(file));
+            io.Fonts->RemoveFont(font);
+            return nullptr;
+        }
+        return font;
+    };
+    for (const ChatFaceFiles& face : chat_faces_) {
+        ImFont* regular = add(face.regular, "Chat: " + face.family);
+        if (!regular) continue;
+        g_chat_faces[lower_ascii(face.family)] = {regular, add(face.bold, "Chat: " + face.family + " Bold")};
+    }
 }
 
 void ImGuiLayer::set_plate_font(const std::filesystem::path& regular, const std::filesystem::path& bold, float size,
@@ -584,6 +657,17 @@ void set_ui_scale(float scale) { g_ui_scale = scale; }
 
 ImFont* chat_font(int index) {
     return index >= 0 && index < static_cast<int>(kChatFonts) ? g_chat_fonts[static_cast<std::size_t>(index)] : nullptr;
+}
+
+bool chat_font_bold(int index) {
+    return index >= 0 && index < static_cast<int>(kChatFonts) && kChatFontBold[static_cast<std::size_t>(index)];
+}
+
+ImFont* chat_face_font(std::string_view family, bool bold) {
+    if (family.empty()) return nullptr;
+    const auto it = g_chat_faces.find(lower_ascii(family));
+    if (it == g_chat_faces.end()) return nullptr;
+    return bold && it->second.second ? it->second.second : it->second.first;
 }
 
 float chat_font_size(int index) {

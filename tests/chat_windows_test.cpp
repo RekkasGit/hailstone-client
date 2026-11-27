@@ -1358,6 +1358,74 @@ return ((l[#l] or ''):gsub('<[^>]*>', ''))
     ImGui::DestroyContext(ctx);
 }
 
+TEST_CASE("Chat windows: each tab keeps its own font face, which the client is told to load") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    test::ScratchDir scratch("chat_tab_font_face");
+    fs::path dir = scratch.path();
+    fs::create_directories(dir / "game");
+    write_strings(dir / "game");
+    GameDir game_dir(dir / "game");
+    std::vector<std::vector<std::string>> told; // what chat_font_faces was told, in order
+    auto run = [&](auto&& body) {
+        net::GameConnection conn(game_dir);
+        ui::ChatView view;
+        app::UiHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game_dir;
+        host.conn = &conn;
+        host.chat = &view;
+        host.option_choices = [](std::string_view option) {
+            return option == "font_face" ? std::vector<std::string>{"Default", "DejaVu Sans", "Roboto"}
+                                         : std::vector<std::string>{};
+        };
+        host.chat_font_faces = [&](const std::vector<std::string>& faces) { told.push_back(faces); };
+        app::UiApi api(host);
+        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        Lua lua(api);
+        body(lua, api);
+    };
+    run([&](Lua& lua, app::UiApi& api) {
+        REQUIRE_FALSE(told.empty());
+        CHECK(told.back().empty()); // loaded: no tab has a face of its own
+        CHECK(lua.run("return hs.ChatNewWindow('Fights')") == "2");
+        CHECK(lua.run("return hs.ChatFontFace(1)") == "");
+        lua.run("hs.ChatSetFontFace(2, 'Roboto')");
+        CHECK(lua.run("return hs.ChatFontFace(2)") == "Roboto");
+        CHECK(lua.run("return hs.ChatFontFace(1)") == "");
+        CHECK(told.back() == std::vector<std::string>{"Roboto"});
+
+        // The menu's Font sets the face of the tab it was opened on: Same as UI, then the UI font list's families.
+        const auto rows = app::chat_context_rows(1);
+        const auto item = std::find_if(rows.begin(), rows.end(), [](const auto& row) { return row.text == "Font"; });
+        REQUIRE(item != rows.end());
+        REQUIRE(item->submenu);
+        const auto faces = item->submenu();
+        REQUIRE(faces.size() == 3);
+        CHECK(faces[0].text == "Same as UI");
+        CHECK(faces[0].check);
+        CHECK(faces[1].text == "DejaVu Sans");
+        REQUIRE(faces[1].act);
+        faces[1].act();
+        CHECK(lua.run("return hs.ChatFontFace(1)") == "DejaVu Sans");
+        CHECK(told.back() == std::vector<std::string>{"DejaVu Sans", "Roboto"});
+        lua.run("hs.ChatSetFontFace(2, 'dejavu sans')"); // one face, whatever its case: told once
+        CHECK(told.back() == std::vector<std::string>{"DejaVu Sans"});
+        lua.run("hs.ChatSetFontFace(2, 'Roboto')");
+        lua.run("hs.ChatSetFontFace(1, '\1bad')"); // a control character: none
+        CHECK(lua.run("return hs.ChatFontFace(1)") == "");
+        api.save_layout();
+    });
+    // Kept with the tab in the UI ini, and the client told again when the settings load.
+    told.clear();
+    run([&](Lua& lua, app::UiApi&) {
+        CHECK(lua.run("return hs.ChatFontFace(2)") == "Roboto");
+        CHECK(lua.run("return hs.ChatFontFace(1)") == "");
+        REQUIRE_FALSE(told.empty());
+        CHECK(told.back() == std::vector<std::string>{"Roboto"});
+    });
+    ImGui::DestroyContext(ctx);
+}
+
 TEST_CASE("Chat windows: named chat groups route, expand, and keep ungrouped readers working") {
     hailstone::test::ScratchDir dir_scratch("chat_client_messages_test");
     const fs::path dir = dir_scratch.path();

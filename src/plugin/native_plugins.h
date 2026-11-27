@@ -86,6 +86,8 @@ struct NativeEnv {
     std::function<std::string(const game::SpellData&)> spell_description;
     // ABI 4: a stock UI icon for ui_icon (the UI's textures). Empty, or nullopt: none.
     std::function<std::optional<UiIconImage>(UiIconKind kind, std::int32_t icon)> ui_icon;
+    // ABI 4: one of the client's ImGui fonts for ui_font (an ImFont*). Empty, or null: none.
+    std::function<void*(UiFontKind kind, std::int32_t index)> ui_font;
     // A plugin has loaded (InitializePlugin returned): the client runs its <name>-AutoExec.cfg, as MacroQuest's
     // LoadMQ2Plugin does (app/autoexec.h). Null: nothing.
     std::function<void(const std::string& name)> loaded;

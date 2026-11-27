@@ -534,6 +534,10 @@ API 1.13 adds:
 - `hs.UI.chat.Timestamps(slot)` and `hs.UI.chat.SetTimestamps(slot, format)` (flat `hs.ChatTimestamps` and
   `hs.ChatSetTimestamps`): the timestamp format of a window's selected tab (`"off"`, `"12h-seconds"`, `"24h-minutes"`
   or `"24h-seconds"`), kept per tab.
+- `hs.UI.chat.FontFace(slot)` and `hs.UI.chat.SetFontFace(slot, face)` (flat `hs.ChatFontFace` and
+  `hs.ChatSetFontFace`): the font face of a window's selected tab, a family of the UI font list (`""` for the UI's
+  own), kept per tab. `ui.PushChatFont(index, face)` draws in it at that chat font's size; a face not loaded draws in
+  the UI's.
 - The `unavailable` field of `hs.UI.hotbars.Info` (flat `hs.HotButtonInfo`): true for a Slam binding the current
   form cannot use, so the interface can dim it.
 

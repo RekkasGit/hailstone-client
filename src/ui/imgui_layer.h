@@ -23,6 +23,14 @@ namespace detail {
 ImFontConfig ui_font_config();
 bool build_ui_font_atlas(ImFontAtlas& atlas);
 
+// The fonts Hailstone ships in fonts/ for the plugins and scripts that name MacroQuest's (HSMono's E3): Roboto 3 as
+// "RobotoRegular" at 16 px and "RobotoRegular (Large)" at 22 px, both with FontAwesome 4.7's icons merged in, as
+// MacroQuest's ConfigureDefaultFont and ConfigureLargeFont make them (MQ's Roboto is 2.0, Apache-2.0; this one is
+// 3, under the OFL, as FontAwesome's font is). Times `scale`. A missing file adds nothing of it.
+inline constexpr char kRobotoFontName[] = "RobotoRegular";
+inline constexpr char kRobotoLargeFontName[] = "RobotoRegular (Large)";
+void add_bundled_fonts(ImFontAtlas& atlas, const std::filesystem::path& dir, float scale);
+
 // A child window or popup can hold navigation focus for the tracked gamepad window.
 bool pad_window_has_focus(const char* name);
 
@@ -48,6 +56,15 @@ struct ImGuiLayerDesc {
     // Where ImGui keeps its windows' places and sizes (the client's own windows; the Lua windows keep theirs in
     // the character's UI ini); empty keeps none.
     std::filesystem::path ini_path;
+    // The shipped fonts/ folder (detail::add_bundled_fonts); empty adds none.
+    std::filesystem::path bundled_fonts_dir;
+};
+
+// A chat tab's own font face (ImGuiLayer::set_chat_faces): its family, as the font list names it, and its files.
+struct ChatFaceFiles {
+    std::string family;
+    std::filesystem::path regular, bold; // bold empty: the regular one drawn for the bold chat fonts
+    bool operator==(const ChatFaceFiles&) const = default;
 };
 
 // One per process. Construct after the VkContext; destroy before it.
@@ -82,6 +99,9 @@ public:
     // The name plates' font (game/nameplate_style.h): its face's regular and bold files (empty: the UI font's), its
     // size in points at 100 % scale and whether it is bold, from the next frame (plate_font()).
     void set_plate_font(const std::filesystem::path& regular, const std::filesystem::path& bold, float size, bool bold_face);
+    // The faces the chat tabs use besides the UI's (Hailstone: a font per tab), into the atlas from the next frame
+    // (chat_face_font). A face whose file the rasteriser cannot read is left out.
+    void set_chat_faces(std::vector<ChatFaceFiles> faces);
 
     // The gamepad (a client extension, docs/gamepad.md): on, ImGui's gamepad navigation runs on the window's pad (menu
     // mode: the SDL3 backend drives it); off, ImGui gets nothing from the pad. Applied at the next new_frame. The pad's
@@ -118,6 +138,9 @@ private:
     void build_fonts();
     float font_size_ = 15.0f;
     std::filesystem::path font_path_, face_, face_bold_;
+    std::filesystem::path bundled_fonts_dir_;
+    std::vector<ChatFaceFiles> chat_faces_;
+    void add_chat_faces();
     std::filesystem::path plate_face_, plate_face_bold_; // set_plate_font's
     float plate_size_ = 15.0f;
     bool plate_bold_ = false;
