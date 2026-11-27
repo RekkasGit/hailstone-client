@@ -2079,17 +2079,18 @@ std::string ChatLine::group_label() const {
     return std::format("{} {} [{}]", group_expanded ? '-' : '+', text, group_messages.size());
 }
 
-void ChatView::add(ChatChannel channel, std::string text, std::uint32_t rgb, std::uint32_t color, std::string peer) {
+void ChatView::add(ChatChannel channel, std::string text, std::uint32_t rgb, std::uint32_t color, std::string peer,
+                   bool from_code) {
     lines.push_back({channel, std::move(text), rgb, color, std::move(peer), 0, false,
-                     static_cast<std::int64_t>(std::time(nullptr)), ++revision, {}, false});
+                     static_cast<std::int64_t>(std::time(nullptr)), ++revision, {}, false, from_code});
     while (lines.size() > max_lines) lines.pop_front();
     scroll_to_bottom = true;
 }
 
-void ChatView::add_chat_group(std::string title, std::vector<std::string> messages) {
+void ChatView::add_chat_group(std::string title, std::vector<std::string> messages, bool from_code) {
     if (title.empty() || title.find_first_of("\r\n\0", 0, 3) != std::string::npos || messages.empty() || max_lines == 0)
         return;
-    add(ChatChannel::System, std::move(title));
+    add(ChatChannel::System, std::move(title), 0, 0, {}, from_code);
     lines.back().group_messages = std::move(messages);
 }
 

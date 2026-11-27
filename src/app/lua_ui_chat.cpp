@@ -737,7 +737,9 @@ std::uint32_t color_of(const ui::ChatLine& l) {
 }
 
 int routed_window(const ui::ChatLine& line) {
-    const auto channel = game::chat_channel_of_color(static_cast<std::int32_t>(color_of(line)));
+    // Hailstone: a plugin's or script's own line goes by its own channel, whatever colour it was written in.
+    const auto channel = line.from_code ? game::kChatChannelCode
+                                        : game::chat_channel_of_color(static_cast<std::int32_t>(color_of(line)));
     const int window = manager().channel_map[static_cast<std::size_t>(channel)];
     return used(window) ? window : 0;
 }
@@ -1219,9 +1221,13 @@ std::vector<Row> filter_menu(int w, game::ChatFilterMenu menu) {
                 rows.push_back(submenu(group.menu, group.menu != game::ChatFilterMenu::ChatChannel || !joined.empty()));
     };
     if (menu == game::ChatFilterMenu::Filters) {
-        add_items([](const game::ChatFilterItem& it) { return it.channel <= 8 || it.channel == 49; });
+        // (Hailstone's Plugins and Scripts item after System Messages, before the submenus)
+        auto first = [](const game::ChatFilterItem& it) {
+            return it.channel <= 8 || it.channel == 49 || it.channel == game::kChatChannelCode;
+        };
+        add_items(first);
         add_submenus(menu); // Chat Channel, Melee, Spells
-        add_items([](const game::ChatFilterItem& it) { return it.channel > 8 && it.channel != 49; });
+        add_items([first](const game::ChatFilterItem& it) { return !first(it); });
     } else {
         add_submenus(menu); // (Hailstone's extended submenus)
         add_items([](const game::ChatFilterItem&) { return true; });

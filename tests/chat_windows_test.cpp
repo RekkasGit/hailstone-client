@@ -27,6 +27,7 @@
 #include "core/game_dir.h"
 #include "net/game_connection.h"
 #include "platform/local_time.h"
+#include "plugin/policy.h"
 #include "ui/dev_screens.h"
 #include "scratch_dir.h"
 
@@ -718,7 +719,7 @@ TEST_CASE("Chat windows: extended channels take only the extended colours and ke
         CHECK(lua.run("return hs.ChatNewWindow('Extended')") == "2");
         const auto original_server_settings = conn.chat_filters().settings;
         for (const auto& item : game::chat_filter_items()) {
-            if (item.channel < game::kChatChannelCountRoF2) continue;
+            if (item.channel < game::kChatChannelCountRoF2 || item.channel == game::kChatChannelCode) continue;
             CAPTURE(item.channel);
             int color = extended_color_of(item.channel);
             REQUIRE(color != 0); // every extended channel in the menu is reached by an extended colour
@@ -797,7 +798,7 @@ TEST_CASE("Chat windows: extended channels take only the extended colours and ke
         Lua lua(api);
         lua.run(kLines + std::string("_G.lines = lines"));
         for (const auto& item : game::chat_filter_items()) {
-            if (item.channel < game::kChatChannelCountRoF2) continue;
+            if (item.channel < game::kChatChannelCountRoF2 || item.channel == game::kChatChannelCode) continue;
             const int window = item.menu == game::ChatFilterMenu::Healing ? 3 : 2;
             CHECK(lua.run(std::format("for _, f in ipairs(hs.ChatFilters({})) do if f.id == {} then return f.on end end",
                                       window, item.channel)) == "true");
@@ -1203,6 +1204,73 @@ TEST_CASE("Chat windows: Always Chat Here takes the chat keys; the main window h
         api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
         Lua lua(api);
         CHECK(lua.run("return tostring(select(5, hs.ChatInfo(1)))") == "false");
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+TEST_CASE("Chat windows: Plugins and Scripts takes every line a plugin or script wrote, whatever its colour") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    test::ScratchDir scratch("chat_code_lines");
+    fs::path dir = scratch.path();
+    fs::create_directories(dir / "game");
+    write_strings(dir / "game");
+    GameDir game_dir(dir / "game");
+    {
+        net::GameConnection conn(game_dir);
+        // The connection marks a line written while a plugin's or script's code runs, and no other.
+        conn.ui_message("from the client");
+        {
+            plugin::CallerScope scope(~0u, "lua:helper");
+            conn.ui_message("from a script", 0, 257); // a tell's colour: the channel still wins
+        }
+        auto client_line = conn.poll_chat();
+        auto code_line = conn.poll_chat();
+        REQUIRE(client_line);
+        REQUIRE(code_line);
+        CHECK_FALSE(client_line->from_code);
+        CHECK(code_line->from_code);
+
+        ui::ChatView view;
+        app::UiHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game_dir;
+        host.conn = &conn;
+        host.chat = &view;
+        app::UiApi api(host);
+        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        Lua lua(api);
+        lua.run(kLines + std::string("_G.lines = lines"));
+
+        // Until it is moved, the channel is in the main window, as every channel starts.
+        view.add(ui::ChatChannel::System, "early script line", 0, 273, {}, true);
+        CHECK(lua.run("return lines(1)") == "early script line");
+
+        CHECK(lua.run("return hs.ChatNewWindow('Scripts')") == "2");
+        lua.run(std::format("hs.ChatSetFilter(2, {}, true); hs.ChatClear(2)", game::kChatChannelCode));
+        CHECK(lua.run(std::format("for _, f in ipairs(hs.ChatFilters(2)) do if f.id == {} then return f.name end end",
+                                  game::kChatChannelCode)) == "Plugins and Scripts");
+        view.add(ui::ChatChannel::System, "client line", 0, 273);
+        view.add(ui::ChatChannel::System, code_line->text, 0, code_line->color, {}, code_line->from_code);
+        view.add(ui::ChatChannel::Say, "script say", 0, 0, {}, true);
+        CHECK(lua.run("return lines(2)") == "from a script|script say");
+        view.add_chat_group("script group", {"row"}, true); // a group's title line keeps the mark too
+        CHECK(view.lines.back().from_code);
+        CHECK(lua.run("return lines(1)") == "early script line|client line");
+
+        // The Filters menu has it after System Messages, before the Chat Channel, Melee and Spells submenus.
+        lua.run("hs.ChatMenu(2)");
+        REQUIRE(host.menus.size() == 1);
+        const auto& menu = host.menus[0].rows;
+        auto filters = std::find_if(menu.begin(), menu.end(), [](const auto& row) { return row.text == "Filters"; });
+        REQUIRE(filters != menu.end());
+        REQUIRE(filters->submenu);
+        const auto rows = filters->submenu();
+        auto at = [&](const char* name) {
+            return std::find_if(rows.begin(), rows.end(), [&](const auto& row) { return row.text == name; });
+        };
+        REQUIRE(at("Plugins and Scripts") != rows.end());
+        CHECK(at("Plugins and Scripts")->check);
+        CHECK(at("Plugins and Scripts") + 1 == at("Chat Channel"));
     }
     ImGui::DestroyContext(ctx);
 }

@@ -113,7 +113,12 @@ when a server sends those colours. The gamepad pack has no filter menu.
 - `hs.ChatSetFilter` takes a channel or a menu's name.
 - Each filter menu ends in the original's **ALL** and Hailstone's **Hide All**, for that menu's own channels only.
 
-They are kept as `ChannelMap0..107` in the character's UI ini and `User_1..153` in its `chat.ini`. An older file
+Channel 108, **Plugins and Scripts** (after System Messages in the Filters menu), takes every line a plugin or Lua
+script wrote while its code ran (`mq.print`, `/echo`, `WriteChatf`, the reply of a command it ran), whatever colour it
+was written in. It starts on the main window like every channel. A line restored from the chat history goes by its
+colour again: the history does not keep who wrote a line.
+
+They are kept as `ChannelMap0..108` in the character's UI ini and `User_1..153` in its `chat.ini`. An older file
 (ChannelMap0..56, User_1..99) loads with the new ones on the main window at their defaults.
 
 ## Quest Journal and Quest Tracker

@@ -1717,6 +1717,11 @@ Other (22), and keeps 99 user colours (User_1..99). Checked: `CChatWindowManager
 - The extended user colours follow the original's rows on the Options Colors page, with Hailstone's defaults; Reset
   Default Colors resets them. `/usercolor` keeps 1..99 (100 a no-op).
 
+- Channel 108, Plugins and Scripts (`game::kChatChannelCode`), is not reached by a colour: a line a plugin or script
+  wrote while its code ran (`plugin::caller_name()` set: `mq.print`, `/echo`, `WriteChatf`, a command's own reply)
+  goes there whatever its colour. Its item is in the Filters menu after System Messages, so the Filters menu's ALL
+  moves it too. It starts on the main window, so nothing moves until the player moves it.
+
 Stock EQEmu sends no colour above 340 (`common/eq_constants.h` `Chat`), so on a stock server everything routes as in
 the original; the extension has no switch. The names and meanings of 355..408 are not confirmed (docs/unknowns.md
 "Chat").

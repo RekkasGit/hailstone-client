@@ -122,7 +122,9 @@ TEST_CASE("/cast by gem, by the start of a memorized spell's name, or =its whole
     // Two self-cast heals (no target, no sight), the first's name the start of the second's.
     auto table = std::make_shared<game::SpellTable>();
     auto heal = [](int id, const char* name) {
-        return spell_line({{0, std::to_string(id)}, {1, name}, {9, "100"}, {13, "1000"}, {83, "1"}, {98, "6"}, {105, "1"}});
+        // (122, 213, 214: the travel type and "can cast in / out of combat", as the cast tests above set them)
+        return spell_line({{0, std::to_string(id)}, {1, name}, {9, "100"}, {13, "1000"}, {83, "1"}, {98, "6"}, {105, "1"},
+                           {122, "3"}, {213, "1"}, {214, "1"}});
     };
     REQUIRE(table->parse(heal(6901, "Minor Healing") + "\n" + heal(6902, "Minor Healing Ward")) == 2);
     conn.set_spell_table_for_test(table);
@@ -131,6 +133,7 @@ TEST_CASE("/cast by gem, by the start of a memorized spell's name, or =its whole
     spells.gems[2].spell = 6902;
     auto cast = [&](const std::string& line) { // the spell the line started casting, 0 none
         spells.casting = {};
+        spells.pending = 0; // the last cast's request, which would hold the next one (cast_gem refuses while pending)
         for (auto& gem : spells.gems) gem.ready = 0;
         spells.recovery_ready = 0;
         rig.chat();
