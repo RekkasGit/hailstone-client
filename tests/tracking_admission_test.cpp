@@ -218,7 +218,7 @@ TEST_CASE("Tracking reopened during camp refreshes after an old request drains o
     connection.set_track_auto_update(false);
     REQUIRE(net::GameConnectionTestAccess::has_tracking_request(connection));
 
-    std::size_t expected_requests = 2;
+    int expected_requests = 2;
     SUBCASE("The retired reply arrives") {
         connection.close_tracking();
         connection.open_tracking();
