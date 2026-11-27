@@ -18,7 +18,7 @@
 
 #include "core/ascii_case.h"
 
-namespace hailstone::game {
+namespace hailstone::net {
 
 struct UseItemLine {
     enum class Kind { Usage, Slot, Name };
@@ -88,4 +88,4 @@ inline bool use_item_name_matches(std::string_view item_name, std::string_view n
     return false;
 }
 
-} // namespace hailstone::game
+} // namespace hailstone::net

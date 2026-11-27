@@ -14,7 +14,7 @@
 
 #include "core/ascii_case.h"
 
-namespace hailstone::game {
+namespace hailstone::net {
 
 // The line is RoF2's gem form: empty, or starting with a number (a sign and a digit too, so "/cast -1" and
 // "/cast 0" keep the original's invalid-gem message).
@@ -31,4 +31,4 @@ inline bool cast_spell_name_matches(std::string_view spell_name, std::string_vie
     return !needle.empty() && istarts_with(spell_name, needle);
 }
 
-} // namespace hailstone::game
+} // namespace hailstone::net

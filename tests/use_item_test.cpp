@@ -1,12 +1,12 @@
-// /useitem's line (game/use_item.h): RoF2's slot form, MacroQuest's name form, and an item id.
+// /useitem's line (net/use_item.h): RoF2's slot form, MacroQuest's name form, and an item id.
 
 #include <doctest/doctest.h>
 
 #include <cstdint>
 
-#include "game/use_item.h"
+#include "net/use_item.h"
 
-using namespace hailstone::game;
+using namespace hailstone::net;
 using Kind = UseItemLine::Kind;
 
 TEST_CASE("useitem: a number first is the slot form, alone or with a bag index") {

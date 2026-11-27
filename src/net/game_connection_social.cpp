@@ -14,7 +14,7 @@
 #include <limits>
 
 #include "core/log.h"
-#include "game/cast_line.h"
+#include "net/cast_line.h"
 #include "game/chat_windows.h"
 #include "game/coords.h"
 #include "game/eq_names.h"
@@ -429,14 +429,14 @@ bool GameConnection::run_slash_command(std::size_t index, const std::string& arg
     if (h == "Cmd_stand") { set_sitting(false); return true; }
     if (h == "Cmd_cast") {
         // Cmd_cast @0x4e8900: /cast 1..12 (the bard twist cleared first). MacroQuest's Cast adds a memorized
-        // spell's name (game/cast_line.h).
-        if (!game::cast_line_is_gem(args)) {
+        // spell's name (net/cast_line.h).
+        if (!cast_line_is_gem(args)) {
             std::string_view words = args;
             const std::string spell_name = game::next_cmd_arg(words);
             for (int g = 0; g < game::kSpellGems; ++g) {
                 const std::uint32_t id = spells_.gems[static_cast<std::size_t>(g)].spell;
                 const game::SpellData* s = id == game::kNoSpell ? nullptr : spell_table_->get(id);
-                if (s && game::cast_spell_name_matches(s->name, spell_name)) {
+                if (s && cast_spell_name_matches(s->name, spell_name)) {
                     clear_bard_twist();
                     cast_gem(g);
                     return true;

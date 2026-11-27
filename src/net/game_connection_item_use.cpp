@@ -20,7 +20,7 @@
 #include "game/mechanics/character.h"
 #include "game/server_ext.h"
 #include "game/slash_commands.h"
-#include "game/use_item.h"
+#include "net/use_item.h"
 #include "net/item_packets.h"
 
 namespace hailstone::net {
@@ -311,9 +311,9 @@ void GameConnection::handle_apply_poison(const ApplyPoison& r) {
 
 void GameConnection::useitem_command(const std::string& args) {
     // Cmd_useitem @0x479200: /useitem <slot 0..32> [index in the bag], numbers only. Hailstone adds MacroQuest's name
-    // form and an item id (game/use_item.h); the slot form is the original's.
-    const game::UseItemLine line = game::parse_use_item(args);
-    if (line.kind == game::UseItemLine::Kind::Usage) {
+    // form and an item id (net/use_item.h); the slot form is the original's.
+    const UseItemLine line = parse_use_item(args);
+    if (line.kind == UseItemLine::Kind::Usage) {
         static constexpr const char* kSlots[] = {"Charm", "Left Ear", "Head", "Face", "Right Ear", "Neck", "Shoulders",
                                                  "Arms", "Back", "Left Wrist", "Right Wrist", "Range", "Hands",
                                                  "Primary", "Secondary", "Left Ring", "Right Ring", "Chest", "Legs",
@@ -328,18 +328,18 @@ void GameConnection::useitem_command(const std::string& args) {
         chat(ChatEvent::Kind::System, "or: /useitem <item name>, /useitem \"<item name>\" or /useitem <item id>");
         return;
     }
-    if (line.kind == game::UseItemLine::Kind::Name) {
+    if (line.kind == UseItemLine::Kind::Name) {
         // MacroQuest's: the first carried item (worn, the general slots and their bags, in slot order, as
         // find_possession takes them) whose name matches. Nothing is said when none does, as in MacroQuest.
         for (std::int16_t slot = 0; slot <= kSlotGeneral10; ++slot) {
             const Item* item = inventory_.at(ItemSlot::possessions(slot));
             if (!item) continue;
-            if (game::use_item_name_matches(item->name, line.name, line.exact)) {
+            if (use_item_name_matches(item->name, line.name, line.exact)) {
                 use_item(ItemSlot::possessions(slot));
                 return;
             }
             for (const auto& c : item->contents)
-                if (game::use_item_name_matches(c.item.name, line.name, line.exact)) {
+                if (use_item_name_matches(c.item.name, line.name, line.exact)) {
                     use_item(ItemSlot::possessions(slot, static_cast<std::int16_t>(c.index)));
                     return;
                 }

@@ -1,10 +1,10 @@
-// /cast's spell name (game/cast_line.h): RoF2's gem form, MacroQuest's name and =name forms.
+// /cast's spell name (net/cast_line.h): RoF2's gem form, MacroQuest's name and =name forms.
 
 #include <doctest/doctest.h>
 
-#include "game/cast_line.h"
+#include "net/cast_line.h"
 
-using namespace hailstone::game;
+using namespace hailstone::net;
 
 TEST_CASE("cast line: a line starting with a number is RoF2's gem form") {
     CHECK(cast_line_is_gem(""));
