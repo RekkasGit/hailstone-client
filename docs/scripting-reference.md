@@ -306,7 +306,7 @@ The value of `Spell[...]`, `Me.Gem[n]`, `Me.Casting` and the like. Its plain val
 | `Level` | int | the level the player's class gets it; NULL when the class cannot use it |
 | `Mana` | int | |
 | `Range`, `AERange` | float | |
-| `CastTime`, `RecastTime`, `RecoveryTime` | float | seconds |
+| `CastTime`, `RecastTime`, `RecoveryTime` | `timestamp` | the cast time, the gem's recast and the recovery after the cast, in milliseconds (as MQ's; `.TotalSeconds` for seconds) |
 | `MyCastTime` | `timestamp` | the cast time (not adjusted for focus) |
 | `Duration` | `ticks` | the duration at the player's level, in ticks of 6 s |
 | `DurationWindow` | int | 1 for a short buff (song window), else 0 |
@@ -356,6 +356,7 @@ An item in a slot. Its plain value is the item's name.
 | `NoTrade` | bool | |
 | `Tradeskills` | bool | |
 | `Clicky` | `spell` | its click effect's spell; NULL without one |
+| `CastTime` | `timestamp` | its click effect's cast time (milliseconds); NULL without a click effect |
 | `Spell` | `spell` | the spell of its first effect of click, scroll, proc, focus and worn, in that order (MQ's); NULL without one |
 | `EffectType` | string | `Spell Scroll`, `Click Worn`, `Click Inventory`, `Click Unknown`, `Worn` or `Combat` (the first it has) |
 | `Timer` | `ticks` | ticks left on its click effect's reuse (rounded up), 0 when ready; NULL without a click effect |

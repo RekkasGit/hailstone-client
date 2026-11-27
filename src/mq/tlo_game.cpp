@@ -1024,11 +1024,12 @@ void register_spell() {
     m("Range", [](const Context&, const game::SpellData& s, std::string_view) { return V::number(s.range); });
     m("AERange", [](const Context&, const game::SpellData& s, std::string_view) { return V::number(s.ae_range); });
     m("Mana", [](const Context&, const game::SpellData& s, std::string_view) { return V::integer(s.mana); });
-    m("CastTime", [](const Context&, const game::SpellData& s, std::string_view) { return V::number(s.cast_time / 1000.0); });
+    // MQ's CastTime, RecastTime and RecoveryTime: timestamps (milliseconds), as MyCastTime.
+    m("CastTime", [](const Context&, const game::SpellData& s, std::string_view) { return V::object(g.timestamp, s.cast_time); });
     m("MyCastTime", [](const Context&, const game::SpellData& s, std::string_view) { return V::object(g.timestamp, s.cast_time); });
-    m("RecastTime", [](const Context&, const game::SpellData& s, std::string_view) { return V::number(s.recast_time / 1000.0); });
+    m("RecastTime", [](const Context&, const game::SpellData& s, std::string_view) { return V::object(g.timestamp, s.recast_time); });
     m("RecoveryTime", [](const Context&, const game::SpellData& s, std::string_view) {
-        return V::number(s.recovery_time / 1000.0);
+        return V::object(g.timestamp, s.recovery_time);
     });
     // MQ's Spell.Duration: ticks (a plain value of ticks, the timestamp members on their milliseconds) at the
     // player's level (GetSpellDuration), the record's cap without a connection.
@@ -1869,6 +1870,12 @@ void register_e3_members() {
     im("Clicky", [](const Context& c, const Value&, const net::Item& it, std::string_view) -> V {
         const auto& e = it.effects[net::kEffectClick];
         return e.present() ? spell_value(c, static_cast<std::uint32_t>(e.effect)) : V::nil();
+    });
+    // MQ's CastTime (ItemMembers::CastTime): the click effect's cast time, a timestamp (milliseconds); NULL without a
+    // click effect. (A negative one from a server is 0.)
+    im("CastTime", [](const Context&, const Value&, const net::Item& it, std::string_view) -> V {
+        const auto& e = it.effects[net::kEffectClick];
+        return e.present() ? V::object(g.timestamp, std::max<std::int64_t>(e.cast_time(), 0)) : V::nil();
     });
     // MQ's Spell (ItemMembers::Spell): the first of the click, scroll, proc, focus and worn effects whose spell the
     // table has (GetSpellByID), NULL when none.

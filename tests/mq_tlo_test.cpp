@@ -209,7 +209,9 @@ TEST_CASE("TLO: spells, gems and buffs") {
     CHECK(f.p("${Spell[200].Name}") == "Minor Healing");
     CHECK(f.p("${Spell[Minor Healing].ID}") == "200");
     CHECK(f.p("${Spell[200].Range}") == "100.00");
-    CHECK(f.p("${Spell[200].CastTime}") == "1.50");
+    // The spell times are timestamps (milliseconds), as MQ's and MyCastTime.
+    CHECK(f.p("${Spell[200].CastTime} ${Spell[200].MyCastTime} ${Spell[200].CastTime.TotalSeconds}") == "1500 1500 1");
+    CHECK(f.p("${Spell[200].RecastTime} ${Spell[200].RecoveryTime}") == "0 0");
     CHECK(f.p("${Spell[200].TargetType}") == "Single");
     CHECK(f.p("${Spell[200].SpellType}") == "Beneficial");
     CHECK(f.p("${Spell[11].Level}") == "3"); // the cleric's level column
@@ -1103,9 +1105,12 @@ TEST_CASE("TLO: Item.Spell is the first of the click, scroll, proc, focus and wo
     REQUIRE(inv.put(primary, sword));
     CHECK(f.p("${Me.Inventory[13].Spell} ${Me.Inventory[13].Spell.ID}") == "Test Venom 3006"); // the proc before worn
     // A click effect comes first; one whose spell the table lacks is passed over, as GetSpellByID's NULL is.
+    CHECK(f.p("${Me.Inventory[13].CastTime}") == "NULL"); // no click effect
     sword.effects[net::kEffectClick].effect = 200; // Minor Healing
+    sword.effects[net::kEffectClick].extra[1] = 3000; // its cast time (ms)
     REQUIRE(inv.put(primary, sword));
     CHECK(f.p("${Me.Inventory[13].Spell}") == "Minor Healing");
+    CHECK(f.p("${Me.Inventory[13].CastTime} ${Me.Inventory[13].Spell.CastTime}") == "3000 1500"); // the item's, the spell's
     sword.effects[net::kEffectClick].effect = 99999;
     REQUIRE(inv.put(primary, sword));
     CHECK(f.p("${Me.Inventory[13].Spell}") == "Test Venom");
