@@ -31,7 +31,10 @@ bool in_group_fn(const void* ctx, std::int32_t id) {
 bool GameConnection::tracking_in_zone() const { return in_zone() && zone_exit_ == ZoneExit::None; }
 
 std::uint64_t GameConnection::tracking_context() const {
-    // The countdown and standing to cancel it preserve the tracking list and its actors in the same zone.
+    // The countdown and standing to cancel it preserve the tracking list and its actors in the same zone. As in RoF2:
+    // Send_OP_Camp @0x5317a0 sits, saves, sends OP_Camp and starts the camp timer without touching any window;
+    // CharacterZoneClient::UseSkill @0x45b2d0 (case 0x35) refuses Tracking only while feigned (StandState 'f'); the
+    // window goes at CDisplay::DeactivateMainUI (@0x4891b0) after OP_Logout.
     return context_for(tracking_interaction_, tracking_in_zone() ? ConnectionState::InZone : state_);
 }
 

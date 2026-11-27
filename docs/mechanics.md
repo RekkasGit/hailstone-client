@@ -1954,6 +1954,9 @@ pages go to HB_<fileNum>.ini [Hotbuttons] Page<p>.Slot<b>.
 
 The Tracking window, list and auto update work during the camp countdown. Standing to cancel the camp keeps the
 same list and pending reply. Sending OP_Logout closes the window and retires any pending list.
+RoF2 does the same: `Send_OP_Camp` (@0x5317a0) sits, saves, sends OP_Camp and starts the camp timer without
+touching any window; `CharacterZoneClient::UseSkill` (@0x45b2d0, case 0x35) refuses Tracking only while feigned
+(StandState 'f'); the window goes at `CDisplay::DeactivateMainUI` (@0x4891b0) after OP_Logout.
 
 The reply's entries are ordered by an introsort (insertion sort up to 32, median of nine above 40, heap sort when
 depth runs out) by the ranger's /tracksort order or the reply order, so ties land in a fixed place. The filter sets
