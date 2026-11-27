@@ -56,6 +56,8 @@ The steps are in `docs/plan.md` "Road to 1.0". This section maps items to steps;
     the UCS reconnect need new `tools/quest_probe.h` steps first.
   - Built from the live items of "Combat and spells", "Movement", "Items and commerce", "Social and friends", "Navigation", "Item comparison", "Isometric camera" and "Check live".
 - [ ] Play it and fix what it finds.
+- [ ] Live smoke scripts for combat and casting: spawn a mob, melee it, loot it; memorize, cast, buff and fade
+  (`tests/live/*.quest`), with the `tools/quest_probe.h` steps they need.
 - [ ] Shadow step (SPA 379): the zone collision `land_spell` needs ("Combat and spells").
 - [ ] The collision radius, too wide for doorways ("Movement").
 - [ ] Verify leave and follow-up requests in live play ("Adventures").
@@ -78,6 +80,10 @@ The steps are in `docs/plan.md` "Road to 1.0". This section maps items to steps;
 - [ ] Session-long caches evicting ("Code health"); freed appearances' texture slots are freed already ("Check live").
 - [ ] An hour in a busy hub with zoning, and several clients on the shared asset cache.
 - [ ] Golden-image tests for a few zones (docs/plan.md section 5).
+- [x] Nightly performance scenes: a Release client's `--bench` in four zones in the viewer and logged in, each night's
+  frame times and memory compared with the last seven (`tools/perf_track.py`, docs/ci.md "Nightly performance").
+  - Open: a busy scene for the logged-in client (a hub with many spawns; it is timed wherever the character stands),
+    and the history read once a few weeks of nights have built up, to tune the thresholds.
 
 ### 1.0 RC
 
@@ -413,6 +419,9 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
 - [x] The player's own rename: the character name change (0x4d5a10). The connection's character name and the profile's take the new name, so every reader follows it.
 - [ ] OP_LevelAppearance's flag-on emitter takes the actor's turn (vf126 @0x1003a950; unknowns.md). It takes the world's axes.
 
+- [ ] A login right after camping out: the zone server closed the new session's zone-in (docs/unknowns.md "Network and
+  session").
+
 ### Real estate (player housing, guild halls)
 - [x] The packets, the manager (catalog, records, access, item rows, owned lists, areas, placed objects, occupancy), result messages, upkeep time left.
 - [x] Buy / sell / transfer checks, the offer dialog, escrow deposit from and withdrawal to the cursor, /realestate, /leaverealestate, the windows' keys.
@@ -569,6 +578,8 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] The box set's other windows (`--box-child`) have no updater and fetch no add-ons: only the first window downloads and installs (tests/updater_test.cpp).
 - [ ] A lock between Hailstone windows the client did not start (two copies opened by hand): each still has its own updater and add-on manager on the same `download/` and `addons/` files.
 - [ ] A release job in CI (packages, manifest, signature, upload).
+- [x] **Crash reports of release builds name functions:** release and nightly builds keep their debug information aside (`HAILSTONE_SEPARATE_SYMBOLS`, `release-symbols/<version>/<platform>/`), Linux reports carry the build ID, and `tools/symbolize_crash.py` names their frames (docs/hardening.md "Crash reports from release builds").
+- [ ] Crash symbols, open: a Windows minidump is read by hand in a debugger (nothing automates it); macOS keeps no symbols; a plugin's or SDL's frames are not named by the tool.
 - [x] **Release images pinned by digest.** `linux.Dockerfile` is pinned by digest with an apt snapshot date; MSVC 17.14 and SDK 10.0.26100 in `msvc_setup.sh` (docs/updater.md "Making a release").
 - [x] **macOS arm64 releases:** a plain folder like Linux's with MoltenVK beside the binary; built, tested and signed ad hoc by the macOS workflow (docs/ci.md "macOS arm64"), packed and signed into the manifest locally. No Developer ID or notarization, by choice: players clear the quarantine (README.md).
 - [ ] **macOS on a Mac.** Only the build and headless tests have run.
@@ -646,6 +657,12 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] **A `core` package does not write over an add-on's plugin folder:** its files in such a folder are left out of the install (5df5960; docs/addons.md).
 
 ## 3. UI
+
+- [ ] **Accessibility** (nothing yet; presentation, so Hailstone's own, not a RoF2 rule).
+  - Colour-blind-safe choices for con colours, health and mana gauges and chat channel colours.
+  - A minimum text size that both packs honour.
+  - A setting that tones down screen shake, flashes and the drunkenness and knockout camera effects.
+  - Later: text-to-speech for chosen chat channels, behind a `platform/` interface.
 
 - [x] Trace and fix the upstream gamepad all-pack smoke test's cursor-extent assertion with ImGui debug checks enabled (docs/unknowns.md "UI").
 
@@ -817,6 +834,8 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] **Untested GPU paths** (neither run on such hardware).
   - A GPU without a sampleable D32_SFLOAT depth attachment (the D32_SFLOAT_S8_UINT / D24_UNORM_S8_UINT fallback, with `separateDepthStencilLayouts`) under the validation layers.
   - ObjectRenderer's instance flush on a driver with non-coherent host memory.
+  - Open: a developer setting that forces each fallback on any GPU, so the nightly run can draw them under the
+    validation layers without such hardware.
 
 - [ ] **The 60 Hz game clock in a live session.** Checked live 2026-11-18: jumps, falls and fall damage the same at 30, 60, 144 and uncapped; turning; a stalled zone load. Open: /follow and camera smoothness at each rate, strafing feel.
 - [ ] **The cameras 1..5 in a live session** (docs/mechanics.md "Cameras"). Each one's place, the wall sweep and sitting (the tether's bone 0) checked live 2026-11-18. Open: mouse look and the camera keys in each, doors, riding.

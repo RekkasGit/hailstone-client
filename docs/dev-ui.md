@@ -934,6 +934,13 @@ Ctrl+Shift+P, `/perf`, or `ui.perf_window=1`. It shows frame times, the main loo
 - Each is timed between `VkContext::gpu_mark` timestamps (`render/gpu_timer.h`), written only while the window is open and read back a frame or two late, so nothing waits on the GPU.
 - With `display.parallel_record` the scene shows as "scene opaque (worker-recorded)" and "scene (worker-recorded)"; `display.parallel_record 0` restores per-pass rows.
 - The zone viewer's `--gpu-timing` (with `--frames`) logs each pass's mean as `gpu pass: ...`.
+- `--bench N` (the viewer and the client) waits until the zone has settled and stayed so for `--bench-settle S`
+  seconds (viewer 2, client 10), times N frames, logs one `bench:` line (mean, p50, p95, p99 and slowest frame time,
+  hitches, resident and committed memory, device-local GPU allocations; `app/frame_bench.h`), then leaves: the
+  viewer at once, the client as a closed window does (`/camp desktop`, so the server keeps no link-dead character for
+  the next login; it quits regardless 60 s later). With
+  `--no-vsync` the client presents unthrottled for that run too. `tools/perf_track.py` runs it each night (docs/ci.md
+  "Nightly performance").
 
 #### Lua garbage collection
 

@@ -99,6 +99,7 @@ if(MSVC)
 endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include(SeparateSymbols) # before the dependencies: its compile options apply to them too
 include(Dependencies)
 include(Shaders)
 
@@ -360,6 +361,7 @@ add_library(hailstone_engine STATIC
   src/app/item_preview_view.cpp
   src/app/item_ui.cpp
   src/app/perf_ui.cpp
+  src/app/frame_bench.cpp
   src/app/stats_ui.cpp
   src/app/actions_ui.cpp
   src/app/actions_ui_sets.cpp
@@ -952,6 +954,7 @@ if(HAILSTONE_CLANG_TIDY)
 endif()
 target_link_libraries(hailstone PRIVATE hailstone_engine)
 set_target_properties(hailstone PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}$<0:>)
+hailstone_separate_symbols(hailstone)
 # Shaders are looked up next to the executable.
 add_custom_command(TARGET hailstone POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${HAILSTONE_SHADER_OUT} $<TARGET_FILE_DIR:hailstone>/shaders)
@@ -1007,6 +1010,13 @@ elseif(TARGET SDL3-shared)
   get_target_property(hailstone_sdl_imported SDL3-shared IMPORTED)
   if(NOT hailstone_sdl_imported)
     install(TARGETS SDL3-shared LIBRARY DESTINATION . NAMELINK_SKIP)
+  endif()
+endif()
+
+if(TARGET SDL3-shared)
+  get_target_property(hailstone_sdl_imported SDL3-shared IMPORTED)
+  if(NOT hailstone_sdl_imported)
+    hailstone_separate_symbols_at_install(SDL3-shared .) # fetched, built with the client's flags: debug information too
   endif()
 endif()
 install(TARGETS MQ2Example LIBRARY DESTINATION plugins COMPONENT examples EXCLUDE_FROM_ALL) # a MODULE is a LIBRARY
@@ -1330,6 +1340,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/lua_slot_info_test.cpp
     tests/social_editor_test.cpp
     tests/app_frame_work_test.cpp
+    tests/frame_bench_test.cpp
     tests/frame_pace_test.cpp
     tests/alt_currency_ui_test.cpp
     tests/useful_npcs_test.cpp

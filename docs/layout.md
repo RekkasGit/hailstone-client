@@ -713,7 +713,9 @@ A crash (a fatal signal on Linux and macOS, an unhandled exception on Windows, o
 
 - the build (`core/build_info.h`: version and commit), the time and what happened;
 - the log's path and its last 16 lines;
-- the stack where glibc has one (`addr2line -e hailstone <+offset>` names a frame of a build with symbols).
+- on Linux the program's GNU build ID (`build-id:`) and the stack where glibc has one; `tools/symbolize_crash.py`
+  names a release's frames from the symbol files kept when it was built (docs/hardening.md "Crash reports from
+  release builds").
 
 On Windows a minidump, `crash-<...>.dmp`, goes beside it (`platform/crash_log.h`): call stacks, registers and the
 module list. It goes into bug reports unchanged, so it holds no heap (not the password field, the session key or a
@@ -729,7 +731,7 @@ After the report the previous handler runs (a core dump, a sanitizer's report, o
 An error that ends the run without a crash (no Vulkan driver, no qualifying GPU, no window, missing shaders) is logged
 and shown in a dialog (`app/startup_error.h`) with the kind of problem, the usual fix, the error and the log's path.
 When no GPU qualifies, it names each GPU and what it lacks (`render/gpu_requirements.h`). The test runs (`--frames`,
-`--screenshot`) show no dialog.
+`--bench`, `--screenshot`) show no dialog.
 
 #### Bug reports
 
