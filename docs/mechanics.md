@@ -2072,10 +2072,12 @@ behaviour worth keeping.
 
 #### Slam
 
-Skill 111, `slam_innate`. A deliberate change: Hailstone takes the innate Slam from the spawn's current race
-(`app::skill_race`), as EQEmu does (Client::OPCombatAbility checks `GetRace()`). The combat lists gain or lose Slam
-with an illusion, and Bash without a shield uses the Slam path; both send `DoAttack(100, 10)`. The original uses the
-profile race (EQ_Character::InitInnates).
+Skill 111, `slam_innate`. The innate Slam (`EQ_Character::InitInnates` @0x44d4d0: slot 11, profile +0x325c, set for
+races 2 / 90, 9 / 92 and 10 / 93) follows the spawn's current race (`app::skill_race`), as in the original:
+`EQPlayer::SetHeights` (@0x5a3f40) reruns `InitInnates(GetRace())`, keeping only slot 10 (regeneration), and
+`EQPlayer::do_change_form` (@0x596b20) and `EQ_Character::eqspa_change_form` (@0x43e2a0) call it on a change of
+form. EQEmu also checks `GetRace()` (Client::OPCombatAbility). The combat lists gain or lose Slam with an illusion,
+and Bash without a shield uses the Slam path; both send `DoAttack(100, 10)`.
 
 The Combat skill picker and the Ability Book list Slam on the innate slot alone (`has_innate_slam`), as
 `CSkillsSelectWnd::SetTypesToDisplay` (@0x756ce0) does: it checks no Bash, so a 90, 92 or 93 form without the Bash
@@ -2087,7 +2089,7 @@ That attack still goes through `CanUseCombatSkill` (@0x5a2f10), which lets Bash 
 only when the spawn's `GetRace` (vtable +0x88, 0x58b4e0: the raw race an illusion sets) is 2, 9 or 10. The citizen
 races 90, 92 and 93 have the innate Slam but not that pass, so in the original their Slam needs Bash and a shield.
 
-A second deliberate change: Slam never needs a shield. Under a 90, 92 or 93 form Hailstone's Slam (and Bash, which
+A deliberate change: Slam never needs a shield. Under a 90, 92 or 93 form Hailstone's Slam (and Bash, which
 goes the Slam way there) needs only the Bash skill (`can_use_combat_skill(..., slam)`): a character with the skill
 slams shieldless, one without it sends nothing. That is what stock EQEmu accepts: `Client::OPCombatAbility` bypasses
 the skill check only for races 2, 9 and 10 by `GetRace()` and checks no shield (it uses one only for the damage).

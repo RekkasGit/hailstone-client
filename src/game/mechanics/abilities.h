@@ -282,8 +282,10 @@ std::optional<SkillMessage> check_hide_moved(const SkillContext& ctx, SkillState
 std::int32_t adjusted_skill(const Character& ch, std::uint32_t skill);
 
 // Whether the current form has the innate Slam (InitInnates' slot 11, below). CSkillsSelectWnd::SetTypesToDisplay
-// @0x756ce0 lists Slam (skill 0x6f) in the skill picker on that slot alone, without Bash. Zero current_race uses the
-// profile race.
+// @0x756ce0 lists Slam (skill 0x6f) in the skill picker on that slot alone, without Bash. The slot follows the
+// current form in the original too: EQPlayer::SetHeights @0x5a3f40 reruns InitInnates(GetRace()), keeping slot 10,
+// and EQPlayer::do_change_form @0x596b20 and EQ_Character::eqspa_change_form @0x43e2a0 call it. Zero current_race
+// uses the profile race.
 bool has_innate_slam(const Character& ch, std::uint32_t current_race);
 
 // Whether Slam's attack can go out: the innate Slam (EQ_Character::InitInnates @0x44d4d0: slot 11, profile +0x325c,
