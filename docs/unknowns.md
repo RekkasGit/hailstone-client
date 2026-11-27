@@ -335,7 +335,8 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   death, then character select, where a test login (`--user ... --character`) waits.
   - Unknown: whether the server is still finishing the camped session (the zone's save and removal) and refuses the
     new one, or whether the client's second session does something the server drops.
-  - Now: nothing in the client; `tools/perf_track.py` waits 20 s before each logged-in run and tries a failed one again.
+  - Now: nothing in the client; `tools/perf_track.py` waits 20 s before each logged-in run and tries a failed one again,
+    and `tools/live_smoke.sh` waits 20 s between scripts.
   - Settle: a packet capture of both sessions with the zone and world logs, and the original client logging in at
     once after a camp to the desktop.
 

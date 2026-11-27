@@ -52,12 +52,14 @@ The steps are in `docs/plan.md` "Road to 1.0". This section maps items to steps;
 - [ ] **Write the checklist.**
   - Its own doc, played on the stock PEQ test server, both packs, a physical controller.
   - What a GM character can script goes in `tests/live/*.quest`, run by `tools/live_smoke.sh` (docs/ci.md "Live smoke
-    tests"), which the nightly run plays: zoning, items and NPCs so far. Loot All, merchants, trades with players and
-    the UCS reconnect need new `tools/quest_probe.h` steps first.
+    tests"), which the nightly run plays: zoning, items, NPCs, combat and spells so far (spells with
+    `HAILSTONE_LIVE_CASTER` set). Loot All, merchants, trades with players and the UCS reconnect need new
+    `tools/quest_probe.h` steps first.
   - Built from the live items of "Combat and spells", "Movement", "Items and commerce", "Social and friends", "Navigation", "Item comparison", "Isometric camera" and "Check live".
 - [ ] Play it and fix what it finds.
-- [ ] Live smoke scripts for combat and casting: spawn a mob, melee it, loot it; memorize, cast, buff and fade
-  (`tests/live/*.quest`), with the `tools/quest_probe.h` steps they need.
+- [x] Live smoke scripts for combat and casting: spawn a mob, melee it, loot it; memorize, cast, buff and fade
+  (`tests/live/combat.quest`, `spells.quest`; the `melee`, `memorize`, `cast`, `expect-buff`, `fade` and `click-off`
+  steps of `tools/quest_probe.h`).
 - [ ] Shadow step (SPA 379): the zone collision `land_spell` needs ("Combat and spells").
 - [ ] The collision radius, too wide for doorways ("Movement").
 - [ ] Verify leave and follow-up requests in live play ("Adventures").
