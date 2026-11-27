@@ -1260,12 +1260,14 @@ TEST_CASE("TLO: the rest of Group and groupmember, as MacroQuest's") {
     // AvgHPs: the player's 75% and Groupie's 100%.
     w.spawns[12].hp_percent = 100;
     CHECK(f.p("${Group.AvgHPs}") == "87");
-    // Cleric: the first player cleric in the zone, the player too.
+    // Cleric: the first player cleric in the zone, in member order (the player, a cleric here, is member 0).
+    w.spawns[1].class_id = game::Cleric;
+    CHECK(f.p("${Group.Cleric} ${Group.Cleric.ID}") == "Tester 1");
+    w.spawns[1].class_id = game::Warrior;
+    w.spawns[12].class_id = game::Warrior; // (the test world makes every player a cleric)
     CHECK(f.p("${Group.Cleric}") == "NULL");
     w.spawns[12].class_id = game::Cleric;
     CHECK(f.p("${Group.Cleric} ${Group.Cleric.ID}") == "Groupie 12");
-    w.spawns[1].class_id = game::Cleric;
-    CHECK(f.p("${Group.Cleric}") == "Tester"); // in member order: the player is member 0
     // Mark NPC: the member the leader delegated it to.
     CHECK(f.p("${Group.MarkNpc} ${Group.Member[1].MarkNpc}") == "NULL FALSE");
     A::leadership(conn).group_marker = 12;
