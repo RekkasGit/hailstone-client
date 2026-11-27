@@ -2909,7 +2909,8 @@ void GameConnection::set_target(std::uint32_t spawn_id) {
 bool GameConnection::request_target_of_target() {
     if (state_ != ConnectionState::InZone || !world_.target_id || !target_of_target_ ||
         !world_.spawns.contains(target_of_target_)) return false;
-    // RoF2 EQType 27 (@0x761827) asks the server whether this spawn can be targeted.
+    // RoF2's path: CGaugeWnd's left-button-up @0x66f920 (the target-of-target gauge, EQType 27) calls
+    // Send_OP_TargetCommand_00761690, whose case 0x1b (@0x761827) asks the server whether this spawn can be targeted.
     return send_zone(encode_target(true, target_of_target_));
 }
 
