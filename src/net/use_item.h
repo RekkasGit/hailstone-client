@@ -10,7 +10,8 @@
 //                                       item's id is; with no such item it stays RoF2's slot form (an invalid slot)
 //
 // As MacroQuest: a first word that is a number is the slot form; otherwise the whole line is the name, its quotes
-// taken out (StripQuotes), and quoted means the whole name (FindItemByName's bExact, ci_equals).
+// taken out (StripQuotes), and quoted means the whole name (FindItemByName's bExact, ci_equals). An unquoted name
+// no carried item has shows RoF2's usage text, as any word that was not a number did before the name form.
 
 #include <cstdint>
 #include <string>
@@ -30,6 +31,8 @@ struct UseItemLine {
     // Name: the text to find, and whether it was quoted (the whole name then).
     std::string name;
     bool exact = false;
+    // Name, not quoted: when no carried item matches, RoF2's usage text is shown (a mistyped slot, "-1", is still
+    // told how the command goes; MacroQuest says nothing).
 };
 
 namespace detail {
@@ -45,15 +48,20 @@ inline UseItemLine parse_use_item(std::string_view line) {
     UseItemLine out;
     line = detail::use_item_trim(line);
     if (line.empty()) return out;
-    // The first word (MQ's GetArg drops its quotes, so "12" is a number too).
-    std::string_view word = line;
+    // The first word as RoF2's GetNextCmdArg reads it (game/slash_commands.h next_cmd_arg): one in ' or " quotes runs
+    // to the matching quote, the quotes dropped (as MQ's GetArg drops them, so "12" and '12' are numbers too);
+    // otherwise it ends at a space, a tab or an item link's \x12.
+    std::string_view digits;
     std::string_view after;
-    if (const auto end = line.find_first_of(" \t"); end != std::string_view::npos) {
-        word = line.substr(0, end);
-        after = detail::use_item_trim(line.substr(end));
+    if (line.front() == '\'' || line.front() == '"') {
+        const std::size_t close = line.find(line.front(), 1);
+        digits = line.substr(1, close == std::string_view::npos ? std::string_view::npos : close - 1);
+        after = close == std::string_view::npos ? std::string_view{} : detail::use_item_trim(line.substr(close + 1));
+    } else {
+        const std::size_t end = line.find_first_of(" \t\x12");
+        digits = line.substr(0, end);
+        if (end != std::string_view::npos) after = detail::use_item_trim(line.substr(end));
     }
-    std::string_view digits = word;
-    if (digits.size() >= 2 && digits.front() == '"' && digits.back() == '"') digits = digits.substr(1, digits.size() - 2);
     bool numeric = !digits.empty();
     for (char c : digits)
         if (c < '0' || c > '9') numeric = false;

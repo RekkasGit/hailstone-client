@@ -140,7 +140,7 @@ discipline's name may leave out its rank.
 | `/lootnodrop [always \| usable \| never]` | Ask before looting No Drop items. |
 | `/autoinventory` | Put the item on your cursor into your inventory. |
 | `/useitem <slot> [bag index]` | Use an item by slot number. |
-| `/useitem <item name>`, `/useitem "<item name>"`, `/useitem <item id>` | Use the first carried item (worn, then the general slots and their bags) whose name holds the text, in any case; in quotes, with that whole name. As MacroQuest's `/useitem`; nothing is said when no item matches. A single number past the slots (0..32) is an item id when you carry that item (Hailstone's; otherwise it stays an invalid slot, as in RoF2). |
+| `/useitem <item name>`, `/useitem "<item name>"`, `/useitem <item id>` | Use the first carried item (worn, then the general slots and their bags) whose name holds the text, in any case; in quotes, with that whole name. As MacroQuest's `/useitem`; when no item matches, a quoted name says nothing (as MacroQuest) and an unquoted one shows RoF2's usage text (as any word but a number did before). The slot number may be in single or double quotes (`/useitem '12'`), as RoF2 reads it. A single number past the slots (0..32) is an item id when you carry that item (Hailstone's; otherwise it stays an invalid slot, as in RoF2). |
 | `/split <pp> <gp> <sp> <cp>`, `/autosplit` | Split coin with the group; split it always. |
 | `/bandolier <add \| delete \| activate> <name or number>` | Weapon sets. |
 | `/potionbelt` | The potion belt. |
