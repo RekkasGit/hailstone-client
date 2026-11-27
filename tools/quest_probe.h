@@ -230,6 +230,18 @@ private:
                 }
                 phase_ = 3;
                 wait_until_ = now + std::chrono::milliseconds(700);
+            } else if (phase_ == 6) {
+                if (!moved_) return;
+                phase_ = 3;
+                wait_until_ = now + std::chrono::milliseconds(500);
+            } else if (phase_ == 3 && !reapproached_ && conn.world().spawns.count(target_) &&
+                       glm::distance(conn.world().spawns.at(target_).position, pos_) > 15.0f) {
+                // A patrolling NPC walks off while the item is picked up, and the client cancels a trade out of
+                // reach: go beside it again, once, before opening the trade.
+                reapproached_ = true;
+                moved_ = false;
+                conn.say(goto_text(conn.world().spawns.at(target_).position + glm::vec3(3.0f, 0.0f, 0.0f)));
+                phase_ = 6;
             } else if (phase_ == 3) {
                 conn.give_to(target_);
                 phase_ = 4;
@@ -588,6 +600,7 @@ private:
     void next() {
         if (index_ < lines_.size()) ++index_;
         phase_ = 0;
+        reapproached_ = false;
     }
 
     void finish_run() {
@@ -618,7 +631,7 @@ private:
     int phase_ = 0;
     int kills_ = 0;
     int passed_ = 0, failed_ = 0;
-    bool active_ = false, done_ = false, handler_set_ = false, moved_ = false, zoned_ = false;
+    bool active_ = false, done_ = false, handler_set_ = false, moved_ = false, zoned_ = false, reapproached_ = false;
     bool stop_on_fail_ = false, failed_last_ = false;
     std::uint32_t target_ = 0, corpse_ = 0, object_ = 0;
     glm::vec3 pos_{0.0f};

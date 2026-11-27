@@ -131,7 +131,7 @@ Each fix left behaviour unchanged; they explain rules in AGENTS.md.
 | MSVC under Wine | Recorded vectors CSpellBookWnd::GetSpellMemTicksLeft: `calc_dex() + calc_int()` called INT first | the calls as separate statements, in the original's order; the other query calls an operator or argument list ordered too |
 | MSVC under Wine | "http_get: cancelled ends a transfer stalled waiting for the answer" takes about 21 s (note 2) | not a client fault (note 2) |
 | MSVC under Wine | The build stops for good at `hailstone_engine.lib` (note 3) | `CMAKE_NINJA_FORCE_RESPONSE_FILE` when building for Windows on another host: the objects go in a response file |
-| MSVC under Wine (the release containers) | Now and then a large build stops with an internal compiler error (C1001, in `p0io.c`) and LNK1104 on an object, at a different file each time; the same build carried on passes | not a client fault; `tools/nightly.sh` tries a failed package build once more |
+| MSVC under Wine (the release containers) | Now and then a large build stops with an internal compiler error (C1001, in `p0io.c`) and LNK1104 on an object, at a different file each time; the same build carried on passes | not a client fault; it came with 20 jobs, not with build.sh's default 8. `tools/nightly.sh` builds Windows with 8 and tries a failed package build once more |
 | MSVC under Wine | 33 shared-cache, mapped-archive and animation tests: the cache never mapped (note 4) | `platform/shared_file.cpp` accepts a LocalSystem entry beside the user's (note 4) |
 | Linux, Windows | CI set-up only (SDL3 dev packages; the glslang asset name and executable name) | see the workflow |
 
@@ -184,6 +184,8 @@ and `#damage`) and a stock PEQ database. `EQ_GAME_DIR` must be set; `PLAYPROBE` 
 `items.quest` and `npc.quest` end with `#nukeitem` on the item they summon, and check that the client saw it go, so
 nightly runs do not fill the character's bags.
 
+A script that ran no step never reached the world (the server refused the login, or answered "That zone is not
+available" while the last script's zone shut down): it is played once more after 30 seconds, and its line says so.
 A script starts with `zone <name>`, which passes at once when the character is already there, so it does not
 depend on where the last session ended. Scripts and the runner name no server, account or password: pass them on the
 command line. The nightly run plays them when a test server is set ("Nightly run" below); they are the scripted part
@@ -235,12 +237,20 @@ them to one rolling pre-release, tagged `nightly`, on GitHub.
 - The containers do not run the tests (the Linux one cannot run the browser tests, Windows' Wine fails some): the
   Linux package's `hailstone_tests` run on this machine before the upload, in 8 parts at once. They leave out the
   cases that start the real CEF helper (`browser host: the CEF helper*`, `browser host: CEF's other processes*`),
-  which time out on some desktops with release builds too. The Windows package is built only.
+  which time out on some desktops with release builds too.
+- The Windows package is then started under Wine (a copy, with the night's log folder as its data folder): it logs
+  in to the live smoke tests' server with their character, enters the world and stops after 3600 frames at 60 per
+  second, with a screenshot (`windows.png`). Not reaching the world fails the night. It needs Wine, the desktop's
+  display (Vulkan presents to a window, which shows for that minute) and the `HAILSTONE_LIVE_*` settings; without
+  them the summary says it was not started. Its Wine prefix is kept in the cache folder.
+- The tests run without the desktop's display (`DISPLAY` and `WAYLAND_DISPLAY` unset), so the browser tests use
+  headless Chromium: CEF's helper can fail to draw on a busy desktop session's display.
 - Each night moves the `nightly` tag to the commit built (a forced update of that one tag, never of a branch),
   uploads the new downloads, removes the previous night's and rewrites the notes. A plain `git fetch` leaves a clone's
   old copy of the tag alone; `git fetch --tags` refuses to move it, which is harmless.
-- A failed package build is tried once more, and the summary says so (MSVC under Wine, "Problems the first runs
-  showed" above).
+- The Windows package builds with no more than 8 jobs, as a release does: at 20, MSVC under Wine failed most large
+  builds ("Problems the first runs showed" above). A failed package build is tried once more, and the summary says
+  so.
 - It needs `gh` signed in with write access, Docker, and the MSVC install `tools/docker/build.sh windows-x64` uses.
 - `--package` does all but the upload, leaving the zips in the checkout's `release-nightly/`.
 
@@ -260,8 +270,6 @@ The service has a shell's environment only as set here: add the build settings t
 Type=oneshot
 ExecStart=/path/to/hailstone-client/tools/nightly.sh --publish
 Nice=10
-# Headless: CEF's helper in the browser tests can fail to draw on a busy desktop session's display.
-UnsetEnvironment=DISPLAY WAYLAND_DISPLAY
 
 # hailstone-nightly.timer
 [Timer]

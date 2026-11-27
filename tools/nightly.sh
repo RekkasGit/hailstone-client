@@ -8,8 +8,9 @@
 #      played by the sanitizer build's playprobe.
 #   4. With --publish, after a night with no failure: the Linux and Windows packages, built as a release is
 #      (tools/docker/build.sh, tools/make_update.py) with the version label nightly.<date>, the Linux package's tests
-#      run on this machine, then uploaded to the rolling `nightly` pre-release on GitHub. The updater never offers a
-#      pre-release, and the packages carry no signed manifest.
+#      run on this machine and the Windows package started under Wine (it logs in to the test server), then
+#      uploaded to the rolling `nightly` pre-release on GitHub. The updater never offers a pre-release, and the
+#      packages carry no signed manifest.
 #   5. A summary, printed and, with a webhook set, posted to Discord.
 #
 # Usage: tools/nightly.sh [--fuzz-seconds N] [--jobs N] [--no-fuzz] [--no-live] [--no-post] [--package | --publish]
@@ -75,6 +76,9 @@ if ! flock -n 9; then
 fi
 
 summary=()
+# The tests run without the desktop's display: CEF's helper in the browser tests can fail to draw on a busy desktop
+# session's, and headless Chromium is what they get elsewhere. The Windows package's start keeps the display.
+headless() { env -u DISPLAY -u WAYLAND_DISPLAY "$@"; }
 failed=0
 note() { summary+=("$1"); echo "nightly: $1"; }
 fail() { note "FAIL $1"; failed=1; }
@@ -108,7 +112,7 @@ if { [ -f build-asan/CMakeCache.txt ] ||
      cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DHAILSTONE_SANITIZE=ON; } \
      > "$logs/asan-configure.log" 2>&1 &&
    nice cmake --build build-asan -j "$jobs" > "$logs/asan-build.log" 2>&1; then
-  if nice ctest --test-dir build-asan -j "$jobs" --output-on-failure > "$logs/asan-tests.log" 2>&1; then
+  if headless nice ctest --test-dir build-asan -j "$jobs" --output-on-failure > "$logs/asan-tests.log" 2>&1; then
     note "sanitizer tests: $(grep -o '[0-9]*% tests passed.*' "$logs/asan-tests.log" | tail -1)"
   else
     fail "sanitizer tests: $(grep -o '[0-9]*% tests passed.*' "$logs/asan-tests.log" | tail -1) (asan-tests.log)"
@@ -165,7 +169,8 @@ if [ "$live" = 1 ] && [ -n "${HAILSTONE_LIVE_SERVER:-}" ]; then
                   grep -l 'ERROR: [A-Za-z]*Sanitizer\|runtime error:' "$logs"/live/*.log 2>/dev/null |
                     xargs -r -n1 basename | sed 's/\.log$/ (sanitizer)/'; } | sort -u | paste -sd, - | sed 's/,/, /g')
     if [ -z "$failures" ] && [ "$passed" -gt 0 ]; then
-      note "live smoke tests: $passed passed"
+      retried=$(grep -c '^PASS .*second try' "$logs/live.log")
+      note "live smoke tests: $passed passed$([ "$retried" -gt 0 ] && echo " ($retried at a second try: no world at first)")"
     else
       fail "live smoke tests: ${failures:-none ran} (live.log, live/)"
     fi
@@ -175,8 +180,45 @@ fi
 # 4. The packages, after a night with no failure.
 published=""
 package_build() {
-  CPUS=$jobs CMAKE_ARGS="-DHAILSTONE_BROWSER=ON -DHAILSTONE_NIGHTLY_LABEL=$2" \
+  # Windows at no more than 8 jobs, build.sh's default and the release builds': at 20, MSVC under Wine failed most
+  # large builds (below); at 8 a clean build passed.
+  local cpus=$jobs
+  [ "$1" = windows-x64 ] && [ "$cpus" -gt 8 ] && cpus=8
+  CPUS=$cpus CMAKE_ARGS="-DHAILSTONE_BROWSER=ON -DHAILSTONE_NIGHTLY_LABEL=$2" \
     tools/docker/build.sh "$1" --no-test > "$3" 2>&1
+}
+
+# The Windows package started under Wine: it logs in to the live smoke tests' server, enters the world and stops
+# after a minute of frames. A copy runs, so nothing it writes reaches the zip; its data folder is the night's logs.
+# It needs Wine, the desktop's display (Vulkan presents to a window) and the test server; without them it is noted
+# and left out.
+windows_start() {
+  if [ -z "${HAILSTONE_LIVE_SERVER:-}" ] || [ -z "${HAILSTONE_LIVE_USER:-}" ] ||
+     [ -z "${HAILSTONE_LIVE_PASSWORD:-}" ] || [ -z "${HAILSTONE_LIVE_CHARACTER:-}" ] || [ -z "${EQ_GAME_DIR:-}" ]; then
+    note "Windows package: not started (no test server or game folder set)"; return 0
+  fi
+  if ! command -v wine > /dev/null || { [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; }; then
+    note "Windows package: not started (no Wine or no display)"; return 0
+  fi
+  local run=$cache/windows-run host port=() rc
+  rsync -a --delete dist/windows-x64/hailstone/ "$run/" || { fail "Windows package: copying it"; return 1; }
+  mkdir -p "$logs/windows-data"
+  host=${HAILSTONE_LIVE_SERVER%%:*}
+  [ "$host" != "$HAILSTONE_LIVE_SERVER" ] && port=(--port "${HAILSTONE_LIVE_SERVER#*:}")
+  export WINEPREFIX=$cache/wine-prefix WINEDEBUG=-all
+  [ -d "$WINEPREFIX" ] || wineboot -i > /dev/null 2>&1
+  (cd "$run" && HAILSTONE_DATA_DIR=$(winepath -w "$logs/windows-data") timeout 300 wine hailstone.exe \
+     --game-dir "$(winepath -w "$EQ_GAME_DIR")" --host "$host" "${port[@]}" --user "$HAILSTONE_LIVE_USER" \
+     --password "$HAILSTONE_LIVE_PASSWORD" --character "$HAILSTONE_LIVE_CHARACTER" --no-audio --max-fps 60 \
+     --frames 3600 --screenshot "$(winepath -w "$logs/windows.png")") > "$logs/windows.log" 2>&1
+  rc=$?
+  unset WINEPREFIX WINEDEBUG
+  if [ "$rc" = 0 ] && grep -q 'chat: You have entered' "$logs/windows.log" && [ -s "$logs/windows.png" ]; then
+    note "Windows package: started under Wine, logged in and entered the world"
+  else
+    fail "Windows package: did not reach the world under Wine (exit $rc; windows.log)"
+    return 1
+  fi
 }
 
 publish_packages() {
@@ -201,7 +243,7 @@ publish_packages() {
   # builds").
   local k pids=() bad=0
   for k in 1 2 3 4 5 6 7 8; do
-    HAILSTONE_TEST_SHARD=$k/8 nice build-linux-x64/hailstone_tests \
+    HAILSTONE_TEST_SHARD=$k/8 headless nice build-linux-x64/hailstone_tests \
       "-tce=browser host: the CEF helper*,browser host: CEF's other processes*" \
       > "$logs/package-tests-$k.log" 2>&1 &
     pids+=("$!")
@@ -218,6 +260,7 @@ publish_packages() {
     fail "Linux package tests: $cases (package-tests.log)"
     return
   fi
+  windows_start || return
   rm -rf release-nightly
   for platform in linux-x64 windows-x64; do
     python3 tools/make_update.py --version "$version" --platform "$platform" --dist "dist/$platform/hailstone" \

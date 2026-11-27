@@ -1013,7 +1013,9 @@ TEST_CASE("TLO: Me's endurance, AA points, auto fire, cast and gem timers, disci
     const int gem_left = std::stoi(f.p("${Me.GemTimer[Minor Healing]}"));
     CHECK(gem_left > 4000);
     CHECK(gem_left <= 5000);
-    CHECK(f.p("${Me.GemTimer[1].TotalSeconds}") == std::to_string(gem_left / 1000));
+    // Read a moment later, on the wall clock: a second boundary may have passed since (seen under the sanitizer).
+    const int gem_seconds = std::stoi(f.p("${Me.GemTimer[1].TotalSeconds}"));
+    CHECK((gem_seconds == gem_left / 1000 || gem_seconds == gem_left / 1000 - 1));
     CHECK(f.p("${Me.GemTimer[5]}") == "NULL");
     // Past int: no gem, not the one it wraps to (gem 1), nor INT_MIN - 1.
     CHECK(f.p("${Me.GemTimer[4294967297]}") == "NULL");
