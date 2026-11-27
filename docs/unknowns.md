@@ -1524,6 +1524,10 @@ Real estate is built to the original (docs/protocol/rof2-packets.md "Real estate
   has been filled (CMerchantWnd's PurchasePageHandler::UpdateList). Here it is TRUE once the merchant is open and an
   item of its stock has come, so a merchant with no stock stays FALSE. Settle: whether UpdateList runs for an empty
   stock.
+- **`Item.Spell`'s order.** `player` (`mq/tlo_game.cpp`) Now: the first of the item's click, scroll, proc, focus and
+  worn effects whose spell id the spell table has; an id the table lacks is skipped for the next effect. Neither the
+  order nor the skipping is checked against MacroQuest. Settle: MQ's `ItemMembers::Spell` (the effects it reads, in
+  which order, and what it returns for an id `GetSpellByID` does not find).
 
 ## Server-specific extensions
 

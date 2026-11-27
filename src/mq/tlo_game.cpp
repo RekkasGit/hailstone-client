@@ -1879,7 +1879,8 @@ void register_e3_members() {
         return e.present() ? V::object(g.timestamp, std::max<std::int64_t>(e.cast_time(), 0)) : V::nil();
     });
     // MQ's Spell (ItemMembers::Spell): the first of the click, scroll, proc, focus and worn effects whose spell the
-    // table has (GetSpellByID), NULL when none.
+    // table has (GetSpellByID), NULL when none. The order and the skipping of an id the table lacks are not checked
+    // against MacroQuest (docs/unknowns.md "Item.Spell's order").
     im("Spell", [](const Context& c, const Value&, const net::Item& it, std::string_view) -> V {
         for (auto kind : {net::kEffectClick, net::kEffectScroll, net::kEffectProc, net::kEffectFocus, net::kEffectWorn}) {
             const auto& e = it.effects[kind];
