@@ -30,6 +30,12 @@ void write(const fs::path& file, const std::string& text) {
     std::ofstream(file, std::ios::binary) << text;
 }
 
+// The same file. On a file system that ignores case (Windows) the found path keeps the asked-for spelling.
+bool same_file(const std::optional<fs::path>& found, const fs::path& expected) {
+    std::error_code ec;
+    return found && fs::equivalent(*found, expected, ec);
+}
+
 app::CfgFolders folders_in(const fs::path& root) {
     app::CfgFolders f;
     f.data = root;
@@ -58,18 +64,18 @@ TEST_CASE("cfg files: only the most specific layer's file runs, autoexec/ first,
     const auto f = folders_in(scratch.path());
     CHECK_FALSE(app::find_cfg(f, "InGame"));
     write(f.global / "InGame.cfg", "/echo global\n");
-    CHECK(app::find_cfg(f, "InGame") == f.global / "InGame.cfg");
-    CHECK(app::find_cfg(f, "ingame") == f.global / "InGame.cfg"); // any case, as on Windows
+    CHECK(same_file(app::find_cfg(f, "InGame"), f.global / "InGame.cfg"));
+    CHECK(same_file(app::find_cfg(f, "ingame"), f.global / "InGame.cfg")); // any case, as on Windows
     write(f.global / "Autoexec" / "INGAME.CFG", "/echo global autoexec\n");
-    CHECK(app::find_cfg(f, "InGame") == f.global / "Autoexec" / "INGAME.CFG");
+    CHECK(same_file(app::find_cfg(f, "InGame"), f.global / "Autoexec" / "INGAME.CFG"));
     write(f.server / "ingame.cfg", "/echo server\n");
-    CHECK(app::find_cfg(f, "InGame") == f.server / "ingame.cfg");
+    CHECK(same_file(app::find_cfg(f, "InGame"), f.server / "ingame.cfg"));
     write(f.character / "InGame.cfg", "/echo character\n");
-    CHECK(app::find_cfg(f, "InGame") == f.character / "InGame.cfg");
+    CHECK(same_file(app::find_cfg(f, "InGame"), f.character / "InGame.cfg"));
     // A layer that is not known is not looked in.
     auto no_character = f;
     no_character.character.clear();
-    CHECK(app::find_cfg(no_character, "InGame") == f.server / "ingame.cfg");
+    CHECK(same_file(app::find_cfg(no_character, "InGame"), f.server / "ingame.cfg"));
     // A name that would leave the folder is no name.
     for (const char* bad : {"", ".", "..", "../InGame", "sub/InGame", "sub\\InGame", "C:InGame", "a\nb"}) {
         CAPTURE(bad);
