@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Modern Trade keeps coin denominations clear of their exact counts. The coin buttons wrap into rows when the offer is narrow or the amounts are large.
 - Left-click the target's target health bar in Modern or Gamepad to select that target.
 - The Tracking window can stay open, be reopened, and refresh its list during the camp countdown.
 - The Combat skill picker offers Slam only when your current form has it (a Barbarian, Troll or Ogre form, citizen forms included), as the original client does; it no longer offers Slam to every character. Saved Slam buttons are dimmed while your form cannot use Slam (a citizen form also needs the Bash skill) and become usable again when it can. Interfaces read it from the hot button's `unavailable` field (UI API 1.13).
