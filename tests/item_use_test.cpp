@@ -166,6 +166,11 @@ TEST_CASE("item use: Cmd_useitem's arguments") {
     CHECK(has_line(lines, "or: /useitem <item name>, /useitem \"<item name>\" or /useitem <item id>"));
     conn.send_command("/useitem 40");
     CHECK(has_line(drain_chat(conn), "That is an invalid slot index."));
+    // Not a number and no item's name: still RoF2's usage text.
+    conn.send_command("/useitem -1");
+    CHECK(has_line(drain_chat(conn), "usage: /useitem <slot> <subindex>"));
+    conn.send_command("/useitem '40'"); // single quotes, as RoF2's GetNextCmdArg takes them: a slot
+    CHECK(has_line(drain_chat(conn), "That is an invalid slot index."));
     // A bad bag index keeps the bag itself; a good one the item in it.
     conn.send_command("/useitem 24 9");
     CHECK(has_line(drain_chat(conn), "That is an invalid bag slot index."));
@@ -209,13 +214,13 @@ TEST_CASE("item use: /useitem by name, by whole name in quotes, or by item id (M
     conn.send_command("/useitem 1001");
     CHECK(request_slot(3) == (13u | 0xffffu << 16));
     clear_pending(ItemSlot::possessions(13));
-    // An id no carried item has stays RoF2's invalid slot; a name no item has says nothing.
+    // An id no carried item has stays RoF2's invalid slot; an unquoted name no item has shows RoF2's usage text.
     conn.send_command("/useitem 5555");
     CHECK(has_line(drain_chat(conn), "That is an invalid slot index."));
     conn.send_command("/useitem Nothing Like It");
     rig.run_for(std::chrono::milliseconds(30));
     CHECK(MockEqServer::count(rig.server.zone_log, Op::ItemVerifyRequest) == 3);
-    CHECK(drain_chat(conn).empty());
+    CHECK(has_line(drain_chat(conn), "usage: /useitem <slot> <subindex>"));
     // A slot is still a slot (13 is the sword's slot, not an item id).
     conn.send_command("/useitem 13");
     CHECK(request_slot(4) == (13u | 0xffffu << 16));

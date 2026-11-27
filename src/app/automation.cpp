@@ -40,6 +40,10 @@ std::vector<fs::path> search_dirs(const fs::path& data, const fs::path& install)
     if (!install.empty() && fs::is_directory(install, ec) && !fs::equivalent(data, install, ec)) dirs.push_back(install);
     return dirs;
 }
+
+mq::CfgLoad to_mq(CfgFile&& file) {
+    return mq::CfgLoad{path_utf8(file.file), std::move(file.lines), std::move(file.refused)};
+}
 } // namespace
 
 struct Automation::Impl {
@@ -216,20 +220,22 @@ struct Automation::Impl {
             cfg_now.push_back(c->world().zone_short_name);
     }
 
-    // The names due, each its most specific file's lines run as the player's typed lines.
+    // The names due, each its most specific file's lines run as the player's typed lines, under one line budget.
     void run_cfgs() {
         std::vector<std::string> names = std::exchange(cfg_now, std::move(cfg_next));
         cfg_next.clear();
         if (names.empty()) return;
         const CfgFolders folders = cfg_folders();
+        std::vector<mq::CfgLoad> files;
         for (const std::string& name : names) {
             const auto file = find_cfg(folders, name);
             if (!file) continue;
-            const auto lines = read_cfg(*file);
-            if (!lines) continue;
-            log::info("cfg: running {} ({} lines)", path_utf8(*file), lines->size());
-            for (const std::string& line : *lines) run(line);
+            auto loaded = read_cfg(*file);
+            if (!loaded) continue;
+            log::info("cfg: running {} ({} lines)", path_utf8(*file), loaded->lines.size());
+            files.push_back(to_mq(std::move(*loaded)));
         }
+        if (!files.empty()) commands->run_cfg_files(files);
     }
 
     void dev_window();
@@ -271,9 +277,10 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
     };
     ce.face = m.env.face;
     ce.keypress = m.env.keypress;
-    ce.load_cfg = [&m](std::string_view name) -> std::optional<std::vector<std::string>> {
-        const auto file = resolve_cfg(m.cfg_folders(), name);
-        return file ? read_cfg(*file) : std::nullopt;
+    ce.load_cfg = [&m](std::string_view name, bool typed) -> std::optional<mq::CfgLoad> {
+        auto file = load_cfg(m.cfg_folders(), name, typed);
+        if (!file) return std::nullopt;
+        return to_mq(std::move(*file));
     };
     m.commands = std::make_unique<mq::Commands>(ce);
     m.cfg_owner = m.hooks.new_owner("cfg");

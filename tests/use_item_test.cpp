@@ -25,6 +25,13 @@ TEST_CASE("useitem: a number first is the slot form, alone or with a bag index")
     l = parse_use_item("\"40\""); // MQ's GetArg drops the quotes: still a number
     CHECK(l.kind == Kind::Slot);
     CHECK(l.number == 40);
+    l = parse_use_item("'12' 3"); // RoF2's GetNextCmdArg takes single quotes as well
+    CHECK(l.kind == Kind::Slot);
+    CHECK(l.number == 12);
+    CHECK_FALSE(l.alone);
+    l = parse_use_item("'12'");
+    CHECK(l.kind == Kind::Slot);
+    CHECK(l.alone);
     l = parse_use_item("99999999999999999999999"); // past 64 bits: no slot and no item's id
     CHECK(l.kind == Kind::Slot);
     CHECK(l.number == UINT64_MAX);
@@ -49,6 +56,10 @@ TEST_CASE("useitem: anything else is a name; quoted is the whole name") {
     l = parse_use_item("Wand 2"); // a word first, a number after: still a name
     CHECK(l.kind == Kind::Name);
     CHECK(l.name == "Wand 2");
+    l = parse_use_item("-1"); // not a number: a name, unquoted (the connection shows the usage when nothing matches)
+    CHECK(l.kind == Kind::Name);
+    CHECK(l.name == "-1");
+    CHECK_FALSE(l.exact);
 }
 
 TEST_CASE("useitem: nothing, or only quotes, asks for the usage") {

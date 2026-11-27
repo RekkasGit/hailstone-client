@@ -313,7 +313,26 @@ void GameConnection::useitem_command(const std::string& args) {
     // Cmd_useitem @0x479200: /useitem <slot 0..32> [index in the bag], numbers only. Hailstone adds MacroQuest's name
     // form and an item id (net/use_item.h); the slot form is the original's.
     const UseItemLine line = parse_use_item(args);
-    if (line.kind == UseItemLine::Kind::Usage) {
+    // MacroQuest's name form: the first carried item (worn, the general slots and their bags, in slot order, as
+    // find_possession takes them) whose name matches.
+    std::optional<ItemSlot> named;
+    if (line.kind == UseItemLine::Kind::Name)
+        for (std::int16_t slot = 0; slot <= kSlotGeneral10 && !named; ++slot) {
+            const Item* item = inventory_.at(ItemSlot::possessions(slot));
+            if (!item) continue;
+            if (use_item_name_matches(item->name, line.name, line.exact)) {
+                named = ItemSlot::possessions(slot);
+                break;
+            }
+            for (const auto& c : item->contents)
+                if (use_item_name_matches(c.item.name, line.name, line.exact)) {
+                    named = ItemSlot::possessions(slot, static_cast<std::int16_t>(c.index));
+                    break;
+                }
+        }
+    // No item of that name: RoF2's usage text when the name was not quoted (any word but a number had it before the
+    // name form, "-1" too); nothing for a quoted one, as in MacroQuest.
+    if (line.kind == UseItemLine::Kind::Usage || (line.kind == UseItemLine::Kind::Name && !named && !line.exact)) {
         static constexpr const char* kSlots[] = {"Charm", "Left Ear", "Head", "Face", "Right Ear", "Neck", "Shoulders",
                                                  "Arms", "Back", "Left Wrist", "Right Wrist", "Range", "Hands",
                                                  "Primary", "Secondary", "Left Ring", "Right Ring", "Chest", "Legs",
@@ -329,21 +348,7 @@ void GameConnection::useitem_command(const std::string& args) {
         return;
     }
     if (line.kind == UseItemLine::Kind::Name) {
-        // MacroQuest's: the first carried item (worn, the general slots and their bags, in slot order, as
-        // find_possession takes them) whose name matches. Nothing is said when none does, as in MacroQuest.
-        for (std::int16_t slot = 0; slot <= kSlotGeneral10; ++slot) {
-            const Item* item = inventory_.at(ItemSlot::possessions(slot));
-            if (!item) continue;
-            if (use_item_name_matches(item->name, line.name, line.exact)) {
-                use_item(ItemSlot::possessions(slot));
-                return;
-            }
-            for (const auto& c : item->contents)
-                if (use_item_name_matches(c.item.name, line.name, line.exact)) {
-                    use_item(ItemSlot::possessions(slot, static_cast<std::int16_t>(c.index)));
-                    return;
-                }
-        }
+        if (named) use_item(*named);
         return;
     }
     // Hailstone's: one number past the slots (the last is kSlotGeneral10) that a carried item's id is (the original

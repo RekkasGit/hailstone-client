@@ -217,6 +217,10 @@ Lua 5.5 state and runs as a coroutine resumed once a frame; `mq.delay` yields to
 - **Command size.** A command of more than 1000 words for a bind is refused (a chat line), and the script runs on. An
   `mq.cmd` line is at most 2047 bytes (MQ's command buffer; longer is an error). `/docommand`, `/noparse`,
   `/squelch` and `/loadcfg` nest at most 16 deep in one line (the rest is dropped, with a chat line).
+- **`/loadcfg`.** A script or plugin names a `.cfg` file (looked up in the cfg folders, docs/autoexec.md); a path is
+  refused with a chat line, so code that cannot read files cannot run the data folder's other files as chat. A file
+  already running is not run inside itself, and one `/loadcfg` runs at most 1000 lines in all, its nested files'
+  included.
 - **Memory.** 256 MB a script; past it, "not enough memory".
 - **No finalizers.** `setmetatable` refuses `__gc` (finalizers cannot be stopped); an `mq.TLO` value's metatable is
   locked (`getmetatable` gives `"mq.TLO"`).

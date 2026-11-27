@@ -435,7 +435,7 @@ bool GameConnection::run_slash_command(std::size_t index, const std::string& arg
             const std::string spell_name = game::next_cmd_arg(words);
             for (int g = 0; g < game::kSpellGems; ++g) {
                 const std::uint32_t id = spells_.gems[static_cast<std::size_t>(g)].spell;
-                const game::SpellData* s = id == game::kNoSpell ? nullptr : spell_table_->get(id);
+                const game::SpellData* s = id == game::kNoSpell || !spell_table_ ? nullptr : spell_table_->get(id);
                 if (s && cast_spell_name_matches(s->name, spell_name)) {
                     clear_bard_twist();
                     cast_gem(g);

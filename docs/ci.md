@@ -240,9 +240,11 @@ them to one rolling pre-release, tagged `nightly`, on GitHub.
   which time out on some desktops with release builds too.
 - The Windows package is then started under Wine (a copy, with the night's log folder as its data folder): it logs
   in to the live smoke tests' server with their character, enters the world and stops after 3600 frames at 60 per
-  second, with a screenshot (`windows.png`). Not reaching the world fails the night. It needs Wine, the desktop's
-  display (Vulkan presents to a window, which shows for that minute) and the `HAILSTONE_LIVE_*` settings; without
-  them the summary says it was not started. Its Wine prefix is kept in the cache folder.
+  second, with a screenshot (`windows.png`). Not reaching the world fails the night. It runs on a 1280x720 screen
+  of its own (`kwin_wayland --virtual --xwayland`), not the desktop's: with the monitor switched off at night the
+  desktop has no outputs and SDL under Wine finds no display. It needs Wine, `kwin_wayland` and the
+  `HAILSTONE_LIVE_*` settings; without them the summary says it was not started. Its Wine prefix is kept in the
+  cache folder.
 - The tests run without the desktop's display (`DISPLAY` and `WAYLAND_DISPLAY` unset), so the browser tests use
   headless Chromium: CEF's helper can fail to draw on a busy desktop session's display.
 - Each night moves the `nightly` tag to the commit built (a forced update of that one tag, never of a branch),

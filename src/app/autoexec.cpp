@@ -1,5 +1,6 @@
 #include "app/autoexec.h"
 
+#include <format>
 #include <system_error>
 
 #include "core/ascii_case.h"
@@ -72,9 +73,9 @@ std::optional<fs::path> find_cfg(const CfgFolders& folders, std::string_view nam
     return std::nullopt;
 }
 
-std::optional<fs::path> resolve_cfg(const CfgFolders& folders, std::string_view text) {
+std::optional<fs::path> resolve_cfg(const CfgFolders& folders, std::string_view text, bool typed) {
     if (plain_name(text)) return find_cfg(folders, text);
-    if (text.empty() || folders.data.empty()) return std::nullopt;
+    if (!typed || text.empty() || folders.data.empty()) return std::nullopt;
     for (char ch : text)
         if (static_cast<unsigned char>(ch) < 32) return std::nullopt;
     std::error_code ec;
@@ -82,16 +83,22 @@ std::optional<fs::path> resolve_cfg(const CfgFolders& folders, std::string_view 
     if (p.is_relative()) p = folders.data / p;
     if (p.extension().empty()) p += ".cfg";
     const fs::path file = fs::weakly_canonical(p, ec);
-    if (ec) return std::nullopt;
-    const fs::path root = fs::weakly_canonical(folders.data, ec);
-    if (ec) return std::nullopt;
-    // Inside the data folder: the file's path starts with the folder's, whole components at a time.
-    auto f = file.begin();
-    for (const fs::path& part : root) {
-        if (part.empty()) continue; // (a trailing separator)
-        if (f == file.end() || *f != part) return std::nullopt;
-        ++f;
-    }
+    if (ec || !iequals(path_utf8(file.extension()), ".cfg")) return std::nullopt;
+    // Inside one of the cfg folders: the file's path starts with the folder's, whole components at a time.
+    auto inside = [&file](const fs::path& dir) {
+        if (dir.empty()) return false;
+        std::error_code root_ec;
+        const fs::path root = fs::weakly_canonical(dir, root_ec);
+        if (root_ec) return false;
+        auto f = file.begin();
+        for (const fs::path& part : root) {
+            if (part.empty()) continue; // (a trailing separator)
+            if (f == file.end() || *f != part) return false;
+            ++f;
+        }
+        return f != file.end();
+    };
+    if (!inside(folders.character) && !inside(folders.server) && !inside(folders.global)) return std::nullopt;
     if (!fs::is_regular_file(file, ec)) return std::nullopt;
     return file;
 }
@@ -111,10 +118,32 @@ std::vector<std::string> cfg_lines(std::string_view text) {
     return out;
 }
 
-std::optional<std::vector<std::string>> read_cfg(const fs::path& file) {
-    auto text = read_text_file(file);
+std::optional<CfgFile> read_cfg(const fs::path& file) {
+    CfgFile out;
+    std::error_code ec;
+    out.file = fs::weakly_canonical(file, ec);
+    if (ec) out.file = file;
+    const std::uintmax_t size = fs::file_size(file, ec);
+    if (ec) return std::nullopt;
+    auto text = size > kMaxCfgBytes ? std::nullopt : read_text_file(file);
+    if (size > kMaxCfgBytes || (text && text->size() > kMaxCfgBytes)) { // (or grown since)
+        out.refused = std::format("'{}' is larger than {} KB: not run", path_utf8(file.filename()), kMaxCfgBytes / 1024);
+        return out;
+    }
     if (!text) return std::nullopt;
-    return cfg_lines(*text);
+    out.lines = cfg_lines(*text);
+    return out;
+}
+
+std::optional<CfgFile> load_cfg(const CfgFolders& folders, std::string_view text, bool typed) {
+    if (!typed && !plain_name(text)) {
+        CfgFile out;
+        out.refused = "A script or plugin may /loadcfg a .cfg file by its name only, not by a path";
+        return out;
+    }
+    const auto file = resolve_cfg(folders, text, typed);
+    if (!file) return std::nullopt;
+    return read_cfg(*file);
 }
 
 } // namespace hailstone::app
