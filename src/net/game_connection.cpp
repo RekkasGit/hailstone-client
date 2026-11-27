@@ -3403,8 +3403,9 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
         if (auto t = decode_target(p)) {
             // The server accepted a target (or targets our pet for us). RoF2 resolves the spawn and then reports
             // the change with OP_TargetMouse, which lets the server update its selected target and send its HoTT.
-            if (*t == 0) world_.target_id = 0;
-            else if (world_.spawns.contains(*t)) set_target(*t);
+            // CEverQuest::HandleWorldMessage (case 0x58e2) sets the target only when GetSpawnByID finds the spawn,
+            // so an id of 0 or an unknown one leaves the current target alone.
+            if (world_.spawns.contains(*t)) set_target(*t);
         }
         break;
     case Op::ZonePlayerToBind:
