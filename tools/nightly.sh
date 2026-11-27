@@ -197,8 +197,8 @@ windows_start() {
      [ -z "${HAILSTONE_LIVE_PASSWORD:-}" ] || [ -z "${HAILSTONE_LIVE_CHARACTER:-}" ] || [ -z "${EQ_GAME_DIR:-}" ]; then
     note "Windows package: not started (no test server or game folder set)"; return 0
   fi
-  if ! command -v wine > /dev/null || { [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; }; then
-    note "Windows package: not started (no Wine or no display)"; return 0
+  if ! command -v wine > /dev/null || ! command -v kwin_wayland > /dev/null; then
+    note "Windows package: not started (no Wine or no kwin_wayland)"; return 0
   fi
   local run=$cache/windows-run host port=() rc
   rsync -a --delete dist/windows-x64/hailstone/ "$run/" || { fail "Windows package: copying it"; return 1; }
@@ -207,11 +207,24 @@ windows_start() {
   [ "$host" != "$HAILSTONE_LIVE_SERVER" ] && port=(--port "${HAILSTONE_LIVE_SERVER#*:}")
   export WINEPREFIX=$cache/wine-prefix WINEDEBUG=-all
   [ -d "$WINEPREFIX" ] || wineboot -i > /dev/null 2>&1
-  (cd "$run" && HAILSTONE_DATA_DIR=$(winepath -w "$logs/windows-data") timeout 300 wine hailstone.exe \
-     --game-dir "$(winepath -w "$EQ_GAME_DIR")" --host "$host" "${port[@]}" --user "$HAILSTONE_LIVE_USER" \
-     --password "$HAILSTONE_LIVE_PASSWORD" --character "$HAILSTONE_LIVE_CHARACTER" --no-audio --max-fps 60 \
-     --frames 3600 --screenshot "$(winepath -w "$logs/windows.png")") > "$logs/windows.log" 2>&1
+  # It runs on a virtual screen of its own (KWin's virtual backend, with Xwayland for Wine), not the desktop's: with
+  # the monitor switched off for the night the desktop has no outputs, and SDL under Wine then finds no display.
+  # KWin starts one program with no arguments, so the command goes in a script, which also keeps the exit code.
+  {
+    printf '#!/bin/bash\ncd %q || exit 1\n' "$run"
+    printf 'HAILSTONE_DATA_DIR=%q wine hailstone.exe' "$(winepath -w "$logs/windows-data")"
+    printf ' %q' --game-dir "$(winepath -w "$EQ_GAME_DIR")" --host "$host" "${port[@]}" \
+      --user "$HAILSTONE_LIVE_USER" --password "$HAILSTONE_LIVE_PASSWORD" --character "$HAILSTONE_LIVE_CHARACTER" \
+      --no-audio --max-fps 60 --frames 3600 --screenshot "$(winepath -w "$logs/windows.png")"
+    printf '\necho $? > %q\n' "$cache/windows-start.rc"
+  } > "$cache/windows-start.sh"
+  chmod 700 "$cache/windows-start.sh"
+  rm -f "$cache/windows-start.rc"
+  env -u DISPLAY -u WAYLAND_DISPLAY timeout 300 kwin_wayland --virtual --xwayland --width 1280 --height 720 \
+    --no-lockscreen --no-global-shortcuts --exit-with-session "$cache/windows-start.sh" > "$logs/windows.log" 2>&1
   rc=$?
+  [ "$rc" = 0 ] && rc=$(cat "$cache/windows-start.rc" 2> /dev/null || echo "none")
+  rm -f "$cache/windows-start.sh" "$cache/windows-start.rc"
   unset WINEPREFIX WINEDEBUG
   if [ "$rc" = 0 ] && grep -q 'chat: You have entered' "$logs/windows.log" && [ -s "$logs/windows.png" ]; then
     note "Windows package: started under Wine, logged in and entered the world"
