@@ -661,6 +661,7 @@ public:
     // Sets the target and tells the server (OP_TargetMouse, as the original
     // does on every target change); 0 clears it.
     void set_target(std::uint32_t spawn_id);
+    bool request_target_of_target();
     enum class GroupTargetMode { CyclePet, MemberOnly };
     // F1 = self, F2..F6 = the group's other rows. The keys select the pet when the owner is already
     // targeted. A click on the member's row selects the member. The selection /disband reads is
