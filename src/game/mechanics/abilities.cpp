@@ -106,6 +106,10 @@ std::int32_t adjusted_skill(const Character& ch, std::uint32_t skill) {
     return server_adjusted_skill(ch, skill);
 }
 
+bool has_innate_slam(const Character& ch, std::uint32_t current_race) {
+    return slam_innate(current_race ? current_race : ch.sheet().race) != 0xff;
+}
+
 bool can_slam(const Character& ch, std::uint32_t current_race) {
     const auto race = current_race ? current_race : ch.sheet().race;
     return slam_innate(race) != 0xff && (has_racial_bash(race) || adjusted_skill(ch, skill::kBash) > 0);
@@ -950,9 +954,10 @@ std::vector<std::uint32_t> usable_skills(const Character& ch, bool combat, std::
         std::int32_t type = skill_combat_type(s);
         if ((type == 1 || type == 2) == combat) out.push_back(s);
     }
-    // Slam (111) comes from the current form, not necessarily the profile race.
+    // Slam (111) comes from the current form's innate slot alone, as CSkillsSelectWnd::SetTypesToDisplay lists it:
+    // a 90, 92 or 93 form without Bash sees it too, though its use is refused (can_use_combat_skill).
     // The list updates as an illusion starts or expires.
-    if (combat && can_slam(ch, current_race)) out.push_back(skill::kSlam);
+    if (combat && has_innate_slam(ch, current_race)) out.push_back(skill::kSlam);
     return out;
 }
 

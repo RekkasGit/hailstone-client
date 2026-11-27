@@ -4,7 +4,7 @@
 
 - Left-click the target's target health bar in Modern or Gamepad to select that target.
 - The Tracking window can stay open, be reopened, and refresh its list during the camp countdown.
-- The Combat skill picker offers Slam only when your current form can use it. Saved Slam buttons are dimmed while unavailable and become usable again when you regain Slam.
+- The Combat skill picker offers Slam only when your current form has it (a Barbarian, Troll or Ogre form, citizen forms included), as the original client does; it no longer offers Slam to every character. Saved Slam buttons are dimmed while your form cannot use Slam (a citizen form also needs the Bash skill) and become usable again when it can.
 - MacroQuest's `.cfg` command files run: `AutoExec.cfg`, `CharSelect.cfg`, `InGame.cfg`, `<server>_<character>.cfg`, `<Class>.cfg`, `zoned.cfg`, `<zone>.cfg`, `<plugin>-AutoExec.cfg` (and `<script>-AutoExec.cfg` for Lua scripts), from `cfg/` in the data folder, a server's folder or a character's folder, the most specific copy only. `/loadcfg <name>` runs one by hand. See docs/autoexec.md.
 - `${Group.Member[name]}` now gives the group member, as in MacroQuest, so `${Group.Member[name].Index}` and the member's other fields work (E3's heals and buffs by name use it). The `Group` TLO also gains `AnyoneMissing`, `MercenaryCount` (and the tank, healer, melee and caster counts), `AvgHPs`, `Cleric`, `MarkNpc`, `MasterLooter` and `MouseOver`, and each member `MarkNpc`, `MasterLooter` and `Present`.
 - Chat timestamps are set per tab: right-click a tab and pick **Timestamps** to change that tab only. Tabs keep the format they had until you change them.

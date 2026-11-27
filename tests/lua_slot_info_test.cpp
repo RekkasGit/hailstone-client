@@ -233,7 +233,7 @@ TEST_CASE("Lua slot reads: hs.HotButtonInfo, hs.GemInfo and hs.BuffSlot's overla
     ImGui::DestroyContext(ctx);
 }
 
-TEST_CASE("Actions: Slam eligibility updates the skill picker and saved buttons with the current form") {
+TEST_CASE("Actions: the skill picker lists Slam and saved Slam buttons work by the current form") {
     namespace mech = game::mechanics;
     test::ScratchDir scratch("slam_actions");
     GameDir game(scratch.path());
@@ -279,8 +279,8 @@ TEST_CASE("Actions: Slam eligibility updates the skill picker and saved buttons 
 
     REQUIRE(api.click_child(window, slot, "right"));
     CHECK(api.list_texts(picker, list) == empty);
-    player.race = 90; // Barbarian citizen form still needs Bash
-    CHECK(api.list_texts(picker, list) == empty);
+    player.race = 90; // Barbarian citizen form: listed from the innate slot alone, as RoF2's picker lists it
+    CHECK(api.list_texts(picker, list) == slam);
     player.race = 2; // Barbarian illusion grants Slam to the same Magician
     REQUIRE(api.list_texts(picker, list) == slam);
     player.race = 5;
@@ -307,6 +307,13 @@ TEST_CASE("Actions: Slam eligibility updates the skill picker and saved buttons 
     CHECK(api.click_child(window, slot, "right")); // can still reassign or clear
     CHECK(api.list_texts(picker, list) == empty);
     api.show(picker, false);
+
+    player.race = 90; // the citizen form lists Slam but, without Bash, cannot use it: the saved buttons stay dimmed
+    CHECK(api.child_state(window, slot) == false);
+    CHECK(run(lua.get(), read_hotbars) == "true,true");
+    CHECK_FALSE(api.click_child(window, slot));
+    CHECK(api.click_hot_button("HotButtonWnd", "HB_Button1"));
+    CHECK(presses == 0);
 
     player.race = 9; // Troll illusion re-enables the same saved assignments
     CHECK(api.child_state(window, slot) == true);

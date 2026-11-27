@@ -141,7 +141,10 @@ struct HotButtonInfo {
 
 // What a hotbutton shows: its kind, text (`label`) and icon (a spell gem's spell, an inventory slot's item).
 HotButtonInfo hot_button_info(UiHost& host, const game::HotButton& b, std::string label);
+// Whether the current form can use Slam (a saved Slam button is dimmed otherwise) / whether the skill picker lists
+// it (game/mechanics/abilities.h can_slam / has_innate_slam).
 bool slam_available(const UiHost& host);
+bool slam_listed(const UiHost& host);
 // Whether the pet window checks a hot button with this label (game/pet_buttons.h); nullopt: no command button has it.
 std::optional<bool> pet_hot_button_checked(UiHost& host, std::string_view label);
 

@@ -281,6 +281,11 @@ std::optional<SkillMessage> check_hide_moved(const SkillContext& ctx, SkillState
 // Backstab, ...), else the profile's (Bard). GetAdjustedSkill itself is not hooked.
 std::int32_t adjusted_skill(const Character& ch, std::uint32_t skill);
 
+// Whether the current form has the innate Slam (InitInnates' slot 11, below). CSkillsSelectWnd::SetTypesToDisplay
+// @0x756ce0 lists Slam (skill 0x6f) in the skill picker on that slot alone, without Bash. Zero current_race uses the
+// profile race.
+bool has_innate_slam(const Character& ch, std::uint32_t current_race);
+
 // Whether Slam's attack can go out: the innate Slam (EQ_Character::InitInnates @0x44d4d0: slot 11, profile +0x325c,
 // set for races 2 / 90, 9 / 92 and 10 / 93), and for races 90, 92 and 93 the Bash skill too, since
 // PlayerZoneClient::CanUseCombatSkill @0x5a2f10 waives Bash (and the shield) only for GetRace 2, 9 and 10. The
