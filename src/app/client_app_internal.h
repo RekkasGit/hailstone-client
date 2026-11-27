@@ -17,6 +17,7 @@
 #include "app/addon_suggest.h"
 #include "app/ability_bulk.h"
 #include "app/window_icon.h"
+#include "app/box_refocus.h"
 #include "app/window_desc.h"
 #include "app/automation.h"
 #include "app/progress_ui.h"
@@ -1371,6 +1372,7 @@ private:
     Clock::time_point server_hint_at_{};
     std::vector<std::string> worlds_noted_; // the worlds the login server listed, as set_listed_worlds() last had them
     platform::ChildProcesses box_clients_; // the box set's other windows
+    BoxRefocus box_refocus_;               // takes the focus back once they have opened (app/box_refocus.h)
     platform::ChildProcesses tools_;       // the tool add-ons the player started (left running when Hailstone quits)
     // The updater (app/client_app_update.cpp, docs/updater.md): null when updates are off for this run.
     std::unique_ptr<Updater> updater_;

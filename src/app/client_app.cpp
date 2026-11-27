@@ -108,6 +108,10 @@ int ClientApp::run() {
         // model is built in the spawns' smoothing (CreatePlayerActor's model choice).
         core::frame_sections::Lap update_lap;
         box_clients_.poll();
+        if (box_refocus_.step(window_.focused(), Clock::now())) {
+            log::info("box: the other windows have opened: this one takes the focus back");
+            window_.raise_focused();
+        }
         update_updater();
         update_addons();
         refresh_ui_packs();

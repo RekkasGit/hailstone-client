@@ -153,6 +153,7 @@ void ClientApp::start_box_login() {
 #else
     const std::filesystem::path exe = platform::install_dir() / "hailstone";
 #endif
+    int started = 0;
     for (std::size_t i = 1; i < set.size(); ++i) {
         // --box-child: only this window updates the folder and its add-ons (app/updater.h kBoxChildArg).
         std::vector<std::string> args{exe.string(), "--server", saved->id, "--account", set[i].username,
@@ -161,9 +162,15 @@ void ClientApp::start_box_login() {
         if (!opts_.game_dir.empty()) args.insert(args.end(), {"--game-dir", opts_.game_dir});
         if (!opts_.classic_dir.empty()) args.insert(args.end(), {"--classic-dir", opts_.classic_dir});
         std::string error;
-        if (box_clients_.start(args, error)) log::info("box: started a window for {}", set[i].username);
-        else log::warn("box: could not start a window for {}: {}", set[i].username, error);
+        if (box_clients_.start(args, error)) {
+            log::info("box: started a window for {}", set[i].username);
+            ++started;
+        } else {
+            log::warn("box: could not start a window for {}: {}", set[i].username, error);
+        }
     }
+    // Each takes the focus as it opens: this window, where the player logged in, takes it back after them.
+    box_refocus_.start(started, Clock::now());
     login_view_.username = set.front().username;
     login_view_.password = passwords.front();
     for (auto& pw : passwords) core::wipe(pw);

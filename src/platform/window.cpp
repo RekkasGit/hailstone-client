@@ -736,6 +736,29 @@ void Window::set_text_input(bool on) {
 
 bool Window::focused() const { return (SDL_GetWindowFlags(window_) & SDL_WINDOW_INPUT_FOCUS) != 0; }
 
+void Window::raise_focused() {
+#ifdef _WIN32
+    // Not SDL's forced raise (SDL_HINT_FORCE_RAISEWINDOW): it restores the window first (ShowWindow SW_RESTORE),
+    // which took a maximized window back to its smaller normal size. The same way past Windows' rule against a
+    // background program taking the foreground, without that: this thread's input attached to the foreground
+    // window's for the call. Only a minimized window is restored (to how it was: maximized stays maximized).
+    if (HWND hwnd = static_cast<HWND>(
+            SDL_GetPointerProperty(SDL_GetWindowProperties(window_), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr))) {
+        if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
+        HWND front = GetForegroundWindow();
+        const DWORD mine = GetCurrentThreadId();
+        const DWORD theirs = front ? GetWindowThreadProcessId(front, nullptr) : 0;
+        const bool attached = theirs != 0 && theirs != mine && AttachThreadInput(theirs, mine, TRUE);
+        BringWindowToTop(hwnd);
+        if (!SetForegroundWindow(hwnd)) log::warn("window: Windows would not bring it to the front");
+        SetFocus(hwnd);
+        if (attached) AttachThreadInput(theirs, mine, FALSE);
+        return;
+    }
+#endif
+    if (!SDL_RaiseWindow(window_)) log::warn("window: could not raise it: {}", SDL_GetError());
+}
+
 WindowMode Window::mode() const {
     if (!(SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN)) return WindowMode::Windowed;
     return SDL_GetWindowFullscreenMode(window_) ? WindowMode::Fullscreen : WindowMode::Borderless;

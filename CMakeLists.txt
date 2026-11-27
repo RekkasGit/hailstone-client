@@ -1174,6 +1174,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mq_combat_test.cpp
     tests/automation_test.cpp
     tests/autoexec_test.cpp
+    tests/box_refocus_test.cpp
     tests/mq_lua_test.cpp
     tests/mq_script_path_test.cpp
     tests/mq_event_pattern_test.cpp
