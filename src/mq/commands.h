@@ -45,6 +45,9 @@ struct CommandEnv {
     std::function<bool(std::string_view command, int mode)> keypress;
     // /timed's clock, in milliseconds; null: the steady clock.
     std::function<std::int64_t()> now_ms;
+    // /loadcfg: the command lines of the .cfg file a name or path gives (app/autoexec.h); nullopt: no such file.
+    // Null: /loadcfg finds none.
+    std::function<std::optional<std::vector<std::string>>(std::string_view name)> load_cfg;
 };
 
 // /timed's limit on lines waiting at once: one more is refused with a chat line, so a script that queues without end
@@ -65,7 +68,7 @@ public:
 // Whether a key command is movement (kCapMove) rather than an action (kCapActions) for /keypress.
 bool movement_key(std::string_view command);
 
-// How deep /docommand, /noparse and /squelch may run each other in one line.
+// How deep /docommand, /noparse, /squelch and /loadcfg may run each other in one line.
 inline constexpr int kMaxNestedCommands = 16;
 
 class Commands {
@@ -86,6 +89,9 @@ private:
     void map_filter(std::string_view args);
     // /docommand, /noparse and /squelch: the rest of the line run as a command, at most kMaxNestedCommands deep.
     void run_nested(std::string_view args);
+    // /loadcfg (MacroQuest's LoadCfgCommand): each of the file's lines run as a typed line (parsed), one level deeper.
+    void load_cfg(std::string_view args);
+    bool too_deep() const; // kMaxNestedCommands reached: says so
     // /timed: a line waiting for its time, with who sent it (run as them: CallerScope).
     struct Timed {
         std::int64_t due_ms = 0;

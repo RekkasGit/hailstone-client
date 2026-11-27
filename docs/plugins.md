@@ -215,8 +215,8 @@ Lua 5.5 state and runs as a coroutine resumed once a frame; `mq.delay` yields to
 - **Nested binds.** A bind whose commands start binds of the same script again
   (`mq.bind('/x', function() mq.cmd('/x') end)`) ends the script once they nest 16 deep.
 - **Command size.** A command of more than 1000 words for a bind is refused (a chat line), and the script runs on. An
-  `mq.cmd` line is at most 2047 bytes (MQ's command buffer; longer is an error). `/docommand`, `/noparse` and
-  `/squelch` nest at most 16 deep in one line (the rest is dropped, with a chat line).
+  `mq.cmd` line is at most 2047 bytes (MQ's command buffer; longer is an error). `/docommand`, `/noparse`,
+  `/squelch` and `/loadcfg` nest at most 16 deep in one line (the rest is dropped, with a chat line).
 - **Memory.** 256 MB a script; past it, "not enough memory".
 - **No finalizers.** `setmetatable` refuses `__gc` (finalizers cannot be stopped); an `mq.TLO` value's metatable is
   locked (`getmetatable` gives `"mq.TLO"`).
@@ -2317,7 +2317,7 @@ The built-in groups are:
 |---|---|
 | `non_rof2` | Hailstone's built-in extended commands |
 | `movement_automation` | `/nav`, `/afollow`, `/moveto`, `/stick`, `/face`, `/keypress` |
-| `command_helpers` | `/docommand`, `/echo`, `/noparse`, `/squelch`, `/timed` |
+| `command_helpers` | `/docommand`, `/echo`, `/loadcfg`, `/noparse`, `/squelch`, `/timed` |
 | `addon_commands` | Commands registered by add-ons |
 
 Use `default = deny` and `allow` or `allow_groups` for an allowlist. Without command rules, all commands retain

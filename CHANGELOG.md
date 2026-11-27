@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- MacroQuest's `.cfg` command files run: `AutoExec.cfg`, `CharSelect.cfg`, `InGame.cfg`, `<server>_<character>.cfg`, `<Class>.cfg`, `zoned.cfg`, `<zone>.cfg`, `<plugin>-AutoExec.cfg` (and `<script>-AutoExec.cfg` for Lua scripts), from `cfg/` in the data folder, a server's folder or a character's folder, the most specific copy only. `/loadcfg <name>` runs one by hand. See docs/autoexec.md.
 - `${Group.Member[name]}` now gives the group member, as in MacroQuest, so `${Group.Member[name].Index}` and the member's other fields work (E3's heals and buffs by name use it). The `Group` TLO also gains `AnyoneMissing`, `MercenaryCount` (and the tank, healer, melee and caster counts), `AvgHPs`, `Cleric`, `MarkNpc`, `MasterLooter` and `MouseOver`, and each member `MarkNpc`, `MasterLooter` and `Present`.
 - Chat timestamps are set per tab: right-click a tab and pick **Timestamps** to change that tab only. Tabs keep the format they had until you change them.
 - New chat filter **Plugins and Scripts** (Filters menu, after System Messages): every line a plugin or Lua script writes goes to the window you pick, whatever its colour. It stays in the main window until moved.

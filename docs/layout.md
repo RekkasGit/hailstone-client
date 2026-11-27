@@ -39,6 +39,8 @@ hailstone/
   plugins/                   compiled plugins: plugins/<name>.so, or plugins/<name>/ with the binary and its settings;
                              plugins/<name>/ui/<pack>/ holds its Lua windows for each UI pack (docs/plugins.md)
   scripts/                   MacroQuest Lua scripts; scripts/config/ is mq.configDir (mq.pickle; config/<script>/ for a script without every capability)
+  cfg/                       MacroQuest's .cfg command files for every server (AutoExec.cfg, InGame.cfg, zoned.cfg ...;
+                             an autoexec/ subfolder first; docs/autoexec.md)
   textures/<pack>/           texture packs; display.texture_folder names one (empty: textures/default/). A pack built
                              by Hailstone Texture Studio or tools/texpack holds by-hash/<hash>[.m|.k|.n|.r].dds and
                              pack.ini (what it was built with)
@@ -53,6 +55,8 @@ hailstone/
     server.ini               [Server] name, host, port, username, remember
     assets/                  the server's own client files, over the asset folder (downloaded, or added by hand)
     hailstone.cfg            the server's rules for plugins, scripts and assets (downloaded; docs/plugins.md)
+    cfg/                     the player's .cfg command files for this server, over <data>/cfg/ (docs/autoexec.md;
+                             never downloaded)
     scripts/, plugins/       the server's own Lua scripts and compiled plugins (downloaded; docs/plugins.md)
     plugin-config/<plugin>/  a plugin's own files for this server (server_config_dir; the NMS plugin's nms.ini)
     plugin_approvals.txt     the player's answers to the server's compiled plugins, by SHA-256 (plugin/consent.h;
@@ -70,6 +74,8 @@ hailstone/
                              chat_history.txt (the chat windows' last lines, each its last 1000, put back at the
                              next entry into the world);
                              hailstone.ini, the client's settings for this character ("A character's settings" below);
+                             cfg/, the character's .cfg command files, over the server's and the global ones
+                             (docs/autoexec.md);
                              kept_items.txt (the items marked Keep in the Advanced Inventory window, one
                              "<item id> <name>" a line; game/kept_items.h);
                              bank.dat (the bank and shared bank as last seen, which the Advanced Inventory lists
