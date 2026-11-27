@@ -1737,6 +1737,12 @@ TEST_CASE("nav: the Navigation TLO") {
     CHECK(h.p("${Navigation.TilesBuilt}/${Navigation.TilesTotal}") == "3/4");
     CHECK(h.p("${Navigation.PathExists[id 10]}") == "TRUE");
     CHECK(h.p("${Navigation.PathExists[locxyz 5000 0 0]}") == "FALSE");
+    // MQ2Nav's "spawn <search>", as /nav takes it: the keyword is no part of the search, nor a "|" options tail.
+    CHECK(h.p("${Navigation.PathExists[spawn npc a_rat01]}") == "TRUE");
+    CHECK(h.p("${Navigation.PathExists[SPAWN a_rat01 | dist=10]}") == "TRUE");
+    CHECK(h.p("${Navigation.PathExists[spawn id 10]}") == "TRUE");
+    CHECK(h.p("${Navigation.PathExists[spawn nobody_here]}") == "FALSE");
+    CHECK(h.p("${Navigation.PathLength[spawn nobody_here]}") == "-1.00");
     CHECK(h.p("${Navigation.PathLength[locxyz 5000 0 0]}") == "-1.00");
     CHECK(h.p("${Navigation.PathLength[loc 0 3 4]}") == "5.00");
     h.ctx.nav = nullptr;

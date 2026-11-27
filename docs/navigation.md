@@ -407,7 +407,8 @@ gap to the spawn), `.Monitor` (the spawn followed); `.Playing` and `.Recording` 
 `.PathLength[<dest>]` (-1 without a path). Hailstone's own: `.MeshComplete`, `.TilesBuilt`, `.TilesTotal`,
 `.Destination`, `.Remaining`.
 
-A destination is `id <#>`, `target`, `loc <y> <x> <z>` (`locyxz`), `locxyz <x> <y> <z>` or a spawn search. Lua reads
+A destination is `id <#>`, `target`, `spawn <search>` (as `/nav spawn`; a `|` and what follows it is left out),
+`loc <y> <x> <z>` (`locyxz`), `locxyz <x> <y> <z>` or a spawn search. Lua reads
 it as `mq.TLO.Navigation.Active()`; plugins with the SDK's `parse` and run `/nav` with `do_command`.
 
 ## Find

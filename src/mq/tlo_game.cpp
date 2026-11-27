@@ -2673,8 +2673,8 @@ void register_e3_members4() {
 
 } // namespace
 
-// MQ2Nav's destination syntax in an index: "id <#>", "target", "loc <y> <x> <z>", "locxyz <x> <y> <z>", or a spawn
-// search. World coordinates.
+// MQ2Nav's destination syntax in an index: "id <#>", "target", "spawn <search>", "loc <y> <x> <z>", "locxyz <x> <y>
+// <z>", or a spawn search. World coordinates.
 std::optional<glm::vec3> nav_destination(const Context& c, std::string_view index) {
     if (!c.conn) return std::nullopt;
     std::vector<std::string> w;
@@ -2703,7 +2703,16 @@ std::optional<glm::vec3> nav_destination(const Context& c, std::string_view inde
     } else if (iequals(w[0], "target")) {
         s = spawn_of(c, c.conn->world().target_id);
     } else {
-        for (const game::Spawn* f : find_spawns(index, *c.conn, c.can_see))
+        // MQ2Nav's ParseDestination: "spawn <search>" searches the rest, up to its last '|' (where /nav's options
+        // start: "spawn pc rekka | dist=10"). Without the keyword the whole index is the search.
+        std::string_view search = index;
+        if (iequals(w[0], "spawn")) {
+            search.remove_prefix(std::min(search.size(), search.find_first_not_of(" ,")));
+            search.remove_prefix(w[0].size());
+            if (const std::size_t bar = search.rfind('|'); bar != std::string_view::npos)
+                search = search.substr(0, bar);
+        }
+        for (const game::Spawn* f : find_spawns(search, *c.conn, c.can_see))
             if (!is_me(c, *f)) {
                 s = f;
                 break;
