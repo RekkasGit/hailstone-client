@@ -199,6 +199,22 @@ WindowGeometry Window::geometry() const {
     return g;
 }
 
+void Window::set_geometry(const WindowGeometry& g) {
+    SDL_RestoreWindow(window_);
+    if (g.width > 0 && g.height > 0) {
+        SDL_SetWindowSize(window_, g.width, g.height);
+        normal_.width = g.width;
+        normal_.height = g.height;
+    }
+    if (on_a_display(g.x, g.y)) {
+        SDL_SetWindowPosition(window_, g.x, g.y);
+        normal_.x = g.x;
+        normal_.y = g.y;
+    }
+    if (g.maximized) SDL_MaximizeWindow(window_);
+    SDL_SyncWindow(window_);
+}
+
 Window::~Window() {
     close_gamepad();
     if (window_) SDL_DestroyWindow(window_);

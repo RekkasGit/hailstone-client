@@ -1063,12 +1063,7 @@ int ClientApp::run() {
     save_chat_history(true);
     if (!opts_.window_size_given) {
         // The game window's place for the next start (window_desc); not a --window-size run's.
-        platform::WindowGeometry g = window_.geometry();
-        config_.set_int("window.x", g.x);
-        config_.set_int("window.y", g.y);
-        config_.set_int("window.width", g.width);
-        config_.set_int("window.height", g.height);
-        config_.set_bool("window.maximized", g.maximized);
+        remember_window_geometry();
         config_.set_bool("ui.perf_window", perf_ui_.open());
         config_.set_bool("ui.perf_log_hitches", perf_ui_.log_hitches());
         config_.save(config_path_);

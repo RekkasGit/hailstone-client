@@ -288,6 +288,9 @@ public:
         shader_dir_ = platform::shaders_dir();
         config_path_ = default_config_path();
         config_.load(config_path_);
+        // A box set's other windows keep their window's mode, size and place per character, never in hailstone.ini
+        // (core/config.h set_display_per_character; apply_character_window).
+        config_.set_display_per_character(opts_.box_child);
         if (opts_.clip_plane != 15) clip_plane_arg_ = opts_.clip_plane;
         if (opts_.max_fps > 0 || opts_.max_fps == kMaxFpsAuto) max_fps_arg_ = opts_.max_fps;
         // The asset folder: --game-dir or EQ_GAME_DIR, else hailstone.ini assets.path, else the picker asks.
@@ -1082,6 +1085,11 @@ private:
     bool set_video_option(std::string_view name, int value);
     // The window's mode at start (display.window_mode, display.resolution: shared, so only then).
     void apply_video_options();
+    // A box set's other window, its character's file attached: the window as that character keeps it (its mode, and
+    // in a window its size, place and maximized), when the file has its own.
+    void apply_character_window();
+    // window.*: the window's normal place and size and whether it is maximized (the character's, in a box window).
+    void remember_window_geometry();
     // Vertical sync, the frame caps and the field of view (apply_settings).
     void apply_frame_options();
     // Sets game_'s base folder (core/asset_folder_choice.h), running the asset-folder picker when nothing usable is

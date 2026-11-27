@@ -112,6 +112,9 @@ class Window {
 public:
     explicit Window(const WindowDesc& desc);
     WindowGeometry geometry() const;
+    // Puts a windowed window at `g` (a place that is on no display is left as it is; a size of 0 too), maximized
+    // when it says so: what WindowDesc gives at start, for a window that is already open.
+    void set_geometry(const WindowGeometry& g);
     ~Window();
     Window(const Window&) = delete;
     Window& operator=(const Window&) = delete;

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A box set's other windows keep their own window mode, resolution, size and place for each character, and no longer change the shared settings in hailstone.ini.
 - After a box set login starts the other accounts' windows, the window you logged in from comes back to the front once they have opened.
 - Logging in a box set on Windows starts the other accounts' windows again. Started without a console (from Explorer or a shortcut), the first window could not start them ("DuplicateHandle(): The handle is invalid").
 - Plugins and Lua scripts no longer stop and start again at every zone change: what is loaded or running stays so, and a plugin you unloaded or a script you stopped stays that way. Plugins also no longer see a character select game state while zoning.
