@@ -1589,7 +1589,8 @@ OP_CameraEffect (0x127f, zone → client; 8 bytes): u32 duration in ms, f32 inte
 camera effect (`game/camera_shake.h`): a stronger intensity replaces the current one (an equal one too, and only a
 longer duration moves the end), a weaker one or a NaN is ignored. Each frame adds a random offset of up to half the
 intensity each way to the drawn camera's position; the duration runs out, the clock going backwards wipes it, and a
-zone-in resets it (the original's zone-in path @0x4939b0). The player itself never moves.
+zone-in resets it (the original's zone-in path @0x4939b0). The player itself never moves. Hailstone's Screen
+Effects option scales the offset (docs/dev-ui.md "Accessibility"; 100 % as the original).
 
 The original adds the offset in the per-frame camera driver @0x796dd0 and hands the shaken position to its render
 camera; when that camera refuses the position (its vtable slot 0x38 returns nonzero) it falls back to the unshaken one.

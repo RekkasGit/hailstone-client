@@ -663,11 +663,22 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 
 ## 3. UI
 
-- [ ] **Accessibility** (nothing yet; presentation, so Hailstone's own, not a RoF2 rule).
-  - Colour-blind-safe choices for con colours, health and mana gauges and chat channel colours.
-  - A minimum text size that both packs honour.
-  - A setting that tones down screen shake, flashes and the drunkenness and knockout camera effects.
-  - Later: text-to-speech for chosen chat channels, behind a `platform/` interface.
+- [x] **Accessibility** (presentation, so Hailstone's own, not a RoF2 rule; docs/dev-ui.md "Accessibility").
+  - [x] Colour Vision (deuteranopia, protanopia, tritanopia): the con colours everywhere `game::con_rgb` reaches, and
+    the packs' health, good and bad colours. Con Labels for the target.
+  - [x] A minimum text size: the UI and plate fonts, the Lua bridge's font calls and `ui.DrawText`.
+  - [x] Screen Effects: the lightning flash, OP_CameraEffect's shake, the drunken field-of-view warp.
+  - [ ] The map's labels under the minimum text size (`app/lua_ui_map.cpp` draws them at a zoom-scaled size).
+  - [ ] Chat channel colours: they are the player's user colours (Options > Colors); a colour-blind-safe preset for
+    them, and the target ring's con colours (its own colour pickers).
+  - [ ] Con Labels on the name plates and the extended target rows, not only the target windows.
+  - [ ] The drunkenness first-person switch and the knockout overhead view under Screen Effects (left as the game has
+    them: camera changes, not flashes).
+  - [ ] Seen with a colour-blind player, and in a live session (checked with unit tests and login-screen screenshots
+    of the minimum text size in both packs only).
+  - [ ] The extended consider chat colours a server may send (user colours 390..396) keep the default con set until
+    the chat colours load again after a Colour Vision change.
+  - [ ] Later: text-to-speech for chosen chat channels, behind a `platform/` interface.
 
 - [x] Trace and fix the upstream gamepad all-pack smoke test's cursor-extent assertion with ImGui debug checks enabled (docs/unknowns.md "UI").
 
