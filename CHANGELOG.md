@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Modern Trade keeps coin denominations clear of their exact counts. The coin buttons wrap into rows when the offer is narrow or the amounts are large.
 - Mana regeneration now uses the server's reported maximum, fixing mana bars that stopped short of full when the client's calculated maximum was lower.
 - Players can ride with classic or Luclin character models. Switching zones no longer drops the mount buff while the rider or mount model is still being built.
 - Choose separate HP, mana, and endurance readouts for group members and HP readouts for pets. Modern puts the choices in the Group and Pet frame menus, and Gamepad puts them under Options > Interface. Current / maximum values appear on servers that supply them.
