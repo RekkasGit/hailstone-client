@@ -2069,6 +2069,9 @@ Skill 111, `slam_innate`. A deliberate change: Hailstone takes the innate Slam f
 with an illusion, and Bash without a shield uses the Slam path; both send `DoAttack(100, 10)`. The original uses the
 profile race (EQ_Character::InitInnates).
 
+The Actions picker and Ability Book use the same eligibility rule as the attack. A saved Actions or hotbar
+binding is disabled while its character cannot Slam and becomes usable again as soon as the character qualifies.
+
 That attack still goes through `CanUseCombatSkill` (@0x5a2f10), which lets Bash pass without the skill or a shield
 only when the spawn's `GetRace` (vtable +0x88, 0x58b4e0: the raw race an illusion sets) is 2, 9 or 10. The citizen
 races 90, 92 and 93 have the innate Slam but not that pass, so in the original their Slam needs Bash and a shield.

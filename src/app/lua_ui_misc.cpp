@@ -399,7 +399,11 @@ public:
             out.text = *s >= 0 && host.skill_name ? host.skill_name(static_cast<std::uint32_t>(*s)) : "";
             // 0x613a70 (Abilities) / CombatPageOnProcessFrame: the skill's timer and SetCheck(!IsAvailable).
             game::ButtonCoolDown& cd = cool_downs_[static_cast<std::size_t>(ability_index(id) + (id.starts_with("ACP_") ? 6 : 0))];
-            if (*s < 0) {
+            if (*s == game::mechanics::skill::kSlam) {
+                out.enabled = slam_available(host);
+                out.action = true; // Keep right-click reassignment available while Slam is disabled.
+            }
+            if (*s < 0 || !out.enabled.value_or(true)) {
                 cd.stop();
             } else {
                 HostButtonQueries q(host);
@@ -466,6 +470,7 @@ public:
             b.slot = id == "ACP_MeleeAttackButton" ? 0 : 1;
             if (host.run_button) host.run_button(b);
         } else if (auto s = ability(host, id)) {
+            if (*s == game::mechanics::skill::kSlam && !slam_available(host)) return false;
             if (*s < 0) { // an empty button: choose its skill, as its right click does
                 g_skill_pick = {id.starts_with("ACP_"), ability_index(id)};
                 return true;
@@ -510,7 +515,7 @@ public:
             b.type = game::HotButtonType::WeaponSlot;
             b.slot = id == "ACP_MeleeAttackButton" ? 0 : 1;
         } else if (auto s = ability(host, id)) {
-            if (*s < 0) return std::nullopt;
+            if (*s < 0 || (*s == game::mechanics::skill::kSlam && !slam_available(host))) return std::nullopt;
             b.type = id.starts_with("ACP_") ? game::HotButtonType::CombatSkill : game::HotButtonType::Ability;
             b.slot = ability_index(id);
         } else if (int n = index_after(id, "ASP_SocialButton"); n >= 1 && n <= game::kSocialButtons) {
@@ -577,23 +582,30 @@ public:
         list_.rows.push_back(ListRow{{"(none)"}});
         skills_.push_back(-1);
         for (int s : g_skill_pick.combat ? std::span<const int>(kCombat) : std::span<const int>(kAbilities)) {
-            if (s < 100 && host.character && host.character->sheet().skills[static_cast<std::size_t>(s)] <= 0) continue;
+            if (host.character && host.character->sheet().skills[static_cast<std::size_t>(s)] <= 0) continue;
             list_.rows.push_back(ListRow{{host.actions->skill_label(*host.conn, static_cast<std::uint32_t>(s))}});
             skills_.push_back(s);
+        }
+        if (g_skill_pick.combat && slam_available(host)) {
+            list_.rows.push_back(ListRow{{host.actions->skill_label(*host.conn, game::mechanics::skill::kSlam)}});
+            skills_.push_back(game::mechanics::skill::kSlam);
         }
         return &list_;
     }
     bool list_click(UiHost& host, std::string_view id, int row, bool, int) override {
-        if (id != "SKSW_SkillSelectorList" || !host.actions || row < 0 || row >= static_cast<int>(skills_.size()))
+        if (id != "SKSW_SkillSelectorList" || !host.actions || g_skill_pick.slot < 0 ||
+            row < 0 || row >= static_cast<int>(skills_.size()))
             return false;
-        host.actions->set_ability_button(g_skill_pick.combat, g_skill_pick.slot, skills_[static_cast<std::size_t>(row)]);
+        const auto skill = skills_[static_cast<std::size_t>(row)];
+        if (skill == game::mechanics::skill::kSlam && !slam_available(host)) return false;
+        host.actions->set_ability_button(g_skill_pick.combat, g_skill_pick.slot, skill);
         g_skill_pick.slot = -1;
         return true;
     }
 
 private:
     static constexpr int kAbilities[] = {9, 17, 25, 27, 29, 32, 35, 40, 42, 48, 53, 55, 62, 67, 75};
-    static constexpr int kCombat[] = {8, 10, 16, 21, 23, 26, 30, 38, 52, 71, 73, 74, game::mechanics::skill::kSlam};
+    static constexpr int kCombat[] = {8, 10, 16, 21, 23, 26, 30, 38, 52, 71, 73, 74};
     ListData list_;
     std::vector<std::int32_t> skills_;
 };

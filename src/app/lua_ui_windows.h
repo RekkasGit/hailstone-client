@@ -136,10 +136,12 @@ struct HotButtonInfo {
     std::optional<double> cool_down;
     std::uint32_t cool_down_left = 0;
     std::optional<std::array<float, 4>> gem_tint;
+    bool unavailable = false; // a saved Slam button in a form that cannot Slam
 };
 
 // What a hotbutton shows: its kind, text (`label`) and icon (a spell gem's spell, an inventory slot's item).
 HotButtonInfo hot_button_info(UiHost& host, const game::HotButton& b, std::string label);
+bool slam_available(const UiHost& host);
 // Whether the pet window checks a hot button with this label (game/pet_buttons.h); nullopt: no command button has it.
 std::optional<bool> pet_hot_button_checked(UiHost& host, std::string_view label);
 

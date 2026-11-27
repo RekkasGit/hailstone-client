@@ -445,6 +445,8 @@ TEST_CASE("CanUseCombatSkill: Bash without the skill is for races 2, 9 and 10 by
         c.form_race = race;
         c.form_slam = slam_innate(race);
         CHECK_FALSE(can_use_combat_skill(c, skill::kBash, true));
+        const auto skills = usable_skills(bard.ch, true, race);
+        CHECK(std::find(skills.begin(), skills.end(), skill::kSlam) == skills.end());
         c.target = Fixture::rat(10.0f);
         for (std::uint32_t id : {skill::kBash, skill::kSlam}) {
             SkillState state;
