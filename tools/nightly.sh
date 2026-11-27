@@ -220,6 +220,9 @@ windows_start() {
   } > "$cache/windows-start.sh"
   chmod 700 "$cache/windows-start.sh"
   rm -f "$cache/windows-start.rc"
+  # winepath above started a wineserver with the desktop's display; one still running when the game starts is joined,
+  # and the game then looks for the desktop's display, not KWin's. Wait for it to end.
+  wineserver -w
   env -u DISPLAY -u WAYLAND_DISPLAY timeout 300 kwin_wayland --virtual --xwayland --width 1280 --height 720 \
     --no-lockscreen --no-global-shortcuts --exit-with-session "$cache/windows-start.sh" > "$logs/windows.log" 2>&1
   rc=$?
