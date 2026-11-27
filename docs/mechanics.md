@@ -1947,6 +1947,9 @@ pages go to HB_<fileNum>.ini [Hotbuttons] Page<p>.Slot<b>.
 
 #### Tracking
 
+The Tracking window, list and auto update work during the camp countdown. Standing to cancel the camp keeps the
+same list and pending reply. Sending OP_Logout closes the window and retires any pending list.
+
 The reply's entries are ordered by an introsort (insertion sort up to 32, median of nine above 40, heap sort when
 depth runs out) by the ranger's /tracksort order or the reply order, so ties land in a fixed place. The filter sets
 the standard con bit and hides by the con mask and the player / pet / mercenary filters.

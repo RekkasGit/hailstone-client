@@ -857,7 +857,7 @@ public:
         list_.columns = 1;
         list_.labels = {""};
         list_.widths = {200};
-        const auto context = host.conn->interaction_context();
+        const auto context = host.conn->tracking_context();
         if (connection_ != host.conn || context_ != context || revision_ != host.conn->tracking().revision) selected_id_ = 0;
         connection_ = host.conn; context_ = context; revision_ = host.conn->tracking().revision;
         ids_.clear();
@@ -870,7 +870,7 @@ public:
     }
     bool list_click(UiHost& host, std::string_view id, int row, bool, int) override {
         if (id != "TRW_TrackingList" || row < 0 || row >= static_cast<int>(ids_.size())) return false;
-        if (!host.conn || !host.conn->tracking_admitted() || host.conn != connection_ || host.conn->interaction_context() != context_ ||
+        if (!host.conn || !host.conn->tracking_admitted() || host.conn != connection_ || host.conn->tracking_context() != context_ ||
             host.conn->tracking().revision != revision_) return false;
         selected_id_ = ids_[static_cast<std::size_t>(row)];
         return true;
@@ -918,7 +918,7 @@ public:
                 return true;
             }
         if (id == "TRW_TrackButton") {
-            if (selected_id_ != 0 && &c == connection_ && c.interaction_context() == context_)
+            if (selected_id_ != 0 && &c == connection_ && c.tracking_context() == context_)
                 c.track_spawn(selected_id_, revision_);
         } else if (id == "DoneButton") {
             c.close_tracking();
