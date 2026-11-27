@@ -1039,7 +1039,7 @@ OnProcessFrame calls PlayerClient_IsWithinInteractRange (npc, 0, 20.0) @0x5a06f0
 | Trainer | CTrainWnd::OnProcessFrame @0x7812a0 | 500 ms | |
 | Adventure recruiter | AdventureMgr_Process @0x41fa80 | more than 500 ms since the state was set or last checked | see note 2 |
 | Mercenary liaison | the window's observer 0x6eb560 | every update (see docs/unknowns.md) | only with a liaison id set |
-| NPC hand-in or player trade | CTradeWnd::OnProcessFrame @0x780b50 | 500 ms | reach is the partner's avatar height plus 20; exactly that stays open |
+| NPC hand-in or player trade | CTradeWnd::OnProcessFrame @0x780b50 | 500 ms | reach is the partner's avatar height plus 20; exactly that stays open (see below) |
 | World tradeskill station | CContainerMgr::Process @0x65d740 (0x4dc160) | more than 500 ms since the last check | the ground item's 3D distance, at most 20; a missing item closes it too |
 
 1. Tribute master: out of reach it stays while an item request is pending (IsItemPending > 0); a missing master
@@ -1057,8 +1057,12 @@ close when their partner dies (Handle_OP_Death @0x532b50).
 
 #### Trades out of reach
 
-Player trades use the hand-ins' 3D distance check, whoever moves; only an open trade is checked. Cancelling credits
-nothing locally; the server's item packets and OP_MoneyUpdate return them.
+Starting a trade with a cursor item or coin uses 3D distance from the player to the partner. RoF2 measures to the
+partner's spawn position (CEverQuest::DropItemOrMoneyOnPlayer @0x5331f0). For grounded NPC hand-ins, Hailstone
+measures to the closest point between the NPC's spawn position and its feet, one avatar height below. This makes
+the lower body of a tall NPC reachable from a ledge below it. Horizontal reach stays at avatar height plus 20.
+The same distance applies to the 500 ms check after the Give or Trade window opens, whoever moves. On cancellation,
+the server returns the items and coin through item packets and OP_MoneyUpdate.
 
 The client that cancels says nothing; the lines come from the server's OP_CancelTrade: 1448 "<name> has cancelled
 the trade.", and 1450 "You have cancelled the trade." for the receiver's own id. Checked: CTradeWnd_CancelAndClose

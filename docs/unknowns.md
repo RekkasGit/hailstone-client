@@ -444,9 +444,8 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - Seen once live (2026-11-18): a Give window to an NPC closed about 6 s after opening, nothing pressed; the item went back to the cursor.
   - Not the server's: stock EQEmu sends OP_CancelTrade only in answer to the client's cancel and at logout
     (`Client::SendLogoutPackets`), and has no trade timer.
-  - The client's own closes are the original's: the partner out of reach (its avatar height + 20) at the 500 ms check
-    (CTradeWnd::OnProcessFrame @0x780b50), the partner dying or leaving, the window hidden. (Hiding the player trade
-    window no longer cancels an NPC hand-in.)
+  - The client closes the Give window at the 500 ms check when the NPC is out of reach (docs/mechanics.md,
+    "Trades out of reach"), when the NPC dies or leaves, or when the Give window is hidden.
   - Settle: the log says which close it was (`trade with <name>: cancelled, ...`, `trade: the give window was closed`);
     the next occurrence settles it.
 - **Which zone version the server runs.** `player`

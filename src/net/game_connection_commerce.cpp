@@ -51,6 +51,17 @@ constexpr std::uint32_t kMerchantRefusalColour = 0x113;
 
 ItemSlot trade_slot(std::int16_t n) { return {kInvTrade, n, -1, -1, 0, 0}; }
 
+float trade_distance(const glm::vec3& player, const game::Spawn& partner) {
+    glm::vec3 target = partner.position;
+    // Hailstone: hand-ins can reach a grounded NPC's lower body. EQEmu also uses fly mode 3 (Water) on dry ground.
+    if (partner.is_npc && (partner.fly_mode == 0 || partner.fly_mode == 3) && partner.body_wet == 0 &&
+        partner.feet_wet == 0 && !partner.mount_id && !partner.on_vehicle && partner.heights.avatar_height > 0.0f &&
+        player.z < target.z) {
+        target.z = std::max(player.z, target.z - partner.heights.avatar_height);
+    }
+    return game::player_distance(&player, &target);
+}
+
 } // namespace
 
 // ---------------------------------------------------------------- merchants
@@ -158,13 +169,16 @@ void GameConnection::update_npc_interactions() {
     // liaison missing or beyond reach hides it. What calls the observer, and how often, is not traced
     // (docs/unknowns.md); this client checks every update.
     if (merc_windows_[0] && merc_.liaison_id && out_of_reach(merc_.liaison_id)) set_merc_window_open(0, false);
-    // CTradeWnd::OnProcessFrame @0x780b50: every 500 ms while trading, the partner within its avatar height + 20;
-    // else CTradeWnd_CancelAndClose, so the server returns the offer, for players and NPC hand-ins alike.
+    // CTradeWnd::OnProcessFrame @0x780b50: every 500 ms while trading, check for the partner within its avatar
+    // height + 20. Use the same reach as the opening click so the server only returns offers that go out of reach.
     // Handle_OP_Death also cancels a trade with the partner who dies, which the corpse test stands in for.
     if (trade_ && trade_->open && due(npc_checks_.trade)) {
         auto it = world_.spawns.find(trade_->partner_id);
+        const game::Spawn* me = world_.player();
         const float reach = it == world_.spawns.end() ? 0.0f : it->second.heights.avatar_height + kInteractRange;
-        const float away = distance_to(trade_->partner_id);
+        const float away = me && it != world_.spawns.end()
+                               ? trade_distance(motion_known_ ? position_ : me->position, it->second)
+                               : 1e9f;
         if (it == world_.spawns.end() || it->second.is_corpse || away > reach) {
             // Which close it was, in the log (a Give window seen closing by itself: docs/unknowns.md).
             log::info("trade with {}: cancelled, {}", trade_->partner_name,
@@ -415,8 +429,8 @@ void GameConnection::give_to(std::uint32_t spawn_id) {
         return;
     }
     // Within the partner's AvatarHeight + 20 (eqstr 12294).
-    glm::vec3 at = motion_known_ ? position_ : me->position;
-    if (glm::distance(at, sp.position) > sp.heights.avatar_height + kInteractRange) {
+    const glm::vec3 at = motion_known_ ? position_ : me->position;
+    if (trade_distance(at, sp) > sp.heights.avatar_height + kInteractRange) {
         chat(ChatEvent::Kind::System, strings_.format(12294, std::vector<std::string>{game::display_name(sp.name)}));
         return;
     }

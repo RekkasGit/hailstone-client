@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Hand-ins to grounded NPCs can reach their lower body, so the Give window works from the ledge below Jaled Dar's Shade in Dragon Necropolis.
 - Modern Trade keeps coin denominations clear of their exact counts. The coin buttons wrap into rows when the offer is narrow or the amounts are large.
 - Windows in the background or minimized now run their game loop, plugins and scripts at least 30 times a second (was 10), so a box set's background characters respond faster. A low Background Frame Rate still draws only that many frames.
 - A box set's other windows keep their own window mode, resolution, size and place for each character, and no longer change the shared settings in hailstone.ini.
