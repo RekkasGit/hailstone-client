@@ -8,6 +8,8 @@
 #      played by the sanitizer build's playprobe.
 #   3b. The performance scenes (tools/perf_track.py): a Release client's frame times and memory in fixed scenes,
 #      compared with the last nights in perf.csv; a rise is reported, not failed.
+#   3c. The forced GPU fallbacks (HAILSTONE_GPU_FALLBACKS): the zone viewer under the validation layers once with none
+#      and once with each; a validation error fails the night.
 #   4. With --publish, after a night with no failure: the Linux and Windows packages, built as a release is
 #      (tools/docker/build.sh, tools/make_update.py) with the version label nightly.<date>, the Linux package's tests
 #      run on this machine and the Windows package started under Wine (it logs in to the test server), then
@@ -15,13 +17,14 @@
 #      packages carry no signed manifest.
 #   5. A summary, printed and, with a webhook set, posted to Discord.
 #
-# Usage: tools/nightly.sh [--fuzz-seconds N] [--jobs N] [--no-fuzz] [--no-live] [--no-perf] [--no-post]
-#                         [--package | --publish]
+# Usage: tools/nightly.sh [--fuzz-seconds N] [--jobs N] [--no-fuzz] [--no-live] [--no-perf] [--no-gpu-fallbacks]
+#                         [--no-post] [--package | --publish]
 #                         [--ref REF]
 #   --fuzz-seconds  seconds per fuzz target (default 1800; the targets run at once, one core each)
 #   --jobs          build and test jobs, and the package containers' CPU limit (default 20)
 #   --no-live       leave out the live smoke tests (and the logged-in performance scene) even with a test server set
 #   --no-perf       leave out the performance scenes
+#   --no-gpu-fallbacks  leave out the forced GPU fallbacks
 #   --package       build, test and zip the packages into the checkout's release-nightly/, without uploading
 #   --publish       build and publish the packages (needs gh signed in with write access, Docker, and MSVC for
 #                   tools/docker/build.sh windows-x64)
@@ -46,6 +49,7 @@ jobs=20
 fuzz=1
 live=1
 perf=1
+gpu_fallbacks=1
 post=1
 publish=0
 ref=origin/main
@@ -56,6 +60,7 @@ while [ $# -gt 0 ]; do
     --no-fuzz) fuzz=0; shift ;;
     --no-live) live=0; shift ;;
     --no-perf) perf=0; shift ;;
+    --no-gpu-fallbacks) gpu_fallbacks=0; shift ;;
     --no-post) post=0; shift ;;
     --package) publish=1; shift ;;
     --publish) publish=2; shift ;;
@@ -201,6 +206,47 @@ if [ "$perf" = 1 ] && [ -n "${EQ_GAME_DIR:-}" ]; then
     [ "$rc" = 2 ] && fail "performance: no scene gave a result (perf.log, perf/)"
   else
     fail "performance build (perf-configure.log, perf-build.log)"
+  fi
+fi
+
+# 3c. The forced GPU fallbacks (docs/ci.md "Nightly GPU fallbacks"): the paths a weaker GPU takes, drawn on this one
+# under the validation layers by the Release viewer, first with none forced so a fallback's own errors stand out.
+# A validation error, or a run that does not finish, fails the night; warnings are counted only.
+if [ "$gpu_fallbacks" = 1 ] && [ -n "${EQ_GAME_DIR:-}" ]; then
+  if { [ -f build-perf/CMakeCache.txt ] || cmake -S . -B build-perf -G Ninja -DCMAKE_BUILD_TYPE=Release; } \
+       > "$logs/fallbacks-configure.log" 2>&1 &&
+     nice cmake --build build-perf -j "$jobs" --target hailstone > "$logs/fallbacks-build.log" 2>&1; then
+    mkdir -p "$logs/fallbacks"
+    drawn=0 warnings=0 bad=() unforced=()
+    for word in none depth-stencil depth-d24 non-coherent shadow-d16 no-bc no-mip-blit no-update-after-bind \
+                no-independent-blend; do
+      log=$logs/fallbacks/$word.log
+      forced=()
+      [ "$word" != none ] && forced=(HAILSTONE_GPU_FALLBACKS="$word")
+      headless env "${forced[@]}" SDL_VIDEO_DRIVER=offscreen timeout 300 build-perf/hailstone/hailstone \
+        --zone qeytoqrg --time 12 --lighting modern --frames 300 --no-audio --validation \
+        --game-dir "$EQ_GAME_DIR" > "$log" 2>&1
+      rc=$?
+      if grep -q 'validation requested but' "$log"; then
+        note "GPU fallbacks: not checked (no Vulkan validation layer installed)"; bad=(); drawn=-1; break
+      fi
+      errors=$(grep -c '^\[error\] vulkan:' "$log")
+      warnings=$((warnings + $(grep -c '^\[warn\] vulkan:' "$log")))
+      grep -q 'cannot be forced' "$log" && unforced+=("$word")
+      if [ "$rc" != 0 ] || [ "$errors" -gt 0 ]; then
+        bad+=("$word ($([ "$rc" != 0 ] && echo "exit $rc, ")$errors validation errors)")
+      else
+        drawn=$((drawn + 1))
+      fi
+    done
+    if [ "${#bad[@]}" -gt 0 ]; then
+      fail "GPU fallbacks: $(printf '%s, ' "${bad[@]}" | sed 's/, $//') (fallbacks/)"
+    elif [ "$drawn" -ge 0 ]; then
+      note "GPU fallbacks: $drawn runs without a validation error, $warnings validation warnings$(
+        [ "${#unforced[@]}" -gt 0 ] && echo "; not forceable here: ${unforced[*]}")"
+    fi
+  else
+    fail "GPU fallbacks build (fallbacks-configure.log, fallbacks-build.log)"
   fi
 fi
 

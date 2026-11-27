@@ -429,6 +429,7 @@ add_library(hailstone_engine STATIC
   src/app/spawn_pick.cpp
   src/game/nameplate_canvas.cpp
   src/ui/lua/lua_nameplate_canvas.cpp
+  src/render/gpu_fallbacks.cpp
   src/render/gpu_requirements.cpp
   src/render/graphics_tier.cpp
   src/render/gpu_cache_protocol.cpp
@@ -1166,6 +1167,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/startup_error_test.cpp
     tests/login_launch_test.cpp
     tests/login_token_session_test.cpp
+    tests/gpu_fallbacks_test.cpp
     tests/gpu_requirements_test.cpp
     tests/graphics_tier_test.cpp
     tests/gpu_ipc_test.cpp
