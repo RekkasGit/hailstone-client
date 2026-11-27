@@ -529,12 +529,16 @@ void GameConnection::update() {
     }
 
     update_chat_server();
-    if (state_ == ConnectionState::InZone) {
+    if (in_zone()) {
         maintain_tracking();
+        // A reopened window can ask for its list once the retired reply drains or times out.
+        const bool retired_request_finished = !tracking_request_ && std::exchange(tracking_request_retired_, false);
         // CTrackingWnd::OnProcessFrame: OP_Track every 6 s with auto update on.
         auto f = game::tracking_frame(tracking_.open, static_cast<std::uint32_t>(now_ms()), tracking_.next_controls,
                                       tracking_.next_track, tracking_.auto_update);
-        if (f.send_track) send_track();
+        if (f.send_track || (retired_request_finished && tracking_.open)) send_track();
+    }
+    if (state_ == ConnectionState::InZone) {
         // No movement reports while a zone change waits for its answer: the original blocks in
         // RequestZoneChangeStatusBlocking @0x52cee0 (from MoveToZone @0x541710) and its main loop does not run, so a
         // retry still finds the crossing position (send_zone_line_position) as the last report.

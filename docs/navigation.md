@@ -421,7 +421,10 @@ request unanswered after 10 s is dropped.
 - One unanswered after 10 s (our own number) is dropped and the next refresh goes out; the list shown stays.
 - A reply with nothing asked, or to a request whose window was closed or whose server policy changed since, is not
   shown.
-- Only a server extension's tracking rule or map policy keeps Tracking closed (docs/plugins.md).
+- If the window was reopened while a retired request was pending, it asks for a new list after that reply arrives
+  or the request times out, even with Auto Update off.
+- Eligible players can use Tracking in the zone through the camp countdown. Server extensions can restrict access
+  through their tracking rule (docs/plugins.md).
 - The player's own death empties the list, as it ends every Find and walk (docs/unknowns.md).
 
 ### The Find window
