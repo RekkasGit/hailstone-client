@@ -293,6 +293,9 @@ them to one rolling pre-release, tagged `nightly`, on GitHub.
   so.
 - It needs `gh` signed in with write access, Docker, and the MSVC install `tools/docker/build.sh windows-x64` uses.
 - `--package` does all but the upload, leaving the zips in the checkout's `release-nightly/`.
+- Each package's symbol files (docs/hardening.md "Crash reports from release builds") go to
+  `~/.cache/hailstone-nightly/symbols/<version>/<platform>/`, not to `release-nightly/`, so they are never uploaded. A
+  night's folder is removed after 90 days.
 
 ### The timer
 
@@ -347,7 +350,9 @@ cmake --install build-windows --prefix dist/hailstone            # the client's 
 
 - It needs clang-cl, lld-link, llvm-lib, llvm-rc and llvm-mt (an LLVM install has them) and the build machine's
   glslang for the shaders.
-- RelWithDebInfo writes `hailstone.pdb`; beside `hailstone.exe` it lets a crash report name the function.
+- RelWithDebInfo writes `hailstone.pdb`; beside `hailstone.exe` it lets a crash report name the function. A Release
+  with `-DHAILSTONE_SEPARATE_SYMBOLS=ON` writes it to `build-windows/symbols/` (docs/hardening.md "Crash reports
+  from release builds").
 - The tests run under Wine (`wine build-windows/hailstone_tests.exe`, with a `WINEPREFIX` of its own).
 
 The compiler wrapper `clang-cl-xwin.sh` puts the target and the SDK's headers on every compile (CEF's CMake files set
