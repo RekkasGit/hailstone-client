@@ -1435,6 +1435,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/item_notify_test.cpp
     tests/remove_buff_test.cpp
     tests/use_item_test.cpp
+    tests/cast_line_test.cpp
     tests/window_notify_test.cpp
     tests/window_child_test.cpp
     tests/imgui_frame_test.cpp
