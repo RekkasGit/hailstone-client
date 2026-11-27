@@ -179,7 +179,11 @@ fi
 # 4. The packages, after a night with no failure.
 published=""
 package_build() {
-  CPUS=$jobs CMAKE_ARGS="-DHAILSTONE_BROWSER=ON -DHAILSTONE_NIGHTLY_LABEL=$2" \
+  # Windows at no more than 8 jobs, build.sh's default and the release builds': at 20, MSVC under Wine failed most
+  # large builds (below); at 8 a clean build passed.
+  local cpus=$jobs
+  [ "$1" = windows-x64 ] && [ "$cpus" -gt 8 ] && cpus=8
+  CPUS=$cpus CMAKE_ARGS="-DHAILSTONE_BROWSER=ON -DHAILSTONE_NIGHTLY_LABEL=$2" \
     tools/docker/build.sh "$1" --no-test > "$3" 2>&1
 }
 
