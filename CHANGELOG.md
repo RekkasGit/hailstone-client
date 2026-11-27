@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Chat timestamps are set per tab: right-click a tab and pick **Timestamps** to change that tab only. Tabs keep the format they had until you change them.
 - New chat filter **Plugins and Scripts** (Filters menu, after System Messages): every line a plugin or Lua script writes goes to the window you pick, whatever its colour. It stays in the main window until moved.
 - Mana regeneration now uses the server's reported maximum, fixing mana bars that stopped short of full when the client's calculated maximum was lower.
 - Players can ride with classic or Luclin character models. Switching zones no longer drops the mount buff while the rider or mount model is still being built.

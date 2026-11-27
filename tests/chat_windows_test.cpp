@@ -1275,6 +1275,89 @@ TEST_CASE("Chat windows: Plugins and Scripts takes every line a plugin or script
     ImGui::DestroyContext(ctx);
 }
 
+TEST_CASE("Chat windows: each tab keeps its own timestamp format; one without follows the old shared setting") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    test::ScratchDir scratch("chat_tab_timestamps");
+    fs::path dir = scratch.path();
+    fs::create_directories(dir / "game");
+    write_strings(dir / "game");
+    GameDir game_dir(dir / "game");
+    std::string shared = "12h-seconds"; // the pack's old chat.timestamps, one format for every tab
+    auto run = [&](auto&& body) {
+        net::GameConnection conn(game_dir);
+        ui::ChatView view;
+        app::UiHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game_dir;
+        host.conn = &conn;
+        host.chat = &view;
+        host.layout_setting = [&](std::string_view key) { return key == "chat.timestamps" ? shared : std::string(); };
+        host.set_layout_setting = [&](std::string_view key, std::string_view value) {
+            if (key == "chat.timestamps") shared = value;
+        };
+        app::UiApi api(host);
+        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        Lua lua(api);
+        body(lua, view, api);
+    };
+    const char* stamped = R"lua(
+local _, l = hs.ChatText(%d, nil, false, hs.ChatTimestamps(%d))
+return ((l[#l] or ''):gsub('<[^>]*>', ''))
+)lua";
+    auto last_line = [&](Lua& lua, int slot) {
+        std::string code = stamped;
+        for (std::size_t at; (at = code.find("%d")) != std::string::npos;) code.replace(at, 2, std::to_string(slot));
+        return lua.run(code);
+    };
+    run([&](Lua& lua, ui::ChatView& view, app::UiApi& api) {
+        CHECK(lua.run("return hs.ChatNewWindow('Fights')") == "2");
+        // Neither tab has its own yet: both follow the shared setting.
+        CHECK(lua.run("return hs.ChatTimestamps(1)") == "12h-seconds");
+        CHECK(lua.run("return hs.ChatTimestamps(2)") == "12h-seconds");
+
+        lua.run("hs.ChatSetTimestamps(2, '24h-minutes')");
+        CHECK(lua.run("return hs.ChatTimestamps(2)") == "24h-minutes");
+        CHECK(lua.run("return hs.ChatTimestamps(1)") == "12h-seconds");
+        lua.run("hs.ChatSetTimestamps(1, 'off')");
+        CHECK(lua.run("return hs.ChatTimestamps(1)") == "off");
+        CHECK(shared == "12h-seconds"); // the tabs' own formats leave the shared setting as it was
+
+        // The menu sets the format of the tab it was opened on only.
+        const auto rows = app::chat_context_rows(2);
+        const auto item = std::find_if(rows.begin(), rows.end(), [](const auto& row) { return row.text == "Timestamps"; });
+        REQUIRE(item != rows.end());
+        REQUIRE(item->submenu);
+        const auto formats = item->submenu();
+        REQUIRE(formats.size() == 4);
+        CHECK(formats[2].check); // [21:07], the tab's own
+        REQUIRE(formats[3].act);
+        formats[3].act();        // [21:07:43]
+        CHECK(lua.run("return hs.ChatTimestamps(2)") == "24h-seconds");
+        CHECK(lua.run("return hs.ChatTimestamps(1)") == "off");
+
+        lua.run(std::format("hs.ChatSetFilter(2, {}, true); hs.ChatClear(2)", game::chat_channel_of_color(277)));
+        view.add(ui::ChatChannel::Say, "hello");
+        view.add(ui::ChatChannel::System, "You have been slain", 0, 277); // My Death, to window 2
+        CHECK(last_line(lua, 1) == "hello");
+        const std::string fights = last_line(lua, 2);
+        CHECK(fights.size() == std::string("[21:07:43] You have been slain").size());
+        CHECK(fights.starts_with("["));
+        CHECK(fights.ends_with("] You have been slain"));
+        api.save_layout();
+    });
+    // Kept with each tab in the UI ini; a change to the shared setting no longer moves a tab that has its own.
+    shared = "24h-minutes";
+    run([&](Lua& lua, ui::ChatView&, app::UiApi&) {
+        CHECK(lua.run("return hs.ChatTimestamps(1)") == "off");
+        CHECK(lua.run("return hs.ChatTimestamps(2)") == "24h-seconds");
+        lua.run("hs.ChatSetTimestamps(2, true)"); // true is 24h-seconds, as hs.ChatText takes it
+        CHECK(lua.run("return hs.ChatTimestamps(2)") == "24h-seconds");
+        lua.run("hs.ChatSetTimestamps(2, 'nonsense')");
+        CHECK(lua.run("return hs.ChatTimestamps(2)") == "off");
+    });
+    ImGui::DestroyContext(ctx);
+}
+
 TEST_CASE("Chat windows: named chat groups route, expand, and keep ungrouped readers working") {
     hailstone::test::ScratchDir dir_scratch("chat_client_messages_test");
     const fs::path dir = dir_scratch.path();
