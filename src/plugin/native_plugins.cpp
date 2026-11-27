@@ -902,6 +902,21 @@ void* h_imgui_context(void* h) {
     return l.host->env.imgui_context();
 }
 
+static_assert(HAILSTONE_UI_ICON_SPELL == static_cast<int>(UiIconKind::Spell));
+static_assert(HAILSTONE_UI_ICON_GEM == static_cast<int>(UiIconKind::Gem));
+
+// For the plugin's own ImGui drawing: so the same gate as imgui_context, which that drawing needs.
+int h_ui_icon(void* h, std::int32_t kind, std::int32_t icon, HailstoneUiImage* out) {
+    Loaded& l = Loaded::of(h);
+    if (!out || out->size < sizeof(HailstoneUiImage) || !l.can(kCapUi) || !l.imgui_compatible()) return 0;
+    if (!l.host->env.ui_icon) return 0;
+    if (kind != HAILSTONE_UI_ICON_SPELL && kind != HAILSTONE_UI_ICON_GEM) return 0;
+    const auto image = l.host->env.ui_icon(static_cast<UiIconKind>(kind), icon);
+    if (!image || !image->texture) return 0;
+    *out = {sizeof(HailstoneUiImage), image->texture, image->u0, image->v0, image->u1, image->v1};
+    return 1;
+}
+
 // ---- ABI 2: the server extension
 
 // A struct the plugin passes for the client to fill: it gets what both know (its `size`, the client's sizeof).
@@ -1864,6 +1879,7 @@ int h_get_spell(void* h, std::uint32_t id, HailstoneSpell* out) {
     v.skill = s->skill;
     v.is_skill = s->is_skill ? 1 : 0;
     v.gem_icon = static_cast<std::uint32_t>(s->gem_icon);
+    v.spell_icon = s->spell_icon;
     return give(out, v);
 }
 
@@ -3765,6 +3781,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.world_placement_get = main_only<h_world_placement_get>;
     p.table.world_placement_cancel = main_only<h_world_placement_cancel>;
     p.table.write_chat_group = main_only<h_write_chat_group>;
+    p.table.ui_icon = main_only<h_ui_icon>;
     Hooks& hooks = *m.env.hooks;
     Loaded* lp = &p;
     // Each callback runs with the plugin's capabilities and counts as the plugin being busy (no unloading under it).

@@ -30,6 +30,7 @@
 #include "plugin/hooks.h"
 #include "plugin/ability_bulk.h"
 #include "plugin/policy.h"
+#include "plugin/ui_icon.h"
 #include "plugin/world_geometry.h"
 
 namespace hailstone { class Config; }
@@ -68,6 +69,8 @@ struct AutomationEnv {
     // The camera's zoom limit for plugins (plugin::NativeEnv); setting it cuts the zoom to it.
     std::function<float()> max_camera_distance;
     std::function<void(float)> set_max_camera_distance;
+    // The stock UI's icons for the plugins' own ImGui drawing (plugin::NativeEnv::ui_icon); null: none.
+    std::function<std::optional<plugin::UiIconImage>(plugin::UiIconKind, std::int32_t)> ui_icon;
     // The in-game browser for the scripts (mq.web) and plugins (the host table's web_*); null: none.
     plugin::WebAccess* web = nullptr;
     // The hot buttons for plugins (plugin::NativeEnv hot_button ...).

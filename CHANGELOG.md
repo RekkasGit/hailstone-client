@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Plugins can draw the game's spell and spell gem icons in their own windows (the SDK's `ui_icon`), and `get_spell` gives a spell's icon. HSMono's C# scripts (E3) now show spell icons where they had a blank space.
 - `${Navigation.PathExists[spawn <search>]}` and `PathLength` take MQ2Nav's `spawn` keyword, as `/nav spawn` does. They searched for a spawn named with the word `spawn` in it and answered FALSE (and -1).
 - MacroQuest's `/look <angle>` sets how far up or down you look, and `${Spawn.FeetWet}` and `${Spawn.Levitating}` (and `${Me...}`) say whether a spawn's feet are in water and whether it levitates.
 - Windows in the background or minimized now run their game loop, plugins and scripts at least 30 times a second (was 10), so a box set's background characters respond faster. A low Background Frame Rate still draws only that many frames.

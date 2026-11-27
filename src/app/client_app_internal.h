@@ -159,6 +159,7 @@
 #include "ui/dev_screens.h"
 #include "ui/lua/lua_host.h"
 #include "ui/ui_packs.h"
+#include "ui/texture_ids.h"
 #include "ui/ui_textures.h"
 #include "app/lua_ui.h"
 #include "app/gamepad.h"
@@ -509,6 +510,14 @@ public:
         };
         aenv.keypress = [this](std::string_view command, int mode) { return script_keypress(command, mode); };
         aenv.max_camera_distance = [this] { return max_camera_distance_; };
+        aenv.ui_icon = [this](plugin::UiIconKind kind, std::int32_t icon) -> std::optional<plugin::UiIconImage> {
+            if (!ui_textures_) return std::nullopt;
+            const auto cell =
+                kind == plugin::UiIconKind::Gem ? ui_textures_->gem_icon(icon) : ui_textures_->spell_icon(icon);
+            if (!cell || !ui::texture_id_live(cell->id)) return std::nullopt;
+            return plugin::UiIconImage{reinterpret_cast<std::uintptr_t>(cell->id), cell->u0, cell->v0, cell->u1,
+                                       cell->v1};
+        };
         aenv.set_max_camera_distance = [this](float d) {
             max_camera_distance_ = d;
             camera_distance_ = std::min(camera_distance_, d);

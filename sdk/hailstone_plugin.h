@@ -710,7 +710,20 @@ typedef struct HailstoneSpell {
     uint32_t target_type, skill;
     int32_t is_skill;
     uint32_t gem_icon;
+    /* -- appended in ABI 4: an older client leaves it as the plugin set it (set it to -1 first) -- */
+    int32_t spell_icon; /* the spell's icon (MQ's SpellIcon): a cell of A_SpellIcons, which ui_icon draws */
 } HailstoneSpell;
+
+/* ui_icon's kinds: which of the stock UI's icon sheets. */
+#define HAILSTONE_UI_ICON_SPELL 1 /* A_SpellIcons (spells01.tga ..., 40 x 40 cells): a spell's spell_icon */
+#define HAILSTONE_UI_ICON_GEM 2   /* A_SpellGems (gemicons01.tga ..., 24 x 24 cells): a spell's gem_icon */
+
+/* ui_icon's answer: the cell's texture as the client's Dear ImGui takes it (an ImTextureID) and its corners in it. */
+typedef struct HailstoneUiImage {
+    uint32_t size; /* initialize to sizeof(HailstoneUiImage) */
+    uintptr_t texture;
+    float u0, v0, u1, v1;
+} HailstoneUiImage;
 
 typedef struct HailstoneItem {
     uint32_t size;
@@ -1234,6 +1247,14 @@ typedef struct PluginHostApi {
      * unavailable. Needs no capability. Call on the client's thread or on a thread using lend_thread. Use
      * HAILSTONE_HOST_HAS(host, write_chat_group) before calling this appended ABI 4 service. */
     int (*write_chat_group)(void* host, const char* title, const char* const* lines, uint32_t count);
+    /* UI. One of the stock UI's icons, from the player's game folder, for the plugin's own Dear ImGui drawing:
+     * `kind` HAILSTONE_UI_ICON_SPELL or _GEM, `icon` the cell (a spell's spell_icon or gem_icon). Writes the texture
+     * and the cell's corners for ImGui::Image (ImTextureRef((ImTextureID)out->texture), size, {u0, v0}, {u1, v1}) and
+     * returns 1; 0 for another kind, a cell the sheets lack, a sheet the game folder lacks, without `ui`, or for a
+     * plugin the client gives no imgui_context. Draw it in the same OnUpdateImGui: a later frame may have replaced
+     * the texture (the UI's art reloads). Call on the client's thread or on a thread using lend_thread. Added later
+     * in ABI 4: test HAILSTONE_HOST_HAS(host, ui_icon) first. */
+    int (*ui_icon)(void* host, int32_t kind, int32_t icon, HailstoneUiImage* out);
 } PluginHostApi;
 /* What use_ability and ability_state take: the kinds of ability the Ability Book lists. The values are stable. */
 enum HS_AbilityKinds {

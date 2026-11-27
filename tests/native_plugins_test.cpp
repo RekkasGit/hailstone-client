@@ -99,6 +99,12 @@ struct Host {
         ne.world_placement_input_allowed = [this] { return placement_scene.has_value(); };
         ne.extensions = extensions.get();
         ne.nameplates = &canvas;
+        // The UI's icons: spell icon 7 and gem icon 3, nothing else.
+        ne.ui_icon = [](plugin::UiIconKind kind, std::int32_t icon) -> std::optional<plugin::UiIconImage> {
+            if (kind == plugin::UiIconKind::Spell && icon == 7) return plugin::UiIconImage{41, 0.25f, 0.5f, 0.75f, 1.0f};
+            if (kind == plugin::UiIconKind::Gem && icon == 3) return plugin::UiIconImage{42, 0, 0, 0.5f, 0.5f};
+            return std::nullopt;
+        };
         ne.use_ability = [this](mq::AbilityKind kind, std::string_view name) {
             used.emplace_back(static_cast<int>(kind), std::string(name));
             return true;
@@ -1407,6 +1413,22 @@ TEST_CASE("native plugins: web pages of the plugin's own (ABI 3), under 'web', c
     browser.shutdown();
 }
 #endif
+
+TEST_CASE("native plugins: ui_icon gives a stock UI icon's texture and cell, with the 'ui' capability only") {
+    {
+        Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+        h.approve(plugin::kCapCommands | plugin::kCapUi);
+        REQUIRE(h.plugins->load("HostProbe"));
+        h.run("/probeuiicon");
+        CHECK(h.printed_line("[Probe] ui icon: spell 1 41 0.25 0.50 0.75 1.00, gem 1 42, missing 0, kind 0, size 0, "
+                             "thread 0"));
+    }
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapCommands); // no 'ui': nothing
+    REQUIRE(h.plugins->load("HostProbe"));
+    h.run("/probeuiicon");
+    CHECK(h.printed_line("[Probe] ui icon: spell 0 0 0.00 0.00 0.00 0.00, gem 0 0, missing 0, kind 0, size 0, thread 0"));
+}
 
 TEST_CASE("native plugins: write_chat_group writes bounded local chat without chat permission") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);

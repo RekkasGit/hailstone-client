@@ -3,6 +3,8 @@
 //   /probethread   calls host functions from a std::thread, then reports what they answered (ability_state too,
 //   when the host table has it)
 //   /probechatgroup   writes a valid group and tries invalid and off-thread local chat submissions
+//   /probeuiicon      asks ui_icon for a spell and a gem icon, a missing cell, another kind, a short struct and
+//                     from another thread
 //   /probethrow    lets an exception out (not a std::exception); so do ${Probe.Throw} and OnUpdateImGui
 //   /probestate n  web_state(tab 1) with a struct whose size says n bytes, as a plugin built with a shorter one
 //   /probemessage n  web_message(tab 1) into a buffer of n bytes (0: no buffer)
@@ -89,6 +91,8 @@ static_assert(offsetof(PluginHostApi, world_placement_cancel) ==
               offsetof(PluginHostApi, world_placement_get) + sizeof(PluginHostApi::caps));
 static_assert(offsetof(PluginHostApi, write_chat_group) ==
               offsetof(PluginHostApi, world_placement_cancel) + sizeof(PluginHostApi::caps));
+static_assert(offsetof(PluginHostApi, ui_icon) ==
+              offsetof(PluginHostApi, write_chat_group) + sizeof(PluginHostApi::caps));
 
 namespace {
 
@@ -120,6 +124,24 @@ void probe_thread(void*, const char*) {
 }
 
 void probe_throw(void*, const char*) { throw 42; }
+
+void probe_ui_icon(void*, const char*) {
+    if (!HAILSTONE_HOST_HAS(host, ui_icon)) return;
+    HailstoneUiImage spell{sizeof(HailstoneUiImage), 0, 0, 0, 0, 0};
+    const int got = host->ui_icon(host->host, HAILSTONE_UI_ICON_SPELL, 7, &spell);
+    HailstoneUiImage gem{sizeof(HailstoneUiImage), 0, 0, 0, 0, 0};
+    const int gem_got = host->ui_icon(host->host, HAILSTONE_UI_ICON_GEM, 3, &gem);
+    HailstoneUiImage other{sizeof(HailstoneUiImage), 0, 0, 0, 0, 0};
+    const int missing = host->ui_icon(host->host, HAILSTONE_UI_ICON_SPELL, 9999, &other);
+    const int bad_kind = host->ui_icon(host->host, 3, 7, &other);
+    HailstoneUiImage small{sizeof(HailstoneUiImage) - 1, 0, 0, 0, 0, 0};
+    const int too_small = host->ui_icon(host->host, HAILSTONE_UI_ICON_SPELL, 7, &small);
+    int off_thread = -1;
+    std::thread([&] { off_thread = host->ui_icon(host->host, HAILSTONE_UI_ICON_SPELL, 7, &other); }).join();
+    WriteChatf("[Probe] ui icon: spell %d %u %.2f %.2f %.2f %.2f, gem %d %u, missing %d, kind %d, size %d, thread %d",
+               got, static_cast<unsigned>(spell.texture), spell.u0, spell.v0, spell.u1, spell.v1, gem_got,
+               static_cast<unsigned>(gem.texture), missing, bad_kind, too_small, off_thread);
+}
 
 void probe_chat_group(void*, const char*) {
     if (!HAILSTONE_HOST_HAS(host, write_chat_group)) return;
@@ -1216,6 +1238,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probethread", probe_thread, nullptr);
     AddCommand("/probethrow", probe_throw, nullptr);
     AddCommand("/probechatgroup", probe_chat_group, nullptr);
+    AddCommand("/probeuiicon", probe_ui_icon, nullptr);
     AddCommand("/probestate", probe_state, nullptr);
     AddCommand("/probemessage", probe_message, nullptr);
     AddCommand("/probetcp", probe_tcp, nullptr);
@@ -1264,6 +1287,7 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probethread");
     RemoveCommand("/probethrow");
     RemoveCommand("/probechatgroup");
+    RemoveCommand("/probeuiicon");
     RemoveCommand("/probestate");
     RemoveCommand("/probemessage");
     RemoveCommand("/probetcp");

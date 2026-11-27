@@ -898,6 +898,19 @@ A plugin that draws with Dear ImGui must be built with the client's Dear ImGui v
 the draw callbacks), so the client does not call `OnUpdateImGui` of a plugin built for an older ABI (it logs that when the
 plugin loads), and `imgui_context` and `web_view` give such a plugin nothing. Rebuild it against this SDK.
 
+`ui_icon` (added later in ABI 4) gives such a plugin the stock UI's icons from the player's game folder, the same
+textures the client's own windows draw: `HAILSTONE_UI_ICON_SPELL` for a cell of A_SpellIcons (a spell's
+`spell_icon`, MacroQuest's `SpellIcon`; `HailstoneSpell` carries it since ABI 4) and `HAILSTONE_UI_ICON_GEM` for
+A_SpellGems (its `gem_icon`). It needs `ui`, returns 0 for a cell or sheet that is not there, and the texture is for
+the same `OnUpdateImGui` only:
+
+```c
+HailstoneUiImage icon = {sizeof icon};
+if (HAILSTONE_HOST_HAS(host, ui_icon) && host->ui_icon(host->host, HAILSTONE_UI_ICON_SPELL, spell.spell_icon, &icon))
+    ImGui::Image(ImTextureRef((ImTextureID)icon.texture), ImVec2(40, 40), ImVec2(icon.u0, icon.v0),
+                 ImVec2(icon.u1, icon.v1));
+```
+
 ### Server extensions (ABI 2)
 
 A server whose players used a patched client (a DLL beside eqgame.exe, a changed eqgame) can give Hailstone the same

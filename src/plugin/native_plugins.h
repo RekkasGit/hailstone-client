@@ -29,6 +29,7 @@
 #include "plugin/consent.h"
 #include "plugin/hooks.h"
 #include "plugin/policy.h"
+#include "plugin/ui_icon.h"
 
 namespace hailstone::mq { class Registry; struct Context; }
 namespace hailstone::net { class GameConnection; }
@@ -83,6 +84,8 @@ struct NativeEnv {
     // (app/spell_ui.h spell_description), for get_spells_data_bulk's spells that are the player's own (spell book,
     // disciplines, owned AAs). Empty: those get dbstr_us.txt's text unfilled, as every other spell does.
     std::function<std::string(const game::SpellData&)> spell_description;
+    // ABI 4: a stock UI icon for ui_icon (the UI's textures). Empty, or nullopt: none.
+    std::function<std::optional<UiIconImage>(UiIconKind kind, std::int32_t icon)> ui_icon;
     // A plugin has loaded (InitializePlugin returned): the client runs its <name>-AutoExec.cfg, as MacroQuest's
     // LoadMQ2Plugin does (app/autoexec.h). Null: nothing.
     std::function<void(const std::string& name)> loaded;
