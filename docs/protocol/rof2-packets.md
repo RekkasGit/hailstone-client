@@ -228,7 +228,7 @@ own-corpse and leadership checks and the next zone's entry use it.
 | Packet | Dir | Opcode | Layout |
 |---|---|---|---|
 | TargetMouse | C→Z | 0x075d | 4 B: u32 new target (0 = none). Sent on every target change |
-| TargetCommand | both | 0x58e2 | 4 B: u32 target. The server echoes it when it accepts a target (and sends it for pets); refused targets get "You cannot see your target" |
+| TargetCommand | both | 0x58e2 | 4 B: u32 target. Clicking the target's target HP gauge requests this ID. The server echoes an accepted ID (and can send one for pets). The client selects a known spawn and sends TargetMouse when the selection changes; an ID of 0 or an unknown one leaves the selection alone (CEverQuest::HandleWorldMessage sets it only when GetSpawnByID finds the spawn). The server reports "You cannot see your target" on refusal and the selection stays in place. |
 | AutoAttack / AutoAttack2 | C→Z | 0x109d / 0x3526 | 4 B each: u32 1 on / 0 off; both sent when the attack flag changes. EQEmu reads byte 0 of AutoAttack and ignores AutoAttack2 |
 | Consider | both | 0x742b | 20 B: u32 player, u32 target, u32 faction, u32 level, u8 pvp, 3 B. See note 1 |
 | ConsiderCorpse | C→Z | 0x5204 | Same 20 B layout as Consider, with the player and corpse IDs and the remaining fields zero |

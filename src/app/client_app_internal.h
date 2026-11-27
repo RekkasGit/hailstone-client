@@ -67,6 +67,7 @@
 #include "core/ini_file.h"
 #include "core/log.h"
 #include "core/path_utf8.h"
+#include "core/server_profile.h"
 #include "core/wipe.h"
 #include "app/nameplate_layer.h"
 #include "app/nameplate_input.h"
@@ -475,6 +476,15 @@ public:
         aenv.server_name = [this] { return char_view_.server_name; };
         aenv.server_profile = [this] { return server_profile_.id; };
         aenv.profile_name = [this] { return server_profile_.name; };
+        // The .cfg files' server and character layers (app/autoexec.h): the folders the character's files use.
+        aenv.server_dir = [this]() -> std::filesystem::path {
+            if (server_profile_.id.empty() && char_view_.server_name.empty()) return {};
+            return profile_dir(files_profile(), login_view_.servers_dir);
+        };
+        aenv.character_dir = [this]() -> std::filesystem::path {
+            if (!conn_ || conn_->character_name().empty() || char_view_.server_name.empty()) return {};
+            return character_files(files_profile(), char_view_.server_name, conn_->character_name()).dir;
+        };
         aenv.window_open = [this](std::string_view w) { return ui_api_ && ui_api_->window_shown(w); };
         // Window.Child's reads, DoOpen / DoClose and the click methods (mq::Context): UiApi's windows are state
         // alone (UiHost and the connection), built with or without anything drawn.

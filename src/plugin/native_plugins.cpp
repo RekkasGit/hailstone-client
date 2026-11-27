@@ -3886,6 +3886,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     }
     m.say(std::format("[Plugin] {} loaded ({})", name, caps_text(caps)), zone_policy, notice_subject(name));
     log::info("plugin {} loaded from {} (sha256 {}, caps {})", name, file->string(), to_hex(hash), caps_text(caps));
+    if (m.env.loaded) m.env.loaded(name);
     return true;
 }
 

@@ -113,7 +113,12 @@ when a server sends those colours. The gamepad pack has no filter menu.
 - `hs.ChatSetFilter` takes a channel or a menu's name.
 - Each filter menu ends in the original's **ALL** and Hailstone's **Hide All**, for that menu's own channels only.
 
-They are kept as `ChannelMap0..107` in the character's UI ini and `User_1..153` in its `chat.ini`. An older file
+Channel 108, **Plugins and Scripts** (after System Messages in the Filters menu), takes every line a plugin or Lua
+script wrote while its code ran (`mq.print`, `/echo`, `WriteChatf`, the reply of a command it ran), whatever colour it
+was written in. It starts on the main window like every channel. A line restored from the chat history goes by its
+colour again: the history does not keep who wrote a line.
+
+They are kept as `ChannelMap0..108` in the character's UI ini and `User_1..153` in its `chat.ini`. An older file
 (ChannelMap0..56, User_1..99) loads with the new ones on the main window at their defaults.
 
 ## Quest Journal and Quest Tracker
@@ -314,9 +319,11 @@ Each entry names the window and what is particular to it; the `hs.*` calls behin
   - A button at the strip's right end folds the window into its tab strip.
   - Always Chat Here (`hs.ChatSetAlwaysHere`, `hs.ChatInfo`'s fifth value) picks the window Enter and '/' start a line in; the main window by default.
   - Right-click a chat window and open **Timestamps** to choose **Off**, 12-hour with seconds (`[09:07:43 PM]`),
-    24-hour without seconds (`[21:07]`), or 24-hour with seconds (`[21:07:43]`). The Modern pack's setting
-    (`chat.timestamps`) applies to all its chat windows, including their existing lines, using each line's local
-    arrival time. Off is the default. Previously enabled timestamps keep the 24-hour format with seconds.
+    24-hour without seconds (`[21:07]`), or 24-hour with seconds (`[21:07:43]`) for that tab. Each tab keeps its
+    own (`ChatWindow<n>_Timestamps` in the character's UI ini, `hs.ChatTimestamps` / `hs.ChatSetTimestamps`), and it
+    applies to the tab's existing lines too, using each line's local arrival time. Off is the default.
+    A tab with no format of its own yet (a profile from before per-tab timestamps, or a new tab) follows the Modern
+    pack's old shared setting (`chat.timestamps`, where a saved `1` is 24-hour with seconds) until one is picked.
   - Each window and tab keeps its own last 1000 lines (Hailstone's limit).
   - A tell window flashes once when another player's tell comes in (`hs.ChatWindows`' `tellsIn`).
   - A window reads only the lines since its version (`hs.ChatText(slot, version, names, stamps, true)`), and everything again (`reset`) when its lines changed otherwise. Line wrap and height are cached until the width or font change. A word wider than the output (a long name or a run with no space) is broken where the row ends, at a character's start, as ImGui's own wrapped text breaks it.
@@ -516,7 +523,9 @@ Helpers: `lib/hudx_tiles.lua`, `lib/hudx_blocked.lua`.
 - **BandolierWnd**, **PotionBeltWnd** and **AuraWindow** (frames).
 - **BlockedBuffWnd** and **BlockedPetBuffWnd**.
 - **MapToolbarWnd**: the tools grouped.
-- TargetOfTargetWindow is kept hidden (the target frame shows the target's target).
+- Modern hides the separate TargetOfTargetWindow. In Modern and Gamepad, left-click the target's target health bar
+  in the target frame to select the spawn it shows. The click goes through `TargetOfTarget_HP` and waits for the
+  server to accept the new target.
 
 Testing: `test.tab.ActionsWindow.ACTW_ActionsSubwindows=n`, `test.show.MapToolbarWnd=1`.
 

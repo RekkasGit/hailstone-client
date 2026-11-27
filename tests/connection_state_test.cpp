@@ -1,6 +1,7 @@
 // GameConnection state that must not outlive what it was about: questions across a zone change or a loot session,
-// the trader selection after a zone change, spawn deletion and renaming, the auras, aggro meter and stun at
-// zone-in; and the decoders of OP_XTargetResponse, OP_GuildUpdate and opcode 0x3ed4. Against the mock EQEmu.
+// the trader selection after a zone change, spawn deletion and renaming, the target an OP_TargetCommand names, the
+// auras, aggro meter and stun at zone-in; and the decoders of OP_XTargetResponse, OP_GuildUpdate and opcode 0x3ed4.
+// Against the mock EQEmu.
 
 #include <doctest/doctest.h>
 
@@ -236,6 +237,22 @@ TEST_CASE("OP_DeleteSpawn of the target clears it and stops auto attack (msgEQRm
     REQUIRE(rig.until([&] { return conn.world().spawns.count(101) == 0; }));
     CHECK(conn.world().target_id == 0);
     CHECK_FALSE(conn.auto_attack());
+}
+
+TEST_CASE("OP_TargetCommand selects a known spawn; 0 or an unknown id leaves the target alone") {
+    // CEverQuest::HandleWorldMessage case 0x58e2: the target changes only when GetSpawnByID finds the spawn.
+    Rig rig;
+    auto& conn = rig.conn;
+    REQUIRE(rig.to_zone());
+    REQUIRE(conn.world().spawns.count(101));
+    REQUIRE(conn.world().spawns.count(102));
+    conn.set_target(101);
+    conn.receive_zone_packet_for_test(encode_target(true, 0));
+    CHECK(conn.world().target_id == 101);
+    conn.receive_zone_packet_for_test(encode_target(true, 999999));
+    CHECK(conn.world().target_id == 101);
+    conn.receive_zone_packet_for_test(encode_target(true, 102));
+    CHECK(conn.world().target_id == 102);
 }
 
 TEST_CASE("OP_MobRename updates the spawn with the full old name and preserves its identity") {

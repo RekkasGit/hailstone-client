@@ -199,7 +199,9 @@ ui.window("HUD Target", function()
     nTargetBuffs = nBuffs
   end
   local nBuffs = nTargetBuffs
-  local extra = (traw ~= -1 and (tname or "") ~= "") or nBuffs > 0
+  local hasTot = traw ~= -1 and tname and tname ~= ""
+  local extra = hasTot or nBuffs > 0
+  local totX0, totY0, totX1, totY1
   hud("HUD Target", 660, 74, 600, extra and 150 or 110, false, function(x0, y0, x1, y1)
     T.panel(x0, y0, x1, y1, 0.9)
     local con = conColour()
@@ -241,13 +243,20 @@ ui.window("HUD Target", function()
       end
     end
     -- the target's target
-    if traw ~= -1 and tname and tname ~= "" then
+    if hasTot then
       T.font(16)
-      local tx0 = x1 - p - T.px(170)
-      T.bar(tx0, y + T.px(2), x1 - p, y + s - T.px(2), tfrac, C.hp, T.fit(tname, T.px(150)))
+      totX0, totY0, totX1, totY1 = x1 - p - T.px(170), y + T.px(2), x1 - p, y + s - T.px(2)
+      T.bar(totX0, totY0, totX1, totY1, tfrac, C.hp, T.fit(tname, T.px(150)))
       T.unfont()
     end
   end)
+  if totX0 then
+    hitArea("HUD Target of Target", totX0, totY0, totX1, totY1, function(x0, y0, x1, y1)
+      if ui.InvisibleButton("##tot", x1 - x0, y1 - y0) then
+        API.windows.ClickChild("TargetOfTargetWindow", "TargetOfTarget_HP", "left")
+      end
+    end)
+  end
 end)
 
 -- ---------------------------------------------------------------- group
