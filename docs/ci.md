@@ -184,6 +184,8 @@ and `#damage`) and a stock PEQ database. `EQ_GAME_DIR` must be set; `PLAYPROBE` 
 `items.quest` and `npc.quest` end with `#nukeitem` on the item they summon, and check that the client saw it go, so
 nightly runs do not fill the character's bags.
 
+A script that ran no step never reached the world (the server refused the login, or answered "That zone is not
+available" while the last script's zone shut down): it is played once more after 30 seconds, and its line says so.
 A script starts with `zone <name>`, which passes at once when the character is already there, so it does not
 depend on where the last session ended. Scripts and the runner name no server, account or password: pass them on the
 command line. The nightly run plays them when a test server is set ("Nightly run" below); they are the scripted part

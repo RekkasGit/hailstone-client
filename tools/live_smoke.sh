@@ -31,11 +31,22 @@ for script in "$@"; do
   timeout 600 "$probe" "$host" "$user" "$pass" --char "$char" --quest "$script" > "$logs/$name.log" 2>&1
   rc=$?
   result=$(grep -o 'QUEST SUMMARY: .*' "$logs/$name.log" | tail -1)
+  again=""
+  # A script that ran no step never reached the world: the server refused the login or the zone ("That zone is not
+  # available" right after the last script's logout, while its zone shuts down). Once more after a pause.
+  if [ "$rc" != 0 ] && { [ -z "$result" ] || [[ "$result" == *" 0 of "* ]]; }; then
+    mv "$logs/$name.log" "$logs/$name-first.log"
+    sleep 30
+    timeout 600 "$probe" "$host" "$user" "$pass" --char "$char" --quest "$script" > "$logs/$name.log" 2>&1
+    rc=$?
+    result=$(grep -o 'QUEST SUMMARY: .*' "$logs/$name.log" | tail -1)
+    again=" (second try: the first never reached the world, $name-first.log)"
+  fi
   if [ "$rc" = 0 ]; then
-    echo "PASS $name: ${result#QUEST SUMMARY: }"
+    echo "PASS $name: ${result#QUEST SUMMARY: }$again"
   else
     failed=1
-    echo "FAIL $name: ${result:-no summary (exit $rc)} ($logs/$name.log)"
+    echo "FAIL $name: ${result:-no summary (exit $rc)} ($logs/$name.log)$again"
     grep 'QUEST FAIL' "$logs/$name.log" | sed 's/^/  /'
   fi
 done

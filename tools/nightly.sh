@@ -169,7 +169,8 @@ if [ "$live" = 1 ] && [ -n "${HAILSTONE_LIVE_SERVER:-}" ]; then
                   grep -l 'ERROR: [A-Za-z]*Sanitizer\|runtime error:' "$logs"/live/*.log 2>/dev/null |
                     xargs -r -n1 basename | sed 's/\.log$/ (sanitizer)/'; } | sort -u | paste -sd, - | sed 's/,/, /g')
     if [ -z "$failures" ] && [ "$passed" -gt 0 ]; then
-      note "live smoke tests: $passed passed"
+      retried=$(grep -c '^PASS .*second try' "$logs/live.log")
+      note "live smoke tests: $passed passed$([ "$retried" -gt 0 ] && echo " ($retried at a second try: no world at first)")"
     else
       fail "live smoke tests: ${failures:-none ran} (live.log, live/)"
     fi
