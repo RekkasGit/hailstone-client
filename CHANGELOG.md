@@ -29,6 +29,7 @@
 - `Spell.CastTime`, `.RecastTime` and `.RecoveryTime` are in milliseconds, as in MacroQuest and as `.MyCastTime` already was; they were seconds. New `Item.CastTime`: an item's click cast time in milliseconds. E3 reads these for its spell and item timings.
 - `${...Item.Spell}` (for example `${Me.Inventory[13].Spell}`) gives the item's spell, as in MacroQuest: its click effect's, else its scroll's, proc's, focus's or worn effect's. It read NULL before.
 - `/useitem` also takes an item's name, as in MacroQuest: `/useitem Rations` finds the first carried item whose name holds the text, `/useitem "Short Sword"` the one with that whole name. A single number past the slot numbers is an item id when you carry that item: `/useitem 1001`. The slot form is unchanged. E3 uses the name form for manastones and food.
+- New TLO member `${Me.Aura[#|name]}` (`.ID`, `.Name`, `.SpawnID`, `.Find[text]`), as in MacroQuest. E3 reads `${Me.Aura[1]}` to see which aura is up before casting a new one.
 - New TLO `${MoveUtils}`, as in MacroQuest's MQ2MoveUtils: `.Stuck` is TRUE while a `/moveto` or `/stick` walk is stuck, and `.Command` names the walk. E3's follow uses it to switch to `/nav` when stuck.
 - `${Window[...]}` answers from the client's own state for the casting, spell book, loot, merchant, bank, trade, give and dialog windows and `pack1`..`pack10`, so scripts that ask whether one is open work with no UI.
 - New command `/beep` (MacroQuest's): plays a sound. Individual Sounds has a Beep volume and a Beep sound choice: a tone or any of your game folder's sounds.

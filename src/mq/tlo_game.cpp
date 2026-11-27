@@ -44,7 +44,7 @@ using net::GameConnection;
 struct Types {
     const Type *spawn, *character, *cls, *race, *heading, *spell, *buff, *timestamp, *item, *zone, *group, *member,
         *everquest, *macroquest, *hailstone, *window, *plugin, *time, *gametime, *navigation, *stick, *debuff, *moveto, *moveutils,
-        *bandolier, *bandolier_item, *advpath, *target, *xtarget, *altability, *aug, *ticks, *body, *raid, *raidmember, *corpse, *pet, *invslot, *merchant, *door, *mercenary;
+        *bandolier, *bandolier_item, *advpath, *target, *xtarget, *altability, *aug, *ticks, *body, *raid, *raidmember, *corpse, *pet, *invslot, *merchant, *door, *mercenary, *aura;
 };
 
 Types g; // set once by register_game_tlos (the types live in the registry that registered them)
@@ -2874,6 +2874,54 @@ void register_bandolier() {
     });
 }
 
+// Me.Aura and its auratype (MQ2CharacterType's Aura, MQ2AuraType): the player's auras as OP_UpdateAura listed
+// them, in the order they came. A number is 1-based; a name matches the start of an aura's name, ignoring case
+// (MQ's _strnicmp over the index's length); no index is the first aura. NULL while the player has none.
+// MQ's Remove method is not here: a TLO read cannot act on the connection. /removeaura <name> does it.
+const net::AuraUpdate* aura_at(const Context& c, std::int64_t n) {
+    if (!c.conn || n < 0 || n >= static_cast<std::int64_t>(c.conn->auras().size())) return nullptr;
+    return &c.conn->auras()[static_cast<std::size_t>(n)];
+}
+
+void register_auras() {
+    me_member("Aura", [](const Context&, const GameConnection& c, std::string_view index) -> V {
+        const auto& auras = c.auras();
+        if (auras.empty()) return V::nil();
+        if (index.empty()) return V::object(g.aura, 0);
+        std::int64_t n = 0;
+        if (parse_int(index, n))
+            return n >= 1 && n <= static_cast<std::int64_t>(auras.size()) ? V::object(g.aura, n - 1) : V::nil();
+        for (std::size_t k = 0; k < auras.size(); ++k)
+            if (istarts_with(auras[k].name, index)) return V::object(g.aura, static_cast<std::int64_t>(k));
+        return V::nil();
+    });
+    Type& t = const_cast<Type&>(*g.aura);
+    t.to_value = [](const Context& c, const Value& v) -> V {
+        const net::AuraUpdate* a = aura_at(c, v.i);
+        return a ? V::string(a->name) : V::nil();
+    };
+    add(g.aura, "ID", [](const Context& c, const Value& v, std::string_view) -> V {
+        return aura_at(c, v.i) ? V::integer(v.i + 1) : V::nil();
+    });
+    add(g.aura, "Name", [](const Context& c, const Value& v, std::string_view) -> V {
+        const net::AuraUpdate* a = aura_at(c, v.i);
+        return a ? V::string(a->name) : V::nil();
+    });
+    add(g.aura, "SpawnID", [](const Context& c, const Value& v, std::string_view) -> V {
+        const net::AuraUpdate* a = aura_at(c, v.i);
+        return a ? V::integer(a->spawn_id) : V::nil();
+    });
+    // Where the index first appears in the name, 1-based and ignoring case; NULL when it does not.
+    add(g.aura, "Find", [](const Context& c, const Value& v, std::string_view index) -> V {
+        const net::AuraUpdate* a = aura_at(c, v.i);
+        if (!a || index.empty() || index.size() > a->name.size()) return V::nil();
+        for (std::size_t pos = 0; pos + index.size() <= a->name.size(); ++pos)
+            if (iequals(std::string_view(a->name).substr(pos, index.size()), index))
+                return V::integer(static_cast<std::int64_t>(pos) + 1);
+        return V::nil();
+    });
+}
+
 void register_moveto() {
     auto status = [](const Context& c) { return c.nav ? std::optional(c.nav->status()) : std::nullopt; };
     add(g.moveto, "Moving", [status](const Context& c, const Value&, std::string_view) {
@@ -3100,6 +3148,7 @@ void register_game_tlos(Registry& r) {
     g.merchant = &r.type("merchant");
     g.door = &r.type("switch");
     g.mercenary = &r.type("mercenary");
+    g.aura = &r.type("auratype");
     register_spawn();
     register_character();
     register_abilities();
@@ -3113,6 +3162,7 @@ void register_game_tlos(Registry& r) {
     register_moveto();
     register_moveutils();
     register_bandolier();
+    register_auras();
     register_advpath();
     register_e3_members();
     register_e3_members2();

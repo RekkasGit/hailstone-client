@@ -889,6 +889,26 @@ TEST_CASE("spawn search: random text parses and searches without fault") {
     }
 }
 
+TEST_CASE("TLO: Me.Aura[n|name] and .ID, .Name, .SpawnID, .Find (MacroQuest's Aura)") {
+    Fixture f;
+    CHECK(f.p("${Me.Aura}") == "NULL"); // no auras
+    CHECK(f.p("${Me.Aura[1]}") == "NULL");
+    auto& auras = net::GameConnectionTestAccess::auras(*f.world.conn);
+    auras.push_back({net::kAuraAdd, 0, 501, 0, "Aura of the Zealot"});
+    auras.push_back({net::kAuraAdd, 0, 502, 0, "Reverent Aura"});
+    CHECK(f.p("${Me.Aura}") == "Aura of the Zealot"); // no index: the first
+    CHECK(f.p("${Me.Aura[1]}") == "Aura of the Zealot");
+    CHECK(f.p("${Me.Aura[2].Name}") == "Reverent Aura");
+    CHECK(f.p("${Me.Aura[2].ID}") == "2");
+    CHECK(f.p("${Me.Aura[2].SpawnID}") == "502");
+    CHECK(f.p("${Me.Aura[3]}") == "NULL");
+    CHECK(f.p("${Me.Aura[0]}") == "NULL");
+    CHECK(f.p("${Me.Aura[reverent].ID}") == "2"); // the start of a name, any case
+    CHECK(f.p("${Me.Aura[Zealot]}") == "NULL");    // not the middle of one
+    CHECK(f.p("${Me.Aura[1].Find[zealot]}") == "13");
+    CHECK(f.p("${Me.Aura[1].Find[Reverent]}") == "NULL");
+}
+
 TEST_CASE("TLO: Me.Bandolier[name|#] and .Active, .Index, .Name, .Item[n]") {
     Fixture f;
     using A = net::GameConnectionTestAccess;

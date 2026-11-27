@@ -265,6 +265,7 @@ character's name.
 | `CashBank` | int | the bank's coin, in copper |
 | `FreeInventory` | int | empty general slots plus empty bag slots |
 | `Pet` | `pet` | as the `Pet` TLO |
+| `Aura[n\|name]` | `auratype` | the player's nth aura (1-based), or the first whose name starts with `name` (any case); no index is the first. NULL while the player has none |
 | `Bandolier[name\|n]` | `bandolier` | a bandolier set by its name (any case) or number (1..20, clamped); NULL for a name no set has |
 | `AbilityReady[name\|number]` | bool | a skill's reuse timer has run out |
 | `CombatAbilityReady[name]` | bool | the same for a combat ability (a discipline); the name works without its "Rk. II" |
@@ -498,6 +499,7 @@ An AA the player owns. Its plain value is its ability (group) id.
 | `gametime` | `hh:mm` | `Hour`, `Minute`, `Day`, `Month`, `Year`, `Night`, `Time24` |
 | `navigation` | `Active` | `Active`, `Paused`, `MeshLoaded`, `MeshComplete`, `TilesBuilt`, `TilesTotal`, `Destination`, `Remaining`, `PathExists[dest]`, `PathLength[dest]` (-1 for no path), `Velocity` (the player's speed, units a second); docs/navigation.md "The Navigation TLO" |
 | `stick` | `ON` or `OFF` | `Active`, `Status` (`ON`, `PAUSED` or `OFF`), `Distance`, `StickTarget` (spawn id, 0 none), `StickTargetName`, `Stopped` (within the stick's distance), `Behind` (and at the spawn's back); docs/navigation.md |
+| `auratype` | its name | `ID` (its number, 1-based), `Name`, `SpawnID` (the aura's spawn), `Find[text]` (where the text first appears in the name, 1-based, any case). MacroQuest's `Remove` method is not supported: `/removeaura <name>` removes one |
 | `bandolier` | its name | `Active` (each of its four items is the one worn in its slot, an empty one an empty slot), `Index` (1..20), `Name`, `Item[1..4]` (primary, secondary, range, ammo; clamped). A set without a name is NULL to every member. To switch sets: `/bandolier activate <name>` |
 | `bandolieritem` | its name | `ID`, `IconID`, `Name` |
 | `advpath` | `TRUE` | `Active`, `State` (1 following, 0 not), `Status` (0 off, 1 on, 2 paused), `Following`, `Paused`, `WaitingWarp`, `Waypoints`, `Length`, `Monitor` (spawn), `Playing` and `Recording` (FALSE); docs/navigation.md |
