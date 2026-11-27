@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Plugins and Lua scripts no longer stop and start again at every zone change: what is loaded or running stays so, and a plugin you unloaded or a script you stopped stays that way. Plugins also no longer see a character select game state while zoning.
 - MacroQuest's `.cfg` command files run: `AutoExec.cfg`, `CharSelect.cfg`, `InGame.cfg`, `<server>_<character>.cfg`, `<Class>.cfg`, `zoned.cfg`, `<zone>.cfg`, `<plugin>-AutoExec.cfg` (and `<script>-AutoExec.cfg` for Lua scripts), from `cfg/` in the data folder, a server's folder or a character's folder, the most specific copy only. `/loadcfg <name>` runs one by hand. See docs/autoexec.md.
 - `${Group.Member[name]}` now gives the group member, as in MacroQuest, so `${Group.Member[name].Index}` and the member's other fields work (E3's heals and buffs by name use it). The `Group` TLO also gains `AnyoneMissing`, `MercenaryCount` (and the tank, healer, melee and caster counts), `AvgHPs`, `Cleric`, `MarkNpc`, `MasterLooter` and `MouseOver`, and each member `MarkNpc`, `MasterLooter` and `Present`.
 - Chat timestamps are set per tab: right-click a tab and pick **Timestamps** to change that tab only. Tabs keep the format they had until you change them.

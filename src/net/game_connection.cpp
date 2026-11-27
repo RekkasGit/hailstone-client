@@ -329,6 +329,7 @@ void GameConnection::start(const WorldTicket& ticket) {
     link_death_.reset();
     zone_client_messages_.reset();
     zoning_ = false;
+    zone_reentry_ = false;
     connect_world(false);
 }
 
@@ -556,13 +557,15 @@ void GameConnection::update() {
     }
     // The rules last while the character is in the world. From the world login to the zone-in (character select
     // too) the last login's rules hold, provisional: only what has the 'login' permission runs. Disconnected,
-    // nothing runs.
+    // nothing runs. A zone change passes through world (Zoning, then EnteringWorld after world's OP_EnterWorld):
+    // the character is still in the world, so its rules stay, and the plugins and scripts running stay as they are.
+    const bool reentering = state_ == ConnectionState::EnteringWorld && zone_reentry_;
     bool in_world = state_ == ConnectionState::InZone || state_ == ConnectionState::Zoning ||
                     state_ == ConnectionState::ZoneConnecting || state_ == ConnectionState::ZoneEntering ||
-                    state_ == ConnectionState::Camping;
+                    state_ == ConnectionState::Camping || reentering;
     bool logging_in = state_ == ConnectionState::WorldConnecting || state_ == ConnectionState::WorldAuth ||
-                      state_ == ConnectionState::CharacterSelect || state_ == ConnectionState::EnteringWorld ||
-                      state_ == ConnectionState::Creating;
+                      state_ == ConnectionState::CharacterSelect ||
+                      (state_ == ConnectionState::EnteringWorld && !reentering) || state_ == ConnectionState::Creating;
     if (logging_in && (!server_rules_ || !server_rules_->provisional)) {
         server_rules_ = cached_server_rules(options_.server_files_dir);
         ++server_rules_serial_;
@@ -651,8 +654,13 @@ void GameConnection::raise_hook_events() {
         switch (state_) {
         case ConnectionState::WorldConnecting:
         case ConnectionState::WorldAuth: game_state = plugin::kGameStatePreCharSelect; break;
-        case ConnectionState::CharacterSelect:
-        case ConnectionState::EnteringWorld: game_state = plugin::kGameStateCharSelect; break;
+        case ConnectionState::CharacterSelect: game_state = plugin::kGameStateCharSelect; break;
+        // A zone change's pass through world stays in game, as Zoning does below; only an entry from character
+        // select is character select.
+        case ConnectionState::EnteringWorld:
+            game_state = zone_reentry_ && hook_game_state_ == plugin::kGameStateInGame ? plugin::kGameStateInGame
+                                                                                        : plugin::kGameStateCharSelect;
+            break;
         case ConnectionState::Creating: game_state = plugin::kGameStateCharCreate; break;
         case ConnectionState::InZone:
         case ConnectionState::Camping: game_state = plugin::kGameStateInGame; break;
@@ -735,6 +743,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         characters_serial_ = core::next_process_serial();
         bool first = state_ == ConnectionState::WorldAuth;
         state_ = ConnectionState::CharacterSelect;
+        zone_reentry_ = false;
         status_.clear();
         if (first) {
             send_checksums(); // Handle_OP_SendCharInfo
@@ -781,6 +790,7 @@ void GameConnection::handle_world(const AppPacket& p) {
                 ask(std::move(c));
             }
             state_ = ConnectionState::CharacterSelect;
+            zone_reentry_ = false;
         }
         break;
     }
@@ -792,6 +802,7 @@ void GameConnection::handle_world(const AppPacket& p) {
             e.name = name && !name->empty() ? *name : character_;
             send_world(encode(e));
             state_ = ConnectionState::EnteringWorld;
+            zone_reentry_ = true;
             status_ = "Entering the world";
         }
         break;
@@ -952,6 +963,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         auto zone = decode_zone_unavail(p);
         error_ = "That zone is not available" + (zone ? " (" + *zone + ")" : std::string()) + ".";
         state_ = ConnectionState::CharacterSelect;
+        zone_reentry_ = false;
         break;
     }
     case Op::MOTD:
@@ -1071,6 +1083,7 @@ void GameConnection::enter_world(const std::string& name, bool return_home) {
     send_world(encode(e));
     error_.clear();
     state_ = ConnectionState::EnteringWorld;
+    zone_reentry_ = false;
     status_ = (return_home ? "Returning home as " : "Entering the world as ") + name;
 }
 
