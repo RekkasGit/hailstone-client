@@ -6,6 +6,8 @@
 #      between nights. A crash's input is kept for the morning.
 #   3. With a test server set (HAILSTONE_LIVE_*), the live smoke tests (tools/live_smoke.sh, tests/live/*.quest)
 #      played by the sanitizer build's playprobe.
+#   3b. The performance scenes (tools/perf_track.py): a Release client's frame times and memory in fixed scenes,
+#      compared with the last nights in perf.csv; a rise is reported, not failed.
 #   4. With --publish, after a night with no failure: the Linux and Windows packages, built as a release is
 #      (tools/docker/build.sh, tools/make_update.py) with the version label nightly.<date>, the Linux package's tests
 #      run on this machine and the Windows package started under Wine (it logs in to the test server), then
@@ -13,11 +15,13 @@
 #      packages carry no signed manifest.
 #   5. A summary, printed and, with a webhook set, posted to Discord.
 #
-# Usage: tools/nightly.sh [--fuzz-seconds N] [--jobs N] [--no-fuzz] [--no-live] [--no-post] [--package | --publish]
+# Usage: tools/nightly.sh [--fuzz-seconds N] [--jobs N] [--no-fuzz] [--no-live] [--no-perf] [--no-post]
+#                         [--package | --publish]
 #                         [--ref REF]
 #   --fuzz-seconds  seconds per fuzz target (default 1800; the targets run at once, one core each)
 #   --jobs          build and test jobs, and the package containers' CPU limit (default 20)
-#   --no-live       leave out the live smoke tests even with a test server set
+#   --no-live       leave out the live smoke tests (and the logged-in performance scene) even with a test server set
+#   --no-perf       leave out the performance scenes
 #   --package       build, test and zip the packages into the checkout's release-nightly/, without uploading
 #   --publish       build and publish the packages (needs gh signed in with write access, Docker, and MSVC for
 #                   tools/docker/build.sh windows-x64)
@@ -31,7 +35,8 @@
 #                               a test server and a GM character for the live smoke tests (optional; all four)
 #
 # Everything it writes is under ${XDG_CACHE_HOME:-~/.cache}/hailstone-nightly: the checkout it tests (a detached
-# worktree of this repository), its build folders, the fuzz corpora and crash inputs, and a log folder per night.
+# worktree of this repository), its build folders, the fuzz corpora and crash inputs, the performance history
+# (perf.csv), and a log folder per night.
 set -uo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && git rev-parse --show-toplevel)
@@ -39,6 +44,7 @@ fuzz_seconds=1800
 jobs=20
 fuzz=1
 live=1
+perf=1
 post=1
 publish=0
 ref=origin/main
@@ -48,6 +54,7 @@ while [ $# -gt 0 ]; do
     --jobs) jobs=$2; shift 2 ;;
     --no-fuzz) fuzz=0; shift ;;
     --no-live) live=0; shift ;;
+    --no-perf) perf=0; shift ;;
     --no-post) post=0; shift ;;
     --package) publish=1; shift ;;
     --publish) publish=2; shift ;;
@@ -89,8 +96,8 @@ if [ ! -e "$checkout/.git" ]; then
   git -C "$repo" worktree add -q --detach "$checkout" "$ref" || { echo "nightly: cannot make $checkout" >&2; exit 1; }
 fi
 git -C "$checkout" checkout -q --detach -f "$ref" || { echo "nightly: cannot check out $ref" >&2; exit 1; }
-git -C "$checkout" clean -q -ffdx -e /build-asan -e /build-fuzz -e /build-linux-x64 -e /build-windows-x64 -e /.docker \
-  -e /plugins/nms -e /plugins/projecttriune
+git -C "$checkout" clean -q -ffdx -e /build-asan -e /build-fuzz -e /build-perf -e /build-linux-x64 \
+  -e /build-windows-x64 -e /.docker -e /plugins/nms -e /plugins/projecttriune
 # The server plugins' clones join the build when the main checkout has them (AGENTS.md, server plugins). Each night
 # relinks them to where they really are, so a link made from a worktree since removed does not dangle.
 for p in nms projecttriune; do
@@ -174,6 +181,25 @@ if [ "$live" = 1 ] && [ -n "${HAILSTONE_LIVE_SERVER:-}" ]; then
     else
       fail "live smoke tests: ${failures:-none ran} (live.log, live/)"
     fi
+  fi
+fi
+
+# 3b. Performance (docs/ci.md "Nightly performance"): a Release client's --bench in the zone viewer and, with a test
+# server, logged in; each scene against its last nights. A rise is reported, not failed: frame times are noisy.
+if [ "$perf" = 1 ] && [ -n "${EQ_GAME_DIR:-}" ]; then
+  if { [ -f build-perf/CMakeCache.txt ] || cmake -S . -B build-perf -G Ninja -DCMAKE_BUILD_TYPE=Release; } \
+       > "$logs/perf-configure.log" 2>&1 &&
+     nice cmake --build build-perf -j "$jobs" --target hailstone > "$logs/perf-build.log" 2>&1; then
+    perf_live=()
+    [ "$live" = 1 ] && [ -n "${HAILSTONE_LIVE_SERVER:-}" ] && [ -n "${HAILSTONE_LIVE_CHARACTER:-}" ] &&
+      perf_live=(--live "$HAILSTONE_LIVE_SERVER")
+    python3 tools/perf_track.py --hailstone build-perf/hailstone/hailstone --csv "$cache/perf.csv" \
+      --commit "$commit" --logs "$logs/perf" "${perf_live[@]}" > "$logs/perf.log" 2>&1
+    rc=$?
+    while IFS= read -r line; do note "$line"; done < <(grep -E '^(perf |REGRESSION )' "$logs/perf.log")
+    [ "$rc" = 2 ] && fail "performance: no scene gave a result (perf.log, perf/)"
+  else
+    fail "performance build (perf-configure.log, perf-build.log)"
   fi
 fi
 

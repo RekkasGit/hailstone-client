@@ -2,6 +2,7 @@
 
 #include "app/client_app_internal.h"
 #include "app/ui_visibility.h"
+#include "app/frame_bench.h"
 #include "app/frame_pace.h"
 #include "assets/zone_flora.h"
 #include "platform/precise_sleep.h"
@@ -15,6 +16,11 @@
 namespace hailstone::app {
 
 namespace client_internal {
+
+namespace {
+// How long --bench waits for its /camp desktop (30 s for a player, at once for a GM) before it quits regardless.
+constexpr double kBenchCampSeconds = 60.0;
+} // namespace
 
 int ClientApp::run() {
     if (quit_) return 0; // the asset-folder picker was quit: nothing else was set up
@@ -43,6 +49,10 @@ int ClientApp::run() {
         scene_recorder_ = std::make_unique<render::SceneRecorder>(vk_);
         shadow_recorder_ = std::make_unique<render::SceneRecorder>(vk_, false);
     }
+    // --bench (app/frame_bench.h): frames timed in the settled zone, one log line, then the client leaves as a
+    // closed window does (/camp desktop), so the server holds no link-dead character for the next run's login.
+    FrameBench bench(opts_.bench_frames, opts_.bench_settle);
+    std::optional<double> bench_left_at; // when the bench asked to leave
     for (int frame = 0; !quit_ && window_.poll_events(); ++frame) {
         if (opts_.frames && frame >= opts_.frames) break;
         retired_ui_textures_.reset(); // the last frame, which may have drawn it, is submitted (waits for the GPU)
@@ -85,10 +95,23 @@ int ClientApp::run() {
         }
         if (quit_) break;
         auto now = Clock::now();
+        const float frame_ms = std::chrono::duration<float, std::milli>(now - last).count(); // --bench: uncapped
         float dt = std::min(std::chrono::duration<float>(now - last).count(), 0.1f);
         last = now;
         if (dt > 0.0f) fps = fps * 0.95f + (1.0f / dt) * 0.05f;
         double t = std::chrono::duration<double>(now - start).count();
+        if (!bench_left_at && bench.add(screen_ == Screen::InGame && player_ready_ && !zone_settling(), t, frame_ms)) {
+            const std::string zone = conn_ ? conn_->world().zone_short_name : std::string();
+            log::info("{}", bench_line(zone, bench_stats(bench.times()), bench_memory(vk_)));
+            log_memory("bench", true);
+            bench_left_at = t;
+            window_close_request();
+        }
+        if (bench_left_at && screen_ != Screen::InGame) quit_ = true; // camped out to character select
+        if (bench_left_at && t - *bench_left_at > kBenchCampSeconds) {
+            log::warn("--bench: still in game {} s after /camp desktop; quitting", kBenchCampSeconds);
+            break;
+        }
         frame_steps_ = step_clock_.advance(static_cast<std::uint64_t>(
             std::chrono::duration_cast<std::chrono::microseconds>(now - start_time_).count()));
         if (conn_) {
