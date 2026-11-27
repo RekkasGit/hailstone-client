@@ -707,7 +707,9 @@ A crash (a fatal signal on Linux and macOS, an unhandled exception on Windows, o
 
 - the build (`core/build_info.h`: version and commit), the time and what happened;
 - the log's path and its last 16 lines;
-- the stack where glibc has one (`addr2line -e hailstone <+offset>` names a frame of a build with symbols).
+- on Linux the program's GNU build ID (`build-id:`) and the stack where glibc has one; `tools/symbolize_crash.py`
+  names a release's frames from the symbol files kept when it was built (docs/hardening.md "Crash reports from
+  release builds").
 
 On Windows a minidump, `crash-<...>.dmp`, goes beside it (`platform/crash_log.h`): call stacks, registers and the
 module list. It goes into bug reports unchanged, so it holds no heap (not the password field, the session key or a

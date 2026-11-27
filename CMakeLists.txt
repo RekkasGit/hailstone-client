@@ -99,6 +99,7 @@ if(MSVC)
 endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include(SeparateSymbols) # before the dependencies: its compile options apply to them too
 include(Dependencies)
 include(Shaders)
 
@@ -951,6 +952,7 @@ if(HAILSTONE_CLANG_TIDY)
 endif()
 target_link_libraries(hailstone PRIVATE hailstone_engine)
 set_target_properties(hailstone PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}$<0:>)
+hailstone_separate_symbols(hailstone)
 # Shaders are looked up next to the executable.
 add_custom_command(TARGET hailstone POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${HAILSTONE_SHADER_OUT} $<TARGET_FILE_DIR:hailstone>/shaders)
@@ -1006,6 +1008,13 @@ elseif(TARGET SDL3-shared)
   get_target_property(hailstone_sdl_imported SDL3-shared IMPORTED)
   if(NOT hailstone_sdl_imported)
     install(TARGETS SDL3-shared LIBRARY DESTINATION . NAMELINK_SKIP)
+  endif()
+endif()
+
+if(TARGET SDL3-shared)
+  get_target_property(hailstone_sdl_imported SDL3-shared IMPORTED)
+  if(NOT hailstone_sdl_imported)
+    hailstone_separate_symbols_at_install(SDL3-shared .) # fetched, built with the client's flags: debug information too
   endif()
 endif()
 install(TARGETS MQ2Example LIBRARY DESTINATION plugins COMPONENT examples EXCLUDE_FROM_ALL) # a MODULE is a LIBRARY

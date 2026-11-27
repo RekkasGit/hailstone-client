@@ -30,7 +30,8 @@
 #                               a test server and a GM character for the live smoke tests (optional; all four)
 #
 # Everything it writes is under ${XDG_CACHE_HOME:-~/.cache}/hailstone-nightly: the checkout it tests (a detached
-# worktree of this repository), its build folders, the fuzz corpora and crash inputs, and a log folder per night.
+# worktree of this repository), its build folders, the fuzz corpora and crash inputs, a log folder per night, and the
+# packages' symbol files, symbols/<version>/<platform>/ (never uploaded; docs/hardening.md "Crash reports").
 set -uo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && git rev-parse --show-toplevel)
@@ -175,7 +176,7 @@ fi
 # 4. The packages, after a night with no failure.
 published=""
 package_build() {
-  CPUS=$jobs CMAKE_ARGS="-DHAILSTONE_BROWSER=ON -DHAILSTONE_NIGHTLY_LABEL=$2" \
+  CPUS=$jobs SYMBOLS_DIR="$cache/symbols" CMAKE_ARGS="-DHAILSTONE_BROWSER=ON -DHAILSTONE_NIGHTLY_LABEL=$2" \
     tools/docker/build.sh "$1" --no-test > "$3" 2>&1
 }
 
@@ -196,6 +197,8 @@ publish_packages() {
       note "the $platform package passed at the second try (package-$platform.log)"
     fi
   done
+  # The symbol files of nightlies older than 90 days go: nobody still runs those.
+  find "$cache/symbols" -mindepth 1 -maxdepth 1 -type d -mtime +90 -exec rm -rf {} + 2>/dev/null
   # In 8 parts at once, as ctest runs them (HAILSTONE_TEST_SHARD, docs/ci.md "The tests"). The cases that start the
   # real CEF helper are left out: they time out on some desktops, the release builds' too (docs/ci.md "Nightly
   # builds").

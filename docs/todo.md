@@ -569,6 +569,8 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] The box set's other windows (`--box-child`) have no updater and fetch no add-ons: only the first window downloads and installs (tests/updater_test.cpp).
 - [ ] A lock between Hailstone windows the client did not start (two copies opened by hand): each still has its own updater and add-on manager on the same `download/` and `addons/` files.
 - [ ] A release job in CI (packages, manifest, signature, upload).
+- [x] **Crash reports of release builds name functions:** release and nightly builds keep their debug information aside (`HAILSTONE_SEPARATE_SYMBOLS`, `release-symbols/<version>/<platform>/`), Linux reports carry the build ID, and `tools/symbolize_crash.py` names their frames (docs/hardening.md "Crash reports from release builds").
+- [ ] Crash symbols, open: a Windows minidump is read by hand in a debugger (nothing automates it); macOS keeps no symbols; a plugin's or SDL's frames are not named by the tool.
 - [x] **Release images pinned by digest.** `linux.Dockerfile` is pinned by digest with an apt snapshot date; MSVC 17.14 and SDK 10.0.26100 in `msvc_setup.sh` (docs/updater.md "Making a release").
 - [x] **macOS arm64 releases:** a plain folder like Linux's with MoltenVK beside the binary; built, tested and signed ad hoc by the macOS workflow (docs/ci.md "macOS arm64"), packed and signed into the manifest locally. No Developer ID or notarization, by choice: players clear the quarantine (README.md).
 - [ ] **macOS on a Mac.** Only the build and headless tests have run.
