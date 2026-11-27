@@ -514,7 +514,9 @@ Helpers: `lib/hudx_tiles.lua`, `lib/hudx_blocked.lua`.
 - **BandolierWnd**, **PotionBeltWnd** and **AuraWindow** (frames).
 - **BlockedBuffWnd** and **BlockedPetBuffWnd**.
 - **MapToolbarWnd**: the tools grouped.
-- TargetOfTargetWindow is kept hidden (the target frame shows the target's target).
+- Modern hides the separate TargetOfTargetWindow. In Modern and Gamepad, left-click the target's target health bar
+  in the target frame to select the spawn it shows. The click goes through `TargetOfTarget_HP` and waits for the
+  server to accept the new target.
 
 Testing: `test.tab.ActionsWindow.ACTW_ActionsSubwindows=n`, `test.show.MapToolbarWnd=1`.
 
