@@ -200,8 +200,8 @@ the memorize always runs; gem 8 is used and keeps the last spell. Scripts are ma
 `items.quest`, `npc.quest` and `combat.quest` end with `#nukeitem` on the item they summon or loot, and check that
 the client saw it go, so nightly runs do not fill the character's bags.
 
-The runner waits 20 seconds between scripts (`LIVE_SMOKE_PAUSE`), so the last script's zone has shut down, and gives each playprobe 480 seconds (`--seconds`); a run still going then camps out all the same. A script
-that ran no step never reached the world (the server refused the login, or answered "That zone is not available"
+The runner waits 20 seconds between scripts (`LIVE_SMOKE_PAUSE`), so the last script's zone has shut down, and
+gives each playprobe 480 seconds (`--seconds`); a run still going then camps out all the same. A script that ran no step never reached the world (the server refused the login, or answered "That zone is not available"
 while the last script's zone shut down): it is played once more after 30 seconds, and its line says so.
 `tests/test_live_smoke.py` checks the runner against a stand-in playprobe (CI's checks run it).
 A script starts with `zone <name>`, which passes at once when the character is already there, so it does not
