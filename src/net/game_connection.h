@@ -403,6 +403,8 @@ public:
     const WorldTicket& ticket() const { return ticket_; }
 
     ConnectionState state() const { return state_; }
+    // EnteringWorld on a zone change's pass through world, not an entry from character select: still in game.
+    bool zone_reentry() const { return state_ == ConnectionState::EnteringWorld && zone_reentry_; }
     // In a zone, the camp's 30 s included (the player is still there): what the plugins see as in_zone.
     bool in_zone() const { return state_ == ConnectionState::InZone || state_ == ConnectionState::Camping; }
     const std::string& error() const { return error_; }

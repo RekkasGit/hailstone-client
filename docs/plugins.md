@@ -651,7 +651,8 @@ Scripts keep running through a zone change, and compiled plugins stay loaded: th
 character leaves the world, so a zone change neither stops, unloads, starts nor loads anything. A script the player
 stopped stays stopped, and a plugin the player unloaded stays unloaded, after zoning. Camping to character select
 makes the rules provisional again (only `login` scripts keep running); a disconnect stops every script. The autorun
-list is read once per login.
+list is read once per login. The server's `run` scripts and required add-on scripts are started at the zone-in of
+each login too, so one that stopped or failed stays stopped until the next login, not the next zone.
 
 ## Lua socials
 
