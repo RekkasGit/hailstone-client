@@ -3308,7 +3308,7 @@ void register_game_tlos(Registry& r) {
               "MoveTo movement and arrival status.");
     r.add_tlo("MoveUtils", [](const Context& c, std::string_view) -> V {
         return c.nav ? V::object(g.moveutils, 0) : V::nil();
-    });
+    }, "Stuck detection and the movement command walking.");
     r.add_tlo("AdvPath", [](const Context& c, std::string_view) -> V {
         return c.nav ? V::object(g.advpath, 0) : V::nil();
     }, "Path-following status.");
