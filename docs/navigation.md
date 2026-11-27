@@ -293,6 +293,7 @@ jumps) when the floor 4 to either side is more than 5 under the feet, so it neve
 | `/nav loc <y> <x> <z>` (`locyxz`) / `locxyz <x> <y> <z>` / `locyx <y> <x>` | to a point (`/loc` order, or x y z); done within 2 |
 | `/nav door <name> [click]` / `door id <#> [click]` | to the nearest door whose name contains the text; `click` uses it on arrival |
 | `distance=<n>` (`dist=<n>`) | anywhere on the line: stop this close |
+| `log=<level>` | anywhere on the line: MQ2Nav's level for this command's own lines, `trace`, `debug`, `info` (the default, and any word it does not know), `warning`, `error`, `critical` or `off`. Above `info` the walk's "Navigating to ...", "Stopped." and "Paused." lines are not shown; above `error` neither are its errors ("No such spawn."). It is no part of a spawn's or door's name (MQ2Nav leaves it in the line) |
 | `/nav help` (also `/nav` alone) | the commands |
 | `/nav stop` / `pause` | stop; pause or go on |
 | `/nav status` | the mesh's tiles and the walk |

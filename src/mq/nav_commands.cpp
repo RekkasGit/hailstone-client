@@ -59,6 +59,16 @@ const game::Spawn* find_spawn(const net::GameConnection& conn, std::string_view 
 
 const char* on_off(bool b) { return b ? "on" : "off"; }
 
+// /nav's log=<level>: spdlog's levels in MQ2Nav's order (spdlog::level::level_string_views), info when it names none
+// of them, as MQ2Nav's ExtractLogLevel; here in any case.
+constexpr int kNavLogInfo = 2, kNavLogError = 4;
+int nav_log_level(std::string_view name) {
+    static constexpr std::string_view kLevels[] = {"trace", "debug", "info", "warning", "error", "critical", "off"};
+    for (int i = 0; i < 7; ++i)
+        if (iequals(name, kLevels[i])) return i;
+    return kNavLogInfo;
+}
+
 } // namespace
 
 void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const CommandEnv& env,
@@ -75,14 +85,20 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
                 out("Navigation is not available.");
                 return;
             }
-            // Options anywhere on the line: distance=N (dist=N).
+            // Options anywhere on the line: distance=N (dist=N), and log=<level>, MQ2Nav's ExtractLogLevel: the level
+            // of this command's own lines, spdlog's names (trace, debug, info, warning, error, critical, off; info
+            // when it is none of them). Taken off the line, so a spawn or door name never includes it (MQ2Nav leaves
+            // it there).
             std::vector<std::string> w;
             float distance = 0.0f;
+            int log_level = kNavLogInfo;
             for (std::string& t : words(args)) {
                 std::string_view tv = t;
                 if (istarts_with(tv, "distance=") || istarts_with(tv, "dist=")) {
                     double d = 0;
                     if (parse_float(tv.substr(tv.find('=') + 1), d)) distance = in_range<float>(d).value_or(0.0f);
+                } else if (istarts_with(tv, "log=")) {
+                    log_level = nav_log_level(tv.substr(4));
                 } else {
                     w.push_back(std::move(t));
                 }
@@ -107,9 +123,17 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
                 }
                 if (!exact && matches == 1) sub = std::string(only);
             }
+            // MQ2Nav's SPDLOG_INFO lines (navigating, stopping, pausing) and SPDLOG_ERROR ones (no such spawn), shown
+            // at log= or below. Help, status, options and usage lines are always shown.
+            auto info = [&](const std::string& text) {
+                if (log_level <= kNavLogInfo) out(text);
+            };
+            auto error = [&](const std::string& text) {
+                if (log_level <= kNavLogError) out(text);
+            };
             auto started = [&](const std::string& err, const std::string& what) {
-                if (err.empty()) out("Navigating to " + what + ".");
-                else out("Cannot navigate to " + what + ": " + err + ".");
+                if (err.empty()) info("Navigating to " + what + ".");
+                else error("Cannot navigate to " + what + ": " + err + ".");
             };
             const net::GameConnection* conn = ctx.conn;
             const game::Spawn* me = conn ? conn->world().player() : nullptr;
@@ -117,7 +141,7 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
             if (iequals(sub, "help")) {
                 for (const char* line :
                      {"/nav id <#> | target | spawn <search> | loc <y> <x> <z> | locxyz <x> <y> <z> | locyx <y> <x>",
-                      "/nav door <name> [click] | door id <#> [click]   (options: distance=<n>)",
+                      "/nav door <name> [click] | door id <#> [click]   (options: distance=<n>, log=<level>)",
                       "/nav stop | pause | status | ui | reload",
                       "/nav option water|lava|pvp|zonelines|doors|follow on|off | clearance <0..6>"})
                     out(line);
@@ -125,12 +149,12 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
             }
             if (iequals(sub, "stop")) {
                 nav->stop("");
-                out("Stopped.");
+                info("Stopped.");
                 return;
             }
             if (iequals(sub, "pause")) {
                 nav->set_paused(!nav->status().paused);
-                out(nav->status().paused ? "Paused." : "Resumed.");
+                info(nav->status().paused ? "Paused." : "Resumed.");
                 return;
             }
             if (iequals(sub, "reload") || iequals(sub, "rebuild")) {
@@ -182,7 +206,7 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
                 return;
             }
             if (!conn || !me) {
-                out("Not in a zone.");
+                error("Not in a zone.");
                 return;
             }
             if (iequals(sub, "id") || iequals(sub, "target") || iequals(sub, "spawn")) {
@@ -200,7 +224,7 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
                     s = find_spawn(*conn, join(w, 1));
                 }
                 if (!s) {
-                    out("No such spawn.");
+                    error("No such spawn.");
                     return;
                 }
                 started(nav->go_to_spawn(s->id, distance), s->name);
@@ -250,7 +274,7 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
                     }
                 }
                 if (!door) {
-                    out("No such door.");
+                    error("No such door.");
                     return;
                 }
                 started(nav->go_to_door(door->id, click), door->name);

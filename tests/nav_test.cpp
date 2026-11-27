@@ -1331,6 +1331,40 @@ TEST_CASE("nav: /nav's destinations, options and controls") {
     CHECK(h.printed.back() == "[Nav] Unknown /nav command: bogus (/nav help)");
 }
 
+TEST_CASE("nav: /nav's log=<level> quiets its own lines, as MQ2Nav's, and is no part of a name") {
+    MqHost h;
+    h.run("/nav id 10 distance=15");
+    CHECK(h.printed.back() == "[Nav] Navigating to a_rat01.");
+    h.printed.clear();
+    // E3's line: the walk starts, at the distance, with no "Navigating to" (an info line) at warning.
+    h.run("/nav id 10 distance=15 log=warning");
+    REQUIRE_FALSE(h.nav.calls.empty());
+    CHECK(h.nav.calls.back().what == "spawn");
+    CHECK(h.nav.calls.back().id == 10);
+    CHECK(h.nav.calls.back().distance == 15.0f);
+    CHECK(h.printed.empty());
+    // An error still shows at warning and error, not at critical or off.
+    h.run("/nav id 9999 log=WARNING");
+    REQUIRE(h.printed.size() == 1);
+    CHECK(h.printed.back() == "[Nav] No such spawn.");
+    h.run("/nav id 9999 log=error");
+    CHECK(h.printed.size() == 2);
+    h.run("/nav id 9999 log=critical");
+    h.run("/nav id 9999 log=off");
+    h.run("/nav stop log=warning"); // stopping is an info line too
+    h.run("/nav pause log=error");
+    CHECK(h.printed.size() == 2);
+    // A level it does not know is info, as MQ2Nav's ExtractLogLevel; debug and trace show what info does.
+    h.run("/nav id 10 log=loud");
+    CHECK(h.printed.back() == "[Nav] Navigating to a_rat01.");
+    h.run("/nav id 10 log=debug");
+    CHECK(h.printed.size() == 4);
+    // Taken off the line: a spawn search does not look for "log=warning" too.
+    h.run("/nav spawn npc Fippy log=warning");
+    CHECK(h.nav.calls.back().id == 11);
+    CHECK(h.printed.size() == 4);
+}
+
 TEST_CASE("nav: /nav door's click on arrival needs 'actions'; the walk alone needs 'move'") {
     MqHost h;
     game::Door door;
