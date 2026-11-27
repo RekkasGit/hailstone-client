@@ -2909,7 +2909,8 @@ void GameConnection::set_target(std::uint32_t spawn_id) {
 bool GameConnection::request_target_of_target() {
     if (state_ != ConnectionState::InZone || !world_.target_id || !target_of_target_ ||
         !world_.spawns.contains(target_of_target_)) return false;
-    // RoF2 EQType 27 (@0x761827) asks the server whether this spawn can be targeted.
+    // RoF2's path: CGaugeWnd's left-button-up @0x66f920 (the target-of-target gauge, EQType 27) calls
+    // Send_OP_TargetCommand_00761690, whose case 0x1b (@0x761827) asks the server whether this spawn can be targeted.
     return send_zone(encode_target(true, target_of_target_));
 }
 
@@ -3402,8 +3403,9 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
         if (auto t = decode_target(p)) {
             // The server accepted a target (or targets our pet for us). RoF2 resolves the spawn and then reports
             // the change with OP_TargetMouse, which lets the server update its selected target and send its HoTT.
-            if (*t == 0) world_.target_id = 0;
-            else if (world_.spawns.contains(*t)) set_target(*t);
+            // CEverQuest::HandleWorldMessage (case 0x58e2) sets the target only when GetSpawnByID finds the spawn,
+            // so an id of 0 or an unknown one leaves the current target alone.
+            if (world_.spawns.contains(*t)) set_target(*t);
         }
         break;
     case Op::ZonePlayerToBind:

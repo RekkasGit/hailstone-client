@@ -586,7 +586,8 @@ public:
             list_.rows.push_back(ListRow{{host.actions->skill_label(*host.conn, static_cast<std::uint32_t>(s))}});
             skills_.push_back(s);
         }
-        if (g_skill_pick.combat && slam_available(host)) {
+        // CSkillsSelectWnd::SetTypesToDisplay @0x756ce0 adds Slam on the innate slot alone, without Bash.
+        if (g_skill_pick.combat && slam_listed(host)) {
             list_.rows.push_back(ListRow{{host.actions->skill_label(*host.conn, game::mechanics::skill::kSlam)}});
             skills_.push_back(game::mechanics::skill::kSlam);
         }
@@ -597,7 +598,7 @@ public:
             row < 0 || row >= static_cast<int>(skills_.size()))
             return false;
         const auto skill = skills_[static_cast<std::size_t>(row)];
-        if (skill == game::mechanics::skill::kSlam && !slam_available(host)) return false;
+        if (skill == game::mechanics::skill::kSlam && !slam_listed(host)) return false;
         host.actions->set_ability_button(g_skill_pick.combat, g_skill_pick.slot, skill);
         g_skill_pick.slot = -1;
         return true;

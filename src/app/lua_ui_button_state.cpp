@@ -18,6 +18,11 @@ bool slam_available(const UiHost& host) {
            game::mechanics::can_slam(*host.character, skill_race(*host.conn, *host.character));
 }
 
+bool slam_listed(const UiHost& host) {
+    return host.conn && host.character &&
+           game::mechanics::has_innate_slam(*host.character, skill_race(*host.conn, *host.character));
+}
+
 std::uint32_t HostButtonQueries::now() { return net::GameConnection::eq_time(); }
 std::uint32_t HostButtonQueries::fast_now() { return static_cast<std::uint32_t>(std::time(nullptr)); }
 

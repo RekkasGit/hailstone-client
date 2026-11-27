@@ -432,7 +432,10 @@ request unanswered after 10 s is dropped.
   shown.
 - If the window was reopened while a retired request was pending, it asks for a new list after that reply arrives
   or the request times out, even with Auto Update off.
-- Eligible players can use Tracking in the zone through the camp countdown. Server extensions can restrict access
+- Eligible players can use Tracking in the zone through the camp countdown, as in RoF2: `Send_OP_Camp`
+  (@0x5317a0) sits, saves, sends OP_Camp and starts the camp timer without touching any window;
+  `CharacterZoneClient::UseSkill` (@0x45b2d0, case 0x35) refuses Tracking only while feigned (StandState 'f'); the
+  window goes at `CDisplay::DeactivateMainUI` (@0x4891b0) after OP_Logout. Server extensions can restrict access
   through their tracking rule (docs/plugins.md).
 - The player's own death empties the list, as it ends every Find and walk (docs/unknowns.md).
 
