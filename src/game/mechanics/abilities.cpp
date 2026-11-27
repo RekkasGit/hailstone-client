@@ -512,7 +512,10 @@ bool can_use_combat_skill(const SkillContext& ctx, std::uint32_t skill, bool sla
     // (vtable +0x88, 0x58b4e0, the raw +0xeb4 an illusion's SetRace writes) with those three, so the variant races
     // 90, 92 and 93, whose innate Slam slot InitInnates also sets, do not pass here.
     const std::uint32_t race = ctx.form_race ? ctx.form_race : sheet.race;
-    // Slam skips Bash's shield requirement, but only in a form that grants Slam.
+    // A deliberate change to a RoF2 rule (docs/mechanics.md "Slam"): Slam's attack needs no shield. The original
+    // asks the races 90, 92 and 93, which have the innate Slam but not the race pass below, for the shield as for
+    // Bash; Hailstone asks only for the Bash skill, which EQEmu's OPCombatAbility wants from them too (it bypasses
+    // the skill only for races 2, 9 and 10, by GetRace, and checks no shield). A form without the innate Slam fails.
     if (skill == skill::kBash && slam) return can_slam(*ctx.ch, race);
     if (skill == skill::kBash && has_racial_bash(race)) return true;
     if (adjusted_skill(*ctx.ch, skill) <= 0) return false; // CharacterZoneClient::HasSkill @0x44a1b0
