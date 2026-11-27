@@ -5,12 +5,18 @@
 
 #include "app/actions_ui.h"
 #include "app/lua_ui_windows.h"
+#include "app/skill_race.h"
 #include "game/hot_button_menu.h"
 #include "game/mechanics/character.h"
 #include "game/spell_gem.h"
 #include "net/game_connection.h"
 
 namespace hailstone::app {
+
+bool slam_available(const UiHost& host) {
+    return host.conn && host.character &&
+           game::mechanics::can_slam(*host.character, skill_race(*host.conn, *host.character));
+}
 
 std::uint32_t HostButtonQueries::now() { return net::GameConnection::eq_time(); }
 std::uint32_t HostButtonQueries::fast_now() { return static_cast<std::uint32_t>(std::time(nullptr)); }

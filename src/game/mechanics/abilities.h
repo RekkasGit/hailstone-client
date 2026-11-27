@@ -281,6 +281,10 @@ std::optional<SkillMessage> check_hide_moved(const SkillContext& ctx, SkillState
 // Backstab, ...), else the profile's (Bard). GetAdjustedSkill itself is not hooked.
 std::int32_t adjusted_skill(const Character& ch, std::uint32_t skill);
 
+// Slam is innate in the three large player forms. Their citizen forms also need the Bash skill.
+// Zero current_race uses the profile race.
+bool can_slam(const Character& ch, std::uint32_t current_race);
+
 // The Actions window's lists: skills the player has (CharacterZoneClient::HasSkill @0x44a1b0: adjusted skill
 // above 0) that the original activates through UseSkill; combat = SkillCombatType 1 or 2.
 // current_race is the player spawn's current appearance race (which can change with illusions).
