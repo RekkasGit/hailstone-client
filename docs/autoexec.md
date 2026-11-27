@@ -16,7 +16,8 @@ Three folders, from the broadest to the most specific (docs/layout.md):
 
 For each file name, only the most specific copy runs: a character's `zoned.cfg` is used instead of the server's or
 the global one, not as well as them. Within a folder, an `autoexec/` subfolder is looked in first, as MacroQuest looks
-in `Config\Autoexec\` before `Config\`. File and folder names match in any case on every system.
+in `Config\Autoexec\` before `Config\`. File and folder names match in any case on every system, but only the ASCII
+letters A to Z fold: a name with other letters (`Bärbel.cfg`) must be written in the file's own case.
 
 Nothing is read from the game folder, and a server cannot put a file in any of these folders: the files a server
 sends go to the profile's `assets/`, `scripts/` and `plugins/` folders and `hailstone.cfg` only.
@@ -51,10 +52,21 @@ At a world entry the order is `InGame`, `<server>_<character>`, `<Class>`, `<zon
 
 ## /loadcfg
 
-`/loadcfg <name>` runs a file now. A name is looked up as above (`.cfg` added when it has no `.`). A name with a
-folder in it is a path, relative to the data folder or absolute, and must name a file inside the data folder
-(MacroQuest takes any path). Without a file it says `Could not /loadcfg '<name>'`.
+`/loadcfg <name>` runs a file now. A name is looked up as above (`.cfg` added when it has no `.`). Without a file it
+says `Could not /loadcfg '<name>'`.
+
+A name with a folder in it is a path, relative to the data folder (`/loadcfg cfg/raids/fights`) or absolute. A path
+is taken only from a line you typed (or one of your own `.cfg` files ran), and only when it names a `.cfg` file inside
+one of the three folders above, subfolders included; anything else in the data folder (a plugin's settings, the chat
+history, a server's `assets/`) is not run. A script or plugin may name a file but not give a path: its path is refused
+with a chat line, as it cannot read files itself and must not send another file's lines as chat. MacroQuest takes any
+path from anyone.
+
+A file larger than 64 KB is not run, with a chat line saying so.
 
 A file's lines run as whoever sent `/loadcfg`: a script that sends it runs the lines with the script's own rights. A
-file may `/loadcfg` another; `/loadcfg`, `/docommand`, `/noparse` and `/squelch` nest at most 16 deep, so a file that
-loads itself stops there with a chat line.
+file may `/loadcfg` another, but not one already running further out (a file that loads itself, or two that load each
+other, stop there with a chat line). `/loadcfg`, `/docommand`, `/noparse` and `/squelch` nest at most 16 deep. One
+`/loadcfg` runs at most 1000 lines in all, the lines of the files it loads in turn included, and so do the files that
+run together at one moment (a world entry's `InGame`, `<server>_<character>`, `<Class>` and `<zone>`); past that the
+rest is dropped with one chat line.

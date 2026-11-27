@@ -384,15 +384,54 @@ void Commands::load_cfg(std::string_view args) {
         say("Usage: /loadcfg <filename>");
         return;
     }
-    auto lines = env_.load_cfg ? env_.load_cfg(args) : std::nullopt;
-    if (!lines) {
+    // A window's line (LiteralLine) is text others wrote, not the player's typing.
+    const bool typed = plugin::caller_name().empty() && g_literal_lines == 0;
+    auto file = env_.load_cfg ? env_.load_cfg(args, typed) : std::nullopt;
+    if (!file) {
         say(std::format("Could not /loadcfg '{}'", args));
         return;
     }
+    if (!file->refused.empty()) {
+        say(file->refused);
+        return;
+    }
+    if (cfg_stack_.empty()) {
+        cfg_budget_ = kMaxCfgLines;
+        cfg_budget_said_ = false;
+    }
+    run_cfg(*file);
+}
+
+void Commands::run_cfg_files(const std::vector<CfgLoad>& files) {
+    cfg_budget_ = kMaxCfgLines;
+    cfg_budget_said_ = false;
+    for (const CfgLoad& file : files) {
+        if (!file.refused.empty()) say(file.refused);
+        else run_cfg(file);
+    }
+}
+
+void Commands::run_cfg(const CfgLoad& file) {
     if (!env_.run || too_deep()) return;
+    if (std::find(cfg_stack_.begin(), cfg_stack_.end(), file.file) != cfg_stack_.end()) {
+        const std::size_t slash = file.file.find_last_of("/\\");
+        say(std::format("[MQ] /loadcfg: {} is already running; not run inside itself",
+                        slash == std::string::npos ? file.file : file.file.substr(slash + 1)));
+        return;
+    }
+    cfg_stack_.push_back(file.file);
     ++nested_;
-    for (const std::string& line : *lines) env_.run(line);
+    for (const std::string& line : file.lines) {
+        if (cfg_budget_ <= 0) {
+            if (!std::exchange(cfg_budget_said_, true))
+                say(std::format("[MQ] /loadcfg: stopped after {} .cfg lines; the rest are not run", kMaxCfgLines));
+            break;
+        }
+        --cfg_budget_;
+        env_.run(line);
+    }
     --nested_;
+    cfg_stack_.pop_back();
 }
 
 std::int64_t Commands::now_ms() const {
