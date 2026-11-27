@@ -360,6 +360,7 @@ add_library(hailstone_engine STATIC
   src/app/item_preview_view.cpp
   src/app/item_ui.cpp
   src/app/perf_ui.cpp
+  src/app/frame_bench.cpp
   src/app/stats_ui.cpp
   src/app/actions_ui.cpp
   src/app/actions_ui_sets.cpp
@@ -1328,6 +1329,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/lua_slot_info_test.cpp
     tests/social_editor_test.cpp
     tests/app_frame_work_test.cpp
+    tests/frame_bench_test.cpp
     tests/frame_pace_test.cpp
     tests/alt_currency_ui_test.cpp
     tests/useful_npcs_test.cpp

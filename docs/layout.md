@@ -723,7 +723,7 @@ After the report the previous handler runs (a core dump, a sanitizer's report, o
 An error that ends the run without a crash (no Vulkan driver, no qualifying GPU, no window, missing shaders) is logged
 and shown in a dialog (`app/startup_error.h`) with the kind of problem, the usual fix, the error and the log's path.
 When no GPU qualifies, it names each GPU and what it lacks (`render/gpu_requirements.h`). The test runs (`--frames`,
-`--screenshot`) show no dialog.
+`--bench`, `--screenshot`) show no dialog.
 
 #### Bug reports
 

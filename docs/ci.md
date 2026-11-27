@@ -42,6 +42,8 @@ into `tools/checks.sh`, not into the workflow alone.
     `is_player_path` refuses, and refuses a binary without the release key; `release_options.sh` names that key.
   - `tests/test_release_tools.py`: the release packers' versions, names and contents (`tools/make_addon.py` and
     `tools/make_update.py`).
+  - `tests/test_perf_track.py`: `tools/perf_track.py` reads the client's `bench:` line and flags a rise against the
+    last nights only past both of its thresholds ("Nightly performance").
 
 One workflow builds: `.github/workflows/macos.yml` ("macOS arm64" below), for the platform Linux cannot build,
 started by hand or by a push to a `macos/**` branch.
@@ -202,12 +204,14 @@ machine:
    `--fuzz-seconds` (default 1800). Their corpora are kept between nights, and a crash's input is kept for the morning.
 3. With a test server set, the live smoke tests ("Live smoke tests" above), played by the sanitizer build's
    `playprobe`. A sanitizer report in a script's log fails it too.
-4. With `--publish`, and only after a night with no failure, the nightly build ("Nightly builds" below).
-5. A summary: printed, kept in the night's log folder, and posted to Discord when a webhook is set. The posted text
+4. The performance scenes ("Nightly performance" below): reported, never a failure.
+5. With `--publish`, and only after a night with no failure, the nightly build ("Nightly builds" below).
+6. A summary: printed, kept in the night's log folder, and posted to Discord when a webhook is set. The posted text
    names no local path; after a publish it ends with the release's link.
 
 It exits 1 when a step fails. Options: `--fuzz-seconds N`, `--jobs N` (default 20, also the package containers' CPU
-limit), `--no-fuzz`, `--no-live`, `--no-post`, `--package` (step 4 without the upload), `--publish`, `--ref REF`.
+limit), `--no-fuzz`, `--no-live`, `--no-perf`, `--no-post`, `--package` (step 5 without the upload), `--publish`,
+`--ref REF`.
 
 - Settings go in `${XDG_CONFIG_HOME:-~/.config}/hailstone/nightly.env`, which it sources: `EQ_GAME_DIR`,
   `HAILSTONE_VECTORS_DIR` and, optionally, `HAILSTONE_NIGHTLY_WEBHOOK` (a Discord webhook URL) and the live smoke
@@ -216,10 +220,44 @@ limit), `--no-fuzz`, `--no-live`, `--no-post`, `--package` (step 4 without the u
   settings.
 - Everything it writes is under `${XDG_CACHE_HOME:-~/.cache}/hailstone-nightly`: the checkout it tests (a detached
   worktree of the repository, reset to the ref each night and cleaned of all but its build folders and the
-  containers' compiler caches in `.docker/`), the corpora (`corpus/<target>`), crash inputs (`crashes/<target>`)
-  and a log folder per night (`logs/<time>`, with `summary.txt`).
+  containers' compiler caches in `.docker/`), the corpora (`corpus/<target>`), crash inputs (`crashes/<target>`),
+  the performance history (`perf.csv`) and a log folder per night (`logs/<time>`, with `summary.txt`).
 - The server plugins' clones join the build when the main checkout has them. A lock keeps two runs apart.
 - A crash input replays with `build-fuzz/<target> <file>` in the checkout.
+
+### Nightly performance
+
+`tools/perf_track.py` runs a Release build of the client (`build-perf`, target `hailstone`) with `--bench`
+(docs/dev-ui.md "The performance window") in fixed scenes and keeps one row per scene and night in `perf.csv`:
+
+- `viewer:<zone>`: the zone viewer at the zone's start point, at noon, without sound, with the client's default
+  lighting (`--lighting modern`: the viewer's own default draws no shadows and takes a tenth of the time), for each of
+  `--zones` (default `qeytoqrg`, `qeynos2`, `gfaydark`, `poknowledge`). No server: the zone's renderers alone.
+- `client:<zone>`: with a test server set, the client logged in as the live smoke tests' character, timed where the
+  character stands once the zone has settled (after the live smoke tests, the zone their last script left). Its rows
+  are named by the zone, so nights in different zones are not compared. Each run camps out to the desktop when done;
+  the next waits 20 s first and a run without a result is tried once more (docs/unknowns.md "A login right after
+  camping out").
+
+Each scene runs once uncounted (the first run after a build fills the pipeline and terrain caches and was a quarter
+slower), then three times at 1920x1080 with `--no-vsync`, 600 frames each in the viewer and 3000 in the client, and
+keeps each measure's median. The
+window is SDL's offscreen video driver (Vulkan's `VK_EXT_headless_surface`): the timer's service has no display, and
+a compositor's pacing would differ from night to night. Its settings are the build tree's own `hailstone.ini`
+(docs/layout.md), not the player's.
+
+Each scene's mean and p99 frame time, resident memory and GPU allocations are compared with the median of its last
+seven nights (none before three). The client scene's frame times are only recorded: on one build they ran from 3 to 7
+ms mean in four runs (spawns walking through the view), against about 10 % in the viewer and 1 % for memory, so the
+client scene is flagged on memory alone. A rise past both a share and an amount (mean: 10 % and 0.25 ms; p99: 15 %
+and 0.5 ms; resident: 5 % and 48 MiB; GPU: 5 % and 32 MiB) is a `REGRESSION` line in the summary. It does not fail
+the night or hold back the packages: frame times are noisy, and a rise is a lead to look at. A night with no scene
+measured fails. Frame times compare only on one machine with one driver: a new GPU, driver or kernel moves them all,
+so read the CSV's history around such a change.
+
+Run it by hand with `tools/perf_track.py --hailstone build-perf/hailstone/hailstone --csv /tmp/perf.csv` (and
+`--live HOST[:PORT]` with `HAILSTONE_LIVE_USER`, `_PASSWORD` and `_CHARACTER` in the environment). `--display` uses
+the desktop instead of the offscreen driver; don't mix such rows with the nightly's.
 
 ### Nightly builds
 
