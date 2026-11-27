@@ -175,23 +175,40 @@ variable `HAILSTONE_SELF_HOSTED` is `true`, since a job with no runner waits in 
 
 `tools/live_smoke.sh HOST[:PORT] USER PASS CHARACTER [script ...]` plays each `tests/live/*.quest` with
 `playprobe --quest` (`tools/quest_probe.h`, which lists the steps) against a test server, and prints a PASS or FAIL
-line for each. It exits 1 when any fails. The scripts need a GM character (they use `#zone`, `#goto`, `#summonitem`
-and `#damage`) and a stock PEQ database. `EQ_GAME_DIR` must be set; `PLAYPROBE` picks the binary (default
-`build/playprobe`) and `LIVE_SMOKE_LOGS` the log folder (default `build/live-smoke/<time>`).
+line for each. It exits 1 when any fails. The scripts need a GM character (they use `#zone`, `#goto`, `#summonitem`,
+`#damage`, `#spawn`, `#npcloot` and `#nukebuffs`) and a stock PEQ database. `EQ_GAME_DIR` must be set; `PLAYPROBE`
+picks the binary (default `build/playprobe`) and `LIVE_SMOKE_LOGS` the log folder (default
+`build/live-smoke/<time>`).
 
 - `zoning.quest`: after each zone-in the client's possessions match the server's; `#goto` moves within a zone.
 - `items.quest`: a summoned item reaches the inventory and stays after a zone-in.
 - `npc.quest`: hail an NPC, trade it an item it hands back, kill an NPC.
+- `combat.quest`: `#spawn` an NPC and give it an item to drop (`#npcloot add`), kill it with auto attack and loot
+  the item. The melee step passes only when the server reports our hits (OP_Damage from us to it, or the killing
+  blow in OP_Death) and it dies.
+- `spells.quest`: clear the buffs (`#nukebuffs`), memorize Courage, cast it on ourselves, see the buff arrive and
+  click it off (OP_BuffRemoveRequest, answered by the server); memorize Yaulp, cast it and wait for the server's fade
+  (OP_Buff, about 24 s on); memorize Strike and cast it on a spawned NPC. A cast passes when the server lands the
+  spell (OP_Action from us with its id) without an interrupt or fizzle.
 
-`items.quest` and `npc.quest` end with `#nukeitem` on the item they summon, and check that the client saw it go, so
-nightly runs do not fill the character's bags.
+`spells.quest` is played as a second character, `LIVE_SMOKE_CASTER`: a GM cleric of any level on the same account
+(the script scribes its three level 1 spells with `#scribespell` when the book lacks them). Without it the script is
+skipped, with a `SKIP` line, not a failure. Each memorize forgets the spell first where it is already memorized, so
+the memorize always runs; gem 8 is used and keeps the last spell. Scripts are marked for the caster with a
+`# live-smoke: caster` line.
 
-A script that ran no step never reached the world (the server refused the login, or answered "That zone is not
-available" while the last script's zone shut down): it is played once more after 30 seconds, and its line says so.
+`items.quest`, `npc.quest` and `combat.quest` end with `#nukeitem` on the item they summon or loot, and check that
+the client saw it go, so nightly runs do not fill the character's bags.
+
+The runner waits 20 seconds between scripts (`LIVE_SMOKE_PAUSE`), so the last script's zone has shut down, and gives each playprobe 480 seconds (`--seconds`); a run still going then camps out all the same. A script
+that ran no step never reached the world (the server refused the login, or answered "That zone is not available"
+while the last script's zone shut down): it is played once more after 30 seconds, and its line says so.
+`tests/test_live_smoke.py` checks the runner against a stand-in playprobe (CI's checks run it).
 A script starts with `zone <name>`, which passes at once when the character is already there, so it does not
 depend on where the last session ended. Scripts and the runner name no server, account or password: pass them on the
-command line. The nightly run plays them when a test server is set ("Nightly run" below); they are the scripted part
-of the 0.10 live checklist (docs/todo.md).
+command line. A run camps out to the desktop when its steps are done, so the character is not left link-dead. The
+nightly run plays them when a test server is set ("Nightly run" below); they are the scripted part of the 0.10 live
+checklist (docs/todo.md).
 A failure is a lead, not proof of a client bug: check the server's log and state too.
 
 ## Nightly run
@@ -219,7 +236,8 @@ upload), `--publish`, `--ref REF`.
 - Settings go in `${XDG_CONFIG_HOME:-~/.config}/hailstone/nightly.env`, which it sources: `EQ_GAME_DIR`,
   `HAILSTONE_VECTORS_DIR` and, optionally, `HAILSTONE_NIGHTLY_WEBHOOK` (a Discord webhook URL) and the live smoke
   tests' server and GM character (`HAILSTONE_LIVE_SERVER=HOST[:PORT]`, `HAILSTONE_LIVE_USER`,
-  `HAILSTONE_LIVE_PASSWORD`, `HAILSTONE_LIVE_CHARACTER`). Never commit them. The summary names none of the server
+  `HAILSTONE_LIVE_PASSWORD`, `HAILSTONE_LIVE_CHARACTER`, and `HAILSTONE_LIVE_CASTER` for the caster). Never commit
+  them. The summary names none of the server
   settings.
 - Everything it writes is under `${XDG_CACHE_HOME:-~/.cache}/hailstone-nightly`: the checkout it tests (a detached
   worktree of the repository, reset to the ref each night and cleaned of all but its build folders and the

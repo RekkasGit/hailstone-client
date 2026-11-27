@@ -36,6 +36,7 @@
 #   HAILSTONE_NIGHTLY_WEBHOOK=  a Discord webhook URL for the summary (optional)
 #   HAILSTONE_LIVE_SERVER=HOST[:PORT] HAILSTONE_LIVE_USER= HAILSTONE_LIVE_PASSWORD= HAILSTONE_LIVE_CHARACTER=
 #                               a test server and a GM character for the live smoke tests (optional; all four)
+#   HAILSTONE_LIVE_CASTER=      a GM cleric on the same account for the live smoke tests that cast (optional)
 #
 # Everything it writes is under ${XDG_CACHE_HOME:-~/.cache}/hailstone-nightly: the checkout it tests (a detached
 # worktree of this repository), its build folders, the fuzz corpora and crash inputs, the performance history
@@ -174,7 +175,8 @@ if [ "$live" = 1 ] && [ -n "${HAILSTONE_LIVE_SERVER:-}" ]; then
   elif [ ! -x build-asan/playprobe ]; then
     fail "live smoke tests: no playprobe (the sanitizer build failed)"
   else
-    PLAYPROBE=build-asan/playprobe LIVE_SMOKE_LOGS="$logs/live" tools/live_smoke.sh "$HAILSTONE_LIVE_SERVER" \
+    PLAYPROBE=build-asan/playprobe LIVE_SMOKE_LOGS="$logs/live" LIVE_SMOKE_CASTER="${HAILSTONE_LIVE_CASTER:-}" \
+      tools/live_smoke.sh "$HAILSTONE_LIVE_SERVER" \
       "$HAILSTONE_LIVE_USER" "$HAILSTONE_LIVE_PASSWORD" "$HAILSTONE_LIVE_CHARACTER" > "$logs/live.log" 2>&1
     passed=$(grep -c '^PASS ' "$logs/live.log")
     # A sanitizer report UBSan does not stop on counts as a failure too.
@@ -183,7 +185,8 @@ if [ "$live" = 1 ] && [ -n "${HAILSTONE_LIVE_SERVER:-}" ]; then
                     xargs -r -n1 basename | sed 's/\.log$/ (sanitizer)/'; } | sort -u | paste -sd, - | sed 's/,/, /g')
     if [ -z "$failures" ] && [ "$passed" -gt 0 ]; then
       retried=$(grep -c '^PASS .*second try' "$logs/live.log")
-      note "live smoke tests: $passed passed$([ "$retried" -gt 0 ] && echo " ($retried at a second try: no world at first)")"
+      skipped=$(grep -c '^SKIP ' "$logs/live.log")
+      note "live smoke tests: $passed passed$([ "$retried" -gt 0 ] && echo " ($retried at a second try: no world at first)")$([ "$skipped" -gt 0 ] && echo ", $skipped skipped (no HAILSTONE_LIVE_CASTER)")"
     else
       fail "live smoke tests: ${failures:-none ran} (live.log, live/)"
     fi
