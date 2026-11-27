@@ -330,14 +330,6 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
   - Unknown: the original appears to read one whenever bit 0x20 is set (`EQPlayer::UnSerializeSpawn`), and to treat
     only bit 0x04 as interactive.
   - Settle: a capture of a destructible spawn with a suffix, or the original's register use at `UnSerializeSpawn`.
-- **A login right after camping out.** `player` On the stock PEQ test server (2026-11-26), the same character logged in
-  again a second or two after its client camped out to the desktop had its zone-in closed by the zone server: link
-  death, then character select, where a test login (`--user ... --character`) waits.
-  - Unknown: whether the server is still finishing the camped session (the zone's save and removal) and refuses the
-    new one, or whether the client's second session does something the server drops.
-  - Now: nothing in the client; `tools/perf_track.py` waits 20 s before each logged-in run and tries a failed one again.
-  - Settle: a packet capture of both sessions with the zone and world logs, and the original client logging in at
-    once after a camp to the desktop.
 
 ## Updates
 

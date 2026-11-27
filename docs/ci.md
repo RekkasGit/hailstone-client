@@ -237,9 +237,9 @@ limit), `--no-fuzz`, `--no-live`, `--no-perf`, `--no-post`, `--package` (step 5 
   `--zones` (default `qeytoqrg`, `qeynos2`, `gfaydark`, `poknowledge`). No server: the zone's renderers alone.
 - `client:<zone>`: with a test server set, the client logged in as the live smoke tests' character, timed where the
   character stands once the zone has settled (after the live smoke tests, the zone their last script left). Its rows
-  are named by the zone, so nights in different zones are not compared. Each run camps out to the desktop when done;
-  the next waits 20 s first and a run without a result is tried once more (docs/unknowns.md "A login right after
-  camping out").
+  are named by the zone, so nights in different zones are not compared. Each run camps out to the desktop when done
+  and the next starts at once; a run without a result is tried once more (a second login of the same account from
+  elsewhere ends the older session, see `run_client`).
 
 Each scene runs once uncounted (the first run after a build fills the pipeline and terrain caches and was a quarter
 slower), then three times at 1920x1080 with `--no-vsync`, 600 frames each in the viewer and 3000 in the client, and

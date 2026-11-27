@@ -419,8 +419,13 @@ Server-dependent systems stock EQEmu never sends keep their live checks open pas
 - [x] The player's own rename: the character name change (0x4d5a10). The connection's character name and the profile's take the new name, so every reader follows it.
 - [ ] OP_LevelAppearance's flag-on emitter takes the actor's turn (vf126 @0x1003a950; unknowns.md). It takes the world's axes.
 
-- [ ] A login right after camping out: the zone server closed the new session's zone-in (docs/unknowns.md "Network and
-  session").
+- [x] A login right after camping out: not a camp problem. Ten back-to-back `--bench` logins of one GM character on the
+  stock PEQ test server (2026-11-27, 0-2 s apart) all camped out and zoned in cleanly. The closed zone-ins of
+  2026-11-26 were the zone kicking a session in play ("Dropped by world CLE subsystem") when the same account logged
+  in again from a second process: EQEmu's world drops an account's older session on each EnterWorld
+  (`ServerOP_ZoneIncClient` / `ServerOP_DropClient`). The client then did what RoF2 does after a link death (3 s, 16 s,
+  character select; connection-and-network notes §6.4). `tools/perf_track.py` no longer waits between runs.
+  Only a GM's instant camp was run back to back; a player's 30 s camp (OP_Logout) was not.
 
 ### Real estate (player housing, guild halls)
 - [x] The packets, the manager (catalog, records, access, item rows, owned lists, areas, placed objects, occupancy), result messages, upkeep time left.

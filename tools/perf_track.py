@@ -28,7 +28,6 @@ import re
 import statistics
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 FIELDS = ["time", "commit", "scene", "frames", "mean_ms", "p50_ms", "p95_ms", "p99_ms", "max_ms", "hitches",
@@ -151,15 +150,12 @@ def scenes(args):
     return out
 
 
-# Back-to-back logins of one character: a login right after the last run camped out has had its zone-in closed by the
-# stock test server (link death, then the test login waits at character select until the timeout). Not traced; each
-# client run waits this long first and is tried once more when it gives no result.
-CLIENT_GAP_SECONDS = 20
-
-
+# A run without a result is tried once more. Back-to-back logins of one character are fine on a stock server (its
+# zone has finished the camped session long before the next client reaches the world); what has ended a logged-in
+# run is a second login of the same account from elsewhere while it played: the world drops the older session
+# ("Dropped by world CLE subsystem"), and the test login then waits at character select until the timeout.
 def run_client(command, timeout, log_path, env):
     for attempt in (1, 2):
-        time.sleep(CLIENT_GAP_SECONDS)
         r = run_once(command, timeout, log_path.with_suffix(f".try{attempt}.log") if attempt > 1 else log_path, env)
         if r is not None:
             return r
