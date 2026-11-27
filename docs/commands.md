@@ -95,7 +95,7 @@ follow the RoF2 client; the ones Hailstone adds are marked as Hailstone's. For t
 | `/attack [on\|off]` | Auto attack. |
 | `/autofire` | Auto fire (ranged). |
 | `/cast <1..12>` | Cast the spell in a gem. |
-| `/cast "<spell name>"`, `/cast "=<spell name>"` | Cast the first memorized spell whose name starts with the text, in any case; with `=`, the one with that whole name. As MacroQuest's `/cast`: the name is the first word, so quote a name with spaces. "You do not seem to have that spell memorized." when no gem matches. |
+| `/cast "<spell name>"`, `/cast "=<spell name>"` | Cast the first memorized spell whose name starts with the text, in any case; with `=`, the one with that whole name. As MacroQuest's `/cast`: the name is the first word, so quote a name with spaces. "You do not seem to have that spell memorized." when no gem matches. MacroQuest's `/cast item <name>` and `/cast list` are not supported: `/useitem` uses an item. |
 | `/stopcast` | Stop casting. |
 | `/melody <gems>`, `/stopsong` | Twist songs; stop singing. |
 | `/discipline <name>`, `/stopdisc` | Use a discipline; end the active one. |
