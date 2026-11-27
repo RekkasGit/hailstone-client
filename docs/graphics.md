@@ -2686,10 +2686,11 @@ labels.
    - The wait is `platform::precise_sleep_until`: the system's sleep (on Windows a high-resolution waitable timer) to
      1 ms before the deadline (0.5 ms on POSIX; 16 ms on Windows without such timers, before 10 1803), then a spin
      that yields between looks at the clock.
-4. `display.background_fps`: 0 as `display.max_fps`; -1 nothing drawn (the Options window's "0"). Below 10 the loop
-   runs on at 10 a second (the game clock catches up at most 250 ms a frame) and draws only that many frames, or none
-   (`app/frame_pace.h`); a frame not drawn is run as a minimised window's is. A minimised window runs at 10 a second
-   whatever this and `display.max_fps` say.
+4. `display.background_fps`: 0 as `display.max_fps`; -1 nothing drawn (the Options window's "0"). Below 30 the loop
+   runs on at 30 a second (the game clock catches up at most 250 ms a frame) and draws only that many frames, or none
+   (`app/frame_pace.h`); a frame not drawn is run as a minimised window's is. A minimised window runs at 30 a second
+   whatever this and `display.max_fps` say. The loop's rate is how often plugins' `OnPulse` and the scripts run, so a
+   box set's background windows run theirs at least 30 times a second.
 5. `display.texture_folder`: indexed at start, its files read as each zone loads. Set by the Options window's
    Textures section, the login screen's More options (both packs; from the next start) and Hailstone Texture Studio.
 

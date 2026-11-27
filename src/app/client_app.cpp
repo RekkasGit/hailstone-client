@@ -48,8 +48,8 @@ int ClientApp::run() {
         retired_ui_textures_.reset(); // the last frame, which may have drawn it, is submitted (waits for the GPU)
         perf_ui_.begin_frame();
         // The frame cap (display.max_fps, --max-fps), and display.background_fps while another window has the focus:
-        // below 10 there, the loop runs on at 10 a second and draws only some frames, or none (app/frame_pace.h). A
-        // minimised window runs at 10 a second whatever the settings say: nothing can be drawn.
+        // below 30 there, the loop runs on at 30 a second and draws only some frames, or none (app/frame_pace.h). A
+        // minimised window runs at 30 a second whatever the settings say: nothing can be drawn.
         // Auto: just under the refresh rate of the display the window is on now (auto_frame_cap).
         const int max_fps =
             effective_max_fps(opts_.max_fps, opts_.max_fps == kMaxFpsAuto ? window_.refresh_rate() : 0.0f);
