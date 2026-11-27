@@ -834,8 +834,10 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] **Untested GPU paths** (neither run on such hardware).
   - A GPU without a sampleable D32_SFLOAT depth attachment (the D32_SFLOAT_S8_UINT / D24_UNORM_S8_UINT fallback, with `separateDepthStencilLayouts`) under the validation layers.
   - ObjectRenderer's instance flush on a driver with non-coherent host memory.
-  - Open: a developer setting that forces each fallback on any GPU, so the nightly run can draw them under the
-    validation layers without such hardware.
+  - Forced on any GPU by `HAILSTONE_GPU_FALLBACKS` (docs/graphics.md "Forcing the GPU fallbacks"), drawn each night
+    under the validation layers (docs/ci.md "Nightly GPU fallbacks"). Open: a GPU that really has them. On AMD the
+    memory stays coherent under `non-coherent`, so a missing flush shows nothing there, and `depth-d24` cannot be
+    forced.
 
 - [ ] **The 60 Hz game clock in a live session.** Checked live 2026-11-18: jumps, falls and fall damage the same at 30, 60, 144 and uncapped; turning; a stalled zone load. Open: /follow and camera smoothness at each rate, strafing feel.
 - [ ] **The cameras 1..5 in a live session** (docs/mechanics.md "Cameras"). Each one's place, the wall sweep and sitting (the tether's bone 0) checked live 2026-11-18. Open: mouse look and the camera keys in each, doors, riding.

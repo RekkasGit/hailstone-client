@@ -207,13 +207,14 @@ machine:
 3. With a test server set, the live smoke tests ("Live smoke tests" above), played by the sanitizer build's
    `playprobe`. A sanitizer report in a script's log fails it too.
 4. The performance scenes ("Nightly performance" below): reported, never a failure.
+   Then the forced GPU fallbacks ("Nightly GPU fallbacks" below): a validation error fails the night.
 5. With `--publish`, and only after a night with no failure, the nightly build ("Nightly builds" below).
 6. A summary: printed, kept in the night's log folder, and posted to Discord when a webhook is set. The posted text
    names no local path; after a publish it ends with the release's link.
 
 It exits 1 when a step fails. Options: `--fuzz-seconds N`, `--jobs N` (default 20, also the package containers' CPU
-limit), `--no-fuzz`, `--no-live`, `--no-perf`, `--no-post`, `--package` (step 5 without the upload), `--publish`,
-`--ref REF`.
+limit), `--no-fuzz`, `--no-live`, `--no-perf`, `--no-gpu-fallbacks`, `--no-post`, `--package` (step 5 without the
+upload), `--publish`, `--ref REF`.
 
 - Settings go in `${XDG_CONFIG_HOME:-~/.config}/hailstone/nightly.env`, which it sources: `EQ_GAME_DIR`,
   `HAILSTONE_VECTORS_DIR` and, optionally, `HAILSTONE_NIGHTLY_WEBHOOK` (a Discord webhook URL) and the live smoke
@@ -260,6 +261,19 @@ so read the CSV's history around such a change.
 Run it by hand with `tools/perf_track.py --hailstone build-perf/hailstone/hailstone --csv /tmp/perf.csv` (and
 `--live HOST[:PORT]` with `HAILSTONE_LIVE_USER`, `_PASSWORD` and `_CHARACTER` in the environment). `--display` uses
 the desktop instead of the offscreen driver; don't mix such rows with the nightly's.
+
+### Nightly GPU fallbacks
+
+The paths only a weaker GPU takes (docs/graphics.md "Forcing the GPU fallbacks") are drawn on the nightly machine's
+GPU: the Release zone viewer (`build-perf`) in `qeytoqrg` at noon with modern lighting, 300 frames on the offscreen
+driver with `--validation`, once with nothing forced and once with each word of `HAILSTONE_GPU_FALLBACKS` alone
+(`all` is not run: each word's errors are named apart). Each run's log is `logs/<night>/fallbacks/<word>.log`.
+
+- A validation error (`[error] vulkan:`) or a run that does not end by itself fails the night and names the word.
+- Validation warnings (performance hints among them) are counted in the summary, not failed.
+- A word this GPU cannot force (`depth-d24` on AMD) is named in the summary; its run still draws, with the normal
+  choice.
+- Without the validation layer installed the step is noted as not checked.
 
 ### Nightly builds
 

@@ -99,7 +99,7 @@ submission/presentation and PNG readback (winding, blending, depth occlusion, li
 1. `begin_frame_commands` starts the frame; the shadow cascades are drawn (`begin_shadow_cascade` ..
    `end_shadow_cascade`, depth only); `begin_scene` begins the scene target. Colour is RGBA16F, multisampled when
    `display.msaa` > 1. Depth has the same sample count: D32_SFLOAT, else D32_SFLOAT_S8_UINT or D24_UNORM_S8_UINT
-   (`separateDepthStencilLayouts` is required). `begin_frame` is the two together, for callers without shadows.
+   (`separateDepthStencilLayouts` is required; "Forcing the GPU fallbacks" below). `begin_frame` is the two together, for callers without shadows.
 2. `begin_overlay` resolves the scene (colour, and depth's sample 0), then draws:
    - the ambient occlusion (`shaders/ao.frag`, R8) when the frame gave `set_ao_view`;
    - the bloom (`draw_bloom`): six half-size RGBA16F levels, 13-tap `shaders/bloom_down.frag` down (Karis-weighted on
@@ -109,6 +109,35 @@ submission/presentation and PNG readback (winding, blending, depth occlusion, li
 
    Rendering stays open on the swapchain image for the UI (`ui::ImGuiLayer::render`).
 3. `end_frame` presents (and calls `begin_overlay` if nothing did).
+
+#### The frame: forcing the GPU fallbacks
+
+Some paths run only on a GPU that lacks something: a depth format with stencil, host memory that is not coherent, no
+BC textures. `HAILSTONE_GPU_FALLBACKS` (a developer setting, unset for players; `render/gpu_fallbacks.h`) makes
+`VkContext` take them on any GPU. It changes only what the context reports or chooses, so the renderers run the code
+a weaker GPU would run. Its words, separated by commas or spaces:
+
+| Word | What is forced | What it cannot show |
+| --- | --- | --- |
+| `depth-stencil` | The depth format a GPU without a sampleable D32_SFLOAT attachment takes: D32_SFLOAT_S8_UINT, else D24_UNORM_S8_UINT. | |
+| `depth-d24` | D24_UNORM_S8_UINT alone. | AMD's desktop GPUs have none: the log says it cannot be forced, and the normal choice (or `depth-stencil`'s, when also given) stands. |
+| `non-coherent` | VMA is shown every memory type without HOST_COHERENT, so it aligns host-visible allocations to `nonCoherentAtomSize` and every `vmaFlushAllocation` and `vmaInvalidateAllocation` calls the driver. | The memory stays coherent: a missing flush draws no wrong pixel, and the validation layers check the flush calls, not whether one is missing. |
+| `shadow-d16` | Shadow maps in D16_UNORM, as on a GPU without linearly filtered D32_SFLOAT. | |
+| `no-bc` | `DeviceCaps::bc_textures` off: BC textures are decoded to RGBA8 on the CPU. | |
+| `no-mip-blit` | `DeviceCaps::srgb_mip_blit` off: colour mip chains are built on the CPU. | |
+| `no-update-after-bind` | `DeviceCaps::update_after_bind` off: the texture arrays' plain sets and their lower limits. | |
+| `no-independent-blend` | `DeviceCaps::independent_blend` off: no scene motion or reactive mask beside the colour. | |
+| `all` | Every word above but `depth-d24`. | |
+
+The log names what is forced (`GPU fallbacks forced: ...`) and the depth format taken. Draw them under the validation
+layers with the zone viewer, for example:
+
+```sh
+HAILSTONE_GPU_FALLBACKS=depth-stencil SDL_VIDEO_DRIVER=offscreen \
+  build/hailstone/hailstone --zone qeytoqrg --frames 300 --validation --game-dir "$EQ_GAME_DIR"
+```
+
+The nightly run does this for each word (docs/ci.md "Nightly GPU fallbacks").
 
 #### The frame: viewport rectangle
 
