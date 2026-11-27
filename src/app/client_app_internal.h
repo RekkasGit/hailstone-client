@@ -17,6 +17,7 @@
 #include "app/addon_suggest.h"
 #include "app/ability_bulk.h"
 #include "app/window_icon.h"
+#include "app/box_refocus.h"
 #include "app/window_desc.h"
 #include "app/automation.h"
 #include "app/progress_ui.h"
@@ -287,6 +288,9 @@ public:
         shader_dir_ = platform::shaders_dir();
         config_path_ = default_config_path();
         config_.load(config_path_);
+        // A box set's other windows keep their window's mode, size and place per character, never in hailstone.ini
+        // (core/config.h set_display_per_character; apply_character_window).
+        config_.set_display_per_character(opts_.box_child);
         if (opts_.clip_plane != 15) clip_plane_arg_ = opts_.clip_plane;
         if (opts_.max_fps > 0 || opts_.max_fps == kMaxFpsAuto) max_fps_arg_ = opts_.max_fps;
         // The asset folder: --game-dir or EQ_GAME_DIR, else hailstone.ini assets.path, else the picker asks.
@@ -1081,6 +1085,11 @@ private:
     bool set_video_option(std::string_view name, int value);
     // The window's mode at start (display.window_mode, display.resolution: shared, so only then).
     void apply_video_options();
+    // A box set's other window, its character's file attached: the window as that character keeps it (its mode, and
+    // in a window its size, place and maximized), when the file has its own.
+    void apply_character_window();
+    // window.*: the window's normal place and size and whether it is maximized (the character's, in a box window).
+    void remember_window_geometry();
     // Vertical sync, the frame caps and the field of view (apply_settings).
     void apply_frame_options();
     // Sets game_'s base folder (core/asset_folder_choice.h), running the asset-folder picker when nothing usable is
@@ -1371,6 +1380,7 @@ private:
     Clock::time_point server_hint_at_{};
     std::vector<std::string> worlds_noted_; // the worlds the login server listed, as set_listed_worlds() last had them
     platform::ChildProcesses box_clients_; // the box set's other windows
+    BoxRefocus box_refocus_;               // takes the focus back once they have opened (app/box_refocus.h)
     platform::ChildProcesses tools_;       // the tool add-ons the player started (left running when Hailstone quits)
     // The updater (app/client_app_update.cpp, docs/updater.md): null when updates are off for this run.
     std::unique_ptr<Updater> updater_;

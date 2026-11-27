@@ -3,6 +3,11 @@
 ## Unreleased
 
 - Modern Trade keeps coin denominations clear of their exact counts. The coin buttons wrap into rows when the offer is narrow or the amounts are large.
+- Windows in the background or minimized now run their game loop, plugins and scripts at least 30 times a second (was 10), so a box set's background characters respond faster. A low Background Frame Rate still draws only that many frames.
+- A box set's other windows keep their own window mode, resolution, size and place for each character, and no longer change the shared settings in hailstone.ini.
+- After a box set login starts the other accounts' windows, the window you logged in from comes back to the front once they have opened.
+- Logging in a box set on Windows starts the other accounts' windows again. Started without a console (from Explorer or a shortcut), the first window could not start them ("DuplicateHandle(): The handle is invalid").
+- Plugins and Lua scripts no longer stop and start again at every zone change: what is loaded or running stays so, and a plugin you unloaded or a script you stopped stays that way. Plugins also no longer see a character select game state while zoning.
 - Left-click the target's target health bar in Modern or Gamepad to select that target.
 - The Tracking window can stay open, be reopened, and refresh its list during the camp countdown.
 - The Combat skill picker offers Slam only when your current form has it (a Barbarian, Troll or Ogre form, citizen forms included), as the original client does; it no longer offers Slam to every character. Saved Slam buttons are dimmed while your form cannot use Slam (a citizen form also needs the Bash skill) and become usable again when it can. Interfaces read it from the hot button's `unavailable` field (UI API 1.13).

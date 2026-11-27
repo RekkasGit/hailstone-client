@@ -3558,6 +3558,9 @@ private:
     std::string zone_host_;
     std::uint16_t zone_port_ = 0;
     bool zoning_ = false;
+    // EnteringWorld is a zone change's (world's OP_EnterWorld while Zoning), not an entry from character select:
+    // the character stays in the world, so the server's rules and the game state the plugins see stay as they were.
+    bool zone_reentry_ = false;
     bool world_login_sent_ = false;
     // ZoneServerInfo's hand-off (4.4): OP_WorldComplete went out and the zone is connected once world drops the
     // link (NetMgr_WaitForDisconnect, 30 s).
