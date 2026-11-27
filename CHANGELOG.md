@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Modern Trade keeps coin denominations clear of their exact counts. The coin buttons wrap into rows when the offer is narrow or the amounts are large.
+- Windows in the background or minimized now run their game loop, plugins and scripts at least 30 times a second (was 10), so a box set's background characters respond faster. A low Background Frame Rate still draws only that many frames.
+- A box set's other windows keep their own window mode, resolution, size and place for each character, and no longer change the shared settings in hailstone.ini.
+- After a box set login starts the other accounts' windows, the window you logged in from comes back to the front once they have opened.
+- Logging in a box set on Windows starts the other accounts' windows again. Started without a console (from Explorer or a shortcut), the first window could not start them ("DuplicateHandle(): The handle is invalid").
+- Plugins and Lua scripts no longer stop and start again at every zone change: what is loaded or running stays so, and a plugin you unloaded or a script you stopped stays that way. Plugins also no longer see a character select game state while zoning.
 - Accessibility options. **Colour Vision** (Options > Display > Accessibility in Modern, Options > Interface in Gamepad) switches the con colours of the target, names, map, chat and extended targets to a colour-blind-safe set for deuteranopia, protanopia or tritanopia, and the interface's health, good and bad colours with them. **Con Labels** writes the target's con colour next to its name. **Minimum Text Size** keeps the windows' text at or above the size you pick. **Screen Effects** tones down or turns off the lightning flash, camera shake and the drunken view warp. They are the player's settings, shared by every character; the defaults change nothing.
 - Left-click the target's target health bar in Modern or Gamepad to select that target.
 - The Tracking window can stay open, be reopened, and refresh its list during the camp countdown.
@@ -10,6 +16,7 @@
 - `${Group.Member[name]}` now gives the group member, as in MacroQuest, so `${Group.Member[name].Index}` and the member's other fields work (E3's heals and buffs by name use it). It gave the member's number before: a script that used that number now gets the member, and reads the number with `.Index`. The `Group` TLO also gains `AnyoneMissing`, `MercenaryCount` (and the tank, healer, melee and caster counts), `AvgHPs`, `Cleric`, `MarkNpc`, `MasterLooter` and `MouseOver`, and each member `MarkNpc`, `MasterLooter` and `Present`.
 - Chat timestamps are set per tab: right-click a tab and pick **Timestamps** to change that tab only. Tabs keep the format they had until you change them. Interfaces reach it through `hs.UI.chat.Timestamps` and `SetTimestamps` (UI API 1.13).
 - New chat filter **Plugins and Scripts** (Filters menu, after System Messages): every line a plugin or Lua script writes goes to the window you pick, whatever its colour. It stays in the main window until moved.
+- Native add-ons can read an inspected item's base value in copper, including items opened from links and previews.
 - Mana regeneration now uses the server's reported maximum, fixing mana bars that stopped short of full when the client's calculated maximum was lower.
 - Players can ride with classic or Luclin character models. Switching zones no longer drops the mount buff while the rider or mount model is still being built.
 - Choose separate HP, mana, and endurance readouts for group members and HP readouts for pets. Modern puts the choices in the Group and Pet frame menus, and Gamepad puts them under Options > Interface. Current / maximum values appear on servers that supply them. Interfaces read them through `hs.UI.character.GaugeValues` (UI API 1.13).

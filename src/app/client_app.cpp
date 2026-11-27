@@ -58,8 +58,8 @@ int ClientApp::run() {
         retired_ui_textures_.reset(); // the last frame, which may have drawn it, is submitted (waits for the GPU)
         perf_ui_.begin_frame();
         // The frame cap (display.max_fps, --max-fps), and display.background_fps while another window has the focus:
-        // below 10 there, the loop runs on at 10 a second and draws only some frames, or none (app/frame_pace.h). A
-        // minimised window runs at 10 a second whatever the settings say: nothing can be drawn.
+        // below 30 there, the loop runs on at 30 a second and draws only some frames, or none (app/frame_pace.h). A
+        // minimised window runs at 30 a second whatever the settings say: nothing can be drawn.
         // Auto: just under the refresh rate of the display the window is on now (auto_frame_cap).
         const int max_fps =
             effective_max_fps(opts_.max_fps, opts_.max_fps == kMaxFpsAuto ? window_.refresh_rate() : 0.0f);
@@ -131,6 +131,10 @@ int ClientApp::run() {
         // model is built in the spawns' smoothing (CreatePlayerActor's model choice).
         core::frame_sections::Lap update_lap;
         box_clients_.poll();
+        if (box_refocus_.step(window_.focused(), Clock::now())) {
+            log::info("box: the other windows have opened: this one takes the focus back");
+            window_.raise_focused();
+        }
         update_updater();
         update_addons();
         refresh_ui_packs();
@@ -1087,12 +1091,7 @@ int ClientApp::run() {
     save_chat_history(true);
     if (!opts_.window_size_given) {
         // The game window's place for the next start (window_desc); not a --window-size run's.
-        platform::WindowGeometry g = window_.geometry();
-        config_.set_int("window.x", g.x);
-        config_.set_int("window.y", g.y);
-        config_.set_int("window.width", g.width);
-        config_.set_int("window.height", g.height);
-        config_.set_bool("window.maximized", g.maximized);
+        remember_window_geometry();
         config_.set_bool("ui.perf_window", perf_ui_.open());
         config_.set_bool("ui.perf_log_hitches", perf_ui_.log_hitches());
         config_.save(config_path_);

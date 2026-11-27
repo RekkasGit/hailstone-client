@@ -1187,6 +1187,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mq_combat_test.cpp
     tests/automation_test.cpp
     tests/autoexec_test.cpp
+    tests/box_refocus_test.cpp
     tests/mq_lua_test.cpp
     tests/mq_script_path_test.cpp
     tests/mq_event_pattern_test.cpp
@@ -1333,6 +1334,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mail_windows_test.cpp
     tests/marketplace_test.cpp
     tests/chat_windows_test.cpp
+    tests/child_processes_test.cpp
     tests/chat_filter_routes_test.cpp
     tests/chat_filter_menu_test.cpp
     tests/chat_stock_colors_test.cpp

@@ -403,6 +403,8 @@ public:
     const WorldTicket& ticket() const { return ticket_; }
 
     ConnectionState state() const { return state_; }
+    // EnteringWorld on a zone change's pass through world, not an entry from character select: still in game.
+    bool zone_reentry() const { return state_ == ConnectionState::EnteringWorld && zone_reentry_; }
     // In a zone, the camp's 30 s included (the player is still there): what the plugins see as in_zone.
     bool in_zone() const { return state_ == ConnectionState::InZone || state_ == ConnectionState::Camping; }
     const std::string& error() const { return error_; }
@@ -3558,6 +3560,9 @@ private:
     std::string zone_host_;
     std::uint16_t zone_port_ = 0;
     bool zoning_ = false;
+    // EnteringWorld is a zone change's (world's OP_EnterWorld while Zoning), not an entry from character select:
+    // the character stays in the world, so the server's rules and the game state the plugins see stay as they were.
+    bool zone_reentry_ = false;
     bool world_login_sent_ = false;
     // ZoneServerInfo's hand-off (4.4): OP_WorldComplete went out and the zone is connected once world drops the
     // link (NetMgr_WaitForDisconnect, 30 s).

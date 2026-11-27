@@ -227,13 +227,24 @@ Some keys stay in `hailstone.ini` whoever plays (`Config::is_shared_key`):
 - the client's own: `assets.*`, `addons.*`, `update.*`, `news.*`, `browser.*`, `plugins.*`, `scripts.*`, `mapfilter.*`;
 - the login screen's: `login.*`, `audio.pregame_music`;
 - the window's place and mode: `window.*`, `display.window_mode`, `display.resolution` (one window, so it does not
-  jump when a character enters);
+  jump when a character enters). A box set's other windows (`--box-child`) are the exception: they keep these per
+  character (below);
 - the computer's graphics tier: `display.gpu_tier`;
 - the player's accessibility options: `accessibility.*` (colour vision, con labels, minimum text size, screen effects;
   docs/dev-ui.md "Accessibility");
 - what is taken only at start: `display.msaa`, `display.upscaler`, `ui.name`, `ui.scale`, `ui.cpp_windows`,
   `ui.dev_windows`, `ui.perf_*`, `game.fixed_step`, `audio.enabled`, `audio.soundfont`, `audio.mix_ahead`,
   `nav.threads`, `nav.prebuild`.
+
+A box set's other windows keep `window.*`, `display.window_mode` and `display.resolution` in the character's file and
+never write them to `hailstone.ini` (`Config::set_display_per_character`):
+
+- they open as `hailstone.ini` says, and once the character enters the window takes the character's own mode, size,
+  place and maximized state, when its file has them;
+- the window's state is kept for the character when it leaves the world and at quit; changes made at the login screen,
+  before a character, go to the character that enters next;
+- a key the character's file lacks is read from `hailstone.ini`. The first window, where the box set was logged in,
+  keeps them in `hailstone.ini` as always.
 
 A shared key still in a character's file moves into `hailstone.ini` when the character enters, if that has none. The
 UI packs' script settings (`ui/settings/<pack>.txt`) are shared too; the window layout is per character

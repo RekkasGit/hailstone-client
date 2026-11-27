@@ -647,9 +647,12 @@ paused, ended, error):
 - A script the rules do not allow is greyed, with the reason in its tooltip.
 - The server's own scripts show Stop and Pause greyed: the player cannot stop them.
 
-Scripts keep running through a zone change. Camping to character select makes the rules provisional again (only
-`login` scripts keep running); a disconnect stops every script. The autorun list is read once per login, so a script
-the player stopped stays stopped after zoning.
+Scripts keep running through a zone change, and compiled plugins stay loaded: the zone-in's rules hold until the
+character leaves the world, so a zone change neither stops, unloads, starts nor loads anything. A script the player
+stopped stays stopped, and a plugin the player unloaded stays unloaded, after zoning. Camping to character select
+makes the rules provisional again (only `login` scripts keep running); a disconnect stops every script. The autorun
+list is read once per login. The server's `run` scripts and required add-on scripts are started at the zone-in of
+each login too, so one that stopped or failed stays stopped until the next login, not the next zone.
 
 ## Lua socials
 
@@ -2205,7 +2208,7 @@ deny = off                ; on blocks Hailstone from entering the server (defaul
 [scripts]
 player = off              ; the player's own scripts: on / off (default off)
 player_caps = read,ui     ; what they may do when on (default all)
-run = hud, autoloot       ; the server's scripts started at each zone-in (/lua run)
+run = hud, autoloot       ; the server's scripts started at the zone-in of each login (/lua run)
 
 [plugins]
 player = off              ; the player's own compiled plugins (default off)
@@ -2699,6 +2702,10 @@ The roster is read with `get_raid_data_bulk` ("Buff, spawn, extended target, abi
 - `inspect_item_packet` (`read` and `ui`) shows that copied item without inventory change or a link request.
 - `HailstoneItem.serial`, `instance_id`, `augment_ids` and `configuration_complete` distinguish received instances and
   installed configurations. Bag contents are never reported as augment IDs.
+- `HailstoneItem.base_value_copper` gives the template's base value for one item, in copper. Merchant quotes depend on
+  the merchant session. Before reading the field in a callback, check that the supplied `size` reaches its end.
+  For records you pass to `get_item` or `decode_item_packet`, initialize the new field to zero before calling. The
+  host preserves the caller's `size` and older hosts leave the new field as supplied.
 - `item_flags`, `item_description_append`, `item_presentation_revision` and `loot_confirmation` let an active
   extension supply plain text metadata and an extra loot question. They do not suppress the stock no-drop
   confirmation.

@@ -113,6 +113,11 @@ bool Config::attach_character(const std::filesystem::path& path) {
             if (!is_shared_key(k)) layer->set(k, v);
         ok = layer->save(path);
     }
+    // A box window's own window settings from before the character: the character's from now on, unless it has its
+    // own (set_display_per_character).
+    for (const auto& [k, v] : held_display_)
+        if (!layer->stored(k)) layer->set(k, v);
+    held_display_.clear();
     layer_ = std::move(layer);
     layer_path_ = path;
     return ok;
@@ -135,6 +140,10 @@ bool Config::is_shared_key(std::string_view key) {
     return std::find(std::begin(kKeys), std::end(kKeys), key) != std::end(kKeys);
 }
 
+bool Config::is_display_key(std::string_view key) {
+    return key == "display.window_mode" || key == "display.resolution" || key.starts_with("window.");
+}
+
 Config* Config::layer_for(std::string_view key) const {
     return layer_ && !is_shared_key(key) ? layer_.get() : nullptr;
 }
@@ -146,7 +155,15 @@ std::optional<std::string> Config::get(std::string_view key) const {
 }
 
 std::optional<std::string> Config::stored(std::string_view key) const {
-    if (Config* l = layer_for(key)) return l->stored(key);
+    if (per_character_display(key)) {
+        if (layer_)
+            if (auto v = layer_->stored(key)) return v;
+        for (const auto& [k, v] : held_display_)
+            if (k == key) return v;
+        // (then hailstone.ini's, below)
+    } else if (Config* l = layer_for(key)) {
+        return l->stored(key);
+    }
     auto it = std::find_if(entries_.begin(), entries_.end(), [&](const auto& e) { return e.first == key; });
     if (it == entries_.end()) return std::nullopt;
     return it->second;
@@ -196,6 +213,16 @@ void Config::set(std::string_view key, std::string_view value) {
 }
 
 void Config::store(std::string_view key, std::string_view value) {
+    if (per_character_display(key)) {
+        if (layer_) return layer_->store(key, value);
+        for (auto& [k, v] : held_display_)
+            if (k == key) {
+                v = std::string(value);
+                return;
+            }
+        held_display_.emplace_back(std::string(key), std::string(value));
+        return;
+    }
     if (Config* l = layer_for(key)) return l->store(key, value);
     // Newlines would break the file format.
     std::string v(value);
@@ -216,6 +243,11 @@ void Config::store(std::string_view key, std::string_view value) {
 
 void Config::erase(std::string_view key) {
     drop_run_override(key);
+    if (per_character_display(key)) {
+        if (layer_) layer_->erase(key);
+        std::erase_if(held_display_, [&](const auto& e) { return e.first == key; });
+        return;
+    }
     if (Config* l = layer_for(key)) return l->erase(key);
     if (std::erase_if(entries_, [&](const auto& e) { return e.first == key; }) > 0 &&
         std::find(changed_.begin(), changed_.end(), key) == changed_.end())

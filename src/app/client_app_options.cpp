@@ -3,6 +3,7 @@
 
 #include "app/client_app_internal.h"
 #include <algorithm>
+#include <limits>
 #include "app/frame_pace.h"
 #include "audio/individual_sounds.h"
 #include "core/ascii_case.h"
@@ -927,10 +928,51 @@ void ClientApp::apply_connection_settings() {
 void ClientApp::use_character_settings(const std::filesystem::path& character_dir) {
     std::filesystem::path file = character_dir.empty() ? std::filesystem::path() : CharacterFiles{character_dir}.settings();
     if (file == config_.character_path()) return;
+    // A box window's size and place are its character's (set_display_per_character): kept for the character it leaves,
+    // as a quit keeps them, before it goes.
+    if (opts_.box_child && !config_.character_path().empty() && !opts_.window_size_given) {
+        remember_window_geometry();
+        config_.save(config_path_);
+    }
     if (!config_.attach_character(file)) log::warn("settings: {} could not be read or written", file.string());
     if (!file.empty()) log::info("settings: the character's, {}", file.string());
     else log::info("settings: hailstone.ini's");
     apply_settings();
+    if (opts_.box_child && !file.empty()) apply_character_window();
+}
+
+void ClientApp::remember_window_geometry() {
+    const platform::WindowGeometry g = window_.geometry();
+    config_.set_int("window.x", g.x);
+    config_.set_int("window.y", g.y);
+    config_.set_int("window.width", g.width);
+    config_.set_int("window.height", g.height);
+    config_.set_bool("window.maximized", g.maximized);
+}
+
+void ClientApp::apply_character_window() {
+    const bool own_mode = config_.character_has("display.window_mode");
+    const bool own_place = config_.character_has("window.width") && config_.character_has("window.height");
+    if (!own_mode && !own_place) return; // (its first entry: the window stays as it is, and is kept as its own at quit)
+    if (!opts_.screenshot.empty()) return; // screenshot runs keep the size asked for
+    const int mode = index_of(kWindowModes, 3, config_.get_string("display.window_mode", "windowed"), 0);
+    if (mode != 0) {
+        window_.set_mode(static_cast<platform::WindowMode>(mode),
+                         mode == 2 ? parse_resolution(config_.get_string("display.resolution", "")) : platform::DisplayMode{});
+        return;
+    }
+    window_.set_mode(platform::WindowMode::Windowed);
+    if (!own_place) return;
+    platform::WindowGeometry g;
+    g.width = std::max(320, config_.get_int("window.width", 1280));
+    g.height = std::max(240, config_.get_int("window.height", 720));
+    // (no place of its own: one on no display, which set_geometry leaves alone)
+    g.x = config_.get_int("window.x", std::numeric_limits<int>::min());
+    g.y = config_.get_int("window.y", std::numeric_limits<int>::min());
+    g.maximized = config_.get_bool("window.maximized", false);
+    window_.set_geometry(g);
+    log::info("box: the window as {} keeps it ({}x{}{})", conn_ ? conn_->character_name() : std::string(), g.width,
+              g.height, g.maximized ? ", maximized" : "");
 }
 
 bool ClientApp::play_sound_test(std::string_view option) {

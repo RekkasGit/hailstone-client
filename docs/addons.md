@@ -123,6 +123,8 @@ of it itself.
 Hailstone folder (`hailstone.ini`, `textures/`, its own settings).
 
 - It is left running when Hailstone quits.
+- It starts with no standard input or output (`/dev/null`, or `NUL` on Windows), even when Hailstone runs from a
+  terminal; a tool that wants a log writes its own file.
 - A server whose opted-in add-on policy refuses the tool (docs/plugins.md "Opt-in add-on policies") refuses Start
   while that server is picked or played on. A tool already running goes on.
 

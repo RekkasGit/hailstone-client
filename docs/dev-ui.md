@@ -386,6 +386,8 @@ Helper: `lib/trade_common.lua`.
 
 - **MerchantWnd**: sortable goods table with search, "Usable only" (MW_UsableButton) and "Affordable only"; coin prices dimmed when unaffordable; Buy or Sell and Inspect; Recover and Parcels pages. Right-click an incoming parcel to inspect its item before retrieving it.
 - **TradeWnd**: both offers side by side (stacked when narrow); accepted sides framed, status from `hs.TradeState()`.
+  Your offer shows exact coin counts with space between each denomination and its count. The coin buttons wrap
+  into two columns or one when the offer is too narrow for all four across.
 - **GiveWnd**. The native shortcut for offering the cursor item to the target is hidden for service NPCs that
   refuse direct hand-ins, including personal and guild tribute masters. Use Donate in the tribute master's window.
 - **BankWnd** and **BigBankWnd** (`bank.lua`): rewrapping slots, a dimming search, shared bank, banked coin.
