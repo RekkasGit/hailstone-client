@@ -1172,10 +1172,11 @@ void register_group() {
         std::int64_t n = 0;
         if (parse_int(index, n))
             return n >= 0 && n <= std::numeric_limits<int>::max() ? member_value(c, static_cast<int>(n)) : V::nil();
+        // A name is that member (MQ2GroupType's Member: a groupmember, not its number; .Index gives the number).
         auto members = group_members(c);
         for (std::size_t i = 0; i < members.size(); ++i) {
             std::string name = members[i] ? members[i]->name : c.conn->character_name();
-            if (iequals(name, index)) return V::integer(static_cast<std::int64_t>(i));
+            if (!index.empty() && iequals(name, index)) return member_value(c, static_cast<int>(i));
         }
         return V::nil();
     });
@@ -2061,6 +2062,105 @@ void register_e3_members() {
         if (v.i < 0 || v.i >= 6) return V::nil();
         return aggro_pct(c, v.i == 0 ? net::kAggroPlayer : net::kAggroGroup1 + static_cast<int>(v.i) - 1);
     });
+
+    // The rest of MQ2GroupType and MQ2GroupMemberType. A member's spawn: the player's own, else the one of its name
+    // in the zone (a corpse is none).
+    auto member_spawn = [](const Context& c, std::size_t i, const game::GroupMember* m) -> const game::Spawn* {
+        if (i == 0) return me(c);
+        return m ? spawn_named(c, m->name) : nullptr;
+    };
+    // AnyoneMissing: a member other than the player offline, or not in the zone, or only a corpse here.
+    add(g.group, "AnyoneMissing", [member_spawn](const Context& c, const Value&, std::string_view) -> V {
+        auto members = group_members(c);
+        if (members.empty()) return V::nil();
+        for (std::size_t i = 1; i < members.size(); ++i)
+            if (members[i] && (members[i]->offline || !member_spawn(c, i, members[i]))) return V::boolean(true);
+        return V::boolean(false);
+    });
+    // MercenaryCount and the four by role (GetGroupMercenaryCount): the mercenaries in the zone of any class, or a
+    // warrior (tank), cleric (healer), rogue (melee), wizard (caster), as MQ's class masks pick them.
+    auto merc_count = [member_spawn](int wanted_class) {
+        return [member_spawn, wanted_class](const Context& c, const Value&, std::string_view) -> V {
+            auto members = group_members(c);
+            if (members.empty()) return V::nil();
+            std::int64_t n = 0;
+            for (std::size_t i = 1; i < members.size(); ++i) {
+                if (!members[i] || !members[i]->merc) continue;
+                const game::Spawn* s = member_spawn(c, i, members[i]);
+                if (s && (wanted_class == 0 || s->class_id == wanted_class)) ++n;
+            }
+            return V::integer(n);
+        };
+    };
+    add(g.group, "MercenaryCount", merc_count(0));
+    add(g.group, "TankMercCount", merc_count(game::Warrior));
+    add(g.group, "HealerMercCount", merc_count(game::Cleric));
+    add(g.group, "MeleeMercCount", merc_count(game::Rogue));
+    add(g.group, "CasterMercCount", merc_count(game::Wizard));
+    // AvgHPs: the player's HP percent and each other member's in the zone, averaged; 100 when they add up to 0.
+    // A deliberate difference from MQ, whose player term is (current / max) * 100 in whole numbers (0 unless the
+    // player is at full HP): here it is the player's percent.
+    add(g.group, "AvgHPs", [member_spawn](const Context& c, const Value&, std::string_view) -> V {
+        auto members = group_members(c);
+        if (members.empty()) return V::nil();
+        std::int64_t total = 0, count = 1;
+        if (V mine = character_member(c, "PctHPs"); mine.kind == Value::Kind::Int) total = mine.i;
+        for (std::size_t i = 1; i < members.size(); ++i) {
+            if (!members[i]) continue;
+            if (const game::Spawn* s = member_spawn(c, i, members[i])) {
+                total += s->hp_percent;
+                ++count;
+            }
+        }
+        return V::integer(total != 0 ? total / count : 100);
+    });
+    // Cleric: the first member who is a player cleric in the zone (the player too), as a spawn.
+    add(g.group, "Cleric", [member_spawn](const Context& c, const Value&, std::string_view) -> V {
+        auto members = group_members(c);
+        for (std::size_t i = 0; i < members.size(); ++i) {
+            if (members[i] && members[i]->merc) continue;
+            const game::Spawn* s = member_spawn(c, i, members[i]);
+            if (s && s->class_id == game::Cleric) return spawn_value(s);
+        }
+        return V::nil();
+    });
+    // MarkNpc: the member the leader delegated Mark NPC to (OP_DelegateAbility; Leadership::group_marker). MQ reads
+    // a group role bit that RoF2's group roles (1..3: tank, assist, puller) do not have; the delegated marker is
+    // RoF2's nearest (docs/unknowns.md "Group.MarkNpc and MasterLooter").
+    auto is_marker = [member_spawn](const Context& c, std::size_t i, const game::GroupMember* m) {
+        const game::Spawn* s = member_spawn(c, i, m);
+        return s && c.conn && c.conn->leadership().group_marker != 0 && s->id == c.conn->leadership().group_marker;
+    };
+    add(g.group, "MarkNpc", [is_marker](const Context& c, const Value&, std::string_view) -> V {
+        auto members = group_members(c);
+        for (std::size_t i = 0; i < members.size(); ++i)
+            if (is_marker(c, i, members[i])) return member_value(c, static_cast<int>(i));
+        return V::nil();
+    });
+    add(g.member, "MarkNpc", [is_marker](const Context& c, const Value& v, std::string_view) -> V {
+        auto members = group_members(c);
+        if (v.i < 0 || v.i >= static_cast<std::int64_t>(members.size())) return V::nil();
+        const auto i = static_cast<std::size_t>(v.i);
+        return V::boolean(is_marker(c, i, members[i]));
+    });
+    // MasterLooter: RoF2's group has no master looter (CGroupBase_SetMemberRole takes roles 1..3 only), so no
+    // member is one (docs/unknowns.md "Group.MarkNpc and MasterLooter").
+    add(g.group, "MasterLooter", [](const Context&, const Value&, std::string_view) { return V::nil(); });
+    add(g.member, "MasterLooter", [](const Context& c, const Value& v, std::string_view) -> V {
+        auto members = group_members(c);
+        if (v.i < 0 || v.i >= static_cast<std::int64_t>(members.size())) return V::nil();
+        return V::boolean(false);
+    });
+    // Present: the member's spawn is in the zone (the player always).
+    add(g.member, "Present", [member_spawn](const Context& c, const Value& v, std::string_view) -> V {
+        auto members = group_members(c);
+        if (v.i < 0 || v.i >= static_cast<std::int64_t>(members.size())) return V::nil();
+        const auto i = static_cast<std::size_t>(v.i);
+        return V::boolean(member_spawn(c, i, members[i]) != nullptr);
+    });
+    // MouseOver: the member whose Group window gauge the mouse is over. The TLOs cannot see the UI's hover, so it
+    // is NULL, as MQ's is with the mouse anywhere else.
+    add(g.group, "MouseOver", [](const Context&, const Value&, std::string_view) { return V::nil(); });
 }
 
 // ---------------------------------------------------------------- Raid, Corpse and more of Me (MacroQuest's meanings)

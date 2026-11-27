@@ -565,7 +565,10 @@ TEST_CASE("TLO: Group, items, Zone and the rest") {
     CHECK(f.p("${Group.Member[0]}") == "Tester");
     CHECK(f.p("${Group.Member[1].Name}") == "Groupie");
     CHECK(f.p("${Group.Member[1].Distance}") == "20.00"); // groupmember inherits spawn
-    CHECK(f.p("${Group.Member[Groupie]}") == "1");
+    CHECK(f.p("${Group.Member[Groupie]}") == "Groupie"); // a name gives the member, as MQ's
+    CHECK(f.p("${Group.Member[groupie].Index}") == "1");
+    CHECK(f.p("${Group.Member[Tester].Index}") == "0");
+    CHECK(f.p("${Group.Member[Nobody]} ${Group.Member[]}") == "NULL NULL");
     CHECK(f.p("${Group.Leader}") == "Groupie");
     CHECK(f.p("${Group.MainTank.Name}") == "Groupie");
     CHECK(f.p("${Zone.ShortName} / ${Zone}") == "qeynos2 / North Qeynos");
@@ -1242,6 +1245,50 @@ TEST_CASE("TLO: spawns' Aggressive, Primary, Secondary and Body; the group's Pre
     CHECK(f.p("${Group.LowMana[" + std::to_string(my_mana + 1) + "]}") == (my_mana + 1 > 10 ? "2" : "1"));
     CHECK(f.p("${Group.LowMana[5]}") == "0");
     CHECK(f.p("${Group.Injured}") == "0");
+}
+
+TEST_CASE("TLO: the rest of Group and groupmember, as MacroQuest's") {
+    Fixture f;
+    using A = net::GameConnectionTestAccess;
+    auto& conn = *f.world.conn;
+    auto& w = A::world(conn);
+    auto& grp = A::group(conn);
+    // Groupie (slot 0, in the zone) and the player: nobody missing, nobody a mercenary.
+    CHECK(f.p("${Group.AnyoneMissing}") == "FALSE");
+    CHECK(f.p("${Group.Member[1].Present} ${Group.Member[0].Present}") == "TRUE TRUE");
+    CHECK(f.p("${Group.MercenaryCount} ${Group.HealerMercCount}") == "0 0");
+    // AvgHPs: the player's 75% and Groupie's 100%.
+    w.spawns[12].hp_percent = 100;
+    CHECK(f.p("${Group.AvgHPs}") == "87");
+    // Cleric: the first player cleric in the zone, the player too.
+    CHECK(f.p("${Group.Cleric}") == "NULL");
+    w.spawns[12].class_id = game::Cleric;
+    CHECK(f.p("${Group.Cleric} ${Group.Cleric.ID}") == "Groupie 12");
+    w.spawns[1].class_id = game::Cleric;
+    CHECK(f.p("${Group.Cleric}") == "Tester"); // in member order: the player is member 0
+    // Mark NPC: the member the leader delegated it to.
+    CHECK(f.p("${Group.MarkNpc} ${Group.Member[1].MarkNpc}") == "NULL FALSE");
+    A::leadership(conn).group_marker = 12;
+    CHECK(f.p("${Group.MarkNpc} ${Group.MarkNpc.Index}") == "Groupie 1");
+    CHECK(f.p("${Group.Member[1].MarkNpc} ${Group.Member[0].MarkNpc}") == "TRUE FALSE");
+    // No master looter in RoF2's group; no hover here.
+    CHECK(f.p("${Group.MasterLooter} ${Group.Member[1].MasterLooter}") == "NULL FALSE");
+    CHECK(f.p("${Group.MouseOver}") == "NULL");
+    // A mercenary cleric joins in the zone; then Groupie goes elsewhere.
+    grp.slots[2].name = "Merc";
+    grp.slots[2].merc = true;
+    auto& merc = w.spawns[14];
+    merc.id = 14;
+    merc.name = "Merc";
+    merc.is_npc = true;
+    merc.class_id = game::Cleric;
+    CHECK(f.p("${Group.MercenaryCount} ${Group.HealerMercCount} ${Group.TankMercCount}") == "1 1 0");
+    CHECK(f.p("${Group.Member[Merc].Mercenary}") == "TRUE");
+    w.spawns.erase(12);
+    CHECK(f.p("${Group.AnyoneMissing} ${Group.Member[Groupie].Present}") == "TRUE FALSE");
+    // Not grouped: none of them.
+    grp.active = false;
+    CHECK(f.p("${Group.AnyoneMissing} ${Group.AvgHPs} ${Group.MercenaryCount}") == "NULL NULL NULL");
 }
 
 TEST_CASE("TLO: Raid and its members") {

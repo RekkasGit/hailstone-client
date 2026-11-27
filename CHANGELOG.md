@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `${Group.Member[name]}` now gives the group member, as in MacroQuest, so `${Group.Member[name].Index}` and the member's other fields work (E3's heals and buffs by name use it). The `Group` TLO also gains `AnyoneMissing`, `MercenaryCount` (and the tank, healer, melee and caster counts), `AvgHPs`, `Cleric`, `MarkNpc`, `MasterLooter` and `MouseOver`, and each member `MarkNpc`, `MasterLooter` and `Present`.
 - Chat timestamps are set per tab: right-click a tab and pick **Timestamps** to change that tab only. Tabs keep the format they had until you change them.
 - New chat filter **Plugins and Scripts** (Filters menu, after System Messages): every line a plugin or Lua script writes goes to the window you pick, whatever its colour. It stays in the main window until moved.
 - Mana regeneration now uses the server's reported maximum, fixing mana bars that stopped short of full when the client's calculated maximum was lower.

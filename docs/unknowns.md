@@ -1510,6 +1510,11 @@ Real estate is built to the original (docs/protocol/rof2-packets.md "Real estate
   (AltAdvManager::GetAAById with the player's level), which is not decoded. Now: the player's owned rank when they have
   one (the rank they cast), else the first rank the AA table holds. Settle: GetAAById's use of the level argument.
 
+- **`Group.MarkNpc` and `MasterLooter`.** `player` MQ reads group role bits for Mark NPC and Master Looter that
+  RoF2's group roles do not have (CGroupBase_SetMemberRole takes 1..3: tank, assist, puller). Now: `MarkNpc` is the
+  member the leader delegated Mark NPC to (OP_DelegateAbility, the RoF2 client's group marker), and `MasterLooter` is
+  never anyone. Settle: whether MQ's emulator build reads the delegated marker for IsMarkNPC, and whether RoF2's
+  CGroupMember keeps any master looter state.
 - **`Merchant.ItemsReceived` for a merchant with nothing to sell.** `player` MQ sets it once the merchant window's list
   has been filled (CMerchantWnd's PurchasePageHandler::UpdateList). Here it is TRUE once the merchant is open and an
   item of its stock has come, so a merchant with no stock stays FALSE. Settle: whether UpdateList runs for an empty

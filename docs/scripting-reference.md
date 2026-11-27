@@ -378,8 +378,10 @@ An item in a slot. Its plain value is the item's name.
 | `Members` | int | members besides the player |
 | `GroupSize` | int | the player included |
 | `Member[n]` | `groupmember` | member n; 0 is the player |
-| `Member[name]` | int | that member's index |
+| `Member[name]` | `groupmember` | the member of that name (any case); `.Index` gives its number |
 | `Leader`, `MainTank`, `MainAssist`, `Puller` | `groupmember` | the member with that role |
+| `MarkNpc` | `groupmember` | the member the leader delegated Mark NPC to |
+| `MasterLooter` | `groupmember` | always NULL: RoF2's group has no master looter |
 
 A `groupmember` has every `spawn` member (of its spawn when it is in the zone), and these. Its plain value is the
 name.
@@ -391,7 +393,10 @@ name.
 | `Spawn` | `spawn` | NULL when it is not in this zone |
 | `Level` | int | also known when it is in another zone |
 | `Leader`, `MainTank`, `MainAssist`, `Puller` | bool | |
+| `MarkNpc` | bool | the leader delegated Mark NPC to it |
+| `MasterLooter` | bool | always FALSE (RoF2 has none) |
 | `Mercenary`, `Offline` | bool | |
+| `Present` | bool | its spawn is in this zone (the player always) |
 | `OtherZone` | bool | online but not in this zone |
 | `PctAggro` | int | its aggro meter percentage |
 
@@ -400,6 +405,12 @@ name.
 | `Present` | int | the members besides the player whose spawn is in this zone |
 | `Injured[pct]` | int | the members in the zone (the player too) with health above 0 and below the percent |
 | `LowMana[pct]` | int | the same for mana (the others' as the group's mana updates give it) |
+| `AnyoneMissing` | bool | a member besides the player is offline, out of the zone, or only a corpse here |
+| `MercenaryCount` | int | the mercenaries in the zone |
+| `TankMercCount`, `HealerMercCount`, `MeleeMercCount`, `CasterMercCount` | int | the same for a warrior, cleric, rogue or wizard mercenary |
+| `AvgHPs` | int | the player's and the other members' in the zone health percent, averaged (100 when they add up to 0). MQ's player term is whole-number (current / max) * 100, 0 below full health; here it is the player's percent |
+| `Cleric` | `spawn` | the first member (the player first) who is a player cleric in the zone |
+| `MouseOver` | `groupmember` | always NULL: the TLOs cannot see the mouse's place in the UI |
 
 ### pet
 
