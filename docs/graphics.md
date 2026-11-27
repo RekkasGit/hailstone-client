@@ -1343,7 +1343,8 @@ The modern lighting's `WeatherLook`:
   `render::set_weather`.
 - **Per zone:** entering another zone restarts the look dry with a clear sky; a storm does not follow the player.
 - **Lightning:** a strike (`render::lightning_flash`) flickers three times over a faint half-second afterglow, lighting
-  the sky, clouds, ambient and haze.
+  the sky, clouds, ambient and haze. Screen Effects (docs/dev-ui.md "Accessibility") scales the flash; 0 % leaves the
+  thunder and no light.
 - **Viewer:** `--weather rain|snow N` shows it already settled, the particles falling for the last 30 s.
 
 #### Weather: puddles

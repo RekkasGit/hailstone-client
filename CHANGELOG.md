@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Accessibility options. **Colour Vision** (Options > Display > Accessibility in Modern, Options > Interface in Gamepad) switches the con colours of the target, names, map, chat and extended targets to a colour-blind-safe set for deuteranopia, protanopia or tritanopia, and the interface's health, good and bad colours with them. **Con Labels** writes the target's con colour next to its name. **Minimum Text Size** keeps the windows' text at or above the size you pick. **Screen Effects** tones down or turns off the lightning flash, camera shake and the drunken view warp. They are the player's settings, shared by every character; the defaults change nothing.
 - Left-click the target's target health bar in Modern or Gamepad to select that target.
 - The Tracking window can stay open, be reopened, and refresh its list during the camp countdown.
 - The Combat skill picker offers Slam only when your current form has it (a Barbarian, Troll or Ogre form, citizen forms included), as the original client does; it no longer offers Slam to every character. Saved Slam buttons are dimmed while your form cannot use Slam (a citizen form also needs the Bash skill) and become usable again when it can. Interfaces read it from the hot button's `unavailable` field (UI API 1.13).

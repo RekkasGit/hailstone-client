@@ -105,6 +105,10 @@ local function body(x, y, w, h, s)
   local pad = 10 * s
   local frac, _, raw = API.character.Gauge(6)
   local caption = API.character.Label(28, true) or name
+  -- Con Labels (Options > Accessibility; game/accessibility.h): the con colour in words, which the host gives the
+  -- con box as its tooltip while the option is on.
+  local conName = con and API.windows.ChildTooltip(WINDOW, "A_TargetBoxStaticAnimTop")
+  if conName and conName ~= "" then caption = caption .. " (" .. conName .. ")" end
   local pct = API.character.Label(29) or ""
   -- name and the con dot
   local nx = x + pad

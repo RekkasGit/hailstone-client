@@ -209,9 +209,13 @@ ui.window("HUD Target", function()
     if con then -- the con colour as the panel's left edge and the name
       T.rect(x0, y0 + T.px(14), x0 + T.px(6), y1 - T.px(14), con, 1, T.px(3))
     end
+    -- Con Labels (Options > Interface; game/accessibility.h): the con colour in words, which the host gives the con
+    -- box as its tooltip while the option is on.
+    local conName = con and API.windows.ChildTooltip("TargetWindow", "A_TargetBoxStaticAnimFill")
+    local shown = (conName and conName ~= "") and (name .. " (" .. conName .. ")") or name
     T.font(26)
     local _, nh = ui.CalcTextSize("Ag")
-    T.textIn(x0 + p + T.px(4), y0 + p - T.px(2), x1 - p - T.px(90), y0 + p + nh, name, con or C.text, 0)
+    T.textIn(x0 + p + T.px(4), y0 + p - T.px(2), x1 - p - T.px(90), y0 + p + nh, shown, con or C.text, 0)
     T.unfont()
     -- A distance is optional; the current host does not export this capability.
     if HAS_TARGET_DISTANCE then

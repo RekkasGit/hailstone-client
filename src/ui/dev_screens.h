@@ -548,6 +548,7 @@ struct TargetView {
     int level = 0;
     int hp_percent = 0;
     std::uint32_t con_rgb = 0xffffff; // consider colour of the name
+    std::string con_label;            // the con colour in words (Con Labels, game/accessibility.h); empty: none
     bool is_corpse = false;
     bool is_self = false;
     float distance = 0.0f;

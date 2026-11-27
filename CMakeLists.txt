@@ -578,6 +578,7 @@ add_library(hailstone_engine STATIC
   src/game/item_options.cpp
   src/game/nameplate_overlap.cpp
   src/game/nameplate_style.cpp
+  src/game/accessibility.cpp
   src/game/option_commands.cpp
   src/game/output_file.cpp
   src/ui/lua/lua_host.cpp
@@ -1395,6 +1396,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/plate_test_test.cpp
     tests/nameplate_overlap_test.cpp
     tests/nameplate_style_test.cpp
+    tests/accessibility_test.cpp
     tests/nameplate_canvas_api_test.cpp
     tests/lua_nameplate_lifetime_test.cpp
     tests/nameplate_canvas_painter_test.cpp

@@ -229,6 +229,8 @@ Some keys stay in `hailstone.ini` whoever plays (`Config::is_shared_key`):
 - the window's place and mode: `window.*`, `display.window_mode`, `display.resolution` (one window, so it does not
   jump when a character enters);
 - the computer's graphics tier: `display.gpu_tier`;
+- the player's accessibility options: `accessibility.*` (colour vision, con labels, minimum text size, screen effects;
+  docs/dev-ui.md "Accessibility");
 - what is taken only at start: `display.msaa`, `display.upscaler`, `ui.name`, `ui.scale`, `ui.cpp_windows`,
   `ui.dev_windows`, `ui.perf_*`, `game.fixed_step`, `audio.enabled`, `audio.soundfont`, `audio.mix_ahead`,
   `nav.threads`, `nav.prebuild`.

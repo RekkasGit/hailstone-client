@@ -456,12 +456,17 @@ int ClientApp::run() {
         // OP_CameraEffect's shake (game/camera_shake.h) for the image being drawn: the original adds it to the camera
         // it renders with (@0x796dd0), never to the game camera. It is taken off again before picking.
         const glm::vec3 unshaken_camera = camera_.position;
+        // Hailstone's Screen Effects (game/accessibility.h) scales the shake and the lightning's flash.
+        const int screen_effects = accessibility_.screen_effects;
         if (in_game && conn_)
-            camera_.position = conn_->camera_shake().offset(
-                camera_.position, static_cast<std::uint32_t>(net::GameConnection::now_ms()));
+            camera_.position = game::scaled_shake(
+                camera_.position,
+                conn_->camera_shake().offset(camera_.position, static_cast<std::uint32_t>(net::GameConnection::now_ms())),
+                screen_effects);
         if (in_game) {
             const std::uint16_t zone_id = conn_ ? conn_->zone_id() : std::uint16_t{0};
             weather_look_.update(weather_, dt, zone_id);
+            weather_look_.flash *= game::screen_effect_scale(screen_effects); // (worked out again from the strike's age)
             update_precipitation(dt, sky_hour);
         }
         const int width = static_cast<int>(f->extent.width), height = static_cast<int>(f->extent.height);
