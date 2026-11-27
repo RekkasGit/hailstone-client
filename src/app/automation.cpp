@@ -276,6 +276,7 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
         if (net::GameConnection* c = m.conn()) c->set_door_target(id);
     };
     ce.face = m.env.face;
+    ce.look = m.env.look;
     ce.keypress = m.env.keypress;
     ce.load_cfg = [&m](std::string_view name, bool typed) -> std::optional<mq::CfgLoad> {
         auto file = load_cfg(m.cfg_folders(), name, typed);

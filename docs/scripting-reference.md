@@ -171,6 +171,8 @@ the clean name.
 | `MaxRangeTo` | float | its melee radius, at least 14 |
 | `Height` | float | its size |
 | `Moving` | bool | |
+| `FeetWet` | bool | the feet are in water or another liquid |
+| `Levitating` | bool | levitating (MacroQuest's: not flying, nor levitating while running) |
 | `StandState` | int | 100 standing, 110 sitting, 111 ducking, 115 feigning |
 | `Sitting`, `Standing`, `Ducking`, `Feigning` | bool | |
 | `Dead` | bool | a corpse |
@@ -639,6 +641,7 @@ them. These commands come from MacroQuest rather than the game:
 | `/echo text` | a line in the chat window |
 | `/target id N` \| `clear` \| `mycorpse` \| `myself` \| a search | targets (nothing, or `myself`: you) |
 | `/face` [target] \| `id N` \| `heading H` \| `loc y,x` \| a search [`fast`] | turns to face (a heading is taken modulo 360; a heading or loc that is not a finite number turns nothing) |
+| `/look <angle>` | looks up (to 128) or down (to -128), 0 level; past 128 either way refused with a chat line |
 | `/keypress <command> [hold\|release]` | presses a key command by the game's name: `forward`, `jump`, `hot1_1`, ... |
 | `/squelch <cmd>` | runs the command without its chat output |
 | `/docommand <cmd>` | runs the command (useful after `${...}` builds it) |

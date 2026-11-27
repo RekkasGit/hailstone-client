@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- MacroQuest's `/look <angle>` sets how far up or down you look, and `${Spawn.FeetWet}` and `${Spawn.Levitating}` (and `${Me...}`) say whether a spawn's feet are in water and whether it levitates.
 - Windows in the background or minimized now run their game loop, plugins and scripts at least 30 times a second (was 10), so a box set's background characters respond faster. A low Background Frame Rate still draws only that many frames.
 - A box set's other windows keep their own window mode, resolution, size and place for each character, and no longer change the shared settings in hailstone.ini.
 - After a box set login starts the other accounts' windows, the window you logged in from comes back to the front once they have opened.

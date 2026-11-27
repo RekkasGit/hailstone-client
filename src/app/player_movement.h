@@ -146,6 +146,7 @@ public:
         float speed_heading = 0.0f;        // SpeedHeading +0x8c (turning)
         std::uint8_t body_wet = 0;         // BodyWet +0xa2
         std::uint8_t feet_wet = 0;         // the region type at the feet (its own sample; FeetWetness is +0xa1)
+        std::uint8_t fly_mode = 0;         // the fly mode it moved in (mech::FlyMode: 2 levitating)
         std::uint8_t head_wet = 0;         // HeadWet: the region type at the eyes (5 = under water)
         std::int32_t colliding_type = 0;   // CollidingType +0x24 (6: on a ladder)
         // With set_trace: DoCollisionMovement's decisions this frame (sweeps, the world test, CanIFitHere with

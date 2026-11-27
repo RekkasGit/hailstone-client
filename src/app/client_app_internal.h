@@ -41,6 +41,7 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <random>
 #include <set>
@@ -502,6 +503,10 @@ public:
         aenv.world_placement_scene = [this] { return world_placement_scene(); };
         aenv.world_placement_input_allowed = [this] { return world_placement_input_allowed(); };
         aenv.face = [this](double degrees, bool) { face_degrees(degrees); };
+        // CameraAngle's units are 256 to a half turn; the look keys and LookSpring take it from there.
+        aenv.look = [this](float angle) {
+            pitch_ = std::clamp(angle * std::numbers::pi_v<float> / 256.0f, -1.5f, 1.5f);
+        };
         aenv.keypress = [this](std::string_view command, int mode) { return script_keypress(command, mode); };
         aenv.max_camera_distance = [this] { return max_camera_distance_; };
         aenv.set_max_camera_distance = [this](float d) {

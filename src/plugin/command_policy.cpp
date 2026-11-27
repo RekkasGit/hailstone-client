@@ -42,6 +42,7 @@ constexpr ExtendedCommand kExtended[] = {
     {"/keypress", "Tap, hold, or release a game binding.", kMovement},
     {"/lighting", "Switch lighting modes."},
     {"/loadcfg", "Run the commands in a .cfg file.", kHelpers},
+    {"/look", "Look up or down at an angle.", kMovement},
     {"/lua", "Start, pause, stop, or list Lua scripts."},
     {"/luasocial", "Open the Lua social editor."},
     {"/makemevisible", "Drop your own invisibility."},

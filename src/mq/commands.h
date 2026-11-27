@@ -47,6 +47,7 @@ struct CommandEnv {
     std::function<void(std::uint32_t spawn_id)> set_target;
     std::function<void(std::optional<std::uint8_t> door)> set_door_target; // /doortarget; null: none
     std::function<void(double degrees, bool fast)> face;  // MQ degrees: clockwise from north
+    std::function<void(float camera_angle)> look;         // /look: MQ's CameraAngle, -128 (down) to 128 (up)
     // /keypress: an EQ key command by its name ("forward", "jump", "hot1_1" ...), tapped (0), held (1) or let go (2);
     // false when the name is unknown.
     std::function<bool(std::string_view command, int mode)> keypress;

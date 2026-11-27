@@ -62,6 +62,7 @@ struct AutomationEnv {
     std::function<std::optional<mq::WindowChild>(std::string_view, std::string_view, bool)> window_child;
     std::function<bool(std::string_view, std::string_view, std::string_view)> window_act;
     std::function<void(double degrees, bool fast)> face;       // MQ degrees, clockwise from north
+    std::function<void(float camera_angle)> look;              // /look: MQ's CameraAngle (-128..128)
     std::function<bool(std::string_view command, int mode)> keypress; // /keypress (0 tap, 1 hold, 2 release)
     std::function<nav::NavControl*()> nav; // /nav, /moveto and the Navigation TLO (app/navigator.h); null: none
     // The camera's zoom limit for plugins (plugin::NativeEnv); setting it cuts the zoom to it.

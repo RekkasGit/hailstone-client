@@ -1059,7 +1059,7 @@ void ClientApp::update_player(float dt) {
             conn_->set_player_motion(body.feet + glm::vec3(0, 0, local_body_height_),
                                      game::yaw_to_heading(local_body_yaw_), body.velocity, body.moving);
             conn_->set_air_supply(local_body_movement_->air_supply());
-            conn_->set_player_body_wet(body.body_wet);
+            conn_->set_player_environment(body.feet_wet, body.body_wet, body.fly_mode);
             conn_->set_standing_on(local_body_movement_->standing_on());
             if (actor_renderer_)
                 actor_renderer_->set_player_motion({true, body.velocity, body.speed_run, body.feet_wet, body.body_wet,
@@ -1135,7 +1135,7 @@ void ClientApp::update_player(float dt) {
         if (frame.follow_off && conn_->follow_target() && (!follow_assist_strafed_ || player_moved) &&
             (!enhanced_profile || (enhanced_profile->flags & game::FollowCancelOnMove))) conn_->stop_follow(true);
         motion_body_wet_ = frame.body_wet;
-        if (!local_body_movement_) conn_->set_player_body_wet(frame.body_wet);
+        if (!local_body_movement_) conn_->set_player_environment(frame.feet_wet, frame.body_wet, frame.fly_mode);
         if (actor_renderer_ && !local_body_movement_)
             actor_renderer_->set_player_motion({true, frame.velocity, frame.speed_run, frame.feet_wet, frame.body_wet,
                                                 frame.speed_heading, conn_->auto_attack(),

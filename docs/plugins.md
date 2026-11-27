@@ -180,7 +180,7 @@ close.
 | 2 | `commands` | run commands outside the groups below: windows, options, `/who`, other plugins' commands, `/lua`; add commands of its own (`mq.bind`, `AddCommand`). The player is told "run other commands (windows, options, /who, other plugins' commands)" |
 | 4 | `target` | change the target: `/target`, `/assist`, `/xtarget`, ... |
 | 8 | `actions` | act: `/cast`, `/disc`, `/doability`, `/useitem`, `/attack`, `/memspellset`, `/pet`, `/loot`, `/autoinventory`, `/alternateadv` (`/alt`), `/split`, `/consent`, `/guilddelete`, non-movement `/keypress`, `/notify`, `/removebuff`, `/removepetbuff` and the window methods that act (`Window[...].DoOpen`, `.DoClose`, `.Child[...].LeftMouseUp`, `.RightMouseUp`); Hailstone's own item commands `/destroy`, `/destroycursor`, `/stowcursor`, `/exchange` and `/unequip`, and `use_ability`. No code presses Yes on a destroy's or a guild disband's question, by `/notify`, a window method or `hs.ClickChild`: only the player answers it |
-| 16 | `move` | move: `/face`, movement `/keypress` (forward, jump, ...), `/follow`, `/sit`, `/stand`, `/duck`, `/camp` |
+| 16 | `move` | move: `/face`, `/look`, movement `/keypress` (forward, jump, ...), `/follow`, `/sit`, `/stand`, `/duck`, `/camp` |
 | 32 | `chat` | speak: plain text, `/say`, `/tell`, `/g`, `/gu`, `/rs`, channels, emotes |
 | 64 | `events` | see chat lines: `mq.event`, `OnIncomingChat`, and hide them (`OnFilterChat`) |
 | 128 | `ui` | draw windows: `mq.imgui.init`, `OnUpdateImGui` |
@@ -2322,7 +2322,7 @@ The built-in groups are:
 | Group | Commands |
 |---|---|
 | `non_rof2` | Hailstone's built-in extended commands |
-| `movement_automation` | `/nav`, `/afollow`, `/moveto`, `/stick`, `/face`, `/keypress` |
+| `movement_automation` | `/nav`, `/afollow`, `/moveto`, `/stick`, `/face`, `/look`, `/keypress` |
 | `command_helpers` | `/docommand`, `/echo`, `/loadcfg`, `/noparse`, `/squelch`, `/timed` |
 | `addon_commands` | Commands registered by add-ons |
 

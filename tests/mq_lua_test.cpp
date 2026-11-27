@@ -42,6 +42,7 @@ struct Host {
     std::vector<std::string> printed, sent;
     std::vector<std::pair<std::string, int>> keys; // /keypress: the command and its mode (0 tap, 1 hold, 2 release)
     std::vector<double> faced; // /face: the MQ degrees asked for
+    std::vector<float> looked; // /look: the CameraAngle asked for
     std::uint32_t target = 0;
     std::int64_t clock = 0;
     std::unique_ptr<mq::Commands> commands;
@@ -67,6 +68,7 @@ struct Host {
             return true;
         };
         ce.face = [this](double degrees, bool) { faced.push_back(degrees); };
+        ce.look = [this](float angle) { looked.push_back(angle); };
         ce.now_ms = [this] { return clock; };
         commands = std::make_unique<mq::Commands>(ce);
         mq::ScriptEnv se;
@@ -1253,6 +1255,29 @@ TEST_CASE("MQ commands: /face takes only a finite heading or loc") {
     h.run("/face loc 10,0"); // the server's y first: due north of the player at the origin
     REQUIRE(h.faced.size() == 4);
     CHECK(h.faced.back() == doctest::Approx(0.0));
+}
+
+TEST_CASE("MQ commands: /look sets the look angle as MacroQuest's, from -128 to 128") {
+    Host h;
+    h.run("/look 32");
+    h.run("/look -128");
+    h.run("/look 128");
+    h.run("/look"); // no number: level, as MQ's GetFloatFromString(.., 0)
+    h.run("/look up");
+    REQUIRE(h.looked.size() == 5);
+    CHECK(h.looked[0] == doctest::Approx(32.0f));
+    CHECK(h.looked[1] == doctest::Approx(-128.0f));
+    CHECK(h.looked[2] == doctest::Approx(128.0f));
+    CHECK(h.looked[3] == 0.0f);
+    CHECK(h.looked[4] == 0.0f);
+    h.printed.clear();
+    h.run("/look 128.5");
+    h.run("/look -200");
+    for (const char* bad : {"/look nan", "/look inf", "/look -inf"}) h.run(bad);
+    CHECK(h.looked.size() == 5); // out of range, or not finite: the look stays
+    REQUIRE(h.printed.size() == 2);
+    CHECK(h.printed[0] == "/look -- Angle 128.500000 out of range.");
+    CHECK(h.printed[1] == "/look -- Angle -200.000000 out of range.");
 }
 
 TEST_CASE("MQ degrees to an EQ heading: wrapped, and nothing for NaN or an infinity") {

@@ -336,6 +336,22 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
             env_.face(heading_between(spawn_position(*me), to), fast);
         },
         plugin::kCapMove);
+    h.add_command(
+        owner_, "/look",
+        [this](std::string_view args) {
+            // MQ's Look: the first word as a number, 0 (level) when it is none, refused past 128 either way.
+            if (!env_.look) return;
+            std::string_view rest = trim(args);
+            double angle = 0;
+            if (!parse_float(first_word(rest), angle)) angle = 0;
+            if (!std::isfinite(angle)) return; // "nan", "inf": MQ would set it; this client leaves the look as it is
+            if (angle > 128.0 || angle < -128.0) {
+                say(std::format("/look -- Angle {:f} out of range.", angle));
+                return;
+            }
+            env_.look(static_cast<float>(angle));
+        },
+        plugin::kCapMove);
     h.add_command(owner_, "/keypress", [this](std::string_view args) {
         std::string_view rest = trim(args);
         std::string key = first_word(rest);

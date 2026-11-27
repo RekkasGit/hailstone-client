@@ -1051,6 +1051,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     out.speed_heading = body.speed_heading;
     out.body_wet = body.body_wet;
     out.feet_wet = region_type(regions, body.feet);
+    out.fly_mode = static_cast<std::uint8_t>(body.fly_mode);
     out.head_wet = head_wet;
     out.colliding_type = body.colliding_type;
     if (cp) conn.note_physics_step(cp->id, now);

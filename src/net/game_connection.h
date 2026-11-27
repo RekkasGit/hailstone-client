@@ -498,10 +498,14 @@ public:
     // casting animation (game::spell_cast_animation).
     void set_cast_animation_fallback(bool on) { cast_animation_fallback_ = on; }
     void reground() { world_.reground(); }
-    // The player's BodyWet (+0xa2) from this frame's movement, on its spawn.
-    void set_player_body_wet(std::uint8_t body_wet) {
-        if (auto it = world_.spawns.find(world_.player_id); world_.player_id && it != world_.spawns.end())
+    // The player's FeetWet (+0xa1), BodyWet (+0xa2) and fly mode (Spawn::local_fly_mode) from this frame's
+    // movement, on its spawn.
+    void set_player_environment(std::uint8_t feet_wet, std::uint8_t body_wet, std::uint8_t fly_mode) {
+        if (auto it = world_.spawns.find(world_.player_id); world_.player_id && it != world_.spawns.end()) {
+            it->second.feet_wet = feet_wet;
             it->second.body_wet = body_wet;
+            it->second.local_fly_mode = fly_mode;
+        }
     }
     const std::optional<PlayerProfile>& profile() const { return profile_; }
     // The level-up effects to show (OP_LevelAppearance), once a frame; at most kLevelEffectCuesKept.

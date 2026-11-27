@@ -565,6 +565,13 @@ void register_spawn() {
         if (is_me(c, s)) return V::boolean(c.conn->player_moving());
         return V::boolean(glm::dot(s.velocity, s.velocity) > 1e-4f);
     });
+    // MQ's FeetWet: the region at the feet is not dry (+0xa1). Levitating: the physics' fly mode is 2
+    // (mPlayerPhysicsClient.Levitate == 2), so not flying, nor 5 (levitating while running). The player's mode is
+    // the one its movement works out; another spawn's the one the server gave it.
+    spawn_member("FeetWet", [](const Context&, const game::Spawn& s, std::string_view) { return V::boolean(s.feet_wet != 0); });
+    spawn_member("Levitating", [](const Context& c, const game::Spawn& s, std::string_view) {
+        return V::boolean((is_me(c, s) ? s.local_fly_mode : s.fly_mode) == 2);
+    });
     spawn_member("StandState", [](const Context&, const game::Spawn& s, std::string_view) { return V::integer(s.stand_state); });
     spawn_member("Sitting", [](const Context&, const game::Spawn& s, std::string_view) { return V::boolean(s.stand_state == 110); });
     spawn_member("Standing", [](const Context&, const game::Spawn& s, std::string_view) { return V::boolean(s.stand_state == 100); });

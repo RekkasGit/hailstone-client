@@ -187,6 +187,27 @@ TEST_CASE("TLO: Me's own state") {
     CHECK(f.p("${Me.Grouped}") == "TRUE");
 }
 
+TEST_CASE("TLO: FeetWet and Levitating, the player's from its own movement") {
+    Fixture f;
+    auto& w = net::GameConnectionTestAccess::world(*f.world.conn);
+    CHECK(f.p("${Me.FeetWet} ${Me.Levitating}") == "FALSE FALSE");
+    // The movement's frame: feet in water (5), body dry, levitating (2). The server's fly mode stays ground.
+    f.world.conn->set_player_environment(5, 0, 2);
+    CHECK(w.spawns[w.player_id].fly_mode == 0);
+    CHECK(f.p("${Me.FeetWet} ${Me.Levitating}") == "TRUE TRUE");
+    f.world.conn->set_player_environment(0, 0, 5); // levitating while running is not MQ's Levitate == 2
+    CHECK(f.p("${Me.FeetWet} ${Me.Levitating}") == "FALSE FALSE");
+    f.world.conn->set_player_environment(0, 0, 1); // flying
+    CHECK(f.p("${Me.Levitating}") == "FALSE");
+    // Another spawn: its own probe and the fly mode the server gave it.
+    w.spawns[10].feet_wet = 5;
+    w.spawns[10].fly_mode = 2;
+    CHECK(f.p("${Spawn[id 10].FeetWet} ${Spawn[id 10].Levitating}") == "TRUE TRUE");
+    w.spawns[10].local_fly_mode = 2; // not the player's: not read
+    w.spawns[10].fly_mode = 0;
+    CHECK(f.p("${Spawn[id 10].Levitating}") == "FALSE");
+}
+
 TEST_CASE("TLO: spells, gems and buffs") {
     Fixture f;
     CHECK(f.p("${Me.Gem[1]}") == "Minor Healing");

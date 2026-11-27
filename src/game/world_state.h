@@ -1174,6 +1174,9 @@ namespace hailstone::game {
 		// The region types under it (+0xa1 FeetWet, +0xa2 BodyWet: 0 dry, 5 water, ...), probed with each step
 		// (WorldState::smooth's `region`); the local player's come from its own controller.
 		std::uint8_t feet_wet = 0, body_wet = 0;
+		// The local player's fly mode as its own movement works it out each frame (PlayerMovement, from fly_mode and
+		// its buffs: MQ's mPlayerPhysicsClient.Levitate); 0 on every other spawn, whose fly_mode is the one it has.
+		std::uint8_t local_fly_mode = 0;
 		std::int32_t colliding_type = 0; // movement sweep's actor type (+0x24); 6 enables climbing animation
 		// EQPlayer::SetHeights' results (game/spawn_heights.h): heights.avatar_height is the spawn's z above its
 		// feet, heights.model_scale its actor's scale. WorldState::set_heights keeps them.
