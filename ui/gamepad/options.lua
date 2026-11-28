@@ -439,6 +439,7 @@ local PAGES = {
     local rows = {}
     local list = table.pack(
       optionRow("Mute", "mute", "bool"),
+      optionRow("Mute in background", "mute_in_background", "bool"),
       optionRow("Master volume", "master", { 0, 100, 5, " %" }),
       optionRow("Music", "music", { 0, 100, 5, " %" }),
       optionRow("Sound effects", "effects", { 0, 100, 5, " %" }),

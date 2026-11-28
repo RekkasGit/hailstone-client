@@ -44,6 +44,7 @@ AudioSettings load_audio_settings(const Config& c) {
         percent = std::clamp(c.get_int("audio." + std::string(sound.name), percent), kSilentPercent, kFullVolumePercent);
     }
     s.mute = c.get_bool("audio.mute", s.mute);
+    s.mute_in_background = c.get_bool("audio.mute_in_background", s.mute_in_background);
     s.environment = c.get_bool("audio.environment", s.environment);
     s.soundfont = c.get_string("audio.soundfont", s.soundfont);
     s.realism = std::clamp(c.get_int("audio.realism", s.realism), 0, 100);
@@ -65,6 +66,7 @@ void store_audio_settings(const AudioSettings& s, Config& c) {
     for (const IndividualSound& sound : individual_sounds())
         c.set_int("audio." + std::string(sound.name), s.individual[sound.group]);
     c.set_bool("audio.mute", s.mute);
+    c.set_bool("audio.mute_in_background", s.mute_in_background);
     c.set_bool("audio.environment", s.environment);
     c.set("audio.soundfont", s.soundfont);
     c.set_int("audio.realism", s.realism);
@@ -173,7 +175,7 @@ AudioSystem::~AudioSystem() {
 }
 
 void AudioSystem::apply_volumes() {
-    mixer_->set_master(settings_.mute ? 0.0f : level(settings_.master));
+    mixer_->set_master(silenced() ? 0.0f : level(settings_.master));
     mixer_->set_bus_volume(Bus::Effects, level(settings_.effects));
     mixer_->set_bus_volume(Bus::Music, level(settings_.music));
     // /reversesound: RoF2 only stores ReverseSound (0xde0d48; docs/formats/audio.md), the client swaps its output.
@@ -194,6 +196,12 @@ void AudioSystem::set_settings(const AudioSettings& s) {
     apply_volumes();
     apply_room();
     if (env_changed) zone_.set_state(night_, environment_, !settings_.environment);
+}
+
+void AudioSystem::set_focused(bool focused) {
+    if (focused == focused_) return;
+    focused_ = focused;
+    apply_volumes();
 }
 
 std::int32_t AudioSystem::room_type() const {

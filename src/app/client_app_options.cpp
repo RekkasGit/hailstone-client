@@ -542,6 +542,7 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (o == "environment") return s.environment ? 1 : 0;
     if (o == "combat_music") return s.combat_music ? 1 : 0;
     if (o == "mute") return s.mute ? 1 : 0;
+    if (o == "mute_in_background") return s.mute_in_background ? 1 : 0;
     if (o == "reverb") return s.reverb ? 1 : 0;
     if (o == "reverse_sound") return s.reverse_sound ? 1 : 0;
     return std::nullopt;
@@ -789,6 +790,7 @@ void ClientApp::set_option_value(std::string_view o, int v) {
     else if (o == "environment") s.environment = v != 0;
     else if (o == "combat_music") s.combat_music = v != 0;
     else if (o == "mute") s.mute = v != 0;
+    else if (o == "mute_in_background") s.mute_in_background = v != 0;
     else if (o == "reverb") s.reverb = v != 0;
     else if (o == "reverse_sound") s.reverse_sound = v != 0;
     else return;

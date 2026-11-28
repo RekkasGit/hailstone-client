@@ -50,6 +50,9 @@ struct AudioSettings {
     // (app/sound_events.cpp).
     GroupVolumes individual;
     bool mute = false;          // audio.mute
+    // audio.mute_in_background: Hailstone, not in the original: no sound while another window has the focus
+    // (AudioSystem::set_focused). On by default, so a box set's background windows are quiet.
+    bool mute_in_background = true;
     bool environment = true;    // audio.environment: the zone's ambient emitters (EmitterSetUserDisabled)
     std::string soundfont;      // audio.soundfont: SF2 for the XMI music; empty = <game>/synthusr.sf2
     // audio.realism, 0..100: the original's "Realism" option (eqclient.ini Realism 0..20, defaults.ini 1), which
@@ -77,6 +80,11 @@ public:
 
     const AudioSettings& settings() const { return settings_; }
     void set_settings(const AudioSettings& s);
+    // Whether the game's window has the focus, once a frame: without it, audio.mute_in_background silences the
+    // output (the master level), while music and sounds play on unheard, to be heard again with the focus.
+    void set_focused(bool focused);
+    // The output is silent: audio.mute, or audio.mute_in_background without the focus.
+    bool silenced() const { return settings_.mute || (settings_.mute_in_background && !focused_); }
     bool has_device() const { return device_ != nullptr; }
 
     // SetCurrentZone: the zone's emitters and music; "" unloads.
@@ -218,6 +226,7 @@ private:
     glm::vec3 listener_{0.0f};
     float yaw_ = 0.0f;
     bool night_ = false;
+    bool focused_ = true; // set_focused
     struct Placed {
         std::uint32_t voice;
         SoundControl control;

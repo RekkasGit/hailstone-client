@@ -924,3 +924,34 @@ TEST_CASE("Audio system: /beep's sounds, a game folder's named sound or the tone
     silent.play_tone_2d(1280.0, 250, SoundGroup::Beep);
     CHECK(silent.mixer().voice_count() == none);
 }
+
+TEST_CASE("Audio system: audio.mute_in_background silences the output without the focus, and is on by default") {
+    test::ScratchDir dir("audio_mute_background");
+    GameDir game(dir.path());
+    Config empty;
+    CHECK(load_audio_settings(empty).mute_in_background);
+    AudioSystem audio(game, AudioSettings{}, false);
+    const float master = audio.mixer().master();
+    CHECK(master > 0.0f);
+    audio.set_focused(false);
+    CHECK(audio.silenced());
+    CHECK(audio.mixer().master() == 0.0f);
+    audio.set_focused(true);
+    CHECK_FALSE(audio.silenced());
+    CHECK(audio.mixer().master() == master);
+    // Off: the background plays on; stored and read back.
+    AudioSettings s = audio.settings();
+    s.mute_in_background = false;
+    audio.set_settings(s);
+    audio.set_focused(false);
+    CHECK_FALSE(audio.silenced());
+    CHECK(audio.mixer().master() == master);
+    Config c;
+    store_audio_settings(s, c);
+    CHECK_FALSE(load_audio_settings(c).mute_in_background);
+    // audio.mute holds with the focus as without.
+    s.mute = true;
+    audio.set_settings(s);
+    audio.set_focused(true);
+    CHECK(audio.mixer().master() == 0.0f);
+}

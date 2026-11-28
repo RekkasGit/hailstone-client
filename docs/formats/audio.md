@@ -355,6 +355,7 @@ The synthesiser is TinySoundFont with `synthusr.sf2`, so it will not sound ident
 | `audio.npc_hits` | 0..100, default 100 (note 1) |
 | `audio.own_footsteps`, `audio.pet_footsteps`, `audio.other_footsteps`, `audio.open_bag`, `audio.open_bank`, `audio.money`, `audio.thunder`, `audio.equip`, `audio.creature_ambient` | 0..100, default 100 (note 4) |
 | `audio.mute` | |
+| `audio.mute_in_background` | no sound while another window has the focus; default on (note 5) |
 | `audio.environment` | the zone's user-disableable emitters |
 | `audio.soundfont` | an SF2 path; default the game's `synthusr.sf2` |
 | `audio.realism` | 0..100, the reverb level of the event sounds; default 5 |
@@ -396,6 +397,10 @@ The synthesiser is TinySoundFont with `synthusr.sf2`, so it will not sound ident
      trade slots stays at full volume.
    - A pet is an NPC with an owner; another player is never one. A walk loop follows the spawn's footstep group as it
      is each frame.
+5. `audio.mute_in_background` is Hailstone's, not in the original. While the window does not have the keyboard focus
+   (`platform::Window::focused`, checked once a frame) the output's master level is 0, as `audio.mute` makes it; the
+   music and sounds play on unheard and are heard again with the focus (`AudioSystem::set_focused`). On by default; the
+   Options window's Audio tab has it as Mute in Background.
 
 Running without sound:
 

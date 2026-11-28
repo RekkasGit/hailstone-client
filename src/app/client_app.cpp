@@ -360,6 +360,7 @@ int ClientApp::run() {
                 motion_.fall_damage.reset();
             }
             update_music();
+            audio_->set_focused(window_.focused());
             audio_->update(now_ms);
         }
         if (zone_particles_ && (in_world || pre_game)) zone_particles_->update(dt, camera_.position);

@@ -281,6 +281,11 @@ void Mixer::set_master(float volume) {
     master_ = std::clamp(volume, 0.0f, 1.0f);
 }
 
+float Mixer::master() const {
+    std::lock_guard lock(mutex_);
+    return master_;
+}
+
 void Mixer::set_swap_channels(bool swap) {
     std::lock_guard lock(mutex_);
     swap_ = swap;

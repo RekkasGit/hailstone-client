@@ -62,6 +62,7 @@ public:
 
     void set_bus_volume(Bus bus, float volume);
     void set_master(float volume);
+    float master() const;
     // The output's left and right channels swapped (/reversesound, audio.reverse_sound): the whole mix, effects,
     // music and streams alike.
     void set_swap_channels(bool swap);

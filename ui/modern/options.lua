@@ -1118,6 +1118,8 @@ end)
 local function audioTab()
   section("Volume", function()
     check("mute", "Mute All Sound", "Silences music and sounds without changing the volumes.")
+    check("mute_in_background", "Mute in Background",
+      "Silences music and sounds while another window has the focus (a Hailstone option).")
     slider("master", "Master Volume", 0, 100, pct)
     slider("music", "Music", 0, 100, pct)
     slider("effects", "Sound Effects", 0, 100, pct, "Spells, combat and the world's sounds.")
