@@ -147,10 +147,10 @@ void SetWindowFontScaleCompat(float scale) {
 	}
 }
 
-// ImGui::PushFont at `size` (by default the font's own), or larger where that would draw below the minimum text size
-// (the window's scale counted); PopFont restores the size before it.
-void PushFontFloored(ImFont *font, float size) {
-	ImGui::PushFont(font, size); // size 0 keeps the current one
+// ImGui::PushFont at `font_size` (by default the font's own), or larger where that would draw below the minimum text
+// size (the window's scale counted); PopFont restores the size before it.
+void PushFontFloored(ImFont *font, float font_size) {
+	ImGui::PushFont(font, font_size); // size 0 keeps the current one
 	const float floor = text_floor_px();
 	const float size = ImGui::GetFontSize();
 	if (floor <= 0.0f || size >= floor || size <= 0.0f) return;
