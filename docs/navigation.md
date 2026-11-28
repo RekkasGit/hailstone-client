@@ -23,8 +23,9 @@ heading is set at once, as `/follow`'s FollowPlayerAI sets it (`game/follow.h`).
 - The player's own forward, back, turn or strafe keys end a walk, as they end `/follow`.
 - Starting a walk ends `/follow`.
 - Nothing moves while the player cannot. A temporary pause (frozen, `/safelock`) carries on when they can.
-- Levitating (fly mode 2 or 5, not in water), a corner or the end below the feet is reached across alone, and the
-  walk's progress toward it is measured across. A levitating body drifts down slower than a path down a hill drops,
+- Levitating (fly mode 2 or 5, not in water), a corner or the end up to 20 below the feet is reached across alone,
+  and the walk's progress toward it is measured across. Deeper than that it keeps its height: a lower floor is not
+  reached by floating over it. A levitating body drifts down slower than a path down a hill drops,
   so it floats over the path; held to the corners' height (8), a walk downhill circled them, never arrived, and took
   the slow descent for a stall, with its strafes and jumps. A point above the feet still needs its height.
 - A sitting player is stood up (the sit key's toggle) when a walk, `/stick` or `/afollow` needs to move them, as
@@ -238,7 +239,8 @@ Recast's mesh has every level of a building, so a goal's height matters:
 - A corner, or the end, counts as reached within 2 across (the end: the walk's distance) and within 8 in height. The
   server's path (`/find`'s) is at its own mesh's heights and is reached by distance across alone.
 - A walk that still ends more than 8 over or under the goal says "Stopped 12 below ...: the mesh has no way up there"
-  (a lift, a jump or a drop it does not know).
+  (a lift, a jump or a drop it does not know). For a spawn that flies or levitates (fly mode 1, 2 or 5) it is 15, its
+  arrival height; one standing on a floor the mesh has no way to keeps 8.
 
 ## Zone lines on the way
 

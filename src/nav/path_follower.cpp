@@ -100,12 +100,13 @@ SteerOutput PathFollower::step(const glm::vec3& feet, double now) {
     if (progress_at_ < 0.0) target_changed(now);
 
     // Corners passed: the next one is within reach (the last one only within the arrival distance).
-    // Within `reach` in height; levitating, any point below (set_levitating).
+    // Within `reach` in height; levitating, also a point up to levitate_drop below (set_levitating).
+    auto floats_over = [&](const glm::vec3& p) {
+        return levitating_ && p.z < feet.z && feet.z - p.z <= tune_.levitate_drop;
+    };
     auto within = [&](const glm::vec3& p, float reach) {
-        if (!check_height_) return true;
-        const float rise = p.z - feet.z;
-        if (levitating_ && rise < 0.0f) return true;
-        return std::abs(rise) <= reach;
+        if (!check_height_ || floats_over(p)) return true;
+        return std::abs(p.z - feet.z) <= reach;
     };
     auto level = [&](const glm::vec3& p) { return within(p, tune_.vertical_reach); };
     while (next_ + 1 < points_.size() && flat(feet, points_[next_]) <= tune_.corner_reach && level(points_[next_])) {
@@ -133,8 +134,8 @@ SteerOutput PathFollower::step(const glm::vec3& feet, double now) {
     }
 
     // Progress counts height too (a fall, a dive, a climb up a column of water are progress), except for the
-    // server's path, whose heights are not ours, and for a point below a levitating player (set_levitating).
-    float gap = check_height_ && !(levitating_ && target.z < feet.z) ? glm::distance(feet, target) : d;
+    // server's path, whose heights are not ours, and for a point a levitating player floats over (set_levitating).
+    float gap = check_height_ && !floats_over(target) ? glm::distance(feet, target) : d;
     if (best_ == std::numeric_limits<float>::max()) { // the first measure toward a new corner or path
         best_ = gap;
         progress_at_ = now;

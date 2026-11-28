@@ -37,6 +37,10 @@ struct FollowerTuning {
     // ... and this close in height, as the end does: a corner on the floor over or under the character is not
     // reached by standing beneath or above it (a ramp that winds over itself, a balcony over a hall).
     float vertical_reach = 8.0f;
+    // Levitating (set_levitating), a corner or the end this far below the feet still counts as reached across. Not
+    // any depth: a floor under the one the player floats on (a lower level, a stair winding beneath) is not reached
+    // by passing over it.
+    float levitate_drop = 20.0f;
     float progress = 0.5f;          // the distance gained that counts as progress
     double stall_seconds = 1.0;     // no progress for this long: stuck
     double unstick_seconds = 0.6;   // how long a jump and strafe lasts
@@ -65,8 +69,8 @@ public:
     // How far above or below the end the walk may finish (its corners still use the tuning's vertical_reach); < 0,
     // as start() leaves it: vertical_reach. A spawn walk's is more, for a spawn that floats (Navigator).
     void set_arrive_height(float reach) { arrive_height_ = reach; }
-    // Hailstone: the player levitates (fly mode 2 or 5): a corner or end below the feet counts as reached across
-    // alone, and progress toward it is measured across. Such a body drifts down slower than a downhill path drops,
+    // Hailstone: the player levitates (fly mode 2 or 5): a corner or end below the feet, up to the tuning's
+    // levitate_drop, counts as reached across alone, and progress toward it is measured across. Such a body drifts down slower than a downhill path drops,
     // so it floats over the path's corners: held to their height, the walk circled them and took the slow descent
     // for a stall (its unstick strafes and jumps). A point above still needs its height. Set each step.
     void set_levitating(bool levitating) { levitating_ = levitating; }
