@@ -391,6 +391,8 @@ Helper: `lib/trade_common.lua`.
 
 - **MerchantWnd**: sortable goods table with search, "Usable only" (MW_UsableButton) and "Affordable only"; coin prices dimmed when unaffordable; Buy or Sell and Inspect; Recover and Parcels pages. Right-click an incoming parcel to inspect its item before retrieving it.
 - **TradeWnd**: both offers side by side (stacked when narrow); accepted sides framed, status from `hs.TradeState()`.
+  Your offer shows exact coin counts with space between each denomination and its count. The coin buttons wrap
+  into two columns or one when the offer is too narrow for all four across.
 - **GiveWnd**. The native shortcut for offering the cursor item to the target is hidden for service NPCs that
   refuse direct hand-ins, including personal and guild tribute masters. Use Donate in the tribute master's window.
 - **BankWnd** and **BigBankWnd** (`bank.lua`): rewrapping slots, a dimming search, shared bank, banked coin.
@@ -548,6 +550,40 @@ Its search field filters the open tab:
 - Words may be loose (`lib/fuzzy.lua`): initials of consecutive words ("fov" for Field of View), a word's letters in order from its first (four letters or more), or one letter off (five or more).
 - Key bindings, chat filters and colours match by name; the key list reads only rows in view without a search.
 - Empty sections are left out whole, and section buttons hide while searching. Tests: `tests/lua_scripts_test.cpp`, `tests/ui_pack_windows4_test.cpp`.
+
+#### Accessibility
+
+Hailstone's own presentation options (not RoF2 rules), the player's and not a character's (`hailstone.ini`
+`accessibility.*`, a shared key: docs/layout.md). The defaults change nothing. `game/accessibility.h` holds them;
+the client puts them in force for the process (`game::set_accessibility`) and the UI layer when they load or change.
+Modern shows them under Options > Display > Accessibility, Gamepad under Options > Interface; the client's own ImGui
+screens read the same settings.
+
+| Option (`hs.Option`) | Key | Values | What it does |
+| --- | --- | --- | --- |
+| `colour_vision` | `accessibility.colour_vision` | 0 off, 1 deuteranopia, 2 protanopia, 3 tritanopia (`option_choices("colour_vision")` names them) | The con colours from a colour-blind-safe set, everywhere `game::con_rgb` is used: the target window, con-coloured names, the map's spawns, the consider message and chat's con colours, extended targets. The packs lay the mode's meaning colours over the palette (`colourVision` in `lib/palettes.lua`). |
+| `con_labels` | `accessibility.con_labels` | 0 / 1 | The target's con colour in words ("Red") beside its name: the host gives the target box (`A_TargetBoxStaticAnim*`) the name as its tooltip, which the packs' target windows read (`hs.ChildTooltip`); the ImGui target screen writes it too. |
+| `min_text_size` | `accessibility.min_text_size` | 0 off, else 10..24 points at 100 % display scale | No UI text smaller than this (`ui/text_floor.h`). |
+| `screen_effects` | `accessibility.screen_effects` | 0..100 %, 100 default | Scales the lightning's flash (`WeatherLook::flash`), OP_CameraEffect's shake (`game::scaled_shake`) and drunkenness' field-of-view widening. |
+
+Colour sets:
+
+- Deuteranopia and protanopia: Okabe and Ito's Color Universal Design set (Okabe & Ito 2008). The cons are grey,
+  bluish green `#009E73`, sky blue `#56B4E9`, blue `#0072B2`, white, yellow `#F0E442` and vermillion `#D55E00`. The
+  packs' health and bad colours are vermillion, low health reddish purple `#CC79A7`, good sky blue and pet / ready
+  bluish green.
+- Tritanopia: Paul Tol's "vibrant" scheme (Tol 2021, SRON/EPS/TN/09-002). The cons are grey `#BBBBBB`, teal
+  `#009988`, cyan `#33BBEE`, blue `#0077BB`, white, orange `#EE7733` and red `#CC3311`. Health and bad are red, low
+  health and good cyan. Under tritanopia the three cool cons differ mostly in lightness; Con Labels names them.
+- Every pack palette keeps its WCAG checks with each mode laid over it (`tests/lua_scripts_test.cpp`).
+
+The minimum text size has no ImGui hook, so it is held where text gets its size. The UI and name plate fonts are
+built no smaller. The Lua bridge's `ui.PushFont`, `ui.PushChatFont` and `ui.SetWindowFontScale` raise a size below
+it, as do `ui.DrawText`'s explicit size and the chat tabs' font. Text can then be larger than a window's layout
+planned for. The map's labels follow the zoom and are not held yet.
+
+Left as they are: the switch to first person at drunkenness 70 and the overhead view while knocked out (camera
+changes, not flashes), and the packs' small pulses (a trade's accept, a new tell). Tests: `tests/accessibility_test.cpp`.
 
 #### System windows
 
@@ -937,6 +973,13 @@ Ctrl+Shift+P, `/perf`, or `ui.perf_window=1`. It shows frame times, the main loo
 - Each is timed between `VkContext::gpu_mark` timestamps (`render/gpu_timer.h`), written only while the window is open and read back a frame or two late, so nothing waits on the GPU.
 - With `display.parallel_record` the scene shows as "scene opaque (worker-recorded)" and "scene (worker-recorded)"; `display.parallel_record 0` restores per-pass rows.
 - The zone viewer's `--gpu-timing` (with `--frames`) logs each pass's mean as `gpu pass: ...`.
+- `--bench N` (the viewer and the client) waits until the zone has settled and stayed so for `--bench-settle S`
+  seconds (viewer 2, client 10), times N frames, logs one `bench:` line (mean, p50, p95, p99 and slowest frame time,
+  hitches, resident and committed memory, device-local GPU allocations; `app/frame_bench.h`), then leaves: the
+  viewer at once, the client as a closed window does (`/camp desktop`, so the server keeps no link-dead character for
+  the next login; it quits regardless 60 s later). With
+  `--no-vsync` the client presents unthrottled for that run too. `tools/perf_track.py` runs it each night (docs/ci.md
+  "Nightly performance").
 
 #### Lua garbage collection
 

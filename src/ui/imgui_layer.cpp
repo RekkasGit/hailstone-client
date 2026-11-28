@@ -21,6 +21,7 @@
 #include "render/vk_context.h"
 #include "ui/imgui_vk_textures.h"
 #include "ui/lua/lua_host.h"
+#include "ui/text_floor.h"
 
 namespace hailstone::ui {
 
@@ -54,6 +55,8 @@ std::string lower_ascii(std::string_view s) {
 ImFont* g_plate_font = nullptr;
 float g_plate_font_size = 15.0f;
 bool g_plate_faux_bold = false;
+// The minimum text size in ImGui's pixels (ImGuiLayer::set_min_text_size; ui/text_floor.h); 0 none.
+float g_text_floor_px = 0.0f;
 
 // Metric-compatible Arial-class fonts first (plan section 2), then common sans fonts.
 // These are plain file paths; a missing file is simply skipped.
@@ -322,14 +325,18 @@ ImGuiLayer::~ImGuiLayer() {
 void ImGuiLayer::build_fonts() {
     ImGuiIO& io = ImGui::GetIO();
     io.Fonts->Clear();
+    // The next frame takes its base size from the new atlas's first font, as the first frame did: ImGui keeps the size
+    // it read then, so a font built at another size (the minimum text size) would otherwise not show.
+    ImGui::GetStyle().FontSizeBase = 0.0f;
     g_ui_fonts.fill(nullptr);
     g_chat_fonts.fill(nullptr);
     g_chat_faces.clear();
     g_plate_font = nullptr;
-    g_plate_font_size = std::round(plate_size_ * scale_);
+    g_text_floor_px = std::round(min_text_points_ * scale_);
+    g_plate_font_size = floor_text_px(std::round(plate_size_ * scale_), g_text_floor_px);
     g_plate_faux_bold = false;
     const ImFontConfig cfg = detail::ui_font_config();
-    float size = std::round(font_size_ * scale_);
+    float size = floor_text_px(std::round(font_size_ * scale_), g_text_floor_px);
     // The face set (set_font_face) when its file is there, else the Arial-class font found.
     std::filesystem::path font, bold;
     try {
@@ -350,7 +357,7 @@ void ImGuiLayer::build_fonts() {
         g_plate_font = nullptr;
         g_plate_faux_bold = plate_bold_;
         ImFontConfig def = cfg;
-        def.SizePixels = std::round(13.0f * scale_);
+        def.SizePixels = floor_text_px(std::round(13.0f * scale_), g_text_floor_px);
         io.Fonts->AddFontDefault(&def);
         detail::add_bundled_fonts(*io.Fonts, bundled_fonts_dir_, scale_);
         add_chat_faces();
@@ -445,6 +452,14 @@ void ImGuiLayer::set_plate_font(const std::filesystem::path& regular, const std:
 }
 
 void ImGuiLayer::set_ini_path(const std::filesystem::path& path) { pending_ini_ = utf8(path); }
+
+void ImGuiLayer::set_min_text_size(float points) {
+    points = std::max(points, 0.0f);
+    if (points == min_text_points_) return;
+    min_text_points_ = points;
+    g_text_floor_px = std::round(min_text_points_ * scale_);
+    fonts_dirty_ = true; // the UI and name plate fonts are built no smaller
+}
 
 void ImGuiLayer::new_frame() {
     if (frame_open_) end_frame_without_render();
@@ -678,6 +693,8 @@ bool keyboard_for_ui(int requested) {
 }
 
 float ui_scale() { return g_ui_scale; }
+float text_floor_px() { return g_text_floor_px; }
+void set_text_floor_px(float px) { g_text_floor_px = std::max(px, 0.0f); }
 void set_ui_scale(float scale) { g_ui_scale = scale; }
 
 ImFont* chat_font(int index) {

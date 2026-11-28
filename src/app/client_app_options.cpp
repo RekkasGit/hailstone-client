@@ -340,6 +340,11 @@ void ClientApp::apply_font_face() {
     ui_.set_font_face(files.regular, files.bold);
 }
 
+void ClientApp::apply_accessibility() {
+    game::set_accessibility(accessibility_);
+    ui_.set_min_text_size(static_cast<float>(accessibility_.min_text_size));
+}
+
 void ClientApp::apply_plate_font() {
     ui::FontFiles files;
     if (!plate_style_.face.empty()) {
@@ -376,6 +381,10 @@ std::vector<std::string> ClientApp::option_choices(std::string_view name) const 
         for (const auto& p : kLightTweakPresets) out.emplace_back(p.name);
         out.emplace_back("Custom");
     }
+    // Hailstone: the colour-vision modes (game/accessibility.h), in the option's order.
+    if (name == "colour_vision")
+        for (int i = 0; i < game::kColourVisionModes; ++i)
+            out.emplace_back(game::colour_vision_label(static_cast<game::ColourVision>(i)));
     // The texture packs (display.texture_folder): "Off", then each folder of textures/.
     if (name == "texture_pack") {
         out.push_back("Off");
@@ -478,6 +487,8 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     // Hailstone: the name plates' text (game/nameplate_style.h); the face is its place in
     // option_choices("plate_font_face"), 0 the UI's, -1 one not in the list.
     if (auto v = game::plate_style_option(plate_style_, o)) return v;
+    // Hailstone: colour_vision, con_labels, min_text_size, screen_effects (game/accessibility.h).
+    if (auto v = game::accessibility_option(accessibility_, o)) return v;
     if (o == "plate_font_face") {
         if (plate_style_.face.empty()) return 0;
         auto choices = option_choices("plate_font_face");
@@ -682,6 +693,12 @@ void ClientApp::set_option_value(std::string_view o, int v) {
         apply_plate_font();
         return;
     }
+    if (game::set_accessibility_option(accessibility_, o, v)) {
+        game::store_accessibility(accessibility_, config_);
+        config_.save(config_path_);
+        apply_accessibility();
+        return;
+    }
     if (o == "target_plate_highlight") {
         target_plate_highlight_ = v != 0;
         config_.set_bool("display.target_plate_highlight", v != 0);
@@ -875,6 +892,8 @@ void ClientApp::apply_settings() {
     apply_font_face();
     plate_style_ = game::load_plate_style(config_);
     apply_plate_font();
+    accessibility_ = game::load_accessibility(config_);
+    apply_accessibility();
     actor_clip_plane_ = std::max(config_.get_int("display.actor_clip_plane", game::kDefaultActorClipPlane), 0);
     mouse_invert_y_ = config_.get_bool("mouse.invert_y", false);
     mouse_wheel_zoom_ = config_.get_bool("mouse.wheel_zoom", true);

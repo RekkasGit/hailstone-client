@@ -113,6 +113,9 @@ public:
     // The faces the chat tabs use besides the UI's (Hailstone: a font per tab), into the atlas from the next frame
     // (chat_face_font). A face whose file the rasteriser cannot read is left out.
     void set_chat_faces(std::vector<ChatFaceFiles> faces);
+    // The minimum text size (game/accessibility.h min_text_size), in points at 100 % display scale; 0 none. From the
+    // next frame: the fonts are built again no smaller, and ui/text_floor.h holds the rest.
+    void set_min_text_size(float points);
 
     // The gamepad (a client extension, docs/gamepad.md): on, ImGui's gamepad navigation runs on the window's pad (menu
     // mode: the SDL3 backend drives it); off, ImGui gets nothing from the pad. Applied at the next new_frame. The pad's
@@ -156,6 +159,7 @@ private:
     std::filesystem::path plate_face_, plate_face_bold_; // set_plate_font's
     float plate_size_ = 15.0f;
     bool plate_bold_ = false;
+    float min_text_points_ = 0.0f;
     bool fonts_dirty_ = false;
     bool frame_open_ = false;
     detail::ImGuiVisibility visibility_;

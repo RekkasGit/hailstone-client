@@ -15,6 +15,7 @@
 #include "app/lua_ui_windows.h"
 #include "core/ascii_case.h"
 #include "game/spawn_name_lookup.h"
+#include "game/accessibility.h"
 #include "game/combat.h"
 #include "game/combat_ability_menu.h"
 #include "app/lua_ui_hotbar.h"
@@ -349,6 +350,9 @@ public:
             if (con != game::Con::None) {
                 Rgb rgb = argb_to_rgb(game::con_rgb(con));
                 out.tint = std::array<float, 4>{rgb[0], rgb[1], rgb[2], 1.0f};
+                // Hailstone's Con Labels (game/accessibility.h): the colour in words, for the packs' target windows
+                // (hs.ChildTooltip) and the stock window's hover.
+                if (game::accessibility().con_labels) out.tooltip = std::string(game::con_colour_name(con));
             }
         } else if (int i = index_after(id, "Buff"); i >= 0) {
             const game::BuffSlot* b = target_buff(c, i);

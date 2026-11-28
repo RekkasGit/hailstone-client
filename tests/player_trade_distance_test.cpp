@@ -281,6 +281,104 @@ TEST_CASE("NPC hand-in: successive offers keep identical gems in separate slots"
     }
 }
 
+TEST_CASE("NPC hand-in: a grounded giant is reachable from a lower floor") {
+    test::Rig rig;
+    REQUIRE(rig.to_zone());
+    auto& c = rig.conn;
+    put_mock_cursor_coins_away(c);
+
+    auto spawn = test::make_spawn("Quest guardian", kPartner, 1, 196, 0, 0, 0, 0);
+    spawn.fly_mode = 3; // EQEmu's Water gravity mode, on dry ground.
+    rig.server.add_spawn(spawn);
+    REQUIRE(rig.until([&] { return c.world().spawns.contains(kPartner); }));
+    const auto& guardian = c.world().spawns.at(kPartner);
+    REQUIRE(guardian.is_npc);
+    REQUIRE(guardian.fly_mode == 3);
+    REQUIRE(guardian.heights.avatar_height == 20.0f);
+    // About 43 units to its position, but only 35 to its feet. Its reach is 40.
+    c.set_player_motion({2.4f, 34.4f, -25.6f}, 0, {}, false);
+
+    const auto cursor = net::ItemSlot::possessions(net::kSlotCursor);
+    const net::ItemSlot give_slot{net::kInvTrade, 0};
+    auto shard = test::make_item(17301, "Quest shard", net::kSlotCursor);
+    shard.no_drop = 0;
+    rig.server.item_packet(net::kItemPacketLimbo, shard);
+    REQUIRE(rig.until([&] { return c.inventory().cursor() && c.inventory().cursor()->id == shard.id; }));
+
+    c.give_to(kPartner);
+    REQUIRE(c.trade());
+    REQUIRE(rig.until([&] { return test::MockEqServer::count(rig.server.zone_log, net::Op::TradeRequest) == 1; }));
+    rig.server.zone.send_reliable(net::encode_trade_request_ack({c.world().player_id, kPartner}));
+    REQUIRE(rig.until([&] { return c.trade() && c.trade()->open; }));
+    check_now(c);
+    REQUIRE(c.trade());
+    CHECK(c.trade()->with_npc);
+    CHECK_FALSE(c.inventory().cursor());
+    REQUIRE(c.inventory().at(give_slot));
+    CHECK(c.inventory().at(give_slot)->id == shard.id);
+
+    app::UiHost host;
+    host.in_game = host.ui_ready = true;
+    host.conn = &c;
+    app::UiApi api(host);
+    REQUIRE(api.click_child("GiveWnd", "GVW_Give_Button"));
+    REQUIRE(rig.until([&] { return test::MockEqServer::count(rig.server.zone_log, net::Op::TradeAcceptClick) == 1; }));
+    const auto moves = trade_item_moves(rig);
+    REQUIRE(moves.size() == 1);
+    CHECK(moves[0].from.same(cursor));
+    CHECK(moves[0].to.same(give_slot));
+    CHECK(moves[0].count == 0);
+    CHECK(test::MockEqServer::count(rig.server.zone_log, net::Op::CancelTrade) == 0);
+
+    auto reward = test::make_item(17302, "Quest key", net::kSlotCursor);
+    rig.server.zone.send_reliable(net::make_packet(net::Op::FinishTrade, {}));
+    rig.server.item_packet(net::kItemPacketLimbo, reward);
+    REQUIRE(rig.until([&] { return !c.trade() && c.inventory().cursor(); }));
+    CHECK_FALSE(c.inventory().at(give_slot));
+    CHECK(c.inventory().cursor()->id == reward.id);
+}
+
+TEST_CASE("trade reach stays bounded for grounded NPCs and uses the center for other partners") {
+    mq_test::World world("npc_trade_reach_bounds");
+    auto& c = *world.conn;
+    add_partner(c);
+    auto& partner = c.world_for_test().spawns.at(kPartner);
+    partner.position = {};
+    partner.heights.avatar_height = 20.0f;
+
+    glm::vec3 inside{};
+    glm::vec3 outside{2.4f, 34.4f, -25.6f};
+    partner.is_npc = true;
+    SUBCASE("exactly at horizontal reach and then one unit farther") {
+        inside = {40, 0, -20};
+        outside = {41, 0, -20};
+    }
+    SUBCASE("too far below the feet") { outside = {0, 0, -61}; }
+    SUBCASE("too far above the center") { outside = {0, 0, 41}; }
+    SUBCASE("airborne NPC") { partner.fly_mode = 1; }
+    SUBCASE("swimming NPC") {
+        partner.fly_mode = 3;
+        partner.body_wet = 5;
+        partner.feet_wet = 5;
+    }
+    SUBCASE("player") { partner.is_npc = false; }
+
+    c.set_player_motion(outside, 0, {}, false);
+    c.give_to(kPartner);
+    REQUIRE_FALSE(c.trade());
+
+    c.set_player_motion(inside, 0, {}, false);
+    c.give_to(kPartner);
+    c.receive_zone_packet_for_test(net::encode_trade_request_ack({c.world().player_id, kPartner}));
+    REQUIRE(c.trade());
+    REQUIRE(c.trade()->open);
+    check_now(c);
+    REQUIRE(c.trade());
+    c.set_player_motion(outside, 0, {}, false);
+    check_now(c);
+    CHECK_FALSE(c.trade());
+}
+
 TEST_CASE("player trade: successive offers can merge identical items") {
     test::Rig rig;
     REQUIRE(rig.to_zone());

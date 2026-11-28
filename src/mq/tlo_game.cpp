@@ -1344,8 +1344,10 @@ void register_misc_types() {
         case net::ConnectionState::Zoning:
         case net::ConnectionState::ZoneConnecting:
         case net::ConnectionState::ZoneEntering: return V::string("INGAME");
-        case net::ConnectionState::CharacterSelect:
+        // A zone change passes through world: still in game, as the plugins' game state says.
         case net::ConnectionState::EnteringWorld:
+            return V::string(c.conn->zone_reentry() ? "INGAME" : "CHARSELECT");
+        case net::ConnectionState::CharacterSelect:
         case net::ConnectionState::Creating: return V::string("CHARSELECT");
         default: return V::string("PRECHARSELECT");
         }

@@ -101,16 +101,20 @@ TEST_CASE("a zone change keeps the server's rules and the game state: plugins an
     REQUIRE_FALSE(states.empty());
     CHECK(states.back() == plugin::kGameStateInGame);
     const auto serial = rig.conn.server_rules_serial();
-    bool provisional = false, entering_world = false;
+    bool provisional = false, entering_world = false, reentry_missed = false;
     rig.on_step = [&] {
         if (!rig.conn.server_rules() || rig.conn.server_rules()->provisional) provisional = true;
-        if (rig.conn.state() == ConnectionState::EnteringWorld) entering_world = true;
+        if (rig.conn.state() == ConnectionState::EnteringWorld) {
+            entering_world = true;
+            if (!rig.conn.zone_reentry()) reentry_missed = true; // ${EverQuest.GameState} would say CHARSELECT
+        }
     };
     states.clear();
     REQUIRE(zone_again(rig, 2));
     REQUIRE(zone_again(rig, 1));
     CHECK(entering_world); // (the zone change did pass through world)
     CHECK_FALSE(provisional);
+    CHECK_FALSE(reentry_missed);
     CHECK(rig.conn.server_rules_serial() == serial);
     CHECK(states.empty()); // in game throughout: no character select, no logging in
 }

@@ -2356,6 +2356,10 @@ void target_window(const TargetView& view, bool attacking, InGameActions& action
     } else {
         ImGui::TextColored(rgb_color(view.con_rgb), "%s", view.name.c_str());
         ImGui::SameLine();
+        if (!view.con_label.empty()) {
+            ImGui::TextColored(rgb_color(view.con_rgb), "(%s)", view.con_label.c_str());
+            ImGui::SameLine();
+        }
         ImGui::TextColored(kDimColor, "L%d  %.0f away", view.level, view.distance);
         points_bar("HP", static_cast<float>(view.hp_percent) / 100.0f, ImVec4(0.80f, 0.18f, 0.18f, 1.0f),
                    std::format("{}%", view.hp_percent));

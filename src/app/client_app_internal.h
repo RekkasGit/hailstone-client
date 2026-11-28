@@ -85,6 +85,7 @@
 #include "game/collision.h"
 #include "game/zone_ladders.h"
 #include "game/combat.h"
+#include "game/accessibility.h"
 #include "game/picking.h"
 #include "game/zoning.h"
 #include "game/mechanics/character.h"
@@ -1735,6 +1736,10 @@ private:
     bool target_plate_through_walls_ = false; // Hailstone: the target's name shown behind walls (display.target_plate_through_walls)
     bool target_plate_highlight_ = true; // Hailstone: the target's name on a dark plate with a marker (display.target_plate_highlight)
     game::PlateStyle plate_style_;    // Hailstone: the name plates' font, size, edge and shrink (game/nameplate_style.h)
+    // Hailstone: colour vision, con labels, minimum text size and screen effects (game/accessibility.h), also put in
+    // force for the process (game::set_accessibility) and the UI layer (ui::ImGuiLayer::set_min_text_size).
+    game::Accessibility accessibility_;
+    void apply_accessibility();
     int show_names_ = 4;              // __ShowNames (/shownames 1..6, display.show_names): the player name sprite's parts
     bool spell_effects_ = true;       // ShowSpellEffects (/showspelleffects, display.spell_effects): spell particles
     // EnvironmentParticleDensity (/particledensity and the Options window's combo; display.environment_particle_density,

@@ -504,7 +504,7 @@ An AA the player owns. Its plain value is its ability (group) id.
 | `augtype` | the augment's name; NULL for an empty socket | `Name`, `Item` (`item`), `Empty`, `Slot`, `Type` (the socket's type), `Visible` |
 | `timestamp` | milliseconds | `Raw` (ms), `TotalSeconds`, `TotalMinutes`, `Hours`, `Minutes` (0..59), `Seconds` (0..59), `Ticks` (6 s, rounded up), `TimeHMS` (`h:mm:ss`), `Time` (`m:ss`) |
 | `zone` | its long name | `ID`, `Name`, `ShortName` |
-| `everquest` | `EverQuest` | `GameState` (`INGAME`, `CHARSELECT` or `PRECHARSELECT`), `Server` (the server's name), `UIScale` (always 1.0), `Ping` (the connection's average round trip, ms, as `/netstats` shows it), `Foreground` (the game's window has the focus) |
+| `everquest` | `EverQuest` | `GameState` (`INGAME`, `CHARSELECT` or `PRECHARSELECT`; `INGAME` throughout a zone change), `Server` (the server's name), `UIScale` (always 1.0), `Ping` (the connection's average round trip, ms, as `/netstats` shows it), `Foreground` (the game's window has the focus) |
 | `window` | `TRUE` or `FALSE` | `Open`, `Name` |
 | `plugin` | its name when loaded, else NULL | `IsLoaded`, `Name` |
 | `debuff` | `Count` | `Count` (all four), `Poisoned`, `Diseased`, `Cursed`, `Corrupted`: counters, summed over every buff; `Silenced`: bool, a buff silences (SPA 96) |
