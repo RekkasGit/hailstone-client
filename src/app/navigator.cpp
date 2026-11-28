@@ -1294,7 +1294,11 @@ nav::SteerOutput Navigator::walk_frame(const Frame& f) {
         Goal done = goal_;
         float short_by = glm::length(glm::vec2(done.point - f.feet));
         float rise = done.point.z - f.feet.z;
-        const float other_floor = done.kind == GoalKind::Spawn ? kSpawnArriveHeight : kOtherFloor; // (a spawn floats)
+        // A spawn that floats (flying or levitating) may hang up to kSpawnArriveHeight over the floor the path ends
+        // on; one standing on a floor the mesh has no way to is on another floor at the 8 a point's walk keeps.
+        const game::Spawn* sp = done.kind == GoalKind::Spawn && env_.spawn ? env_.spawn(done.spawn) : nullptr;
+        const bool floats = sp && (sp->fly_mode == 1 || sp->fly_mode == 2 || sp->fly_mode == 5);
+        const float other_floor = floats ? kSpawnArriveHeight : kOtherFloor;
         if (partial_ && std::abs(rise) > other_floor) {
             // On another floor than the goal's, with no way there over the mesh (a lift, a jump, a drop it lacks).
             finish(std::format("[Nav] Stopped {:.0f} {} {}: the mesh has no way {} there.", std::abs(rise),

@@ -230,7 +230,8 @@ TEST_CASE("character files: /outputfile may not take the names of the files kept
     CharacterFiles f{std::filesystem::path("c")};
     for (const auto& p : {f.ui_ini(), f.hot_buttons(), f.trader_prices(), f.barter_lines(), f.barter_log(),
                           f.address_book(), f.ignore_list(), f.guild_notes(), f.chat_ini(), f.options_ini(),
-                          f.chat_history(), f.scripts_ini(), f.kept_items(), f.settings(), f.ui_settings("modern")}) {
+                          f.chat_history(), f.scripts_ini(), f.kept_items(), f.settings(), f.imgui_ini(),
+                          f.ui_settings("modern")}) {
         CAPTURE(p.filename().string());
         CHECK(is_kept_character_file(p.filename().string()));
     }

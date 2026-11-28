@@ -304,6 +304,7 @@ TEST_CASE("nav: a spawn walk's end may be up to its own height allowance over th
 TEST_CASE("nav: levitating downhill, corners and the end below the feet are reached across") {
     // Downhill: the corners drop 12 at a time, and the levitating body floats over them.
     const std::vector<glm::vec3> hill{{0, 0, 0}, {10, 0, -12}, {20, 0, -24}, {30, 0, -36}};
+    // (Over each by up to 20: levitate_drop. Deeper is the next test's.)
     // Not levitating, 12 over the corner is not at it: it stays the aim.
     nav::PathFollower walk;
     walk.start(hill, 2.0f);
@@ -315,9 +316,9 @@ TEST_CASE("nav: levitating downhill, corners and the end below the feet are reac
     lev.set_levitating(true);
     lev.step({10, 0, 0}, 0.0);
     CHECK(lev.next() == 2);
-    lev.step({20, 0, -2}, 0.1);
+    lev.step({20, 0, -6}, 0.1);
     CHECK(lev.next() == 3);
-    lev.step({30, 0, -6}, 0.2);
+    lev.step({30, 0, -18}, 0.2);
     CHECK(lev.state() == nav::FollowState::Arrived);
     // A point above still needs its height: an end 12 up is not reached from under it, levitating or not.
     nav::PathFollower up;
@@ -327,7 +328,7 @@ TEST_CASE("nav: levitating downhill, corners and the end below the feet are reac
     CHECK(up.state() == nav::FollowState::Moving);
     // Set each step: no longer levitating, the end below is held to its height again.
     nav::PathFollower landed;
-    landed.start({{0, 0, 0}, {5, 0, -30}}, 2.0f);
+    landed.start({{0, 0, 0}, {5, 0, -18}}, 2.0f);
     landed.set_levitating(true);
     landed.set_levitating(false);
     landed.step({5, 0, 0}, 0.0);
@@ -335,6 +336,25 @@ TEST_CASE("nav: levitating downhill, corners and the end below the feet are reac
     landed.set_levitating(true);
     landed.step({5, 0, 0}, 0.1);
     CHECK(landed.state() == nav::FollowState::Arrived);
+}
+
+TEST_CASE("nav: levitating, a floor far below is not reached by floating over it") {
+    // A goal on the level beneath, 30 down: passing over it is not arriving, and its corner stays the aim.
+    nav::PathFollower lev;
+    lev.start({{0, 0, 0}, {10, 0, 0}, {10, 0, -30}, {20, 0, -30}}, 2.0f);
+    lev.set_levitating(true);
+    lev.step({10, 0, 0}, 0.0);
+    CHECK(lev.next() == 2); // past the stair's top, level with the feet: its foot is the aim
+    lev.step({10, 0, -1}, 0.1);
+    CHECK(lev.next() == 2); // its foot, 29 down, is not passed from over it
+    lev.step({20, 0, -1}, 0.2);
+    CHECK(lev.state() == nav::FollowState::Moving); // nor is the end
+    lev.step({20, 0, -12}, 0.3);
+    CHECK(lev.state() == nav::FollowState::Moving); // still the stair's foot to pass
+    lev.step({10, 0, -12}, 0.4);
+    CHECK(lev.next() == 3);
+    lev.step({20, 0, -12}, 0.5);
+    CHECK(lev.state() == nav::FollowState::Arrived); // 18 over the end, within 20
 }
 
 TEST_CASE("nav: ground steeper than the slope limit is not walkable") {
@@ -977,6 +997,35 @@ struct StickHarness {
     float away() const { return glm::length(glm::vec2(feet - mob.position)); }
 };
 } // namespace
+
+TEST_CASE("nav: a spawn on a floor the mesh has no way up to is not reached from under it; one floating is") {
+    // A balcony 12 up with no stairs: the walk can only end under the spawn on it.
+    auto under_balcony = [](std::uint8_t fly_mode) {
+        StickHarness h;
+        Scene s;
+        s.floor(0, 0, 100, 100, 0);
+        s.floor(50, 60, 100, 100, 12);
+        h.collision = s.collision();
+        h.mob.position = {75, 80, 12};
+        h.mob.fly_mode = fly_mode;
+        h.nav.zone_loaded(h.collision, nullptr, {});
+        REQUIRE(h.nav.go_to_spawn(7, 5).empty()); // (the mesh is built for a walk)
+        auto wall_clock = std::chrono::steady_clock::now();
+        while (!h.nav.status().mesh_complete && std::chrono::steady_clock::now() - wall_clock < std::chrono::seconds(30)) {
+            app::Navigator::Frame f;
+            f.feet = h.feet;
+            h.nav.frame(f);
+            std::this_thread::yield();
+        }
+        for (double end = h.now + 60.0; h.nav.status().active && h.now < end;) h.frame();
+        CHECK_FALSE(h.nav.status().active);
+        for (const std::string& line : h.chat)
+            if (line.find("below a_gnoll01: the mesh has no way up there") != std::string::npos) return true;
+        return false;
+    };
+    CHECK(under_balcony(0));  // standing on it: another floor, as a point's walk (8)
+    CHECK_FALSE(under_balcony(2)); // levitating 12 over the floor below: within a spawn walk's 15
+}
 
 TEST_CASE("nav: a Find-owned walk retires before movement while replacement navigation keeps its own lifetime") {
     StickHarness h;

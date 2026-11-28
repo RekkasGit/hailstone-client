@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Sound is muted while another window has the focus, so a box set's background windows are quiet. Options, Audio, **Mute in Background** turns it off.
-- `/nav`, `/moveto`, `/stick` and `/afollow` work downhill while you levitate. The levitating body floats above the path, so the walk circled its corners and the destination and took the slow descent for being stuck; a point below a levitating player now counts as reached when you are over it.
+- `/nav`, `/moveto`, `/stick` and `/afollow` work downhill while you levitate. The levitating body floats above the path, so the walk circled its corners and the destination and took the slow descent for being stuck; a point up to 20 below a levitating player now counts as reached when you are over it (a lower floor does not).
 - `/nav id`, `/nav target` and `/nav spawn` arrive at a levitating spawn: the walk may end up to 15 under or over a spawn (it was 8, so a spawn floating higher was never reached).
 - `/nav`, `/moveto`, `/stick` and `/afollow` stand a sitting character up when they need to move them, instead of waiting for them to stand. `/stick` and `/afollow` leave a character sitting while it is already within their distance, so it can meditate beside the one it follows.
 - Plugin and script windows (E3's among them) keep their places and sizes per character, in the character's own `hailstone-windows.ini`, so a box set's windows no longer overwrite one another's. A character's first time starts from the places you had.
