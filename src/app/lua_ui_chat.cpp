@@ -41,6 +41,7 @@
 #include "game/item_links.h"
 #include "game/mq_colors.h"
 #include "game/spells.h"
+#include "mq/chat_text_filter.h"
 #include "net/game_connection.h"
 #include "plugin/lua_keep.h"
 #include "platform/local_time.h"
@@ -2250,6 +2251,47 @@ int ChatSetFontFace(lua_State* L) {
     return 0;
 }
 
+// on, texts = hs.ChatTextFilters()   -- Hailstone: MacroQuest's /filter name (mq/chat_text_filter.h): whether it is
+// on, and its texts in the order added ('*' first: anywhere in a line; otherwise how a line starts, case ignored).
+// Nothing without the client's automation.
+int ChatTextFilters(lua_State* L) {
+    UiHost* h = state().host;
+    if (!h || !h->chat_text_filters) return 0;
+    lua_pushboolean(L, h->chat_text_filters->enabled());
+    const auto& names = h->chat_text_filters->names();
+    lua_createtable(L, static_cast<int>(names.size()), 0);
+    for (std::size_t i = 0; i < names.size(); ++i) {
+        lua_pushlstring(L, names[i].data(), names[i].size());
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    return 2;
+}
+
+// hs.ChatSetTextFiltersOn(on)   -- Hailstone: /filter name on|off
+int ChatSetTextFiltersOn(lua_State* L) {
+    UiHost* h = state().host;
+    if (h && h->chat_text_filters) h->chat_text_filters->set_enabled(lua_toboolean(L, 1) != 0);
+    return 0;
+}
+
+// added = hs.ChatAddTextFilter(text)   -- Hailstone: /filter name add; false for an empty text or one listed already
+int ChatAddTextFilter(lua_State* L) {
+    UiHost* h = state().host;
+    std::size_t length = 0;
+    const char* text = luaL_checklstring(L, 1, &length);
+    lua_pushboolean(L, h && h->chat_text_filters && h->chat_text_filters->add(std::string_view(text, length)));
+    return 1;
+}
+
+// removed = hs.ChatRemoveTextFilter(text)   -- Hailstone: /filter name remove (case ignored); false when not listed
+int ChatRemoveTextFilter(lua_State* L) {
+    UiHost* h = state().host;
+    std::size_t length = 0;
+    const char* text = luaL_checklstring(L, 1, &length);
+    lua_pushboolean(L, h && h->chat_text_filters && h->chat_text_filters->remove(std::string_view(text, length)));
+    return 1;
+}
+
 // format = hs.ChatTimestamps(slot)   -- Hailstone: the timestamp format of the tab that is up ("off",
 // "12h-seconds", "24h-minutes" or "24h-seconds"), for hs.ChatText's stamps; a tab with none of its own yet has the
 // UI pack's old shared chat.timestamps
@@ -3135,6 +3177,8 @@ void register_chat_api(lua_State* L, UiHost& h) {
                                    {"ChatSetFilter", ChatSetFilter}, {"ChatSetFont", ChatSetFont},
                                    {"ChatTimestamps", ChatTimestamps}, {"ChatSetTimestamps", ChatSetTimestamps},
                                    {"ChatFontFace", ChatFontFace}, {"ChatSetFontFace", ChatSetFontFace},
+                                   {"ChatTextFilters", ChatTextFilters}, {"ChatSetTextFiltersOn", ChatSetTextFiltersOn},
+                                   {"ChatAddTextFilter", ChatAddTextFilter}, {"ChatRemoveTextFilter", ChatRemoveTextFilter},
                                    {"ChatDefaultChannels", ChatDefaultChannels}, {"ChatSetDefault", ChatSetDefault},
                                    {"ChatClear", ChatClear}, {"ChatNewTab", ChatNewTab},
                                    {"ChatCloseTab", ChatCloseTab}, {"ChatSelectTab", ChatSelectTab},

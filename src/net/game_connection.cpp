@@ -265,6 +265,13 @@ void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t 
     enqueue_chat(std::move(event));
 }
 
+void GameConnection::show_chat_unfiltered(std::string text, std::uint32_t color) {
+    ChatEvent event{ChatEvent::Kind::System, std::move(text), 0, color, {}, {}};
+    event.unfiltered = true;
+    if (!prepare_chat(event, std::nullopt, true)) return;
+    enqueue_chat(std::move(event));
+}
+
 bool GameConnection::write_chat_group(std::string title, std::vector<std::string> messages) {
     if (!valid_chat_group_text(title, kChatGroupMaxTitleBytes) || messages.empty() || messages.size() > kChatGroupMaxRows)
         return false;

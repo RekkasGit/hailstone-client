@@ -24,6 +24,7 @@
 #include "game/item_links.h"
 #include "game/server_ext.h"
 #include "game/social.h"
+#include "mq/chat_text_filter.h"
 #include "ui/ui_ini.h"
 #include "core/game_dir.h"
 #include "net/game_connection.h"
@@ -1495,6 +1496,43 @@ return opened[3]:find('+ Client System Messages [2]', 1, true) ~= nil
     CHECK(lua.run("hs.ChatClear(2); hs.ChatLink(2, 1003, id); return #select(2, hs.ChatText(2))") == "0");
 }
 
+TEST_CASE("Chat windows: hs.ChatTextFilters and its setters edit /filter name's texts") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    hailstone::test::ScratchDir dir_scratch("chat_text_filters_test");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    write_strings(dir / "game");
+    GameDir game(dir / "game");
+    net::GameConnection conn(game);
+    ui::ChatView view;
+    app::UiHost host;
+    host.in_game = host.ui_ready = true;
+    host.game = &game;
+    host.conn = &conn;
+    host.chat = &view;
+    app::UiApi api(host);
+    api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+    Lua lua(api);
+    // Without the client's automation there is no list.
+    CHECK(lua.run("return select('#', hs.ChatTextFilters())") == "0");
+    mq::ChatTextFilters filters;
+    host.chat_text_filters = &filters;
+    CHECK(lua.run("local on, t = hs.ChatTextFilters() return tostring(on) .. #t") == "true0");
+    CHECK(lua.run("return tostring(hs.ChatAddTextFilter('*beams a smile at'))") == "true");
+    CHECK(lua.run("return tostring(hs.ChatAddTextFilter('*BEAMS a smile at'))") == "false"); // listed (case ignored)
+    CHECK(lua.run("return tostring(hs.ChatAddTextFilter(''))") == "false");
+    CHECK(lua.run("hs.ChatSetTextFiltersOn(false) local on, t = hs.ChatTextFilters() return tostring(on) .. t[1]") ==
+          "false*beams a smile at");
+    CHECK_FALSE(filters.enabled());
+    CHECK(lua.run("return tostring(hs.ChatRemoveTextFilter('*Beams A Smile At'))") == "true");
+    CHECK(lua.run("return tostring(hs.ChatRemoveTextFilter('*beams a smile at'))") == "false");
+    CHECK(filters.names().empty());
+    // The versioned names reach the same calls.
+    CHECK(lua.run("return tostring(hs.UI.chat.AddTextFilter('You give '))") == "true");
+    CHECK(filters.names() == std::vector<std::string>{"You give "});
+    ImGui::DestroyContext(ctx);
+}
+
 TEST_CASE("Chat windows: a line with a route of its own goes by it, and the chat history keeps it") {
     ImGuiContext* ctx = ImGui::CreateContext();
     hailstone::test::ScratchDir dir_scratch("chat_route_test");
@@ -1516,6 +1554,7 @@ TEST_CASE("Chat windows: a line with a route of its own goes by it, and the chat
         lua.run(kLines + std::string("_G.lines = lines"));
         check(lua, view);
         app::save_chat_history(true);
+        api.save_layout(); // the second window and its channel, for the next session
     };
     session([&](Lua& lua, ui::ChatView& view) {
         CHECK(lua.run("return hs.ChatNewWindow()") == "2");

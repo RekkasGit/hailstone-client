@@ -266,6 +266,8 @@ struct ChatEvent {
     // The string id of a line from OP_FormattedMessage (0 for any other), which the chat windows route a few by
     // (game::chat_channel_of_message).
     std::uint32_t string_id = 0;
+    // Hailstone: never hidden by /filter name's texts (its own replies, as MacroQuest's never go through its filter).
+    bool unfiltered = false;
 };
 
 // Something the client plays a sound for (audio/; the wave each gets is
@@ -2797,6 +2799,8 @@ public:
     // A line in the chat windows as dsp_chat shows it (`color`: the chat colour index, 0 the default), and one from
     // the string table.
     void show_chat(std::string text, std::uint32_t color = 0) { chat(ChatEvent::Kind::System, std::move(text), 0, color); }
+    // The same, never hidden by /filter name (ChatEvent::unfiltered).
+    void show_chat_unfiltered(std::string text, std::uint32_t color = 0);
     void show_eqstr(std::uint32_t eqstr, std::vector<std::string> args = {}, std::uint32_t color = 0) {
         system(eqstr, std::move(args), color);
     }
