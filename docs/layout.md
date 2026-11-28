@@ -39,7 +39,8 @@ hailstone/
                              the UI packs, so under HAILSTONE_DATA_DIR it stays in the install's ui/
   browser/                   the in-game browser's helper and CEF's files (docs/browser.md); replaced by an update
   hailstone.ini              the client's settings (core/config.h); a character in the world has its own (below)
-  hailstone-windows.ini      Dear ImGui's own window positions
+  hailstone-windows.ini      Dear ImGui's own window positions outside the world (the login and character select
+                             screens); a character in the world has its own (below)
   plugins/                   compiled plugins: plugins/<name>.so, or plugins/<name>/ with the binary and its settings;
                              plugins/<name>/ui/<pack>/ holds its Lua windows for each UI pack (docs/plugins.md)
   scripts/                   MacroQuest Lua scripts; scripts/config/ is mq.configDir (mq.pickle; config/<script>/ for a script without every capability)
@@ -616,6 +617,7 @@ files are in `servers/<profile>/characters/<world>/<name>/` (`core/character_fil
 | File | What |
 |---|---|
 | `UI.ini` | window places and the chat windows |
+| `hailstone-windows.ini` | Hailstone: Dear ImGui's own window places, sizes and tables while the character is in the world: the plugins' and scripts' windows (E3's under HSMono). A character's first entry starts from the shared file's places; the shared file is used again at character select. Each box window's character keeps its own |
 | `hotbuttons.ini` | the original's character ini (`<name>_<server>.ini`): hot buttons and socials, and the blocked buff lists (see below) |
 | `BZR.ini` | trader prices |
 | `AddressBook.txt` | the mail address book |

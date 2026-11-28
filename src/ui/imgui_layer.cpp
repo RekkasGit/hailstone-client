@@ -119,6 +119,25 @@ ImFontConfig detail::ui_font_config() {
     return ImFontConfig();
 }
 
+void detail::switch_ini_settings(std::string& ini_path, const std::string& to) {
+    if (to == ini_path) return;
+    ImGuiIO& io = ImGui::GetIO();
+    if (GImGui->SettingsLoaded) {
+        if (!ini_path.empty()) ImGui::SaveIniSettingsToDisk(ini_path.c_str());
+        io.WantSaveIniSettings = false;
+        std::error_code ec;
+        const std::filesystem::path file(std::u8string(to.begin(), to.end()));
+        if (!to.empty() && std::filesystem::is_regular_file(file, ec)) {
+            ImGui::ClearIniSettings();
+            ImGui::LoadIniSettingsFromDisk(to.c_str());
+        } else {
+            ImGui::MarkIniSettingsDirty(); // (the places in memory, written to the new file at ImGui's next save)
+        }
+    }
+    ini_path = to;
+    io.IniFilename = ini_path.empty() ? nullptr : ini_path.c_str();
+}
+
 void detail::add_bundled_fonts(ImFontAtlas& atlas, const std::filesystem::path& dir, float scale) {
     if (dir.empty()) return;
     std::error_code ec;
@@ -425,8 +444,14 @@ void ImGuiLayer::set_plate_font(const std::filesystem::path& regular, const std:
     fonts_dirty_ = true;
 }
 
+void ImGuiLayer::set_ini_path(const std::filesystem::path& path) { pending_ini_ = utf8(path); }
+
 void ImGuiLayer::new_frame() {
     if (frame_open_) end_frame_without_render();
+    if (pending_ini_) {
+        detail::switch_ini_settings(ini_path_, *pending_ini_);
+        pending_ini_.reset();
+    }
     if (fonts_dirty_) {
         // The UI font changed (/fontface): the atlas built again, its texture made again by the backend's NewFrame.
         fonts_dirty_ = false;

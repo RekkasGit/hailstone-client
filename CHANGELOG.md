@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Plugin and script windows (E3's among them) keep their places and sizes per character, in the character's own `hailstone-windows.ini`, so a box set's windows no longer overwrite one another's. A character's first time starts from the places you had.
 - `/nav` takes MQ2Nav's `log=<level>` (`log=warning` hides "Navigating to ...", as E3 asks for), and it no longer ends up in a `/nav spawn` or `/nav door` name.
 - Plugins can see the lines other plugins and scripts write, as MacroQuest's `OnWriteChatColor` gives them: the new optional export `OnIncomingPluginScriptChat(line, color)` (the `events` permission). `OnIncomingChat` stays game chat only.
 - Each chat tab can have a font of its own: right-click the tab and pick **Font** (Same as UI, or any font in the UI font list). Hailstone's Roboto is now in the UI, name plate and chat font lists too. Interfaces reach it through `hs.UI.chat.FontFace` and `SetFontFace` (UI API 1.13).

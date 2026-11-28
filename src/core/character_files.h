@@ -59,6 +59,9 @@ struct CharacterFiles {
     std::filesystem::path options_ini() const { return file("options.ini"); }
     std::filesystem::path chat_history() const { return file("chat_history.txt"); } // Hailstone: the last chat lines
     std::filesystem::path scripts_ini() const { return file("scripts.ini"); } // Hailstone: the scripts' autorun list
+    // Hailstone: Dear ImGui's own window places for the character (platform::imgui_ini's name), the plugins' and
+    // scripts' windows among them (ui::ImGuiLayer::set_ini_path)
+    std::filesystem::path imgui_ini() const { return file("hailstone-windows.ini"); }
     std::filesystem::path kept_items() const { return file("kept_items.txt"); } // Hailstone: the Keep marks
     std::filesystem::path bank_snapshot() const { return file("bank.dat"); } // Hailstone: the bank as last seen
     // Hailstone: the character's client settings, over hailstone.ini (core/config.h Config::attach_character)

@@ -921,6 +921,9 @@ void ClientApp::use_character_settings(const std::filesystem::path& character_di
         config_.save(config_path_);
     }
     if (!config_.attach_character(file)) log::warn("settings: {} could not be read or written", file.string());
+    // Dear ImGui's window places follow (the plugins' and scripts' windows): the character's own file, so a box
+    // set's windows no longer write over one another's; the shared one outside the world.
+    ui_.set_ini_path(file.empty() ? platform::imgui_ini() : CharacterFiles{character_dir}.imgui_ini());
     if (!file.empty()) log::info("settings: the character's, {}", file.string());
     else log::info("settings: hailstone.ini's");
     apply_settings();

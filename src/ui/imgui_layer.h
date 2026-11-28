@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -30,6 +31,13 @@ bool build_ui_font_atlas(ImFontAtlas& atlas);
 inline constexpr char kRobotoFontName[] = "RobotoRegular";
 inline constexpr char kRobotoLargeFontName[] = "RobotoRegular (Large)";
 void add_bundled_fonts(ImFontAtlas& atlas, const std::filesystem::path& dir, float scale);
+
+// The current context's settings file from `ini_path` (io.IniFilename points into it) to `to` (UTF-8; empty: none),
+// outside a frame. Once ImGui has loaded its settings, those of the file left are saved to it first; then a `to` that
+// exists is loaded in their place (ImGui moves the windows already open to its places), and one that does not yet
+// starts from them (a character's first entry keeps the places it had) and is written soon. Before that first load
+// only the name changes: NewFrame loads it.
+void switch_ini_settings(std::string& ini_path, const std::string& to);
 
 // A child window or popup can hold navigation focus for the tracked gamepad window.
 bool pad_window_has_focus(const char* name);
@@ -99,6 +107,9 @@ public:
     // The name plates' font (game/nameplate_style.h): its face's regular and bold files (empty: the UI font's), its
     // size in points at 100 % scale and whether it is bold, from the next frame (plate_font()).
     void set_plate_font(const std::filesystem::path& regular, const std::filesystem::path& bold, float size, bool bold_face);
+    // Dear ImGui's settings file (window places, sizes, tables) from the next frame (detail::switch_ini_settings): the
+    // character's while one is in the world, the shared one before (platform::imgui_ini).
+    void set_ini_path(const std::filesystem::path& path);
     // The faces the chat tabs use besides the UI's (Hailstone: a font per tab), into the atlas from the next frame
     // (chat_face_font). A face whose file the rasteriser cannot read is left out.
     void set_chat_faces(std::vector<ChatFaceFiles> faces);
@@ -131,6 +142,7 @@ private:
     platform::Window& window_;
     render::VkContext& vk_;
     std::string ini_path_; // io.IniFilename points into it
+    std::optional<std::string> pending_ini_; // set_ini_path's, switched to before the next frame
     float last_w_ = 0.0f, last_h_ = 0.0f; // the display size of the last frame not minimized
     VkFormat color_format_ = VK_FORMAT_UNDEFINED;
     std::uint32_t min_image_count_ = 0;

@@ -1235,6 +1235,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/client_flags_test.cpp
     tests/close_camp_test.cpp
     tests/font_faces_test.cpp
+    tests/imgui_ini_test.cpp
     tests/process_test.cpp
     tests/flora_test.cpp
     tests/flora_growth_test.cpp
