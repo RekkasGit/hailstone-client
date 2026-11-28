@@ -88,9 +88,11 @@ public:
         glm::vec3 feet{0.0f};  // world, the player's feet
         double now = 0.0;      // seconds
         bool can_move = true;  // standing or ducking, not frozen, dead or locked
+        bool sitting = false;  // sitting, and neither dead nor locked: standing up lets it move (SteerOutput::stand)
         bool player_input = false; // the player pressed a movement key: the walk ends (as /follow's does)
         float height = 6.0f;   // the player's AvatarHeight, for the door reach
         bool swimming = false; // the body is in water (BodyWet 5 and up): forward follows the look pitch
+        bool levitating = false; // fly mode 2 or 5: a point below is reached across (PathFollower::set_levitating)
         bool head_under = false; // the eyes are under water (HeadWet): no air
         float air = 1.0f;      // the air left, of the most (1 when unknown)
     };
@@ -235,6 +237,10 @@ private:
     nav::SteerOutput walk_frame(const Frame& f);
     nav::SteerOutput stick_frame(const Frame& f);
     nav::SteerOutput afollow_frame(const Frame& f);
+    // A walk, /stick or /afollow that needs to move a player who sits stands them up (SteerOutput::stand), as MQ2Nav
+    // and MQ2MoveUtils, which move by the forward key, do with Allow Auto Stand on; asked at most once a second, so
+    // a stand the game refuses (mesmerized) is not sent every frame.
+    nav::SteerOutput stand_up(const Frame& f);
     bool afollow_current() const; // the spawn followed is still the one given, in this zone
     float afollow_left(const glm::vec3& feet) const; // the trail's flat length from the feet, and the gap to the spawn
     bool doors_on() const { return options_.open_doors && !goal_.no_doors; }
@@ -300,6 +306,7 @@ private:
     std::optional<AFollow> afollow_;
     std::string last_finish_; // finish()'s message: a stick's walk that ended with one (no path, stuck) ends the stick
     bool paused_ = false;
+    double stand_asked_at_ = -1e9; // when stand_up last asked (Frame::now)
     bool overlay_ = false;
     glm::vec3 feet_{0.0f};
     double now_ = 0.0;

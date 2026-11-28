@@ -25,6 +25,9 @@ constexpr double kRepathSeconds = 0.5;
 constexpr float kRepathMoved = 3.0f;
 // A goal this far over or under where a walk ended is on another floor (nav::FollowerTuning::vertical_reach).
 constexpr float kOtherFloor = 8.0f;
+// A spawn walk (/nav id, target, spawn) may end this far under or over the spawn's feet: a levitating spawn floats
+// above the floor its path ends on by more than the 8 a corner allows (Hailstone; MQ2Nav compares in 3D).
+constexpr float kSpawnArriveHeight = 15.0f;
 // /stick walks straight at its spot within this (flat), when the way is in plain sight; over the mesh beyond.
 constexpr float kStickStraight = 40.0f;
 // How far on along the path a swimmer aims its pitch (Navigator::swim_pitch).
@@ -199,6 +202,9 @@ bool Navigator::plan(const glm::vec3& from) {
         follower_.replace(std::move(points), !goal_.flat);
     else
         follower_.start(std::move(points), goal_.distance, !goal_.flat);
+    // A spawn may float above the floor the path ends on (levitating, a flyer): the walk ends up to kSpawnArriveHeight
+    // under or over it, where a point's walk keeps the corners' 8.
+    if (goal_.kind == GoalKind::Spawn) follower_.set_arrive_height(kSpawnArriveHeight);
     retire_server_path(); // a local mesh result supersedes its still-pending server fallback
     return true;
 }
@@ -516,7 +522,8 @@ nav::SteerOutput Navigator::afollow_frame(const Frame& f) {
             a.dirty = true;
         }
     }
-    if (!f.can_move || paused_) return {};
+    if (paused_) return {};
+    if (!f.can_move && !f.sitting) return {};
     // A point near the feet further along (the spawn came back past the player) cuts off the loop before it; never
     // across a warp.
     {
@@ -554,6 +561,8 @@ nav::SteerOutput Navigator::afollow_frame(const Frame& f) {
     // Near enough: hold. The spawn gone and its trail walked: done. A warp ahead is walked to, not held short of.
     const float left = afollow_left(f.feet);
     const float want = a.leader_gone || warp_ahead ? 1.0f : a.options.distance;
+    // Sitting: stood up only to go after it; near enough, left sitting (a player meditating at the leader's side).
+    if (!f.can_move) return a.trail.empty() || left <= want ? nav::SteerOutput{} : stand_up(f);
     if (a.trail.empty() || left <= want) {
         if (a.leader_gone) {
             afollow_off(std::format("[AFollow] {} is gone.", a.label));
@@ -655,7 +664,8 @@ nav::SteerOutput Navigator::stick_frame(const Frame& f) {
         unstick(std::format("[Stick] {} is gone.", stick_->label));
         return {};
     }
-    if (!f.can_move || paused_) return {};
+    if (paused_) return {};
+    if (!f.can_move && !f.sitting) return {};
     const auto revision = goal_revision_;
     const game::Spawn* s = env_.spawn ? env_.spawn(stick_->spawn) : nullptr;
     if (!s) return {};
@@ -678,6 +688,9 @@ nav::SteerOutput Navigator::stick_frame(const Frame& f) {
         spot = at - glm::vec3(facing * (want * 0.6f), 0.0f);
         reach = want * 0.3f;
     }
+    // Sitting: stood up only when it has to move to keep the distance; in range, left sitting and not turned (a player
+    // meditating beside the one it sticks to).
+    if (!f.can_move) return away <= want && in_arc ? nav::SteerOutput{} : stand_up(f);
     nav::SteerOutput out;
     if (away <= want && in_arc) {
         // Near enough: hold, facing it.
@@ -1084,10 +1097,19 @@ void Navigator::open_door_early(const Frame& f) {
 nav::SteerOutput Navigator::frame(const Frame& f) {
     feet_ = f.feet;
     now_ = f.now;
+    follower_.set_levitating(f.levitating && !f.swimming); // (in water, the swim's own pitch takes it there)
     if (zone_) zone_->update(f.feet);
     if (stick_) return stick_frame(f);
     if (afollow_) return afollow_frame(f);
     return walk_frame(f);
+}
+
+nav::SteerOutput Navigator::stand_up(const Frame& f) {
+    nav::SteerOutput out;
+    if (!f.sitting || f.now - stand_asked_at_ < 1.0) return out;
+    stand_asked_at_ = f.now;
+    out.stand = true;
+    return out;
 }
 
 nav::SteerOutput Navigator::walk_frame(const Frame& f) {
@@ -1102,7 +1124,8 @@ nav::SteerOutput Navigator::walk_frame(const Frame& f) {
         finish("Navigation stopped.");
         return {};
     }
-    if (!f.can_move || paused_) return {};
+    if (paused_) return {};
+    if (!f.can_move) return stand_up(f); // (a walk always has somewhere to go)
 
     // Waiting for the server's path (no mesh under the player when the walk began).
     if (server_asked_at_ >= 0.0) {
@@ -1271,7 +1294,8 @@ nav::SteerOutput Navigator::walk_frame(const Frame& f) {
         Goal done = goal_;
         float short_by = glm::length(glm::vec2(done.point - f.feet));
         float rise = done.point.z - f.feet.z;
-        if (partial_ && std::abs(rise) > kOtherFloor) {
+        const float other_floor = done.kind == GoalKind::Spawn ? kSpawnArriveHeight : kOtherFloor; // (a spawn floats)
+        if (partial_ && std::abs(rise) > other_floor) {
             // On another floor than the goal's, with no way there over the mesh (a lift, a jump, a drop it lacks).
             finish(std::format("[Nav] Stopped {:.0f} {} {}: the mesh has no way {} there.", std::abs(rise),
                                rise > 0 ? "below" : "above", done.label, rise > 0 ? "up" : "down"));

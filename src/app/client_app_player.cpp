@@ -751,9 +751,12 @@ void ClientApp::update_player(float dt) {
             nf.now = nav_now;
             nf.can_move = !conn_->interface_locked() && !conn_->player_status().dead &&
                           (stand == net::kStandStanding || stand == net::kStandCrouching);
+            nf.sitting = !conn_->interface_locked() && !conn_->player_status().dead && stand == net::kStandSitting;
             nf.player_input = player_moved;
             nf.height = floor_offset_;
             nf.swimming = motion_body_wet_ >= 5;
+            if (const game::Spawn* me = conn_->world().player())
+                nf.levitating = me->local_fly_mode == 2 || me->local_fly_mode == 5; // (its own movement's mode)
             nf.head_under = assets::is_water_type(motion_head_wet_);
             nf.air = movement_.max_air_supply() > 0
                          ? std::clamp(static_cast<float>(movement_.air_supply()) / static_cast<float>(movement_.max_air_supply()),
@@ -889,6 +892,7 @@ void ClientApp::update_player(float dt) {
         // so the walk keeps the movement rules. The player's own turn, move or strafe keys end it, as they end /follow.
         if (nav_ && !conn_->eye_id()) {
             nav::SteerOutput steer = nav_->frame(nf);
+            if (steer.stand) conn_->sit_toggle(); // (only ever asked while sitting: it stands up)
             if (steer.active) {
                 yaw_ = steer.yaw;
                 mk.forward = steer.forward;

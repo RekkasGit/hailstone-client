@@ -27,6 +27,9 @@ struct SteerOutput {
     bool jump = false;   // pressed this step
     int strafe = 0;      // -1 left, +1 right
     std::optional<float> pitch; // the look pitch (radians, up positive) while swimming; none: leave it
+    // Hailstone: the player sits and the walk, /stick or /afollow needs to move: stand them up (the sit key's toggle,
+    // GameConnection::sit_toggle). Nothing else is steered until they stand.
+    bool stand = false;
 };
 
 struct FollowerTuning {
@@ -59,6 +62,14 @@ public:
     // how near its new end it finishes. The walk carries on as it is: its corner, stall clock and counters kept.
     void extend(const std::vector<glm::vec3>& more) { points_.insert(points_.end(), more.begin(), more.end()); }
     void set_arrive(float arrive) { arrive_ = arrive; }
+    // How far above or below the end the walk may finish (its corners still use the tuning's vertical_reach); < 0,
+    // as start() leaves it: vertical_reach. A spawn walk's is more, for a spawn that floats (Navigator).
+    void set_arrive_height(float reach) { arrive_height_ = reach; }
+    // Hailstone: the player levitates (fly mode 2 or 5): a corner or end below the feet counts as reached across
+    // alone, and progress toward it is measured across. Such a body drifts down slower than a downhill path drops,
+    // so it floats over the path's corners: held to their height, the walk circled them and took the slow descent
+    // for a stall (its unstick strafes and jumps). A point above still needs its height. Set each step.
+    void set_levitating(bool levitating) { levitating_ = levitating; }
     // Moves the last point (a goal that is taken again as it moves, Navigator::moveto_spawn).
     void set_end(const glm::vec3& end) {
         if (!points_.empty()) points_.back() = end;
@@ -95,6 +106,8 @@ private:
     std::vector<glm::vec3> points_;
     std::size_t next_ = 0;
     float arrive_ = 1.0f;
+    float arrive_height_ = -1.0f; // set_arrive_height's
+    bool levitating_ = false;     // set_levitating's
     bool check_height_ = true;
     float best_ = 0.0f;           // nearest the current corner has been
     double progress_at_ = -1.0;   // when best_ last improved; < 0: set on the next step

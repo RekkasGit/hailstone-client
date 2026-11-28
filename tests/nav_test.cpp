@@ -266,6 +266,77 @@ TEST_CASE("nav: a corner or an end over or under the character is not reached by
     CHECK(s.state() == nav::FollowState::Arrived);
 }
 
+TEST_CASE("nav: a spawn walk's end may be up to its own height allowance over the feet; a corner keeps 8") {
+    // The end 12 over the feet (a levitating spawn): past the 8 a corner allows, so no arrival by default...
+    nav::PathFollower p;
+    p.start({{0, 0, 0}, {5, 0, 12}}, 2.0f);
+    p.step({5, 0, 0}, 0.0);
+    CHECK(p.state() == nav::FollowState::Moving);
+    // ... but within a spawn walk's 15 (Navigator: kSpawnArriveHeight), under it or over it.
+    nav::PathFollower s;
+    s.start({{0, 0, 0}, {5, 0, 12}}, 2.0f);
+    s.set_arrive_height(15.0f);
+    s.step({5, 0, 0}, 0.0);
+    CHECK(s.state() == nav::FollowState::Arrived);
+    nav::PathFollower under;
+    under.start({{0, 0, 20}, {5, 0, 6}}, 2.0f);
+    under.set_arrive_height(15.0f);
+    under.step({5, 0, 20}, 0.0);
+    CHECK(under.state() == nav::FollowState::Arrived);
+    // Not past it: 16 over stays a walk.
+    nav::PathFollower far;
+    far.start({{0, 0, 0}, {5, 0, 16}}, 2.0f);
+    far.set_arrive_height(15.0f);
+    far.step({5, 0, 0}, 0.0);
+    CHECK(far.state() == nav::FollowState::Moving);
+    // Along the path (corners still ahead, within the distance of the end): the same allowance.
+    nav::PathFollower along;
+    along.start({{0, 0, 0}, {3, 0, 0}, {6, 0, 12}}, 10.0f);
+    along.set_arrive_height(15.0f);
+    along.step({0, 0, 0}, 0.0);
+    CHECK(along.state() == nav::FollowState::Arrived);
+    // A new start goes back to the corners' 8.
+    s.start({{0, 0, 0}, {5, 0, 12}}, 2.0f);
+    s.step({5, 0, 0}, 1.0);
+    CHECK(s.state() == nav::FollowState::Moving);
+}
+
+TEST_CASE("nav: levitating downhill, corners and the end below the feet are reached across") {
+    // Downhill: the corners drop 12 at a time, and the levitating body floats over them.
+    const std::vector<glm::vec3> hill{{0, 0, 0}, {10, 0, -12}, {20, 0, -24}, {30, 0, -36}};
+    // Not levitating, 12 over the corner is not at it: it stays the aim.
+    nav::PathFollower walk;
+    walk.start(hill, 2.0f);
+    walk.step({10, 0, 0}, 0.0);
+    CHECK(walk.next() == 1);
+    // Levitating, over it is past it, and so on down to the end, which is reached over it too.
+    nav::PathFollower lev;
+    lev.start(hill, 2.0f);
+    lev.set_levitating(true);
+    lev.step({10, 0, 0}, 0.0);
+    CHECK(lev.next() == 2);
+    lev.step({20, 0, -2}, 0.1);
+    CHECK(lev.next() == 3);
+    lev.step({30, 0, -6}, 0.2);
+    CHECK(lev.state() == nav::FollowState::Arrived);
+    // A point above still needs its height: an end 12 up is not reached from under it, levitating or not.
+    nav::PathFollower up;
+    up.start({{0, 0, 0}, {5, 0, 12}}, 2.0f);
+    up.set_levitating(true);
+    up.step({5, 0, 0}, 0.0);
+    CHECK(up.state() == nav::FollowState::Moving);
+    // Set each step: no longer levitating, the end below is held to its height again.
+    nav::PathFollower landed;
+    landed.start({{0, 0, 0}, {5, 0, -30}}, 2.0f);
+    landed.set_levitating(true);
+    landed.set_levitating(false);
+    landed.step({5, 0, 0}, 0.0);
+    CHECK(landed.state() == nav::FollowState::Moving);
+    landed.set_levitating(true);
+    landed.step({5, 0, 0}, 0.1);
+    CHECK(landed.state() == nav::FollowState::Arrived);
+}
+
 TEST_CASE("nav: ground steeper than the slope limit is not walkable") {
     Scene s;
     // 70 degrees: z rises 2.75 for each unit of x.
@@ -647,11 +718,14 @@ struct NavHarness {
     }()};
     glm::vec3 feet{20, 20, 0};
     double now = 0.0;
+    bool sitting = false; // the player sits: it cannot move until it stands (SteerOutput::stand)
     nav::SteerOutput frame(bool player_input = false) {
         app::Navigator::Frame f;
         f.feet = feet;
         f.now = now;
         f.player_input = player_input;
+        f.can_move = !sitting;
+        f.sitting = sitting;
         nav::SteerOutput o = nav.frame(f);
         feet = move(feet, o, 15.0f, 0.05f);
         now += 0.05;
@@ -707,6 +781,22 @@ TEST_CASE("nav: with prebuild, a zone with no cache starts building its mesh at 
         std::this_thread::yield();
     }
     CHECK(nav.status().mesh_complete);
+}
+
+TEST_CASE("nav: a /nav walk stands a sitting player up, then walks") {
+    NavHarness h;
+    h.nav.zone_loaded(h.collision, nullptr, {});
+    REQUIRE(h.nav.go_to_point({80, 20, 0}, 2.0f, "the far side", false).empty());
+    h.sitting = true;
+    const nav::SteerOutput o = h.frame();
+    CHECK(o.stand);
+    CHECK_FALSE(o.active);
+    CHECK(h.feet == glm::vec3(20, 20, 0));
+    CHECK(h.nav.status().active); // still on its way
+    h.sitting = false;
+    h.run();
+    CHECK_FALSE(h.nav.status().active);
+    CHECK(glm::length(glm::vec2(h.feet) - glm::vec2(80, 20)) <= 2.5f);
 }
 
 TEST_CASE("nav: a walk to ground the mesh cannot reach says so, and how far short it stopped") {
@@ -865,6 +955,7 @@ struct StickHarness {
     }()};
     glm::vec3 feet{20, 20, 0};
     double now = 0.0;
+    bool sitting = false; // the player sits: it cannot move until it stands (SteerOutput::stand)
     StickHarness() {
         mob.id = 7;
         mob.name = "a_gnoll01";
@@ -876,6 +967,8 @@ struct StickHarness {
         f.feet = feet;
         f.now = now;
         f.player_input = player_input;
+        f.can_move = !sitting;
+        f.sitting = sitting;
         nav::SteerOutput o = nav.frame(f);
         feet = move(feet, o, 15.0f, 0.05f);
         now += 0.05;
@@ -1010,6 +1103,52 @@ TEST_CASE("nav: /stick closes to inside melee range, holds facing the spawn, fol
     CHECK_FALSE(h.frame(true).active);
     CHECK(h.nav.status().stick_spawn == 0);
     CHECK(h.chat.back() == "You are no longer sticking to anything.");
+}
+
+TEST_CASE("nav: a sitting player is stood up when /stick or /afollow must move, and left sitting in range") {
+    StickHarness h;
+    h.nav.zone_loaded(h.collision, nullptr, {});
+    REQUIRE(h.nav.stick(7, {}).empty());
+    // 30 away and sitting: stood up, nothing else steered, asked again only after a second.
+    h.sitting = true;
+    nav::SteerOutput o = h.frame();
+    CHECK(o.stand);
+    CHECK_FALSE(o.active);
+    CHECK(h.feet == glm::vec3(20, 20, 0));
+    for (int i = 0; i < 15; ++i) CHECK_FALSE(h.frame().stand); // (0.75 s)
+    bool again = false;
+    for (int i = 0; i < 10; ++i) again |= h.frame().stand;
+    CHECK(again);
+    // Standing: after it, as ever.
+    h.sitting = false;
+    for (int i = 0; i < 200 && h.away() > 6.0f; ++i) CHECK(h.frame().active);
+    CHECK(h.away() <= 6.0f);
+    // Sitting in range (meditating beside it): left sitting, not turned.
+    h.sitting = true;
+    for (int i = 0; i < 40; ++i) {
+        o = h.frame();
+        CHECK_FALSE(o.stand);
+        CHECK_FALSE(o.active);
+    }
+    // Paused, nothing; it walks off: stood up to go after it.
+    h.mob.position = {30, 75, 0};
+    h.nav.set_paused(true);
+    for (int i = 0; i < 40; ++i) CHECK_FALSE(h.frame().stand);
+    h.nav.set_paused(false);
+    CHECK(h.frame().stand);
+    h.nav.stop("");
+
+    // /afollow the same: far along the trail, stood up; within its distance, left sitting.
+    StickHarness a;
+    a.nav.zone_loaded(a.collision, nullptr, {});
+    REQUIRE(a.nav.afollow(7, {10.0f, true}).empty());
+    a.sitting = true;
+    CHECK(a.frame().stand);
+    a.sitting = false;
+    for (int i = 0; i < 400 && a.nav.status().afollow_length > 10.0f; ++i) a.frame();
+    REQUIRE(a.nav.status().afollow_length <= 10.0f);
+    a.sitting = true;
+    for (int i = 0; i < 40; ++i) CHECK_FALSE(a.frame().stand);
 }
 
 TEST_CASE("nav: /stick goes round a wall over the mesh, and ends when the spawn dies") {

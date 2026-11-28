@@ -15,6 +15,7 @@ void PathFollower::start(std::vector<glm::vec3> points, float arrive, bool check
     unsticks_ = 0;
     stuck_ = false;
     arrive_ = std::max(arrive, 0.5f);
+    arrive_height_ = -1.0f;
     failure_.clear();
     replace(std::move(points), check_height);
 }
@@ -99,7 +100,14 @@ SteerOutput PathFollower::step(const glm::vec3& feet, double now) {
     if (progress_at_ < 0.0) target_changed(now);
 
     // Corners passed: the next one is within reach (the last one only within the arrival distance).
-    auto level = [&](const glm::vec3& p) { return !check_height_ || std::abs(p.z - feet.z) <= tune_.vertical_reach; };
+    // Within `reach` in height; levitating, any point below (set_levitating).
+    auto within = [&](const glm::vec3& p, float reach) {
+        if (!check_height_) return true;
+        const float rise = p.z - feet.z;
+        if (levitating_ && rise < 0.0f) return true;
+        return std::abs(rise) <= reach;
+    };
+    auto level = [&](const glm::vec3& p) { return within(p, tune_.vertical_reach); };
     while (next_ + 1 < points_.size() && flat(feet, points_[next_]) <= tune_.corner_reach && level(points_[next_])) {
         ++next_;
         paths_ = 0;
@@ -109,23 +117,24 @@ SteerOutput PathFollower::step(const glm::vec3& feet, double now) {
     }
     const glm::vec3& target = points_[next_];
     float d = flat(feet, target);
-    if (next_ + 1 == points_.size() && d <= arrive_ && level(target)) {
+    const float end_reach = arrive_height_ >= 0.0f ? arrive_height_ : tune_.vertical_reach;
+    if (next_ + 1 == points_.size() && d <= arrive_ && within(target, end_reach)) {
         state_ = FollowState::Arrived;
         return out;
     }
     // Within the arrival distance of the end along the path, with corners still ahead: done there, not at the last
     // corner (a /nav distance=45 stops 45 short, however the path bends round the goal). Along the path, never
     // straight across: a goal behind a wall is not reached through it. In height the end may be as far off as the
-    // distance itself, or vertical_reach when that is more.
+    // distance itself, or the end's height allowance (vertical_reach, set_arrive_height) when that is more.
     if (next_ + 1 < points_.size() && remaining(feet) <= arrive_ &&
-        (!check_height_ || std::abs(points_.back().z - feet.z) <= std::max(tune_.vertical_reach, arrive_))) {
+        within(points_.back(), std::max(end_reach, arrive_))) {
         state_ = FollowState::Arrived;
         return out;
     }
 
     // Progress counts height too (a fall, a dive, a climb up a column of water are progress), except for the
-    // server's path, whose heights are not ours.
-    float gap = check_height_ ? glm::distance(feet, target) : d;
+    // server's path, whose heights are not ours, and for a point below a levitating player (set_levitating).
+    float gap = check_height_ && !(levitating_ && target.z < feet.z) ? glm::distance(feet, target) : d;
     if (best_ == std::numeric_limits<float>::max()) { // the first measure toward a new corner or path
         best_ = gap;
         progress_at_ = now;

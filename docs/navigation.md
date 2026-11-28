@@ -22,7 +22,16 @@ heading is set at once, as `/follow`'s FollowPlayerAI sets it (`game/follow.h`).
 
 - The player's own forward, back, turn or strafe keys end a walk, as they end `/follow`.
 - Starting a walk ends `/follow`.
-- Nothing moves while the player cannot. A temporary pause (sitting, frozen, `/safelock`) carries on when they can.
+- Nothing moves while the player cannot. A temporary pause (frozen, `/safelock`) carries on when they can.
+- Levitating (fly mode 2 or 5, not in water), a corner or the end below the feet is reached across alone, and the
+  walk's progress toward it is measured across. A levitating body drifts down slower than a path down a hill drops,
+  so it floats over the path; held to the corners' height (8), a walk downhill circled them, never arrived, and took
+  the slow descent for a stall, with its strafes and jumps. A point above the feet still needs its height.
+- A sitting player is stood up (the sit key's toggle) when a walk, `/stick` or `/afollow` needs to move them, as
+  MQ2Nav and MQ2MoveUtils do by pressing forward with Allow Auto Stand on; asked again at most once a second while
+  they still sit (a mesmerized player cannot stand). A `/nav` or `/moveto` walk always moves, so it always stands
+  them; `/stick` and `/afollow` only when out of their distance, so a player who sits beside the one they follow
+  (to meditate) stays sitting. Paused, none of them stands anyone.
 
 Spawn walks and `/stick` are tied to the actor they were given: its despawn, the reuse of its ID, zoning or the
 player's death ends them, even paused. A new command can select the new actor.
@@ -289,10 +298,10 @@ jumps) when the floor 4 to either side is more than 5 under the feet, so it neve
 
 | Command | |
 |---|---|
-| `/nav id <#>` / `target` / `spawn <search>` | to a spawn (MQ's search words, `docs/plugins.md`), following it as it moves; done within 5 |
+| `/nav id <#>` / `target` / `spawn <search>` | to a spawn (MQ's search words, `docs/plugins.md`), following it as it moves; done within 5 across, and up to 15 under or over the spawn (a levitating one floats above the floor its path ends on; a walk to a point keeps 8) |
 | `/nav loc <y> <x> <z>` (`locyxz`) / `locxyz <x> <y> <z>` / `locyx <y> <x>` | to a point (`/loc` order, or x y z); done within 2 |
 | `/nav door <name> [click]` / `door id <#> [click]` | to the nearest door whose name contains the text; `click` uses it on arrival |
-| `distance=<n>` (`dist=<n>`) | anywhere on the line: stop this close |
+| `distance=<n>` (`dist=<n>`) | anywhere on the line: stop this close, across (x and y; MQ2Nav measures in 3D), with the end within the walk's height allowance (8, a spawn's 15, or the distance when that is more) |
 | `log=<level>` | anywhere on the line: MQ2Nav's level for this command's own lines, `trace`, `debug`, `info` (the default, and any word it does not know), `warning`, `error`, `critical` or `off`. Above `info` the walk's "Navigating to ...", "Stopped." and "Paused." lines are not shown; above `error` neither are its errors ("No such spawn."). It is no part of a spawn's or door's name (MQ2Nav leaves it in the line) |
 | `/nav help` (also `/nav` alone) | the commands |
 | `/nav stop` / `pause` | stop; pause or go on |
