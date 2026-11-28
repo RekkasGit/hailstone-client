@@ -7,6 +7,7 @@
 #include "app/lua_ui.h"
 #include "app/addon_install.h"
 #include "core/asset_folder.h"
+#include "game/chat_windows.h"
 #include "net/server_files.h"
 #include "ui/ui_ini.h"
 #include "platform/open_folder.h"
@@ -1245,7 +1246,8 @@ void ClientApp::update_connection() {
     while (auto c = conn_->poll_chat()) {
         if (c->group.empty())
             game_view_.chat.add(chat_channel(c->kind), std::move(c->text), c->rgb, c->color, std::move(c->peer),
-                                c->from_code);
+                                c->from_code,
+                                game::chat_channel_of_message(static_cast<std::int32_t>(c->color), c->string_id));
         else
             game_view_.chat.add_chat_group(std::move(c->text), std::move(c->group), c->from_code);
     }

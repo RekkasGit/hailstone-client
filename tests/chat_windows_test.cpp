@@ -8,6 +8,7 @@
 #include <format>
 #include <fstream>
 #include <functional>
+#include <sstream>
 
 #include <imgui.h>
 #include <lua.hpp>
@@ -1492,6 +1493,60 @@ return opened[3]:find('+ Client System Messages [2]', 1, true) ~= nil
    and opened[4]:find('First', 1, true) ~= nil and opened[4]:find('Second', 1, true) ~= nil
 )lua") == "true");
     CHECK(lua.run("hs.ChatClear(2); hs.ChatLink(2, 1003, id); return #select(2, hs.ChatText(2))") == "0");
+}
+
+TEST_CASE("Chat windows: a line with a route of its own goes by it, and the chat history keeps it") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    hailstone::test::ScratchDir dir_scratch("chat_route_test");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    write_strings(dir / "game");
+    GameDir game(dir / "game");
+    auto session = [&](const std::function<void(Lua&, ui::ChatView&)>& check) {
+        net::GameConnection conn(game);
+        ui::ChatView view;
+        app::UiHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game;
+        host.conn = &conn;
+        host.chat = &view;
+        app::UiApi api(host);
+        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        Lua lua(api);
+        lua.run(kLines + std::string("_G.lines = lines"));
+        check(lua, view);
+        app::save_chat_history(true);
+    };
+    session([&](Lua& lua, ui::ChatView& view) {
+        CHECK(lua.run("return hs.ChatNewWindow()") == "2");
+        lua.run("hs.ChatSetFilter(2, 77, true)"); // Your damage over time
+        const auto before = lua.run("return lines(2)");
+        // Colour 325 with the DoT route goes to window 2; without it, to Other (still the main window).
+        view.add(ui::ChatChannel::System, "a rat has taken 5 damage from your Poison Bolt.", 0, 325, {}, false, 77);
+        view.add(ui::ChatChannel::System, "a dot line with no route", 0, 325);
+        CHECK(lua.run("return lines(2)") == before + "|a rat has taken 5 damage from your Poison Bolt.");
+        CHECK(lua.run("return lines(1):find('no route', 1, true) ~= nil") == "true");
+        CHECK(lua.run("return lines(1):find('Poison Bolt', 1, true) == nil") == "true");
+    });
+    // The next session: the routed line comes back to window 2 from the history, kept as "325:77".
+    fs::path file;
+    for (const auto& e : fs::recursive_directory_iterator(dir))
+        if (e.path().filename() == "chat_history.txt") file = e.path();
+    REQUIRE_FALSE(file.empty());
+    {
+        std::ifstream saved(file);
+        std::stringstream all;
+        all << saved.rdbuf();
+        CHECK(all.str().find("\t325:77\t") != std::string::npos);
+    }
+    session([&](Lua& lua, ui::ChatView& view) {
+        bool restored = false;
+        for (const auto& l : view.lines)
+            if (l.text.find("Poison Bolt") != std::string::npos) restored = l.route == 77 && l.color == 325;
+        CHECK(restored);
+        CHECK(lua.run("return lines(2):find('Poison Bolt', 1, true) ~= nil") == "true");
+    });
+    ImGui::DestroyContext(ctx);
 }
 
 TEST_CASE("Chat windows: the chat history keeps times and client-message groups, and reads old formats") {

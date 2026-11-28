@@ -263,6 +263,9 @@ struct ChatEvent {
     // Hailstone: a plugin or script wrote it while its code ran (plugin::caller_name()); the chat windows route such
     // a line to its own channel (game::kChatChannelCode), not by its colour.
     bool from_code = false;
+    // The string id of a line from OP_FormattedMessage (0 for any other), which the chat windows route a few by
+    // (game::chat_channel_of_message).
+    std::uint32_t string_id = 0;
 };
 
 // Something the client plays a sound for (audio/; the wave each gets is
@@ -3128,7 +3131,7 @@ private:
     // `client_codes`: the client's own line keeps the MQ colour codes it wrote (client_message).
     void chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0,
               std::string peer = {}, std::optional<std::string> display_text = std::nullopt, bool filter = true,
-              bool client_codes = false);
+              bool client_codes = false, std::uint32_t string_id = 0);
     bool prepare_chat(ChatEvent& event, std::optional<std::string> display_text, bool filter,
                       bool group_member = false, bool client_codes = false);
     void enqueue_chat(ChatEvent event);

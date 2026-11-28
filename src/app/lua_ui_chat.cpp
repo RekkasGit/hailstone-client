@@ -793,8 +793,10 @@ std::uint32_t color_of(const ui::ChatLine& l) {
 
 int routed_window(const ui::ChatLine& line) {
     // Hailstone: a plugin's or script's own line goes by its own channel, whatever colour it was written in.
-    const auto channel = line.from_code ? game::kChatChannelCode
-                                        : game::chat_channel_of_color(static_cast<std::int32_t>(color_of(line)));
+    // Hailstone: a line with a route of its own (a stock server's DoT ticks, game::chat_channel_of_message) by that.
+    const auto channel = line.from_code   ? game::kChatChannelCode
+                         : line.route >= 0 ? line.route
+                                           : game::chat_channel_of_color(static_cast<std::int32_t>(color_of(line)));
     const int window = manager().channel_map[static_cast<std::size_t>(channel)];
     return used(window) ? window : 0;
 }
@@ -2705,7 +2707,16 @@ void restore_chat_history(UiHost& host, const std::filesystem::path& file) {
         ui::ChatLine l;
         l.channel = static_cast<ui::ChatChannel>(std::atoi(std::string(f[0]).c_str()));
         l.rgb = static_cast<std::uint32_t>(std::strtoul(std::string(f[1]).c_str(), nullptr, 16));
-        l.color = static_cast<std::uint32_t>(std::strtoul(std::string(f[2]).c_str(), nullptr, 10));
+        {
+            // The colour, and a route of its own after a colon ("325:77"; an older client reads the colour alone).
+            const std::string color(f[2]);
+            char* end = nullptr;
+            l.color = static_cast<std::uint32_t>(std::strtoul(color.c_str(), &end, 10));
+            if (end && *end == ':') {
+                const long route = std::strtol(end + 1, nullptr, 10);
+                if (route >= 0 && route < game::kChatChannelCount) l.route = static_cast<int>(route);
+            }
+        }
         if (timed) l.time = std::strtoll(std::string(f[3]).c_str(), nullptr, 10);
         l.peer = history_unescape(f[timed ? 4 : 3]);
         l.text = history_unescape(std::string_view(line).substr(at));
@@ -2769,8 +2780,9 @@ void save_chat_history(bool ending) {
             const ui::ChatLine& l = lines[i];
             if (l.restored && l.text == kHistoryMark && l.group_messages.empty()) continue;
             const auto write = [&](std::string_view text) {
-                out << static_cast<int>(l.channel) << '\t' << std::format("{:x}", l.rgb) << '\t' << l.color << '\t'
-                    << l.time << '\t' << history_escape(l.peer) << '\t' << history_escape(text) << '\n';
+                out << static_cast<int>(l.channel) << '\t' << std::format("{:x}", l.rgb) << '\t' << l.color;
+                if (l.route >= 0) out << ':' << l.route;
+                out << '\t' << l.time << '\t' << history_escape(l.peer) << '\t' << history_escape(text) << '\n';
             };
             if (l.group_messages.empty()) {
                 write(l.text);
